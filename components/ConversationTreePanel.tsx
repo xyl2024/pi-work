@@ -9,6 +9,12 @@ import { BranchMessageViewer } from "./BranchMessageViewer";
 import { buildConversationTree } from "@/lib/buildConversationTree";
 import { layoutConversationTree } from "@/lib/conversationTreeLayout";
 import type { LayoutCard } from "@/lib/conversationTreeLayout";
+import {
+  hashString,
+  roughPolyline,
+  roughRect,
+  sketchRotateDeg,
+} from "@/lib/rough";
 
 /** Pixels (pre-scale). */
 const CARD_W = 200;
@@ -79,6 +85,19 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
     () => layoutConversationTree(tree.cards),
     [tree.cards],
   );
+  // Precompute the sketchy decorations for each card: a stable pseudo-
+  // random tilt plus the double-stroked hand-drawn border strokes. Seeded
+  // by card id so geometry never flickers between renders.
+  const cardSketch = useMemo(() => {
+    const map = new Map<string, { angle: number; borderPaths: string[] }>();
+    for (const c of layout.cards) {
+      map.set(c.id, {
+        angle: sketchRotateDeg(c.id),
+        borderPaths: roughRect(1, 1, CARD_W - 2, CARD_H - 2, hashString(`${c.id}:border`)),
+      });
+    }
+    return map;
+  }, [layout.cards]);
   const hoveredRef = useRef<LayoutCard | null>(null);
 
   // Auto-follow: scroll the panel to keep the latest active card visible
@@ -146,8 +165,12 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
       style={{
         height: "100%",
         overflow: "auto",
-        background: "var(--bg)",
         position: "relative",
+        // Faint dot grid — the sketch pad the tree is drawn on.
+        backgroundColor: "var(--bg)",
+        backgroundImage:
+          "radial-gradient(color-mix(in srgb, var(--text-dim) 22%, transparent) 0.7px, transparent 0.8px)",
+        backgroundSize: "18px 18px",
       }}
     >
       <div
@@ -192,28 +215,32 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
               const cx = child.x * colPitch + CARD_W / 2;
               const cy = child.y * rowPitch;
               // Same column: straight vertical line.
-              // Different column: down, jog horizontal, then down.
-              let d: string;
+              // Different column: down, jog horizontal, then down. Both are
+              // drawn as rough hand-drawn curves seeded by the edge id.
               let labelX: number;
               let labelY: number;
+              let points: [number, number][];
               if (parent.x === child.x) {
-                d = `M ${px} ${py} L ${cx} ${cy}`;
+                points = [[px, py], [cx, cy]];
                 // Center the chip on the vertical line at its midpoint.
                 labelX = px;
                 labelY = (py + cy) / 2;
               } else {
                 const midY = py + ROW_GAP / 2;
-                d = `M ${px} ${py} L ${px} ${midY} L ${cx} ${midY} L ${cx} ${cy}`;
+                points = [[px, py], [px, midY], [cx, midY], [cx, cy]];
                 // Park the chip on the horizontal jog so it doesn't fight
                 // the right-angle bends.
                 labelX = (px + cx) / 2;
                 labelY = midY;
               }
+              const d = roughPolyline(points, hashString(`${edge.fromId}->${edge.toId}`));
               const label =
                 edge.isUserToAssistant && edge.roundStats
                   ? formatRoundLabel(edge.roundStats, t)
                   : null;
               const chipH = 14;
+              // The chip itself gets a tiny sketchy tilt (seeded, stable).
+              const labelRotate = sketchRotateDeg(`${edge.fromId}->${edge.toId}:label`, 3.5);
               // While the agent is working, the active branch's connector
               // animates: dashes march from the parent card (start point)
               // toward the child card (end point). See .tree-edge-flow.
@@ -232,7 +259,7 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
                     className={flowing ? "tree-edge-flow" : undefined}
                   />
                   {label && (
-                    <g>
+                    <g transform={`rotate(${labelRotate.toFixed(2)} ${labelX} ${labelY})`}>
                       {/* Background pill that breaks the line so the label
                           reads as a chip *on* the connector (not a label
                           floating over the line). fill = panel bg → the
@@ -266,31 +293,61 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
               edge strokes above — cards themselves are uniform (no per-card
               highlight/dim) so the only "lit vs unlit" signal is which line
               connects them. */}
-          {layout.cards.map((card) => (
-            <div
-              key={card.id}
-              data-card-id={card.id}
-              style={{
-                position: "absolute",
-                left: card.x * colPitch,
-                top: card.y * rowPitch,
-              }}
-            >
-              <ConversationTreeCard
-                card={card}
-                // Lock every card for the entire agent turn, not just the
-                // streaming sub-window. The agent can be busy with tool
-                // calls between LLM turns, and switching branches then
-                // would race the in-flight response just the same.
-                disabled={agentRunning}
-                width={CARD_W}
-                height={CARD_H}
-                onClick={handleClick}
-                onHover={handleHover}
-                onZoom={handleZoom}
-              />
-            </div>
-          ))}
+          {layout.cards.map((card) => {
+            const sketch = cardSketch.get(card.id);
+            return (
+              <div
+                key={card.id}
+                data-card-id={card.id}
+                style={{
+                  position: "absolute",
+                  left: card.x * colPitch,
+                  top: card.y * rowPitch,
+                  // Slight tilt per card — hand-written sticky note look.
+                  transform: `rotate(${sketch?.angle.toFixed(2) ?? 0}deg)`,
+                }}
+              >
+                {/* Hand-drawn border strokes, above the card's flat fill. */}
+                {sketch && (
+                  <svg
+                    width={CARD_W}
+                    height={CARD_H}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      zIndex: 2,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {sketch.borderPaths.map((d, i) => (
+                      <path
+                        key={i}
+                        d={d}
+                        fill="none"
+                        stroke={card.role === "user" ? "rgba(99, 102, 241, 0.55)" : "var(--border)"}
+                        strokeWidth={1.1}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    ))}
+                  </svg>
+                )}
+                <ConversationTreeCard
+                  card={card}
+                  // Lock every card for the entire agent turn, not just the
+                  // streaming sub-window. The agent can be busy with tool
+                  // calls between LLM turns, and switching branches then
+                  // would race the in-flight response just the same.
+                  disabled={agentRunning}
+                  width={CARD_W}
+                  height={CARD_H}
+                  onClick={handleClick}
+                  onHover={handleHover}
+                  onZoom={handleZoom}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
       {zoomEntryId && (

@@ -39,9 +39,8 @@ export function ConversationTreeCard({
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const isUser = card.role === "user";
-  const borderColor = isUser
-    ? "rgba(99, 102, 241, 0.4)"
-    : "var(--border)";
+  // The crisp CSS border is deliberately omitted — the sketchy double-
+  // stroked border is drawn by the panel's SVG overlay (lib/rough.ts).
   const background = isUser
     ? "rgba(99, 102, 241, 0.08)"
     : "var(--bg-panel)";
@@ -73,10 +72,9 @@ export function ConversationTreeCard({
         width,
         height,
         background,
-        border: `1px solid ${borderColor}`,
-        borderRadius: 8,
+        borderRadius: 6,
         cursor: disabled ? "not-allowed" : "pointer",
-        transition: "background 0.12s, border-color 0.12s",
+        transition: "background 0.12s",
         color: "var(--text)",
         overflow: "hidden",
       }}
