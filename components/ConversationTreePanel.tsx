@@ -13,31 +13,9 @@ import type { LayoutCard } from "@/lib/conversationTreeLayout";
 /** Pixels (pre-scale). */
 const CARD_W = 200;
 const CARD_H = 64;
-const COL_GAP = 32;
-const ROW_GAP = 24;
+const COL_GAP = 48;
+const ROW_GAP = 36;
 const SCALE = 0.85;
-
-/** Detect the user card of the round currently being streamed. */
-function findStreamingUserId(
-  cards: LayoutCard[],
-  activeLeafId: string | null,
-): string | null {
-  if (!activeLeafId) return null;
-  // Find the user card whose round contains the leaf as its descendant.
-  // If the leaf is an assistant card with no following assistant child (i.e.
-  // it's still in progress), the parent user card is the streaming one.
-  const byId = new Map(cards.map((c) => [c.id, c]));
-  const leaf = byId.get(activeLeafId);
-  if (!leaf) return null;
-  // Walk parent chain until we hit a user card.
-  let cursor: LayoutCard | undefined = leaf;
-  while (cursor) {
-    if (cursor.role === "user") return cursor.id;
-    if (!cursor.parentCardId) return null;
-    cursor = byId.get(cursor.parentCardId);
-  }
-  return null;
-}
 
 function formatRoundLabel(stats: { thinking: number; toolCalls: number }): string | null {
   const parts: string[] = [];
@@ -50,7 +28,7 @@ function formatRoundLabel(stats: { thinking: number; toolCalls: number }): strin
 interface Props {
   /** The full session entries — used to look up the entry that a card represents for the tooltip / scroll. */
   entriesById: Map<string, SessionEntry>;
-  /** True while the agent is streaming tokens. Drives the per-card pulse dot + auto-follow scroll. */
+  /** True while the agent is streaming tokens. Drives auto-follow scroll. */
   isStreaming: boolean;
   /**
    * True for the *entire* agent turn (waiting_model / streaming / running_tools /
@@ -74,10 +52,6 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
   const layout = useMemo(
     () => layoutConversationTree(tree.cards),
     [tree.cards],
-  );
-  const streamingUserId = useMemo(
-    () => (isStreaming ? findStreamingUserId(layout.cards, branchActiveLeafId) : null),
-    [layout.cards, branchActiveLeafId, isStreaming],
   );
   const hoveredRef = useRef<LayoutCard | null>(null);
 
@@ -210,6 +184,7 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
                     stroke={stroke}
                     strokeOpacity={strokeOpacity}
                     strokeWidth={strokeWidth}
+                    strokeDasharray="4 4"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
@@ -256,7 +231,6 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
             >
               <CardWithTooltip
                 card={card}
-                streaming={streamingUserId === card.id}
                 // Lock every card for the entire agent turn, not just the
                 // streaming sub-window. The agent can be busy with tool
                 // calls between LLM turns, and switching branches then
@@ -278,7 +252,6 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
 
 interface CardWithTooltipProps {
   card: LayoutCard;
-  streaming: boolean;
   /** True while the agent is streaming — blocks the card's click. */
   disabled: boolean;
   width: number;
@@ -290,7 +263,6 @@ interface CardWithTooltipProps {
 
 function CardWithTooltip({
   card,
-  streaming,
   disabled,
   width,
   height,
@@ -316,7 +288,6 @@ function CardWithTooltip({
     <Tooltip content={tooltip} side="left">
       <ConversationTreeCard
         card={card}
-        streaming={streaming}
         disabled={disabled}
         width={width}
         height={height}

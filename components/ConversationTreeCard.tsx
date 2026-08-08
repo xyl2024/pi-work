@@ -4,8 +4,6 @@ import type { LayoutCard } from "@/lib/conversationTreeLayout";
 
 interface Props {
   card: LayoutCard;
-  /** True when this is the user card of the round currently being streamed. */
-  streaming: boolean;
   /** True while the agent is streaming — disables the card's click. */
   disabled: boolean;
   /** Pixels for the card box. The whole tree is scaled by its parent. */
@@ -31,7 +29,6 @@ function previewText(card: LayoutCard): string {
 
 export function ConversationTreeCard({
   card,
-  streaming,
   disabled,
   width,
   height,
@@ -99,39 +96,37 @@ export function ConversationTreeCard({
       >
         {displayText}
       </span>
-      {/* Bottom-right corner: image chip and/or streaming dot */}
-      {(card.imageCount > 0 || streaming) && (
+      {/* Bottom-right corner: image chip with count */}
+      {card.imageCount > 0 && (
         <span
+          aria-label={`${card.imageCount} images`}
+          title={`${card.imageCount} images`}
           style={{
             position: "absolute",
             right: 6,
             bottom: 5,
             display: "flex",
             alignItems: "center",
-            gap: 4,
+            gap: 3,
             fontSize: 10,
             color: "var(--text-dim)",
           }}
         >
-          {card.imageCount > 0 && (
-            <span aria-label={`${card.imageCount} images`} title={`${card.imageCount} images`}>
-              🖼️ ×{card.imageCount}
-            </span>
-          )}
-          {streaming && (
-            <span
-              aria-label="streaming"
-              style={{
-                display: "inline-block",
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: "var(--accent)",
-                boxShadow: "0 0 0 2px var(--bg-panel)",
-                animation: "pulse 1.2s ease-in-out infinite",
-              }}
-            />
-          )}
+          <svg
+            width={11}
+            height={11}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+          </svg>
+          <span>×{card.imageCount}</span>
         </span>
       )}
     </button>
