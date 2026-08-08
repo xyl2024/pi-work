@@ -19,6 +19,7 @@ import { MessageView } from "./MessageView";
 import { ShowFileRenderer } from "./ShowFileRenderer";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { Tooltip } from "./Tooltip";
+import { AgentTodoPanel } from "./AgentTodoPanel";
 import { ReplayBar } from "./ReplayBar";
 import { useAgentSession, type AgentPhase } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
@@ -1329,6 +1330,12 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         />
       )}
       <div className="relative flex flex-1 overflow-hidden">
+        {/* Agent Todo: absolute-positioned floating panel in the chat area's
+            left whitespace. Lives as a sibling of the scroll container (not
+            a flex item) so it does not squeeze the centered message column. */}
+        <AgentTodoPanel
+          sessionId={session?.id ?? null}
+        />
         <div ref={scrollContainerRef} onScroll={handleScroll} onWheel={handleWheel} onTouchMove={handleTouchMove} className="relative flex-1 overflow-y-auto px-4 py-4">
           <div className="mx-auto max-w-[820px]">
 
