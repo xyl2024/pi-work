@@ -36,6 +36,9 @@ interface Props {
   onAtMention?: (filePath: string) => void;
   onFileMutated?: () => void;
   onFileDeleted?: (filePath: string) => void;
+  /** Bump to collapse every expanded folder. Initial value (or undefined)
+   *  is ignored — only subsequent increments trigger a collapse. */
+  collapseKey?: number;
 }
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
@@ -488,13 +491,28 @@ function TreeNode({
   );
 }
 
-export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted }: Props) {
+export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted, collapseKey }: Props) {
   const { t } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const prevCwdRef = useRef<string | null>(null);
+
+  // External "collapse all" trigger: a parent bumps `collapseKey` to ask us
+  // to clear every expanded folder. We intentionally do NOT re-fetch — the
+  // data is already loaded, the user just wants the tree folded back to its
+  // roots. Initial value (or undefined) is ignored; only subsequent bumps
+  // fire. A dedicated ref tracks the last seen value so the first effect run
+  // (initial mount) is a no-op.
+  const prevCollapseKeyRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (collapseKey === undefined) return;
+    if (prevCollapseKeyRef.current !== undefined && prevCollapseKeyRef.current !== collapseKey) {
+      setExpandedPaths(new Set());
+    }
+    prevCollapseKeyRef.current = collapseKey;
+  }, [collapseKey]);
 
   // Subscribe to the git status store. Re-renders when entriesByCwd /
   // generationByCwd change for *any* cwd; the useMemo below filters to

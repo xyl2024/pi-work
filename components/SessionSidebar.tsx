@@ -154,6 +154,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
   const [pinnedSessions, setPinnedSessions] = useState<string[]>([]);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
+  const [explorerCollapseKey, setExplorerCollapseKey] = useState(0);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
   const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -171,6 +172,16 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
     // (e.g. user switched away, or cwd is not a git repo).
     if (selectedCwdProp) notifyMutated(selectedCwdProp);
   }, [selectedCwdProp]);
+
+  // Collapse every expanded folder in the explorer. FileExplorer watches
+  // `explorerCollapseKey` and clears its `expandedPaths` set when this
+  // bumps. Bumping (rather than resetting to 0) means clicking twice in
+  // a row still fires — without it the second click would be a no-op.
+  // Intentionally silent — the visual change of folders folding back is
+  // its own confirmation.
+  const triggerCollapseAll = useCallback(() => {
+    setExplorerCollapseKey((k) => k + 1);
+  }, []);
 
   // Persist expand state to localStorage. Stored as a flat object
   // { [cwd]: boolean } — last-writer-wins on the cwd key.
@@ -766,6 +777,31 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
               </svg>
               {t("Explorer")}
             </button>
+            <Tooltip content={t("Collapse all")}>
+            <button
+              onClick={triggerCollapseAll}
+              aria-label={t("Collapse all")}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 26, height: 26, padding: 0, marginRight: 4,
+                background: "none",
+                border: "none",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+                borderRadius: 5,
+                flexShrink: 0,
+                transition: "color 0.3s, background 0.3s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2.5" y="2.5" width="9" height="9" rx="1.2"/>
+                <line x1="5" y1="7" x2="9" y2="7"/>
+                <path d="M8 14 H11 a2 2 0 0 0 2-2 V9"/>
+              </svg>
+            </button>
+            </Tooltip>
             <Tooltip content={t("Refresh explorer")}>
             <button
               onClick={triggerExplorerRefresh}
@@ -805,6 +841,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
                 onAtMention={onAtMention}
                 onFileMutated={triggerExplorerRefresh}
                 onFileDeleted={onFileDeleted}
+                collapseKey={explorerCollapseKey}
               />
             </div>
           )}
