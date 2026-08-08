@@ -938,7 +938,7 @@ export function AppShell() {
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 36, height: 36, padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--border)",
+              background: "none", border: "none",
               color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
@@ -966,7 +966,6 @@ export function AppShell() {
                   background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
                   border: "none",
                   borderTop: activeTopPanel === "system" ? "2px solid var(--accent)" : "2px solid transparent",
-                  borderRight: "1px solid var(--border)",
                   cursor: "pointer",
                   color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
                   fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
@@ -993,7 +992,6 @@ export function AppShell() {
                   background: activeTopPanel === "tools" ? "var(--bg-selected)" : "none",
                   border: "none",
                   borderTop: activeTopPanel === "tools" ? "2px solid var(--accent)" : "2px solid transparent",
-                  borderRight: "1px solid var(--border)",
                   cursor: tools.length > 0 ? "pointer" : "default",
                   color: tools.length > 0 ? (activeTopPanel === "tools" ? "var(--text)" : "var(--text-muted)") : "var(--text-dim)",
                   fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
@@ -1024,7 +1022,7 @@ export function AppShell() {
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center",
                       width: 36, height: 36, padding: 0,
-                      background: "none", border: "none", borderLeft: "1px solid var(--border)",
+                      background: "none", border: "none",
                       color: "var(--text-muted)", cursor: "pointer", transition: "color 0.12s",
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
@@ -1045,7 +1043,7 @@ export function AppShell() {
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center",
                       width: 36, height: 36, padding: 0,
-                      background: "none", border: "none", borderLeft: "1px solid var(--border)",
+                      background: "none", border: "none",
                       color: headerActions.isExporting ? "var(--accent)" : "var(--text-muted)",
                       cursor: headerActions.isExporting ? "default" : "pointer",
                       opacity: headerActions.isExporting ? 0.8 : 1,
@@ -1082,7 +1080,7 @@ export function AppShell() {
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center",
                       width: 36, height: 36, padding: 0,
-                      background: "none", border: "none", borderLeft: "1px solid var(--border)",
+                      background: "none", border: "none",
                       color: headerActions.isAutoNaming ? "var(--accent)" : "var(--text-muted)",
                       cursor: headerActions.canAutoName ? "pointer" : "default",
                       opacity: headerActions.canAutoName ? 1 : 0.5,
@@ -1378,7 +1376,7 @@ export function AppShell() {
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
-            background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+            background: "transparent", border: "none",
             color: rightPanelState !== "closed" ? "var(--accent)" : "var(--text-muted)",
             cursor: "pointer", transition: "color 0.12s",
           }}
@@ -1398,7 +1396,7 @@ export function AppShell() {
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
-            background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+            background: "transparent", border: "none",
             color: activeRightPanelKind === "todo" ? "var(--accent)" : "var(--text-muted)",
             cursor: "pointer", transition: "color 0.12s",
           }}
@@ -1420,7 +1418,7 @@ export function AppShell() {
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+              background: "transparent", border: "none",
               color: activeRightPanelKind === "canvas" ? "var(--accent)" : "var(--text-muted)",
               cursor: "pointer", transition: "color 0.12s",
             }}
@@ -1442,7 +1440,7 @@ export function AppShell() {
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 36, height: 36, padding: 0,
-            background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+            background: "transparent", border: "none",
             color: activeRightPanelKind === "translate" ? "var(--accent)" : "var(--text-muted)",
             cursor: "pointer", transition: "color 0.12s",
           }}
@@ -1468,7 +1466,7 @@ export function AppShell() {
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+              background: "transparent", border: "none",
               color: activeRightPanelKind === "json" ? "var(--accent)" : "var(--text-muted)",
               cursor: "pointer", transition: "color 0.12s",
             }}
@@ -1491,7 +1489,7 @@ export function AppShell() {
               position: "relative",
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+              background: "transparent", border: "none",
               color: activeRightPanelKind === "rss" ? "var(--accent)" : "var(--text-muted)",
               cursor: "pointer", transition: "color 0.12s",
             }}
@@ -1538,7 +1536,7 @@ export function AppShell() {
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+              background: "transparent", border: "none",
               color: activeRightPanelKind === "gitDiff" ? "var(--accent)" : "var(--text-muted)",
               cursor: (selectedSession?.cwd ?? newSessionCwd) ? "pointer" : "not-allowed",
               opacity: (selectedSession?.cwd ?? newSessionCwd) ? 1 : 0.4,
@@ -1597,7 +1595,7 @@ export function AppShell() {
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 36, height: 36, padding: 0,
-                  background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+                  background: "transparent", border: "none",
                   color: activeRightPanelKind === "conversationTree" ? "var(--accent)" : "var(--text-muted)",
                   cursor: (selectedSession?.id ?? newSessionCwd) ? "pointer" : "not-allowed",
                   opacity: (selectedSession?.id ?? newSessionCwd) ? 1 : 0.4,
@@ -1630,7 +1628,7 @@ export function AppShell() {
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+              background: "transparent", border: "none",
               color: activeRightPanelKind === "favorites" ? "var(--accent)" : "var(--text-muted)",
               cursor: "pointer", transition: "color 0.12s",
             }}
@@ -1651,7 +1649,7 @@ export function AppShell() {
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 36, height: 36, padding: 0,
-                background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+                background: "transparent", border: "none",
                 color: activeRightPanelKind === "tokens" ? "var(--accent)" : "var(--text-muted)",
                 cursor: "pointer", transition: "color 0.12s",
               }}
@@ -1757,7 +1755,7 @@ function ToolCallsVerticalButton({ active, onClick }: { active: boolean; onClick
           position: "relative",
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
           width: 36, height: 36, padding: 0,
-          background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+          background: "transparent", border: "none",
           color: active ? "var(--accent)" : "var(--text-muted)",
           cursor: "pointer", transition: "color 0.12s",
           gap: 1,

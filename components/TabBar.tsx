@@ -89,7 +89,6 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               height: 36,
               paddingLeft: 12,
               paddingRight: 6,
-              borderRight: "1px solid var(--border)",
               background: "var(--bg-panel)",
               cursor: "pointer",
               fontSize: 12,
