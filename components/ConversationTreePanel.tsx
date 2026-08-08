@@ -178,8 +178,12 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
               if (!parent || !child) return null;
               const onActive =
                 tree.activePathIds.has(parent.id) && tree.activePathIds.has(child.id);
+              // The active leaf path is the ONLY indicator of the current
+              // branch (cards themselves are uniform). Bump the active
+              // stroke well above the inactive one so it reads at a glance.
               const stroke = onActive ? "var(--accent)" : "var(--text-dim)";
-              const strokeWidth = onActive ? 1.5 : 1;
+              const strokeWidth = onActive ? 2.5 : 1;
+              const strokeOpacity = onActive ? 1 : 0.55;
               const px = parent.x * colPitch + CARD_W / 2;
               const py = parent.y * rowPitch + CARD_H;
               const cx = child.x * colPitch + CARD_W / 2;
@@ -204,6 +208,7 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
                     d={d}
                     fill="none"
                     stroke={stroke}
+                    strokeOpacity={strokeOpacity}
                     strokeWidth={strokeWidth}
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -235,39 +240,36 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
               );
             })}
           </svg>
-          {/* Card layer */}
-          {layout.cards.map((card) => {
-            const active = tree.activePathIds.has(card.id);
-            const dimmed = !active;
-            return (
-              <div
-                key={card.id}
-                data-card-id={card.id}
-                style={{
-                  position: "absolute",
-                  left: card.x * colPitch,
-                  top: card.y * rowPitch,
-                }}
-              >
-                <CardWithTooltip
-                  card={card}
-                  active={active}
-                  dimmed={dimmed}
-                  streaming={streamingUserId === card.id}
-                  // Lock every card for the entire agent turn, not just the
-                  // streaming sub-window. The agent can be busy with tool
-                  // calls between LLM turns, and switching branches then
-                  // would race the in-flight response just the same.
-                  disabled={agentRunning}
-                  width={CARD_W}
-                  height={CARD_H}
-                  onClick={handleClick}
-                  onHover={handleHover}
-                  entriesById={entriesById}
-                />
-              </div>
-            );
-          })}
+          {/* Card layer. The active leaf path is communicated solely via the
+              edge strokes above — cards themselves are uniform (no per-card
+              highlight/dim) so the only "lit vs unlit" signal is which line
+              connects them. */}
+          {layout.cards.map((card) => (
+            <div
+              key={card.id}
+              data-card-id={card.id}
+              style={{
+                position: "absolute",
+                left: card.x * colPitch,
+                top: card.y * rowPitch,
+              }}
+            >
+              <CardWithTooltip
+                card={card}
+                streaming={streamingUserId === card.id}
+                // Lock every card for the entire agent turn, not just the
+                // streaming sub-window. The agent can be busy with tool
+                // calls between LLM turns, and switching branches then
+                // would race the in-flight response just the same.
+                disabled={agentRunning}
+                width={CARD_W}
+                height={CARD_H}
+                onClick={handleClick}
+                onHover={handleHover}
+                entriesById={entriesById}
+              />
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -276,8 +278,6 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
 
 interface CardWithTooltipProps {
   card: LayoutCard;
-  active: boolean;
-  dimmed: boolean;
   streaming: boolean;
   /** True while the agent is streaming — blocks the card's click. */
   disabled: boolean;
@@ -290,8 +290,6 @@ interface CardWithTooltipProps {
 
 function CardWithTooltip({
   card,
-  active,
-  dimmed,
   streaming,
   disabled,
   width,
@@ -318,8 +316,6 @@ function CardWithTooltip({
     <Tooltip content={tooltip} side="left">
       <ConversationTreeCard
         card={card}
-        active={active}
-        dimmed={dimmed}
         streaming={streaming}
         disabled={disabled}
         width={width}

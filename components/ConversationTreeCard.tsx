@@ -4,10 +4,6 @@ import type { LayoutCard } from "@/lib/conversationTreeLayout";
 
 interface Props {
   card: LayoutCard;
-  /** True when this card's entry id is on the active leaf path. */
-  active: boolean;
-  /** True when the card is NOT on the active path (used to dim non-active branches). */
-  dimmed: boolean;
   /** True when this is the user card of the round currently being streamed. */
   streaming: boolean;
   /** True while the agent is streaming — disables the card's click. */
@@ -21,10 +17,20 @@ interface Props {
 
 const PLACEHOLDER_OPACITY = 0.7;
 
+/**
+ * Preview text for the card. Empty `card.text` falls back to the
+ * placeholder (e.g. "[完成工具调用]"). All whitespace (spaces + newlines)
+ * is collapsed away — the card is a tiny badge, and stripping whitespace
+ * helps the 3-line clamp render readably. The tooltip keeps the full
+ * formatted text.
+ */
+function previewText(card: LayoutCard): string {
+  const raw = card.text.trim().length > 0 ? card.text : (card.placeholder ?? "");
+  return raw.replace(/\s+/g, "");
+}
+
 export function ConversationTreeCard({
   card,
-  active,
-  dimmed,
   streaming,
   disabled,
   width,
@@ -33,24 +39,14 @@ export function ConversationTreeCard({
   onHover,
 }: Props) {
   const isUser = card.role === "user";
-  const opacity = dimmed ? 0.45 : 1;
-  const borderColor = active
-    ? "var(--accent)"
-    : isUser
-      ? "rgba(99, 102, 241, 0.4)"
-      : "var(--border)";
+  const borderColor = isUser
+    ? "rgba(99, 102, 241, 0.4)"
+    : "var(--border)";
   const background = isUser
-    ? active
-      ? "rgba(99, 102, 241, 0.18)"
-      : "rgba(99, 102, 241, 0.08)"
-    : active
-      ? "var(--bg-hover)"
-      : "var(--bg-panel)";
-  const roleBadge = isUser ? "U" : "A";
-  const roleBadgeBg = isUser ? "var(--accent)" : "var(--text-muted)";
-  const roleBadgeFg = isUser ? "#fff" : "var(--bg)";
+    ? "rgba(99, 102, 241, 0.08)"
+    : "var(--bg-panel)";
 
-  const displayText = card.text.trim().length > 0 ? card.text : (card.placeholder ?? "");
+  const displayText = previewText(card);
   const isPlaceholder = card.text.trim().length === 0 && card.placeholder !== null;
 
   return (
@@ -70,13 +66,12 @@ export function ConversationTreeCard({
         top: 0,
         width,
         height,
-        padding: "8px 10px 8px 28px",
+        padding: "8px 10px",
         background,
-        border: `1.5px solid ${borderColor}`,
+        border: `1px solid ${borderColor}`,
         borderRadius: 8,
         cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? Math.min(opacity, 0.55) : opacity,
-        transition: "opacity 0.12s, border-color 0.12s, background 0.12s",
+        transition: "background 0.12s, border-color 0.12s",
         textAlign: "left",
         overflow: "hidden",
         font: "inherit",
@@ -86,29 +81,6 @@ export function ConversationTreeCard({
         gap: 6,
       }}
     >
-      {/* Role badge in the upper-left corner */}
-      <span
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          top: 6,
-          left: 6,
-          width: 16,
-          height: 16,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 9,
-          fontFamily: "var(--font-mono)",
-          fontWeight: 700,
-          background: roleBadgeBg,
-          color: roleBadgeFg,
-          borderRadius: 3,
-          flexShrink: 0,
-        }}
-      >
-        {roleBadge}
-      </span>
       <span
         style={{
           flex: 1,
@@ -123,7 +95,6 @@ export function ConversationTreeCard({
           WebkitLineClamp: 3,
           WebkitBoxOrient: "vertical",
           wordBreak: "break-word",
-          whiteSpace: "pre-wrap",
         }}
       >
         {displayText}
