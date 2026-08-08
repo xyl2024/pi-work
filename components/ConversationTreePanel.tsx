@@ -128,8 +128,8 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
           // scaled with the tree.
           transform: `scale(${SCALE})`,
           transformOrigin: "top left",
-          width: totalWidth * SCALE,
-          height: totalHeight * SCALE,
+          width: totalWidth,
+          height: totalHeight,
           padding: "12px 12px 24px 12px",
         }}
       >
