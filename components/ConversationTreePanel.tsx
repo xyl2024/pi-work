@@ -72,8 +72,8 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
     [branchTree, branchActiveLeafId],
   );
   const layout = useMemo(
-    () => layoutConversationTree(tree.cards, tree.activePathIds),
-    [tree.cards, tree.activePathIds],
+    () => layoutConversationTree(tree.cards),
+    [tree.cards],
   );
   const streamingUserId = useMemo(
     () => (isStreaming ? findStreamingUserId(layout.cards, branchActiveLeafId) : null),

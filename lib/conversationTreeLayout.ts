@@ -44,9 +44,9 @@ function indexCards(cards: ConversationCard[]): {
  * vertical extent of the card's subtree in the rendered tree.
  *
  * - User card: 1 + (its one assistant child's height), or 1 if no assistant.
- * - Assistant card: 1 + max(child heights). With the active-spine layout,
- *   siblings all start at the same y, so vertical extent is bounded by the
- *   tallest sibling rather than the sum.
+ * - Assistant card: 1 + max(child heights). Siblings all start at the same
+ *   y, so vertical extent is bounded by the tallest sibling rather than
+ *   the sum.
  */
 function computeSubtreeHeight(
   card: ConversationCard,
@@ -75,7 +75,7 @@ function computeSubtreeHeight(
 }
 
 /**
- * Assign (x, y) to every card via an active-spine DFS:
+ * Assign (x, y) to every card via a stable, tree-only DFS:
  *
  * - User→assistant edge: assistant sits directly below in the SAME column.
  *   This is always a 1:1 relationship (a round's user has one final
@@ -84,14 +84,16 @@ function computeSubtreeHeight(
  * - Assistant with ONE user child: linear continuation, same column.
  *
  * - Assistant with MULTIPLE user children (a fork):
- *     - The child on the active leaf path (the "spine") sits at (x, y+1) —
- *       same column, the conversation continues straight down.
- *     - All other children fan out to (x+1, y+1), (x+2, y+1), ... — each
+ *     - The leftmost (oldest) child keeps the parent's column (x, y+1) —
+ *       this is the stable "spine" slot, decided purely from tree order
+ *       (childrenById preserves pi's timestamp-ordered tree).
+ *     - Younger siblings fan out to (x+1, y+1), (x+2, y+1), ... — each
  *       in its own column, all at the same row. Subtrees extend downward
  *       independently in their own columns.
  *
- * The result: the active leaf's path is a clean vertical spine, and any
- * branch created by "Edit from here" appears as a new column on the right.
+ * Layout positions are deliberately independent of the active leaf path,
+ * so clicking a card in a different branch never moves any cards. The
+ * active branch is shown by edge highlights in the rendering layer.
  * Multiple disconnected roots render as separate spines stacked vertically.
  */
 function assignPositions(
@@ -100,7 +102,6 @@ function assignPositions(
   y: number,
   heights: Map<string, number>,
   childrenById: Map<string, ConversationCard[]>,
-  activePathIds: Set<string>,
   out: Map<string, LayoutCard>,
 ): void {
   const layout: LayoutCard = {
@@ -116,7 +117,7 @@ function assignPositions(
     // A round's user card has at most one assistant child (the round's
     // final reply). Same-column continuation either way.
     if (kids.length > 0) {
-      assignPositions(kids[0], x, y + 1, heights, childrenById, activePathIds, out);
+      assignPositions(kids[0], x, y + 1, heights, childrenById, out);
     }
     return;
   }
@@ -124,23 +125,19 @@ function assignPositions(
   if (kids.length <= 1) {
     // Linear continuation: same column.
     if (kids.length === 1) {
-      assignPositions(kids[0], x, y + 1, heights, childrenById, activePathIds, out);
+      assignPositions(kids[0], x, y + 1, heights, childrenById, out);
     }
     return;
   }
-  // Fork: split into active-child (stays on spine) and others (fan right).
-  const activeChild = kids.find((k) => activePathIds.has(k.id));
-  if (activeChild) {
-    assignPositions(activeChild, x, y + 1, heights, childrenById, activePathIds, out);
-  }
-  // Non-active children get distinct columns to the right, all at y+1.
-  // If no child is on the active path, the spine shifts to x+1 for all of
-  // them — we don't draw an empty active slot.
-  const baseX = activeChild ? x + 1 : x + 1;
+  // Fork: kids[0] (the oldest sibling) keeps the parent's column so the
+  // spine stays put regardless of which branch is active. The active
+  // branch is communicated entirely by edge highlights, not by position.
+  const spine = kids[0];
+  assignPositions(spine, x, y + 1, heights, childrenById, out);
   let slot = 0;
   for (const k of kids) {
-    if (k === activeChild) continue;
-    assignPositions(k, baseX + slot, y + 1, heights, childrenById, activePathIds, out);
+    if (k === spine) continue;
+    assignPositions(k, x + 1 + slot, y + 1, heights, childrenById, out);
     slot++;
   }
 }
@@ -155,14 +152,17 @@ export interface ConversationTreeLayout {
 }
 
 /**
- * Compute the active-spine layout for a flat card list. `activePathIds` is
- * the set of card ids on the active leaf path — at each fork, the child on
- * this path stays in the parent's column (the spine), while the others
- * fan out to the right in their own columns.
+ * Compute a stable column layout for a flat card list.
+ *
+ * Column assignment depends ONLY on tree structure — at every assistant
+ * fork the leftmost (oldest) child inherits the parent's column, while
+ * younger siblings fan out to the right. The active leaf path plays no
+ * role in positioning: clicking a different branch never moves any
+ * cards. The active branch is communicated entirely by edge highlights
+ * in the rendering layer.
  */
 export function layoutConversationTree(
   cards: ConversationCard[],
-  activePathIds: Set<string> = new Set(),
 ): ConversationTreeLayout {
   if (cards.length === 0) {
     return { cards: [], edges: [], widthCols: 0, heightRows: 0 };
@@ -177,7 +177,7 @@ export function layoutConversationTree(
   const out = new Map<string, LayoutCard>();
   let y = 0;
   for (const r of roots) {
-    assignPositions(r, 0, y, heights, childrenById, activePathIds, out);
+    assignPositions(r, 0, y, heights, childrenById, out);
     y += heights.get(r.id) ?? 1;
   }
 
