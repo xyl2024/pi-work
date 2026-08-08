@@ -13,18 +13,14 @@ interface Props {
   onHover: (card: LayoutCard | null) => void;
 }
 
-const PLACEHOLDER_OPACITY = 0.7;
-
 /**
- * Preview text for the card. Empty `card.text` falls back to the
- * placeholder (e.g. "[完成工具调用]"). All whitespace (spaces + newlines)
- * is collapsed away — the card is a tiny badge, and stripping whitespace
- * helps the 3-line clamp render readably. The tooltip keeps the full
- * formatted text.
+ * Preview text for the card. Whitespace (spaces + newlines) is collapsed
+ * away — the card is a tiny badge, and stripping whitespace helps the
+ * 3-line clamp render readably. Empty `card.text` is valid (renders an
+ * empty card). The tooltip keeps the full formatted text.
  */
 function previewText(card: LayoutCard): string {
-  const raw = card.text.trim().length > 0 ? card.text : (card.placeholder ?? "");
-  return raw.replace(/\s+/g, "");
+  return card.text.replace(/\s+/g, "");
 }
 
 export function ConversationTreeCard({
@@ -44,7 +40,6 @@ export function ConversationTreeCard({
     : "var(--bg-panel)";
 
   const displayText = previewText(card);
-  const isPlaceholder = card.text.trim().length === 0 && card.placeholder !== null;
 
   return (
     <button
@@ -69,12 +64,12 @@ export function ConversationTreeCard({
         borderRadius: 8,
         cursor: disabled ? "not-allowed" : "pointer",
         transition: "background 0.12s, border-color 0.12s",
-        textAlign: "left",
+        textAlign: "center",
         overflow: "hidden",
         font: "inherit",
         color: "var(--text)",
         display: "flex",
-        alignItems: "flex-start",
+        alignItems: "center",
         gap: 6,
       }}
     >
@@ -84,9 +79,7 @@ export function ConversationTreeCard({
           minWidth: 0,
           fontSize: 11,
           lineHeight: "14px",
-          color: isPlaceholder ? "var(--text-muted)" : "var(--text)",
-          fontStyle: isPlaceholder ? "italic" : "normal",
-          opacity: isPlaceholder ? PLACEHOLDER_OPACITY : 1,
+          color: "var(--text)",
           overflow: "hidden",
           display: "-webkit-box",
           WebkitLineClamp: 3,

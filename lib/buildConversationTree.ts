@@ -11,15 +11,9 @@ export interface ConversationCard {
   /** SessionEntry.id — used as React key, for active-path lookup, for click → scroll. */
   id: string;
   role: CardRole;
-  /** Truncation-free source text — CSS line-clamp handles truncation at render. */
+  /** Truncation-free source text — CSS line-clamp handles truncation at render. Empty string is valid (renders an empty card). */
   text: string;
   imageCount: number;
-  /**
-   * Shown when text is empty to keep the card readable:
-   *   "[完成工具调用]" — final assistant with only thinking + tool calls.
-   *   "[发送了图片]"   — final assistant with images but no text.
-   */
-  placeholder: string | null;
   /**
    * Populated on user cards only. Counts thinking + toolCall blocks across
    * all assistant messages in the round (down to the next user message in
@@ -130,20 +124,11 @@ function buildCardFromEntry(
   const msg = messageFromEntry(entry)!;
   const text = extractMessageText(msg);
   const imageCount = countImages(msg);
-  let placeholder: string | null = null;
-  if (role === "assistant") {
-    if (text.trim().length === 0 && imageCount === 0) {
-      placeholder = "[完成工具调用]";
-    } else if (text.trim().length === 0 && imageCount > 0) {
-      placeholder = "[发送了图片]";
-    }
-  }
   return {
     id: entry.id,
     role,
     text,
     imageCount,
-    placeholder,
     roundStats,
     parentCardId,
     timestamp: entry.timestamp,

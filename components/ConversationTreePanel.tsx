@@ -260,10 +260,7 @@ function CardWithTooltip({
 }: CardWithTooltipProps) {
   const entry = entriesById.get(card.id);
   const ts = entry?.timestamp ? new Date(entry.timestamp).toLocaleString() : "";
-  const fullText =
-    card.text.trim().length > 0
-      ? card.text
-      : (card.placeholder ?? "");
+  const fullText = card.text;
   const tooltip = (
     <div style={{ maxWidth: 280, whiteSpace: "pre-wrap" }}>
       <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>
