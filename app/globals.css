@@ -163,6 +163,17 @@
   box-sizing: border-box;
 }
 
+/* Text selection — keep the original text color (no invert) and use a
+   soft light-blue background that stays visible on both light and dark themes. */
+::selection {
+  background: rgba(135, 180, 255, 0.35);
+  color: inherit;
+}
+::-moz-selection {
+  background: rgba(135, 180, 255, 0.35);
+  color: inherit;
+}
+
 html, body {
   height: 100%;
   margin: 0;
