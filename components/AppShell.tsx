@@ -25,6 +25,7 @@ import { SettingsModal } from "./SettingsModal";
 
 import { SchedulerModal } from "./SchedulerModal";
 import { ConversationTreePanel } from "./ConversationTreePanel";
+import type { SessionTreeNode } from "@/lib/types";
 import { CommandPalette } from "./CommandPalette";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { InboxModal } from "./InboxModal";
@@ -72,6 +73,40 @@ const RIGHT_PANEL_RATIO = 0.32;
 function isButtonVisible(cfg: RightSideBarConfig | null, id: RightBarButtonId): boolean {
   if (cfg === null) return true;
   return cfg[id] !== false;
+}
+
+// Walk the entry tree starting at `entryId` and return the entry id of the
+// deepest leaf reachable from it. A leaf is any entry whose `children` list
+// is empty. If `entryId` isn't found in the tree we return null so the
+// caller can fall back to the original id. This is what lets us map "click
+// on this card" to "switch to the END of that card's branch" — we never
+// stop the navigation at an ancestor card just because the user happened
+// to click higher up in the tree.
+function findDeepestLeafEntryId(
+  entryId: string,
+  roots: SessionTreeNode[],
+): string | null {
+  const byId = new Map<string, SessionTreeNode>();
+  const walk = (n: SessionTreeNode): void => {
+    byId.set(n.entry.id, n);
+    for (const c of n.children) walk(c);
+  };
+  for (const r of roots) walk(r);
+  const start = byId.get(entryId);
+  if (!start) return null;
+  let deepest: SessionTreeNode = start;
+  const stack: SessionTreeNode[] = [start];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    deepest = node;
+    if (node.children.length > 0) {
+      // Push in reverse so the leftmost branch is popped first.
+      for (let i = node.children.length - 1; i >= 0; i--) {
+        stack.push(node.children[i]);
+      }
+    }
+  }
+  return deepest.entry.id;
 }
 
 // Split a fully-assembled system prompt into "Pi base + Append" segments and
@@ -648,16 +683,20 @@ export function AppShell() {
     setRightPanelState("normal");
   }, [t]);
 
-  // Click on a card in the conversation-tree panel. If the card is on the
-  // active leaf path, just scroll the chat to that entry; otherwise switch
-  // branches (navigate_tree to that entry's leaf) and the chat will pick up
-  // the new leaf context, after which pendingScrollEntryId fires the scroll.
+  // Click on a card in the conversation-tree panel. We always resolve the
+  // clicked card to the deepest leaf entry in its subtree, so the chat
+  // jumps to the *end* of that branch rather than stopping at an ancestor
+  // card. While the agent is streaming we drop the click entirely — the
+  // card is also visually disabled at the source, but we double-check here
+  // so any non-mouse trigger (keyboard, programmatic) is also blocked.
   const handleConversationTreeCardClick = useCallback((cardId: string) => {
-    if (branchActiveLeafId !== cardId) {
-      handleBranchLeafChange(cardId);
+    if (isStreaming) return;
+    const targetLeafId = findDeepestLeafEntryId(cardId, branchTree) ?? cardId;
+    if (branchActiveLeafId !== targetLeafId) {
+      handleBranchLeafChange(targetLeafId);
     }
-    setPendingScrollEntryId(cardId);
-  }, [branchActiveLeafId, handleBranchLeafChange, setPendingScrollEntryId]);
+    setPendingScrollEntryId(targetLeafId);
+  }, [isStreaming, branchActiveLeafId, branchTree, handleBranchLeafChange, setPendingScrollEntryId]);
 
   // Index entries by id for the panel's tooltip + timestamp display. Built
   // from the same raw tree the panel walks, so it stays in sync without an

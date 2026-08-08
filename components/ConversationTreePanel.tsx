@@ -142,29 +142,9 @@ export function ConversationTreePanel({ entriesById, isStreaming, onCardClick }:
     >
       <div
         style={{
-          // Top toolbar (scale indicator + hint).
-          position: "sticky",
-          top: 0,
-          zIndex: 2,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "6px 10px",
-          background: "var(--bg-panel)",
-          borderBottom: "1px solid var(--border)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-        }}
-      >
-        <span>
-          {t("Conversation Tree")} · {layout.cards.length} {t("cards")}
-        </span>
-        <span style={{ fontSize: 10 }}>{t("Drag to scroll")}</span>
-      </div>
-      <div
-        style={{
           // The transformed inner container — origin top-left so the
-          // sticky header above doesn't get scaled with the tree.
+          // page-level header (if any wraps this panel) doesn't get
+          // scaled with the tree.
           transform: `scale(${SCALE})`,
           transformOrigin: "top left",
           width: totalWidth * SCALE,
@@ -267,6 +247,9 @@ export function ConversationTreePanel({ entriesById, isStreaming, onCardClick }:
                   active={active}
                   dimmed={dimmed}
                   streaming={streamingUserId === card.id}
+                  // Lock every card while the agent is streaming — switching
+                  // branches mid-stream would race the in-flight response.
+                  disabled={isStreaming}
                   width={CARD_W}
                   height={CARD_H}
                   onClick={handleClick}
@@ -287,6 +270,8 @@ interface CardWithTooltipProps {
   active: boolean;
   dimmed: boolean;
   streaming: boolean;
+  /** True while the agent is streaming — blocks the card's click. */
+  disabled: boolean;
   width: number;
   height: number;
   onClick: (card: LayoutCard) => void;
@@ -299,6 +284,7 @@ function CardWithTooltip({
   active,
   dimmed,
   streaming,
+  disabled,
   width,
   height,
   onClick,
@@ -326,6 +312,7 @@ function CardWithTooltip({
         active={active}
         dimmed={dimmed}
         streaming={streaming}
+        disabled={disabled}
         width={width}
         height={height}
         onClick={onClick}

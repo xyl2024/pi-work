@@ -10,6 +10,8 @@ interface Props {
   dimmed: boolean;
   /** True when this is the user card of the round currently being streamed. */
   streaming: boolean;
+  /** True while the agent is streaming — disables the card's click. */
+  disabled: boolean;
   /** Pixels for the card box. The whole tree is scaled by its parent. */
   width: number;
   height: number;
@@ -24,6 +26,7 @@ export function ConversationTreeCard({
   active,
   dimmed,
   streaming,
+  disabled,
   width,
   height,
   onClick,
@@ -59,6 +62,8 @@ export function ConversationTreeCard({
       onFocus={() => onHover(card)}
       onBlur={() => onHover(null)}
       title={displayText}
+      disabled={disabled}
+      aria-disabled={disabled}
       style={{
         position: "absolute",
         left: 0,
@@ -69,8 +74,8 @@ export function ConversationTreeCard({
         background,
         border: `1.5px solid ${borderColor}`,
         borderRadius: 8,
-        cursor: "pointer",
-        opacity,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? Math.min(opacity, 0.55) : opacity,
         transition: "opacity 0.12s, border-color 0.12s, background 0.12s",
         textAlign: "left",
         overflow: "hidden",
