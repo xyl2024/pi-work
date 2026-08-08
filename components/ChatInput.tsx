@@ -132,6 +132,19 @@ function Typewriter({ phrases }: { phrases: string[] }) {
   }, []);
 
   useEffect(() => {
+    // Defensive reset when the phrases source changes underneath us:
+    // the user can reconfigure `typewriter_phrases` via SettingsModal,
+    // which mutates the parent's `phrases` reference on save. If the
+    // new list is shorter than our current `phraseIdx`, the next
+    // `current.slice(...)` would throw on an undefined entry. We reset
+    // to a fresh random idx and clear any partial text from the
+    // previous phrase.
+    if (phraseIdx >= phrases.length) {
+      setPhraseIdx(Math.floor(Math.random() * phrases.length));
+      setText("");
+      setDeleting(false);
+      return;
+    }
     const current = phrases[phraseIdx];
     let timeout: ReturnType<typeof setTimeout>;
     if (!deleting && text === current) {
@@ -268,6 +281,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (Array.isArray(configured) && configured.length > 0) return configured;
     return TYPEWRITER_PHRASES[locale];
   }, [settings, locale]);
+  // Content-signature key for the Typewriter: changes only when the
+  // phrases list's actual content changes (not just the array reference).
+  // A remount gives us a clean state reset for any reconfigure — without
+  // this, a same-length content edit could leave `text` containing
+  // partial chars from the previous phrase. The separator is the
+  // start-of-heading control char to avoid collisions with user input.
+  // Memoized so the join only recomputes when the phrases ref changes.
+  const typewriterKey = useMemo(
+    () => `${locale}${typewriterPhrases.join("")}`,
+    [typewriterPhrases, locale],
+  );
   const [value, setValue] = useState("");
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
@@ -887,7 +911,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 fontWeight: 400,
               }}
             >
-              <Typewriter phrases={typewriterPhrases} />
+              <Typewriter key={typewriterKey} phrases={typewriterPhrases} />
             </span>
           )}
           <textarea
