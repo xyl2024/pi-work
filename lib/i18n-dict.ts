@@ -37,7 +37,13 @@ export const ZH_TRANSLATIONS = {
   "Context": "上下文",
   "Branches": "会话分支",
   "No active session": "没有活动会话",
+  "Empty session": "空会话",
   "This session has no branches (you can click `Edit from here` on any user message to start a new session branch)": "当前会话没有分支（可在任意用户消息处点击“从这里编辑”开启新的会话分支）",
+  // Conversation-tree panel (replaces the top-bar Branches dropdown)
+  "Conversation Tree": "对话树",
+  "Open conversation tree": "打开对话树",
+  "Drag to scroll": "拖动滚动",
+  "Click a card to switch to that branch and jump there": "点击卡片可切换到该分支并跳转过去",
   "Loading session...": "正在加载会话...",
   "Running tool...": "正在运行工具...",
   "Running": "正在运行",

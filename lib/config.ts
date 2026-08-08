@@ -37,7 +37,8 @@ export type RightBarButtonId =
   | "favorites"
   | "tokens"
   | "toolCalls"
-  | "gitDiff";
+  | "gitDiff"
+  | "conversationTree";
 
 export const RIGHT_BAR_BUTTON_IDS: readonly RightBarButtonId[] = [
   "todos",
@@ -49,6 +50,7 @@ export const RIGHT_BAR_BUTTON_IDS: readonly RightBarButtonId[] = [
   "tokens",
   "toolCalls",
   "gitDiff",
+  "conversationTree",
 ] as const;
 
 export type RightSideBarConfig = Record<RightBarButtonId, boolean>;
@@ -105,6 +107,7 @@ const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = {
   tokens: true,
   toolCalls: true,
   gitDiff: true,
+  conversationTree: true,
 };
 
 const DEFAULT_CONFIG: PiWorkConfig = {

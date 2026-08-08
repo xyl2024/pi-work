@@ -41,6 +41,12 @@ export interface SessionUiState {
   systemPrompt: string | null;
   sessionStats: SessionStats;
   contextUsage: ContextUsage;
+  /**
+   * Whether the active session's agent is currently streaming a response.
+   * Drives the streaming pulse dot in the conversation-tree panel and any
+   * other cross-cutting UI that wants to show live-agent state.
+   */
+  isStreaming: boolean;
 }
 
 const INITIAL: SessionUiState = {
@@ -49,6 +55,7 @@ const INITIAL: SessionUiState = {
   systemPrompt: null,
   sessionStats: null,
   contextUsage: null,
+  isStreaming: false,
 };
 
 let state: SessionUiState = INITIAL;

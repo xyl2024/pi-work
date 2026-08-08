@@ -24,7 +24,7 @@ import { PromptsConfig } from "./PromptsConfig";
 import { SettingsModal } from "./SettingsModal";
 
 import { SchedulerModal } from "./SchedulerModal";
-import { BranchNavigator } from "./BranchNavigator";
+import { ConversationTreePanel } from "./ConversationTreePanel";
 import { CommandPalette } from "./CommandPalette";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { InboxModal } from "./InboxModal";
@@ -45,6 +45,7 @@ import {
   RSS_TAB_ID,
   TOKENS_TAB_ID,
   GIT_DIFF_TAB_ID,
+  CONVERSATION_TREE_TAB_ID,
   RIGHT_BAR_ID_FOR_TAB_KIND,
 } from "@/lib/types";
 import type { RightSideBarConfig, RightBarButtonId } from "@/lib/config";
@@ -204,9 +205,9 @@ export function AppShell() {
 
   // Session-level UI state (branch tree, system prompt, agents files, session
   // stats, context usage) is owned by useAgentSession in ChatWindow and
-  // published to a module-level store. The top bar / branch navigator / context
-  // panel here read from that store.
-  const { branchTree, branchActiveLeafId, systemPrompt } = useSessionUiState();
+  // published to a module-level store. The top bar / conversation-tree panel
+  // / context panel here read from that store.
+  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
   const systemBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -230,10 +231,10 @@ export function AppShell() {
   }, [sessionKey, selectedSession?.id, fetchTools]);
 
   // Single active panel — only one dropdown open at a time
-  const [activeTopPanel, setActiveTopPanel] = useState<"branches" | "system" | "tools" | null>(null);
+  const [activeTopPanel, setActiveTopPanel] = useState<"system" | "tools" | null>(null);
   const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  const toggleTopPanel = useCallback((panel: "branches" | "system" | "tools") => {
+  const toggleTopPanel = useCallback((panel: "system" | "tools") => {
     setActiveTopPanel((cur) => cur === panel ? null : panel);
   }, []);
 
@@ -637,6 +638,40 @@ export function AppShell() {
     setRightPanelState("normal");
   }, [t]);
 
+  // Open the conversation-tree panel — card map of the session's tree.
+  const handleOpenConversationTreeTab = useCallback(() => {
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "conversationTree")) return prev;
+      return [{ kind: "conversationTree", id: CONVERSATION_TREE_TAB_ID, label: t("Conversation Tree") }, ...prev];
+    });
+    setActiveFileTabId(CONVERSATION_TREE_TAB_ID);
+    setRightPanelState("normal");
+  }, [t]);
+
+  // Click on a card in the conversation-tree panel. If the card is on the
+  // active leaf path, just scroll the chat to that entry; otherwise switch
+  // branches (navigate_tree to that entry's leaf) and the chat will pick up
+  // the new leaf context, after which pendingScrollEntryId fires the scroll.
+  const handleConversationTreeCardClick = useCallback((cardId: string) => {
+    if (branchActiveLeafId !== cardId) {
+      handleBranchLeafChange(cardId);
+    }
+    setPendingScrollEntryId(cardId);
+  }, [branchActiveLeafId, handleBranchLeafChange, setPendingScrollEntryId]);
+
+  // Index entries by id for the panel's tooltip + timestamp display. Built
+  // from the same raw tree the panel walks, so it stays in sync without an
+  // extra fetch.
+  const conversationTreeEntriesById = useMemo(() => {
+    const map = new Map<string, import("@/lib/types").SessionEntry>();
+    const walk = (n: import("@/lib/types").SessionTreeNode) => {
+      map.set(n.entry.id, n.entry);
+      for (const c of n.children) walk(c);
+    };
+    for (const r of branchTree) walk(r);
+    return map;
+  }, [branchTree]);
+
   // Right-bar tab buttons toggle the panel only when their own tab is both
   // active and visible. Opening through other entry points keeps its existing
   // "open this tab" semantics.
@@ -895,16 +930,6 @@ export function AppShell() {
           </Tooltip>
           {showChat && (
             <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-              <BranchNavigator
-                tree={branchTree}
-                activeLeafId={branchActiveLeafId}
-                onLeafChange={handleBranchLeafChange}
-                inline
-                containerRef={topBarRef}
-                open={activeTopPanel === "branches"}
-                onToggle={() => toggleTopPanel("branches")}
-                hasSession
-              />
               <button
                 ref={systemBtnRef}
                 onClick={() => toggleTopPanel("system")}
@@ -1296,6 +1321,12 @@ export function AppShell() {
             <TokensPanel onSelectSession={handleSelectSession} />
           ) : activeFileTab?.kind === "gitDiff" ? (
             <GitDiffPanel cwd={selectedSession?.cwd ?? newSessionCwd ?? null} />
+          ) : activeFileTab?.kind === "conversationTree" ? (
+            <ConversationTreePanel
+              entriesById={conversationTreeEntriesById}
+              isStreaming={isStreaming}
+              onCardClick={(card) => handleConversationTreeCardClick(card.id)}
+            />
           ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
               {t("No file open")}
@@ -1529,6 +1560,35 @@ export function AppShell() {
         )}
         {/* Favorites + Tool Calls + Focus — grouped at the bottom of the button bar */}
         <div style={{ marginTop: "auto" }}>
+          {/* Open conversation tree — always visible when toggled on */}
+          {isButtonVisible(rightSideBarConfig, "conversationTree") && (
+            <Tooltip content={(selectedSession?.id ?? newSessionCwd) ? t("Open conversation tree") : t("Open a session first")} side="left">
+              <button
+                onClick={() => handleToggleRightPanelTab(CONVERSATION_TREE_TAB_ID, handleOpenConversationTreeTab)}
+                disabled={!selectedSession?.id && !newSessionCwd}
+                aria-label={t("Open conversation tree")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 36, height: 36, padding: 0,
+                  background: "transparent", border: "none", borderBottom: "1px solid var(--border)",
+                  color: activeRightPanelKind === "conversationTree" ? "var(--accent)" : "var(--text-muted)",
+                  cursor: (selectedSession?.id ?? newSessionCwd) ? "pointer" : "not-allowed",
+                  opacity: (selectedSession?.id ?? newSessionCwd) ? 1 : 0.4,
+                  transition: "color 0.12s",
+                }}
+                onMouseEnter={(e) => { if (selectedSession?.id ?? newSessionCwd) e.currentTarget.style.color = "var(--accent)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "conversationTree" ? "var(--accent)" : "var(--text-muted)"; }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="6" cy="6" r="2.5" />
+                  <circle cx="6" cy="18" r="2.5" />
+                  <circle cx="18" cy="6" r="2.5" />
+                  <path d="M6 9v6" />
+                  <path d="M18 9a9 9 0 0 1-9 9" />
+                </svg>
+              </button>
+            </Tooltip>
+          )}
           {/* Open favorites — always visible */}
           {isButtonVisible(rightSideBarConfig, "favorites") && (
           <Tooltip content={t("Open favorites")} side="left">

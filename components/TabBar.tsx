@@ -15,7 +15,8 @@ export type Tab =
   | { kind: "canvas"; id: string; label: string }
   | { kind: "rss"; id: string; label: string }
   | { kind: "tokens"; id: string; label: string }
-  | { kind: "gitDiff"; id: string; label: string };
+  | { kind: "gitDiff"; id: string; label: string }
+  | { kind: "conversationTree"; id: string; label: string };
 
 interface Props {
   tabs: Tab[];
@@ -68,6 +69,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
             <RssTabIcon />
           ) : tab.kind === "tokens" ? (
             <TokensTabIcon />
+          ) : tab.kind === "conversationTree" ? (
+            <ConversationTreeTabIcon />
           ) : (
             getFileIcon(tab.label, 13)
           );
@@ -230,6 +233,19 @@ function TokensTabIcon() {
       <line x1="6" y1="12" x2="6" y2="4" />
       <line x1="10" y1="12" x2="10" y2="2" />
       <line x1="0.5" y1="12.5" x2="13.5" y2="12.5" />
+    </svg>
+  );
+}
+
+function ConversationTreeTabIcon() {
+  // Three-node branch glyph: two outer nodes fan in to a single trunk node.
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="3" cy="4" r="1.6" />
+      <circle cx="3" cy="12" r="1.6" />
+      <circle cx="13" cy="4" r="1.6" />
+      <path d="M3 5.6v4.8" />
+      <path d="M13 5.6a8 8 0 0 1-8 8" />
     </svg>
   );
 }

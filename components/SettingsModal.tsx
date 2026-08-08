@@ -22,6 +22,7 @@ const RIGHT_BAR_BUTTONS_UI: Array<{ id: RightBarButtonId; labelKey: string }> = 
   { id: "tokens",    labelKey: "Open token audit" },
   { id: "toolCalls", labelKey: "Tool Calls" },
   { id: "gitDiff",   labelKey: "Open git diff" },
+  { id: "conversationTree", labelKey: "Open conversation tree" },
 ];
 
 // Display order for the "Custom Tools" section checkboxes. Tools are

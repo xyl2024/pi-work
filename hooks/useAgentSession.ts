@@ -758,6 +758,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // the same scalar contents.
   useEffect(() => { setSessionUiState({ sessionStats }); }, [sessionStats]);
   useEffect(() => { setSessionUiState({ contextUsage }); }, [contextUsage]);
+  useEffect(() => { setSessionUiState({ isStreaming: streamState.isStreaming }); }, [streamState.isStreaming]);
 
   return {
     // State
