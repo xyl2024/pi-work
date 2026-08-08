@@ -339,6 +339,25 @@ pre, code {
   }
 }
 
+/* Conversation-tree active branch — flowing dashes while the agent works.
+   Applied to the connector paths on the active path via .tree-edge-flow;
+   the dash pattern (stroke-dasharray) is set inline, so this class only
+   supplies the animation. A negative stroke-dashoffset moves the pattern
+   forward along the path direction: from the parent card (start point)
+   toward the child card (end point). One period of the dash pattern is
+   3+9=12px, so -12 loops seamlessly. */
+.tree-edge-flow {
+  animation: tree-branch-flow 1s linear infinite;
+}
+@keyframes tree-branch-flow {
+  to { stroke-dashoffset: -12; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tree-edge-flow {
+    animation: none;
+  }
+}
+
 /* Process details summary row — hover brightens the text */
 .process-summary {
   color: var(--text-muted);

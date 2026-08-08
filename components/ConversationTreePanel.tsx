@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SessionEntry, SessionTreeNode } from "@/lib/types";
+import type { SessionTreeNode } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
-import { Tooltip } from "./Tooltip";
 import { ConversationTreeCard } from "./ConversationTreeCard";
 import { BranchMessageViewer } from "./BranchMessageViewer";
 import { buildConversationTree } from "@/lib/buildConversationTree";
@@ -51,8 +50,6 @@ function estimateLabelWidth(text: string): number {
 }
 
 interface Props {
-  /** The full session entries — used to look up the entry that a card represents for the tooltip / scroll. */
-  entriesById: Map<string, SessionEntry>;
   /** True while the agent is streaming tokens. Drives auto-follow scroll. */
   isStreaming: boolean;
   /**
@@ -66,7 +63,7 @@ interface Props {
   onCardClick: (card: LayoutCard) => void;
 }
 
-export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, onCardClick }: Props) {
+export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }: Props) {
   const { t } = useI18n();
   const { branchTree, branchActiveLeafId } = useSessionUiState();
   // When set, opens the full-branch preview modal for the clicked card's
@@ -217,6 +214,10 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
                   ? formatRoundLabel(edge.roundStats, t)
                   : null;
               const chipH = 14;
+              // While the agent is working, the active branch's connector
+              // animates: dashes march from the parent card (start point)
+              // toward the child card (end point). See .tree-edge-flow.
+              const flowing = agentRunning && onActive;
               return (
                 <g key={`${edge.fromId}->${edge.toId}`}>
                   <path
@@ -225,9 +226,10 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
                     stroke={stroke}
                     strokeOpacity={strokeOpacity}
                     strokeWidth={strokeWidth}
-                    strokeDasharray="4 4"
+                    strokeDasharray={flowing ? "3 9" : "4 4"}
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    className={flowing ? "tree-edge-flow" : undefined}
                   />
                   {label && (
                     <g>
@@ -274,7 +276,7 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
                 top: card.y * rowPitch,
               }}
             >
-              <CardWithTooltip
+              <ConversationTreeCard
                 card={card}
                 // Lock every card for the entire agent turn, not just the
                 // streaming sub-window. The agent can be busy with tool
@@ -286,7 +288,6 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
                 onClick={handleClick}
                 onHover={handleHover}
                 onZoom={handleZoom}
-                entriesById={entriesById}
               />
             </div>
           ))}
@@ -300,53 +301,5 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
         />
       )}
     </div>
-  );
-}
-
-interface CardWithTooltipProps {
-  card: LayoutCard;
-  /** True while the agent is streaming — blocks the card's click. */
-  disabled: boolean;
-  width: number;
-  height: number;
-  onClick: (card: LayoutCard) => void;
-  onHover: (card: LayoutCard | null) => void;
-  onZoom: (card: LayoutCard) => void;
-  entriesById: Map<string, SessionEntry>;
-}
-
-function CardWithTooltip({
-  card,
-  disabled,
-  width,
-  height,
-  onClick,
-  onHover,
-  onZoom,
-  entriesById,
-}: CardWithTooltipProps) {
-  const entry = entriesById.get(card.id);
-  const ts = entry?.timestamp ? new Date(entry.timestamp).toLocaleString() : "";
-  const fullText = card.text;
-  const tooltip = (
-    <div style={{ maxWidth: 280, whiteSpace: "pre-wrap" }}>
-      <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 4 }}>
-        {card.role === "user" ? "User" : "Assistant"} · {ts}
-      </div>
-      <div style={{ fontSize: 11 }}>{fullText}</div>
-    </div>
-  );
-  return (
-    <Tooltip content={tooltip} side="left">
-      <ConversationTreeCard
-        card={card}
-        disabled={disabled}
-        width={width}
-        height={height}
-        onClick={onClick}
-        onHover={onHover}
-        onZoom={onZoom}
-      />
-    </Tooltip>
   );
 }

@@ -699,19 +699,6 @@ export function AppShell() {
     setPendingScrollEntryId(targetLeafId);
   }, [agentRunning, branchActiveLeafId, branchTree, handleBranchLeafChange, setPendingScrollEntryId]);
 
-  // Index entries by id for the panel's tooltip + timestamp display. Built
-  // from the same raw tree the panel walks, so it stays in sync without an
-  // extra fetch.
-  const conversationTreeEntriesById = useMemo(() => {
-    const map = new Map<string, import("@/lib/types").SessionEntry>();
-    const walk = (n: import("@/lib/types").SessionTreeNode) => {
-      map.set(n.entry.id, n.entry);
-      for (const c of n.children) walk(c);
-    };
-    for (const r of branchTree) walk(r);
-    return map;
-  }, [branchTree]);
-
   // Right-bar tab buttons toggle the panel only when their own tab is both
   // active and visible. Opening through other entry points keeps its existing
   // "open this tab" semantics.
@@ -1363,7 +1350,6 @@ export function AppShell() {
             <GitDiffPanel cwd={selectedSession?.cwd ?? newSessionCwd ?? null} />
           ) : activeFileTab?.kind === "conversationTree" ? (
             <ConversationTreePanel
-              entriesById={conversationTreeEntriesById}
               isStreaming={isStreaming}
               agentRunning={agentRunning}
               onCardClick={(card) => handleConversationTreeCardClick(card.id)}

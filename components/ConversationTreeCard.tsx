@@ -21,7 +21,7 @@ interface Props {
  * Preview text for the card. Whitespace (spaces + newlines) is collapsed
  * away — the card is a tiny badge, and stripping whitespace helps the
  * 3-line clamp render readably. Empty `card.text` is valid (renders an
- * empty card). The tooltip keeps the full formatted text.
+ * empty card).
  */
 function previewText(card: LayoutCard): string {
   return card.text.replace(/\s+/g, "");
@@ -86,7 +86,6 @@ export function ConversationTreeCard({
         onClick={() => onClick(card)}
         disabled={disabled}
         aria-disabled={disabled}
-        title={displayText}
         style={{
           // The actual clickable surface — fills the wrapper. The zoom
           // button sits on top via a separate sibling so it can capture
@@ -128,7 +127,6 @@ export function ConversationTreeCard({
       {card.imageCount > 0 && (
         <span
           aria-label={`${card.imageCount} images`}
-          title={`${card.imageCount} images`}
           style={{
             position: "absolute",
             right: 6,
