@@ -119,6 +119,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const isNew = session === null;
 
   const [data, setData] = useState<SessionData | null>(null);
+  // Live conversation tree pushed by the server after each message_end (via
+  // the synthetic session_tree_update SSE event), so the conversation-tree
+  // panel renders new cards without waiting for the whole turn to finish.
+  // null = not initialized — falls back to data.tree (loaded from disk).
+  const [liveTree, setLiveTree] = useState<SessionTreeNode[] | null>(null);
   // Only existing sessions load from disk — the new-session page (no session
   // yet, cwd possibly still being picked) must never sit in the loading
   // state, otherwise first entry would spin forever on "Loading session...".
@@ -243,6 +248,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as SessionData & { agentState?: { running: boolean; state?: { isStreaming?: boolean; contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; systemPrompt?: string; thinkingLevel?: string } } };
       setData(d);
+      // data.tree is now authoritative (fresh from disk); drop any live tree
+      // pushed during the previous streaming window so it can't go stale.
+      setLiveTree(null);
       setActiveLeafId(d.leafId);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
@@ -391,6 +399,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             })
             .catch(() => {});
         }
+        break;
+      }
+      // Server-pushed live conversation tree (after every message_end, and
+      // once on SSE connect). Keeps the conversation-tree panel rendering
+      // new cards as soon as pi persists each message — no wait for the
+      // whole turn (agent_end) to finish.
+      case "session_tree_update": {
+        const tree = event.tree;
+        const leafId = event.leafId;
+        if (Array.isArray(tree)) setLiveTree(tree as SessionTreeNode[]);
+        if (typeof leafId === "string") setActiveLeafId(leafId);
         break;
       }
       case "tool_execution_start": {
@@ -710,8 +729,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [systemPrompt]);
 
   useEffect(() => {
-    setSessionUiState({ branchTree: data?.tree ?? [], branchActiveLeafId: activeLeafId });
-  }, [data?.tree, activeLeafId]);
+    setSessionUiState({ branchTree: liveTree ?? data?.tree ?? [], branchActiveLeafId: activeLeafId });
+  }, [data?.tree, activeLeafId, liveTree]);
 
   // Keep the store's leaf-change handler ref pointing at the latest callback.
   // We don't include this in a useEffect (it would lag one render behind); a

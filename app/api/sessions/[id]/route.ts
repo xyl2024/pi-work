@@ -8,6 +8,8 @@ import {
   invalidateSessionListCache,
   buildSessionContext,
   listAllSessions,
+  stripSessionInfoNodes,
+  fallbackSessionLeafId,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { deleteAgentTodoFile } from "@/lib/agent-todo-store";
@@ -179,41 +181,13 @@ export async function PATCH(
 // session_info and the edges above the rename would render as
 // inactive. Use spread (new entry object) to avoid mutating pi's
 // session data.
-function stripSessionInfoNodes<T extends { entry: { type?: string; parentId?: string | null }; children: T[] }>(nodes: T[]): T[] {
-  const out: T[] = [];
-  for (const n of nodes) {
-    if (n.entry.type === "session_info") {
-      const promotedParentId = n.entry.parentId ?? null;
-      for (const child of stripSessionInfoNodes(n.children)) {
-        out.push({
-          ...child,
-          entry: { ...child.entry, parentId: promotedParentId },
-        });
-      }
-    } else {
-      out.push({ ...n, children: stripSessionInfoNodes(n.children) });
-    }
-  }
-  return out;
-}
-
+// (Implementation moved to lib/session-reader.ts — shared with the
+// live-tree SSE push so both render paths strip session_info identically.)
+//
 // When a session_info entry is the last one in the file, reloading makes it
 // the leaf; subsequent messages would then hang off the metadata entry. Walk
 // back to the nearest real entry so the returned leaf stays a real message.
-function fallbackSessionLeafId(
-  sm: ReturnType<typeof SessionManager.open>,
-  leafId: string | null,
-): string | null {
-  let cur = leafId;
-  const seen = new Set<string>();
-  while (cur && !seen.has(cur)) {
-    seen.add(cur);
-    const entry = sm.getEntry(cur);
-    if (!entry || (entry as { type?: string }).type !== "session_info") break;
-    cur = (entry as { parentId?: string | null }).parentId ?? null;
-  }
-  return cur;
-}
+
 
 // DELETE /api/sessions/[id]
 export async function DELETE(

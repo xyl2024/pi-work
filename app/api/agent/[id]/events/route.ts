@@ -48,6 +48,17 @@ export async function GET(
         encode(event);
       });
 
+      // Push the current tree immediately so a freshly-opened event stream
+      // (e.g. right after /api/agent/new created the session) renders the
+      // conversation tree without waiting for the next message_end. Must run
+      // AFTER the onEvent subscription above — emitTreeUpdate only reaches
+      // listeners that are already registered.
+      try {
+        session.emitTreeUpdate();
+      } catch {
+        // best-effort — tree emission failures must not break the stream
+      }
+
       // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s)
       const heartbeat = setInterval(() => {
         try {

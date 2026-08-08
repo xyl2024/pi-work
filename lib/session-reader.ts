@@ -8,6 +8,63 @@ import { normalizeToolCalls } from "./normalize";
 
 export { getAgentDir };
 
+// ============================================================================
+// Session-tree cleanup helpers
+//
+// session_info entries are session metadata (name), not conversation branch
+// nodes. They are appended by pi when a session is (auto-)renamed, hung off
+// whatever the leaf was at that moment — which turns them into a side-branch
+// that misroutes buildConversationTree's per-round children[0] walk (the
+// round's final assistant gets locked early and every intermediate message
+// renders as a standalone card). Both the disk-loaded tree
+// (/api/sessions/[id]) and the live tree pushed over SSE must apply the same
+// cleanup so they render identically.
+// ============================================================================
+
+/**
+ * Strip session_info nodes out of a branch tree (children promoted into the
+ * vacated slot). Re-links each promoted child's parentId to the session_info's
+ * own parentId so the active-path walk in lib/buildConversationTree — which
+ * follows entry.parentId upward — can keep climbing past the strip point.
+ */
+export function stripSessionInfoNodes<T extends { entry: { type?: string; parentId?: string | null }; children: T[] }>(nodes: T[]): T[] {
+  const out: T[] = [];
+  for (const n of nodes) {
+    if (n.entry.type === "session_info") {
+      const promotedParentId = n.entry.parentId ?? null;
+      for (const child of stripSessionInfoNodes(n.children)) {
+        out.push({
+          ...child,
+          entry: { ...child.entry, parentId: promotedParentId },
+        });
+      }
+    } else {
+      out.push({ ...n, children: stripSessionInfoNodes(n.children) });
+    }
+  }
+  return out;
+}
+
+/**
+ * When a session_info entry is the last one in the file, reloading makes it
+ * the leaf; subsequent messages would then hang off the metadata entry. Walk
+ * back to the nearest real entry so the returned leaf stays a real message.
+ */
+export function fallbackSessionLeafId(
+  sm: { getEntry(id: string): unknown },
+  leafId: string | null,
+): string | null {
+  let cur = leafId;
+  const seen = new Set<string>();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const entry = sm.getEntry(cur);
+    if (!entry || (entry as { type?: string }).type !== "session_info") break;
+    cur = (entry as { parentId?: string | null }).parentId ?? null;
+  }
+  return cur;
+}
+
 function getSessionsDir(): string {
   return `${getAgentDir()}/sessions`;
 }

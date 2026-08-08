@@ -1,5 +1,5 @@
 import { createAgentSession, DefaultResourceLoader, isToolCallEventType } from "@earendil-works/pi-coding-agent";
-import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
+import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
@@ -90,9 +90,51 @@ export class AgentSessionWrapper {
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
       this.resetIdleTimer();
       this.updateRunningState(event);
+      // Push the freshest conversation tree after every persisted message
+      // (message_end is when pi writes the entry to the session file), so
+      // the conversation-tree panel can render new cards without waiting
+      // for the whole turn to finish (agent_end → full session reload).
+      if (event.type === "message_end") {
+        this.emitTreeUpdate();
+      }
       for (const l of this.listeners) l(event);
     });
     this.resetIdleTimer();
+  }
+
+  /**
+   * Emit a synthetic `session_tree_update` event carrying the session's
+   * latest tree + leaf id. Called after every message_end, and once by the
+   * SSE route on connect, so the conversation-tree panel renders new cards
+   * in near-real-time instead of waiting for agent_end to reload the file.
+   */
+  emitTreeUpdate(): void {
+    try {
+      const sm = this.inner.sessionManager;
+      const treeEvent: AgentEvent = {
+        type: "session_tree_update",
+        // Apply the same session_info cleanup the /api/sessions/[id] GET
+        // performs, so the live tree matches the disk-loaded one. Without
+        // this, a rename's session_info node (hung off the then-current
+        // leaf) becomes a side-branch that misroutes buildConversationTree's
+        // per-round children[0] walk — the round's final assistant gets
+        // locked early and every intermediate message renders as a card.
+        tree: stripSessionInfoNodes(sm.getTree()) as unknown,
+        leafId: fallbackSessionLeafId(sm, sm.getLeafId()),
+      };
+      for (const l of this.listeners) {
+        try {
+          l(treeEvent);
+        } catch {
+          // listener errors must not break the event loop
+        }
+      }
+    } catch (e) {
+      log.warn("tree update emission failed", {
+        sessionId: this.sessionId,
+        error: String(e),
+      });
+    }
   }
 
   private updateRunningState(event: AgentEvent): void {
