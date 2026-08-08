@@ -13,8 +13,8 @@ import type { LayoutCard } from "@/lib/conversationTreeLayout";
 /** Pixels (pre-scale). */
 const CARD_W = 200;
 const CARD_H = 64;
-const COL_GAP = 48;
-const ROW_GAP = 36;
+const COL_GAP = 72;
+const ROW_GAP = 54;
 const SCALE = 0.85;
 
 function formatRoundLabel(stats: { thinking: number; toolCalls: number }): string | null {
@@ -130,7 +130,7 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
           transformOrigin: "top left",
           width: totalWidth,
           height: totalHeight,
-          padding: "12px 12px 24px 12px",
+          padding: "24px 24px 48px 24px",
         }}
       >
         <div
@@ -189,27 +189,15 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
                     strokeLinejoin="round"
                   />
                   {label && (
-                    <g transform={`translate(${px + 8}, ${labelY})`}>
-                      <rect
-                        x={0}
-                        y={-8}
-                        width={label.length * 7 + 8}
-                        height={16}
-                        rx={4}
-                        fill="var(--bg-panel)"
-                        stroke={stroke}
-                        strokeWidth={0.8}
-                      />
-                      <text
-                        x={4}
-                        y={3}
-                        fontSize={9}
-                        fontFamily="var(--font-mono)"
-                        fill={onActive ? "var(--accent)" : "var(--text-muted)"}
-                      >
-                        {label}
-                      </text>
-                    </g>
+                    <text
+                      x={px + 8}
+                      y={labelY + 3}
+                      fontSize={9}
+                      fontFamily="var(--font-mono)"
+                      fill={onActive ? "var(--accent)" : "var(--text-muted)"}
+                    >
+                      {label}
+                    </text>
                   )}
                 </g>
               );
