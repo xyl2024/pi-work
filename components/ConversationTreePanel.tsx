@@ -18,12 +18,36 @@ const COL_GAP = 72;
 const ROW_GAP = 54;
 const SCALE = 0.85;
 
-function formatRoundLabel(stats: { thinking: number; toolCalls: number }): string | null {
+function formatRoundLabel(
+  stats: { thinking: number; toolCalls: number },
+  t: (key: string) => string,
+): { text: string; width: number } | null {
   const parts: string[] = [];
-  if (stats.thinking > 0) parts.push(`${stats.thinking} 条思考`);
-  if (stats.toolCalls > 0) parts.push(`${stats.toolCalls} 条工具调用`);
+  if (stats.thinking > 0) parts.push(`${stats.thinking} ${t("thoughts")}`);
+  if (stats.toolCalls > 0) parts.push(`${stats.toolCalls} ${t("tool calls")}`);
   if (parts.length === 0) return null;
-  return parts.join(" ");
+  const text = parts.join(" ");
+  return { text, width: estimateLabelWidth(text) };
+}
+
+/**
+ * Pixel-width estimate for the round label at fontSize 9, var(--font-mono).
+ * CJK glyphs are ~9px wide; digits ~5.5px; spaces ~3px. The +16 budget
+ * leaves room for 8px horizontal padding on each side of the chip rect.
+ */
+function estimateLabelWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code >= 0x4e00 && code <= 0x9fff) {
+      width += 9;
+    } else if (ch === " ") {
+      width += 3;
+    } else {
+      width += 5.5;
+    }
+  }
+  return width + 16;
 }
 
 interface Props {
@@ -173,17 +197,26 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
               // Same column: straight vertical line.
               // Different column: down, jog horizontal, then down.
               let d: string;
+              let labelX: number;
+              let labelY: number;
               if (parent.x === child.x) {
                 d = `M ${px} ${py} L ${cx} ${cy}`;
+                // Center the chip on the vertical line at its midpoint.
+                labelX = px;
+                labelY = (py + cy) / 2;
               } else {
                 const midY = py + ROW_GAP / 2;
                 d = `M ${px} ${py} L ${px} ${midY} L ${cx} ${midY} L ${cx} ${cy}`;
+                // Park the chip on the horizontal jog so it doesn't fight
+                // the right-angle bends.
+                labelX = (px + cx) / 2;
+                labelY = midY;
               }
               const label =
                 edge.isUserToAssistant && edge.roundStats
-                  ? formatRoundLabel(edge.roundStats)
+                  ? formatRoundLabel(edge.roundStats, t)
                   : null;
-              const labelY = (py + cy) / 2;
+              const chipH = 14;
               return (
                 <g key={`${edge.fromId}->${edge.toId}`}>
                   <path
@@ -197,15 +230,31 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
                     strokeLinejoin="round"
                   />
                   {label && (
-                    <text
-                      x={px + 8}
-                      y={labelY + 3}
-                      fontSize={9}
-                      fontFamily="var(--font-mono)"
-                      fill={onActive ? "var(--accent)" : "var(--text-muted)"}
-                    >
-                      {label}
-                    </text>
+                    <g>
+                      {/* Background pill that breaks the line so the label
+                          reads as a chip *on* the connector (not a label
+                          floating over the line). fill = panel bg → the
+                          dashed line "passes behind" the chip. */}
+                      <rect
+                        x={labelX - label.width / 2}
+                        y={labelY - chipH / 2}
+                        width={label.width}
+                        height={chipH}
+                        rx={chipH / 2}
+                        ry={chipH / 2}
+                        fill="var(--bg)"
+                      />
+                      <text
+                        x={labelX}
+                        y={labelY + 3}
+                        fontSize={9}
+                        fontFamily="var(--font-mono)"
+                        fill={onActive ? "var(--accent)" : "var(--text-muted)"}
+                        textAnchor="middle"
+                      >
+                        {label.text}
+                      </text>
+                    </g>
                   )}
                 </g>
               );
