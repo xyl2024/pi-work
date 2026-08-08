@@ -328,6 +328,11 @@ export const ZH_TRANSLATIONS = {
   "Enable or disable custom pi tools. Changes apply to sessions started after this point; running sessions keep their original tool set.": "启用或禁用自定义 pi 工具。修改只对之后启动的会话生效；已运行的会话保持原有工具集。",
   "Agent Todo": "Agent Todo（智能体任务列表）",
   "Show File": "Show File（内联展示文件）",
+  // Settings / chat input typewriter phrases (config.yaml → typewriter_phrases)
+  "Typewriter phrases": "打字机文案",
+  "Custom phrases cycled in the empty chat input. One phrase per line. Empty lines are ignored. Leave both blank to use the bundled defaults.": "在空聊天框中循环显示的文案，每行一条。空行会被忽略；两个都留空则使用内置默认文案。",
+  "English phrases": "英文文案",
+  "Chinese phrases": "中文文案",
   // File explorer (rename/delete/copy/context menu)
   "Delete file?": "删除文件？",
   "Delete folder?": "删除文件夹？",

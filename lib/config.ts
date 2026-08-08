@@ -3,6 +3,11 @@ import { join } from "path";
 import { homedir } from "os";
 import { load, dump } from "js-yaml";
 import { createLogger } from "./logger";
+import type { Locale } from "./i18n-dict";
+import {
+  DEFAULT_TYPEWRITER_PHRASES,
+  parseTypewriterPhrases,
+} from "./typewriter-phrases";
 
 const log = createLogger("config");
 
@@ -84,12 +89,22 @@ export interface AppendSystemConfig {
   enabled: boolean;
 }
 
+// ── Chat input typewriter phrases ─────────────────────────────────────────
+// Cycled randomly when the chat input is empty. Edited via the Settings
+// modal (per-locale textareas, one phrase per line) and persisted under
+// `typewriter_phrases` in ~/.pi-work/config.yaml. Shape mirrors the
+// i18n Locale type so the chat input can pick the right list without
+// any extra lookup. Falls back to bundled defaults on any parse failure
+// (see lib/typewriter-phrases.ts for the fail-open rules).
+export type TypewriterPhrases = Record<Locale, string[]>;
+
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   extensions: ExtensionsConfig;
   right_side_bar: RightSideBarConfig;
   custom_tools: CustomToolsConfig;
   append_system: AppendSystemConfig;
+  typewriter_phrases: TypewriterPhrases;
 }
 
 const DEFAULT_DANGEROUS_PATTERNS: DangerousPatternsConfig = {
@@ -121,6 +136,12 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   },
   // Preserve pre-existing behavior: append file loads by default.
   append_system: { enabled: true },
+  // Bundled quote collection — also the fallback for parseTypewriterPhrases
+  // when the field is missing, malformed, or partially empty.
+  typewriter_phrases: {
+    en: [...DEFAULT_TYPEWRITER_PHRASES.en],
+    zh: [...DEFAULT_TYPEWRITER_PHRASES.zh],
+  },
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -235,6 +256,7 @@ export function readConfig(): PiWorkConfig {
       right_side_bar: parseRightSideBar(cfg.right_side_bar),
       custom_tools: parseCustomTools(cfg.custom_tools),
       append_system: parseAppendSystem(cfg.append_system),
+      typewriter_phrases: parseTypewriterPhrases(cfg.typewriter_phrases),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });

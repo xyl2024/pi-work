@@ -2,11 +2,13 @@
 
 import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent, useMemo } from "react";
 import { useI18n, type Locale } from "@/hooks/useI18n";
+import { useSettings } from "@/hooks/settingsStore";
 import { Tooltip } from "./Tooltip";
 import { IconHoverButton } from "./IconHoverButton";
 import { ProviderIcon } from "./ProviderIcon";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { CwdPicker } from "./CwdPicker";
+import { DEFAULT_TYPEWRITER_PHRASES } from "@/lib/typewriter-phrases";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -114,63 +116,8 @@ const BUILTIN_NEW_SESSION: SlashResource = {
 };
 
 const TYPEWRITER_PHRASES: Record<Locale, string[]> = {
-  en: [
-    "ready when you are.",
-    "ask me anything.",
-    "let's build something cool.",
-    "explore your codebase.",
-    "draft an email.",
-    "summarize that paper.",
-    "plan your weekend.",
-    "explain it like I'm five.",
-    "pair-program with me.",
-    "fix that pesky bug.",
-    "translate to Chinese.",
-    "write a haiku.",
-    "brainstorm ideas.",
-    "review my pull request.",
-    "what should we cook tonight?",
-    "ship it.",
-    "make it pretty.",
-    "talk it through with me.",
-    "code is poetry.",
-    "the cursor blinks back.",
-    "draft in moonlight.",
-    "let the code breathe.",
-    "trace the river.",
-    "a small, kind fix.",
-    "morning, again.",
-    "leave room for wonder.",
-    "where the light lands.",
-  ],
-  zh: [
-    "我准备好了。",
-    "随时问我任何问题。",
-    "一起做点有趣的东西。",
-    "探索你的代码库。",
-    "帮你起草一封邮件。",
-    "总结那篇论文。",
-    "规划你的周末。",
-    "像讲给五岁小孩一样解释。",
-    "和我一起结对编程。",
-    "修掉那个烦人的 bug。",
-    "翻译成中文。",
-    "写一首俳句。",
-    "一起头脑风暴。",
-    "帮我 review 这个 PR。",
-    "今晚吃什么？",
-    "发版吧。",
-    "把它变好看。",
-    "陪我梳理一下思路。",
-    "今晚月色真好。",
-    "行到水穷处，坐看云起时。",
-    "此心安处是吾乡。",
-    "把酒祝东风。",
-    "留白处，自有山河。",
-    "春风又绿江南岸。",
-    "人间有味是清欢。",
-    "落霞与孤鹜齐飞。",
-  ],
+  en: [...DEFAULT_TYPEWRITER_PHRASES.en],
+  zh: [...DEFAULT_TYPEWRITER_PHRASES.zh],
 };
 
 function Typewriter({ phrases }: { phrases: string[] }) {
@@ -309,6 +256,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   userMessageHistory,
 }: Props, ref) {
   const { t, locale } = useI18n();
+  // Pick the active locale's typewriter phrases from the settings store.
+  // Falls back to the bundled defaults whenever the store hasn't loaded
+  // yet (initial mount) or the user-supplied list is empty for this
+  // locale (parseTypewriterPhrases already guards the empty case, but
+  // we belt-and-suspenders here because an empty list would otherwise
+  // deadlock the Typewriter effect on `phrases[0] === undefined`).
+  const settings = useSettings();
+  const typewriterPhrases = useMemo(() => {
+    const configured = settings?.typewriter_phrases?.[locale];
+    if (Array.isArray(configured) && configured.length > 0) return configured;
+    return TYPEWRITER_PHRASES[locale];
+  }, [settings, locale]);
   const [value, setValue] = useState("");
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
@@ -928,7 +887,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 fontWeight: 400,
               }}
             >
-              <Typewriter phrases={TYPEWRITER_PHRASES[locale]} />
+              <Typewriter phrases={typewriterPhrases} />
             </span>
           )}
           <textarea

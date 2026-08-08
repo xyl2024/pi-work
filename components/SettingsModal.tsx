@@ -8,6 +8,11 @@ import { WeChatSettingsSection } from "./WeChatSettingsSection";
 import { InboxTestSection } from "./InboxTestSection";
 import type { PiWorkConfig, RightBarButtonId, RightSideBarConfig, AgentCustomToolName } from "@/lib/config";
 import { setSettings } from "@/hooks/settingsStore";
+import {
+  DEFAULT_TYPEWRITER_PHRASES,
+  parseTypewriterPhraseList,
+} from "@/lib/typewriter-phrases";
+import type { Locale } from "@/lib/i18n-dict";
 
 // Display order for the "Right-side buttons" section checkboxes. Each row
 // reuses an existing i18n key (originally written for the right-bar button
@@ -59,6 +64,37 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
   const [appendSystemLoading, setAppendSystemLoading] = useState(true);
   const [appendSystemSaving, setAppendSystemSaving] = useState(false);
   const [appendSystemSavedOk, setAppendSystemSavedOk] = useState(false);
+
+  // ── Typewriter phrases (chat input placeholder) ──
+  // Per-locale textareas, one phrase per line. Parsed back into a
+  // string[] at save time via parseTypewriterPhraseList (which trims,
+  // drops empties, and de-dupes — same rules as the server-side parser).
+  const [typewriterDraft, setTypewriterDraft] = useState<Record<Locale, string>>({
+    en: "", zh: "",
+  });
+  const [originalTypewriterDraft, setOriginalTypewriterDraft] = useState<Record<Locale, string>>({
+    en: "", zh: "",
+  });
+  const [typewriterSaving, setTypewriterSaving] = useState(false);
+  const [typewriterSavedOk, setTypewriterSavedOk] = useState(false);
+
+  // Seed the draft from the loaded config once it's available. Using a
+  // ref so we don't reset the user's edits if `config` later changes
+  // (e.g. after we save and write the new snapshot back into local
+  // state). The Append System Prompt effect uses an empty-dep pattern
+  // for the same reason — we only want to seed once.
+  const typewriterSeededRef = useRef(false);
+  useEffect(() => {
+    if (typewriterSeededRef.current) return;
+    if (!config) return;
+    const seeded: Record<Locale, string> = {
+      en: config.typewriter_phrases.en.join("\n"),
+      zh: config.typewriter_phrases.zh.join("\n"),
+    };
+    typewriterSeededRef.current = true;
+    setTypewriterDraft(seeded);
+    setOriginalTypewriterDraft(seeded);
+  }, [config]);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -311,6 +347,10 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
 
   const appendSystemDirty = !!appendSystem && appendSystem.content !== originalAppendSystem;
 
+  const typewriterDirty =
+    typewriterDraft.en !== originalTypewriterDraft.en ||
+    typewriterDraft.zh !== originalTypewriterDraft.zh;
+
   const handleAppendSystemSave = useCallback(async () => {
     if (!appendSystem) return;
     setAppendSystemSaving(true);
@@ -338,6 +378,55 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
 
   const canSave = isDirty;
 
+  // Typewriter phrases save — parses each textarea back into a clean
+  // string[] (trim, drop empties, de-dupe; same rules as the server-side
+  // parser so what the modal sends matches what gets stored). Empty
+  // results for either locale fall back to the bundled defaults so a
+  // accidental clear in the textarea can't break the chat input.
+  const handleTypewriterSave = useCallback(async () => {
+    if (!config) return;
+    setTypewriterSaving(true);
+    try {
+      const nextEn = parseTypewriterPhraseList(
+        typewriterDraft.en.split("\n"),
+        DEFAULT_TYPEWRITER_PHRASES.en,
+      );
+      const nextZh = parseTypewriterPhraseList(
+        typewriterDraft.zh.split("\n"),
+        DEFAULT_TYPEWRITER_PHRASES.zh,
+      );
+      const nextConfig: PiWorkConfig = {
+        ...config,
+        typewriter_phrases: { en: nextEn, zh: nextZh },
+      };
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextConfig),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setConfig(nextConfig);
+      setOriginalConfig(nextConfig);
+      setSettings(nextConfig); // publish → chat input picks up new phrases on the next render
+      const reseeded: Record<Locale, string> = {
+        en: nextEn.join("\n"),
+        zh: nextZh.join("\n"),
+      };
+      setTypewriterDraft(reseeded);
+      setOriginalTypewriterDraft(reseeded);
+      setTypewriterSavedOk(true);
+      setTimeout(() => setTypewriterSavedOk(false), 1500);
+      toast.show({ kind: "success", message: t("Settings saved") });
+    } catch (e) {
+      toast.show({
+        kind: "error",
+        message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),
+      });
+    } finally {
+      setTypewriterSaving(false);
+    }
+  }, [config, typewriterDraft, t, toast]);
+
   const handleSave = useCallback(async () => {
     if (!config) return;
     setSaving(true);
@@ -363,12 +452,12 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
   const savedOkRef = useRef(savedOk);
   savedOkRef.current = savedOk;
   const handleClose = useCallback(() => {
-    if (isDirty) {
+    if (isDirty || typewriterDirty || appendSystemDirty) {
       const ok = window.confirm(t("Discard unsaved changes?"));
       if (!ok) return;
     }
     onClose();
-  }, [isDirty, onClose, t]);
+  }, [isDirty, typewriterDirty, appendSystemDirty, onClose, t]);
 
   const clawdOnDeskEnabled = config?.extensions.clawd_on_desk.enabled ?? false;
 
@@ -821,6 +910,66 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
           )}
 
           <InboxTestSection />
+
+          {/* ── Section 7: Typewriter phrases (chat input placeholder) ── */}
+          {/* One phrase per line, per locale. Same shape as the Append
+              System Prompt section: independent Save button that PUTs the
+              whole PiWorkConfig and immediately publishes to the settings
+              store so the chat input re-renders with the new phrases. */}
+          {config && (
+            <div style={{ marginBottom: 24, marginTop: 24 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>
+                  {t("Typewriter phrases")}
+                </h3>
+                <button
+                  onClick={handleTypewriterSave}
+                  disabled={!typewriterDirty || typewriterSaving || typewriterSavedOk}
+                  style={{
+                    padding: "4px 14px", height: 28,
+                    background: typewriterSavedOk ? "#16a34a" : typewriterSaving ? "var(--bg-panel)" : "var(--accent)",
+                    border: "none", borderRadius: 6,
+                    color: typewriterSavedOk ? "#fff" : typewriterSaving ? "var(--text-muted)" : "#fff",
+                    cursor: (!typewriterDirty || typewriterSaving || typewriterSavedOk) ? "default" : "pointer",
+                    fontSize: 12, fontWeight: 600,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    transition: "background-color 0.2s ease, color 0.2s ease",
+                    opacity: (!typewriterDirty || typewriterSaving || typewriterSavedOk) ? 0.5 : 1,
+                  }}
+                >
+                  {typewriterSavedOk && (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                  <span>{typewriterSavedOk ? t("Saved") : typewriterSaving ? t("Saving...") : t("Save")}</span>
+                </button>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
+                {t("Custom phrases cycled in the empty chat input. One phrase per line. Empty lines are ignored. Leave both blank to use the bundled defaults.")}
+              </p>
+              {(["en", "zh"] as const).map((loc) => (
+                <div key={loc} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 6px 0" }}>
+                    {loc === "en" ? t("English phrases") : t("Chinese phrases")}
+                  </div>
+                  <textarea
+                    value={typewriterDraft[loc]}
+                    onChange={(e) => setTypewriterDraft((prev) => ({ ...prev, [loc]: e.target.value }))}
+                    spellCheck={false}
+                    placeholder={DEFAULT_TYPEWRITER_PHRASES[loc].join("\n")}
+                    style={{
+                      width: "100%", height: 140, padding: "8px 10px", resize: "vertical",
+                      background: "var(--bg-panel)", border: "1px solid var(--border)",
+                      borderRadius: 6, color: "var(--text)", fontSize: 12,
+                      fontFamily: "var(--font-mono)", lineHeight: 1.55,
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
