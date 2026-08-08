@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionEntry, SessionTreeNode } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
 import { Tooltip } from "./Tooltip";
 import { ConversationTreeCard } from "./ConversationTreeCard";
+import { BranchMessageViewer } from "./BranchMessageViewer";
 import { buildConversationTree } from "@/lib/buildConversationTree";
 import { layoutConversationTree } from "@/lib/conversationTreeLayout";
 import type { LayoutCard } from "@/lib/conversationTreeLayout";
@@ -44,6 +45,10 @@ interface Props {
 export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, onCardClick }: Props) {
   const { t } = useI18n();
   const { branchTree, branchActiveLeafId } = useSessionUiState();
+  // When set, opens the full-branch preview modal for the clicked card's
+  // entry. The viewer reads `branchTree` itself, so the panel stays
+  // stateless about branch content.
+  const [zoomEntryId, setZoomEntryId] = useState<string | null>(null);
 
   const tree = useMemo(
     () => buildConversationTree(branchTree as SessionTreeNode[], branchActiveLeafId),
@@ -80,6 +85,9 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
   };
   const handleHover = (card: LayoutCard | null) => {
     hoveredRef.current = card;
+  };
+  const handleZoom = (card: LayoutCard) => {
+    setZoomEntryId(card.id);
   };
 
   if (layout.cards.length === 0) {
@@ -228,12 +236,20 @@ export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, 
                 height={CARD_H}
                 onClick={handleClick}
                 onHover={handleHover}
+                onZoom={handleZoom}
                 entriesById={entriesById}
               />
             </div>
           ))}
         </div>
       </div>
+      {zoomEntryId && (
+        <BranchMessageViewer
+          entryId={zoomEntryId}
+          branchTree={branchTree as SessionTreeNode[]}
+          onClose={() => setZoomEntryId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -246,6 +262,7 @@ interface CardWithTooltipProps {
   height: number;
   onClick: (card: LayoutCard) => void;
   onHover: (card: LayoutCard | null) => void;
+  onZoom: (card: LayoutCard) => void;
   entriesById: Map<string, SessionEntry>;
 }
 
@@ -256,6 +273,7 @@ function CardWithTooltip({
   height,
   onClick,
   onHover,
+  onZoom,
   entriesById,
 }: CardWithTooltipProps) {
   const entry = entriesById.get(card.id);
@@ -278,6 +296,7 @@ function CardWithTooltip({
         height={height}
         onClick={onClick}
         onHover={onHover}
+        onZoom={onZoom}
       />
     </Tooltip>
   );

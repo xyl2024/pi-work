@@ -44,6 +44,7 @@ export const ZH_TRANSLATIONS = {
   "Open conversation tree": "打开对话树",
   "Drag to scroll": "拖动滚动",
   "Click a card to switch to that branch and jump there": "点击卡片可切换到该分支并跳转过去",
+  "Expand card to view full message": "放大查看该消息完整内容",
   "Loading session...": "正在加载会话...",
   "Running tool...": "正在运行工具...",
   "Running": "正在运行",
