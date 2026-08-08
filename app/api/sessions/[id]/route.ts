@@ -169,11 +169,27 @@ export async function PATCH(
 // session_info entries are session metadata (name), not conversation branch
 // nodes. Strip them out of the branch tree (children promoted to the slot),
 // so historical renames don't show up as stray "session_info" nodes.
-function stripSessionInfoNodes<T extends { entry: { type?: string }; children: T[] }>(nodes: T[]): T[] {
+//
+// Children promoted into the vacated slot still have `entry.parentId`
+// pointing at the now-removed session_info id. Re-link each promoted
+// child's parentId to session_info's own parentId so the active-path
+// walk in lib/buildConversationTree — which follows entry.parentId
+// upward — can keep climbing past the strip point. Without this, any
+// active path passing through a renamed session would break above the
+// session_info and the edges above the rename would render as
+// inactive. Use spread (new entry object) to avoid mutating pi's
+// session data.
+function stripSessionInfoNodes<T extends { entry: { type?: string; parentId?: string | null }; children: T[] }>(nodes: T[]): T[] {
   const out: T[] = [];
   for (const n of nodes) {
     if (n.entry.type === "session_info") {
-      out.push(...stripSessionInfoNodes(n.children));
+      const promotedParentId = n.entry.parentId ?? null;
+      for (const child of stripSessionInfoNodes(n.children)) {
+        out.push({
+          ...child,
+          entry: { ...child.entry, parentId: promotedParentId },
+        });
+      }
     } else {
       out.push({ ...n, children: stripSessionInfoNodes(n.children) });
     }
