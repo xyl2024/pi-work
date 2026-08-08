@@ -20,6 +20,7 @@ import { useToolCallStatsView, useToolCallStatsScroll } from "@/hooks/toolCallSt
 import { ModelsConfig } from "./ModelsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { Tooltip } from "./Tooltip";
+import { IconHoverButton } from "./IconHoverButton";
 import { PromptsConfig } from "./PromptsConfig";
 import { SettingsModal } from "./SettingsModal";
 
@@ -244,11 +245,9 @@ export function AppShell() {
   // / context panel here read from that store.
   const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
-  const systemBtnRef = useRef<HTMLButtonElement>(null);
 
   // Tools list — fetched once per session, cached for button clicks
   const [tools, setTools] = useState<ToolInfo[]>([]);
-  const toolsBtnRef = useRef<HTMLButtonElement>(null);
 
   const fetchTools = useCallback(async (sessionId: string) => {
     try {
@@ -956,152 +955,91 @@ export function AppShell() {
           </button>
           </Tooltip>
           {showChat && (
-            <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-              <button
-                ref={systemBtnRef}
+            <div style={{ display: "flex", alignItems: "center", height: "100%", gap: 2 }}>
+              <IconHoverButton
                 onClick={() => toggleTopPanel("system")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  height: "100%", padding: "0 12px",
-                  background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  borderTop: activeTopPanel === "system" ? "2px solid var(--accent)" : "2px solid transparent",
-                  cursor: "pointer",
-                  color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
-                  fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)"; }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: systemPrompt ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }}>
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <line x1="8" y1="13" x2="16" y2="13" />
-                  <line x1="8" y1="17" x2="13" y2="17" />
-                </svg>
-                <span>{t("System Prompts")}</span>
-              </button>
+                active={activeTopPanel === "system"}
+                icon={
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: systemPrompt ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }}>
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="8" y1="13" x2="16" y2="13" />
+                    <line x1="8" y1="17" x2="13" y2="17" />
+                  </svg>
+                }
+                label={t("System Prompts")}
+              />
               <Tooltip content={tools.length > 0 ? `${tools.filter((t) => t.active).length} / ${tools.length} ${t("Active").toLowerCase()}` : t("No tools available for this session")}>
-              <button
-                ref={toolsBtnRef}
-                onClick={() => toggleTopPanel("tools")}
-                disabled={tools.length === 0}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  height: "100%", padding: "0 12px",
-                  background: activeTopPanel === "tools" ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  borderTop: activeTopPanel === "tools" ? "2px solid var(--accent)" : "2px solid transparent",
-                  cursor: tools.length > 0 ? "pointer" : "default",
-                  color: tools.length > 0 ? (activeTopPanel === "tools" ? "var(--text)" : "var(--text-muted)") : "var(--text-dim)",
-                  fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
-                  opacity: tools.length > 0 ? 1 : 0.5,
-                }}
-                onMouseEnter={(e) => { if (tools.length > 0) e.currentTarget.style.color = "var(--text)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = tools.length > 0 ? (activeTopPanel === "tools" ? "var(--text)" : "var(--text-muted)") : "var(--text-dim)"; }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                </svg>
-                <span>{t("Tools")}</span>
-                {tools.length > 0 && (
-                  <span style={{ fontSize: 10, opacity: 0.7 }}>{tools.filter((t) => t.active).length}</span>
-                )}
-              </button>
-              </Tooltip>
-              </div>
-          )}
-          <div style={{ flex: 1 }} />
-          {showChat && headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible) && (
-            <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-              {headerActions.replayVisible && (
-                <Tooltip content={t("Replay")}>
-                  <button
-                    type="button"
-                    onClick={headerActions.onOpenReplay}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      width: 36, height: 36, padding: 0,
-                      background: "none", border: "none",
-                      color: "var(--text-muted)", cursor: "pointer", transition: "color 0.12s",
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" />
+                <IconHoverButton
+                  onClick={() => toggleTopPanel("tools")}
+                  active={activeTopPanel === "tools"}
+                  disabled={tools.length === 0}
+                  icon={
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                     </svg>
-                  </button>
-                </Tooltip>
-              )}
-              {headerActions.exportVisible && (
-                <Tooltip content={headerActions.isExporting ? t("Exporting...") : t("Export session")}>
-                  <button
-                    type="button"
-                    onClick={headerActions.onExport}
-                    disabled={headerActions.isExporting}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      width: 36, height: 36, padding: 0,
-                      background: "none", border: "none",
-                      color: headerActions.isExporting ? "var(--accent)" : "var(--text-muted)",
-                      cursor: headerActions.isExporting ? "default" : "pointer",
-                      opacity: headerActions.isExporting ? 0.8 : 1,
-                      transition: "color 0.12s",
-                    }}
-                    onMouseEnter={(e) => { if (!headerActions.isExporting) e.currentTarget.style.color = "var(--text)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = headerActions.isExporting ? "var(--accent)" : "var(--text-muted)"; }}
-                  >
-                    {headerActions.isExporting ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" y1="2" x2="12" y2="6" />
-                        <line x1="12" y1="16" x2="12" y2="22" />
-                        <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-                        <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-                        <line x1="2" y1="12" x2="6" y2="12" />
-                        <line x1="16" y1="12" x2="22" y2="12" />
-                      </svg>
-                    ) : (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                    )}
-                  </button>
-                </Tooltip>
-              )}
-              {headerActions.autoNameVisible && (
-                <Tooltip content={headerActions.isAutoNaming ? t("Naming...") : t("Auto-name session")}>
-                  <button
-                    type="button"
-                    onClick={headerActions.onAutoName}
-                    disabled={!headerActions.canAutoName}
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      width: 36, height: 36, padding: 0,
-                      background: "none", border: "none",
-                      color: headerActions.isAutoNaming ? "var(--accent)" : "var(--text-muted)",
-                      cursor: headerActions.canAutoName ? "pointer" : "default",
-                      opacity: headerActions.canAutoName ? 1 : 0.5,
-                      transition: "color 0.12s",
-                    }}
-                    onMouseEnter={(e) => { if (headerActions.canAutoName) e.currentTarget.style.color = "var(--text)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.color = headerActions.isAutoNaming ? "var(--accent)" : "var(--text-muted)"; }}
-                  >
-                    {headerActions.isAutoNaming ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="M12 7v5l3 2" />
-                      </svg>
-                    ) : (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z" />
-                        <path d="M19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9L19 14z" />
-                      </svg>
-                    )}
-                  </button>
-                </Tooltip>
+                  }
+                  label={tools.length > 0 ? `${t("Tools")} ${tools.filter((t) => t.active).length}` : t("Tools")}
+                />
+              </Tooltip>
+              {headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible) && (
+                <>
+                  <div style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px", flexShrink: 0 }} />
+                  {headerActions.replayVisible && (
+                    <IconHoverButton
+                      icon={
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" />
+                        </svg>
+                      }
+                      label={t("Replay")}
+                      onClick={headerActions.onOpenReplay}
+                    />
+                  )}
+                  {headerActions.exportVisible && (
+                    <IconHoverButton
+                      icon={headerActions.isExporting ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="2" x2="12" y2="6" />
+                          <line x1="12" y1="16" x2="12" y2="22" />
+                          <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+                          <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+                          <line x1="2" y1="12" x2="6" y2="12" />
+                          <line x1="16" y1="12" x2="22" y2="12" />
+                        </svg>
+                      ) : (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      )}
+                      label={headerActions.isExporting ? t("Exporting...") : t("Export session")}
+                      onClick={headerActions.onExport}
+                      disabled={headerActions.isExporting}
+                      variant={headerActions.isExporting ? "accent" : "default"}
+                    />
+                  )}
+                  {headerActions.autoNameVisible && (
+                    <IconHoverButton
+                      icon={headerActions.isAutoNaming ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                      ) : (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z" />
+                          <path d="M19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9L19 14z" />
+                        </svg>
+                      )}
+                      label={headerActions.isAutoNaming ? t("Naming...") : t("Auto-name session")}
+                      onClick={headerActions.onAutoName}
+                      disabled={!headerActions.canAutoName}
+                      variant={headerActions.isAutoNaming ? "accent" : "default"}
+                    />
+                  )}
+                </>
               )}
             </div>
           )}
