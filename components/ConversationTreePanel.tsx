@@ -50,13 +50,20 @@ function formatRoundLabel(stats: { thinking: number; toolCalls: number }): strin
 interface Props {
   /** The full session entries — used to look up the entry that a card represents for the tooltip / scroll. */
   entriesById: Map<string, SessionEntry>;
-  /** Total count of root-to-leaf messages, used to detect the active streaming round. */
+  /** True while the agent is streaming tokens. Drives the per-card pulse dot + auto-follow scroll. */
   isStreaming: boolean;
+  /**
+   * True for the *entire* agent turn (waiting_model / streaming / running_tools /
+   * retrying), from agent_start to agent_end. We lock every card for this
+   * whole window — switching branches mid-round would race the in-flight
+   * response even during the non-streaming gaps between LLM calls.
+   */
+  agentRunning: boolean;
   /** Called when the user clicks a card; the parent (AppShell) decides whether to navigate_tree or scroll. */
   onCardClick: (card: LayoutCard) => void;
 }
 
-export function ConversationTreePanel({ entriesById, isStreaming, onCardClick }: Props) {
+export function ConversationTreePanel({ entriesById, isStreaming, agentRunning, onCardClick }: Props) {
   const { t } = useI18n();
   const { branchTree, branchActiveLeafId } = useSessionUiState();
 
@@ -247,9 +254,11 @@ export function ConversationTreePanel({ entriesById, isStreaming, onCardClick }:
                   active={active}
                   dimmed={dimmed}
                   streaming={streamingUserId === card.id}
-                  // Lock every card while the agent is streaming — switching
-                  // branches mid-stream would race the in-flight response.
-                  disabled={isStreaming}
+                  // Lock every card for the entire agent turn, not just the
+                  // streaming sub-window. The agent can be busy with tool
+                  // calls between LLM turns, and switching branches then
+                  // would race the in-flight response just the same.
+                  disabled={agentRunning}
                   width={CARD_W}
                   height={CARD_H}
                   onClick={handleClick}

@@ -759,6 +759,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   useEffect(() => { setSessionUiState({ sessionStats }); }, [sessionStats]);
   useEffect(() => { setSessionUiState({ contextUsage }); }, [contextUsage]);
   useEffect(() => { setSessionUiState({ isStreaming: streamState.isStreaming }); }, [streamState.isStreaming]);
+  // Publish the wider "agent is busy with this turn" flag so the
+  // conversation-tree panel can lock card clicks for the entire turn,
+  // not just the streaming sub-window. (See SessionUiState.agentRunning.)
+  useEffect(() => { setSessionUiState({ agentRunning }); }, [agentRunning]);
 
   return {
     // State

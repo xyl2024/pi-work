@@ -44,9 +44,20 @@ export interface SessionUiState {
   /**
    * Whether the active session's agent is currently streaming a response.
    * Drives the streaming pulse dot in the conversation-tree panel and any
-   * other cross-cutting UI that wants to show live-agent state.
+   * other cross-cutting UI that wants to show live-agent state. This is a
+   * subset of `agentRunning` — it is only true while tokens are arriving,
+   * not while the agent is executing tool calls between LLM turns.
    */
   isStreaming: boolean;
+  /**
+   * Whether the active session's agent is busy with this turn — from
+   * `agent_start` until `agent_end`. Covers every phase of the round
+   * (waiting on the model, streaming tokens, running tools between LLM
+   * turns, retrying). The conversation-tree panel uses this to lock card
+   * clicks for the *entire* turn, since switching branches mid-round
+   * would race the in-flight response even during non-streaming gaps.
+   */
+  agentRunning: boolean;
 }
 
 const INITIAL: SessionUiState = {
@@ -56,6 +67,7 @@ const INITIAL: SessionUiState = {
   sessionStats: null,
   contextUsage: null,
   isStreaming: false,
+  agentRunning: false,
 };
 
 let state: SessionUiState = INITIAL;

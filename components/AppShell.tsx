@@ -242,7 +242,7 @@ export function AppShell() {
   // stats, context usage) is owned by useAgentSession in ChatWindow and
   // published to a module-level store. The top bar / conversation-tree panel
   // / context panel here read from that store.
-  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming } = useSessionUiState();
+  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
   const systemBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -686,17 +686,18 @@ export function AppShell() {
   // Click on a card in the conversation-tree panel. We always resolve the
   // clicked card to the deepest leaf entry in its subtree, so the chat
   // jumps to the *end* of that branch rather than stopping at an ancestor
-  // card. While the agent is streaming we drop the click entirely — the
-  // card is also visually disabled at the source, but we double-check here
-  // so any non-mouse trigger (keyboard, programmatic) is also blocked.
+  // card. While the agent is busy with this turn (which includes tool
+  // calls between LLM turns, not just streaming) we drop the click entirely
+  // — the card is also visually disabled at the source, but we double-check
+  // here so any non-mouse trigger (keyboard, programmatic) is also blocked.
   const handleConversationTreeCardClick = useCallback((cardId: string) => {
-    if (isStreaming) return;
+    if (agentRunning) return;
     const targetLeafId = findDeepestLeafEntryId(cardId, branchTree) ?? cardId;
     if (branchActiveLeafId !== targetLeafId) {
       handleBranchLeafChange(targetLeafId);
     }
     setPendingScrollEntryId(targetLeafId);
-  }, [isStreaming, branchActiveLeafId, branchTree, handleBranchLeafChange, setPendingScrollEntryId]);
+  }, [agentRunning, branchActiveLeafId, branchTree, handleBranchLeafChange, setPendingScrollEntryId]);
 
   // Index entries by id for the panel's tooltip + timestamp display. Built
   // from the same raw tree the panel walks, so it stays in sync without an
@@ -1364,6 +1365,7 @@ export function AppShell() {
             <ConversationTreePanel
               entriesById={conversationTreeEntriesById}
               isStreaming={isStreaming}
+              agentRunning={agentRunning}
               onCardClick={(card) => handleConversationTreeCardClick(card.id)}
             />
           ) : (
