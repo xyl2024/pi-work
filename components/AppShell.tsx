@@ -1607,11 +1607,17 @@ export function AppShell() {
                 onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "conversationTree" ? "var(--accent)" : "var(--text-muted)"; }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="6" cy="6" r="2.5" />
-                  <circle cx="6" cy="18" r="2.5" />
-                  <circle cx="18" cy="6" r="2.5" />
-                  <path d="M6 9v6" />
-                  <path d="M18 9a9 9 0 0 1-9 9" />
+                  {/* 对话树：父气泡 + 主干分叉 + 两个子气泡 */}
+                  <rect x="8" y="2" width="8" height="6" rx="2.5" />
+                  <path d="M10.5 8 L12 10.5 L13.5 8" />
+                  <path d="M12 10.5 L12 12" />
+                  <path d="M6.5 12 L17.5 12" />
+                  <path d="M6.5 12 L6.5 13.5" />
+                  <path d="M17.5 12 L17.5 13.5" />
+                  <path d="M5.2 15 L6.5 13.5 L7.8 15" />
+                  <path d="M16.2 15 L17.5 13.5 L18.8 15" />
+                  <rect x="3" y="15" width="7" height="5.5" rx="2" />
+                  <rect x="14" y="15" width="7" height="5.5" rx="2" />
                 </svg>
               </button>
             </Tooltip>
