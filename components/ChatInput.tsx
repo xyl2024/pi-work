@@ -7,6 +7,7 @@ import { IconHoverButton } from "./IconHoverButton";
 import { ProviderIcon } from "./ProviderIcon";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { CwdPicker } from "./CwdPicker";
+import { AgentTodoPanel } from "./AgentTodoPanel";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -898,8 +899,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         )}
 
         {/* Main input — stays visible while the agent is streaming (abort button handles cancel) */}
-        <CollapsiblePanel open={true}>
-        <div
+        <div style={{ position: "relative" }}>
+          <AgentTodoPanel sessionId={sessionId ?? null} />
+          <CollapsiblePanel open={true}>
+            <div
           style={{
             display: "flex",
             gap: 8,
@@ -1010,8 +1013,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </svg>
             </button>
           )}
+            </div>
+          </CollapsiblePanel>
         </div>
-        </CollapsiblePanel>
         {(selectedSlashResource || (slashMenuOpen && slashQuery)) && (
           <div style={{ position: "relative" }}>
             {selectedSlashResource && (
