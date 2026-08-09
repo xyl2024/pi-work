@@ -10,9 +10,10 @@
  *
  * Schema mirrors Anthropic's Claude Code `AskUserQuestion` tool so LLMs that
  * already know that shape can use this tool zero-shot. One small extension:
- * each question may carry `required: boolean` (default false) — when true,
- * the user cannot submit without selecting at least one option (and, if the
- * "Other" option is selected, typing non-empty text).
+ * each question may carry `required: boolean` (default true when omitted —
+ * the server normalizes an omitted field to true) — when true, the user
+ * cannot submit without selecting at least one option (and, if the "Other"
+ * option is selected, typing non-empty text).
  */
 
 export const ASK_USER_QUESTIONS_TOOL_NAME = "ask_user_questions";
@@ -51,7 +52,8 @@ export interface AskUserQuestion {
   /** When true, the user may select multiple options. Default false. */
   multiSelect: boolean;
   /** When true, the user cannot submit without at least one selected
-   *  option (and non-empty text if "Other" is selected). Default false. */
+   *  option (and non-empty text if "Other" is selected). The schema field
+   *  is optional; omitted means required (normalized to true server-side). */
   required: boolean;
   /** 2-4 options to present. */
   options: AskUserQuestionOption[];

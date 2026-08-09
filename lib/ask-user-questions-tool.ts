@@ -82,10 +82,14 @@ const AskUserQuestionsParamsSchema = Type.Object({
         description: "Allow multiple selections. Default false.",
         default: false,
       }),
-      required: Type.Boolean({
-        description: "User must answer this question to submit. Default false.",
-        default: false,
-      }),
+      // Optional on purpose: many LLMs omit `required` (it's an extension
+      // beyond Claude Code's AskUserQuestion shape). Omitting it used to
+      // fail schema validation; now it falls back to required: true below.
+      required: Type.Optional(
+        Type.Boolean({
+          description: "User must answer this question to submit. Default true when omitted.",
+        }),
+      ),
       options: Type.Array(
         Type.Object({
           label: Type.String({
@@ -129,7 +133,7 @@ function paramsToQuestions(params: AskUserQuestionsParamsType): AskUserQuestion[
     question: q.question,
     header: q.header,
     multiSelect: q.multiSelect,
-    required: q.required,
+    required: q.required ?? true,
     options: q.options.map((o) => ({ label: o.label, description: o.description })),
   }));
 }
@@ -195,7 +199,7 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
     name: ASK_USER_QUESTIONS_TOOL_NAME,
     label: "Ask User Questions",
     description:
-      "Ask the user 1-5 multiple-choice questions and wait for their answers. Each question has 2-4 options with a short label and a longer description. Set `multiSelect: true` to allow multiple selections. Set `required: true` to forbid skipping. Add an option labeled exactly `Other` to allow the user to type a free-text answer for that question. The tool blocks until the user responds or cancels; do not call it from a context where no user is available (e.g. a scheduled task — the tool will return an error in that case).",
+      "Ask the user 1-5 multiple-choice questions and wait for their answers. Each question has 2-4 options with a short label and a longer description. Set `multiSelect: true` to allow multiple selections. Questions are required by default; set `required: false` to let the user skip one. Add an option labeled exactly `Other` to allow the user to type a free-text answer for that question. The tool blocks until the user responds or cancels; do not call it from a context where no user is available (e.g. a scheduled task — the tool will return an error in that case).",
     parameters: AskUserQuestionsParamsSchema,
     executionMode: "sequential",
     promptSnippet: "Ask the user structured multiple-choice questions.",
@@ -204,7 +208,7 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
       "Each call can carry 1-5 questions. Group related decisions in one call so the user answers them in a single round-trip.",
       "Each question must have 2-4 options. The `header` field is a short (1-12 char) chip label used to reference that question in the answer summary; the `question` field is the long-form prompt shown to the user.",
       "Set `multiSelect: true` when the user may legitimately pick more than one option (e.g. \"which features to include\"). Leave false for exclusive choices.",
-      "Set `required: true` when skipping the question would block your next step. Leave false for open-ended optional questions.",
+      "Questions are required by default (the user must answer to submit). Set `required: false` for open-ended optional questions the user may skip.",
       "Add an option labeled exactly `Other` to allow the user to type a free-text answer. The frontend will turn that option into a text input.",
       "Do NOT call this tool from a scheduled task or any context where no user is available — it will return an error. Provide the necessary context to the model directly instead.",
     ],
