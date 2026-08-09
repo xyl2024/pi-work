@@ -1275,7 +1275,7 @@ export function AppShell() {
           ) : activeFileTab?.kind === "json" ? (
             <JsonPanel />
           ) : activeFileTab?.kind === "file" ? (
-            <FileViewer filePath={activeFileTab.filePath} />
+            <FileViewer filePath={activeFileTab.filePath} cwd={selectedSession?.cwd ?? newSessionCwd ?? undefined} />
           ) : activeFileTab?.kind === "canvas" ? (
             <CanvasPanel />
           ) : activeFileTab?.kind === "rss" ? (

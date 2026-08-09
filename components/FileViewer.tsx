@@ -17,6 +17,7 @@ import { SvgBlock } from "./SvgBlock";
 import { CodeBlock } from "./CodeBlock";
 import { FileSearchBar } from "./FileSearchBar";
 import { encodeFilePathForApi, getFileName, normalizeFilePathSlashes } from "@/lib/file-paths";
+import { parseFileDiff, type GitDeletedBlock, type GitLineMarkType } from "@/lib/git-line-marks";
 import { Document, Page, pdfjs } from "react-pdf";
 
 import "react-pdf/dist/Page/AnnotationLayer.css";
@@ -26,6 +27,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 interface Props {
   filePath: string;
+  /** Only used to locate the git repo for gutter marks. */
+  cwd?: string;
 }
 
 interface FileData {
@@ -37,6 +40,16 @@ interface FileData {
 const IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif"]);
 const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "weba", "webm"]);
 const PDF_EXTS = new Set(["pdf"]);
+
+// Git gutter mark colours — match the existing DiffView palette.
+const GIT_ADDED_COLOR = "#4ade80";
+const GIT_MODIFIED_COLOR = "#60a5fa";
+const GIT_DELETED_COLOR = "#f87171";
+/** Pixel height of one code line in the syntax highlighter (13px font,
+ *  1.6 line-height) — used to position deleted-block markers. */
+const CODE_LINE_HEIGHT = 13 * 1.6;
+/** Top padding of the syntax highlighter content (`padding: "12px 0"`). */
+const CODE_TOP_PADDING = 12;
 
 function isImagePath(filePath: string): boolean {
   const base = getFileName(filePath);
@@ -1006,7 +1019,7 @@ function PdfViewer({ filePath }: Props) {
   );
 }
 
-export function FileViewer({ filePath }: Props) {
+export function FileViewer({ filePath, cwd }: Props) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} />;
   }
@@ -1016,10 +1029,10 @@ export function FileViewer({ filePath }: Props) {
   if (isPdfPath(filePath)) {
     return <PdfViewer filePath={filePath} />;
   }
-  return <TextFileViewer filePath={filePath} />;
+  return <TextFileViewer filePath={filePath} cwd={cwd} />;
 }
 
-function TextFileViewer({ filePath }: Props) {
+function TextFileViewer({ filePath, cwd }: Props) {
   const { isDark } = useTheme();
   const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
@@ -1032,6 +1045,12 @@ function TextFileViewer({ filePath }: Props) {
   const [watching, setWatching] = useState(false);
   const [changeCount, setChangeCount] = useState(0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // Git gutter marks (VS Code style): line → added/modified, plus deleted
+  // blocks rendered as collapsible markers. null = not loaded / no diff /
+  // truncated (fall back to no marks).
+  const [gitMarks, setGitMarks] = useState<Map<number, GitLineMarkType> | null>(null);
+  const [gitDeletedBlocks, setGitDeletedBlocks] = useState<GitDeletedBlock[]>([]);
+  const [expandedDelete, setExpandedDelete] = useState<number | null>(null);
   // Inline search state. `searchInputValue` updates on every keystroke for a
   // responsive input field; `searchQuery` lags behind by 250ms (see effect
   // below) and is what drives match computation.
@@ -1204,6 +1223,33 @@ function TextFileViewer({ filePath }: Props) {
       });
   }, []);
 
+  // Load git gutter marks: diff worktree vs HEAD (staged + unstaged
+  // combined). Truncated diffs (>500KB) fall back to no marks rather than
+  // risk wrong markers.
+  const loadGitMarks = useCallback(() => {
+    if (!cwd) {
+      setGitMarks(null);
+      setGitDeletedBlocks([]);
+      return;
+    }
+    fetch(`/api/git/diff?cwd=${encodeURIComponent(cwd)}&file=${encodeURIComponent(filePath)}&base=head`)
+      .then((r) => r.json())
+      .then((d: { diff: string | null; truncated: boolean }) => {
+        if (d.truncated || !d.diff) {
+          setGitMarks(null);
+          setGitDeletedBlocks([]);
+          return;
+        }
+        const parsed = parseFileDiff(d.diff);
+        setGitMarks(parsed.lineMarks);
+        setGitDeletedBlocks(parsed.deletedBlocks);
+      })
+      .catch(() => {
+        setGitMarks(null);
+        setGitDeletedBlocks([]);
+      });
+  }, [cwd, filePath]);
+
   // Initial load + SSE watch setup
   useEffect(() => {
     setLoading(true);
@@ -1216,6 +1262,9 @@ function TextFileViewer({ filePath }: Props) {
     setChangeCount(0);
     setWatching(false);
     setLightboxIndex(null);
+    setGitMarks(null);
+    setGitDeletedBlocks([]);
+    setExpandedDelete(null);
     // Reset inline search state on file switch — matches the spec ("clear on
     // filePath change"). The search bar unmounts because the conditional in
     // the JSX evaluates `!previewMode`; we explicitly clear the
@@ -1233,6 +1282,7 @@ function TextFileViewer({ filePath }: Props) {
     fetchContent(filePath).then((d) => {
       if (d?.language === "markdown") setPreviewMode(true);
     }).finally(() => setLoading(false));
+    loadGitMarks();
 
     // Set up SSE watch
     const encoded = encodeFilePathForApi(filePath);
@@ -1245,6 +1295,7 @@ function TextFileViewer({ filePath }: Props) {
 
     es.addEventListener("change", () => {
       fetchContent(filePath, true);
+      loadGitMarks();
     });
 
     es.addEventListener("error", () => {
@@ -1259,7 +1310,7 @@ function TextFileViewer({ filePath }: Props) {
       es.close();
       esRef.current = null;
     };
-  }, [filePath, fetchContent]);
+  }, [filePath, fetchContent, loadGitMarks]);
 
   if (loading) {
     return (
@@ -1487,7 +1538,7 @@ function TextFileViewer({ filePath }: Props) {
       )}
 
       {/* Content area */}
-      <div ref={contentRef} style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
+      <div ref={contentRef} style={{ flex: 1, overflow: "auto", background: "var(--bg)", position: "relative" }}>
         {viewMode === "diff" && hasDiff ? (
           <DiffView oldContent={prevContent!} newContent={data.content} language={data.language} />
         ) : isHtml && previewMode ? (
@@ -1513,13 +1564,14 @@ function TextFileViewer({ filePath }: Props) {
             language={data.language === "text" ? "plaintext" : data.language}
             style={isDark ? vscDarkPlus : vs}
             showLineNumbers
-            // Force per-line <span> wrappers when the search bar is open
-            // (react-syntax-highlighter only calls `lineProps` when wrapLines
-            // is true). For `language="text"` (plaintext, no tokens) the
-            // default would skip wrapping entirely — that would silently
-            // disable all highlights. Keep the user's wrap preference in
-            // effect when the search bar is closed.
-            wrapLines={searchOpen || wrapLines}
+            // Force per-line <span> wrappers when the search bar is open or
+            // git gutter marks are present (react-syntax-highlighter only
+            // calls `lineProps` when wrapLines is true). For
+            // `language="text"` (plaintext, no tokens) the default would
+            // skip wrapping entirely — that would silently disable all
+            // highlights. Keep the user's wrap preference in effect when
+            // the search bar is closed and there are no marks.
+            wrapLines={searchOpen || wrapLines || (gitMarks !== null && gitMarks.size > 0)}
             lineNumberStyle={{
               color: "var(--text-dim)",
               fontStyle: "normal",
@@ -1529,13 +1581,15 @@ function TextFileViewer({ filePath }: Props) {
             lineProps={(lineNumber: number) => {
               const isCurrent = lineNumber === currentMatchLine;
               const isMatch = !isCurrent && matchedLines.has(lineNumber);
+              const mark = gitMarks?.get(lineNumber);
+              const style: React.CSSProperties = {};
+              if (mark === "added") style.borderLeft = `3px solid ${GIT_ADDED_COLOR}`;
+              else if (mark === "modified") style.borderLeft = `3px solid ${GIT_MODIFIED_COLOR}`;
+              if (isCurrent) style.background = "rgba(255, 200, 0, 0.30)";
+              else if (isMatch) style.background = "rgba(255, 200, 0, 0.12)";
               return {
                 "data-fv-line": lineNumber,
-                style: isCurrent
-                  ? { background: "rgba(255, 200, 0, 0.30)" }
-                  : isMatch
-                  ? { background: "rgba(255, 200, 0, 0.12)" }
-                  : {},
+                style,
               };
             }}
             customStyle={{
@@ -1552,6 +1606,77 @@ function TextFileViewer({ filePath }: Props) {
           >
             {data.content}
           </SyntaxHighlighter>
+        )}
+
+        {/* Git deleted-block markers — absolutely positioned over the gutter
+            (line numbers), showing a "−N" pill that expands the removed
+            lines. Hidden while wrapping is on (line heights become unstable)
+            and outside the source view. */}
+        {viewMode === "source" && !previewMode && !wrapLines && gitDeletedBlocks.length > 0 && (
+          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 48, pointerEvents: "none", zIndex: 5 }}>
+            {gitDeletedBlocks.map((block, i) => {
+              const top = CODE_TOP_PADDING + (block.beforeLine - 1) * CODE_LINE_HEIGHT;
+              const expanded = expandedDelete === i;
+              return (
+                <div key={i} style={{ position: "absolute", left: 0, top, width: 48 }}>
+                  <button
+                    onClick={() => setExpandedDelete(expanded ? null : i)}
+                    title={t("Deleted lines")}
+                    style={{
+                      width: 44,
+                      height: CODE_LINE_HEIGHT,
+                      marginLeft: 2,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "#3d2020",
+                      color: GIT_DELETED_COLOR,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      border: "1px solid rgba(248, 113, 113, 0.4)",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      pointerEvents: "auto",
+                      fontFamily: "var(--font-mono)",
+                    }}
+                  >
+                    −{block.lines.length}
+                  </button>
+                  {expanded && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 3,
+                        top: CODE_LINE_HEIGHT + 2,
+                        width: 440,
+                        maxHeight: 240,
+                        overflow: "auto",
+                        zIndex: 20,
+                        pointerEvents: "auto",
+                        background: "#3d2020",
+                        border: "1px solid rgba(248, 113, 113, 0.45)",
+                        borderLeft: `3px solid ${GIT_DELETED_COLOR}`,
+                        borderRadius: 4,
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 12,
+                        lineHeight: 1.6,
+                        boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+                      }}
+                    >
+                      {block.lines.map((l, j) => (
+                        <div
+                          key={j}
+                          style={{ whiteSpace: "pre", color: "#f87171", padding: "0 8px", background: "transparent" }}
+                        >
+                          - {l}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
       {lightboxIndex !== null && gallery.length > 0 && (

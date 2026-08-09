@@ -345,6 +345,7 @@ export const ZH_TRANSLATIONS = {
   "Delete folder?": "删除文件夹？",
   "Delete failed": "删除失败",
   "Deleted": "已删除",
+  "Deleted lines": "已删除的行",
   "Renamed": "已重命名",
   "Auto-name": "自动命名",
   "Auto-name session": "自动命名会话",

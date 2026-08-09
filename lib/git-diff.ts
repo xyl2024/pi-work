@@ -295,9 +295,16 @@ export async function getFileDiff(
   repoRoot: string,
   filePath: string,
   staged: boolean,
+  baseHead = false,
 ): Promise<{ diff: string | null; truncated: boolean }> {
   const args = ["diff"];
-  if (staged) args.push("--cached");
+  if (staged) {
+    args.push("--cached");
+  } else if (baseHead) {
+    // Worktree vs HEAD — merges staged + unstaged changes so the gutter
+    // markers survive a `git add` (VS Code behaviour).
+    args.push("HEAD");
+  }
   if (!staged && !(await isTracked(repoRoot, filePath))) {
     // Untracked file — `git diff -- <path>` is empty; emulate a new file.
     return diffAgainstDevNull(repoRoot, filePath);
