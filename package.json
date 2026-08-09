@@ -2,6 +2,30 @@
   "name": "@xyl2024/pi-work",
   "version": "0.6.11",
   "description": "Pi Work — Web UI for the pi coding agent",
+  "keywords": [
+    "pi",
+    "coding-agent",
+    "ai",
+    "nextjs",
+    "claude",
+    "anthropic",
+    "sse"
+  ],
+  "homepage": "https://github.com/xyl2024/pi-work#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xyl2024/pi-work.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xyl2024/pi-work/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "bin": {
     "pi-work": "bin/pi-work.js"
   },

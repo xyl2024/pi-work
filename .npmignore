@@ -1,0 +1,48 @@
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.env.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Git / CI
+.git/
+.gitignore
+.gitattributes
+
+# Build artifacts not in the tarball (already excluded via files, defensive)
+.next/cache/
+.next/dev/
+*.tsbuildinfo
+
+# Development-only
+docs/
+scripts/
+electron-shell/
+agent-skills/
+extensions/
+docker-compose.yml
+Dockerfile
+volumes/
+
+# Tests / coverage
+coverage/
+.nyc_output/
+*.test.*
+*.spec.*
+
+# Backups
+*.bak
+*.bak.*
