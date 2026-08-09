@@ -69,11 +69,12 @@ export type RightSideBarConfig = Record<RightBarButtonId, boolean>;
 // validator will silently drop it (fail-open default still applies, but
 // the user setting is lost).
 
-export type AgentCustomToolName = "agent_todo" | "show_file";
+export type AgentCustomToolName = "agent_todo" | "show_file" | "ask_user_questions";
 
 export const AGENT_CUSTOM_TOOL_NAMES: readonly AgentCustomToolName[] = [
   "agent_todo",
   "show_file",
+  "ask_user_questions",
 ] as const;
 
 export interface CustomToolsConfig {

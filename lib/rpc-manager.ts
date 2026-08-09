@@ -11,6 +11,8 @@ import { buildTodoTools } from "./todo-tools";
 import { readEnabledTodoTools } from "./todo-tools-config";
 import { buildShowFileTool } from "./show-file-tool";
 import { buildAgentTodoTool } from "./agent-todo-tool";
+import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-questions-tool";
+import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "./ask-user-questions-tool-types";
 import { readEnabledCustomTools } from "./custom-tools-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 
@@ -32,6 +34,37 @@ export interface PermissionRequestEvent {
   toolCallId: string;
   ruleName: string;
   command: string;
+}
+
+// ============================================================================
+// Ask user questions (parallel to the permission queue above)
+//
+// The `ask_user_questions` custom tool blocks until the user answers a
+// batch of structured questions or cancels. The tool calls
+// `requestUserInput(toolCallId, questions)` (closure-bound per session);
+// the wrapper emits a synthetic `ask_user_questions_request` SSE event,
+// stores a Promise in `pendingUserInputs`, and resolves it when the
+// client POSTs back an `ask_user_questions_decision` command.
+//
+// Distinct from `pendingPermissions` because the data shape, lifecycle,
+// and front-end renderer are entirely different. We do NOT impose a
+// timeout — the wrapper's idle timer (10 min) reaps abandoned requests
+// on destroy, and the tool's AbortSignal handles explicit aborts.
+// ============================================================================
+
+interface PendingUserInput {
+  resolve: (resolution: UserInputResolution) => void;
+  reject: (reason: string) => void;
+  questions: AskUserQuestion[];
+  /** Epoch ms when the request was emitted (used by the UI for ordering). */
+  ts: number;
+}
+
+export interface AskUserQuestionsRequestEvent {
+  type: "ask_user_questions_request";
+  toolCallId: string;
+  questions: AskUserQuestion[];
+  ts: number;
 }
 
 // ============================================================================
@@ -62,6 +95,7 @@ export class AgentSessionWrapper {
   private _running = false;
   private pendingPermissions: Map<string, PendingPermission> = new Map();
   private allowedThisSession: Set<string> = new Set();
+  private pendingUserInputs: Map<string, PendingUserInput> = new Map();
 
   constructor(public readonly inner: AgentSessionLike) {}
 
@@ -233,6 +267,108 @@ export class AgentSessionWrapper {
     return this.allowedThisSession.has(ruleName);
   }
 
+  /**
+   * Block the calling tool until the user answers the given batch of
+   * questions (or cancels). Emits a synthetic `ask_user_questions_request`
+   * SSE event and returns a Promise that resolves with the user's
+   * answers — or `{kind: "cancelled"}` if they clicked Cancel.
+   *
+   * No timeout is imposed: the tool's AbortSignal handles explicit aborts,
+   * and `destroy()` rejects pending entries when the wrapper is reaped.
+   * The tool wrapper treats either rejection as an error result for the
+   * agent (no hangs).
+   */
+  requestUserInput(
+    toolCallId: string,
+    questions: AskUserQuestion[],
+  ): Promise<UserInputResolution> {
+    if (this.pendingUserInputs.has(toolCallId)) {
+      // Idempotent: return the existing promise for a re-entry (shouldn't
+      // happen for a unique toolCallId, but defensive).
+      return new Promise<UserInputResolution>((resolve, reject) => {
+        const existing = this.pendingUserInputs.get(toolCallId)!;
+        existing.resolve = (r) => { resolve(r); existing.resolve = () => {}; };
+        existing.reject = (reason) => { reject(reason); existing.reject = () => {}; };
+      });
+    }
+    const promise = new Promise<UserInputResolution>((resolve, reject) => {
+      const entry: PendingUserInput = {
+        resolve,
+        reject,
+        questions,
+        ts: Date.now(),
+      };
+      this.pendingUserInputs.set(toolCallId, entry);
+    });
+    const event: AskUserQuestionsRequestEvent = {
+      type: "ask_user_questions_request",
+      toolCallId,
+      questions,
+      ts: Date.now(),
+    };
+    for (const l of this.listeners) {
+      try {
+        l(event as unknown as AgentEvent);
+      } catch {
+        // listener errors must not break the request flow
+      }
+    }
+    log.info("ask_user_questions request emitted", {
+      toolCallId,
+      questionCount: questions.length,
+    });
+    return promise;
+  }
+
+  /**
+   * Resolve a pending ask_user_questions request. Called when the client
+   * POSTs back an `ask_user_questions_decision` command.
+   *
+   * The decision is either `{cancelled: true}` (user clicked Cancel) or
+   * `{answers: AskUserQuestionAnswer[]}` (user submitted answers, possibly
+   * empty for non-required questions they skipped).
+   */
+  resolveUserInput(
+    toolCallId: string,
+    decision: AskUserQuestionsDecision | AskUserQuestionsCancel,
+  ): boolean {
+    const pending = this.pendingUserInputs.get(toolCallId);
+    if (!pending) return false;
+    this.pendingUserInputs.delete(toolCallId);
+    if ("cancelled" in decision && decision.cancelled) {
+      pending.resolve({ kind: "cancelled" });
+      log.info("ask_user_questions cancelled", { toolCallId });
+    } else if ("answers" in decision) {
+      pending.resolve({ kind: "answered", answers: decision.answers });
+      log.info("ask_user_questions answered", {
+        toolCallId,
+        answerCount: decision.answers.filter((a) => a.selectedLabels.length > 0).length,
+      });
+    } else {
+      // Defensive: unknown decision shape — treat as cancel to unblock.
+      pending.resolve({ kind: "cancelled" });
+      log.warn("ask_user_questions unknown decision shape, treated as cancel", {
+        toolCallId,
+      });
+    }
+    return true;
+  }
+
+  /** Snapshot of pending ask_user_questions requests for this wrapper.
+   *  Used by the /api/agent/[id]/events route to re-emit after SSE
+   *  reconnect so a refresh-mid-question doesn't lose the question. */
+  snapshotPendingUserInputs(): AskUserQuestionsRequestPayload[] {
+    const out: AskUserQuestionsRequestPayload[] = [];
+    for (const [toolCallId, pending] of this.pendingUserInputs) {
+      out.push({
+        toolCallId,
+        questions: pending.questions,
+        ts: pending.ts,
+      });
+    }
+    return out;
+  }
+
   async send(command: Record<string, unknown>): Promise<unknown> {
     this.resetIdleTimer();
     const type = command.type as string;
@@ -351,6 +487,15 @@ export class AgentSessionWrapper {
         return { resolved };
       }
 
+      case "ask_user_questions_decision": {
+        const toolCallId = command.toolCallId as string;
+        const decision = command.decision as
+          | AskUserQuestionsDecision
+          | AskUserQuestionsCancel;
+        const resolved = this.resolveUserInput(toolCallId, decision);
+        return { resolved };
+      }
+
       default:
         throw new Error(`Unsupported command: ${type}`);
     }
@@ -369,6 +514,10 @@ export class AgentSessionWrapper {
     }
     this.pendingPermissions.clear();
     this.allowedThisSession.clear();
+    for (const [, pending] of this.pendingUserInputs) {
+      pending.reject("destroyed");
+    }
+    this.pendingUserInputs.clear();
     log.info("agent wrapper destroyed", {
       sessionId: this.sessionId,
       sessionFile: this.sessionFile || undefined,
@@ -476,6 +625,10 @@ export async function startRpcSession(
     // wrapper is constructed below. Using a box object so TypeScript does
     // not narrow the type to `never` inside the closure.
     const wrapperRef: { current: AgentSessionWrapper | null } = { current: null };
+    // Same forward-reference pattern for the `ask_user_questions` tool:
+    // the tool closure captures this ref and reads the wrapper at execute
+    // time. Set immediately after the wrapper is constructed below.
+    const requestUserInputRef: { current: AgentSessionWrapper | null } = { current: null };
     // Snapshot which agent-side custom tools are enabled for this session.
     // Read once here so the value is stable across the IIFE (an in-flight
     // config write shouldn't change the tool set mid-session). Custom
@@ -629,6 +782,24 @@ export async function startRpcSession(
         ...buildTodoTools(readEnabledTodoTools()),
         ...(enabledCustom.has("show_file") ? buildShowFileTool() : []),
         ...(enabledCustom.has("agent_todo") ? buildAgentTodoTool() : []),
+        ...(enabledCustom.has("ask_user_questions")
+          ? buildAskUserQuestionsTool({
+              // Read the wrapper lazily at execute time. By the time the
+              // agent can invoke the tool, the wrapper exists and the slot
+              // is filled (see below). If the slot is somehow still null
+              // (defensive), the tool returns an error result.
+              requestUserInput: (toolCallId, questions) => {
+                const w = requestUserInputRef.current;
+                if (!w) {
+                  return Promise.reject(
+                    new Error("ask_user_questions wrapper not initialized"),
+                  );
+                }
+                return w.requestUserInput(toolCallId, questions);
+              },
+              source: capturedSource,
+            })
+          : []),
       ],
     });
     capturedSessionId = inner.sessionId as string;
@@ -658,6 +829,7 @@ export async function startRpcSession(
 
     const wrapper = new AgentSessionWrapper(inner);
     wrapperRef.current = wrapper;
+    requestUserInputRef.current = wrapper;
     wrapper.start();
 
     const realSessionId = inner.sessionId as string;
