@@ -38,6 +38,7 @@ const RIGHT_BAR_BUTTONS_UI: Array<{ id: RightBarButtonId; labelKey: string }> = 
 const CUSTOM_TOOLS_UI: Array<{ id: AgentCustomToolName; labelKey: string }> = [
   { id: "agent_todo", labelKey: "Agent Todo" },
   { id: "show_file",  labelKey: "Show File" },
+  { id: "ask_user_questions", labelKey: "Ask User Questions" },
 ];
 
 export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void; onProfileSaved?: () => void }) {
@@ -843,7 +844,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
             </div>
           </div>
 
-          {/* ── Section 5: Custom Tools (agent_todo, show_file) ── */}
+          {/* ── Section 5: Custom Tools (agent_todo, show_file, ask_user_questions) ── */}
           {/* Immediate-apply checkboxes, same shape as Section 6. */}
           {config && (
             <div style={{ marginBottom: 24, marginTop: 24 }}>

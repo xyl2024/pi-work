@@ -20,6 +20,7 @@ import { ShowFileRenderer } from "./ShowFileRenderer";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { Tooltip } from "./Tooltip";
 import { AgentTodoPanel } from "./AgentTodoPanel";
+import { AskUserQuestionsPanel } from "./AskUserQuestionsPanel";
 import { ReplayBar } from "./ReplayBar";
 import { useAgentSession, type AgentPhase } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
@@ -1173,32 +1174,35 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, []);
 
   const chatInputElement = (
-    <ChatInput
-      ref={chatInputRef}
-      onSend={handleSend}
-      onAbort={handleAbort}
-      isStreaming={agentRunning}
-      model={displayModelValue}
-      modelNames={modelNames}
-      modelList={modelList}
-      onModelChange={handleModelChange}
-      toolPreset={toolPreset}
-      onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
-      thinkingLevel={thinkingLevel}
-      onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
-      availableThinkingLevels={availableThinkingLevels}
-      thinkingLevelMap={currentThinkingLevelMap}
-      retryInfo={retryInfo}
-      contextUsage={contextUsage}
-      slashResources={slashResources}
-      slashResourceKey={slashResourceKey}
-      onSlashAction={(action) => { if (action === "new") onNewSessionRequest?.(); }}
-      sessionId={currentSessionId}
-      userMessageHistory={userMessageHistory}
-      cwd={cwd ?? null}
-      onCwdChange={onCwdChange ?? (() => {})}
-      showCwdPicker={!!showCwdPicker}
-    />
+    <>
+      <AskUserQuestionsPanel sessionId={currentSessionId} />
+      <ChatInput
+        ref={chatInputRef}
+        onSend={handleSend}
+        onAbort={handleAbort}
+        isStreaming={agentRunning}
+        model={displayModelValue}
+        modelNames={modelNames}
+        modelList={modelList}
+        onModelChange={handleModelChange}
+        toolPreset={toolPreset}
+        onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
+        thinkingLevel={thinkingLevel}
+        onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
+        availableThinkingLevels={availableThinkingLevels}
+        thinkingLevelMap={currentThinkingLevelMap}
+        retryInfo={retryInfo}
+        contextUsage={contextUsage}
+        slashResources={slashResources}
+        slashResourceKey={slashResourceKey}
+        onSlashAction={(action) => { if (action === "new") onNewSessionRequest?.(); }}
+        sessionId={currentSessionId}
+        userMessageHistory={userMessageHistory}
+        cwd={cwd ?? null}
+        onCwdChange={onCwdChange ?? (() => {})}
+        showCwdPicker={!!showCwdPicker}
+      />
+    </>
   );
 
   if (loading) {

@@ -9,6 +9,8 @@ import { useToast } from "@/components/Toast";
 import { useI18n } from "./useI18n";
 import { usePendingPermissionsRef } from "./usePendingPermissions";
 import { setSessionUiState, setLeafChangeHandler } from "./sessionUiStore";
+import { setPendingAskUserQuestions } from "./askUserQuestionsStore";
+import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
 
 export interface SessionData {
   sessionId: string;
@@ -498,6 +500,39 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           ruleName: event.ruleName as string,
           command: event.command as string,
           sessionId: sid,
+        });
+        break;
+      }
+      // ask_user_questions: agent wants to block on user input. Push the
+      // questions into the module-scoped store; the sticky panel and
+      // sidebar dot read from there.
+      case "ask_user_questions_request": {
+        const sid = sessionIdRef.current;
+        if (!sid) break;
+        const questions = event.questions;
+        const toolCallId = event.toolCallId;
+        if (typeof toolCallId !== "string" || !Array.isArray(questions)) break;
+        // Defensive: drop the event if the payload is malformed rather than
+        // handing garbage to the panel — the tool's server-side wrapper
+        // already validated, but a buggy SDK could still send odd shapes.
+        const validQuestions: AskUserQuestion[] = [];
+        for (const q of questions) {
+          if (
+            q &&
+            typeof q.question === "string" &&
+            typeof q.header === "string" &&
+            typeof q.multiSelect === "boolean" &&
+            typeof q.required === "boolean" &&
+            Array.isArray(q.options)
+          ) {
+            validQuestions.push(q as AskUserQuestion);
+          }
+        }
+        if (validQuestions.length === 0) break;
+        setPendingAskUserQuestions(sid, {
+          toolCallId,
+          questions: validQuestions,
+          ts: typeof event.ts === "number" ? event.ts : Date.now(),
         });
         break;
       }

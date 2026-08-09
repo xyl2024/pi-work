@@ -753,6 +753,11 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
     return filtered.length > 0 ? filtered : null;
   })();
 
+  // ask_user_questions falls through to the default ToolCallBlock below —
+  // the sticky panel above ChatInput is the primary UX surface for this
+  // tool, and the in-stream card should just show raw JSON like every
+  // other tool call. No special badge, no special history card.
+
   return (
     <div
       style={{

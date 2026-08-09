@@ -509,6 +509,20 @@ span.linenumber {
   50%      { opacity: 0.7; }
 }
 
+/* Pending-question dot in the sidebar (SessionItem): small, calm amber
+   pulse. Referenced via inline style from SessionItem. Distinct from
+   the running-title breathe so a session that's both running AND has a
+   pending question reads as two separate states, not a flicker. */
+@keyframes ask-sidebar-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.35); opacity: 0.7; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ask-sidebar-pulse, [aria-label="Awaiting your answer"] {
+    animation: none !important;
+  }
+}
+
 @keyframes saved-pop {
   0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.55); }
   40%  { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.25); }

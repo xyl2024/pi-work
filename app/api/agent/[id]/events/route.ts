@@ -59,6 +59,23 @@ export async function GET(
         // best-effort — tree emission failures must not break the stream
       }
 
+      // Re-emit any in-flight ask_user_questions requests so a page refresh
+      // mid-question doesn't strand the user. Same ordering rule as the
+      // tree push above: subscription must already be live.
+      try {
+        const pending = session.snapshotPendingUserInputs();
+        for (const entry of pending) {
+          encode({
+            type: "ask_user_questions_request",
+            toolCallId: entry.toolCallId,
+            questions: entry.questions,
+            ts: entry.ts,
+          });
+        }
+      } catch {
+        // best-effort
+      }
+
       // Heartbeat every 30s to prevent server/proxy timeout (Next.js default ~120-150s)
       const heartbeat = setInterval(() => {
         try {

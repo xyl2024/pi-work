@@ -17,6 +17,14 @@ interface SessionItemProps {
   onTogglePin?: () => void;
   isFavorited?: boolean;
   onToggleFavorite?: () => void;
+  /**
+   * True when this session has an unanswered `ask_user_questions` request
+   * in the module store. Renders a small accent dot next to the title so
+   * the user notices pending questions even when they switched tabs. The
+   * sticky panel inside the chat window is the primary surface; this dot
+   * is purely an indicator for sessions not currently focused.
+   */
+  hasPendingQuestion?: boolean;
 }
 
 export function SessionItem({
@@ -29,6 +37,7 @@ export function SessionItem({
   onTogglePin,
   isFavorited = false,
   onToggleFavorite,
+  hasPendingQuestion = false,
 }: SessionItemProps) {
   const { t } = useI18n();
   const toast = useToast();
@@ -321,7 +330,28 @@ export function SessionItem({
           {/* Running indicator — the title turns accent and breathes slowly
               while the agent is between agent_start and agent_end (replaces
               the old pulsing dot; see pi-running-title-breathe keyframes) */}
-          <div style={{ flex: 1, minWidth: 0 }} aria-label={session.running ? `${title} (${t("running")})` : title}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }} aria-label={session.running ? `${title} (${t("running")})` : title}>
+            {hasPendingQuestion && (
+              // Pending-question dot: distinct color (amber) from the
+              // running indicator so users can tell "agent is busy" from
+              // "agent is asking me something". Tooltip names it so
+              // hovering explains the unfamiliar glyph.
+              <Tooltip content={t("Awaiting your answer")}>
+                <span
+                  aria-label={t("Awaiting your answer")}
+                  style={{
+                    flexShrink: 0,
+                    display: "inline-block",
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: "#f59e0b",
+                    boxShadow: "0 0 0 2px color-mix(in srgb, #f59e0b 20%, transparent)",
+                    animation: "ask-sidebar-pulse 1.6s ease-in-out infinite",
+                  }}
+                />
+              </Tooltip>
+            )}
             <Tooltip content={title}>
             <div
               style={{

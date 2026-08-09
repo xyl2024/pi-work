@@ -6,6 +6,7 @@ import type { SessionInfo, Workspace } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { SessionItem } from "./SessionItem";
 import { Tooltip } from "./Tooltip";
+import { useAllPendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 
 /**
  * Per-cwd session loader state. Held in a Map keyed by cwd so each group
@@ -86,6 +87,12 @@ export function MultiCwdList({
   // Stable lookup for pinned sessions across all cwds in this list.
   const pinnedSessionSet = new Set(pinnedSessions);
 
+  // Set of sessionIds that currently have an unanswered `ask_user_questions`
+  // request. Read from the module-scoped store so we re-render whenever a
+  // question appears or resolves in any session, not just the visible one.
+  const pendingQuestions = useAllPendingAskUserQuestions();
+  const pendingQuestionSessionIds = new Set(pendingQuestions.map((p) => p.sessionId));
+
   return (
     <div data-hover-scrollbar style={{ flex: 1, overflowY: "auto", padding: "4px 8px 8px", minHeight: 80, display: "flex", flexDirection: "column", gap: 8 }}>
       {loadingWorkspaces && workspaces.length === 0 && (
@@ -130,6 +137,7 @@ export function MultiCwdList({
             pinnedSessionSet={pinnedSessionSet}
             favoriteIds={favoriteIds}
             selectedSessionId={selectedSessionId}
+            pendingQuestionSessionIds={pendingQuestionSessionIds}
             onHeaderRef={(el) => onCwdHeaderRef(ws.cwd, el)}
             onToggleExpand={() => onToggleExpand(ws.cwd)}
             onSelectSession={onSelectSession}
@@ -181,6 +189,10 @@ interface CwdGroupProps {
   pinnedSessionSet: Set<string>;
   favoriteIds: string[];
   selectedSessionId: string | null;
+  /** Set of sessionIds with an unanswered `ask_user_questions` request.
+   *  Owned by the parent so the whole sidebar re-renders in sync when the
+   *  store changes, not just the group that contains the affected session. */
+  pendingQuestionSessionIds: Set<string>;
 
   onHeaderRef: (el: HTMLDivElement | null) => void;
   onToggleExpand: () => void;
@@ -202,6 +214,7 @@ function CwdGroup({
   pinnedSessionSet,
   favoriteIds,
   selectedSessionId,
+  pendingQuestionSessionIds,
   onHeaderRef,
   onToggleExpand,
   onSelectSession,
@@ -602,6 +615,7 @@ function CwdGroup({
                   onTogglePin={() => onTogglePin(s.id)}
                   isFavorited={favoriteIds.includes(s.id)}
                   onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(s.id) : undefined}
+                  hasPendingQuestion={pendingQuestionSessionIds.has(s.id)}
                 />
               ))}
             </>
@@ -640,6 +654,7 @@ function CwdGroup({
               onTogglePin={() => onTogglePin(s.id)}
               isFavorited={favoriteIds.includes(s.id)}
               onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(s.id) : undefined}
+              hasPendingQuestion={pendingQuestionSessionIds.has(s.id)}
             />
           ))}
           </div>
