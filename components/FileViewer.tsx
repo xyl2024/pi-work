@@ -16,7 +16,7 @@ import { EchartsBlock } from "./EchartsBlock";
 import { SvgBlock } from "./SvgBlock";
 import { CodeBlock } from "./CodeBlock";
 import { FileSearchBar } from "./FileSearchBar";
-import { encodeFilePathForApi, getFileName, getRelativeFilePath, normalizeFilePathSlashes } from "@/lib/file-paths";
+import { encodeFilePathForApi, getFileName, normalizeFilePathSlashes } from "@/lib/file-paths";
 import { Document, Page, pdfjs } from "react-pdf";
 
 import "react-pdf/dist/Page/AnnotationLayer.css";
@@ -26,7 +26,6 @@ pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 interface Props {
   filePath: string;
-  cwd?: string;
 }
 
 interface FileData {
@@ -293,7 +292,7 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
   );
 }
 
-function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+function ImageViewer({ filePath }: { filePath: string }) {
   const { t } = useI18n();
   const toast = useToast();
   const [watching, setWatching] = useState(false);
@@ -358,10 +357,7 @@ function ImageViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
           flexShrink: 0,
         }}
       >
-        <Tooltip content={filePath}><span style={{ fontFamily: "var(--font-mono)" }}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span></Tooltip>
-        <span style={{ marginLeft: "auto" }}>{ext || "image"}</span>
+        <span>{ext || "image"}</span>
         {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
         {formatSizeStr && <span>{formatSizeStr}</span>}
         <Tooltip content={watching ? t("Live sync active") : t("Not watching")}>
@@ -455,7 +451,7 @@ function formatDuration(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
-function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
+function AudioViewer({ filePath }: { filePath: string }) {
   const { t } = useI18n();
   const toast = useToast();
   const [watching, setWatching] = useState(false);
@@ -520,10 +516,7 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
           flexShrink: 0,
         }}
       >
-        <Tooltip content={filePath}><span style={{ fontFamily: "var(--font-mono)" }}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span></Tooltip>
-        <span style={{ marginLeft: "auto" }}>{ext || "audio"}</span>
+        <span>{ext || "audio"}</span>
         {duration != null && <span>{formatDuration(duration)}</span>}
         {size != null && <span>{formatSize(size)}</span>}
         <Tooltip content={watching ? t("Live sync active") : t("Not watching")}>
@@ -578,7 +571,7 @@ function AudioViewer({ filePath, cwd }: { filePath: string; cwd?: string }) {
   );
 }
 
-function PdfViewer({ filePath, cwd }: Props) {
+function PdfViewer({ filePath }: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const [numPages, setNumPages] = useState(0);
@@ -808,15 +801,7 @@ function PdfViewer({ filePath, cwd }: Props) {
           flexShrink: 0,
         }}
       >
-        <Tooltip content={filePath}>
-          <span style={{ fontFamily: "var(--font-mono)" }}>
-            {getRelativeFilePath(filePath, cwd)}
-          </span>
-        </Tooltip>
-
-        {formatSizeStr && <span style={{ marginLeft: 8 }}>{formatSizeStr}</span>}
-
-        <span style={{ marginLeft: "auto" }} />
+        {formatSizeStr && <span>{formatSizeStr}</span>}
 
         {/* Page navigation */}
         <button
@@ -1021,23 +1006,22 @@ function PdfViewer({ filePath, cwd }: Props) {
   );
 }
 
-export function FileViewer({ filePath, cwd }: Props) {
+export function FileViewer({ filePath }: Props) {
   if (isImagePath(filePath)) {
-    return <ImageViewer filePath={filePath} cwd={cwd} />;
+    return <ImageViewer filePath={filePath} />;
   }
   if (isAudioPath(filePath)) {
-    return <AudioViewer filePath={filePath} cwd={cwd} />;
+    return <AudioViewer filePath={filePath} />;
   }
   if (isPdfPath(filePath)) {
-    return <PdfViewer filePath={filePath} cwd={cwd} />;
+    return <PdfViewer filePath={filePath} />;
   }
-  return <TextFileViewer filePath={filePath} cwd={cwd} />;
+  return <TextFileViewer filePath={filePath} />;
 }
 
-function TextFileViewer({ filePath, cwd }: Props) {
+function TextFileViewer({ filePath }: Props) {
   const { isDark } = useTheme();
   const { t } = useI18n();
-  const toast = useToast();
   const [data, setData] = useState<FileData | null>(null);
   const [prevContent, setPrevContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1047,10 +1031,6 @@ function TextFileViewer({ filePath, cwd }: Props) {
   const [wrapLines, setWrapLines] = useState(false);
   const [watching, setWatching] = useState(false);
   const [changeCount, setChangeCount] = useState(0);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [externalChangeWhileEditing, setExternalChangeWhileEditing] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   // Inline search state. `searchInputValue` updates on every keystroke for a
   // responsive input field; `searchQuery` lags behind by 250ms (see effect
@@ -1062,7 +1042,6 @@ function TextFileViewer({ filePath, cwd }: Props) {
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const esRef = useRef<EventSource | null>(null);
-  const editingRef = useRef(false);
 
   // Resolve raw markdown image src → final URL. Pass-through for external/data
   // URLs and already-rewritten /api/files/... paths; rewrite relative paths
@@ -1079,7 +1058,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
   // prev/next navigation. Recomputed only when the source or path changes.
   const gallery = useMemo(
     () => (data?.language === "markdown" ? extractImageGallery(data.content, resolveSrc) : []),
-    [data?.content, data?.language, resolveSrc],
+    [data, resolveSrc],
   );
 
   // Markdown renderers for ReactMarkdown. Hoisted to the top level so the
@@ -1225,65 +1204,6 @@ function TextFileViewer({ filePath, cwd }: Props) {
       });
   }, []);
 
-  const handleEdit = useCallback(() => {
-    if (!data) return;
-    setEditContent(data.content);
-    setExternalChangeWhileEditing(false);
-    editingRef.current = true;
-    setIsEditing(true);
-  }, [data]);
-
-  const handleCancel = useCallback(() => {
-    editingRef.current = false;
-    setIsEditing(false);
-    setExternalChangeWhileEditing(false);
-    // Reload from file to discard any local edits
-    fetchContent(filePath);
-  }, [filePath, fetchContent]);
-
-  const handleSave = useCallback(async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const encoded = encodeFilePathForApi(filePath);
-      const res = await fetch(`/api/files/${encoded}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editContent }),
-      });
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
-      // Optimistic local update — avoids full re-fetch
-      setData({ ...data, content: editContent, size: new Blob([editContent]).size });
-      setPrevContent(data.content);
-      setChangeCount((c) => c + 1);
-      editingRef.current = false;
-      setIsEditing(false);
-      setExternalChangeWhileEditing(false);
-      toast.show({ kind: "success", message: t("File saved") });
-    } catch (e) {
-      console.error("Text file save failed", e);
-      toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to save file") });
-    } finally {
-      setSaving(false);
-    }
-  }, [data, editContent, filePath, t, toast]);
-
-  const handleTextareaKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const ta = e.currentTarget;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      setEditContent((prev) => prev.substring(0, start) + "  " + prev.substring(end));
-      requestAnimationFrame(() => {
-        ta.selectionStart = ta.selectionEnd = start + 2;
-      });
-    } else if (e.key === "s" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      handleSave();
-    }
-  }, [handleSave]);
-
   // Initial load + SSE watch setup
   useEffect(() => {
     setLoading(true);
@@ -1295,18 +1215,15 @@ function TextFileViewer({ filePath, cwd }: Props) {
     setWrapLines(false);
     setChangeCount(0);
     setWatching(false);
-    setIsEditing(false);
-    setExternalChangeWhileEditing(false);
     setLightboxIndex(null);
     // Reset inline search state on file switch — matches the spec ("clear on
     // filePath change"). The search bar unmounts because the conditional in
-    // the JSX evaluates `!previewMode && !isEditing`; we explicitly clear the
+    // the JSX evaluates `!previewMode`; we explicitly clear the
     // state so reopening after a new file lands on an empty bar.
     setSearchOpen(false);
     setSearchInputValue("");
     setSearchQuery("");
     setSearchMatchIndex(0);
-    editingRef.current = false;
 
     if (esRef.current) {
       esRef.current.close();
@@ -1327,11 +1244,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
     });
 
     es.addEventListener("change", () => {
-      if (editingRef.current) {
-        setExternalChangeWhileEditing(true);
-      } else {
-        fetchContent(filePath, true);
-      }
+      fetchContent(filePath, true);
     });
 
     es.addEventListener("error", () => {
@@ -1370,7 +1283,6 @@ function TextFileViewer({ filePath, cwd }: Props) {
   const isMarkdown = data.language === "markdown";
   const lines = data.content.split("\n");
   const hasDiff = prevContent !== null && prevContent !== data.content;
-  const isDirty = editContent !== data.content;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -1388,222 +1300,171 @@ function TextFileViewer({ filePath, cwd }: Props) {
           flexShrink: 0,
         }}
       >
-        <Tooltip content={filePath}><span style={{ fontFamily: "var(--font-mono)" }}>
-          {getRelativeFilePath(filePath, cwd)}
-        </span></Tooltip>
-        <span style={{ marginLeft: "auto" }}>{data.language}</span>
+        <span>{data.language}</span>
 
-        {isEditing ? (
-          <>
-            {isDirty && <span style={{ color: "#fbbf24", fontWeight: 600 }}>● unsaved</span>}
-            {externalChangeWhileEditing && (
-              <Tooltip content={t("File changed externally. Save to overwrite or Cancel to reload.")}>
-                <span style={{ color: "#f87171", fontWeight: 600 }}>⚠ external</span>
-              </Tooltip>
-            )}
+        {viewMode === "source" && <span>{lines.length} {t("lines")}</span>}
+        <span>{formatSize(data.size)}</span>
+
+        {/* Live watch indicator */}
+        <Tooltip content={watching ? t("Live sync active") : t("Not watching")}>
+        <span
+          style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
+        >
+          <span
+            style={{
+              width: 7, height: 7, borderRadius: "50%",
+              background: watching ? "#4ade80" : "var(--border)",
+              display: "inline-block",
+              boxShadow: watching ? "0 0 4px #4ade80" : "none",
+            }}
+          />
+          {watching ? t("live") : t("static")}
+        </span>
+        </Tooltip>
+
+        {/* Diff / Source toggle — shown only when there are changes */}
+        {hasDiff && (
+          <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
             <button
-              onClick={handleSave}
-              disabled={saving || !isDirty}
+              onClick={() => setViewMode("source")}
               style={{
-                padding: "2px 10px", fontSize: 11, fontWeight: 600,
-                cursor: saving || !isDirty ? "default" : "pointer",
-                background: isDirty ? "var(--accent)" : "var(--bg-hover)",
-                color: isDirty ? "#fff" : "var(--text-muted)",
-                border: "1px solid var(--border)", borderRadius: 5,
-                opacity: saving || !isDirty ? 0.5 : 1,
+                padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
+                background: viewMode === "source" ? "var(--bg-selected)" : "var(--bg-hover)",
+                color: viewMode === "source" ? "var(--text)" : "var(--text-muted)",
+                fontWeight: viewMode === "source" ? 600 : 400,
               }}
             >
-              {saving ? t("Saving...") : t("Save")}
+              {t("Source")}
             </button>
             <button
-              onClick={handleCancel}
+              onClick={() => setViewMode("diff")}
               style={{
-                padding: "2px 10px", fontSize: 11, cursor: "pointer",
-                background: "var(--bg-hover)", color: "var(--text)",
-                border: "1px solid var(--border)", borderRadius: 5,
+                padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
+                background: viewMode === "diff" ? "var(--bg-selected)" : "var(--bg-hover)",
+                color: viewMode === "diff" ? "var(--text)" : "var(--text-muted)",
+                fontWeight: viewMode === "diff" ? 600 : 400,
               }}
             >
-              {t("Cancel")}
+              {t("Diff")} {changeCount > 0 && <span style={{ color: "#4ade80", marginLeft: 2 }}>+{changeCount}</span>}
             </button>
-          </>
-        ) : (
-          <>
-            {viewMode === "source" && <span>{lines.length} {t("lines")}</span>}
-            <span>{formatSize(data.size)}</span>
-
-            {/* Live watch indicator */}
-            <Tooltip content={watching ? t("Live sync active") : t("Not watching")}>
-            <span
-              style={{ display: "flex", alignItems: "center", gap: 4, color: watching ? "#4ade80" : "var(--text-dim)" }}
-            >
-              <span
-                style={{
-                  width: 7, height: 7, borderRadius: "50%",
-                  background: watching ? "#4ade80" : "var(--border)",
-                  display: "inline-block",
-                  boxShadow: watching ? "0 0 4px #4ade80" : "none",
-                }}
-              />
-              {watching ? t("live") : t("static")}
-            </span>
-            </Tooltip>
-
-            {/* Diff / Source toggle — shown only when there are changes */}
-            {hasDiff && (
-              <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
-                <button
-                  onClick={() => setViewMode("source")}
-                  style={{
-                    padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
-                    background: viewMode === "source" ? "var(--bg-selected)" : "var(--bg-hover)",
-                    color: viewMode === "source" ? "var(--text)" : "var(--text-muted)",
-                    fontWeight: viewMode === "source" ? 600 : 400,
-                  }}
-                >
-                  {t("Source")}
-                </button>
-                <button
-                  onClick={() => setViewMode("diff")}
-                  style={{
-                    padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
-                    background: viewMode === "diff" ? "var(--bg-selected)" : "var(--bg-hover)",
-                    color: viewMode === "diff" ? "var(--text)" : "var(--text-muted)",
-                    fontWeight: viewMode === "diff" ? 600 : 400,
-                  }}
-                >
-                  {t("Diff")} {changeCount > 0 && <span style={{ color: "#4ade80", marginLeft: 2 }}>+{changeCount}</span>}
-                </button>
-              </div>
-            )}
-
-            {/* Search toggle — opens the inline search bar (Ctrl+F). Source view only. */}
-            {viewMode === "source" && !previewMode && (
-              <Tooltip content={t("Search file")}>
-                <button
-                  onClick={() => setSearchOpen((v) => !v)}
-                  aria-label={t("Search file")}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 26,
-                    height: 22,
-                    cursor: "pointer",
-                    background: searchOpen ? "var(--bg-selected)" : "var(--bg-hover)",
-                    color: searchOpen ? "var(--text)" : "var(--text-muted)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 5,
-                    padding: 0,
-                  }}
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                </button>
-              </Tooltip>
-            )}
-
-            {/* Word wrap toggle */}
-            {viewMode === "source" && !previewMode && (
-              <Tooltip content={wrapLines ? t("Disable word wrap") : t("Enable word wrap")}>
-              <button
-                onClick={() => setWrapLines((v) => !v)}
-                style={{
-                  padding: "2px 8px", fontSize: 11, cursor: "pointer",
-                  background: wrapLines ? "var(--bg-selected)" : "var(--bg-hover)",
-                  color: wrapLines ? "var(--text)" : "var(--text-muted)",
-                  border: "1px solid var(--border)", borderRadius: 5,
-                  fontWeight: wrapLines ? 600 : 400,
-                }}
-              >
-                {t("wrap")}
-              </button>
-              </Tooltip>
-            )}
-
-            {/* HTML source/preview toggle */}
-            {isHtml && viewMode === "source" && (
-              <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
-                <button
-                  onClick={() => setPreviewMode(false)}
-                  style={{
-                    padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
-                    background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
-                    color: !previewMode ? "var(--text)" : "var(--text-muted)",
-                    fontWeight: !previewMode ? 600 : 400,
-                  }}
-                >
-                  {t("Code")}
-                </button>
-                <button
-                  onClick={() => setPreviewMode(true)}
-                  style={{
-                    padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
-                    background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
-                    color: previewMode ? "var(--text)" : "var(--text-muted)",
-                    fontWeight: previewMode ? 600 : 400,
-                  }}
-                >
-                  {t("Preview")}
-                </button>
-              </div>
-            )}
-
-            {/* Markdown preview/raw toggle */}
-            {isMarkdown && viewMode === "source" && (
-              <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
-                <button
-                  onClick={() => setPreviewMode(true)}
-                  style={{
-                    padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
-                    background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
-                    color: previewMode ? "var(--text)" : "var(--text-muted)",
-                    fontWeight: previewMode ? 600 : 400,
-                  }}
-                >
-                  {t("Preview")}
-                </button>
-                <button
-                  onClick={() => setPreviewMode(false)}
-                  style={{
-                    padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
-                    background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
-                    color: !previewMode ? "var(--text)" : "var(--text-muted)",
-                    fontWeight: !previewMode ? 600 : 400,
-                  }}
-                >
-                  {t("Raw")}
-                </button>
-              </div>
-            )}
-
-            {/* Edit button */}
-            <button
-              onClick={handleEdit}
-              style={{
-                padding: "2px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
-                background: "var(--bg-hover)", color: "var(--text)",
-                border: "1px solid var(--border)", borderRadius: 5,
-              }}
-            >
-              {t("Edit")}
-            </button>
-          </>
+          </div>
         )}
+
+        {/* Search toggle — opens the inline search bar (Ctrl+F). Source view only. */}
+        {viewMode === "source" && !previewMode && (
+          <Tooltip content={t("Search file")}>
+            <button
+              onClick={() => setSearchOpen((v) => !v)}
+              aria-label={t("Search file")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 26,
+                height: 22,
+                cursor: "pointer",
+                background: searchOpen ? "var(--bg-selected)" : "var(--bg-hover)",
+                color: searchOpen ? "var(--text)" : "var(--text-muted)",
+                border: "1px solid var(--border)",
+                borderRadius: 5,
+                padding: 0,
+              }}
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </button>
+          </Tooltip>
+        )}
+
+        {/* Word wrap toggle */}
+        {viewMode === "source" && !previewMode && (
+          <Tooltip content={wrapLines ? t("Disable word wrap") : t("Enable word wrap")}>
+          <button
+            onClick={() => setWrapLines((v) => !v)}
+            style={{
+              padding: "2px 8px", fontSize: 11, cursor: "pointer",
+              background: wrapLines ? "var(--bg-selected)" : "var(--bg-hover)",
+              color: wrapLines ? "var(--text)" : "var(--text-muted)",
+              border: "1px solid var(--border)", borderRadius: 5,
+              fontWeight: wrapLines ? 600 : 400,
+            }}
+          >
+            {t("wrap")}
+          </button>
+          </Tooltip>
+        )}
+
+        {/* HTML source/preview toggle */}
+        {isHtml && viewMode === "source" && (
+          <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
+            <button
+              onClick={() => setPreviewMode(false)}
+              style={{
+                padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
+                background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
+                color: !previewMode ? "var(--text)" : "var(--text-muted)",
+                fontWeight: !previewMode ? 600 : 400,
+              }}
+            >
+              {t("Code")}
+            </button>
+            <button
+              onClick={() => setPreviewMode(true)}
+              style={{
+                padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
+                background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
+                color: previewMode ? "var(--text)" : "var(--text-muted)",
+                fontWeight: previewMode ? 600 : 400,
+              }}
+            >
+              {t("Preview")}
+            </button>
+          </div>
+        )}
+
+        {/* Markdown preview/raw toggle */}
+        {isMarkdown && viewMode === "source" && (
+          <div style={{ display: "flex", borderRadius: 5, overflow: "hidden", border: "1px solid var(--border)" }}>
+            <button
+              onClick={() => setPreviewMode(true)}
+              style={{
+                padding: "2px 8px", fontSize: 11, border: "none", cursor: "pointer",
+                background: previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
+                color: previewMode ? "var(--text)" : "var(--text-muted)",
+                fontWeight: previewMode ? 600 : 400,
+              }}
+            >
+              {t("Preview")}
+            </button>
+            <button
+              onClick={() => setPreviewMode(false)}
+              style={{
+                padding: "2px 8px", fontSize: 11, border: "none", borderLeft: "1px solid var(--border)", cursor: "pointer",
+                background: !previewMode ? "var(--bg-selected)" : "var(--bg-hover)",
+                color: !previewMode ? "var(--text)" : "var(--text-muted)",
+                fontWeight: !previewMode ? 600 : 400,
+              }}
+            >
+              {t("Raw")}
+            </button>
+          </div>
+        )}
+
       </div>
 
-      {/* Inline search bar — mounted only in source view, hidden in edit / preview / diff. */}
-      {searchOpen && viewMode === "source" && !previewMode && !isEditing && (
+      {/* Inline search bar — mounted only in source view, hidden in preview / diff. */}
+      {searchOpen && viewMode === "source" && !previewMode && (
         <FileSearchBar
           query={searchInputValue}
           onQueryChange={setSearchInputValue}
@@ -1627,27 +1488,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
 
       {/* Content area */}
       <div ref={contentRef} style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
-        {isEditing ? (
-          <textarea
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            onKeyDown={handleTextareaKeyDown}
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-              resize: "none",
-              padding: "12px 16px",
-              fontFamily: "var(--font-mono)",
-              fontSize: 13,
-              lineHeight: 1.6,
-              background: "var(--bg)",
-              color: "var(--text)",
-              outline: "none",
-              tabSize: 2,
-            }}
-          />
-        ) : viewMode === "diff" && hasDiff ? (
+        {viewMode === "diff" && hasDiff ? (
           <DiffView oldContent={prevContent!} newContent={data.content} language={data.language} />
         ) : isHtml && previewMode ? (
           <iframe
