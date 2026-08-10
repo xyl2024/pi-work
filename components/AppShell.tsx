@@ -1154,7 +1154,7 @@ export function AppShell() {
                     </div>
                   ) : (
                     <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                      {t("Send a message to load the system prompt. (Because of Pi's design: system prompt words are not pre-set; they are only constructed when needed.)")}
+                      {t("Send a message to load the system prompt.")}
                     </div>
                   )}
                 </div>
