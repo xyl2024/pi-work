@@ -1013,6 +1013,20 @@ export const ZH_TRANSLATIONS = {
   "Test send": "发送",
   "Test message sent": "测试消息已发送",
   "Test title placeholder": "Hello world",
+  // ── File preview size limits (Settings modal + file viewer 413) ──
+  "File preview limits": "文件预览大小",
+  "Maximum file size the preview pane will load. Audio and video are streamed with no size limit.": "文件预览面板能加载的最大文件大小。音频和视频是流式播放，不设上限。",
+  "Max size for text / code files": "文本 / 代码文件最大大小",
+  "Max size for image files": "图片文件最大大小",
+  "Max size for PDF files": "PDF 文件最大大小",
+  "Range: {min}–{max} MB": "范围：{min}–{max} MB",
+  "Must be between {min} and {max}": "必须在 {min}–{max} 之间",
+  "Value must not be empty": "值不能为空",
+  "File too large: {kind} file is {size} MB, limit is {limit} MB": "文件过大：{kind} 文件 {size} MB，超过 {limit} MB 限制",
+  // Kind names reused by the 413 i18n template above.
+  "Image (file kind)": "图片",
+  "Text (file kind)": "文本",
+  "PDF (file kind)": "PDF",
 } as const;
 
 export function tServer(key: string, locale: Locale): string {

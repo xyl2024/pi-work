@@ -1340,9 +1340,45 @@ function TextFileViewer({ filePath, cwd }: Props) {
     const encoded = encodeFilePathForApi(filePath);
     return fetch(`/api/files/${encoded}?type=read`)
       .then((r) => r.json())
-      .then((d: FileData & { error?: string }) => {
+      .then((d: FileData & {
+        error?: string;
+        code?: string;
+        kind?: "text" | "image" | "pdf";
+        sizeBytes?: number;
+        limitBytes?: number;
+      }) => {
         if (d.error) {
-          setError(d.error);
+          // Server-side 413s come with a machine-readable code + the
+          // actual size/limit; translate them into a localized message
+          // here so the user sees "文件过大：文本 文件 12.4 MB，超过 5
+          // MB 限制" in zh, or the English equivalent — never the raw
+          // English "text file too large: 12.4 MB exceeds the 5 MB
+          // limit" string. Falls back to `d.error` for any other error
+          // shape (404, 500, network) so behavior elsewhere is unchanged.
+          if (
+            d.code === "FILE_TOO_LARGE" &&
+            d.kind &&
+            typeof d.sizeBytes === "number" &&
+            typeof d.limitBytes === "number"
+          ) {
+            const sizeMb = (d.sizeBytes / 1024 / 1024).toFixed(1);
+            const limitMb = Math.round(d.limitBytes / 1024 / 1024);
+            const kindLabelKey =
+              d.kind === "image"
+                ? "Image (file kind)"
+                : d.kind === "pdf"
+                ? "PDF (file kind)"
+                : "Text (file kind)";
+            setError(
+              t("File too large: {kind} file is {size} MB, limit is {limit} MB", {
+                kind: t(kindLabelKey),
+                size: sizeMb,
+                limit: limitMb,
+              }),
+            );
+          } else {
+            setError(d.error);
+          }
           return null;
         }
         if (isRefresh) {

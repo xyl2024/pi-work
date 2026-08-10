@@ -8,6 +8,26 @@ import {
   DEFAULT_TYPEWRITER_PHRASES,
   parseTypewriterPhrases,
 } from "./typewriter-phrases";
+import {
+  FILE_VIEWER_LIMITS,
+  FILE_VIEWER_KINDS,
+  FILE_VIEWER_DEFAULT_MAX_SIZE_MB,
+  type FileViewerConfig,
+  type FileViewerKind,
+  type FileViewerMaxSizeMb,
+} from "./file-viewer-limits";
+
+// Re-export so existing server-side callers (the /api/files route
+// handler, /api/settings PUT validator) can keep importing these
+// symbols from "@/lib/config" without changing their import paths.
+export {
+  FILE_VIEWER_LIMITS,
+  FILE_VIEWER_KINDS,
+  FILE_VIEWER_DEFAULT_MAX_SIZE_MB,
+  type FileViewerConfig,
+  type FileViewerKind,
+  type FileViewerMaxSizeMb,
+};
 
 const log = createLogger("config");
 
@@ -99,6 +119,11 @@ export interface AppendSystemConfig {
 // (see lib/typewriter-phrases.ts for the fail-open rules).
 export type TypewriterPhrases = Record<Locale, string[]>;
 
+// ── File preview size limits ─────────────────────────────────────────────
+// Client-safe types and per-kind ranges live in `./file-viewer-limits`
+// (imported + re-exported above) so SettingsModal can import the ranges
+// without pulling `fs` / `path` into the client bundle. This block is
+// just the `PiWorkConfig` integration point.
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   extensions: ExtensionsConfig;
@@ -106,6 +131,7 @@ export interface PiWorkConfig {
   custom_tools: CustomToolsConfig;
   append_system: AppendSystemConfig;
   typewriter_phrases: TypewriterPhrases;
+  file_viewer: FileViewerConfig;
 }
 
 const DEFAULT_DANGEROUS_PATTERNS: DangerousPatternsConfig = {
@@ -142,6 +168,11 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   typewriter_phrases: {
     en: [...DEFAULT_TYPEWRITER_PHRASES.en],
     zh: [...DEFAULT_TYPEWRITER_PHRASES.zh],
+  },
+  // Preserves pre-feature behavior: same hardcoded limits the route used
+  // before the value became user-configurable.
+  file_viewer: {
+    max_size_mb: { ...FILE_VIEWER_DEFAULT_MAX_SIZE_MB },
   },
 };
 
@@ -206,6 +237,42 @@ function parseAppendSystem(raw: unknown): AppendSystemConfig {
   return { enabled: obj.enabled !== false };
 }
 
+// File preview size limits — fail-open like every other parser here:
+// missing/garbled field → defaults; out-of-range numbers → clamped with a
+// log.warn. Strict validation lives in the PUT route so the SettingsModal
+// never lets an invalid value through, but a hand-edited YAML can never
+// break the file route.
+function parseFileViewerMaxSizeMb(raw: unknown): FileViewerMaxSizeMb {
+  const out: FileViewerMaxSizeMb = { ...FILE_VIEWER_DEFAULT_MAX_SIZE_MB };
+  if (!raw || typeof raw !== "object") return out;
+  const obj = raw as Record<string, unknown>;
+  for (const kind of FILE_VIEWER_KINDS) {
+    const val = obj[kind];
+    if (typeof val !== "number" || !Number.isFinite(val)) continue;
+    const { min, max } = FILE_VIEWER_LIMITS[kind];
+    const rounded = Math.round(val);
+    const clamped = Math.max(min, Math.min(max, rounded));
+    if (clamped !== val) {
+      log.warn("file_viewer.max_size_mb clamped", {
+        kind,
+        requested: val,
+        applied: clamped,
+        min,
+        max,
+      });
+    }
+    out[kind] = clamped;
+  }
+  return out;
+}
+
+function parseFileViewer(raw: unknown): FileViewerConfig {
+  if (!raw || typeof raw !== "object") {
+    return { max_size_mb: { ...FILE_VIEWER_DEFAULT_MAX_SIZE_MB } };
+  }
+  return { max_size_mb: parseFileViewerMaxSizeMb((raw as Record<string, unknown>).max_size_mb) };
+}
+
 const CONFIG_DIR = join(homedir(), ".pi-work");
 const CONFIG_PATH = join(CONFIG_DIR, "config.yaml");
 
@@ -258,6 +325,7 @@ export function readConfig(): PiWorkConfig {
       custom_tools: parseCustomTools(cfg.custom_tools),
       append_system: parseAppendSystem(cfg.append_system),
       typewriter_phrases: parseTypewriterPhrases(cfg.typewriter_phrases),
+      file_viewer: parseFileViewer(cfg.file_viewer),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });

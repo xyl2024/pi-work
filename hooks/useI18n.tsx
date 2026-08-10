@@ -9,7 +9,14 @@ interface I18nContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
   toggleLocale: () => void;
-  t: (key: string) => string;
+  /**
+   * Look up a translation by English key. Optional `params` substitutes
+   * `{name}` placeholders in the resolved string (both the English
+   * source and the Chinese translation). Missing keys return the key
+   * itself verbatim in English; missing placeholders are left as the
+   * literal `{name}` token so they surface during review.
+   */
+  t: (key: string, params?: Record<string, string | number>) => string;
 }
 
 const STORAGE_KEY = "pi-locale";
@@ -55,12 +62,25 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const value = useMemo<I18nContextValue>(() => ({
-    locale,
-    setLocale,
-    toggleLocale,
-    t: (key) => locale === "zh" ? ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS] ?? key : key,
-  }), [locale, setLocale, toggleLocale]);
+  const value = useMemo<I18nContextValue>(() => {
+    const interpolate = (template: string, params?: Record<string, string | number>): string => {
+      if (!params) return template;
+      return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+        name in params ? String(params[name]) : match,
+      );
+    };
+    return {
+      locale,
+      setLocale,
+      toggleLocale,
+      t: (key, params) => {
+        const raw = locale === "zh"
+          ? ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS] ?? key
+          : key;
+        return interpolate(raw, params);
+      },
+    };
+  }, [locale, setLocale, toggleLocale]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

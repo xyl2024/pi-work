@@ -7,6 +7,7 @@ import { useToast } from "./Toast";
 import { WeChatSettingsSection } from "./WeChatSettingsSection";
 import { InboxTestSection } from "./InboxTestSection";
 import type { PiWorkConfig, RightBarButtonId, RightSideBarConfig, AgentCustomToolName } from "@/lib/config";
+import { FILE_VIEWER_LIMITS, FILE_VIEWER_KINDS, type FileViewerKind, type FileViewerMaxSizeMb } from "@/lib/file-viewer-limits";
 import { setSettings } from "@/hooks/settingsStore";
 import {
   DEFAULT_TYPEWRITER_PHRASES,
@@ -40,6 +41,118 @@ const CUSTOM_TOOLS_UI: Array<{ id: AgentCustomToolName; labelKey: string }> = [
   { id: "show_file",  labelKey: "Show File" },
   { id: "ask_user_questions", labelKey: "Ask User Questions" },
 ];
+
+// Display order for the "File preview limits" section number inputs. The
+// ranges mirror lib/config.ts#FILE_VIEWER_LIMITS — duplicated here so the
+// UI can render per-kind `min` / `max` HTML attributes without a second
+// round-trip to the server. Keep these in sync if FILE_VIEWER_LIMITS
+// changes.
+const FILE_VIEWER_UI: Array<{ kind: FileViewerKind; labelKey: string }> = [
+  { kind: "text",  labelKey: "Max size for text / code files" },
+  { kind: "image", labelKey: "Max size for image files" },
+  { kind: "pdf",   labelKey: "Max size for PDF files" },
+];
+
+/**
+ * One row in the "File preview limits" section. The row owns a local
+ * `draft` string so the user can type freely (including transient
+ * invalid states like empty / decimal) without losing focus; on blur or
+ * Enter we parse + range-check, and on success we call `onCommit(next)`
+ * which the modal wires to a settings-store write. Invalid input never
+ * reaches the PUT — the row rolls the draft back to the last accepted
+ * value and shows a short inline error in the theme's danger color.
+ */
+function FileViewerLimitRow({
+  kind,
+  label,
+  min,
+  max,
+  value,
+  onCommit,
+}: {
+  kind: FileViewerKind;
+  label: string;
+  min: number;
+  max: number;
+  value: number;
+  onCommit: (next: number) => void;
+}) {
+  const { t } = useI18n();
+  const [draft, setDraft] = useState<string>(String(value));
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-sync the draft when the authoritative value changes (e.g. PUT
+  // succeeded and settingsStore emitted, or rollback on PUT failure).
+  // Skipping the sync while the input is in an error state would let
+  // the rolled-back draft survive — always mirror the prop so the row
+  // tells the truth about what's on disk.
+  useEffect(() => {
+    setDraft(String(value));
+    setError(null);
+  }, [value]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed === "") {
+      setError(t("Value must not be empty"));
+      setDraft(String(value));
+      return;
+    }
+    const num = Number(trimmed);
+    if (!Number.isFinite(num) || !Number.isInteger(num) || num < min || num > max) {
+      setError(t("Must be between {min} and {max}", { min, max }));
+      setDraft(String(value));
+      return;
+    }
+    setError(null);
+    if (num !== value) onCommit(num);
+  };
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 4px 0" }}>
+        {label}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            // Clear the error as soon as the user starts editing again,
+            // so the red border doesn't linger on an in-progress fix.
+            if (error) setError(null);
+          }}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+          }}
+          aria-invalid={error ? "true" : undefined}
+          style={{
+            width: 80,
+            height: 30,
+            padding: "4px 8px",
+            background: "var(--bg-panel)",
+            border: `1px solid ${error ? "#ef4444" : "var(--border)"}`,
+            borderRadius: 6,
+            color: "var(--text)",
+            fontSize: 13,
+            outline: "none",
+          }}
+        />
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>MB</span>
+        {error && (
+          <span style={{ fontSize: 11, color: "#ef4444" }}>{error}</span>
+        )}
+      </div>
+      <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
+        {t("Range: {min}–{max} MB", { min, max })}
+      </div>
+    </div>
+  );
+}
 
 export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void; onProfileSaved?: () => void }) {
   const { t, locale, setLocale } = useI18n();
@@ -336,6 +449,64 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       toast.show({ kind: "success", message: t("Settings saved") });
     } catch (e) {
+      toast.show({
+        kind: "error",
+        message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),
+      });
+    }
+  }, [config, t, toast]);
+
+  // File preview size limit — per-kind MB. Same immediate-apply pattern
+  // as the right-bar / custom-tools toggles: PUT the whole PiWorkConfig
+  // and keep modal isDirty=false so closing the modal doesn't prompt
+  // "discard changes?". Already-open file tabs keep showing the
+  // existing file (Q9 decision: don't force-refetch); the new limit
+  // takes effect on the next read.
+  const handleFileViewerLimitChange = useCallback(async (
+    kind: FileViewerKind,
+    next: number,
+  ) => {
+    if (!config) return;
+    const { min, max } = FILE_VIEWER_LIMITS[kind];
+    // Defense in depth: the input row already validates on blur, but a
+    // direct caller (or a regression in that row) shouldn't be able to
+    // PUT an out-of-range value past this handler either.
+    if (!Number.isInteger(next) || next < min || next > max) {
+      toast.show({
+        kind: "error",
+        message: t("Must be between {min} and {max}", { min, max }),
+      });
+      return;
+    }
+    const nextMaxSizeMb: FileViewerMaxSizeMb = {
+      ...config.file_viewer.max_size_mb,
+      [kind]: next,
+    };
+    const nextConfig: PiWorkConfig = {
+      ...config,
+      file_viewer: { max_size_mb: nextMaxSizeMb },
+    };
+    const previousConfig = config;
+    setConfig(nextConfig);
+    setOriginalConfig(nextConfig);
+    setSettings(nextConfig);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextConfig),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      toast.show({ kind: "success", message: t("Settings saved") });
+    } catch (e) {
+      // Roll back the optimistic local update so the row reflects the
+      // actual on-disk value (not the rejected write).
+      setConfig(previousConfig);
+      setOriginalConfig(previousConfig);
+      setSettings(previousConfig);
       toast.show({
         kind: "error",
         message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),
@@ -912,7 +1083,38 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
 
           <InboxTestSection />
 
-          {/* ── Section 7: Typewriter phrases (chat input placeholder) ── */}
+          {/* ── Section 7: File preview limits ── */}
+          {/* Per-kind MB caps. Renders FILE_VIEWER_UI rows; each row's
+              onCommit dispatches to handleFileViewerLimitChange, which
+              PUTs the whole PiWorkConfig and keeps modal isDirty=false.
+              Already-open file tabs are not force-refetched — the new
+              limit applies on the next read (Q9 decision). */}
+          {config && (
+            <div style={{ marginBottom: 24, marginTop: 24 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
+                {t("File preview limits")}
+              </h3>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
+                {t("Maximum file size the preview pane will load. Audio and video are streamed with no size limit.")}
+              </p>
+              {FILE_VIEWER_UI.map(({ kind, labelKey }) => {
+                const { min, max } = FILE_VIEWER_LIMITS[kind];
+                return (
+                  <FileViewerLimitRow
+                    key={kind}
+                    kind={kind}
+                    label={t(labelKey)}
+                    min={min}
+                    max={max}
+                    value={config.file_viewer.max_size_mb[kind]}
+                    onCommit={(next) => handleFileViewerLimitChange(kind, next)}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── Section 8: Typewriter phrases (chat input placeholder) ── */}
           {/* One phrase per line, per locale. Same shape as the Append
               System Prompt section: independent Save button that PUTs the
               whole PiWorkConfig and immediately publishes to the settings

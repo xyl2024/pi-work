@@ -9,6 +9,7 @@ import {
   invalidateAllowedRootsCache,
   isPathAllowed,
 } from "@/lib/file-access";
+import { readConfig } from "@/lib/config";
 
 const IGNORED_NAMES = new Set([
   "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -18,10 +19,43 @@ const IGNORED_NAMES = new Set([
 
 const IGNORED_SUFFIXES = [".pyc"];
 
-const TEXT_PREVIEW_MAX_BYTES = 10 * 1024 * 1024;
-const IMAGE_PREVIEW_MAX_BYTES = 10 * 1024 * 1024;
-const PDF_PREVIEW_MAX_BYTES = 50 * 1024 * 1024;
 const log = createLogger("api/files");
+
+/**
+ * Read the per-kind preview-size limits (in MB) from ~/.pi-work/config.yaml.
+ * Falls back to defaults if the config is missing/garbled — `readConfig` is
+ * fail-open, so the file route never blocks on user YAML errors.
+ */
+function getPreviewLimits(): { text: number; image: number; pdf: number } {
+  return readConfig().file_viewer.max_size_mb;
+}
+
+/**
+ * Build a 413 response for "file too large" rejections. Returns a
+ * machine-readable shape (code/kind/sizeBytes/limitBytes) so the
+ * SettingsModal/FilViewer can i18n the user-facing message client-side
+ * and so future features (e.g. an "Open settings" button) can detect
+ * this error category without string-matching the message. The English
+ * `error` field is still populated for `curl` / log readability.
+ */
+function fileTooLargeResponse(
+  kind: "image" | "text" | "pdf",
+  sizeBytes: number,
+  limitMb: number,
+): NextResponse {
+  const sizeMb = (sizeBytes / 1024 / 1024).toFixed(1);
+  const error = `${kind} file too large: ${sizeMb} MB exceeds the ${limitMb} MB limit`;
+  return NextResponse.json(
+    {
+      error,
+      code: "FILE_TOO_LARGE",
+      kind,
+      sizeBytes,
+      limitBytes: limitMb * 1024 * 1024,
+    },
+    { status: 413 },
+  );
+}
 
 const IMAGE_EXT_TO_MIME: Record<string, string> = {
   png: "image/png",
@@ -241,11 +275,15 @@ export async function GET(
         log.warn("file read rejected", { path: filePath, reason: "not a file", durationMs: elapsedMs(startedAt) });
         return NextResponse.json({ error: "Not a file" }, { status: 400 });
       }
+      const limits = getPreviewLimits();
+      const textLimit = limits.text * 1024 * 1024;
+      const imageLimit = limits.image * 1024 * 1024;
+      const pdfLimit = limits.pdf * 1024 * 1024;
       const imageMime = getImageMime(filePath);
       if (imageMime) {
-        if (stat.size > IMAGE_PREVIEW_MAX_BYTES) {
-          log.warn("image read rejected", { path: filePath, size: stat.size, durationMs: elapsedMs(startedAt) });
-          return NextResponse.json({ error: "Image too large (>10MB)" }, { status: 413 });
+        if (stat.size > imageLimit) {
+          log.warn("image read rejected", { path: filePath, size: stat.size, limitBytes: imageLimit, durationMs: elapsedMs(startedAt) });
+          return fileTooLargeResponse("image", stat.size, limits.image);
         }
         log.info("image read streamed", {
           path: filePath,
@@ -280,9 +318,9 @@ export async function GET(
       }
       const pdfMime = getPdfMime(filePath);
       if (pdfMime) {
-        if (stat.size > PDF_PREVIEW_MAX_BYTES) {
-          log.warn("pdf read rejected", { path: filePath, size: stat.size, durationMs: elapsedMs(startedAt) });
-          return NextResponse.json({ error: "PDF too large (>50MB)" }, { status: 413 });
+        if (stat.size > pdfLimit) {
+          log.warn("pdf read rejected", { path: filePath, size: stat.size, limitBytes: pdfLimit, durationMs: elapsedMs(startedAt) });
+          return fileTooLargeResponse("pdf", stat.size, limits.pdf);
         }
         log.info("pdf read streamed", {
           path: filePath,
@@ -293,9 +331,9 @@ export async function GET(
         });
         return streamFile(filePath, stat, pdfMime, request.headers.get("range"));
       }
-      if (stat.size > TEXT_PREVIEW_MAX_BYTES) {
-        log.warn("text read rejected", { path: filePath, size: stat.size, durationMs: elapsedMs(startedAt) });
-        return NextResponse.json({ error: "File too large for preview (>256KB)" }, { status: 413 });
+      if (stat.size > textLimit) {
+        log.warn("text read rejected", { path: filePath, size: stat.size, limitBytes: textLimit, durationMs: elapsedMs(startedAt) });
+        return fileTooLargeResponse("text", stat.size, limits.text);
       }
       const content = fs.readFileSync(filePath, "utf-8");
       const language = getLanguage(filePath);
