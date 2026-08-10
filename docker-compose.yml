@@ -1,20 +1,19 @@
 services:
   pi-work:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # Pass the host's ~/.pi path so the build can copy it into the image.
-        PI_HOME: ${HOME}
+    # Use the pre-built image (with playwright-cli manually installed) instead
+    # of rebuilding from the upstream base. The CMD from that image is not
+    # `next start`, so we set `command:` explicitly.
+    image: playwright-cli-devenv:extended-piwork
+    command: node_modules/.bin/next start -p 30141
+    # build: omitted — we're using the existing image, not rebuilding
+
+    network_mode: host
 
     volumes:
-      # 如果要复用自己的pi配置，将 ~/.pi 拷贝到./volumes/pi_home中，并剔除.pi/agent/sessions
-      - ./volumes/pi_home:/home/node:rw
-
-    ports:
-      - "30141:30141"
+      - ./volumes/pi_home:/root:rw
 
     restart: unless-stopped
 
     environment:
-      HOME: /home/node
+      HOME: /root
+      NODE_ENV: production
