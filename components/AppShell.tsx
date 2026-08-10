@@ -129,6 +129,11 @@ const AGENTS_SEGMENT_COLORS = [
   "#06b6d4", // cyan
 ];
 
+// Animation duration for the top-bar dropdown. Passed to CollapsiblePanel and
+// reused by toggleTopPanel's switch timer so the two-phase panel switch
+// (collapse → swap content → expand) lines up with the collapse animation.
+const TOP_PANEL_ANIM_MS = 180;
+
 function splitSystemPrompt(systemPrompt: string): SystemPromptSegment[] {
   const segments: SystemPromptSegment[] = [];
   const re = /<project_instructions path="([^"]+)">([\s\S]*?)<\/project_instructions>/g;
@@ -226,6 +231,56 @@ export function AppShell() {
   const agentControls = useAgentControls();
   const headerActions = useChatHeaderActions();
 
+  // ── Top-bar dropdown (system prompt / tools) ──
+  // One dropdown open at a time. `displayedTopPanel` controls which content is
+  // rendered inside it — deliberately separate from `activeTopPanel`: on close
+  // the last panel stays mounted so the collapse animation runs with real
+  // content (conditional children would unmount first and snap the height to
+  // 0, making the collapse appear instant).
+  const [activeTopPanel, setActiveTopPanel] = useState<"system" | "tools" | null>(null);
+  const [displayedTopPanel, setDisplayedTopPanel] = useState<"system" | "tools" | null>(null);
+  const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  // Pending timer for a panel switch. The 0fr/1fr grid trick can't animate
+  // between two different content heights, so switching = collapse the current
+  // panel, swap the content, expand the new one — the timer fires at the end
+  // of the collapse animation (TOP_PANEL_ANIM_MS).
+  const topPanelSwitchTimer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (topPanelSwitchTimer.current !== null) window.clearTimeout(topPanelSwitchTimer.current);
+  }, []);
+
+  const closeTopPanel = useCallback(() => {
+    if (topPanelSwitchTimer.current !== null) {
+      window.clearTimeout(topPanelSwitchTimer.current);
+      topPanelSwitchTimer.current = null;
+    }
+    setActiveTopPanel(null);
+  }, []);
+
+  const toggleTopPanel = useCallback((panel: "system" | "tools") => {
+    // A pending switch must be cancelled first, or its timer would reopen the
+    // panel with a different panel after this click.
+    if (topPanelSwitchTimer.current !== null) {
+      window.clearTimeout(topPanelSwitchTimer.current);
+      topPanelSwitchTimer.current = null;
+    }
+    if (activeTopPanel === panel) {
+      // Toggle off — the content stays mounted for the collapse animation.
+      setActiveTopPanel(null);
+    } else if (activeTopPanel === null) {
+      setDisplayedTopPanel(panel);
+      setActiveTopPanel(panel);
+    } else {
+      // Switching panels: collapse the current one first, then swap + expand.
+      setActiveTopPanel(null);
+      topPanelSwitchTimer.current = window.setTimeout(() => {
+        topPanelSwitchTimer.current = null;
+        setDisplayedTopPanel(panel);
+        setActiveTopPanel(panel);
+      }, TOP_PANEL_ANIM_MS);
+    }
+  }, [activeTopPanel]);
+
   const openPalette = useCallback(() => {
     // The palette is the top-level modal — opening it closes every other
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
@@ -235,9 +290,9 @@ export function AppShell() {
     setSettingsConfigOpen(false);
     setSchedulerOpen(false);
     setInboxOpen(false);
-    setActiveTopPanel(null);
+    closeTopPanel();
     setPaletteOpen(true);
-  }, []);
+  }, [closeTopPanel]);
 
   // Session-level UI state (branch tree, system prompt, agents files, session
   // stats, context usage) is owned by useAgentSession in ChatWindow and
@@ -263,14 +318,6 @@ export function AppShell() {
     if (!selectedSession?.id) return;
     fetchTools(selectedSession.id);
   }, [sessionKey, selectedSession?.id, fetchTools]);
-
-  // Single active panel — only one dropdown open at a time
-  const [activeTopPanel, setActiveTopPanel] = useState<"system" | "tools" | null>(null);
-  const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
-
-  const toggleTopPanel = useCallback((panel: "system" | "tools") => {
-    setActiveTopPanel((cur) => cur === panel ? null : panel);
-  }, []);
 
   useEffect(() => {
     if (!activeTopPanel || !topBarRef.current) return;
@@ -344,9 +391,9 @@ export function AppShell() {
     setSessionKey((k) => k + 1);
     resetSessionUi();
     setTools([]);
-    setActiveTopPanel(null);
+    closeTopPanel();
     router.replace("/", { scroll: false });
-  }, [router, newSessionCwd]);
+  }, [router, newSessionCwd, closeTopPanel]);
 
   // First entry (no session in URL, nothing selected): land directly on the
   // new-session page with the most recently used cwd pre-picked, so typing
@@ -404,9 +451,9 @@ export function AppShell() {
     setSessionKey((k) => k + 1);
     resetSessionUi();
     setTools([]);
-    setActiveTopPanel(null);
+    closeTopPanel();
     router.replace("/", { scroll: false });
-  }, [router]);
+  }, [router, closeTopPanel]);
 
   // Called when /new slash command is triggered. Pass a `cwdOverride` to
   // pick a non-active cwd (e.g. the per-cwd "+" button in the sidebar)
@@ -483,10 +530,10 @@ export function AppShell() {
       setSessionKey((k) => k + 1);
       resetSessionUi();
       setTools([]);
-      setActiveTopPanel(null);
+      closeTopPanel();
       router.replace("/", { scroll: false });
     }
-  }, [selectedSession, router]);
+  }, [selectedSession, router, closeTopPanel]);
 
   const handleOpenFile = useCallback((filePath: string, fileName: string) => {
     const tabId = `file:${filePath}`;
@@ -1046,6 +1093,7 @@ export function AppShell() {
           {/* Top panel dropdown — shared, only one active at a time */}
           <CollapsiblePanel
             open={activeTopPanel !== null}
+            durationMs={TOP_PANEL_ANIM_MS}
             style={{
               position: "fixed",
               top: topPanelPos?.top ?? 0,
@@ -1054,7 +1102,7 @@ export function AppShell() {
               zIndex: 500,
             }}
           >
-              {activeTopPanel === "system" && (
+              {displayedTopPanel === "system" && (
                 <div style={{
                   background: "var(--bg-panel)",
                   borderBottom: "1px solid var(--border)",
@@ -1159,7 +1207,7 @@ export function AppShell() {
                   )}
                 </div>
               )}
-              {activeTopPanel === "tools" && (
+              {displayedTopPanel === "tools" && (
                 <div style={{
                   background: "var(--bg-panel)",
                   borderBottom: "1px solid var(--border)",
