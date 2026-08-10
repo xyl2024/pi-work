@@ -24,6 +24,14 @@ export function CodeBlock({ code, lang }: Props) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [btnHovered, setBtnHovered] = useState(false);
+
+  // Floating overlay is fully invisible: no background / border / shadow —
+  // the label and copy button read as plain text floating over the code.
+  // Colors are theme-aware so the text stays legible against either the
+  // dark or light SyntaxHighlighter palette.
+  const buttonColor = isDark ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.78)";
+  const labelColor = isDark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.45)";
 
   const copy = () => {
     copyText(code)
@@ -78,11 +86,7 @@ export function CodeBlock({ code, lang }: Props) {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: "2px 6px 2px 10px",
-          borderRadius: 6,
-          background: isDark ? "rgba(30,30,30,0.9)" : "rgba(255,255,255,0.92)",
-          border: "1px solid var(--border)",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+          padding: "2px 4px",
           opacity: hovered ? 1 : 0,
           pointerEvents: hovered ? "auto" : "none",
           transition: "opacity 0.15s ease",
@@ -92,7 +96,7 @@ export function CodeBlock({ code, lang }: Props) {
           <span
             style={{
               fontSize: 11,
-              color: "var(--text-muted)",
+              color: labelColor,
               fontFamily: "var(--font-sans)",
               maxWidth: 160,
               overflow: "hidden",
@@ -105,15 +109,19 @@ export function CodeBlock({ code, lang }: Props) {
         )}
         <button
           onClick={copy}
+          onMouseEnter={() => setBtnHovered(true)}
+          onMouseLeave={() => setBtnHovered(false)}
           style={{
             background: "none",
             border: "none",
-            color: "var(--text-muted)",
+            // Copied flips to a single accent color so the success state is
+            // recognizable without reintroducing any background fill.
+            color: copied ? "#22c55e" : buttonColor,
             cursor: "pointer",
             fontSize: 11,
             fontFamily: "var(--font-sans)",
-            padding: "2px 6px",
-            borderRadius: 4,
+            padding: "2px 4px",
+            textDecoration: btnHovered ? "underline" : "none",
           }}
         >
           {copied ? t("copied") : t("copy")}
