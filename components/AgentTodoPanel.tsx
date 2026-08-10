@@ -219,6 +219,12 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
             color: "var(--text)",
             textAlign: "left",
             fontFamily: "inherit",
+            // Header's own padding + margin tween in lock-step with the
+            // body (Q5 D1). borderBottom stays as a toggled "none" ↔
+            // "1px solid ..." because border-style can't be smoothly
+            // transitioned; the 1px snap is masked by the padding change.
+            transition:
+              "padding 180ms cubic-bezier(0.32, 0.72, 0, 1), margin-bottom 180ms cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
           <span
@@ -255,20 +261,36 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
               aria-hidden
-              style={{ color: "var(--text-muted)" }}
+              className="agent-todo-chevron"
+              style={{
+                color: "var(--text-muted)",
+                // Single path flipped via rotate — avoids swapping the path
+                // on every state change and gives a smooth rotation tween.
+                transform: collapsed ? "rotate(0deg)" : "rotate(180deg)",
+                transition: "transform 180ms cubic-bezier(0.32, 0.72, 0, 1)",
+              }}
             >
-              {collapsed ? (
-                <path d="M3 7.5L6 4.5L9 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-              ) : (
-                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-              )}
+              <path d="M3 7.5L6 4.5L9 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </span>
         </button>
-        {!collapsed && (
-          // minHeight: 0 lets this flex item shrink below its content height
-          // so `overflowY: auto` actually engages instead of overflowing the
-          // panel's maxHeight.
+        {/*
+          Always rendered so max-height can transition between 0 and 240.
+          The outer layer animates height with overflow: hidden clipping the
+          collapsing content; the inner layer keeps the scroll — overflowY:
+          auto only engages because the outer is overflow: hidden. 240px ≈
+          6–7 task rows; beyond that the inner takes over and scrolls.
+          Revisit the constant if task row layout (padding, font-size)
+          changes.
+        */}
+        <div
+          className="agent-todo-body"
+          style={{
+            maxHeight: collapsed ? 0 : 240,
+            overflow: "hidden",
+            transition: "max-height 180ms cubic-bezier(0.32, 0.72, 0, 1)",
+          }}
+        >
           <div style={{ overflowY: "auto", minHeight: 0 }}>
             {sortedTasks.map((task, idx) => (
               <TaskRow
@@ -278,7 +300,7 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
               />
             ))}
           </div>
-        )}
+        </div>
       </aside>
       <style>{`
         @keyframes agent-todo-fade-in {
@@ -320,6 +342,14 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
             animation: none;
             background-image: none;
             -webkit-text-fill-color: currentColor;
+          }
+          /* Fold/unfold motion collapses to zero — every animated property
+             snaps to its target. The border-bottom toggle (none ↔ 1px
+             solid) is unchanged; only its smooth tween is dropped. */
+          .agent-todo-panel button,
+          .agent-todo-body,
+          .agent-todo-chevron {
+            transition: none !important;
           }
         }
       `}</style>
