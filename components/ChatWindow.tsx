@@ -543,6 +543,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     handleToolPresetChange, handleThinkingLevelChange,
     userMessageHistory,
     activeLeafId, currentSessionId,
+    inFlightToolResults,
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady: wrappedOnFirstAssistantReady,
     modelsRefreshKey,
@@ -1348,6 +1349,18 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
               for (const msg of messages) {
                 if (msg.role === "toolResult") {
                   toolResultsMap.set(msg.toolCallId, msg);
+                }
+              }
+              // Overlay in-flight partial tool output on top of the settled
+              // messages array. Only used for toolCallIds without a settled
+              // toolResult yet, so once message_end lands the messages entry
+              // wins automatically and we render the authoritative final
+              // output. This is what makes a long-running bash command
+              // stream its output to the UI in real time instead of showing
+              // nothing until tool_execution_end.
+              for (const [id, partial] of inFlightToolResults) {
+                if (!toolResultsMap.has(id)) {
+                  toolResultsMap.set(id, partial);
                 }
               }
               // Last turn anchor — computed in the

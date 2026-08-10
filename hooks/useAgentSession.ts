@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, UserMessage } from "@/lib/types";
+import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage, UserMessage } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand } from "@/lib/agent-client";
 import type { ToolCallStatsDispatch } from "./ToolCallStatsContext";
@@ -134,6 +134,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
+  // In-flight partial tool results keyed by toolCallId. Populated on
+  // tool_execution_start, updated on each tool_execution_update (bash's
+  // 100ms-throttled streaming output), and cleared on tool_execution_end.
+  // ChatWindow overlays this map over the settled `messages` array so a
+  // long-running bash command renders output as it streams, instead of
+  // showing nothing until the final message_end lands.
+  const [inFlightToolResults, setInFlightToolResults] = useState<Map<string, ToolResultMessage>>(
+    () => new Map(),
+  );
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const [agentRunning, setAgentRunning] = useState(false);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
@@ -427,10 +436,51 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ? (args as Record<string, unknown>)
             : undefined,
         });
+        // Seed an empty in-flight placeholder so the UI can render streaming
+        // output (tool_execution_update events) even before the first chunk
+        // arrives. Cleared on tool_execution_end.
+        setInFlightToolResults((prev) => {
+          if (prev.has(id)) return prev;
+          const next = new Map(prev);
+          next.set(id, {
+            role: "toolResult",
+            toolCallId: id,
+            toolName: name,
+            content: [],
+            timestamp: Date.now(),
+          });
+          return next;
+        });
         setAgentPhase((prev) => {
           const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
           if (!tools.some((t) => t.id === id)) tools.push({ id, name });
           return { kind: "running_tools", tools };
+        });
+        break;
+      }
+      case "tool_execution_update": {
+        // Pi throttles tool onUpdate calls to 100ms (10Hz); partialResult.content
+        // is the accumulated snapshot, not a delta, so we just replace the
+        // in-flight entry's content. Empty updates (e.g. the initial empty
+        // onUpdate from bash right after spawn) are a no-op.
+        const id = event.toolCallId as string;
+        const partial = event.partialResult as
+          | { content?: Array<{ type?: string; text?: string }>; details?: unknown }
+          | undefined;
+        if (!id || !partial || !Array.isArray(partial.content)) break;
+        const content: TextContent[] = [];
+        for (const b of partial.content) {
+          if (b && b.type === "text" && typeof b.text === "string") {
+            content.push({ type: "text", text: b.text });
+          }
+        }
+        if (content.length === 0) break;
+        setInFlightToolResults((prev) => {
+          const existing = prev.get(id);
+          if (!existing) return prev; // no start event yet — drop
+          const next = new Map(prev);
+          next.set(id, { ...existing, content });
+          return next;
         });
         break;
       }
@@ -454,6 +504,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           timestamp: Date.now(),
           resultText,
           resultDetails: result?.details,
+        });
+        // Drop the in-flight placeholder. The final toolResult message will
+        // arrive via the subsequent message_start + message_end events and
+        // render from the settled `messages` array.
+        setInFlightToolResults((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Map(prev);
+          next.delete(id);
+          return next;
         });
         setAgentPhase((prev) => {
           if (prev?.kind !== "running_tools") return prev;
@@ -820,7 +879,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     // State
-    data, loading, error, activeLeafId, messages, entryIds, streamState,
+    data, loading, error, activeLeafId, messages, entryIds, inFlightToolResults, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt,
     currentModel, displayModel, sessionStats,
