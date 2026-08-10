@@ -854,6 +854,7 @@ export const ZH_TRANSLATIONS = {
   "Tree view": "树形视图",
   "Collapse all": "全部折叠",
   "Expand all": "全部展开",
+  "Scroll to bottom": "回到底部",
   "Error": "错误",
   "Parse error: {error}": "解析错误：{error}",
   "Ignored prefix: {prefix}": "已忽略前缀：{prefix}",

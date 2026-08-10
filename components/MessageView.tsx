@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { createContext, useContext, useState, useRef, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Tooltip } from "./Tooltip";
@@ -12,6 +12,22 @@ import { SvgBlock } from "./SvgBlock";
 import { CodeBlock, copyText } from "./CodeBlock";
 import { SHOW_FILE_TOOL_NAME } from "@/lib/show-file-tool-types";
 import { ProviderIcon, hasProviderIcon } from "./ProviderIcon";
+
+/**
+ * Bumped from ChatWindow every time the user clicks "全部折叠". Subscribed
+ * by ThinkingBlock / ToolCallBlock / ProcessDetailsGroup, which use the
+ * nonce as a one-shot signal to fold themselves (without clearing the
+ * per-block userExpandedRef, so a manual re-expand right after still wins).
+ *
+ * Wrapped around the message-rendering subtree so newly mounted blocks
+ * that surface mid-turn also pick up the latest nonce.
+ */
+const CollapseNonceContext = createContext(0);
+export const CollapseNonceProvider = CollapseNonceContext.Provider;
+export function useCollapseNonce(): number {
+  return useContext(CollapseNonceContext);
+}
+
 import type {
   AgentMessage,
   UserMessage,
@@ -642,6 +658,12 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming }: { block:
   useEffect(() => {
     if (!userExpandedRef.current && !isSearchMatch) setExpanded(false);
   }, [isSearchMatch]);
+  // "全部折叠" — collapse this block on every nonce bump, but leave
+  // userExpandedRef alone so a subsequent manual click still expands.
+  const collapseNonce = useCollapseNonce();
+  useEffect(() => {
+    if (collapseNonce > 0) setExpanded(false);
+  }, [collapseNonce]);
   const toggle = () => {
     setExpanded((v) => {
       const next = !v;
@@ -730,6 +752,13 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming }: { block:
 function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: ToolResultMessage }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
+  // "全部折叠" — collapse this tool card on every nonce bump. ToolCallBlock
+  // has no manual-override flag (every click is the user explicitly asking
+  // to toggle), so a plain setExpanded(false) is enough.
+  const collapseNonce = useCollapseNonce();
+  useEffect(() => {
+    if (collapseNonce > 0) setExpanded(false);
+  }, [collapseNonce]);
   // Height animation for expand/collapse — same pattern as the thinking block.
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const inputStr = JSON.stringify(block.input, null, 2);

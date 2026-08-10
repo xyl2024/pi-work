@@ -15,7 +15,7 @@ import {
   splitFinalAssistantBlocks,
   collectShowFilePaths,
 } from "@/lib/message-display";
-import { MessageView } from "./MessageView";
+import { MessageView, CollapseNonceProvider, useCollapseNonce } from "./MessageView";
 import { ShowFileRenderer } from "./ShowFileRenderer";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { Tooltip } from "./Tooltip";
@@ -378,6 +378,13 @@ function ProcessDetailsGroup({
 }) {
   const { t, locale } = useI18n();
   const [expanded, setExpanded] = useState(false);
+  // "全部折叠" — fold this group on every nonce bump. ProcessDetailsGroup
+  // has no userExpandedRef; the user can re-expand immediately via the
+  // header button if they want a different state.
+  const collapseNonce = useCollapseNonce();
+  useEffect(() => {
+    if (collapseNonce > 0) setExpanded(false);
+  }, [collapseNonce]);
   // Height animation for expand/collapse — same pattern as the thinking block:
   // container height follows the rendered content via ResizeObserver.
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
@@ -733,6 +740,15 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     setTimeout(() => { isProgrammaticScrollRef.current = false; }, 500);
   }, []);
 
+  // ── 一键折叠 ──
+  // Bumped on every click. Subscribed by ThinkingBlock / ToolCallBlock /
+  // ProcessDetailsGroup via CollapseNonceProvider; each block uses it as a
+  // one-shot signal to fold itself without disturbing per-block manual state.
+  const [collapseNonce, setCollapseNonce] = useState(0);
+  const handleCollapseAll = useCallback(() => {
+    setCollapseNonce((n) => n + 1);
+  }, []);
+
   // ── In-session search: Ctrl+F toggle ──
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -886,6 +902,18 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const replayActive = replayOpen && !streamState.isStreaming && !agentRunning;
   const renderMessages = replayActive ? messages.slice(0, replayIndex) : messages;
   const renderEntryIds = replayActive ? entryIds.slice(0, replayIndex) : entryIds;
+
+  // Whether any currently-rendered message contains something foldable.
+  // Derived from the same messages slice the scroll list uses so a streamed
+  // turn whose process group hasn't rendered yet still gates correctly.
+  const hasCollapsible = useMemo(
+    () => renderMessages.some((m) => hasDisplayableProcessMessage(m) || (m.role === "assistant" && (m.content ?? []).some((b) => b.type === "thinking" || b.type === "toolCall"))),
+    [renderMessages],
+  );
+  // Agent running: button stays mounted but is disabled + dimmed so the
+  // affordance is stable. A mid-stream collapse would race with new blocks
+  // arriving and re-expanding, so we gate the click instead of hiding.
+  const collapseAllEnabled = hasCollapsible && !agentRunning;
 
   // Last user message / last turn anchor — used by
   // the turn renderer and the streaming gallery below.
@@ -1334,6 +1362,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
           onClose={closeReplay}
         />
       )}
+      <CollapseNonceProvider value={collapseNonce}>
       <div className="relative flex flex-1 overflow-hidden">
         {/* Agent Todo: absolute-positioned floating panel in the chat area's
             left whitespace. Lives as a sibling of the scroll container (not
@@ -1575,24 +1604,52 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </div>
         </div>
 
-        {/* To-bottom button — shown when user scrolls up */}
-        {showToBottom && (
-          <Tooltip content={t("Scroll to bottom")}>
-          <button
-            onClick={handleToBottom}
-            className="absolute bottom-4 right-12 z-10 flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110"
-            style={{
-              background: "var(--bg-panel)",
-              borderColor: "var(--border)",
-              color: "var(--text-muted)",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+        {/* Bottom-right action stack — both buttons stay mounted at all
+            times so the affordance is stable. Disabled + dimmed when the
+            action doesn't apply. Hard-coded bilingual labels for the
+            "回到底部" button per product decision (no i18n key). */}
+        <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-end gap-2">
+          <Tooltip content={t("Collapse all")}>
+            <button
+              type="button"
+              onClick={handleCollapseAll}
+              disabled={!collapseAllEnabled}
+              aria-label={t("Collapse all")}
+              className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100"
+              style={{
+                background: "var(--bg-panel)",
+                borderColor: "var(--border)",
+                color: collapseAllEnabled ? "var(--text-muted)" : "var(--text-dim)",
+                opacity: collapseAllEnabled ? 1 : 0.45,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="4 6 12 12 20 6" />
+                <polyline points="4 12 12 18 20 12" />
+                <polyline points="4 18 12 24 20 18" />
+              </svg>
+            </button>
           </Tooltip>
-        )}
+          <Tooltip content={t("Scroll to bottom")}>
+            <button
+              type="button"
+              onClick={handleToBottom}
+              disabled={!showToBottom}
+              aria-label={t("Scroll to bottom")}
+              className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100"
+              style={{
+                background: "var(--bg-panel)",
+                borderColor: "var(--border)",
+                color: showToBottom ? "var(--text-muted)" : "var(--text-dim)",
+                opacity: showToBottom ? 1 : 0.45,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </Tooltip>
+        </div>
 
         {/* Replay toggle now lives next to the input box (ChatInput bottom
             buttons) — opens the time-travel scrubber. Hidden while the agent
@@ -1601,6 +1658,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         {/* Tool call stats are rendered as a right-panel tab by AppShell.
             We just publish the snapshot + scroll callback to the module store. */}
       </div>
+      </CollapseNonceProvider>
 
       <div className="relative">
         {session && (
