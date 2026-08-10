@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
+import { useConfirm } from "./ConfirmDialog";
 
 interface PromptTemplate {
   name: string;
@@ -28,7 +29,19 @@ function sourceLabel(prompt: PromptTemplate): string {
   return "path";
 }
 
-function PromptDetail({ prompt, cwd }: { prompt: PromptTemplate; cwd: string }) {
+function PromptDetail({
+  prompt,
+  cwd,
+  editable,
+  onEdit,
+  onDelete,
+}: {
+  prompt: PromptTemplate;
+  cwd: string;
+  editable: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const { t } = useI18n();
   const label = sourceLabel(prompt);
 
@@ -68,6 +81,60 @@ function PromptDetail({ prompt, cwd }: { prompt: PromptTemplate; cwd: string }) 
         >
           {displayPath(prompt.filePath)}
         </span>
+        {editable && (
+          <>
+            <button
+              onClick={onEdit}
+              title={t("Edit Prompt")}
+              style={{
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: 4,
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                padding: "2px 7px",
+                fontSize: 11,
+                lineHeight: 1.4,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--bg-hover)";
+                e.currentTarget.style.color = "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "none";
+                e.currentTarget.style.color = "var(--text-muted)";
+              }}
+            >
+              {t("Edit")}
+            </button>
+            <button
+              onClick={onDelete}
+              title={t("Delete prompt")}
+              style={{
+                background: "none",
+                border: "1px solid var(--border)",
+                borderRadius: 4,
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                padding: "2px 7px",
+                fontSize: 11,
+                lineHeight: 1.4,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(248,113,113,0.12)";
+                e.currentTarget.style.color = "#f87171";
+                e.currentTarget.style.borderColor = "#f87171";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "none";
+                e.currentTarget.style.color = "var(--text-muted)";
+                e.currentTarget.style.borderColor = "var(--border)";
+              }}
+            >
+              {t("Delete")}
+            </button>
+          </>
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -110,20 +177,24 @@ function PromptDetail({ prompt, cwd }: { prompt: PromptTemplate; cwd: string }) 
   );
 }
 
-function AddPromptPanel({
+function PromptEditorPanel({
   cwd,
-  onCreated,
+  mode,
+  initial,
+  onSaved,
 }: {
   cwd: string;
-  onCreated: (filePath: string) => void;
+  mode: "create" | "edit";
+  initial?: PromptTemplate;
+  onSaved: (filePath: string) => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
   const [scope, setScope] = useState<"global" | "project">("global");
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [argumentHint, setArgumentHint] = useState("");
-  const [content, setContent] = useState("");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [argumentHint, setArgumentHint] = useState(initial?.argumentHint ?? "");
+  const [content, setContent] = useState(initial?.content ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -132,67 +203,105 @@ function AddPromptPanel({
     inputRef.current?.focus();
   }, []);
 
-  const createPrompt = useCallback(async () => {
+  const save = useCallback(async () => {
     if (!name.trim() || !content.trim() || saving) return;
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/prompts", {
-        method: "POST",
+      const url = mode === "create" ? "/api/prompts" : "/api/prompts";
+      const method = mode === "create" ? "POST" : "PUT";
+      const payload: Record<string, unknown> = { cwd, name, description, argumentHint, content };
+      if (mode === "create") payload.scope = scope;
+      if (mode === "edit") payload.filePath = initial?.filePath;
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwd, scope, name, description, argumentHint, content }),
+        body: JSON.stringify(payload),
       });
       const d = (await res.json()) as { success?: boolean; filePath?: string; error?: string };
       if (!res.ok || d.error || !d.filePath) {
-        setError(d.error ?? `HTTP ${res.status}`);
-        toast.show({ kind: "error", message: d.error ?? `HTTP ${res.status}` });
+        const msg = d.error ?? `HTTP ${res.status}`;
+        setError(msg);
+        toast.show({
+          kind: "error",
+          message: mode === "create" ? msg : t("Failed to edit prompt") + `: ${msg}`,
+        });
         return;
       }
-      onCreated(d.filePath);
-      toast.show({ kind: "success", message: t("Prompt created") });
+      onSaved(d.filePath);
+      toast.show({
+        kind: "success",
+        message: mode === "create" ? t("Prompt created") : t("Prompt updated"),
+      });
     } catch (e) {
-      setError(String(e));
-      toast.show({ kind: "error", message: String(e) });
+      const msg = String(e);
+      setError(msg);
+      toast.show({ kind: "error", message: msg });
     } finally {
       setSaving(false);
     }
-  }, [argumentHint, content, cwd, description, name, onCreated, saving, scope, t, toast]);
+  }, [argumentHint, content, cwd, description, initial?.filePath, mode, name, onSaved, saving, scope, t, toast]);
 
-  const targetPath = scope === "global" ? "~/.pi/agent/prompts/" : `${shortenPath(cwd)}/.pi/prompts/`;
+  const isEditing = mode === "edit";
+  const nameLocked = isEditing;
+  const targetPath = isEditing
+    ? shortenPath(initial?.filePath ?? "")
+    : scope === "global"
+      ? "~/.pi/agent/prompts/"
+      : `${shortenPath(cwd)}/.pi/prompts/`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{t("New Prompt")}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
+        {isEditing ? t("Edit Prompt") : t("New Prompt")}
+      </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div
-          style={{
-            display: "flex",
-            borderRadius: 5,
-            border: "1px solid var(--border)",
-            overflow: "hidden",
-            fontSize: 12,
-            flexShrink: 0,
-          }}
-        >
-          {(["global", "project"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setScope(s)}
-              style={{
-                padding: "3px 10px",
-                border: "none",
-                cursor: "pointer",
-                background: scope === s ? "var(--bg-selected)" : "none",
-                color: scope === s ? "var(--text)" : "var(--text-dim)",
-                fontWeight: scope === s ? 600 : 400,
-                borderRight: s === "global" ? "1px solid var(--border)" : "none",
-              }}
-            >
-              {t(s)}
-            </button>
-          ))}
+      {!isEditing && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            style={{
+              display: "flex",
+              borderRadius: 5,
+              border: "1px solid var(--border)",
+              overflow: "hidden",
+              fontSize: 12,
+              flexShrink: 0,
+            }}
+          >
+            {(["global", "project"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setScope(s)}
+                style={{
+                  padding: "3px 10px",
+                  border: "none",
+                  cursor: "pointer",
+                  background: scope === s ? "var(--bg-selected)" : "none",
+                  color: scope === s ? "var(--text)" : "var(--text-dim)",
+                  fontWeight: scope === s ? 600 : 400,
+                  borderRight: s === "global" ? "1px solid var(--border)" : "none",
+                }}
+              >
+                {t(s)}
+              </button>
+            ))}
+          </div>
+          <span
+            style={{
+              fontSize: 12,
+              color: "var(--text-dim)",
+              fontFamily: "var(--font-mono)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            -&gt; {targetPath}
+          </span>
         </div>
+      )}
+      {isEditing && (
         <span
           style={{
             fontSize: 12,
@@ -203,9 +312,9 @@ function AddPromptPanel({
             whiteSpace: "nowrap",
           }}
         >
-          -&gt; {targetPath}
+          {targetPath}
         </span>
-      </div>
+      )}
 
       <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>{t("Name")}</span>
@@ -214,15 +323,17 @@ function AddPromptPanel({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="review"
+          readOnly={nameLocked}
           style={{
             padding: "7px 10px",
             fontSize: 13,
-            background: "var(--bg-panel)",
+            background: nameLocked ? "var(--bg-subtle)" : "var(--bg-panel)",
             border: "1px solid var(--border)",
             borderRadius: 6,
-            color: "var(--text)",
+            color: nameLocked ? "var(--text-dim)" : "var(--text)",
             outline: "none",
             fontFamily: "var(--font-mono)",
+            cursor: nameLocked ? "not-allowed" : "text",
           }}
         />
       </label>
@@ -290,7 +401,7 @@ function AddPromptPanel({
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
-          onClick={createPrompt}
+          onClick={save}
           disabled={saving || !name.trim() || !content.trim()}
           style={{
             padding: "7px 16px",
@@ -303,7 +414,13 @@ function AddPromptPanel({
             opacity: saving || !name.trim() || !content.trim() ? 0.5 : 1,
           }}
         >
-          {saving ? t("Creating...") : t("Create")}
+          {saving
+            ? isEditing
+              ? t("Editing...")
+              : t("Creating...")
+            : isEditing
+              ? t("Save")
+              : t("Create")}
         </button>
       </div>
     </div>
@@ -318,11 +435,20 @@ export function PromptsConfig({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [prompts, setPrompts] = useState<PromptTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [addMode, setAddMode] = useState(false);
+  type Mode = "view" | "create" | "edit";
+  const [mode, setMode] = useState<Mode>("view");
+  const [editing, setEditing] = useState<PromptTemplate | null>(null);
+
+  function isEditable(prompt: PromptTemplate): boolean {
+    const scope = prompt.sourceInfo?.scope;
+    return scope === "user" || scope === "project";
+  }
 
   const loadPrompts = useCallback((preferredSelected?: string) => {
     setLoading(true);
@@ -351,6 +477,46 @@ export function PromptsConfig({
   }, [loadPrompts]);
 
   const selectedPrompt = prompts.find((p) => p.filePath === selected) ?? null;
+
+  const startEdit = useCallback((prompt: PromptTemplate) => {
+    setEditing(prompt);
+    setMode("edit");
+  }, []);
+
+  const exitEditor = useCallback(() => {
+    setMode("view");
+    setEditing(null);
+  }, []);
+
+  const deletePrompt = useCallback(async (prompt: PromptTemplate) => {
+    const ok = await confirm({
+      title: t("Delete prompt?"),
+      description: t("This will delete the prompt file: {path}").replace("{path}", prompt.filePath),
+      confirmLabel: t("Delete"),
+      cancelLabel: t("Cancel"),
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      const res = await fetch("/api/prompts", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cwd, filePath: prompt.filePath }),
+      });
+      const d = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || d.error) {
+        const msg = d.error ?? `HTTP ${res.status}`;
+        toast.show({ kind: "error", message: t("Failed to delete prompt") + `: ${msg}` });
+        return;
+      }
+      toast.show({ kind: "success", message: t("Prompt deleted") });
+      // If the deleted one is currently selected, clear the selection.
+      setSelected((cur) => (cur === prompt.filePath ? null : cur));
+      loadPrompts();
+    } catch (e) {
+      toast.show({ kind: "error", message: String(e) });
+    }
+  }, [confirm, cwd, loadPrompts, t, toast]);
 
   return (
     <div
@@ -462,13 +628,13 @@ export function PromptsConfig({
                         {t(grpLabel)}
                       </div>
                       {grpPrompts.map((prompt) => {
-                        const isSelected = !addMode && selected === prompt.filePath;
+                        const isSelected = mode === "view" && selected === prompt.filePath;
                         return (
                           <div
                             key={prompt.filePath}
                             onClick={() => {
                               setSelected(prompt.filePath);
-                              setAddMode(false);
+                              exitEditor();
                             }}
                             style={{
                               display: "flex",
@@ -514,7 +680,10 @@ export function PromptsConfig({
 
             <div style={{ padding: "8px 6px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
               <div
-                onClick={() => setAddMode(true)}
+                onClick={() => {
+                  setMode("create");
+                  setEditing(null);
+                }}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -522,15 +691,15 @@ export function PromptsConfig({
                   padding: "7px 8px",
                   borderRadius: 5,
                   cursor: "pointer",
-                  background: addMode ? "var(--bg-selected)" : "none",
-                  color: addMode ? "var(--accent)" : "var(--text-dim)",
+                  background: mode === "create" ? "var(--bg-selected)" : "none",
+                  color: mode === "create" ? "var(--accent)" : "var(--text-dim)",
                   fontSize: 12,
                 }}
                 onMouseEnter={(e) => {
-                  if (!addMode) e.currentTarget.style.background = "var(--bg-hover)";
+                  if (mode === "view") e.currentTarget.style.background = "var(--bg-hover)";
                 }}
                 onMouseLeave={(e) => {
-                  if (!addMode) e.currentTarget.style.background = "none";
+                  if (mode === "view") e.currentTarget.style.background = "none";
                 }}
               >
                 <svg
@@ -552,16 +721,26 @@ export function PromptsConfig({
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-            {addMode ? (
-              <AddPromptPanel
+            {mode !== "view" ? (
+              <PromptEditorPanel
+                key={mode === "edit" ? `edit:${editing?.filePath ?? ""}` : "create"}
                 cwd={cwd}
-                onCreated={(filePath) => {
-                  setAddMode(false);
+                mode={mode === "create" ? "create" : "edit"}
+                initial={mode === "edit" ? editing ?? undefined : undefined}
+                onSaved={(filePath) => {
+                  exitEditor();
                   loadPrompts(filePath);
                 }}
               />
             ) : loading ? null : selectedPrompt ? (
-              <PromptDetail key={selectedPrompt.filePath} prompt={selectedPrompt} cwd={cwd} />
+              <PromptDetail
+                key={selectedPrompt.filePath}
+                prompt={selectedPrompt}
+                cwd={cwd}
+                editable={isEditable(selectedPrompt)}
+                onEdit={() => startEdit(selectedPrompt)}
+                onDelete={() => deletePrompt(selectedPrompt)}
+              />
             ) : (
               <div
                 style={{
