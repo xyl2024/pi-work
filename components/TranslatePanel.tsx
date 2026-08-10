@@ -380,52 +380,72 @@ export function TranslatePanel() {
             </div>
           )}
         </div>
-        <div
-          role="group"
-          aria-label={t("Target language")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            height: 28,
-            padding: 2,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            opacity: isStreaming ? 0.5 : 1,
-          }}
+        {/* Target-language toggle. A single button whose label always shows
+            the *other* language (the action it performs on click). The label
+            is keyed by `target` so React remounts the <span> on every
+            switch, re-firing the `lang-swap-in` keyframe from globals.css
+            for the "切换感". `minWidth` keeps the button from jittering
+            between the two label widths. */}
+        <Tooltip
+          content={t("Current target: {lang}", { lang: t(target === "zh" ? "Chinese" : "English") })}
         >
-          {([
-            { code: "en" as const, labelKey: "English" },
-            { code: "zh" as const, labelKey: "Chinese" },
-          ]).map((opt) => {
-            const active = target === opt.code;
-            return (
-              <button
-                key={opt.code}
-                role="radio"
-                aria-checked={active}
-                disabled={isStreaming}
-                onClick={() => { if (!isStreaming) setTarget(opt.code); }}
-                style={{
-                  flex: 1,
-                  minWidth: 56,
-                  height: "100%",
-                  padding: "0 12px",
-                  background: active ? "var(--accent)" : "transparent",
-                  color: active ? "var(--accent-fg, #fff)" : "var(--text-muted)",
-                  border: "none",
-                  borderRadius: 4,
-                  cursor: isStreaming ? "not-allowed" : "pointer",
-                  fontSize: 12,
-                  fontWeight: active ? 600 : 400,
-                  transition: "background-color 0.15s, color 0.15s",
-                }}
-              >
-                {t(opt.labelKey)}
-              </button>
-            );
-          })}
-        </div>
+          <button
+            onClick={() => { if (!isStreaming) setTarget(target === "en" ? "zh" : "en"); }}
+            disabled={isStreaming}
+            aria-label={t("Switch to {lang}", { lang: t(target === "zh" ? "Chinese" : "English") })}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "0 10px", height: 28,
+              minWidth: 96,
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              color: "var(--text)",
+              cursor: isStreaming ? "not-allowed" : "pointer",
+              fontSize: 12, fontWeight: 500,
+              opacity: isStreaming ? 0.5 : 1,
+              overflow: "hidden",
+              transition: "background-color 0.15s, border-color 0.15s, transform 0.1s",
+            }}
+            onMouseEnter={(e) => {
+              if (isStreaming) return;
+              e.currentTarget.style.background = "var(--bg-hover)";
+              e.currentTarget.style.borderColor = "var(--text-dim)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--bg)";
+              e.currentTarget.style.borderColor = "var(--border)";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+            onMouseDown={(e) => { if (!isStreaming) e.currentTarget.style.transform = "scale(0.95)"; }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+            onBlur={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+          >
+            {/* Swap arrows icon — a left-pointing and right-pointing chevron
+                stacked, hinting that the button *swaps* something. */}
+            <svg
+              width="12" height="12" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" strokeWidth="1.8"
+              strokeLinecap="round" strokeLinejoin="round"
+              style={{ flexShrink: 0, opacity: 0.7 }}
+            >
+              <path d="M3 7h13" />
+              <path d="M16 4l3 3-3 3" />
+              <path d="M21 17H8" />
+              <path d="M8 20l-3-3 3-3" />
+            </svg>
+            <span
+              key={target}
+              style={{
+                display: "inline-block",
+                whiteSpace: "nowrap",
+                animation: "lang-swap-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)",
+              }}
+            >
+              {t(target === "en" ? "toChinese" : "toEnglish")}
+            </span>
+          </button>
+        </Tooltip>
         <Tooltip content={isStreaming ? t("Stop") : (input.trim() ? t("Translate (⌘+Enter)") : t("Type text to translate…"))}>
           <button
             onClick={handleTranslate}

@@ -496,6 +496,16 @@ span.linenumber {
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* TranslatePanel's target-language toggle: when the user clicks the
+   `to中文` / `to英文` button, the label inside is keyed by `target` so
+   React remounts the <span>; the entrance plays once per click.
+   TranslatePanel.tsx references this name from an inline style. */
+@keyframes lang-swap-in {
+  0%   { opacity: 0; transform: translateY(-5px) scale(0.92); filter: blur(2px); }
+  55%  { opacity: 1; filter: blur(0); }
+  100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
