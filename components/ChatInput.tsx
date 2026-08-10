@@ -888,11 +888,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             gap: 8,
             alignItems: "center",
             background: "var(--bg)",
-            border: `1px solid ${THINKING_BORDER_COLOR[thinkingLevel ?? "auto"]}`,
+            border: `1.5px solid ${THINKING_BORDER_COLOR[thinkingLevel ?? "auto"]}`,
             borderRadius: 14,
             padding: "10px 10px 10px 14px",
-            boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
-            transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
+            boxShadow: "none",
+            transition: "border-color 0.15s, background 0.15s",
             position: "relative",
           } as React.CSSProperties}
         >
