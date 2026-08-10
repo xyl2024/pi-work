@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { getFileIcon } from "./FileIcons";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
@@ -29,9 +29,43 @@ interface Props {
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMenu }: Props) {
   const { t } = useI18n();
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Convert vertical wheel (deltaY) into horizontal scroll, matching the
+  // VSCode tab-bar behavior. We also fold deltaX in so that macOS trackpad
+  // horizontal gestures (which arrive as plain deltaX) keep working.
+  //
+  // deltaMode notes:
+  //   - 0 = pixels (most browsers / trackpad)
+  //   - 1 = lines (Firefox mouse wheel) — convert to a ~16px-per-line estimate
+  //   - 2 = pages  — treat as one screenful
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // Only intercept when there's actually horizontal overflow to scroll into.
+    if (el.scrollWidth <= el.clientWidth) return;
+
+    const lineHeight = 16;
+    const page = Math.max(el.clientWidth, 200);
+    const normalize = (raw: number) => {
+      if (e.deltaMode === 1) return raw * lineHeight;
+      if (e.deltaMode === 2) return raw * page;
+      return raw;
+    };
+    const dx = normalize(e.deltaX);
+    const dy = normalize(e.deltaY);
+    // deltaY drives horizontal scroll (vertical wheel → horizontal).
+    // deltaX is added on top so trackpad horizontal gestures still work.
+    const next = el.scrollLeft + dy + dx;
+    if (next === el.scrollLeft) return;
+    e.preventDefault();
+    el.scrollLeft = next;
+  }, []);
 
   return (
     <div
+      ref={scrollRef}
+      onWheel={handleWheel}
       style={{
         display: "flex",
         alignItems: "flex-end",
