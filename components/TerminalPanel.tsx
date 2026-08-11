@@ -23,6 +23,8 @@ export interface TerminalPanelProps {
 interface TabInfo {
   id: number;
   cwd: string;
+  /** user-chosen display name; falls back to cwd when unset/empty. */
+  title?: string;
 }
 
 function readTheme() {
@@ -302,6 +304,32 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
     setTabs((prev) => prev.filter((tab) => tab.id !== id));
   }, []);
 
+  // ── Tab rename (double-click a tab) ─────────────────────────────────
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+
+  const startRename = useCallback((tab: TabInfo) => {
+    setEditingId(tab.id);
+    setEditingValue(tab.title ?? tab.cwd);
+  }, []);
+
+  const commitRename = useCallback(() => {
+    if (editingId === null) return;
+    const next = editingValue.trim();
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === editingId ? { ...tab, title: next || undefined } : tab,
+      ),
+    );
+    setEditingId(null);
+    setEditingValue("");
+  }, [editingId, editingValue]);
+
+  const cancelRename = useCallback(() => {
+    setEditingId(null);
+    setEditingValue("");
+  }, []);
+
   // Keep activeId valid; when the last tab closes, reset the opened flag so
   // the next panel open creates a fresh terminal.
   useEffect(() => {
@@ -337,6 +365,10 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
             <div
               key={tab.id}
               onClick={() => setActiveId(tab.id)}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                startRename(tab);
+              }}
               title={tab.cwd}
               style={{
                 display: "flex",
@@ -353,7 +385,45 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
                 fontSize: 12,
               }}
             >
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tab.cwd}</span>
+              {editingId === tab.id ? (
+                <input
+                  autoFocus
+                  value={editingValue}
+                  onChange={(e) => setEditingValue(e.target.value)}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitRename();
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      cancelRename();
+                    }
+                    e.stopPropagation();
+                  }}
+                  onBlur={commitRename}
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    width: "100%",
+                    background: "var(--bg)",
+                    color: "var(--text)",
+                    border: "1px solid var(--accent)",
+                    borderRadius: 2,
+                    padding: "0 4px",
+                    height: 18,
+                    fontSize: 12,
+                    fontFamily: "var(--font-sans)",
+                    outline: "none",
+                  }}
+                />
+              ) : (
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {tab.title || tab.cwd}
+                </span>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
