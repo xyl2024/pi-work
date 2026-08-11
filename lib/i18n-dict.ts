@@ -1074,7 +1074,7 @@ export const ZH_TRANSLATIONS = {
 
   // ── Session Media Library (会话媒体库) ──
   "Session Media Library": "会话媒体库",
-  "Open session library": "打开会话媒体库",
+  "Open session library": "打开媒体库",
   "Images": "图片",
   "Videos": "视频",
   "Audio": "音频",

@@ -62,7 +62,6 @@ export function SessionLibraryOpenButton({ count, sessionId }: Props) {
         type="button"
         onClick={handleClick}
         aria-label={t("Open session library")}
-        title={t("Open session library")}
         className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110"
         style={{
           background: "var(--bg-panel)",
