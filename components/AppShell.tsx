@@ -1777,6 +1777,7 @@ export function AppShell() {
         minHeight: 0,
         overflow: "hidden",
         borderTop: terminalOpen && !terminalMaximized ? "1px solid var(--border)" : "none",
+        paddingBottom: terminalOpen && !terminalMaximized ? 8 : 0,
         background: "var(--bg)",
         zIndex: 201,
       }}
