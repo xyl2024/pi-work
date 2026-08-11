@@ -16,7 +16,8 @@ export type Tab =
   | { kind: "rss"; id: string; label: string }
   | { kind: "tokens"; id: string; label: string }
   | { kind: "gitDiff"; id: string; label: string }
-  | { kind: "conversationTree"; id: string; label: string };
+  | { kind: "conversationTree"; id: string; label: string }
+  | { kind: "terminal"; id: string; label: string };
 
 interface Props {
   tabs: Tab[];
@@ -105,6 +106,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
             <TokensTabIcon />
           ) : tab.kind === "conversationTree" ? (
             <ConversationTreeTabIcon />
+          ) : tab.kind === "terminal" ? (
+            <TerminalTabIcon />
           ) : (
             getFileIcon(tab.label, 13)
           );
@@ -279,6 +282,16 @@ function ConversationTreeTabIcon() {
       <circle cx="13" cy="4" r="1.6" />
       <path d="M3 5.6v4.8" />
       <path d="M13 5.6a8 8 0 0 1-8 8" />
+    </svg>
+  );
+}
+
+function TerminalTabIcon() {
+  // Chevron prompt — reads as a shell / terminal.
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 17 10 11 4 5" />
+      <line x1="12" y1="19" x2="20" y2="19" />
     </svg>
   );
 }

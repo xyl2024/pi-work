@@ -14,6 +14,7 @@ import { ToolCallStatsPanel } from "./ToolCallStatsPanel";
 import { JsonPanel } from "./JsonPanel";
 import { CanvasPanel } from "./CanvasPanel";
 import { RssPanel } from "./RssPanel";
+import { TerminalPanel } from "./TerminalPanel";
 import { TokensPanel } from "./TokensPanel";
 import { GitDiffPanel } from "./GitDiffPanel";
 import { useToolCallStatsView, useToolCallStatsScroll } from "@/hooks/toolCallStatsStore";
@@ -46,6 +47,7 @@ import {
   JSON_TAB_ID,
   CANVAS_TAB_ID,
   RSS_TAB_ID,
+  TERMINAL_TAB_ID,
   TOKENS_TAB_ID,
   GIT_DIFF_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
@@ -701,6 +703,16 @@ export function AppShell() {
     setRightPanelState("normal");
   }, [t]);
 
+  // Open the terminal panel — same pattern as rss / translate.
+  const handleOpenTerminalTab = useCallback(() => {
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "terminal")) return prev;
+      return [{ kind: "terminal", id: TERMINAL_TAB_ID, label: t("Terminal") }, ...prev];
+    });
+    setActiveFileTabId(TERMINAL_TAB_ID);
+    setRightPanelState("normal");
+  }, [t]);
+
   // Open the Token-audit panel.
   const handleOpenTokensTab = useCallback(() => {
     setFileTabs((prev) => {
@@ -892,6 +904,7 @@ export function AppShell() {
     openJsonTab: handleOpenJsonTab,
     openTokensTab: handleOpenTokensTab,
     openGitDiffTab: handleOpenGitDiffTab,
+    openTerminalTab: handleOpenTerminalTab,
     toggleSidebar: () => setSidebarOpen((v) => !v),
     toggleRightPanel: () => setRightPanelState((v) => v === "closed" ? "normal" : "closed"),
     toggleFocus,
@@ -902,7 +915,7 @@ export function AppShell() {
     theme.setPreset, setLocale, handleSlashNew,
     handleOpenTodoTab, handleOpenFavoritesTab, handleOpenCanvasTab,
     handleOpenTranslateTab, handleOpenToolCallsTab, handleOpenJsonTab,
-    handleOpenTokensTab, handleOpenGitDiffTab,
+    handleOpenTokensTab, handleOpenGitDiffTab, handleOpenTerminalTab,
     toggleFocus, agentControls,
     selectedSession, newSessionCwd,
   ]);
@@ -1342,6 +1355,8 @@ export function AppShell() {
               agentRunning={agentRunning}
               onCardClick={(card) => handleConversationTreeCardClick(card.id)}
             />
+          ) : activeFileTab?.kind === "terminal" ? (
+            <TerminalPanel />
           ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
               {t("No file open")}
@@ -1517,6 +1532,26 @@ export function AppShell() {
         </button>
         </Tooltip>
         )}
+        {/* Open terminal — always visible (not configurable in settings yet) */}
+        <Tooltip content={activeRightPanelKind === "terminal" ? t("Hide terminal") : t("Open terminal")} side="left">
+        <button
+          onClick={() => handleToggleRightPanelTab(TERMINAL_TAB_ID, handleOpenTerminalTab)}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 36, height: 36, padding: 0,
+            background: "transparent", border: "none",
+            color: activeRightPanelKind === "terminal" ? "var(--accent)" : "var(--text-muted)",
+            cursor: "pointer", transition: "color 0.12s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "terminal" ? "var(--accent)" : "var(--text-muted)"; }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="4 17 10 11 4 5" />
+            <line x1="12" y1="19" x2="20" y2="19" />
+          </svg>
+        </button>
+        </Tooltip>
         {/* Open git diff panel */}
         {isButtonVisible(rightSideBarConfig, "gitDiff") && (
         <Tooltip content={(selectedSession?.cwd ?? newSessionCwd) ? t("Open git diff") : t("Open a session first")} side="left">

@@ -19,5 +19,7 @@ export async function register(): Promise<void> {
     schedulerBootstrap();
     const { bootstrap: rssBootstrap } = await import("@/lib/rss/startup");
     rssBootstrap();
+    const { bootstrap: terminalBootstrap } = await import("@/lib/terminal/startup");
+    terminalBootstrap();
   }
 }
