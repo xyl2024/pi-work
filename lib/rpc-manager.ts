@@ -775,12 +775,17 @@ export async function startRpcSession(
       resourceLoader,
       // Per-session customTools: user_todos_list / user_todo_description are
       // gated by ~/.pi-work/todo-tools.json (see todo-tools-config); the two
-      // agent-side tools (show_file, agent_todo) are gated by
+      // agent-side tools (show_media, agent_todo) are gated by
       // ~/.pi-work/config.yaml → custom_tools.enabled. Read at startRpcSession
       // time only — already-running sessions keep their original tool set.
+      // `show_file` is accepted as a legacy alias of `show_media` so users
+      // with an existing config.yaml entry don't lose access after the
+      // rename.
       customTools: [
         ...buildTodoTools(readEnabledTodoTools()),
-        ...(enabledCustom.has("show_file") ? buildShowFileTool() : []),
+        ...(enabledCustom.has("show_media") || enabledCustom.has("show_file")
+          ? buildShowFileTool()
+          : []),
         ...(enabledCustom.has("agent_todo") ? buildAgentTodoTool() : []),
         ...(enabledCustom.has("ask_user_questions")
           ? buildAskUserQuestionsTool({

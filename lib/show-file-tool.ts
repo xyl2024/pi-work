@@ -1,12 +1,16 @@
 /**
- * Custom Pi Agent tool: `show_file`.
+ * Custom Pi Agent tool: `show_media`.
  *
- * Displays one or more files inline below the tool call in the chat UI.
- * Supports images, video, audio, PDFs, HTML (sandbox iframe), and text.
+ * Displays one or more **multimedia** files (image / video / audio) inline
+ * below the tool call in the chat UI. Non-multimedia paths (PDF, Markdown,
+ * HTML, plain text, binary) are rejected at validation time with a
+ * per-path error — the tool is intentionally narrower than its former
+ * `show_file` incarnation. For PDFs and code/text previews, use the
+ * right-hand file viewer (FileViewer + open_file path).
  *
- * Validation reuses lib/file-access.ts so the path is restricted to the
- * same allowed roots the `/api/files` route enforces (sessions' cwds +
- * `~/.pi-work/workspace/pi-cwd-*`).
+ * All paths the server accepts are still restricted to the same allowed
+ * roots as `/api/files` (sessions' cwds + `~/.pi-work/workspace/pi-cwd-*`),
+ * via `lib/file-access.ts`.
  *
  * IMPORTANT: This file imports `@earendil-works/pi-coding-agent`, which
  * transitively pulls in server-only Node modules. Client code that needs
@@ -21,24 +25,30 @@ import { getAllowedRoots, isPathAllowed } from "./file-access";
 import {
   SHOW_FILE_TOOL_NAME,
   SHOW_FILE_MAX_PATHS,
+  SHOW_FILE_ALLOWED_CATEGORIES,
   categorizeByExt,
   type ShowFileDetails,
   type ShowFileEntry,
 } from "./show-file-tool-types";
 
-export { SHOW_FILE_TOOL_NAME, SHOW_FILE_MAX_PATHS, categorizeByExt };
+export {
+  SHOW_FILE_TOOL_NAME,
+  SHOW_FILE_MAX_PATHS,
+  SHOW_FILE_ALLOWED_CATEGORIES,
+  categorizeByExt,
+};
 export type { ShowFileCategory, ShowFileDetails, ShowFileEntry } from "./show-file-tool-types";
 
 const ShowFileParams = Type.Object({
   paths: Type.Array(
     Type.String({
       description:
-        "Absolute path to the file to display. Relative paths are resolved against the session's working directory. Supports images (png/jpg/gif/webp/svg/...), video (mp4/webm/mov/...), audio (mp3/wav/...), PDFs, HTML files (rendered in a sandboxed iframe), and text/markdown files.",
+        "Absolute path to a **multimedia** file (image / video / audio) to display inline. Relative paths are resolved against the session's working directory. Accepted formats include images (png/jpg/gif/webp/svg/...), video (mp4/webm/mov/...), and audio (mp3/wav/...). PDFs, Markdown, HTML, plain text, and binary files are NOT accepted here — use the right-hand file viewer for those.",
     }),
     {
       minItems: 1,
       maxItems: SHOW_FILE_MAX_PATHS,
-      description: `1 to ${SHOW_FILE_MAX_PATHS} files to display together in a single tool call.`,
+      description: `1 to ${SHOW_FILE_MAX_PATHS} multimedia files to display together in a single tool call.`,
     },
   ),
 });
@@ -79,23 +89,44 @@ function processOne(absPath: string): ShowFileEntry {
   }
 
   const category = categorizeByExt(absPath);
+  // Reject anything that isn't a multimedia file. Without this guard, an
+  // agent could pass a PDF path and the UI would fall back to the
+  // right-side file viewer rather than the chat-inline preview that the
+  // tool promises — by failing loudly here, the model gets a clear signal
+  // to reach for a different surface (FileViewer via open_file in the
+  // right-hand panel).
+  if (!SHOW_FILE_ALLOWED_CATEGORIES.includes(category as typeof SHOW_FILE_ALLOWED_CATEGORIES[number])) {
+    return {
+      path: absPath,
+      exists: false,
+      category,
+      error: `Unsupported file category for show_media: "${category}". Only image, video, and audio files are accepted (PDF, Markdown, HTML, plain text, and binary are not).`,
+    };
+  }
+
   const size = stat.size;
   return {
     path: absPath,
     exists: true,
     category,
     size,
-    summary: `Displayed ${absPath} (${category}, ${fmtSize(size)})`,
+    summary: `Added ${absPath} to session library in the Pi Work UI (${category}, ${fmtSize(size)})`,
   };
 }
 
 export const showFileTool = defineTool<typeof ShowFileParams, ShowFileDetails>({
   name: SHOW_FILE_TOOL_NAME,
-  label: "Show File",
+  label: "Show Media",
   description:
-    "Display up to 5 files inline in the chat (supported file types: images, video, audio, PDFs, HTML, text/markdown).",
+    "Display up to 5 multimedia files (images, video, audio) in the pi work UI.",
   parameters: ShowFileParams,
   executionMode: "sequential",
+  promptSnippet: "Render images, video, and audio files inline in the chat UI.",
+  promptGuidelines: [
+    "When your work output includes audio, video, or images, use the `show_media` tool to present them to the user interface.",
+    "`show_media` accepts up to 5 paths per call (image / video / audio only). Batch related artifacts into a single call when they belong together.",
+    "For PDF, Markdown, HTML, plain text, or binary files, do NOT use `show_media` \u2014 it rejects them. Use the right-hand file viewer (the `open_file` flow handled by the chat UI) for those.",
+  ],
   async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
     const rawPaths = params.paths;
 
@@ -160,8 +191,8 @@ export const showFileTool = defineTool<typeof ShowFileParams, ShowFileDetails>({
     const failCount = files.length - okCount;
     const summary =
       failCount === 0
-        ? `Displayed ${okCount} file${okCount === 1 ? "" : "s"}.`
-        : `Displayed ${okCount} of ${files.length} files; ${failCount} failed.`;
+        ? `Added ${okCount} file${okCount === 1 ? "" : "s"} to the session library in the Pi Work UI.`
+        : `Added ${okCount} of ${files.length} files to the session library in the Pi Work UI; ${failCount} failed.`;
 
     return result<ShowFileDetails>(summary, { files, summary });
   },

@@ -1,5 +1,5 @@
 /**
- * Client-safe constants, types, and pure helpers for the `show_file` tool.
+ * Client-safe constants, types, and pure helpers for the `show_media` tool.
  *
  * This file MUST NOT import `@earendil-works/pi-coding-agent` or any
  * server-only Node module — it's imported by client components
@@ -7,10 +7,35 @@
  * the SDK's `child_process` dependency into the browser bundle.
  */
 
-export const SHOW_FILE_TOOL_NAME = "show_file";
+/**
+ * Current tool name. Renamed from `show_file` → `show_media` so the
+ * tool's name matches its narrower scope (image / video / audio only).
+ * The Session Library derive layer still recognizes the old name for
+ * backward compatibility with `.jsonl` files written before the rename —
+ * historical `show_file` tool calls keep rendering in the modal.
+ */
+export const SHOW_FILE_TOOL_NAME = "show_media";
 
-/** Maximum number of files a single `show_file` tool call may reference. */
+/** Legacy tool name — kept for backward-compatible derive of old sessions. */
+export const SHOW_FILE_LEGACY_TOOL_NAME = "show_file";
+
+/** Maximum number of paths a single `show_media` tool call may reference. */
 export const SHOW_FILE_MAX_PATHS = 5;
+
+/**
+ * Categories accepted by the server-side tool. Anything outside this set
+ * is rejected at validation time with a per-path error — `show_media`
+ * refuses to render PDFs, Markdown, HTML, plain text, or arbitrary
+ * binary blobs (use the right-hand file viewer for those instead).
+ */
+export const SHOW_FILE_ALLOWED_CATEGORIES = ["image", "video", "audio"] as const;
+
+/** True when the tool-call name matches either the current or legacy
+ *  identifier. Use everywhere we previously compared against a single
+ *  string so historical sessions keep working. */
+export function isShowFileToolName(toolName: string): boolean {
+  return toolName === SHOW_FILE_TOOL_NAME || toolName === SHOW_FILE_LEGACY_TOOL_NAME;
+}
 
 const IMAGE_EXTS = new Set([
   "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif",

@@ -89,10 +89,14 @@ export type RightSideBarConfig = Record<RightBarButtonId, boolean>;
 // validator will silently drop it (fail-open default still applies, but
 // the user setting is lost).
 
-export type AgentCustomToolName = "agent_todo" | "show_file" | "ask_user_questions";
+export type AgentCustomToolName = "agent_todo" | "show_media" | "show_file" | "ask_user_questions";
 
 export const AGENT_CUSTOM_TOOL_NAMES: readonly AgentCustomToolName[] = [
   "agent_todo",
+  "show_media",
+  // Legacy alias — kept for backward compatibility with ~/.pi-work/config.yaml
+  // entries that still say `show_file`. The runtime registers `show_media`
+  // regardless of which key the user has enabled.
   "show_file",
   "ask_user_questions",
 ] as const;
