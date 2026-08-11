@@ -47,7 +47,6 @@ import {
   JSON_TAB_ID,
   CANVAS_TAB_ID,
   RSS_TAB_ID,
-  TERMINAL_TAB_ID,
   TOKENS_TAB_ID,
   GIT_DIFF_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
@@ -70,6 +69,10 @@ interface ToolInfo {
 // Fixed panel ratios (drag-resize removed). Center column takes the remainder.
 const LEFT_PANEL_RATIO = 0.18;
 const RIGHT_PANEL_RATIO = 0.32;
+
+// Bottom terminal panel geometry.
+const TERMINAL_HEIGHT_KEY = "pi-terminal-panel-height";
+const MIN_TERMINAL_HEIGHT = 80;
 
 // True while settings haven't been fetched (or the fetch failed).
 // Until then, all right-bar buttons render as visible — the conservative
@@ -703,16 +706,6 @@ export function AppShell() {
     setRightPanelState("normal");
   }, [t]);
 
-  // Open the terminal panel — same pattern as rss / translate.
-  const handleOpenTerminalTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "terminal")) return prev;
-      return [{ kind: "terminal", id: TERMINAL_TAB_ID, label: t("Terminal") }, ...prev];
-    });
-    setActiveFileTabId(TERMINAL_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
-
   // Open the Token-audit panel.
   const handleOpenTokensTab = useCallback(() => {
     setFileTabs((prev) => {
@@ -869,6 +862,84 @@ export function AppShell() {
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const activeRightPanelKind = rightPanelState === "closed" ? null : activeFileTab?.kind ?? null;
 
+  // ── Bottom terminal panel ─────────────────────────────────────────────
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalMaximized, setTerminalMaximized] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState<number>(() => {
+    if (typeof window === "undefined") return 200;
+    try {
+      const v = Number(localStorage.getItem(TERMINAL_HEIGHT_KEY));
+      if (Number.isFinite(v) && v >= MIN_TERMINAL_HEIGHT && v <= window.innerHeight - 60) return v;
+    } catch {
+      // ignore
+    }
+    return 200;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TERMINAL_HEIGHT_KEY, String(terminalHeight));
+    } catch {
+      // ignore
+    }
+  }, [terminalHeight]);
+
+  // Closing the panel also leaves maximized mode, so the next open restores
+  // the normal drag-sized height.
+  useEffect(() => {
+    if (!terminalOpen) setTerminalMaximized(false);
+  }, [terminalOpen]);
+
+  const toggleTerminal = useCallback(() => {
+    setTerminalOpen((v) => !v);
+  }, []);
+
+  const toggleTerminalMaximize = useCallback(() => setTerminalMaximized((v) => !v), []);
+
+  // Ctrl+` toggles the terminal panel (VS Code muscle memory).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key === "`") {
+        e.preventDefault();
+        setTerminalOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Drag the panel's top edge to resize (clamped to min/max).
+  const startTerminalDrag = useCallback(
+    (startY: number) => {
+      const startH = terminalHeight;
+      const onMove = (ev: MouseEvent) => {
+        const next = startH - (ev.clientY - startY);
+        setTerminalHeight(Math.min(Math.max(next, MIN_TERMINAL_HEIGHT), window.innerHeight - 60));
+      };
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        document.body.style.userSelect = "";
+      };
+      document.body.style.userSelect = "none";
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    },
+    [terminalHeight],
+  );
+
+  // New terminals default to the active session's cwd; without a session,
+  // fall back to the last-used directory.
+  const terminalDefaultCwd = useMemo(() => {
+    const sessionCwd = selectedSession?.cwd ?? newSessionCwd;
+    if (sessionCwd) return sessionCwd;
+    try {
+      return localStorage.getItem("pi-terminal-cwd") || "~";
+    } catch {
+      return "~";
+    }
+  }, [selectedSession, newSessionCwd]);
+
   // When the user hides a button whose panel is currently active, the right
   // panel would otherwise sit open with no toggle in the bar. Auto-close the
   // panel — the tab itself stays in the tab strip so re-enabling the button
@@ -904,7 +975,6 @@ export function AppShell() {
     openJsonTab: handleOpenJsonTab,
     openTokensTab: handleOpenTokensTab,
     openGitDiffTab: handleOpenGitDiffTab,
-    openTerminalTab: handleOpenTerminalTab,
     toggleSidebar: () => setSidebarOpen((v) => !v),
     toggleRightPanel: () => setRightPanelState((v) => v === "closed" ? "normal" : "closed"),
     toggleFocus,
@@ -915,7 +985,7 @@ export function AppShell() {
     theme.setPreset, setLocale, handleSlashNew,
     handleOpenTodoTab, handleOpenFavoritesTab, handleOpenCanvasTab,
     handleOpenTranslateTab, handleOpenToolCallsTab, handleOpenJsonTab,
-    handleOpenTokensTab, handleOpenGitDiffTab, handleOpenTerminalTab,
+    handleOpenTokensTab, handleOpenGitDiffTab,
     toggleFocus, agentControls,
     selectedSession, newSessionCwd,
   ]);
@@ -956,7 +1026,8 @@ export function AppShell() {
 
   return (
     <>
-    <div style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
+      <div style={{ display: terminalMaximized ? "none" : "flex", flex: 1, minHeight: 0 }}>
       {/* Mobile overlay backdrop */}
       <div
         className="sidebar-overlay-backdrop"
@@ -1355,8 +1426,6 @@ export function AppShell() {
               agentRunning={agentRunning}
               onCardClick={(card) => handleConversationTreeCardClick(card.id)}
             />
-          ) : activeFileTab?.kind === "terminal" ? (
-            <TerminalPanel />
           ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
               {t("No file open")}
@@ -1532,26 +1601,6 @@ export function AppShell() {
         </button>
         </Tooltip>
         )}
-        {/* Open terminal — always visible (not configurable in settings yet) */}
-        <Tooltip content={activeRightPanelKind === "terminal" ? t("Hide terminal") : t("Open terminal")} side="left">
-        <button
-          onClick={() => handleToggleRightPanelTab(TERMINAL_TAB_ID, handleOpenTerminalTab)}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 36, height: 36, padding: 0,
-            background: "transparent", border: "none",
-            color: activeRightPanelKind === "terminal" ? "var(--accent)" : "var(--text-muted)",
-            cursor: "pointer", transition: "color 0.12s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "terminal" ? "var(--accent)" : "var(--text-muted)"; }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="4 17 10 11 4 5" />
-            <line x1="12" y1="19" x2="20" y2="19" />
-          </svg>
-        </button>
-        </Tooltip>
         {/* Open git diff panel */}
         {isButtonVisible(rightSideBarConfig, "gitDiff") && (
         <Tooltip content={(selectedSession?.cwd ?? newSessionCwd) ? t("Open git diff") : t("Open a session first")} side="left">
@@ -1721,10 +1770,67 @@ export function AppShell() {
               </svg>
             </button>
           </Tooltip>
+          {/* Open terminal — bottom-panel toggle */}
+          <Tooltip content={terminalOpen ? t("Hide terminal") : t("Open terminal")} side="left">
+            <button
+              onClick={toggleTerminal}
+              aria-label={terminalOpen ? t("Hide terminal") : t("Open terminal")}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 36, height: 36, padding: 0,
+                background: "transparent", border: "none",
+                color: terminalOpen ? "var(--accent)" : "var(--text-muted)",
+                cursor: "pointer", transition: "color 0.12s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = terminalOpen ? "var(--accent)" : "var(--text-muted)"; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" y1="19" x2="20" y2="19" />
+              </svg>
+            </button>
+          </Tooltip>
         </div>
       </div>
     </div>
-    {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); setModelsRefreshKey((k) => k + 1); }} />}
+
+    {/* Bottom terminal panel — always mounted so terminals survive collapse;
+        the wrapper animates its height. */}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flexShrink: 0,
+        height: terminalOpen ? (terminalMaximized ? "100%" : terminalHeight) : 0,
+        minHeight: 0,
+        overflow: "hidden",
+        borderTop: terminalOpen && !terminalMaximized ? "1px solid var(--border)" : "none",
+      }}
+    >
+      {terminalOpen && !terminalMaximized && (
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault();
+            startTerminalDrag(e.clientY);
+          }}
+          onDoubleClick={toggleTerminalMaximize}
+          title={t("Drag to resize")}
+          style={{ flexShrink: 0, height: 5, cursor: "ns-resize", background: "var(--bg-panel)" }}
+        />
+      )}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <TerminalPanel
+          defaultCwd={terminalDefaultCwd}
+          open={terminalOpen}
+          maximized={terminalMaximized}
+          onToggleMaximize={toggleTerminalMaximize}
+          onClosePanel={() => setTerminalOpen(false)}
+        />
+      </div>
+    </div>
+  </div>
+  {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); setModelsRefreshKey((k) => k + 1); }} />}
     {skillsConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
       <SkillsConfig cwd={(selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setSkillsConfigOpen(false)} />
     )}

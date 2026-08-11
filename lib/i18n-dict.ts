@@ -904,13 +904,19 @@ export const ZH_TRANSLATIONS = {
   "No feeds yet — click + to add one.": "暂无订阅 — 点击 + 添加",
   "Feed not found": "未找到订阅",
 
-  // Terminal panel (right-panel tab)
+  // Terminal panel (bottom panel)
   "Terminal": "终端",
   "Open terminal": "打开终端",
   "Hide terminal": "隐藏终端",
-  "Terminal directory": "终端目录",
+  "New terminal": "新建终端",
+  "Close terminal": "关闭终端",
+  "Restart": "重启",
+  "Maximize terminal": "最大化终端",
+  "Restore terminal": "还原终端",
+  "Connecting": "连接中",
+  "No terminals yet": "暂无终端",
+  "Drag to resize": "拖动调整高度",
   "Connect": "连接",
-  "Enter a terminal directory": "请输入终端目录",
   "Terminal error": "终端错误",
   "Terminal connection failed": "终端连接失败",
   "Terminal connection closed": "终端连接已关闭",
