@@ -1027,7 +1027,7 @@ export function AppShell() {
   return (
     <>
     <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
-      <div style={{ display: terminalMaximized ? "none" : "flex", flex: 1, minHeight: 0 }}>
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       {/* Mobile overlay backdrop */}
       <div
         className="sidebar-overlay-backdrop"
@@ -1795,17 +1795,25 @@ export function AppShell() {
       </div>
     </div>
 
-    {/* Bottom terminal panel — always mounted so terminals survive collapse;
-        the wrapper animates its height. */}
+    {/* Bottom terminal panel — floats OVER the page (fixed overlay) instead of
+        squeezing the layout above. Always mounted so terminals survive
+        collapse; the wrapper animates its height. */}
     <div
       style={{
+        position: "fixed",
+        left: 0,
+        // right side is the 36px button rail — stop before it so the rail
+        // stays visible and clickable.
+        right: 36,
+        bottom: 0,
         display: "flex",
         flexDirection: "column",
-        flexShrink: 0,
-        height: terminalOpen ? (terminalMaximized ? "100%" : terminalHeight) : 0,
+        height: terminalOpen ? (terminalMaximized ? "100dvh" : terminalHeight) : 0,
         minHeight: 0,
         overflow: "hidden",
         borderTop: terminalOpen && !terminalMaximized ? "1px solid var(--border)" : "none",
+        background: "var(--bg)",
+        zIndex: 201,
       }}
     >
       {terminalOpen && !terminalMaximized && (
