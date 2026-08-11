@@ -72,6 +72,8 @@ const RIGHT_PANEL_RATIO = 0.32;
 
 // Bottom terminal panel geometry.
 const TERMINAL_HEIGHT_KEY = "pi-terminal-panel-height";
+const TERMINAL_LOCATION_KEY = "pi-terminal-panel-location";
+const TERMINAL_TAB_ID = "terminal:global";
 const MIN_TERMINAL_HEIGHT = 80;
 
 // True while settings haven't been fetched (or the fetch failed).
@@ -849,11 +851,38 @@ export function AppShell() {
   const effectiveNewSessionCwd = newSessionCwd;
   const showChat = initialSessionRestored || selectedSession !== null || effectiveNewSessionCwd !== null;
 
+  const [rightPanelRect, setRightPanelRect] = useState<{ left: number; width: number } | null>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const panel = rightPanelRef.current;
+    if (!panel) return;
+    const update = () => {
+      const rect = panel.getBoundingClientRect();
+      setRightPanelRect({ left: rect.left, width: rect.width });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(panel);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [rightPanelState]);
+
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const activeRightPanelKind = rightPanelState === "closed" ? null : activeFileTab?.kind ?? null;
 
-  // ── Bottom terminal panel ─────────────────────────────────────────────
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalLocation, setTerminalLocation] = useState<"bottom" | "right">(() => {
+    if (typeof window === "undefined") return "bottom";
+    try {
+      return localStorage.getItem(TERMINAL_LOCATION_KEY) === "right" ? "right" : "bottom";
+    } catch {
+      return "bottom";
+    }
+  });
   const [terminalMaximized, setTerminalMaximized] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState<number>(() => {
     if (typeof window === "undefined") return 200;
@@ -880,9 +909,54 @@ export function AppShell() {
     if (!terminalOpen) setTerminalMaximized(false);
   }, [terminalOpen]);
 
+  const openTerminalOnRight = useCallback(() => {
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "terminal")) return prev;
+      return [...prev, { kind: "terminal", id: TERMINAL_TAB_ID, label: t("Terminal") }];
+    });
+    setActiveFileTabId(TERMINAL_TAB_ID);
+    setRightPanelState("normal");
+    setTerminalOpen(true);
+  }, [t]);
+
   const toggleTerminal = useCallback(() => {
+    if (terminalLocation === "right") {
+      if (terminalOpen && activeFileTabId === TERMINAL_TAB_ID && rightPanelState !== "closed") {
+        setTerminalOpen(false);
+        handleCloseFileTab(TERMINAL_TAB_ID);
+      } else {
+        openTerminalOnRight();
+      }
+      return;
+    }
     setTerminalOpen((v) => !v);
-  }, []);
+  }, [terminalLocation, terminalOpen, activeFileTabId, rightPanelState, handleCloseFileTab, openTerminalOnRight]);
+
+  const moveTerminal = useCallback(() => {
+    if (terminalLocation === "bottom") {
+      setTerminalLocation("right");
+      setTerminalMaximized(false);
+      openTerminalOnRight();
+    } else {
+      setTerminalLocation("bottom");
+      handleCloseFileTab(TERMINAL_TAB_ID);
+      setTerminalOpen(true);
+    }
+  }, [terminalLocation, handleCloseFileTab, openTerminalOnRight]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TERMINAL_LOCATION_KEY, terminalLocation);
+    } catch {
+      // ignore
+    }
+  }, [terminalLocation]);
+
+  useEffect(() => {
+    if (terminalLocation === "right" && !fileTabs.some((tab) => tab.kind === "terminal")) {
+      setTerminalOpen(false);
+    }
+  }, [terminalLocation, fileTabs]);
 
   const toggleTerminalMaximize = useCallback(() => setTerminalMaximized((v) => !v), []);
 
@@ -891,14 +965,18 @@ export function AppShell() {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key === "`") {
         e.preventDefault();
-        setTerminalOpen((v) => !v);
+        if (terminalLocation === "right") {
+          openTerminalOnRight();
+        } else {
+          setTerminalOpen((v) => !v);
+        }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [terminalLocation, openTerminalOnRight]);
 
-  // Drag the panel's top edge to resize (clamped to min/max).
+  // Drag the bottom panel's top edge to resize (clamped to min/max).
   const startTerminalDrag = useCallback(
     (startY: number) => {
       const startH = terminalHeight;
@@ -1360,6 +1438,7 @@ export function AppShell() {
 
       {/* Right panel: file viewer — always mounted, width animated via CSS */}
       <div
+        ref={rightPanelRef}
         className={`right-panel-container right-panel-${rightPanelState}`}
         style={{
           display: "flex",
@@ -1376,8 +1455,14 @@ export function AppShell() {
             <TabBar
               tabs={fileTabs}
               activeTabId={activeFileTabId ?? ""}
-              onSelectTab={setActiveFileTabId}
-              onCloseTab={handleCloseFileTab}
+              onSelectTab={(tabId) => {
+                setActiveFileTabId(tabId);
+                if (tabId === TERMINAL_TAB_ID) setRightPanelState("normal");
+              }}
+              onCloseTab={(tabId) => {
+                if (tabId === TERMINAL_TAB_ID) setTerminalOpen(false);
+                handleCloseFileTab(tabId);
+              }}
               onContextMenu={handleTabContextMenu}
             />
           </div>
@@ -1415,7 +1500,7 @@ export function AppShell() {
               agentRunning={agentRunning}
               onCardClick={(card) => handleConversationTreeCardClick(card.id)}
             />
-          ) : (
+          ) : activeFileTab?.kind === "terminal" ? null : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
               {t("No file open")}
             </div>
@@ -1766,23 +1851,26 @@ export function AppShell() {
     <div
       style={{
         position: "fixed",
-        left: 0,
-        // right side is the 36px button rail — stop before it so the rail
-        // stays visible and clickable.
-        right: 36,
+        left: terminalLocation === "right" ? rightPanelRect?.left : 0,
+        right: terminalLocation === "right" ? undefined : 36,
+        top: terminalLocation === "right" ? 36 : undefined,
         bottom: 0,
+        width: terminalLocation === "right" ? rightPanelRect?.width : undefined,
         display: "flex",
         flexDirection: "column",
-        height: terminalOpen ? (terminalMaximized ? "100dvh" : terminalHeight) : 0,
+        height: terminalLocation === "right"
+          ? (terminalOpen && activeFileTabId === TERMINAL_TAB_ID && rightPanelState !== "closed" ? "calc(100dvh - 36px)" : 0)
+          : (terminalOpen ? (terminalMaximized ? "100dvh" : terminalHeight) : 0),
         minHeight: 0,
         overflow: "hidden",
-        borderTop: terminalOpen && !terminalMaximized ? "1px solid var(--border)" : "none",
-        paddingBottom: terminalOpen && !terminalMaximized ? 8 : 0,
+        borderTop: terminalLocation === "bottom" && terminalOpen && !terminalMaximized ? "1px solid var(--border)" : "none",
+        paddingBottom: terminalLocation === "bottom" && terminalOpen && !terminalMaximized ? 8 : 0,
+        borderLeft: terminalLocation === "right" ? "1px solid var(--border)" : "none",
         background: "var(--bg)",
         zIndex: 201,
       }}
     >
-      {terminalOpen && !terminalMaximized && (
+      {terminalLocation === "bottom" && terminalOpen && !terminalMaximized && (
         <div
           onMouseDown={(e) => {
             e.preventDefault();
@@ -1797,9 +1885,14 @@ export function AppShell() {
         <TerminalPanel
           defaultCwd={terminalDefaultCwd}
           open={terminalOpen}
+          location={terminalLocation}
+          onMove={moveTerminal}
           maximized={terminalMaximized}
           onToggleMaximize={toggleTerminalMaximize}
-          onClosePanel={() => setTerminalOpen(false)}
+          onClosePanel={() => {
+            setTerminalOpen(false);
+            if (terminalLocation === "right") handleCloseFileTab(TERMINAL_TAB_ID);
+          }}
         />
       </div>
     </div>

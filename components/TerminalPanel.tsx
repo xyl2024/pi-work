@@ -14,6 +14,9 @@ export interface TerminalPanelProps {
   defaultCwd: string;
   /** whether the bottom panel is visible. */
   open: boolean;
+  /** where the terminal panel is currently docked. */
+  location: "bottom" | "right";
+  onMove: () => void;
   /** whether the panel is maximized. */
   maximized: boolean;
   onToggleMaximize: () => void;
@@ -26,6 +29,11 @@ interface TabInfo {
   cwd: string;
   /** user-chosen display name; falls back to cwd when unset/empty. */
   title?: string;
+}
+
+function terminalBasename(cwd: string): string {
+  const normalized = cwd.replace(/[\\/]+$/, "");
+  return normalized.split(/[\\/]/).pop() || cwd;
 }
 
 function readTheme() {
@@ -275,7 +283,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
  * backed by its own WebSocket + pty. Inactive tabs stay mounted so their
  * processes keep running while hidden.
  */
-export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, onClosePanel }: TerminalPanelProps) {
+export function TerminalPanel({ defaultCwd, open, location, onMove, maximized, onToggleMaximize, onClosePanel }: TerminalPanelProps) {
   const { t } = useI18n();
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -289,7 +297,7 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
     } catch {
       // ignore
     }
-    setTabs((prev) => [...prev, { id, cwd }]);
+    setTabs((prev) => [...prev, { id, cwd, title: terminalBasename(cwd) }]);
     setActiveId(id);
   }, []);
 
@@ -421,7 +429,7 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
                 />
               ) : (
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {tab.title || tab.cwd}
+                  {tab.title || terminalBasename(tab.cwd)}
                 </span>
               )}
               <button
@@ -475,6 +483,40 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
         </button>
         </Tooltip>
         <div style={{ flex: 1 }} />
+        <Tooltip content={location === "bottom" ? t("Move terminal to right") : t("Move terminal to bottom")}>
+        <button
+          onClick={onMove}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 24,
+            height: 24,
+            padding: 0,
+            background: "transparent",
+            border: "none",
+            borderRadius: 4,
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {location === "bottom" ? (
+              <>
+                <path d="M14 5l7 7-7 7" />
+                <path d="M3 12h18" />
+              </>
+            ) : (
+              <>
+                <path d="M5 10l7 7 7-7" />
+                <path d="M12 3v14" />
+              </>
+            )}
+          </svg>
+        </button>
+        </Tooltip>
+        {location === "bottom" && (
         <Tooltip content={maximized ? t("Restore terminal") : t("Maximize terminal")}>
         <button
           onClick={onToggleMaximize}
@@ -512,6 +554,7 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
           </svg>
         </button>
         </Tooltip>
+        )}
         <Tooltip content={t("Hide terminal")}>
         <button
           onClick={onClosePanel}

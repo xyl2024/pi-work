@@ -278,7 +278,7 @@ export const CONVERSATION_TREE_TAB_ID = "conversationTree:global";
 // hidden is currently active, close the panel. "file" is intentionally
 // absent — the file-panel toggle is always-visible (Q1).
 import type { RightBarButtonId } from "./config";
-export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<Record<"file" | "todo" | "canvas" | "translate" | "toolCalls" | "json" | "rss" | "favorites" | "tokens" | "gitDiff" | "conversationTree", RightBarButtonId>> = {
+export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<Record<"file" | "todo" | "canvas" | "translate" | "toolCalls" | "json" | "rss" | "favorites" | "tokens" | "gitDiff" | "conversationTree" | "terminal", RightBarButtonId>> = {
   todo: "todos",
   canvas: "canvas",
   translate: "translate",
