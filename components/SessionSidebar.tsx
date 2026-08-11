@@ -33,6 +33,7 @@ interface Props {
   onOpenSkills?: () => void;
   onOpenPrompts?: () => void;
   onOpenScheduler?: () => void;
+  onOpenMcp?: () => void;
   onOpenSettings?: () => void;
   onOpenInbox?: () => void;
   inboxUnread?: number;
@@ -133,7 +134,7 @@ const WORKSPACE_PAGE_SIZE = 5;
 const SESSION_PAGE_SIZE_GROUPED = 5;
 const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenMcp, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
   const { t } = useI18n();
   const toast = useToast();
 
@@ -855,6 +856,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
           onOpenSkills={onOpenSkills}
           onOpenPrompts={onOpenPrompts}
           onOpenScheduler={onOpenScheduler}
+          onOpenMcp={onOpenMcp}
           onOpenInbox={onOpenInbox}
           inboxUnread={inboxUnread}
           refreshKey={profileRefreshKey}

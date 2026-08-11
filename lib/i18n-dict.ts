@@ -1033,6 +1033,25 @@ export const ZH_TRANSLATIONS = {
   "Image (file kind)": "图片",
   "Text (file kind)": "文本",
   "PDF (file kind)": "PDF",
+  // ── MCP (Model Context Protocol) — v1 standalone client + test bench ──
+  "Open MCP servers": "打开 MCP 服务",
+  "MCP Servers": "MCP 服务",
+  "Enable MCP integration": "启用 MCP 集成",
+  "+ Add server": "+ 新建服务",
+  "Cancel add": "取消新增",
+  "Servers": "服务列表",
+  "No servers yet. Click \"+ Add server\" to add one.": "还没有服务。点 \"+ 新建服务\" 来添加一个。",
+  "MCP server disabled": "已禁用",
+  "not connected": "未连接",
+  "Connecting…": "连接中…",
+  "Refreshing…": "刷新中…",
+  "Calling…": "调用中…",
+  "A server with this name already exists.": "已存在同名服务。",
+  "MCP connect failed": "连接 MCP 失败",
+  "Select a server on the left, or add one to begin.": "在左侧选个服务，或新增一个开始测试。",
+  "Connect the server to list its tools.": "连接服务后就能列出工具。",
+  "Arguments (JSON)": "参数（JSON）",
+  "Refresh tools": "刷新工具列表",
 } as const;
 
 export function tServer(key: string, locale: Locale): string {

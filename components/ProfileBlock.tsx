@@ -11,6 +11,7 @@ interface Props {
   onOpenSkills?: () => void;
   onOpenPrompts?: () => void;
   onOpenScheduler?: () => void;
+  onOpenMcp?: () => void;
   onOpenInbox?: () => void;
   inboxUnread?: number;
   refreshKey?: number;
@@ -36,7 +37,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenInbox, inboxUnread, refreshKey }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenMcp, onOpenInbox, inboxUnread, refreshKey }: Props) {
   const { t } = useI18n();
   const [username, setUsername] = useState<string | null>(null);
   const [avatarAttempted, setAvatarAttempted] = useState(0);
@@ -91,7 +92,7 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk || !avatarLoaded;
 
-  const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenPrompts || onOpenScheduler);
+  const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenPrompts || onOpenScheduler || onOpenMcp);
 
   return (
     <div
@@ -293,6 +294,21 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
                 <polyline points="12 7 12 12 15 14" />
               </svg>
               <span>{t("Scheduled tasks")}</span>
+            </button>
+          )}
+          {onOpenMcp && (
+            <button
+              role="menuitem"
+              onClick={() => { setMenuOpen(false); onOpenMcp(); }}
+              style={itemBaseStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 1024 1024" fill="currentColor" style={{ flexShrink: 0 }} aria-hidden="true">
+                <path d="M330.965333 529.685333a85.333333 85.333333 0 0 0 120.682667 120.682667L723.2 378.837333l60.330667 60.330667L512 710.698667A170.666667 170.666667 0 0 1 270.634667 469.333333L542.165333 197.824l60.330667 60.330667-271.530667 271.530666z" />
+                <path d="M693.034667 107.306667a170.24 170.24 0 0 1 49.6 131.392 170.666667 170.666667 0 0 1 131.392 290.986666L542.165333 861.546667l89.6 89.6-60.330666 60.373333-149.952-149.973333L813.696 469.333333a85.333333 85.333333 0 0 0-120.682667-120.661333L421.482667 620.16l-60.330667-60.330667 271.530667-271.530666A85.333333 85.333333 0 0 0 512 167.616L119.808 559.829333l-60.352-60.330666L451.669333 107.285333a170.666667 170.666667 0 0 1 241.365334 0z" />
+              </svg>
+              <span>{t("MCP Servers")}</span>
             </button>
           )}
         </div>
