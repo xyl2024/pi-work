@@ -352,6 +352,23 @@ export function TerminalPanel({ defaultCwd, open, location, onMove, maximized, o
     }
   }, [tabs, activeId]);
 
+  const tabScrollRef = useRef<HTMLDivElement>(null);
+  const handleTabWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    const el = tabScrollRef.current;
+    if (!el || el.scrollWidth <= el.clientWidth) return;
+    const lineHeight = 16;
+    const page = Math.max(el.clientWidth, 200);
+    const normalize = (value: number) => {
+      if (e.deltaMode === 1) return value * lineHeight;
+      if (e.deltaMode === 2) return value * page;
+      return value;
+    };
+    const next = el.scrollLeft + normalize(e.deltaY) + normalize(e.deltaX);
+    if (next === el.scrollLeft) return;
+    e.preventDefault();
+    el.scrollLeft = next;
+  }, []);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
       {/* Tab bar */}
@@ -368,6 +385,19 @@ export function TerminalPanel({ defaultCwd, open, location, onMove, maximized, o
           minWidth: 0,
         }}
       >
+        <div
+          ref={tabScrollRef}
+          onWheel={handleTabWheel}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            flex: 1,
+            minWidth: 0,
+            overflowX: "auto",
+            overflowY: "hidden",
+            gap: 2,
+          }}
+        >
         {tabs.map((tab) => {
           const active = tab.id === activeId;
           return (
@@ -482,7 +512,8 @@ export function TerminalPanel({ defaultCwd, open, location, onMove, maximized, o
           +
         </button>
         </Tooltip>
-        <div style={{ flex: 1 }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 2 }}>
         <Tooltip content={location === "bottom" ? t("Move terminal to right") : t("Move terminal to bottom")}>
         <button
           onClick={onMove}
@@ -579,6 +610,7 @@ export function TerminalPanel({ defaultCwd, open, location, onMove, maximized, o
           </svg>
         </button>
         </Tooltip>
+      </div>
       </div>
 
       {/* Terminal bodies — inactive tabs stay mounted so their processes keep running */}
