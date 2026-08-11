@@ -1071,6 +1071,32 @@ export const ZH_TRANSLATIONS = {
   "Connect the server to list its tools.": "连接服务后就能列出工具。",
   "Arguments (JSON)": "参数（JSON）",
   "Refresh tools": "刷新工具列表",
+
+  // ── Session Media Library (会话媒体库) ──
+  "Session Media Library": "会话媒体库",
+  "Open session library": "打开会话媒体库",
+  "Images": "图片",
+  "Videos": "视频",
+  "Audio": "音频",
+  "Failed": "失败",
+  "Search files…": "搜索文件…",
+  "No files in this session yet.": "本次会话还没有 show_media 调用过多媒体文件。",
+  "Let the agent use the show_media tool to surface images, video, and audio — they all land here.": "让 agent 用 show_media 展示图片、视频、音频，会汇总到这里。",
+  "Copy path": "复制路径",
+  "Open in tab": "在右栏打开",
+  "Path copied": "路径已复制",
+  "Failed to copy path": "复制路径失败",
+  "{n} of {total}": "第 {n} / {total} 项",
+  "Failed to load": "加载失败",
+  "{n} files added": "已添加 {n} 个文件",
+  "{n} files added · {m} failed": "已添加 {n} 个文件 · {m} 个失败",
+  "{n} file added": "已添加 1 个文件",
+  "Open in session library": "在会话媒体库中打开",
+  "Failed: {message}": "失败：{message}",
+  "New files added": "新增了文件",
+  "No matches for the current filter.": "当前筛选下没有匹配项。",
+  "No media in the current filter.": "当前筛选下没有媒体。",
+  "File": "文件",
 } as const;
 
 export function tServer(key: string, locale: Locale): string {

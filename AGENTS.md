@@ -231,7 +231,7 @@ latest list when removing by `toolCallId`.
 `lib/rpc-manager.ts` registers these as `customTools` on `createAgentSession`:
 
 - `user_todos_list` / `user_todo_description` — read-only todo queries against `~/.pi-work/todos.db` (`lib/todo-tools.ts`, gated by `~/.pi-work/todo-tools.json`). The first returns a lightweight summary filterable by `status` / `tags` / `create_time_window` / `due_time_window`; the second fetches full description + image URLs by id. Set `PI_WORK_PUBLIC_BASE_URL` to control the image origin in the second tool's output.
-- `show_file` — inline-render one or more files below the tool call in chat (`lib/show-file-tool.ts` + `lib/show-file-tool-types.ts`). Path validation reuses `lib/file-access.ts` (same allowed roots as `/api/files`).
+- `show_media` — inline-render one or more **multimedia** files (image / video / audio) below the tool call in chat (`lib/show-file-tool.ts` + `lib/show-file-tool-types.ts`). Path validation reuses `lib/file-access.ts` (same allowed roots as `/api/files`). The tool rejects PDF / Markdown / HTML / plain text / binary paths — use the right-hand FileViewer for those. The legacy alias `show_file` is still recognised by the derive layer (Session Library) and config (`~/.pi-work/config.yaml`) for backward compatibility.
 - `agent_todo` — single-tool action-dispatched (`create | update | list | get | delete | clear`); persisted per-session to `~/.pi-work/agent-todo/<sessionId>.jsonl` as append-only snapshots (`lib/agent-todo-store.ts`). Full design in `docs/agent-todo/`.
 
 Server-only files (`*-tool.ts`, `*-store.ts` under `lib/`) import `@earendil-works/pi-coding-agent`, which transitively pulls in `child_process` and other Node modules. **Client code must import types/constants from the matching `-types.ts` file instead** — see the `IMPORTANT` comment at the top of each tool file.
@@ -306,7 +306,7 @@ lib/
   json-array-store.ts       read/write a JSON file containing a string array
   file-paths.ts             path normalization + /api/files URL encoding
   file-name.ts              validateFileName() for create/rename routes
-  file-access.ts            shared allowed-roots logic for /api/files + show_file tool (cached 5s)
+  file-access.ts            shared allowed-roots logic for /api/files + show_media tool (cached 5s)
   logger.ts                 structured logger used by every route + lib file
   npx.ts                    helpers to run `npm` / `npx` from the server (skill install)
   shallowEqual.ts           content-equality guard used by every useSyncExternalStore store
@@ -338,7 +338,7 @@ components/
   SessionSidebar.tsx        session tree + FileExplorer + favorites
   ChatWindow.tsx            message list + minimap + sticky-scroll wiring
   ChatInput.tsx             input bar + model/thinking/tools/compact controls + new-session button
-  MessageView.tsx           renders one message (user/assistant/toolCall/toolResult/show_file)
+  MessageView.tsx           renders one message (user/assistant/toolCall/toolResult/show_media)
   BranchNavigator.tsx       in-session branch switcher
   ChatMinimap.tsx           scroll minimap alongside the message list
   ToolPanel.tsx             exports `PRESET_NONE` (the only named preset constant; `getPresetFromTools` returns "none" / "full" only)
@@ -350,7 +350,7 @@ components/
   FileExplorer.tsx          file tree inside sidebar
   FileSearchBar.tsx         VS Code-style inline search bar (FileViewer)
   FileViewer.tsx            file content in a tab (text, image, audio, pdf)
-  ShowFileRenderer.tsx      renders the `show_file` tool result inline in chat
+  ShowFileRenderer.tsx      renders a multimedia file inline (image / video / audio); legacy PDF/MD/text branches kept for the right-hand file viewer
   TabBar.tsx                tab bar (Chat + open file tabs + Todo)
   TodoPanel.tsx             user-side todo list panel (~/.pi-work/todos.db)
   TodoDescriptionView.tsx   sanitized read-only HTML render for a todo description
@@ -440,7 +440,7 @@ docs/
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`
 - `globalThis` survives Next.js hot-reload; plain module-level Map does not
 - Idle timeout: 10 minutes. Concurrent `startRpcSession()` calls share a single start Promise (`globalThis.__piStartLocks`)
-- `customTools` registered here: `buildTodoTools(...)`, `buildShowFileTool()`, `buildAgentTodoTool()` — the trio that gives pi-work sessions their distinctive toolset
+- `customTools` registered here: `buildTodoTools(...)`, `buildShowFileTool()` (registers the `show_media` tool), `buildAgentTodoTool()` — the trio that gives pi-work sessions their distinctive toolset
 
 ### In-session branching only
 Branches live inside a single `.jsonl` file. The `Edit from here` button on any user message calls `navigate_tree` against the current session; the resulting entries share a `parentId` and the BranchNavigator lets the user switch between them. Switching between leaves calls `/api/sessions/[id]/context?leafId=`.

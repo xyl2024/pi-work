@@ -13,10 +13,12 @@ import {
   countToolCallsByName,
   getAssistantErrorMessage,
   splitFinalAssistantBlocks,
-  collectShowFilePaths,
 } from "@/lib/message-display";
 import { MessageView, CollapseNonceProvider, useCollapseNonce } from "./MessageView";
-import { ShowFileRenderer } from "./ShowFileRenderer";
+import { SessionLibraryModal } from "./session-library/SessionLibraryModal";
+import { SessionLibraryOpenButton } from "./SessionLibraryOpenButton";
+import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
+import { resetSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { Tooltip } from "./Tooltip";
 import { AgentTodoPanel } from "./AgentTodoPanel";
@@ -59,6 +61,10 @@ interface Props {
   onRenameCompleted?: () => void;
   /** Fired as soon as the user confirms a rename — keeps in-memory state in sync. */
   onSessionNameChange?: (name: string) => void;
+  /** Open a file path in the right-hand panel (used by Session Library
+   *  "Open in tab" buttons). Optional; ChatWindow renders a working
+   *  "open file" experience even without it (falls back to a no-op). */
+  onOpenFile?: (filePath: string, fileName: string) => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: ReturnType<typeof useI18n>["t"]): string {
@@ -183,190 +189,6 @@ function withAssistantBlocks(
 /** How many tool names the process summary lists before falling back to "+N". */
 const MAX_TOOL_BREAKDOWN = 3;
 
-/** Turn-level gallery for show_file: renders every file referenced by the
- *  turn's show_file calls below the final answer, so the files stay visible
- *  even when the tool-call cards are folded into the process group. Only
- *  rendered once the turn has settled (ChatWindow gates on isLiveTurn).
- *
- *  Carousel: one file at a time in a fixed-height stage (images letterbox
- *  with object-fit: contain), glassy prev/next arrows, pill dots + counter
- *  in a footer bar, and keyboard ←/→ navigation. */
-function ShowFileGallery({ paths, cwd }: { paths: string[]; cwd?: string }) {
-  const { t } = useI18n();
-  const [index, setIndex] = useState(0);
-  const [dir, setDir] = useState<1 | -1>(1);
-  const count = paths.length;
-  const safeIndex = count > 0 ? Math.min(index, count - 1) : 0;
-
-  const goTo = (i: number) => {
-    const next = ((i % count) + count) % count;
-    if (next === safeIndex) return;
-    // Direction follows the shortest arc around the circular track; ties (even
-    // count, exact opposite) prefer forward so prev/next feel consistent.
-    const delta = next - safeIndex;
-    const half = count / 2;
-    const d = delta > 0
-      ? (delta <= half ? delta : delta - count)
-      : (delta >= -half ? delta : delta + count);
-    setDir(d >= 0 ? 1 : -1);
-    setIndex(next);
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "ArrowLeft") { e.preventDefault(); goTo(safeIndex - 1); }
-    else if (e.key === "ArrowRight") { e.preventDefault(); goTo(safeIndex + 1); }
-  };
-
-  // Single file — no carousel chrome, natural size.
-  if (count === 1) {
-    return <ShowFileRenderer filePath={paths[0]} cwd={cwd} />;
-  }
-  if (count === 0) return null;
-
-  return (
-    <div
-      className="show-file-carousel"
-      tabIndex={0}
-      onKeyDown={onKeyDown}
-      role="region"
-      aria-label={t("File gallery")}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "clamp(260px, 62vh, 500px)",
-        border: "1px solid var(--border)",
-        borderRadius: 12,
-        background: "var(--bg-panel)",
-        overflow: "hidden",
-        outline: "none",
-      }}
-    >
-      {/* Stage: one file at a time, centered, slide-in on index change */}
-      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
-        <div
-          key={safeIndex}
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "10px 44px 8px 44px",
-            animation: `${dir === 1 ? "gallery-slide-in-right" : "gallery-slide-in-left"} 0.32s cubic-bezier(0.22, 1, 0.36, 1)`,
-          }}
-        >
-          <ShowFileRenderer key={`${safeIndex}-${paths[safeIndex]}`} filePath={paths[safeIndex]} cwd={cwd} fill />
-        </div>
-
-        {count > 1 && (
-          <>
-            <GalleryArrow side="left" onClick={() => goTo(safeIndex - 1)} label={t("Previous")} />
-            <GalleryArrow side="right" onClick={() => goTo(safeIndex + 1)} label={t("Next")} />
-          </>
-        )}
-      </div>
-
-      {/* Footer: pill dots + counter */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          padding: "7px 12px",
-          borderTop: "1px solid var(--border)",
-          background: "var(--bg-subtle)",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 5, minHeight: 12 }}>
-          {count <= 12 && paths.map((_, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => goTo(i)}
-              aria-label={t("Go to file {n}").replace("{n}", String(i + 1))}
-              aria-current={i === safeIndex}
-              style={{
-                width: i === safeIndex ? 18 : 6,
-                height: 6,
-                padding: 0,
-                border: "none",
-                borderRadius: 3,
-                cursor: "pointer",
-                background: i === safeIndex ? "var(--accent)" : "var(--text-dim)",
-                opacity: i === safeIndex ? 1 : 0.45,
-                transition: "width 0.2s ease, background 0.15s ease, opacity 0.15s ease",
-              }}
-            />
-          ))}
-        </div>
-        <span
-          style={{
-            flexShrink: 0,
-            fontSize: 11,
-            fontFamily: "var(--font-mono)",
-            color: "var(--text-muted)",
-            background: "var(--bg-selected)",
-            padding: "2px 8px",
-            borderRadius: 9,
-          }}
-        >
-          {safeIndex + 1} / {count}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/** Circular glassy arrow used by the ShowFileGallery carousel. */
-function GalleryArrow({ side, onClick, label }: { side: "left" | "right"; onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      style={{
-        position: "absolute",
-        top: "50%",
-        transform: "translateY(-50%)",
-        left: side === "left" ? 6 : undefined,
-        right: side === "right" ? 6 : undefined,
-        zIndex: 2,
-        width: 30,
-        height: 30,
-        padding: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: "50%",
-        border: "1px solid rgba(255,255,255,0.22)",
-        background: "rgba(0,0,0,0.45)",
-        color: "#fff",
-        cursor: "pointer",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
-        opacity: 0.65,
-        transition: "opacity 0.15s ease, background 0.15s ease",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.opacity = "1";
-        e.currentTarget.style.background = "rgba(0,0,0,0.65)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.opacity = "0.65";
-        e.currentTarget.style.background = "rgba(0,0,0,0.45)";
-      }}
-    >
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-        {side === "left"
-          ? <polyline points="15 18 9 12 15 6" />
-          : <polyline points="9 18 15 12 9 6" />}
-      </svg>
-    </button>
-  );
-}
-
 function ProcessDetailsGroup({
   messageCount,
   toolCallCounts,
@@ -488,7 +310,7 @@ function ProcessDetailsGroup({
   );
 }
 
-function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, showCwdPicker, onRenameCompleted, onSessionNameChange }: Props) {
+function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, showCwdPicker, onRenameCompleted, onSessionNameChange, onOpenFile }: Props) {
   const { t, locale } = useI18n();
   const toast = useToast();
   const [slashResources, setSlashResources] = useState<SlashResource[]>([]);
@@ -607,6 +429,18 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     // Handlers come from useAgentSession (stable useCallback refs); only
     // re-register when the bits that drive `when()` predicates change.
   }, [agentRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Session Library: derive entries + reset on session change ──
+  const { entries: sessionLibraryEntries } = useSessionLibraryEntries(messages);
+  useEffect(() => {
+    resetSessionLibrary();
+  }, [currentSessionId]);
+  const handleOpenFileFromLibrary = useCallback(
+    (filePath: string, fileName: string) => {
+      if (onOpenFile) onOpenFile(filePath, fileName);
+    },
+    [onOpenFile],
+  );
 
   // Export the current session as a single-file HTML download. Mirrors the
   // fetch → blob → object-URL → <a download> pattern in hooks/useTodos.tsx
@@ -925,6 +759,12 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   for (let i = renderMessages.length - 1; i >= 0; i--) {
     if (isGroupAnchor(renderMessages[i])) { lastAnchorIdx = i; break; }
   }
+  // lastAnchorIdx was previously used to gate the per-turn gallery rendering.
+  // With the Session Library modal owning all show_file rendering, the only
+  // remaining live consumer was `isLiveTurn`, which we just removed. Keep the
+  // calculation here so a future reintroduction (e.g. a "currently streaming"
+  // banner) has the index ready without having to recompute it.
+  void lastAnchorIdx;
   const replayLabel = (() => {
     const base = `${replayIndex} / ${messages.length}`;
     const m = messages[replayIndex - 1] as (AgentMessage & { timestamp?: number }) | undefined;
@@ -1528,14 +1368,14 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 // while the agent is still working on this turn it is omitted
                 // entirely, so the streaming answer text isn't pushed around
                 // by files appearing beneath it.
-                const isLiveTurn = agentRunning && userIdx === lastAnchorIdx && lastAnchorIdx !== -1;
+                // (Kept as a no-op comment — formerly guarded turn-level gallery
+                //  rendering which the Session Library modal now owns.)
 
-                // Turn-level show_file gallery: every path referenced by the
-                // turn's show_file calls, in call order.
-                const turnPaths = collectShowFilePaths(renderMessages, userIdx + 1, endIdx);
-                const turnGallery = turnPaths.length > 0
-                  ? <ShowFileGallery paths={turnPaths} cwd={session?.cwd} />
-                  : null;
+                // The show_file gallery is now served by the Session Library
+                // modal (see SessionLibraryOpenButton + SessionLibraryModal).
+                // Each ToolCallCard surfaces a "已添加 N 个文件 · M 个失败"
+                // status row that opens the modal focused on the matching
+                // entries; the modal is the only place files are rendered.
 
                 const processChildren = (
                   <Fragment>
@@ -1571,14 +1411,9 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     renderOne(finalAssistantIdx, {
                       messageOverride: finalAnswerMessage,
                       keySuffix: "answer",
-                      afterContent: isLiveTurn ? null : turnGallery,
+                      afterContent: null,
                     }),
                   );
-                } else if (turnGallery && !isLiveTurn) {
-                  // No trailing answer — the gallery still renders at the
-                  // bottom of the turn's visible content (below the fold
-                  // group / inline process).
-                  rendered.push(<div key={`gallery-${userIdx}`}>{turnGallery}</div>);
                 }
 
                 idx = endIdx;
@@ -1609,6 +1444,13 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
             action doesn't apply. Hard-coded bilingual labels for the
             "回到底部" button per product decision (no i18n key). */}
         <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-end gap-2">
+          {/* Session Library launcher (Q10A: first position). Always
+              visible — empty state is shown inside the modal. Unread
+              badge appears when entries land while the modal is closed. */}
+          <SessionLibraryOpenButton
+            count={sessionLibraryEntries.length}
+            sessionId={currentSessionId}
+          />
           <Tooltip content={t("Collapse all")}>
             <button
               type="button"
@@ -1672,6 +1514,14 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         )}
         {chatInputElement}
       </div>
+      {/* Session Library modal — portal'd into document.body so it sits
+          above all chat UI. Reads UI state from sessionLibraryStore and
+          entry data from the live messages array. */}
+      <SessionLibraryModal
+        messages={messages}
+        cwd={session?.cwd}
+        onOpenFile={handleOpenFileFromLibrary}
+      />
       </>
       )}
     </div>

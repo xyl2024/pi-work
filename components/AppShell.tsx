@@ -1363,6 +1363,7 @@ export function AppShell() {
               showCwdPicker={selectedSession === null}
               onRenameCompleted={handleSessionRenameCompleted}
               onSessionNameChange={handleSessionNameChange}
+              onOpenFile={handleOpenFile}
             />
           ) : null}
         </div>

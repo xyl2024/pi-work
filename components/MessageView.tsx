@@ -10,7 +10,9 @@ import { MermaidBlock } from "./MermaidBlock";
 import { EchartsBlock } from "./EchartsBlock";
 import { SvgBlock } from "./SvgBlock";
 import { CodeBlock, copyText } from "./CodeBlock";
-import { SHOW_FILE_TOOL_NAME } from "@/lib/show-file-tool-types";
+import { isShowFileToolName } from "@/lib/show-file-tool-types";
+import { useShowFileResults } from "@/hooks/showFileResultsStore";
+import { openSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { ProviderIcon, hasProviderIcon } from "./ProviderIcon";
 
 /**
@@ -770,10 +772,11 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
 
-  // Special render for show_file: keep the standard tool call card and append a
-  // rendered viewer below it. The viewer is mounted speculatively from
-  // block.input.paths so it starts loading while the tool is still running.
-  const isShowFile = block.toolName === SHOW_FILE_TOOL_NAME;
+  // Special render for show_file: surface a "N files added · M failed" status
+  // row that opens the Session Library modal focused on this tool call. The
+  // gallery itself now lives in the SessionLibraryModal (Q1C) — this row is
+  // just an entry point.
+  const isShowFile = isShowFileToolName(block.toolName);
   const showFilePaths: string[] | null = (() => {
     if (!isShowFile || !block.input) return null;
     const raw = block.input.paths;
@@ -781,6 +784,16 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
     const filtered = raw.filter((p): p is string => typeof p === "string" && p.length > 0);
     return filtered.length > 0 ? filtered : null;
   })();
+  const showFileResults = useShowFileResults();
+  const showFileFailedCount = (() => {
+    if (!isShowFile) return 0;
+    const files = showFileResults.get(block.toolCallId);
+    if (!files) return 0;
+    return files.filter((f) => !f.exists).length;
+  })();
+  const handleOpenInLibrary = () => {
+    openSessionLibrary({ focusToolCallId: block.toolCallId });
+  };
 
   // ask_user_questions falls through to the default ToolCallBlock below —
   // the sticky panel above ChatInput is the primary UX surface for this
@@ -798,8 +811,16 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
       }}
     >
       {/* ── Tool call header ── */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setExpanded((v) => !v);
+          }
+        }}
         style={{
           display: "flex",
           alignItems: "center",
@@ -822,14 +843,50 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
           {getToolPreview(block)}
         </span>
         {isShowFile && showFilePaths && (
-          <span style={{ color: "var(--text-dim)", fontSize: 11, flexShrink: 0, whiteSpace: "nowrap" }}>
-            ⬇ {t(showFilePaths.length === 1 ? "{n} file shown below" : "{n} files shown below").replace("{n}", String(showFilePaths.length))}
-          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenInLibrary();
+            }}
+            title={t("Open in session library")}
+            aria-label={t("Open in session library")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "2px 8px",
+              fontSize: 11,
+              fontFamily: "var(--font-mono)",
+              color: showFileFailedCount > 0 ? "#f87171" : "var(--text-muted)",
+              background: showFileFailedCount > 0 ? "rgba(248,113,113,0.08)" : "var(--bg-selected)",
+              border: "1px solid var(--border)",
+              borderRadius: 999,
+              cursor: "pointer",
+              flexShrink: 0,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+            <span>
+              {showFileFailedCount > 0
+                ? t("{n} files added · {m} failed", { n: showFilePaths.length, m: showFileFailedCount })
+                : showFilePaths.length === 1
+                  ? t("{n} file added", { n: 1 })
+                  : t("{n} files added", { n: showFilePaths.length })}
+            </span>
+            <span aria-hidden="true">↗</span>
+          </button>
         )}
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
-      </button>
+      </div>
 
       {/* ── Expanded content (animated height) ── */}
       <div

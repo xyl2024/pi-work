@@ -322,7 +322,7 @@ components/
   FileExplorer.tsx          file tree inside sidebar
   FileSearchBar.tsx         VS Code-style inline search bar (FileViewer)
   FileViewer.tsx            file content in a tab (text, image, audio, pdf)
-  ShowFileRenderer.tsx      renders the `show_file` tool result inline in chat
+  ShowFileRenderer.tsx      renders a multimedia file inline (image / video / audio); legacy PDF/MD/text branches kept for the right-hand file viewer
   TabBar.tsx                tab bar (Chat + open file tabs + Todo)
   TodoPanel.tsx             user-side todo list panel (~/.pi-work/todos.db)
   TodoDescriptionView.tsx   sanitized read-only HTML render for a todo description

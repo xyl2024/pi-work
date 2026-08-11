@@ -8,6 +8,8 @@ import type { ToolCallStatsDispatch } from "./ToolCallStatsContext";
 import { useToast } from "@/components/Toast";
 import { useI18n } from "./useI18n";
 import { usePendingPermissionsRef } from "./usePendingPermissions";
+import { setShowFileResult, resetShowFileResults } from "./showFileResultsStore";
+import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { setSessionUiState, setLeafChangeHandler } from "./sessionUiStore";
 import { setPendingAskUserQuestions } from "./askUserQuestionsStore";
 import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
@@ -143,6 +145,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [inFlightToolResults, setInFlightToolResults] = useState<Map<string, ToolResultMessage>>(
     () => new Map(),
   );
+  // toolCallId → toolName scratchpad for the duration of a session. Populated
+  // on tool_execution_start, consulted on tool_execution_end (the end event
+  // doesn't carry the tool name, so we can't tell e.g. `show_file` apart from
+  // `read` without this). Component-scope, so a session remount resets it.
+  const toolCallNameRef = useRef<Map<string, string>>(new Map());
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const [agentRunning, setAgentRunning] = useState(false);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
@@ -427,6 +434,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
         const args = event.args;
+        toolCallNameRef.current.set(id, name);
         statsEmitRef.current?.({
           type: "tool_start",
           toolCallId: id,
@@ -488,6 +496,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const id = event.toolCallId as string;
         const isError = event.isError === true;
         const result = event.result as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
+        // Capture show_file results into the Session Library cache so the
+        // modal can render success / failure states correctly. The runtime
+        // cache is module-scoped so it survives ChatWindow re-renders but
+        // is reset on session switches (see below).
+        const toolNameForEnd = toolCallNameRef.current.get(id);
+        if (toolNameForEnd && isShowFileToolName(toolNameForEnd) && result?.details) {
+          const files = (result.details as { files?: unknown }).files;
+          if (Array.isArray(files)) {
+            setShowFileResult(
+              id,
+              files as Parameters<typeof setShowFileResult>[1],
+            );
+          }
+        }
         let resultText: string | undefined;
         if (result && Array.isArray(result.content)) {
           const firstText = result.content.find((c) => c?.type === "text" && typeof c.text === "string");
@@ -514,6 +536,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           next.delete(id);
           return next;
         });
+        toolCallNameRef.current.delete(id);
         setAgentPhase((prev) => {
           if (prev?.kind !== "running_tools") return prev;
           const tools = prev.tools.filter((t) => t.id !== id);
@@ -814,6 +837,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return () => {
       eventSourceRef.current?.close();
       eventSourceRef.current = null;
+      // Session ended / unmounted: drop the runtime show_file cache so the
+      // next session doesn't inherit this session's toolCallIds.
+      resetShowFileResults();
+      // toolCallNameRef.current is read here only as a defensive flush; the
+      // ref is component-scoped and disappears with the next mount anyway.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      toolCallNameRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
