@@ -94,6 +94,21 @@ A single careless command can wipe data that has no backup, is not in git, and c
 
 **The cost of "I'll just write a small test file to that path" can be the user's entire data. Don't take that bet.**
 
+## 6. Don't Touch the Production Environment Without Permission
+
+**Production build/restart is a user-initiated decision — never an autonomous side effect.**
+
+The user's terminal may already be running `run_pi_web.sh`, a systemd user unit, or some other long-lived process serving traffic. A surprise rebuild or restart is disruptive, slow, and often irreversible mid-session. Even if the server "looks down," do not start it back up on your own.
+
+### The hard rules
+
+- **NEVER** run `npm run build` on the user's behalf. The dev loop is `npm run dev`; production builds are deliberate (`run_pi_web.sh` consumes a fresh bundle, and `next build` also pollutes `.next/` in a way that breaks `npm run dev`).
+- **NEVER** kill, restart, start, or otherwise touch the production server process — `run_pi_web.sh`, systemd user units (`systemctl --user ...`), or anything else bound to a shared port. This includes `pkill` / `kill` / `killall` against a server PID, even if it "looks stuck."
+- **NEVER** run `scripts/deploy-systemd-user.sh`, launch the Electron shell on the user's behalf, or publish a build to a shared location.
+- **NEVER** treat "the prod server is responding on port X" as a green light to take a side action. Read-only probing is fine; anything that mutates the running stack is not.
+
+If a task seems to call for one of these — even a "small" rebuild that "feels safe" — stop, name what you want to run and why, and wait for an explicit OK. The user is the only one who knows whether now is the moment to interrupt the running service.
+
 # Pi Work
 
 Web UI for the pi coding agent. The product is called "Pi Work" (renamed from "Pi Agent Web"). The package is `@xyl2024/pi-work`.
