@@ -5,6 +5,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { useI18n } from "@/hooks/useI18n";
+import { Tooltip } from "./Tooltip";
 
 const CWD_KEY = "pi-terminal-cwd";
 
@@ -362,14 +363,13 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
         {tabs.map((tab) => {
           const active = tab.id === activeId;
           return (
+            <Tooltip key={tab.id} content={tab.cwd}>
             <div
-              key={tab.id}
               onClick={() => setActiveId(tab.id)}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 startRename(tab);
               }}
-              title={tab.cwd}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -449,11 +449,12 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
                 ×
               </button>
             </div>
+            </Tooltip>
           );
         })}
+        <Tooltip content={t("New terminal")}>
         <button
           onClick={() => createTerminal(defaultCwd || "~")}
-          title={t("New terminal")}
           style={{
             display: "flex",
             alignItems: "center",
@@ -472,10 +473,11 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
         >
           +
         </button>
+        </Tooltip>
         <div style={{ flex: 1 }} />
+        <Tooltip content={maximized ? t("Restore terminal") : t("Maximize terminal")}>
         <button
           onClick={onToggleMaximize}
-          title={maximized ? t("Restore terminal") : t("Maximize terminal")}
           style={{
             display: "flex",
             alignItems: "center",
@@ -492,12 +494,27 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            {maximized ? <polyline points="18 15 12 9 6 15" /> : <polyline points="6 9 12 15 18 9" />}
+            {maximized ? (
+              <>
+                <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+              </>
+            ) : (
+              <>
+                <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+              </>
+            )}
           </svg>
         </button>
+        </Tooltip>
+        <Tooltip content={t("Hide terminal")}>
         <button
           onClick={onClosePanel}
-          title={t("Hide terminal")}
           style={{
             display: "flex",
             alignItems: "center",
@@ -514,9 +531,11 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
           }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="6 9 12 15 18 9" />
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
+        </Tooltip>
       </div>
 
       {/* Terminal bodies — inactive tabs stay mounted so their processes keep running */}
