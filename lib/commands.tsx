@@ -52,7 +52,6 @@ const BrainIcon = () => I(<><path d="M9 4a3 3 0 0 0-3 3v0a3 3 0 0 0-3 3v1a3 3 0 
 const ToolIcon = () => I(<><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-7 7 2.6 2.6 7-7a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-2.4 2.3-2.7z" /></>);
 const SidebarIcon = () => I(<><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /></>);
 const PanelRightIcon = () => I(<><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" /></>);
-const FocusIcon = () => I(<><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></>);
 const CheckIcon = () => I(<polyline points="20 6 9 17 4 12" />);
 const CanvasIcon = () => I(<><path d="M3 17l4-4 3 3 7-7 4 4" /><circle cx="6" cy="6" r="2" /></>);
 const StarIcon = () => I(<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />);
@@ -161,7 +160,6 @@ export interface CommandContext {
   // View toggles
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
-  toggleFocus: () => void;
 
   // Imperative agent controls — null when no ChatWindow is mounted.
   agentControls: AgentControls | null;
@@ -319,15 +317,6 @@ export function buildCommands(ctx: CommandContext, opts: BuildOptions): Command[
     shortcut: "⌘⌥B",
     run: () => ctx.toggleRightPanel(),
   });
-  cmds.push({
-    id: "view.focus",
-    title: t("Toggle focus mode"),
-    group: "View",
-    keywords: ["focus", "zen", "distraction", "专注", "免打扰"],
-    icon: <FocusIcon />,
-    run: () => ctx.toggleFocus(),
-  });
-
   // ── Panel (7) ──
   cmds.push({
     id: "panel.todo",
