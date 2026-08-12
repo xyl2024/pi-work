@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
@@ -126,6 +127,19 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+
+    // URL recognition: links are underlined + pointer-cursor on hover.
+    // Ctrl/Cmd+left-click opens the link; a plain click does nothing
+    // (VS Code-style). The handler fires on mouseup only when press and
+    // release both land on the same link, so drag-selection across a URL
+    // never triggers it. Note: with "noopener" window.open always returns
+    // null, so the return value can't be used to detect popup blocking.
+    const webLinks = new WebLinksAddon((event, uri) => {
+      if (event.ctrlKey || event.metaKey) {
+        window.open(uri, "_blank", "noopener");
+      }
+    });
+    term.loadAddon(webLinks);
     term.open(container);
     try {
       fit.fit();
