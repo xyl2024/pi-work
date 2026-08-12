@@ -6,6 +6,8 @@ import remarkGfm from "remark-gfm";
 import { Tooltip } from "./Tooltip";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
+import { useToast } from "./Toast";
+import { exportMessageAsPng, MESSAGE_ACTION_ROW_CLASS } from "@/lib/export-message-card";
 import { MermaidBlock } from "./MermaidBlock";
 import { EchartsBlock } from "./EchartsBlock";
 import { SvgBlock } from "./SvgBlock";
@@ -375,10 +377,13 @@ function AssistantMessageView({
   entryId?: string;
 }) {
   const { t } = useI18n();
+  const toast = useToast();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
   const blocks = message.content ?? [];
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const messageRef = useRef<HTMLDivElement>(null);
   const streamStartRef = useRef<number | null>(null);
   const [tps, setTps] = useState<number | null>(null);
   const blocksRef = useRef(blocks);
@@ -399,6 +404,22 @@ function AssistantMessageView({
         // Silent — UI just doesn't flip to "Copied".
         console.warn("clipboard write failed");
       });
+  };
+
+  const handleExport = async () => {
+    const el = messageRef.current;
+    if (!el || exporting) return;
+    setExporting(true);
+    try {
+      await exportMessageAsPng(el, "20px 24px 28px");
+      toast.show({ kind: "success", message: t("Message card exported") });
+    } catch (err) {
+      // Cross-origin images without CORS headers are the usual culprit.
+      console.warn("export message failed:", err);
+      toast.show({ kind: "error", message: t("Failed to export image") });
+    } finally {
+      setExporting(false);
+    }
   };
 
   useEffect(() => {
@@ -428,6 +449,7 @@ function AssistantMessageView({
 
   return (
     <div
+      ref={messageRef}
       style={{ marginBottom: 16 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -512,7 +534,7 @@ function AssistantMessageView({
 
       {afterContent}
 
-      <div style={{
+      <div className={MESSAGE_ACTION_ROW_CLASS} style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 8,
       }}>
         {message.usage && !isStreaming && (
@@ -551,6 +573,42 @@ function AssistantMessageView({
               </svg>
             )}
             {copied ? t("Copied") : t("Copy")}
+          </button>
+          </Tooltip>
+        )}
+        {textContent && !isStreaming && (
+          <Tooltip content={t("Export as PNG")}>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "3px 8px", height: 22,
+              background: "none", border: "none",
+              borderRadius: 5,
+              color: "var(--text-dim)",
+              cursor: exporting ? "wait" : "pointer",
+              fontSize: 11, fontWeight: 400,
+              whiteSpace: "nowrap",
+              opacity: hovered ? 1 : 0,
+              pointerEvents: hovered ? "auto" : "none",
+              transition: "opacity 0.12s, color 0.12s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
+          >
+            {exporting ? (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true">
+                <path d="M12 2a10 10 0 0 1 10 10" />
+              </svg>
+            ) : (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            )}
+            {exporting ? t("Exporting…") : t("Export")}
           </button>
           </Tooltip>
         )}

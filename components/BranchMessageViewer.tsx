@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentMessage, SessionTreeNode } from "@/lib/types";
 import { MessageView } from "./MessageView";
 import { useI18n } from "@/hooks/useI18n";
+import { useToast } from "./Toast";
+import { exportMessageAsPng } from "@/lib/export-message-card";
 
 interface Props {
   /** The clicked card's entry id — used to look up the one message this card represents. */
@@ -47,6 +49,25 @@ function findMessage(
  */
 export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
   const { t } = useI18n();
+  const toast = useToast();
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    const source = bodyRef.current;
+    if (!source || exporting) return;
+    setExporting(true);
+    try {
+      await exportMessageAsPng(source);
+      toast.show({ kind: "success", message: t("Message card exported") });
+    } catch (err) {
+      // Cross-origin images without CORS headers are the usual culprit.
+      console.warn("export message card failed:", err);
+      toast.show({ kind: "error", message: t("Failed to export image") });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const data = useMemo(
     () => findMessage(entryId, branchTree),
@@ -171,6 +192,65 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
             </span>
           </div>
           <button
+            onClick={handleExport}
+            disabled={exporting}
+            title={exporting ? t("Exporting…") : t("Export as PNG")}
+            aria-label={t("Export as PNG")}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--bg-hover)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+            style={{
+              width: 28,
+              height: 28,
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "transparent",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              color: exporting ? "var(--text-dim)" : "var(--text-muted)",
+              cursor: exporting ? "wait" : "pointer",
+              flexShrink: 0,
+              transition: "background 0.12s",
+            }}
+          >
+            {exporting ? (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                style={{ animation: "spin 0.8s linear infinite" }}
+                aria-hidden="true"
+              >
+                <path d="M12 2a10 10 0 0 1 10 10" />
+              </svg>
+            ) : (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+            )}
+          </button>
+          <button
             onClick={onClose}
             title={t("Close")}
             aria-label={t("Close")}
@@ -201,8 +281,10 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
           </button>
         </div>
 
-        {/* Scrollable message body */}
+        {/* Scrollable message body — ref'd so the export can clone exactly
+            this region and re-render it as a standalone card. */}
         <div
+          ref={bodyRef}
           style={{
             flex: 1,
             minHeight: 0,
