@@ -107,7 +107,7 @@ export function MessageView({ message, isStreaming, toolResults, modelNames, ent
   if (message.role === "user") {
     return (
       <div className={isFocused ? "search-flash" : undefined}>
-        <UserMessageView message={message as UserMessage} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} keywords={keywords} isSearchMatch={isSearchMatch} />
+        <UserMessageView message={message as UserMessage} isFocused={isFocused} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} keywords={keywords} isSearchMatch={isSearchMatch} />
       </div>
     );
   }
@@ -124,8 +124,15 @@ export function MessageView({ message, isStreaming, toolResults, modelNames, ent
   return null;
 }
 
-function UserMessageView({ message, onNavigate, prevAssistantEntryId, onEditContent, keywords, isSearchMatch }: {
+const COLLAPSED_USER_MSG_HEIGHT = 240;
+// Outer bubble box = inner content + vertical padding (8px × 2) + border (1px × 2).
+// useCollapseHeight measures only the inner div, so heights must add this back
+// or the bottom padding + last line get clipped by overflow: hidden.
+const BUBBLE_VERTICAL_EXTRA = 18;
+
+function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId, onEditContent, keywords, isSearchMatch }: {
   message: UserMessage;
+  isFocused?: boolean;
   onNavigate?: (entryId: string) => void;
   prevAssistantEntryId?: string;
   onEditContent?: (content: string) => void;
@@ -138,6 +145,16 @@ function UserMessageView({ message, onNavigate, prevAssistantEntryId, onEditCont
   const [avatarOk, setAvatarOk] = useState(true);
   const [avatarLoaded, setAvatarLoaded] = useState(false);
   const [avatarCacheKey] = useState(() => `${Date.now()}`);
+  // Long user messages collapse to COLLAPSED_USER_MSG_HEIGHT with a
+  // click-to-expand gradient mask; expand is one-way and search hits
+  // (isFocused) force the message open.
+  const [expanded, setExpanded] = useState(false);
+  const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
+  const isOpen = expanded || !!isFocused;
+  // Natural height when under the limit, clamped to the collapse height when
+  // overflowing — never a fixed 240px for short messages.
+  const naturalHeight = contentHeight === null ? "auto" : contentHeight + BUBBLE_VERTICAL_EXTRA;
+  const showExpandMask = contentHeight !== null && contentHeight + BUBBLE_VERTICAL_EXTRA > COLLAPSED_USER_MSG_HEIGHT;
 
   useEffect(() => {
     let cancelled = false;
@@ -237,12 +254,17 @@ function UserMessageView({ message, onNavigate, prevAssistantEntryId, onEditCont
       {(imageBlocks.length > 0 || content) && (
         <div
           style={{
+            position: "relative",
             background: "var(--user-bg)",
             border: "1px solid rgba(59,130,246,0.2)",
             borderRadius: 12,
             padding: "8px 12px",
+            height: isOpen ? naturalHeight : (contentHeight === null ? "auto" : Math.min(contentHeight + BUBBLE_VERTICAL_EXTRA, COLLAPSED_USER_MSG_HEIGHT)),
+            overflow: "hidden",
+            transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
           }}
         >
+          <div ref={contentRef}>
           {imageBlocks.length > 0 && (
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: content ? 8 : 0 }}>
               {imageBlocks.map((img, i) => {
@@ -279,6 +301,35 @@ function UserMessageView({ message, onNavigate, prevAssistantEntryId, onEditCont
             >
               {highlightKeywords(content, keywords, isSearchMatch)}
             </div>
+          )}
+          </div>
+
+          {!isOpen && showExpandMask && (
+            <button
+              onClick={() => setExpanded(true)}
+              aria-label={t("Expand")}
+              style={{
+                position: "absolute",
+                left: 0, right: 0, bottom: 0,
+                height: 48,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                border: "none",
+                padding: 0,
+                background: "linear-gradient(to bottom, rgba(0,0,0,0), var(--user-bg))",
+              }}
+            >
+              <svg
+                width="16" height="16" viewBox="0 0 24 24"
+                fill="none" stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round"
+                style={{ color: "var(--text-muted)" }}
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
           )}
         </div>
       )}
