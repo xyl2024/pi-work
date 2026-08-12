@@ -346,6 +346,9 @@ export const ZH_TRANSLATIONS = {
   "Awaiting your answer": "等待你的回答",
   "Required": "必填",
   "Type your own answer…": "请输入自定义回答…",
+  "Answers sent": "回答已发送",
+  "The agent is continuing…": "智能体会继续处理你的回答…",
+  "{n} questions pending": "{n} 个问题待回答",
   // File explorer (rename/delete/copy/context menu)
   "Delete file?": "删除文件？",
   "Delete folder?": "删除文件夹？",

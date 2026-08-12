@@ -100,6 +100,15 @@ export function useHasPendingAskUserQuestions(sessionId: string): boolean {
   return s.has(sessionId);
 }
 
+/** Synchronous read of a session's pending entry (no subscription). Used by
+ *  the panel's cleanup path to check whether a stale entry is still the one
+ *  it submitted before clearing it. */
+export function getPendingAskUserQuestions(
+  sessionId: string,
+): PendingAskUserQuestions | null {
+  return state.get(sessionId) ?? null;
+}
+
 /** Server SSE handler → store. Idempotent on the (sessionId, toolCallId) pair:
  *  if the same pair comes through again (SSE reconnect re-emit), we keep
  *  the existing entry to avoid disturbing the panel mid-answer. */
@@ -151,8 +160,16 @@ export function resetAskUserQuestionsStore(): void {
   setState(new Map());
 }
 
-/** Imperative submit hook used by the panel — wraps the fetch + store clear.
- *  Returns true on a 2xx response, throws otherwise. */
+/** Imperative submit hook used by the panel — wraps the fetch. Returns true
+ *  on a 2xx response, throws otherwise.
+ *
+ *  The client store is NOT cleared here on success: the panel wants to show a
+ *  brief "Answers sent" confirmation before the sticky panel closes, so it
+ *  schedules the clear itself (via clearPendingAskUserQuestions). We DO clear
+ *  on a non-2xx HTTP response — a failed POST to a dead session means the
+ *  wrapper is gone and the entry is stale; keeping the panel up would be
+ *  worse. A network-level throw leaves the entry in place so the user can
+ *  retry. */
 export function useAskUserQuestionsSubmit(): (
   sessionId: string,
   toolCallId: string,
@@ -169,11 +186,10 @@ export function useAskUserQuestionsSubmit(): (
           decision,
         }),
       });
-      // Clear the client store regardless of HTTP status: even on a 404 the
-      // tool result will arrive server-side (or the wrapper is gone), so
-      // leaving the sticky panel up would be worse than a stale clear.
-      clearPendingAskUserQuestions(sessionId);
       if (!res.ok) {
+        // Stale: the wrapper is gone (e.g. server restart). The panel is
+        // pointless now — drop it so the sidebar dot doesn't linger.
+        clearPendingAskUserQuestions(sessionId);
         const body = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status}${body ? `: ${body}` : ""}`);
       }
