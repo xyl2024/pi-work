@@ -129,6 +129,51 @@ tree and surfaces a long tail of pre-existing warnings, so skip it locally
 unless you want to gate on it. The `next lint` subcommand was removed in Next 16.
 **Never run `next build` during dev** — pollutes `.next/` and breaks `npm run dev`.
 
+## npm install gotchas
+
+### `NODE_ENV=production` silently skips devDependencies
+
+Any shell spawned from the running production server (check
+`echo $NODE_ENV`; `npm_lifecycle_script=next start ...` in the env is a
+smoking gun) has `NODE_ENV=production`, which makes `npm install` default to
+`--omit=dev`. Result: devDependencies (`typescript`, `@types/*`, …) are never
+installed, and npm reports **"up to date"** while installing nothing.
+
+Symptoms:
+- `node_modules/.bin/tsc` doesn't exist, or `tsc --noEmit` floods with
+  `TS7016: Could not find a declaration file for module 'js-yaml'/'ws'/...`
+  for packages that ARE in package.json/package-lock.json.
+- `npm install <devDep>` says "up to date" but the folder never appears.
+
+Fix: `npm install --include=dev` (or `unset NODE_ENV` first).
+
+### npm registry CDN flakes on some tarballs
+
+`registry.npmjs.org` metadata responds fine but certain tarballs (e.g.
+`typescript-5.9.3.tgz`) hang on direct connection, while other packages
+download fine — the official CDN is unreliable from this network. If an
+install hangs or fails on tarball fetch, retry with the mirror, which is a
+command-line flag and does NOT touch `.npmrc`:
+
+```bash
+npm install --registry=https://registry.npmmirror.com
+```
+
+### npm believes a partial node_modules is complete
+
+If `node_modules` is missing packages but npm keeps saying "up to date", the
+hidden `node_modules/.package-lock.json` (npm's internal install state) is
+out of sync. Delete it to force a real reconciliation:
+
+```bash
+rm -f node_modules/.package-lock.json
+npm install --include=dev --registry=https://registry.npmmirror.com
+```
+
+The two gotchas above compound: the 2026-08 node_modules breakage was exactly
+this — production-inherited env + flaky official CDN — and the combo command
+above fixed it (added 278 packages).
+
 ## Production startup
 
 For long-running local use, do not use `npm run dev`. After source changes,
