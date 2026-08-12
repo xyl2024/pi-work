@@ -145,6 +145,8 @@ export const ZH_TRANSLATIONS = {
   "Disable word wrap": "关闭自动换行",
   "Enable word wrap": "开启自动换行",
   "wrap": "换行",
+  "virtualized": "虚拟滚动",
+  "Word wrap is disabled for large files": "大文件已禁用自动换行",
   "Code": "代码",
   "Preview": "预览",
   "Raw": "原文",

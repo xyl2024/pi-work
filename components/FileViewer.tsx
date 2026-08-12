@@ -51,6 +51,12 @@ const GIT_DELETED_COLOR = "#f87171";
 const CODE_LINE_HEIGHT = 13 * 1.6;
 /** Top padding of the syntax highlighter content (`padding: "12px 0"`). */
 const CODE_TOP_PADDING = 12;
+/** Source view switches to a windowed plain-text renderer (no syntax
+ *  highlighting) above this line count or byte size — full-file Prism
+ *  tokenization + DOM mounting is what stalls the main thread on big files.
+ *  Fixed row height is what makes the windowing math trivial. */
+const VIRTUALIZE_MIN_LINES = 2000;
+const VIRTUALIZE_MIN_BYTES = 500 * 1024;
 
 function isImagePath(filePath: string): boolean {
   const base = getFileName(filePath);
@@ -308,6 +314,194 @@ function DiffView({ oldContent, newContent }: { oldContent: string; newContent: 
         diffIdx += seg.lines.length;
         return <div key={si}>{lines}</div>;
       })}
+    </div>
+  );
+}
+
+interface VirtualizedCodeLinesProps {
+  lines: string[];
+  gitMarks: Map<number, GitLineMarkType> | null;
+  gitDeletedBlocks: GitDeletedBlock[];
+  expandedDelete: number | null;
+  onToggleDelete: (index: number) => void;
+  matchedLines: ReadonlySet<number>;
+  currentMatchLine: number | null;
+}
+
+/**
+ * Windowed renderer for very large text files (see VIRTUALIZE_MIN_LINES /
+ * VIRTUALIZE_MIN_BYTES). Only the lines intersecting the viewport plus an
+ * overscan band are mounted; every row is absolutely positioned inside a
+ * full-height spacer so the scrollbar still reflects the whole file. Syntax
+ * highlighting is intentionally dropped (tokenizing a multi-MB file on the
+ * main thread is the other half of the original stall), but line numbers,
+ * search-match highlights, and git gutter marks are preserved.
+ */
+function VirtualizedCodeLines({
+  lines,
+  gitMarks,
+  gitDeletedBlocks,
+  expandedDelete,
+  onToggleDelete,
+  matchedLines,
+  currentMatchLine,
+}: VirtualizedCodeLinesProps) {
+  const { t } = useI18n();
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportH, setViewportH] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Keep viewport height in sync with the container (panel resize, etc.).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) setViewportH(entry.contentRect.height);
+    });
+    ro.observe(el);
+    setViewportH(el.clientHeight);
+    return () => ro.disconnect();
+  }, []);
+
+  const total = lines.length;
+  // Overscan band above/below the viewport so fast scrolling doesn't flash
+  // empty space while React catches up.
+  const OVERSCAN = 30;
+  const start = Math.max(0, Math.floor(scrollTop / CODE_LINE_HEIGHT) - OVERSCAN);
+  const end = Math.min(
+    total,
+    Math.ceil((scrollTop + Math.max(viewportH, 1)) / CODE_LINE_HEIGHT) + OVERSCAN,
+  );
+
+  const rows: React.ReactNode[] = [];
+  for (let i = start; i < end; i++) {
+    const lineNo = i + 1;
+    const mark = gitMarks?.get(lineNo);
+    const isCurrent = lineNo === currentMatchLine;
+    const isMatch = !isCurrent && matchedLines.has(lineNo);
+    const style: React.CSSProperties = {};
+    if (mark === "added") style.borderLeft = `3px solid ${GIT_ADDED_COLOR}`;
+    else if (mark === "modified") style.borderLeft = `3px solid ${GIT_MODIFIED_COLOR}`;
+    if (isCurrent) style.background = "rgba(255, 200, 0, 0.30)";
+    else if (isMatch) style.background = "rgba(255, 200, 0, 0.12)";
+    rows.push(
+      <div
+        key={lineNo}
+        data-fv-line={lineNo}
+        style={{
+          position: "absolute",
+          top: CODE_TOP_PADDING + i * CODE_LINE_HEIGHT,
+          left: 0,
+          right: 0,
+          height: CODE_LINE_HEIGHT,
+          display: "flex",
+          ...style,
+        }}
+      >
+        <span
+          style={{
+            minWidth: "3em",
+            paddingRight: "1em",
+            textAlign: "right",
+            color: "var(--text-dim)",
+            userSelect: "none",
+            flexShrink: 0,
+          }}
+        >
+          {lineNo}
+        </span>
+        <span
+          style={{
+            flex: 1,
+            whiteSpace: "pre",
+            padding: "0 8px 0 0",
+            color: "var(--text)",
+            tabSize: 4,
+          }}
+        >
+          {lines[i] || "\u00a0"}
+        </span>
+      </div>,
+    );
+  }
+
+  return (
+    <div
+      ref={scrollRef}
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+      className="fv-virtual-scroll"
+      style={{ height: "100%", overflow: "auto", background: "var(--bg)" }}
+    >
+      <div
+        style={{
+          position: "relative",
+          height: CODE_TOP_PADDING + total * CODE_LINE_HEIGHT,
+          minWidth: "100%",
+        }}
+      >
+        {rows}
+        {gitDeletedBlocks.map((block, i) => {
+          const top = CODE_TOP_PADDING + (block.beforeLine - 1) * CODE_LINE_HEIGHT;
+          const expanded = expandedDelete === i;
+          return (
+            <div key={`del-${i}`} style={{ position: "absolute", left: 0, top, width: 48, zIndex: 5 }}>
+              <button
+                onClick={() => onToggleDelete(i)}
+                title={t("Deleted lines")}
+                style={{
+                  width: 44,
+                  height: CODE_LINE_HEIGHT,
+                  marginLeft: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "#3d2020",
+                  color: GIT_DELETED_COLOR,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  border: "1px solid rgba(248, 113, 113, 0.4)",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                −{block.lines.length}
+              </button>
+              {expanded && (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 3,
+                    top: CODE_LINE_HEIGHT + 2,
+                    width: 440,
+                    maxHeight: 240,
+                    overflow: "auto",
+                    zIndex: 20,
+                    pointerEvents: "auto",
+                    background: "#3d2020",
+                    border: "1px solid rgba(248, 113, 113, 0.45)",
+                    borderLeft: `3px solid ${GIT_DELETED_COLOR}`,
+                    borderRadius: 4,
+                    fontFamily: "var(--font-mono)",
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                    boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+                  }}
+                >
+                  {block.lines.map((l, j) => (
+                    <div
+                      key={j}
+                      style={{ whiteSpace: "pre", color: "#f87171", padding: "0 8px", background: "transparent" }}
+                    >
+                      - {l}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1305,6 +1499,14 @@ function TextFileViewer({ filePath, cwd }: Props) {
   );
   const currentMatchLine = searchMatches[searchMatchIndex]?.line ?? null;
 
+  // Split once per content change and derive the virtualization flag early
+  // (the search-scroll effect below needs it, and re-splitting a multi-MB
+  // string on every render would defeat the whole point of this feature).
+  const contentLines = useMemo(() => (data ? data.content.split("\n") : []), [data]);
+  const virtualize =
+    !!data &&
+    (contentLines.length > VIRTUALIZE_MIN_LINES || data.size > VIRTUALIZE_MIN_BYTES);
+
   // Clamp the current match index when match count changes (SSE update,
   // case toggle, or query edit) so we never point past the end.
   useEffect(() => {
@@ -1327,12 +1529,25 @@ function TextFileViewer({ filePath, cwd }: Props) {
 
   // Scroll the current match into view (centered). No-op if the search bar
   // is closed or the match is on a line that's not currently mounted (e.g.
-  // when the user is viewing the diff or preview branches).
+  // when the user is viewing the diff or preview branches). In virtualized
+  // mode the target row may not be mounted at all, so scroll the window
+  // container directly instead of hunting for the DOM node.
   useEffect(() => {
     if (currentMatchLine == null) return;
-    const el = contentRef.current?.querySelector(`[data-fv-line="${currentMatchLine}"]`);
-    el?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [currentMatchLine]);
+    if (virtualize) {
+      const el = contentRef.current?.querySelector<HTMLElement>(".fv-virtual-scroll");
+      if (!el) return;
+      const targetTop = CODE_TOP_PADDING + (currentMatchLine - 1) * CODE_LINE_HEIGHT;
+      const viewportH = el.clientHeight;
+      el.scrollTo({
+        top: Math.max(0, targetTop - (viewportH - CODE_LINE_HEIGHT) / 2),
+        behavior: "smooth",
+      });
+    } else {
+      const el = contentRef.current?.querySelector(`[data-fv-line="${currentMatchLine}"]`);
+      el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [currentMatchLine, virtualize]);
 
   // ── End inline search ────────────────────────────────────────────
 
@@ -1507,7 +1722,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
 
   const isHtml = data.language === "html";
   const isMarkdown = data.language === "markdown";
-  const lines = data.content.split("\n");
+  const lines = contentLines;
   const hasDiff = prevContent !== null && prevContent !== data.content;
 
   return (
@@ -1529,6 +1744,9 @@ function TextFileViewer({ filePath, cwd }: Props) {
         <span>{data.language}</span>
 
         {viewMode === "source" && <span>{lines.length} {t("lines")}</span>}
+        {virtualize && viewMode === "source" && (
+          <span style={{ color: "var(--text-dim)" }}>{t("virtualized")}</span>
+        )}
         <span>{formatSize(data.size)}</span>
 
         {/* Live watch indicator */}
@@ -1615,15 +1833,17 @@ function TextFileViewer({ filePath, cwd }: Props) {
 
         {/* Word wrap toggle */}
         {viewMode === "source" && !previewMode && (
-          <Tooltip content={wrapLines ? t("Disable word wrap") : t("Enable word wrap")}>
+          <Tooltip content={virtualize ? t("Word wrap is disabled for large files") : wrapLines ? t("Disable word wrap") : t("Enable word wrap")}>
           <button
             onClick={() => setWrapLines((v) => !v)}
+            disabled={virtualize}
             style={{
-              padding: "2px 8px", fontSize: 11, cursor: "pointer",
+              padding: "2px 8px", fontSize: 11, cursor: virtualize ? "default" : "pointer",
               background: wrapLines ? "var(--bg-selected)" : "var(--bg-hover)",
               color: wrapLines ? "var(--text)" : "var(--text-muted)",
               border: "1px solid var(--border)", borderRadius: 5,
               fontWeight: wrapLines ? 600 : 400,
+              opacity: virtualize ? 0.4 : 1,
             }}
           >
             {t("wrap")}
@@ -1734,6 +1954,16 @@ function TextFileViewer({ filePath, cwd }: Props) {
               {data.content}
             </ReactMarkdown>
           </div>
+        ) : virtualize ? (
+          <VirtualizedCodeLines
+            lines={lines}
+            gitMarks={gitMarks}
+            gitDeletedBlocks={gitDeletedBlocks}
+            expandedDelete={expandedDelete}
+            onToggleDelete={(i) => setExpandedDelete(expandedDelete === i ? null : i)}
+            matchedLines={matchedLines}
+            currentMatchLine={currentMatchLine}
+          />
         ) : (
           <SyntaxHighlighter
             language={data.language === "text" ? "plaintext" : data.language}
@@ -1787,7 +2017,7 @@ function TextFileViewer({ filePath, cwd }: Props) {
             (line numbers), showing a "−N" pill that expands the removed
             lines. Hidden while wrapping is on (line heights become unstable)
             and outside the source view. */}
-        {viewMode === "source" && !previewMode && !wrapLines && gitDeletedBlocks.length > 0 && (
+        {viewMode === "source" && !previewMode && !wrapLines && !virtualize && gitDeletedBlocks.length > 0 && (
           <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 48, pointerEvents: "none", zIndex: 5 }}>
             {gitDeletedBlocks.map((block, i) => {
               const top = CODE_TOP_PADDING + (block.beforeLine - 1) * CODE_LINE_HEIGHT;
