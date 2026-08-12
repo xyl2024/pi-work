@@ -12,10 +12,10 @@
  * After the `show_file` → `show_media` rename the library contains only
  * multimedia (image / video / audio). Two view modes:
  *
- * - "grid"            — full-bleed grid + filter bar (default)
+ * - "grid"            — full-bleed masonry (default)
  * - "media-preview"   — single media tile takes the modal body; ←/→
- *                        navigate across the filtered media list; Esc
- *                        returns to grid
+ *                        navigate across the media list; Esc returns to
+ *                        grid
  *
  * Close behavior:
  * - Esc: media-preview → grid → close (double-step)
@@ -27,7 +27,7 @@
  * stacking context and we can lock body scroll while it's open.
  */
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -36,6 +36,9 @@ import {
   backToSessionLibraryGrid,
 } from "@/hooks/sessionLibraryStore";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
+import { useToast } from "@/components/Toast";
+import { copyText } from "@/components/CodeBlock";
+import { joinFilePath } from "@/lib/file-paths";
 import type { AgentMessage } from "@/lib/types";
 import { SessionLibraryGrid } from "./SessionLibraryGrid";
 import { SessionLibraryPreview } from "./SessionLibraryPreview";
@@ -89,8 +92,32 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
   }, [ui.isOpen, messages, actions]);
 
   // ── Stable derived data (computed once, passed down to children) ──
-  const { entries, filteredEntries, tiles, counts, filter, search } =
-    useSessionLibraryEntries(messages);
+  const { entries, tiles } = useSessionLibraryEntries(messages);
+
+  // ── Current preview tile → absolute path shown in the header bar so the
+  // user always knows what they're looking at. ──
+  const previewPath = useMemo(() => {
+    if (ui.viewMode !== "media-preview" || !ui.mediaPreviewTileKey) return null;
+    const tile = tiles.find(
+      (tl) => `${tl.entryToolCallId}|${tl.path}` === ui.mediaPreviewTileKey,
+    );
+    if (!tile) return null;
+    const p = tile.path;
+    if (!cwd) return p;
+    if (p.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith("\\\\")) return p;
+    return joinFilePath(cwd, p);
+  }, [ui.viewMode, ui.mediaPreviewTileKey, tiles, cwd]);
+
+  const toast = useToast();
+  const handleCopyPath = async () => {
+    if (!previewPath) return;
+    try {
+      await copyText(previewPath);
+      toast.show({ kind: "success", message: t("Path copied") });
+    } catch {
+      toast.show({ kind: "error", message: t("Failed to copy path") });
+    }
+  };
 
   if (!ui.isOpen) return null;
   if (typeof document === "undefined") return null;
@@ -122,7 +149,9 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "min(1100px, 100%)",
-          maxHeight: "85vh",
+          // Fixed height — the modal never resizes with the current tile
+          // (small vs huge images, missing files, etc.). The body flexes.
+          height: "85vh",
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
           borderRadius: 12,
@@ -132,99 +161,108 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
           overflow: "hidden",
         }}
       >
-        {/* ── Top bar: × close, title, count ── */}
+        {/* ── Compact top bar: icon, title, current path + copy, close ── */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
-            padding: "12px 16px",
+            gap: 10,
+            padding: "6px 12px",
             borderBottom: "1px solid var(--border)",
             background: "var(--bg-subtle)",
             flexShrink: 0,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <span
-              aria-hidden="true"
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                background: "var(--accent)",
-                color: "var(--accent-fg, #fff)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 14,
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="9" cy="9" r="2" />
-                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-              </svg>
-            </span>
-            <h2
-              style={{
-                margin: 0,
-                fontSize: 14,
-                fontWeight: 600,
-                color: "var(--text)",
-              }}
-            >
-              {t("Session Media Library")}
-            </h2>
+          <span
+            aria-hidden="true"
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 5,
+              background: "var(--accent)",
+              color: "var(--accent-fg, #fff)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <rect x="14" y="14" width="7" height="7" rx="1" />
+            </svg>
+          </span>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--text)",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            {t("Session Media Library")}
+          </h2>
+          {ui.focusToolCallId && (
             <span
               style={{
                 color: "var(--text-dim)",
-                fontSize: 12,
+                fontSize: 10,
                 fontFamily: "var(--font-mono)",
                 background: "var(--bg-selected)",
-                padding: "2px 8px",
-                borderRadius: 9,
+                padding: "1px 6px",
+                borderRadius: 8,
+                flexShrink: 0,
               }}
             >
-              {counts.total} {t("files")}
+              ↪ {ui.focusToolCallId.slice(0, 8)}
             </span>
-            {ui.focusToolCallId && (
-              <span
-                style={{
-                  color: "var(--text-dim)",
-                  fontSize: 11,
-                  fontFamily: "var(--font-mono)",
-                  background: "var(--bg-selected)",
-                  padding: "2px 8px",
-                  borderRadius: 9,
-                }}
-              >
-                ↪ {ui.focusToolCallId.slice(0, 8)}
-              </span>
-            )}
-          </div>
+          )}
 
-          <div style={{ flex: 1 }} />
+          {previewPath ? (
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                textAlign: "right",
+                fontSize: 11,
+                fontFamily: "var(--font-mono)",
+                color: "var(--text-dim)",
+              }}
+            >
+              {previewPath}
+            </span>
+          ) : (
+            <div style={{ flex: 1 }} />
+          )}
+
+          {previewPath && (
+            <button
+              type="button"
+              onClick={handleCopyPath}
+              aria-label={t("Copy path")}
+              title={t("Copy path")}
+              style={headerIconBtnStyle}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+              </svg>
+            </button>
+          )}
 
           <button
             type="button"
             onClick={() => actions.close()}
             aria-label={t("Close")}
             title={t("Close")}
-            style={{
-              width: 32,
-              height: 32,
-              padding: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "var(--bg-panel)",
-              color: "var(--text-muted)",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontSize: 16,
-              lineHeight: 1,
-            }}
+            style={{ ...headerIconBtnStyle, fontSize: 14, lineHeight: 1 }}
           >
             ✕
           </button>
@@ -236,20 +274,11 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
         ) : ui.viewMode === "media-preview" ? (
           <SessionLibraryPreview
             tiles={tiles}
-            entries={filteredEntries}
-            counts={counts}
-            filter={filter}
-            search={search}
             cwd={cwd}
-            onOpenFile={onOpenFile}
           />
         ) : (
           <SessionLibraryGrid
             tiles={tiles}
-            entries={filteredEntries}
-            counts={counts}
-            filter={filter}
-            search={search}
             cwd={cwd}
             onOpenFile={onOpenFile}
           />
@@ -260,6 +289,22 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
 
   return createPortal(node, document.body);
 }
+
+/** Compact 26px icon button for the header bar (copy / close). */
+const headerIconBtnStyle: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  padding: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "var(--bg-panel)",
+  color: "var(--text-muted)",
+  border: "1px solid var(--border)",
+  borderRadius: 6,
+  cursor: "pointer",
+  flexShrink: 0,
+};
 
 function EmptyState() {
   const { t } = useI18n();

@@ -1,53 +1,48 @@
 "use client";
 
 /**
- * SessionLibraryPreview — single-media preview view (Q12B / Q1A).
+ * SessionLibraryPreview — theater view (Q12B / Q1A).
  *
- * Renders one media tile (image / video / audio) full-bleed inside the
- * modal body. ←/→ walk through the filtered media tile list cyclically.
- * Esc returns to the grid (handled in SessionLibraryModal).
+ * A single media tile takes over the modal body in a dark, cinematic
+ * stage with minimal chrome: floating circular prev/next arrows on the
+ * sides, a back-to-grid button and counter pill on top, and (for images)
+ * a zoom cluster in the corner. No header bar of its own — the modal's
+ * top bar shows the current file path + a copy button and handles
+ * closing.
  *
- * After the `show_file` → `show_media` rename the library contains only
- * multimedia. All three categories share this single preview surface so
- * users don't context-switch between image and non-image flows.
+ *   image  →  auto-fits the stage (contain) and zooms inline: wheel to
+ *             zoom (cursor-anchored), drag to pan when zoomed,
+ *             double-click to toggle 100% / fit, plus −/+/% buttons
+ *   video  →  <video controls> (autoplay)
+ *   audio  →  AudioPlayer album variant (gradient cover + animated
+ *             equalizer, "now playing" layout)
  *
- *   image   →  <img>  with loading spinner + error fallback
- *   video   →  <video controls>  with poster fallback while metadata loads
- *   audio   →  <AudioPlayer>     (existing component)
- *
- * No external lightbox — the modal's 1100px max-width is large enough
- * to feel like a focused viewer without the page-jumping of a portal'd
- * lightbox.
+ * Below the stage sits a filmstrip (Google Photos / Lightroom pattern):
+ * thumbnails of every media tile in the current filter for one-click
+ * jumping. ←/→ walk the list cyclically; Esc returns to the grid
+ * (handled in SessionLibraryModal).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   backToSessionLibraryGrid,
   useSessionLibraryActions,
   useSessionLibraryUi,
 } from "@/hooks/sessionLibraryStore";
-import { useToast } from "@/components/Toast";
 import { AudioPlayer } from "@/components/AudioPlayer";
-import { copyText } from "@/components/CodeBlock";
 import { encodeFilePathForApi, getFileName, joinFilePath } from "@/lib/file-paths";
-import type {
-  SessionLibraryCounts,
-  SessionLibraryEntry,
-  SessionLibraryTile,
-} from "@/lib/session-library-derive";
+import { EqualizerBars, gradientFromPath, useInView } from "./MediaBits";
+import type { SessionLibraryTile } from "@/lib/session-library-derive";
 
 interface Props {
   tiles: SessionLibraryTile[];
-  entries: SessionLibraryEntry[];
-  counts: SessionLibraryCounts;
-  filter: string;
-  search: string;
   cwd?: string;
-  onOpenFile: (filePath: string, fileName: string) => void;
 }
 
 const MEDIA_CATEGORIES = new Set(["image", "video", "audio"]);
+const MIN_SCALE = 0.1;
+const MAX_SCALE = 8;
 
 function makeTileKey(tile: { entryToolCallId: string; path: string }): string {
   return `${tile.entryToolCallId}|${tile.path}`;
@@ -61,18 +56,24 @@ function resolvePath(filePath: string, cwd?: string): string {
   return joinFilePath(cwd, filePath);
 }
 
+function fileApiUrl(filePath: string): string {
+  return `/api/files/${encodeFilePathForApi(filePath)}?type=read`;
+}
+
 export function SessionLibraryPreview({
   tiles,
   cwd,
-  onOpenFile,
 }: Props) {
   const { t } = useI18n();
   const ui = useSessionLibraryUi();
   const actions = useSessionLibraryActions();
-  const toast = useToast();
 
+  // `known` guards the cold-cache case (reload / session switch): unknown
+  // tiles render best-effort; only cache-confirmed failures are excluded
+  // (they live in the grid's error rows; pending tiles can't be clicked
+  // into preview).
   const mediaTiles = useMemo(
-    () => tiles.filter((tl) => MEDIA_CATEGORIES.has(tl.category)),
+    () => tiles.filter((tl) => MEDIA_CATEGORIES.has(tl.category) && (!tl.known || tl.exists)),
     [tiles],
   );
 
@@ -88,7 +89,76 @@ export function SessionLibraryPreview({
   const resolvedPath = current ? resolvePath(current.path, cwd) : null;
   const name = current ? getFileName(current.path) : "";
 
-  // ── ←/→ keyboard nav (Modal-level Esc handler takes precedence) ──
+  // ── Inline image zoom / pan (reset when switching tiles) ──
+  const [imgZoom, setImgZoom] = useState({ scale: 1, tx: 0, ty: 0 });
+  useEffect(() => setImgZoom({ scale: 1, tx: 0, ty: 0 }), [currentIndex]);
+
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+
+  const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+  const zoomIn = () => setImgZoom((z) => ({ ...z, scale: clampScale(z.scale * 1.25) }));
+  const zoomOut = () => setImgZoom((z) => ({ ...z, scale: clampScale(z.scale / 1.25) }));
+  const resetZoom = () => setImgZoom({ scale: 1, tx: 0, ty: 0 });
+
+  // Wheel zoom, cursor-anchored, images only. The stage doesn't scroll so
+  // preventDefault is safe here (the filmstrip below has its own listener).
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || current?.category !== "image") return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const px = e.clientX - rect.left - rect.width / 2;
+      const py = e.clientY - rect.top - rect.height / 2;
+      setImgZoom((z) => {
+        const next = clampScale(z.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+        const k = next / z.scale;
+        return {
+          scale: next,
+          tx: px - (px - z.tx) * k,
+          ty: py - (py - z.ty) * k,
+        };
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [current?.category, currentIndex]);
+
+  // Drag-to-pan while zoomed — window listeners so the drag survives
+  // leaving the stage.
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: MouseEvent) => {
+      const s = dragStartRef.current;
+      if (!s) return;
+      setImgZoom((z) => ({ ...z, tx: s.tx + (e.clientX - s.x), ty: s.ty + (e.clientY - s.y) }));
+    };
+    const onUp = () => {
+      setDragging(false);
+      dragStartRef.current = null;
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging]);
+
+  const onImageDoubleClick = () => {
+    setImgZoom((z) => (z.scale > 1 ? { scale: 1, tx: 0, ty: 0 } : { scale: 2, tx: 0, ty: 0 }));
+  };
+
+  const onImageMouseDown = (e: React.MouseEvent) => {
+    if (imgZoom.scale <= 1) return;
+    e.preventDefault();
+    dragStartRef.current = { x: e.clientX, y: e.clientY, tx: imgZoom.tx, ty: imgZoom.ty };
+    setDragging(true);
+  };
+
+  // ── ←/→ keyboard nav ──
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!current) return;
@@ -105,6 +175,13 @@ export function SessionLibraryPreview({
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [currentIndex, mediaTiles, current, actions]);
+
+  // ── Filmstrip: keep the active thumb in view when navigating ──
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = stripRef.current?.children[currentIndex] as HTMLElement | undefined;
+    el?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [currentIndex]);
 
   if (!current || !resolvedPath) {
     return (
@@ -123,15 +200,15 @@ export function SessionLibraryPreview({
     );
   }
 
-  const url = `/api/files/${encodeFilePathForApi(resolvedPath)}?type=read`;
+  const url = fileApiUrl(resolvedPath);
 
-  const handleCopyPath = async () => {
-    try {
-      await copyText(resolvedPath);
-      toast.show({ kind: "success", message: t("Path copied") });
-    } catch {
-      toast.show({ kind: "error", message: t("Failed to copy path") });
-    }
+  const goPrev = () => {
+    const next = (currentIndex - 1 + mediaTiles.length) % mediaTiles.length;
+    actions.focusMedia(makeTileKey(mediaTiles[next]));
+  };
+  const goNext = () => {
+    const next = (currentIndex + 1) % mediaTiles.length;
+    actions.focusMedia(makeTileKey(mediaTiles[next]));
   };
 
   return (
@@ -144,216 +221,157 @@ export function SessionLibraryPreview({
         background: "var(--bg)",
       }}
     >
-      {/* ── Header: back, counter, prev, next ── */}
+      {/* ── Media stage (dark theater, floating controls) ── */}
       <div
+        ref={stageRef}
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "8px 14px",
-          borderBottom: "1px solid var(--border)",
-          background: "var(--bg-subtle)",
-          flexShrink: 0,
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => backToSessionLibraryGrid()}
-          aria-label={t("Close")}
-          title={t("Close")}
-          style={iconBtnStyle}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-
-        <span
-          style={{
-            fontSize: 12,
-            fontFamily: "var(--font-mono)",
-            color: "var(--text-muted)",
-            background: "var(--bg-selected)",
-            padding: "2px 10px",
-            borderRadius: 9,
-            minWidth: 64,
-            textAlign: "center",
-          }}
-        >
-          {t("{n} of {total}", { n: currentIndex + 1, total: mediaTiles.length })}
-        </span>
-
-        <span
-          aria-hidden="true"
-          style={{
-            fontSize: 10,
-            fontFamily: "var(--font-mono)",
-            color: "var(--text-dim)",
-            textTransform: "uppercase",
-            letterSpacing: 0.4,
-            padding: "2px 6px",
-            borderRadius: 4,
-            background: "var(--bg-selected)",
-          }}
-        >
-          {current.category}
-        </span>
-
-        <button
-          type="button"
-          onClick={() => {
-            const next = (currentIndex - 1 + mediaTiles.length) % mediaTiles.length;
-            actions.focusMedia(makeTileKey(mediaTiles[next]));
-          }}
-          aria-label={t("Previous")}
-          title={t("Previous")}
-          disabled={mediaTiles.length <= 1}
-          style={{ ...iconBtnStyle, opacity: mediaTiles.length <= 1 ? 0.4 : 1 }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            const next = (currentIndex + 1) % mediaTiles.length;
-            actions.focusMedia(makeTileKey(mediaTiles[next]));
-          }}
-          aria-label={t("Next")}
-          title={t("Next")}
-          disabled={mediaTiles.length <= 1}
-          style={{ ...iconBtnStyle, opacity: mediaTiles.length <= 1 ? 0.4 : 1 }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </button>
-
-        <div style={{ flex: 1 }} />
-      </div>
-
-      {/* ── Media body ── */}
-      <div
-        style={{
+          position: "relative",
           flex: 1,
           minHeight: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: "16px 24px",
+          padding: "14px 20px",
           overflow: "hidden",
-          background: "var(--bg)",
+          background: "#050505",
         }}
       >
         {current.category === "image" && (
-          <ImageBody src={url} alt={name} key={url} />
+          <ImageBody
+            src={url}
+            alt={name}
+            key={url}
+            zoom={imgZoom}
+            dragging={dragging}
+            onDoubleClick={onImageDoubleClick}
+            onMouseDown={onImageMouseDown}
+          />
         )}
         {current.category === "video" && (
           <VideoBody src={url} alt={name} key={url} />
         )}
         {current.category === "audio" && (
-          <div style={{ width: "min(720px, 100%)" }}>
-            <AudioPlayer src={url} title={name} />
+          <div style={{ width: "min(560px, 100%)" }}>
+            <AudioPlayer
+              src={url}
+              title={name}
+              subtitle={current.size !== undefined ? fmtSize(current.size) : undefined}
+              variant="album"
+              artGradient={gradientFromPath(resolvedPath)}
+              artSize={200}
+            />
+          </div>
+        )}
+
+        {/* Floating back-to-grid button */}
+        <button
+          type="button"
+          onClick={() => backToSessionLibraryGrid()}
+          aria-label={t("Close")}
+          title={t("Close")}
+          style={floatCtlBtnStyle({ top: 12, left: 12 })}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+
+        {/* Counter pill */}
+        <span
+          style={{
+            position: "absolute",
+            top: 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            padding: "3px 12px",
+            borderRadius: 999,
+            background: "rgba(0,0,0,0.5)",
+            border: "1px solid rgba(255,255,255,0.14)",
+            color: "rgba(255,255,255,0.92)",
+            fontSize: 12,
+            fontFamily: "var(--font-mono)",
+            zIndex: 2,
+            pointerEvents: "none",
+          }}
+        >
+          {t("{n} of {total}", { n: currentIndex + 1, total: mediaTiles.length })}
+        </span>
+
+        {/* Circular prev/next arrows on the sides */}
+        <CarouselArrow side="left" onClick={goPrev} disabled={mediaTiles.length <= 1} />
+        <CarouselArrow side="right" onClick={goNext} disabled={mediaTiles.length <= 1} />
+
+        {/* Zoom cluster (images only) */}
+        {current.category === "image" && (
+          <div
+            style={{
+              position: "absolute",
+              right: 14,
+              bottom: 12,
+              display: "flex",
+              gap: 6,
+              zIndex: 2,
+            }}
+          >
+            <StageCtlBtn onClick={zoomOut} ariaLabel={t("Zoom out")} disabled={imgZoom.scale <= MIN_SCALE + 0.001}>
+              −
+            </StageCtlBtn>
+            <StageCtlBtn onClick={resetZoom} ariaLabel={t("Fit")} style={{ minWidth: 48 }}>
+              {imgZoom.scale === 1 ? t("Fit") : `${Math.round(imgZoom.scale * 100)}%`}
+            </StageCtlBtn>
+            <StageCtlBtn onClick={zoomIn} ariaLabel={t("Zoom in")} disabled={imgZoom.scale >= MAX_SCALE}>
+              +
+            </StageCtlBtn>
           </div>
         )}
       </div>
 
-      {/* ── Footer: info + actions ── */}
+      {/* ── Filmstrip: click any thumb to jump ── */}
       <div
+        ref={stripRef}
         style={{
-          padding: "10px 16px 12px",
+          display: "flex",
+          gap: 8,
+          padding: "10px 14px",
           borderTop: "1px solid var(--border)",
           background: "var(--bg-subtle)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
+          overflowX: "auto",
           flexShrink: 0,
         }}
       >
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              fontSize: 13,
-              color: "var(--text)",
-              fontFamily: "var(--font-mono)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {name}
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--text-dim)",
-              fontFamily: "var(--font-mono)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              marginTop: 2,
-            }}
-            title={resolvedPath}
-          >
-            {resolvedPath}
-            {current.size !== undefined && (
-              <span style={{ marginLeft: 8 }}>· {fmtSize(current.size)}</span>
-            )}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleCopyPath}
-          style={iconBtnWithLabelStyle}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" />
-            <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-          </svg>
-          <span>{t("Copy path")}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenFile(resolvedPath, name)}
-          style={iconBtnWithLabelStyle}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M7 17 17 7" />
-            <path d="M7 7h10v10" />
-          </svg>
-          <span>{t("Open in tab")}</span>
-        </button>
+        {mediaTiles.map((tile, i) => (
+          <FilmThumb
+            key={makeTileKey(tile)}
+            tile={tile}
+            active={i === currentIndex}
+            onClick={() => actions.focusMedia(makeTileKey(tile))}
+            cwd={cwd}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-const iconBtnStyle: React.CSSProperties = {
-  width: 30,
-  height: 30,
-  padding: 0,
-  border: "1px solid var(--border)",
-  background: "var(--bg-panel)",
-  color: "var(--text-muted)",
-  borderRadius: 6,
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const iconBtnWithLabelStyle: React.CSSProperties = {
-  ...iconBtnStyle,
-  width: "auto",
-  height: 30,
-  padding: "0 12px",
-  gap: 6,
-  fontSize: 12,
-  fontFamily: "var(--font-mono)",
-  flexShrink: 0,
-};
+function floatCtlBtnStyle(extra: React.CSSProperties): React.CSSProperties {
+  return {
+    position: "absolute",
+    width: 34,
+    height: 34,
+    padding: 0,
+    borderRadius: "50%",
+    background: "rgba(0,0,0,0.5)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    color: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    zIndex: 2,
+    transition: "background 0.12s ease, opacity 0.12s ease",
+    ...extra,
+  };
+}
 
 function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -362,20 +380,45 @@ function fmtSize(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-function ImageBody({ src, alt }: { src: string; alt: string }) {
+// ── Stage bodies ────────────────────────────────────────────────────────
+
+function ImageBody({
+  src,
+  alt,
+  zoom,
+  dragging,
+  onDoubleClick,
+  onMouseDown,
+}: {
+  src: string;
+  alt: string;
+  zoom: { scale: number; tx: number; ty: number };
+  dragging: boolean;
+  onDoubleClick: () => void;
+  onMouseDown: (e: React.MouseEvent) => void;
+}) {
   const [loaded, setLoaded] = useState(false);
   const [errored, setErrored] = useState(false);
   return (
     <div
+      onDoubleClick={onDoubleClick}
+      onMouseDown={onMouseDown}
       style={{
         position: "relative",
-        maxWidth: "100%",
-        maxHeight: "100%",
+        // Fill the stage on BOTH axes (flex: 1 grows width, alignSelf:
+        // stretch fills the cross axis) so the image's percentage
+        // max-height resolves against a definite height. Without the
+        // stretch, the wrapper's height is content-driven (auto) and a
+        // tall image renders taller than the stage and gets clipped.
+        flex: 1,
+        alignSelf: "stretch",
+        minWidth: 0,
+        minHeight: 0,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        minWidth: 120,
-        minHeight: 120,
+        cursor: zoom.scale > 1 ? "grab" : "default",
+        userSelect: "none",
       }}
     >
       {!loaded && !errored && <Spinner />}
@@ -383,6 +426,7 @@ function ImageBody({ src, alt }: { src: string; alt: string }) {
       <img
         src={src}
         alt={alt}
+        draggable={false}
         onLoad={() => setLoaded(true)}
         onError={() => setErrored(true)}
         style={{
@@ -390,8 +434,8 @@ function ImageBody({ src, alt }: { src: string; alt: string }) {
           maxWidth: "100%",
           maxHeight: "100%",
           objectFit: "contain",
-          borderRadius: 6,
-          border: "1px solid var(--border)",
+          transform: `translate(${zoom.tx}px, ${zoom.ty}px) scale(${zoom.scale})`,
+          transition: dragging ? "none" : "transform 0.1s ease-out",
         }}
       />
       {errored && <ErrorBox label={alt} />}
@@ -415,10 +459,189 @@ function VideoBody({ src, alt }: { src: string; alt: string }) {
         maxHeight: "100%",
         objectFit: "contain",
         borderRadius: 6,
-        border: "1px solid var(--border)",
+        border: "1px solid rgba(255,255,255,0.08)",
         background: "#000",
       }}
     />
+  );
+}
+
+// ── Floating controls ───────────────────────────────────────────────────
+
+function CarouselArrow({
+  side,
+  onClick,
+  disabled,
+}: {
+  side: "left" | "right";
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  const { t } = useI18n();
+  const label = side === "left" ? t("Previous") : t("Next");
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      style={{
+        position: "absolute",
+        top: "50%",
+        transform: "translateY(-50%)",
+        left: side === "left" ? 12 : undefined,
+        right: side === "right" ? 12 : undefined,
+        width: 44,
+        height: 44,
+        padding: 0,
+        borderRadius: "50%",
+        background: "rgba(0,0,0,0.5)",
+        border: "1px solid rgba(255,255,255,0.18)",
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.3 : 0.9,
+        zIndex: 2,
+        transition: "background 0.12s ease, opacity 0.12s ease",
+      }}
+      onMouseEnter={(e) => {
+        if (disabled) return;
+        e.currentTarget.style.background = "rgba(0,0,0,0.72)";
+        e.currentTarget.style.opacity = "1";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = "rgba(0,0,0,0.5)";
+        e.currentTarget.style.opacity = disabled ? "0.3" : "0.9";
+      }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        {side === "left" ? (
+          <polyline points="15 18 9 12 15 6" />
+        ) : (
+          <polyline points="9 18 15 12 9 6" />
+        )}
+      </svg>
+    </button>
+  );
+}
+
+function StageCtlBtn({
+  onClick,
+  ariaLabel,
+  disabled,
+  children,
+  style,
+}: {
+  onClick: () => void;
+  ariaLabel: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      title={ariaLabel}
+      style={{
+        height: 30,
+        minWidth: 30,
+        padding: "0 10px",
+        borderRadius: 999,
+        background: "rgba(0,0,0,0.5)",
+        border: "1px solid rgba(255,255,255,0.18)",
+        color: "rgba(255,255,255,0.92)",
+        fontSize: 12,
+        fontFamily: "var(--font-mono)",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.35 : 1,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "background 0.12s ease",
+        ...style,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Filmstrip thumb ─────────────────────────────────────────────────────
+
+function FilmThumb({
+  tile,
+  active,
+  onClick,
+  cwd,
+}: {
+  tile: SessionLibraryTile;
+  active: boolean;
+  onClick: () => void;
+  cwd?: string;
+}) {
+  const resolvedPath = resolvePath(tile.path, cwd);
+  const url = fileApiUrl(resolvedPath);
+  const [ref, inView] = useInView<HTMLButtonElement>();
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onClick}
+      aria-label={getFileName(tile.path)}
+      style={{
+        width: 72,
+        height: 54,
+        flexShrink: 0,
+        padding: 0,
+        borderRadius: 6,
+        overflow: "hidden",
+        border: active ? "2px solid var(--accent)" : "1px solid var(--border)",
+        background: "#000",
+        cursor: "pointer",
+        opacity: active ? 1 : 0.72,
+        transition: "opacity 0.12s ease, border-color 0.12s ease",
+        position: "relative",
+      }}
+    >
+      {tile.category === "image" && (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      )}
+      {tile.category === "video" && (
+        <video
+          src={inView ? url : undefined}
+          preload="metadata"
+          muted
+          playsInline
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", background: "#000" }}
+        />
+      )}
+      {tile.category === "audio" && (
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            background: gradientFromPath(tile.path),
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <EqualizerBars playing={false} width={22} height={12} barCount={5} />
+        </div>
+      )}
+    </button>
   );
 }
 
@@ -430,8 +653,8 @@ function Spinner() {
         position: "absolute",
         width: 28,
         height: 28,
-        border: "3px solid var(--border)",
-        borderTopColor: "var(--text-muted)",
+        border: "3px solid rgba(255,255,255,0.12)",
+        borderTopColor: "rgba(255,255,255,0.7)",
         borderRadius: "50%",
         animation: "session-library-spin 0.9s linear infinite",
       }}

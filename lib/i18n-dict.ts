@@ -1103,6 +1103,9 @@ export const ZH_TRANSLATIONS = {
   "New files added": "新增了文件",
   "No matches for the current filter.": "当前筛选下没有匹配项。",
   "No media in the current filter.": "当前筛选下没有媒体。",
+  "Zoom": "放大",
+  "Zoom in": "放大",
+  "Zoom out": "缩小",
   "File": "文件",
 } as const;
 

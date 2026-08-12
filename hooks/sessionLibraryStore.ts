@@ -1,6 +1,6 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { isContentEqual } from "@/lib/shallowEqual";
 
 /**
@@ -157,18 +157,23 @@ export function resetSessionLibrary(): void {
 }
 
 // ── Stable action hooks ──────────────────────────────────────────────────
-// The imperative setters are module-level and have no React deps, so they
-// are already stable across renders. The hook just bundles them into one
-// object so consumers can pick `actions.open` etc.
+// The imperative setters are module-level and have no React deps, so the
+// returned object is memoized once. Keep it stable: effects that depend on
+// `actions` must not re-run on every render (an unstable object here was
+// the root cause of an infinite render loop when an effect wrote back to
+// the store from both its body and its cleanup).
 
 export function useSessionLibraryActions() {
-  return {
-    open: openSessionLibrary,
-    close: closeSessionLibrary,
-    setFilter: setSessionLibraryFilter,
-    setSearch: setSessionLibrarySearch,
-    focusMedia: focusSessionLibraryMedia,
-    backToGrid: backToSessionLibraryGrid,
-    reset: resetSessionLibrary,
-  };
+  return useMemo(
+    () => ({
+      open: openSessionLibrary,
+      close: closeSessionLibrary,
+      setFilter: setSessionLibraryFilter,
+      setSearch: setSessionLibrarySearch,
+      focusMedia: focusSessionLibraryMedia,
+      backToGrid: backToSessionLibraryGrid,
+      reset: resetSessionLibrary,
+    }),
+    [],
+  );
 }

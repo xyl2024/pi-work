@@ -3,23 +3,22 @@
 /**
  * SessionLibraryGrid — grid view body of the Session Library modal.
  *
- * Combines the filter tabs (Q3D / Q17B), the search box, and the responsive
- * tile grid (Q4B). Each tile is either an image preview tile (covers with
- * object-fit: contain so portrait screenshots letterbox correctly) or a
- * compact non-image row (PDF / video / audio / text / binary).
- *
- * Failed entries are rendered as full-width error rows below the grid (Q7A)
- * — they don't occupy image slots but stay visible inside the "全部" filter.
+ * A masonry tile layout (CSS columns). Each tile keeps its natural aspect
+ * ratio: images render at full width / natural height, videos show their
+ * first frame with a duration badge + play affordance, and audio is a
+ * square "album card" with a deterministic gradient cover. Failed entries
+ * are rendered as full-width error rows below the masonry — they don't
+ * occupy media slots but stay visible so users notice.
  *
  * Pending (streaming) entries render as a subtle dashed-border card so the
- * user knows the tool call hasn't completed yet (Q18A).
+ * user knows the tool call hasn't completed yet.
  *
  * The grid auto-scrolls to the focused entry once on mount when the modal
  * was opened from a tool-call card (`focusToolCallId`), then briefly
  * flashes a highlight ring around the matched tile.
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   useSessionLibraryActions,
@@ -27,42 +26,27 @@ import {
   focusSessionLibraryMedia,
 } from "@/hooks/sessionLibraryStore";
 import { encodeFilePathForApi, joinFilePath, getFileName } from "@/lib/file-paths";
+import {
+  DurationBadge,
+  EqualizerBars,
+  gradientFromPath,
+  useInView,
+  useMediaDuration,
+} from "./MediaBits";
 import type {
-  SessionLibraryCounts,
-  SessionLibraryEntry,
   SessionLibraryTile,
 } from "@/lib/session-library-derive";
-import type { SessionLibraryFilter } from "@/hooks/sessionLibraryStore";
 
 interface Props {
   tiles: SessionLibraryTile[];
-  entries: SessionLibraryEntry[];
-  counts: SessionLibraryCounts;
-  filter: string;
-  search: string;
   cwd?: string;
   onOpenFile: (filePath: string, fileName: string) => void;
 }
-
-const FILTER_TABS: Array<{
-  key: SessionLibraryFilter;
-  labelKey: string;
-}> = [
-  { key: "all", labelKey: "All" },
-  { key: "image", labelKey: "Images" },
-  { key: "video", labelKey: "Videos" },
-  { key: "audio", labelKey: "Audio" },
-  { key: "failed", labelKey: "Failed" },
-];
 
 const MEDIA_CATEGORIES = new Set(["image", "video", "audio"]);
 
 export function SessionLibraryGrid({
   tiles,
-  entries,
-  counts,
-  filter,
-  search,
   cwd,
   onOpenFile,
 }: Props) {
@@ -99,8 +83,13 @@ export function SessionLibraryGrid({
   // paths survive as compact rows now — `show_media` only accepts image /
   // video / audio, so the "non-media" bucket is effectively just the
   // failed entries). ──
+  //
+  // `known` guards the cold-cache case: after a reload / session switch the
+  // runtime cache is empty, so `exists` is a best-effort false. Those tiles
+  // still render (the file is usually there); only cache-confirmed failures
+  // land in the error rows.
   const mediaTiles = useMemo(
-    () => tiles.filter((tl) => MEDIA_CATEGORIES.has(tl.category)),
+    () => tiles.filter((tl) => MEDIA_CATEGORIES.has(tl.category) && (!tl.known || tl.exists)),
     [tiles],
   );
   const nonMediaTiles = useMemo(
@@ -108,10 +97,10 @@ export function SessionLibraryGrid({
     [tiles],
   );
 
-  // Failed entries (resolved but exists === false). Always render as full-
+  // Failed entries (cache-confirmed misses). Always render as full-
   // width error rows, even in the "all" filter, so users notice.
   const failedTiles = useMemo(
-    () => tiles.filter((tl) => tl.resolved && !tl.exists),
+    () => tiles.filter((tl) => tl.resolved && tl.known && !tl.exists),
     [tiles],
   );
 
@@ -125,131 +114,7 @@ export function SessionLibraryGrid({
         overflow: "hidden",
       }}
     >
-      {/* ── Filter bar + search ── */}
-      <div
-        style={{
-          padding: "10px 14px",
-          borderBottom: "1px solid var(--border)",
-          background: "var(--bg-subtle)",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            flexWrap: "wrap",
-            alignItems: "center",
-          }}
-        >
-          {FILTER_TABS.map((tab) => {
-            const active = filter === tab.key;
-            const count = counts.byFilter[tab.key] ?? 0;
-            const failedInFilter =
-              tab.key !== "all" && tab.key !== "failed"
-                ? counts.byFilter.failed
-                : 0;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => actions.setFilter(tab.key)}
-                aria-pressed={active}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: 12,
-                  borderRadius: 999,
-                  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
-                  background: active ? "var(--accent)" : "var(--bg-panel)",
-                  color: active ? "var(--accent-fg, #fff)" : "var(--text-muted)",
-                  cursor: "pointer",
-                  fontWeight: active ? 600 : 400,
-                  transition: "all 0.12s",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span>{t(tab.labelKey)}</span>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontFamily: "var(--font-mono)",
-                    opacity: 0.8,
-                  }}
-                >
-                  {count}
-                </span>
-                {tab.key === "failed" && count > 0 && (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: "50%",
-                      background: "#f87171",
-                    }}
-                  />
-                )}
-                {tab.key !== "all" &&
-                  tab.key !== "failed" &&
-                  failedInFilter > 0 && (
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: "#f87171",
-                      }}
-                    />
-                  )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "var(--bg-panel)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            padding: "4px 8px",
-            minWidth: 200,
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)" }}>
-            <circle cx="11" cy="11" r="7" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            placeholder={t("Search files…")}
-            value={search}
-            onChange={(e) => actions.setSearch(e.target.value)}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              color: "var(--text)",
-              fontSize: 12,
-              fontFamily: "inherit",
-            }}
-          />
-        </div>
-      </div>
-
-      {/* ── Scrollable body: grid + non-image rows + failed rows ── */}
+      {/* ── Scrollable body: masonry + non-image rows + failed rows ── */}
       <div
         ref={gridRef}
         style={{
@@ -262,35 +127,28 @@ export function SessionLibraryGrid({
           gap: 16,
         }}
       >
-        {tiles.length === 0 && entries.length > 0 && (
-          <div
-            style={{
-              padding: "32px 16px",
-              color: "var(--text-dim)",
-              fontSize: 12,
-              textAlign: "center",
-            }}
-          >
-            {t("No matches for the current filter.")}
-          </div>
-        )}
-
         {mediaTiles.length > 0 && (
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-              gap: 10,
-              alignContent: "start",
+              // Masonry: CSS columns let every tile keep its natural
+              // aspect ratio (portrait screenshots stay tall, videos
+              // keep their frame, audio is a square album card).
+              columnWidth: 210,
+              columnGap: 12,
+              maxWidth: "100%",
             }}
           >
             {mediaTiles.map((tile) => (
-              <ImageTile
+              <div
                 key={`${tile.entryToolCallId}-${tile.path}`}
-                tile={tile}
-                cwd={cwd}
-                onOpenFile={onOpenFile}
-              />
+                style={{ breakInside: "avoid", marginBottom: 12 }}
+              >
+                <MediaTile
+                  tile={tile}
+                  cwd={cwd}
+                  onOpenFile={onOpenFile}
+                />
+              </div>
             ))}
           </div>
         )}
@@ -314,7 +172,7 @@ export function SessionLibraryGrid({
           </div>
         )}
 
-        {failedTiles.length > 0 && filter !== "failed" && (
+        {failedTiles.length > 0 && (
           <div
             style={{
               display: "flex",
@@ -360,9 +218,9 @@ export function SessionLibraryGrid({
   );
 }
 
-// ── Image tile ──────────────────────────────────────────────────────────
+// ── Media tile (image / video / audio) ──────────────────────────────────
 
-function ImageTile({
+function MediaTile({
   tile,
   cwd,
   onOpenFile,
@@ -372,6 +230,8 @@ function ImageTile({
   onOpenFile: (filePath: string, fileName: string) => void;
 }) {
   const { t } = useI18n();
+  const [hovered, setHovered] = useState(false);
+  const [imgErrored, setImgErrored] = useState(false);
   const resolvedPath = resolvePath(tile.path, cwd);
   const url = `/api/files/${encodeFilePathForApi(resolvedPath)}?type=read`;
   const name = getFileName(tile.path);
@@ -380,75 +240,238 @@ function ImageTile({
     return <PendingTile name={name} />;
   }
 
+  const openPreview = () => focusSessionLibraryMedia(`${tile.entryToolCallId}|${tile.path}`);
+  const openInTab = () => onOpenFile(resolvedPath, name);
+
   return (
-    <button
-      type="button"
+    <div
       data-tool-call-id={tile.entryToolCallId}
-      onClick={() => focusSessionLibraryMedia(`${tile.entryToolCallId}|${tile.path}`)}
-      onDoubleClick={() => onOpenFile(resolvedPath, name)}
-      style={{
-        position: "relative",
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        background: "var(--bg)",
-        cursor: "pointer",
-        padding: 0,
-        overflow: "hidden",
-        aspectRatio: "1 / 1",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        transition: "transform 0.1s ease, border-color 0.1s ease",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = "var(--accent)";
-        e.currentTarget.style.transform = "translateY(-1px)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = "var(--border)";
-        e.currentTarget.style.transform = "none";
+      role="button"
+      tabIndex={0}
+      aria-label={name}
+      onClick={openPreview}
+      onDoubleClick={openInTab}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openPreview();
+        }
       }}
       title={tile.path}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: "relative",
+        borderRadius: 10,
+        overflow: "hidden",
+        background: "var(--bg)",
+        border: "1px solid var(--border)",
+        cursor: "pointer",
+        transition: "transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease",
+        transform: hovered ? "translateY(-2px)" : "none",
+        borderColor: hovered ? "var(--accent)" : undefined,
+        boxShadow: hovered ? "0 8px 24px rgba(0,0,0,0.18)" : "none",
+      }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={url}
-        alt={name}
-        loading="lazy"
-        style={{
-          maxWidth: "100%",
-          maxHeight: "100%",
-          objectFit: "contain",
-          display: "block",
-        }}
-      />
+      {tile.category === "video" && <VideoTileMedia src={url} />}
+      {tile.category === "audio" && <AudioTileMedia src={url} path={tile.path} />}
+      {tile.category === "image" &&
+        (imgErrored ? (
+          <BrokenMediaTile />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={url}
+            alt={name}
+            loading="lazy"
+            onError={() => setImgErrored(true)}
+            style={{ display: "block", width: "100%", height: "auto" }}
+          />
+        ))}
+
+      {/* Center play button for videos — brightens on hover. */}
+      {tile.category === "video" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: hovered ? "rgba(0,0,0,0.18)" : "rgba(0,0,0,0.06)",
+            transition: "opacity 0.14s ease, background 0.14s ease",
+            pointerEvents: "none",
+          }}
+        >
+          <span
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: "50%",
+              background: "rgba(0,0,0,0.55)",
+              border: "1px solid rgba(255,255,255,0.35)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              transform: hovered ? "scale(1.08)" : "scale(1)",
+              transition: "transform 0.14s ease",
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14z" />
+            </svg>
+          </span>
+        </div>
+      )}
+
+      {/* Audio tiles get a small decorative equalizer over their cover. */}
+      {tile.category === "audio" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+          }}
+        >
+          <EqualizerBars playing={false} width={56} height={30} barCount={7} />
+        </div>
+      )}
+
+      {/* Name bar — always visible; right side keeps room for badges. */}
       <div
         style={{
           position: "absolute",
           left: 0,
           right: 0,
           bottom: 0,
-          padding: "4px 8px",
-          background: "linear-gradient(transparent, rgba(0,0,0,0.75))",
+          padding: "18px 8px 5px",
+          background: "linear-gradient(transparent, rgba(0,0,0,0.78))",
           color: "#fff",
           fontSize: 11,
           fontFamily: "var(--font-mono)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          textAlign: "left",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          pointerEvents: "none",
         }}
       >
-        {name}
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            textAlign: "left",
+          }}
+        >
+          {name}
+        </span>
+        {tile.size !== undefined && (
+          <span style={{ fontSize: 10, opacity: 0.85, flexShrink: 0 }}>
+            {fmtSize(tile.size)}
+          </span>
+        )}
       </div>
+
       <OpenInTabHint
         onClick={(e) => {
           e.stopPropagation();
-          onOpenFile(resolvedPath, name);
+          openInTab();
         }}
         label={t("Open in tab")}
       />
-    </button>
+    </div>
+  );
+}
+
+// Fallback for a media file that failed to load (e.g. deleted on disk
+// after a cold-cache reload) — a muted placeholder instead of a broken
+// image glyph.
+function BrokenMediaTile() {
+  const { t } = useI18n();
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        minHeight: 120,
+        background: "var(--bg-subtle)",
+        color: "var(--text-dim)",
+        fontSize: 11,
+        fontFamily: "var(--font-mono)",
+      }}
+    >
+      <span aria-hidden="true" style={{ fontSize: 12 }}>✕</span>
+      <span>{t("Failed to load")}</span>
+    </div>
+  );
+}
+
+// Video tile body: uses a real <video preload="metadata"> element so the
+// first frame doubles as the poster (no extra thumbnail fetch), and reads
+// the duration + intrinsic aspect ratio from its metadata. The source is
+// only attached once the tile scrolls into view.
+function VideoTileMedia({ src }: { src: string }) {
+  const [ref, inView] = useInView<HTMLVideoElement>();
+  const [duration, setDuration] = useState<number | null>(null);
+  const [aspect, setAspect] = useState<string | null>(null);
+  return (
+    <>
+      <video
+        ref={ref}
+        src={inView ? src : undefined}
+        preload="metadata"
+        muted
+        playsInline
+        onLoadedMetadata={(e) => {
+          const el = e.currentTarget;
+          if (Number.isFinite(el.duration)) setDuration(el.duration);
+          if (el.videoWidth && el.videoHeight) {
+            setAspect(`${el.videoWidth} / ${el.videoHeight}`);
+          }
+        }}
+        style={{
+          display: "block",
+          width: "100%",
+          aspectRatio: aspect ?? "16 / 9",
+          background: "#000",
+          pointerEvents: "none",
+        }}
+      />
+      <DurationBadge seconds={duration} />
+    </>
+  );
+}
+
+// Audio tile body: deterministic gradient cover (album art) + duration.
+function AudioTileMedia({ src, path }: { src: string; path: string }) {
+  const [ref, inView] = useInView<HTMLDivElement>();
+  const duration = useMediaDuration(inView ? src : undefined, "audio");
+  return (
+    <div
+      ref={ref}
+      style={{
+        aspectRatio: "1 / 1",
+        background: gradientFromPath(path),
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "repeating-linear-gradient(115deg, rgba(255,255,255,0.05) 0 2px, transparent 2px 8px)",
+        }}
+      />
+      <DurationBadge seconds={duration} />
+    </div>
   );
 }
 

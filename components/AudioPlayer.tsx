@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { EqualizerBars } from "./session-library/MediaBits";
 
 interface Props {
   src: string;
@@ -14,6 +15,17 @@ interface Props {
    * together with the disc. Defaults to `/record.jpg` from `public/`.
    */
   cover?: string;
+  /**
+   * Layout variant:
+   * - "disc"  — vinyl record art (default, used by inline file renderers)
+   * - "album" — square gradient cover + animated equalizer (Session Media
+   *             Library theater view)
+   */
+  variant?: "disc" | "album";
+  /** CSS gradient for the album-variant cover. Defaults to a violet pair. */
+  artGradient?: string;
+  /** Square cover size (px) for the album variant. */
+  artSize?: number;
 }
 
 const SPEEDS = [0.5, 1, 1.5, 2] as const;
@@ -32,7 +44,7 @@ function formatTime(seconds: number): string {
  * native <audio> element and renders progress / time / speed / volume
  * controls in a card that matches the rest of ShowFileRenderer.
  */
-export function AudioPlayer({ src, title, subtitle, cover = DEFAULT_COVER }: Props) {
+export function AudioPlayer({ src, title, subtitle, cover = DEFAULT_COVER, variant = "disc", artGradient, artSize = 160 }: Props) {
   const { t } = useI18n();
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -208,7 +220,84 @@ export function AudioPlayer({ src, title, subtitle, cover = DEFAULT_COVER }: Pro
     >
       <audio ref={audioRef} src={src} preload="metadata" />
 
-      {/* Vinyl disc: large circular record that spins while playing. */}
+      {variant === "album" ? (
+        /* ── Album card: square gradient art + equalizer ("now playing"). ── */
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div
+            aria-hidden="true"
+            style={{
+              width: artSize,
+              height: artSize,
+              borderRadius: 14,
+              background: artGradient ?? "linear-gradient(135deg, hsl(260 58% 44%), hsl(310 62% 22%))",
+              position: "relative",
+              flexShrink: 0,
+              overflow: "hidden",
+              boxShadow: "0 10px 28px rgba(0,0,0,0.4)",
+            }}
+          >
+            {/* Faint diagonal grooves for texture. */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: "repeating-linear-gradient(115deg, rgba(255,255,255,0.05) 0 2px, transparent 2px 8px)",
+              }}
+            />
+            {/* Soft glow while playing. */}
+            {playing && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "radial-gradient(circle at 50% 60%, rgba(255,255,255,0.14), transparent 62%)",
+                }}
+              />
+            )}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <EqualizerBars playing={playing} width={artSize * 0.42} height={artSize * 0.5} barCount={7} />
+            </div>
+          </div>
+          <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+            <div
+              title={title}
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: "var(--text)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {title ?? "audio"}
+            </div>
+            {subtitle && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--text-dim)",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  marginTop: 4,
+                }}
+              >
+                {subtitle}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+      /* ── Vinyl disc: large circular record that spins while playing. ── */
       <div
         style={{
           display: "flex",
@@ -306,6 +395,7 @@ export function AudioPlayer({ src, title, subtitle, cover = DEFAULT_COVER }: Pro
           )}
         </div>
       </div>
+      )}
 
       {/* Error / loading banner */}
       {error && (
