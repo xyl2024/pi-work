@@ -350,6 +350,110 @@ pre, code {
   }
 }
 
+/* Loading state — pixel-grid wavefront (chat waiting indicator).
+   Each cell's delay/duration come in via --ls-delay / --ls-dur custom
+   properties set inline by components/LoadingState.tsx; the keyframes
+   only control the pop-on → hold → fade-out arc. Reduced motion freezes
+   the grid to its dim state and turns the shimmering label into plain
+   text (the elapsed timer still ticks — it lives in JS). */
+.ls-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 4px);
+  gap: 1.5px;
+}
+.ls-pixel {
+  width: 4px;
+  height: 4px;
+  background: var(--accent);
+  border-radius: 1px;
+  opacity: 0.15;
+  animation: ls-pixel-on var(--ls-dur, 650ms) ease-in-out var(--ls-delay, 0ms) infinite;
+}
+.ls-pixel--round {
+  border-radius: 50%;
+}
+.ls-pixel--dim {
+  opacity: 0.07;
+  animation: none;
+}
+@keyframes ls-pixel-on {
+  0%   { opacity: 0.15; }
+  14%  { opacity: 1; }
+  44%  { opacity: 1; }
+  60%  { opacity: 0.15; }
+  100% { opacity: 0.15; }
+}
+.ls-label {
+  font-size: 13px;
+  font-weight: 500;
+  background-image: linear-gradient(90deg,
+    var(--text-dim) 35%, var(--text) 50%, var(--text-dim) 65%);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: ls-shimmer 1.4s linear infinite;
+}
+@keyframes ls-shimmer {
+  from { background-position: 100% 0; }
+  to   { background-position: 0% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ls-pixel {
+    animation: none;
+  }
+  .ls-label {
+    animation: none;
+    background-image: none;
+    color: var(--text);
+  }
+}
+
+/* Streaming text — words resolve out of blur (assistant output).
+   The settled prefix keeps rendering as live markdown; the in-flight tail
+   animates word-by-word via .streaming-word, with a blinking caret at the
+   end. .markdown-body--streaming pulls the last paragraph inline so the
+   tail continues the current line instead of wrapping to a new one (inline
+   boxes ignore vertical margins, so the paragraph gap collapses too).
+   Reduced motion turns it into plain static text. */
+.markdown-body--streaming p:last-of-type {
+  display: inline;
+}
+.streaming-word {
+  display: inline;
+  will-change: filter, opacity;
+  animation: stream-in 420ms cubic-bezier(0.22, 0.61, 0.25, 1) both;
+}
+@keyframes stream-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+.streaming-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  background: var(--text);
+  animation: blink 1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .streaming-word {
+    animation: none;
+  }
+  .streaming-cursor {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
 /* Conversation-tree active branch — flowing dashes while the agent works.
    Applied to the connector paths on the active path via .tree-edge-flow;
    the dash pattern (stroke-dasharray) is set inline, so this class only

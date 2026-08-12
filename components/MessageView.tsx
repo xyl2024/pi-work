@@ -699,11 +699,44 @@ function useMarkdownComponents(isStreaming?: boolean) {
 function TextBlock({ block, keywords, isSearchMatch, isStreaming }: { block: TextContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean }) {
   const text = highlightTextAsHtml(block.text, keywords, isSearchMatch);
   const components = useMarkdownComponents(isStreaming);
+  // Streaming reveal: the settled prefix (text as of the last update) keeps
+  // rendering as live markdown, while the newest slice animates in as plain
+  // words resolving out of blur (.streaming-word) with a blinking caret.
+  // Skipped for search matches — highlightTextAsHtml injects <mark> HTML
+  // that must never be sliced mid-tag. prevLenRef is updated in an effect
+  // (not during render) so the reveal survives StrictMode double-renders.
+  const streamReveal = isStreaming && !isSearchMatch;
+  const prevLenRef = useRef(0);
+  useEffect(() => {
+    prevLenRef.current = block.text.length;
+  }, [block.text]);
+  const settled = streamReveal ? prevLenRef.current : block.text.length;
+  const delta = streamReveal ? block.text.slice(settled) : "";
+  const tailTokens = delta.split(/(\s+)/).filter((t) => t.length > 0);
+
   return (
-    <div className="markdown-body">
+    <div className={`markdown-body${streamReveal ? " markdown-body--streaming" : ""}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {text}
+        {streamReveal ? text.slice(0, settled) : text}
       </ReactMarkdown>
+      {streamReveal && tailTokens.length > 0 && (
+        <span>
+          {tailTokens.map((tok, i) =>
+            /^\s+$/.test(tok) ? (
+              <span key={`${settled}-${i}`}>{tok}</span>
+            ) : (
+              <span
+                key={`${settled}-${i}`}
+                className="streaming-word"
+                style={{ animationDelay: `${Math.min(i * 25, 250)}ms` }}
+              >
+                {tok}
+              </span>
+            ),
+          )}
+        </span>
+      )}
+      {streamReveal && <span className="streaming-cursor" aria-hidden />}
     </div>
   );
 }

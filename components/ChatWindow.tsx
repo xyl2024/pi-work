@@ -24,6 +24,7 @@ import { Tooltip } from "./Tooltip";
 import { AgentTodoPanel } from "./AgentTodoPanel";
 import { AskUserQuestionsPanel } from "./AskUserQuestionsPanel";
 import { ReplayBar } from "./ReplayBar";
+import LoadingState from "./LoadingState";
 import { useAgentSession, type AgentPhase } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useI18n } from "@/hooks/useI18n";
@@ -1426,8 +1427,8 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
             )}
 
             {agentRunning && !streamState.streamingMessage && (
-              <div className="py-2 text-[13px] text-text-muted">
-                <span className="animate-[pulse_1.5s_infinite]">{phaseLabel(agentPhase, t)}</span>
+              <div className="py-2">
+                <LoadingState label={phaseLabel(agentPhase, t)} />
               </div>
             )}
 
