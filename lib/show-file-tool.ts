@@ -125,7 +125,6 @@ export const showFileTool = defineTool<typeof ShowFileParams, ShowFileDetails>({
   promptGuidelines: [
     "When your work output includes audio, video, or images, use the `show_media` tool to present them to the user interface.",
     "`show_media` accepts up to 5 paths per call (image / video / audio only). Batch related artifacts into a single call when they belong together.",
-    "For PDF, Markdown, HTML, plain text, or binary files, do NOT use `show_media` \u2014 it rejects them. Use the right-hand file viewer (the `open_file` flow handled by the chat UI) for those.",
   ],
   async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
     const rawPaths = params.paths;
