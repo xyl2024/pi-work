@@ -6,6 +6,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
+import { useToast } from "@/components/Toast";
 
 const CWD_KEY = "pi-terminal-cwd";
 
@@ -67,6 +68,7 @@ const smallButtonStyle: React.CSSProperties = {
  */
 function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
   const { t } = useI18n();
+  const toast = useToast();
   // `t` changes identity on locale switch — keep a ref so the WS effect
   // (which tears down the pty on re-run) never re-runs for a cosmetic change.
   const tRef = useRef(t);
@@ -184,6 +186,44 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
       }
     });
 
+    // Right-click copy/paste. With selection → copy to clipboard; without →
+    // paste from clipboard straight into the pty (same path as keyboard
+    // input). xterm 6 does not bind the system clipboard on its own.
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      if (!navigator.clipboard) {
+        toast.show({ kind: "error", message: tRef.current("Clipboard not available") });
+        return;
+      }
+      if (term.hasSelection()) {
+        const selection = term.getSelection();
+        navigator.clipboard.writeText(selection).then(
+          () => {
+            term.clearSelection();
+          },
+          (err: unknown) => {
+            console.error("terminal clipboard write failed", err);
+            toast.show({ kind: "error", message: tRef.current("Clipboard access denied") });
+          },
+        );
+      } else {
+        navigator.clipboard.readText().then(
+          (text) => {
+            if (!text) return;
+            const liveWs = wsRef.current;
+            if (liveWs && liveWs.readyState === WebSocket.OPEN) {
+              liveWs.send(JSON.stringify({ type: "data", data: text }));
+            }
+          },
+          (err: unknown) => {
+            console.error("terminal clipboard read failed", err);
+            toast.show({ kind: "error", message: tRef.current("Clipboard access denied") });
+          },
+        );
+      }
+    };
+    term.element?.addEventListener("contextmenu", handleContextMenu);
+
     const ro = new ResizeObserver(() => {
       try {
         fit.fit();
@@ -197,6 +237,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
       settled = true;
       dataSub.dispose();
       resizeSub.dispose();
+      term.element?.removeEventListener("contextmenu", handleContextMenu);
       ro.disconnect();
       try {
         ws.close();
@@ -208,7 +249,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
       fitRef.current = null;
       term.dispose();
     };
-  }, [wsUrl, cwd]);
+  }, [wsUrl, cwd, toast]);
 
   // When the tab becomes visible again (switch back, panel reopen), re-fit —
   // display:none / zero-height containers leave xterm with stale dimensions.

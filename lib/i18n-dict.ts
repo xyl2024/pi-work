@@ -1078,6 +1078,8 @@ export const ZH_TRANSLATIONS = {
   "Videos": "视频",
   "Audio": "音频",
   "Failed": "失败",
+  "Clipboard access denied": "无法访问剪贴板",
+  "Clipboard not available": "剪贴板不可用，请使用 HTTPS 或 localhost",
   "Search files…": "搜索文件…",
   "No files in this session yet.": "本次会话还没有 show_media 调用过多媒体文件。",
   "Let the agent use the show_media tool to surface images, video, and audio — they all land here.": "让 agent 用 show_media 展示图片、视频、音频，会汇总到这里。",
