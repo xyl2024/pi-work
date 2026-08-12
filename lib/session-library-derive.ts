@@ -37,6 +37,12 @@ export interface SessionLibraryEntryResult {
    *  When false the entry is "pending" — the tool call was emitted but the
    *  result hasn't landed yet (still streaming). */
   resolved: boolean;
+  /** True when `exists`/`size` came from the live tool result cache.
+   *  False when the cache is cold (page reload / session switch) — in that
+   *  case `exists: false` is NOT a real failure, it just means we don't
+   *  know. The UI renders those tiles as a best-effort attempt instead of
+   *  hiding them behind the "failed" bucket. */
+  known: boolean;
 }
 
 export interface SessionLibraryEntry {
@@ -126,16 +132,20 @@ export function deriveSessionLibraryEntries(
             size: detail.size,
             error: detail.error,
             resolved: true,
+            known: true,
           };
         }
         // No detail yet — either still streaming or session reloaded and
         // the runtime cache is cold. Show as pending with category guessed
-        // from the path so the grid still has something to display.
+        // from the path so the grid still has something to display. `known`
+        // stays false so a reloaded session's tiles render as a best-effort
+        // attempt (the file is usually still there) rather than as failures.
         return {
           path,
           exists: false,
           category: categorizeByExt(path),
           resolved: hasResult,
+          known: false,
         };
       });
 
@@ -150,7 +160,7 @@ export function deriveSessionLibraryEntries(
       entries.push({
         toolCallId: tc.toolCallId,
         paths: pathResults,
-        hasAnySuccess: pathResults.some((p) => p.resolved && p.exists),
+        hasAnySuccess: pathResults.some((p) => p.resolved && p.known && p.exists),
         resolved: pathResults.every((p) => p.resolved),
         messageIndex: i,
         isError: toolResult?.isError ?? false,
@@ -184,7 +194,7 @@ export function filterSessionLibraryEntries(
         if (!entry.paths.some((p) => p.category === "audio")) return false;
         break;
       case "failed":
-        if (!entry.paths.some((p) => p.resolved && !p.exists)) return false;
+        if (!entry.paths.some((p) => p.known && !p.exists)) return false;
         break;
       default:
         break;
@@ -223,7 +233,7 @@ export function countSessionLibraryEntries(
     let entryHasFailed = false;
     for (const p of entry.paths) {
       cats.add(p.category);
-      if (p.resolved && !p.exists) {
+      if (p.known && !p.exists) {
         failed++;
         entryHasFailed = true;
       }
@@ -245,6 +255,9 @@ export interface SessionLibraryTile {
   path: string;
   category: ShowFileCategory;
   exists: boolean;
+  /** False when the runtime cache was cold (reload / session switch) —
+   *  the tile should be rendered best-effort, not treated as failed. */
+  known: boolean;
   resolved: boolean;
   size?: number;
   error?: string;
@@ -259,6 +272,7 @@ export function flattenSessionLibraryTiles(entries: SessionLibraryEntry[]): Sess
         path: p.path,
         category: p.category,
         exists: p.exists,
+        known: p.known,
         resolved: p.resolved,
         size: p.size,
         error: p.error,
