@@ -38,7 +38,7 @@ const RIGHT_BAR_BUTTONS_UI: Array<{ id: RightBarButtonId; labelKey: string }> = 
 // via /api/settings — same immediate-apply pattern as Right-side buttons.
 const CUSTOM_TOOLS_UI: Array<{ id: AgentCustomToolName; labelKey: string }> = [
   { id: "agent_todo", labelKey: "Agent Todo" },
-  { id: "show_file",  labelKey: "Show File" },
+  { id: "show_media", labelKey: "Show Media" },
   { id: "ask_user_questions", labelKey: "Ask User Questions" },
 ];
 
@@ -1015,7 +1015,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
             </div>
           </div>
 
-          {/* ── Section 5: Custom Tools (agent_todo, show_file, ask_user_questions) ── */}
+          {/* ── Section 5: Custom Tools (agent_todo, show_media, ask_user_questions) ── */}
           {/* Immediate-apply checkboxes, same shape as Section 6. */}
           {config && (
             <div style={{ marginBottom: 24, marginTop: 24 }}>

@@ -333,7 +333,7 @@ export const ZH_TRANSLATIONS = {
   "Custom Tools": "自定义工具",
   "Enable or disable custom pi tools. Changes apply to sessions started after this point; running sessions keep their original tool set.": "启用或禁用自定义 pi 工具。修改只对之后启动的会话生效；已运行的会话保持原有工具集。",
   "Agent Todo": "Agent Todo（智能体任务列表）",
-  "Show File": "Show File（内联展示文件）",
+  "Show Media": "Show Media（内联展示多媒体文件）",
   "Ask User Questions": "Ask User Questions（向用户提问）",
   // Settings / chat input typewriter phrases (config.yaml → typewriter_phrases)
   "Typewriter phrases": "打字机文案",

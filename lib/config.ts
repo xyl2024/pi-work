@@ -224,8 +224,15 @@ function parseCustomTools(raw: unknown): CustomToolsConfig {
   if (enabledRaw.length === 0) return { enabled: [] };
   const seen = new Set<AgentCustomToolName>();
   for (const item of enabledRaw) {
-    if (typeof item === "string" && (AGENT_CUSTOM_TOOL_NAMES as readonly string[]).includes(item)) {
-      seen.add(item as AgentCustomToolName);
+    if (typeof item !== "string") continue;
+    // Normalize the legacy `show_file` spelling to the current `show_media`
+    // name, so the Settings UI checkbox (keyed by tool name) and the
+    // runtime tool registration always agree. `show_file` remains a legal
+    // input so old config.yaml files keep working — it just never survives
+    // the parse.
+    const name = item === "show_file" ? "show_media" : item;
+    if ((AGENT_CUSTOM_TOOL_NAMES as readonly string[]).includes(name)) {
+      seen.add(name as AgentCustomToolName);
     }
   }
   if (seen.size === 0) return { enabled: [...AGENT_CUSTOM_TOOL_NAMES] };
