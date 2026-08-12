@@ -141,6 +141,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
     });
     term.loadAddon(webLinks);
     term.open(container);
+    if (active) term.focus();
     try {
       fit.fit();
     } catch {
@@ -274,6 +275,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
     } catch {
       // ignore
     }
+    termRef.current?.focus();
   }, [active]);
 
   const handleRestart = useCallback(() => {
