@@ -277,21 +277,27 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
         {/*
           Always rendered so max-height can transition between 0 and 240.
           The outer layer animates height with overflow: hidden clipping the
-          collapsing content; the inner layer keeps the scroll — overflowY:
-          auto only engages because the outer is overflow: hidden. 240px ≈
-          6–7 task rows; beyond that the inner takes over and scrolls.
-          Revisit the constant if task row layout (padding, font-size)
-          changes.
+          collapsing content; the inner layer keeps the scroll. The body is a
+          column flex container and the scrollport is a flex item (`flex: 1`
+          + `minHeight: 0`), so it is exactly as tall as the body's used
+          (max-height-clamped) height and overflowY: auto engages once the
+          content exceeds it. Without that flex chain the scrollport would
+          grow to content height and the body's overflow: hidden would just
+          clip the tail — the list would be unscrollable. 240px ≈ 6–7 task
+          rows; beyond that the inner takes over and scrolls. Revisit the
+          constant if task row layout (padding, font-size) changes.
         */}
         <div
           className="agent-todo-body"
           style={{
             maxHeight: collapsed ? 0 : 240,
             overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
             transition: "max-height 180ms cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
-          <div style={{ overflowY: "auto", minHeight: 0 }}>
+          <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
             {sortedTasks.map((task, idx) => (
               <TaskRow
                 key={task.id}
