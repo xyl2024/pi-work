@@ -399,18 +399,19 @@ export function TranslatePanel() {
           </AnimatedPopover>
         </div>
         {/* Target-language toggle. A single button whose label always shows
-            the *other* language (the action it performs on click). The label
-            is keyed by `target` so React remounts the <span> on every
-            switch, re-firing the `lang-swap-in` keyframe from globals.css
-            for the "切换感". `minWidth` keeps the button from jittering
-            between the two label widths. */}
+            the *current* target language ("to中文" / "to英文"); clicking
+            switches the target to the other language. The label is keyed by
+            `target` so React remounts the <span> on every switch,
+            re-firing the `lang-swap-in` keyframe from globals.css for the
+            "切换感". `minWidth` keeps the button from jittering between the
+            two label widths. */}
         <Tooltip
           content={t("Current target: {lang}", { lang: t(target === "zh" ? "Chinese" : "English") })}
         >
           <button
             onClick={() => { if (!isStreaming) setTarget(target === "en" ? "zh" : "en"); }}
             disabled={isStreaming}
-            aria-label={t("Switch to {lang}", { lang: t(target === "zh" ? "Chinese" : "English") })}
+            aria-label={t("Switch to {lang}", { lang: t(target === "zh" ? "English" : "Chinese") })}
             style={{
               display: "flex", alignItems: "center", gap: 6,
               padding: "0 10px", height: 28,
@@ -460,7 +461,7 @@ export function TranslatePanel() {
                 animation: "lang-swap-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)",
               }}
             >
-              {t(target === "en" ? "toChinese" : "toEnglish")}
+              {t(target === "zh" ? "toChinese" : "toEnglish")}
             </span>
           </button>
         </Tooltip>
