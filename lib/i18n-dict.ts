@@ -225,6 +225,8 @@ export const ZH_TRANSLATIONS = {
   "ID *": "ID *",
   "model-id": "模型 ID",
   "Display name": "显示名称",
+  "Icon": "图标",
+  "Icon source hint": "选择一个现有提供商的图标；模型未单独设置时沿用提供商的图标，都未设置时显示默认图标",
   "inherit": "继承",
   "none": "无",
   "API key stored message": "API key 已保存。在下方输入新的 key 可以替换它，或断开连接将其移除。",

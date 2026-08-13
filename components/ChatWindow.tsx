@@ -376,7 +376,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const {
     loading, error, messages, entryIds, entryTimestamps, streamState,
-    agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
+    agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
     retryInfo, contextUsage,
     displayModel: displayModelValue,
     agentPhase,
@@ -1095,6 +1095,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         isStreaming={agentRunning}
         model={displayModelValue}
         modelNames={modelNames}
+        modelIcons={modelIcons}
         modelList={modelList}
         onModelChange={handleModelChange}
         toolPreset={toolPreset}
@@ -1327,6 +1328,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     message={msg}
                     toolResults={toolResultsMap}
                     modelNames={modelNames}
+                    modelIcons={modelIcons}
                     entryId={renderEntryIds[idx]}
                     onNavigate={agentRunning ? undefined : handleNavigate}
                     prevAssistantEntryId={agentRunning ? undefined : prevAssistantEntryId}
@@ -1504,7 +1506,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
             })()}
 
             {streamState.isStreaming && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} />
+              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} modelIcons={modelIcons} />
             )}
 
             {agentRunning && !streamState.streamingMessage && (

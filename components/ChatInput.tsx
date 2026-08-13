@@ -5,7 +5,7 @@ import { useI18n, type Locale } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/settingsStore";
 import { Tooltip } from "./Tooltip";
 import { IconHoverButton } from "./IconHoverButton";
-import { ProviderIcon } from "./ProviderIcon";
+import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "./ProviderIcon";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { CwdPicker } from "./CwdPicker";
 import { DEFAULT_TYPEWRITER_PHRASES } from "@/lib/typewriter-phrases";
@@ -39,6 +39,8 @@ interface Props {
   isStreaming: boolean;
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
+  /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
+  modelIcons?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string }[];
   onModelChange?: (provider: string, modelId: string) => void;
   toolPreset?: "none" | "full";
@@ -255,7 +257,7 @@ function findDirectSlashResource(message: string, resources: SlashResource[]): {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, isStreaming, model, modelNames, modelList, onModelChange,
+  onSend, onAbort, isStreaming, model, modelNames, modelIcons, modelList, onModelChange,
   toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
@@ -1157,18 +1159,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     }}
                   >
                     <ProviderIcon
-                      id={model?.provider ?? ""}
+                      id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons) ?? ""}
                       size={12}
-                      fallback={
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="4" y="4" width="16" height="16" rx="2" />
-                          <rect x="9" y="9" width="6" height="6" />
-                          <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-                          <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-                          <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
-                          <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
-                        </svg>
-                      }
+                      fallback={<ProviderGearIcon size={11} />}
                     />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
                   </button>
@@ -1188,12 +1181,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         <div key={group.provider}>
                           {(modelsByProvider.length > 1) && (
                             <div style={{
+                              display: "flex", alignItems: "center", gap: 5,
                               padding: "6px 12px 4px",
                               fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
                               textTransform: "uppercase", letterSpacing: "0.07em",
                               borderTop: gi > 0 ? "1px solid var(--border)" : "none",
                             }}>
-                              {group.provider}
+                              <ProviderIcon id={resolveProviderIcon(group.provider, undefined, modelIcons) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
+                              <span>{group.provider}</span>
                             </div>
                           )}
                           {group.options.map((opt) => {
@@ -1218,6 +1213,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                                 {isActive
                                   ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
                                   : <span style={{ width: 10, flexShrink: 0 }} />}
+                                <ProviderIcon id={resolveProviderIcon(opt.provider, opt.modelId, modelIcons) ?? ""} size={12} fallback={<ProviderGearIcon size={11} />} />
                                 {opt.name}
                               </button>
                             );

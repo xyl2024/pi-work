@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
 import { Tooltip } from "./Tooltip";
-import { ProviderIcon } from "./ProviderIcon";
+import { ProviderIcon, ProviderGearIcon, hasProviderIcon, PROVIDER_ICON_IDS } from "./ProviderIcon";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,8 @@ interface ModelEntry {
   maxTokens?: number;
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
   compat?: Record<string, unknown>;
+  /** Provider id whose icon this model should display (chosen in the UI). */
+  icon?: string;
 }
 
 interface ProviderEntry {
@@ -55,6 +57,8 @@ interface ProviderEntry {
   compat?: Record<string, unknown>;
   models?: ModelEntry[];
   modelOverrides?: Record<string, unknown>;
+  /** Provider id whose icon this provider's models should display by default (chosen in the UI). */
+  icon?: string;
 }
 
 interface ModelsJson {
@@ -205,6 +209,36 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{children}</div>;
 }
 
+// ── Icon picker (shared by provider + model forms) ────────────────────────────
+
+function IconField({ value, onChange }: { value: string | undefined; onChange: (v: string | undefined) => void }) {
+  const { t } = useI18n();
+  return (
+    <Field label={t("Icon")}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 5, background: "var(--bg-hover)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {value && hasProviderIcon(value)
+            ? <ProviderIcon id={value} size={16} />
+            : <ProviderGearIcon size={14} />}
+        </div>
+        <select
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value || undefined)}
+          style={{ ...inputStyle, flex: 1 }}
+        >
+          <option value="">— {t("none")} / {t("inherit")} —</option>
+          {PROVIDER_ICON_IDS.map((id) => (
+            <option key={id} value={id}>{id}</option>
+          ))}
+        </select>
+      </div>
+      <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
+        {t("Icon source hint")}
+      </span>
+    </Field>
+  );
+}
+
 // ── Provider detail ───────────────────────────────────────────────────────────
 
 function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
@@ -240,6 +274,8 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
           </button>
         )}
       </Field>
+
+      <IconField value={provider.icon} onChange={(v) => set("icon", v)} />
 
       <Field label="Base URL">
         <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
@@ -446,6 +482,8 @@ function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; onChang
         <Field label={t("ID *")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder={t("model-id")} mono /></Field>
         <Field label={t("Name")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("Display name")} /></Field>
       </div>
+
+      <IconField value={model.icon} onChange={(v) => set("icon", v)} />
 
       <Field label={t("API override")}>
         <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
@@ -1306,6 +1344,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
               ) : providers.map(([pName, pData]) => {
                 const isProviderSelected = selection?.type === "provider" && selection.name === pName;
                 const models = pData.models ?? [];
+                const providerIcon = pData.icon && hasProviderIcon(pData.icon) ? pData.icon : "";
                 return (
                   <div key={pName} style={{ marginBottom: 2 }}>
                     {/* Provider row */}
@@ -1315,13 +1354,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                       onMouseEnter={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "none"; }}
                     >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
-                        <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" />
-                        <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-                        <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-                        <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
-                        <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
-                      </svg>
+                      <ProviderIcon id={providerIcon} size={13} fallback={<ProviderGearIcon size={11} />} />
                       <span style={{ fontSize: 12, fontWeight: isProviderSelected ? 600 : 400, color: "var(--text)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {pName}
                       </span>
@@ -1330,6 +1363,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                     {/* Model rows */}
                     {models.map((m, i) => {
                       const isModelSelected = selection?.type === "model" && selection.providerName === pName && selection.index === i;
+                      const modelIcon = (m.icon && hasProviderIcon(m.icon)) ? m.icon : providerIcon;
                       return (
                         <div
                           key={i}
@@ -1338,6 +1372,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                           onMouseEnter={(e) => { if (!isModelSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
                           onMouseLeave={(e) => { if (!isModelSelected) e.currentTarget.style.background = "none"; }}
                         >
+                          <ProviderIcon id={modelIcon} size={11} fallback={<ProviderGearIcon size={10} />} />
                           <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: m.id ? "var(--text-muted)" : "var(--text-dim)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {m.id || t("new model")}
                           </span>

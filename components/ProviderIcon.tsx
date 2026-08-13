@@ -69,6 +69,56 @@ export function hasProviderIcon(providerId: string | null | undefined): boolean 
   return !!providerId && PROVIDER_ICONS[providerId] !== undefined;
 }
 
+/** All provider ids that have an icon — used by the ModelsConfig icon picker. */
+export const PROVIDER_ICON_IDS: string[] = Object.keys(PROVIDER_ICONS);
+
+/** The default fallback icon shown when a model has no provider icon and no custom icon. */
+export function ProviderGearIcon({ size }: { size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ color: "var(--text-muted)", flexShrink: 0 }}
+      aria-hidden="true"
+    >
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <rect x="9" y="9" width="6" height="6" />
+      <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
+      <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
+      <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
+      <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
+    </svg>
+  );
+}
+
+/**
+ * Resolve the icon id to render for a model.
+ * 1. A builtin provider icon, when the provider itself has one.
+ * 2. A custom icon picked in ModelsConfig (stored per-model and per-provider
+ *    in models.json; the route folds provider icons into each model and keeps
+ *    a bare provider key). Values are provider ids.
+ * 3. undefined → caller renders the default gear fallback.
+ */
+export function resolveProviderIcon(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+  modelIcons?: Record<string, string>,
+): string | undefined {
+  if (provider && PROVIDER_ICONS[provider]) return provider;
+  if (provider && modelIcons) {
+    const iconId = model ? (modelIcons[`${provider}:${model}`] ?? modelIcons[model]) : modelIcons[provider];
+    const resolved = iconId ?? modelIcons[provider];
+    if (resolved && PROVIDER_ICONS[resolved]) return resolved;
+  }
+  return undefined;
+}
+
 export function ProviderIcon({ id, size, fallback }: { id: string; size: number; fallback?: React.ReactNode }) {
   const pi = PROVIDER_ICONS[id];
   if (!pi) return fallback ?? null;

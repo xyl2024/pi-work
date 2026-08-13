@@ -15,7 +15,7 @@ import { CodeBlock, copyText } from "./CodeBlock";
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { useShowFileResults } from "@/hooks/showFileResultsStore";
 import { openSessionLibrary } from "@/hooks/sessionLibraryStore";
-import { ProviderIcon, hasProviderIcon } from "./ProviderIcon";
+import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "./ProviderIcon";
 import { ReadFileChips } from "./ReadFileChips";
 
 /**
@@ -51,6 +51,8 @@ interface Props {
   isStreaming?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
+  /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
+  modelIcons?: Record<string, string>;
   entryId?: string;
   onNavigate?: (entryId: string) => void;
   prevAssistantEntryId?: string;
@@ -150,7 +152,7 @@ function highlightKeywords(text: string, keywords?: string[], isSearchMatch?: bo
   return parts.length > 0 ? parts : text;
 }
 
-export function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, onOpenFile }: Props) {
+export function MessageView({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, onOpenFile }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
 
   if (message.role === "user") {
@@ -163,7 +165,7 @@ export function MessageView({ message, isStreaming, toolResults, modelNames, ent
   if (message.role === "assistant") {
     return (
       <div className={isFocused ? "search-flash" : undefined}>
-        <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} onOpenFile={onOpenFile} />
+        <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} onOpenFile={onOpenFile} />
       </div>
     );
   }
@@ -462,6 +464,7 @@ function AssistantMessageView({
   isStreaming,
   toolResults,
   modelNames,
+  modelIcons,
   showTimestamp,
   keywords,
   isSearchMatch,
@@ -474,6 +477,7 @@ function AssistantMessageView({
   isStreaming?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
+  modelIcons?: Record<string, string>;
   showTimestamp?: boolean;
   keywords?: string[];
   isSearchMatch?: boolean;
@@ -587,9 +591,11 @@ function AssistantMessageView({
       >
         {message.provider && (
           <>
-            {hasProviderIcon(message.provider) && (
-              <ProviderIcon id={message.provider} size={16} />
-            )}
+            <ProviderIcon
+              id={resolveProviderIcon(message.provider, message.model, modelIcons) ?? ""}
+              size={16}
+              fallback={<ProviderGearIcon size={16} />}
+            />
             <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
           </>
         )}
