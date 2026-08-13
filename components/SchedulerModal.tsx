@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
 import { useConfirm } from "./ConfirmDialog";
 import { Tooltip } from "./Tooltip";
+import { ProviderIcon } from "./ProviderIcon";
 
 type TaskRunStatus = "running" | "success" | "error" | "timeout";
 
@@ -46,12 +47,34 @@ interface Props {
   onOpenSession: (sessionId: string) => void;
 }
 
+interface ModelMeta {
+  modelList: { id: string; name: string; provider: string }[];
+  thinkingLevels: Record<string, string[]>;
+  thinkingLevelMaps: Record<string, Record<string, string | null>>;
+  defaultModel: { provider: string; modelId: string } | null;
+}
+
 type View =
   | { kind: "list" }
   | { kind: "runs"; taskId: string }
   | { kind: "form"; editingId: string | null };
 
-const EMPTY_FORM = {
+type ToolMode = "all" | "none" | "custom";
+
+interface TaskForm {
+  name: string;
+  cron: string;
+  cwd: string;
+  prompt: string;
+  enabled: boolean;
+  provider: string;
+  modelId: string;
+  thinkingLevel: string;
+  toolMode: ToolMode;
+  toolNames: string;
+}
+
+const EMPTY_FORM: TaskForm = {
   name: "",
   cron: "",
   cwd: "",
@@ -60,7 +83,30 @@ const EMPTY_FORM = {
   provider: "",
   modelId: "",
   thinkingLevel: "",
+  toolMode: "all",
   toolNames: "",
+};
+
+// Mirrors the chat input bar's thinking picker (ChatInput.tsx): level →
+// indicator color + per-level description, reused by the scheduler form.
+const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVEL_COLOR: Record<(typeof THINKING_LEVELS)[number], string> = {
+  auto: "var(--text-dim)",
+  off: "#94a3b8",
+  minimal: "#38bdf8",
+  low: "#3b82f6",
+  medium: "#8b5cf6",
+  high: "#f97316",
+  xhigh: "#ef4444",
+};
+const THINKING_DESC: Record<(typeof THINKING_LEVELS)[number], string> = {
+  auto: "Use pi default",
+  off: "Disable reasoning",
+  minimal: "Minimal reasoning",
+  low: "Low reasoning",
+  medium: "Medium reasoning",
+  high: "High reasoning",
+  xhigh: "Highest reasoning",
 };
 
 function formatDateTime(ts: number | null): string {
@@ -82,6 +128,23 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
   const [triggering, setTriggering] = useState<string | null>(null);
+  const [modelMeta, setModelMeta] = useState<ModelMeta | null>(null);
+
+  const loadModels = useCallback(async () => {
+    try {
+      const res = await fetch("/api/models");
+      if (!res.ok) return;
+      const data = (await res.json()) as Partial<ModelMeta>;
+      setModelMeta({
+        modelList: data.modelList ?? [],
+        thinkingLevels: data.thinkingLevels ?? {},
+        thinkingLevelMaps: data.thinkingLevelMaps ?? {},
+        defaultModel: data.defaultModel ?? null,
+      });
+    } catch {
+      // Model metadata is an optional nicety — fall back to the default options silently.
+    }
+  }, []);
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -115,13 +178,14 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
   useEffect(() => {
     if (open) {
       void loadTasks();
+      void loadModels();
       setView({ kind: "list" });
     } else {
       setView({ kind: "list" });
       setRuns([]);
       setForm({ ...EMPTY_FORM });
     }
-  }, [open, loadTasks]);
+  }, [open, loadTasks, loadModels]);
 
   useEffect(() => {
     if (open && view.kind === "runs") void loadRuns(view.taskId);
@@ -142,6 +206,7 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
   };
 
   const openEditForm = (task: ScheduledTask) => {
+    const toolNames = task.toolNames ?? [];
     setForm({
       name: task.name,
       cron: task.cron,
@@ -151,7 +216,8 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
       provider: task.provider ?? "",
       modelId: task.modelId ?? "",
       thinkingLevel: task.thinkingLevel ?? "",
-      toolNames: (task.toolNames ?? []).join(", "),
+      toolMode: task.toolNames === null ? "all" : toolNames.length === 0 ? "none" : "custom",
+      toolNames: toolNames.join(", "),
     });
     setView({ kind: "form", editingId: task.id });
   };
@@ -172,6 +238,10 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
       .split(",")
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
+    let toolNames: string[] | null;
+    if (form.toolMode === "all") toolNames = null;
+    else if (form.toolMode === "none") toolNames = [];
+    else toolNames = toolNamesArr.length > 0 ? toolNamesArr : null;
     const body = {
       name: form.name.trim(),
       cron: form.cron.trim(),
@@ -181,7 +251,7 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
       provider: form.provider.trim() || null,
       modelId: form.modelId.trim() || null,
       thinkingLevel: form.thinkingLevel.trim() || null,
-      toolNames: toolNamesArr.length > 0 ? toolNamesArr : null,
+      toolNames,
     };
     try {
       let res: Response;
@@ -418,6 +488,7 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
             saving={saving}
             onSave={() => void saveForm()}
             onCancel={cancelForm}
+            meta={modelMeta}
           />
         )}
       </div>
@@ -793,12 +864,14 @@ function FormBody({
   saving,
   onSave,
   onCancel,
+  meta,
 }: {
-  form: typeof EMPTY_FORM;
-  setForm: (f: typeof EMPTY_FORM) => void;
+  form: TaskForm;
+  setForm: (f: TaskForm) => void;
   saving: boolean;
   onSave: () => void;
   onCancel: () => void;
+  meta: ModelMeta | null;
 }) {
   const { t } = useI18n();
   return (
@@ -831,23 +904,10 @@ function FormBody({
         />
       </Field>
 
-      <details style={{ color: "var(--text-muted)", fontSize: 11 }}>
-        <summary style={{ cursor: "pointer", userSelect: "none" }}>{t("Provider (optional)")}</summary>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 8 }}>
-          <Field label={t("Provider (optional)")}>
-            <input value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })} placeholder={t("Default model")} style={inputStyle} />
-          </Field>
-          <Field label={t("Model (optional)")}>
-            <input value={form.modelId} onChange={(e) => setForm({ ...form, modelId: e.target.value })} style={inputStyle} />
-          </Field>
-          <Field label={t("Thinking level (optional)")}>
-            <input value={form.thinkingLevel} onChange={(e) => setForm({ ...form, thinkingLevel: e.target.value })} style={inputStyle} />
-          </Field>
-          <Field label={t("Tool names (optional, comma-separated)")}>
-            <input value={form.toolNames} onChange={(e) => setForm({ ...form, toolNames: e.target.value })} style={inputStyle} />
-          </Field>
-        </div>
-      </details>
+      {/* Model / thinking / tools — dropdown selectors mirroring the chat input bar */}
+      <ModelSelect form={form} setForm={setForm} meta={meta} />
+      <ThinkingSelect form={form} setForm={setForm} meta={meta} />
+      <ToolsSelect form={form} setForm={setForm} />
 
       <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)" }}>
         <input
@@ -887,6 +947,410 @@ function FormBody({
         </button>
       </div>
     </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <polyline points="1.5 5 4 7.5 8.5 2.5" />
+    </svg>
+  );
+}
+
+function optionButtonStyle(active: boolean): React.CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    padding: "6px 10px",
+    borderRadius: 5,
+    background: active ? "var(--bg-selected)" : "none",
+    border: "none",
+    color: active ? "var(--text)" : "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 12,
+    textAlign: "left",
+    fontWeight: active ? 600 : 400,
+    whiteSpace: "nowrap",
+  };
+}
+
+/**
+ * A form-field dropdown that opens a fixed-position panel below the button
+ * (flips upward when there is no room). The panel is a DOM child of the
+ * trigger wrapper, so outside-click detection covers both; scrolling the
+ * form closes it so the panel never detaches from its button.
+ */
+function FieldDropdown({
+  trigger,
+  children,
+  panelWidth,
+}: {
+  trigger: (open: boolean, toggle: () => void) => React.ReactNode;
+  children: (close: () => void) => React.ReactNode;
+  panelWidth?: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number; upward: boolean } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener("mousedown", handler);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
+  const toggle = () => {
+    if (!open) {
+      const btn = wrapRef.current?.querySelector("[data-dropdown-anchor]") as HTMLElement | null;
+      if (btn) {
+        const r = btn.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - r.bottom;
+        const upward = spaceBelow < 320;
+        setRect({
+          top: upward ? Math.max(8, r.top - 300) : r.bottom + 4,
+          left: r.left,
+          width: r.width,
+          upward,
+        });
+      }
+    }
+    setOpen((v) => !v);
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative" }}>
+      {trigger(open, toggle)}
+      {open && rect && (
+        <div
+          style={{
+            position: "fixed",
+            top: rect.top,
+            left: rect.left,
+            minWidth: rect.width,
+            width: panelWidth,
+            maxHeight: Math.min(300, rect.upward ? rect.top - 8 : window.innerHeight - rect.top - 8),
+            overflowY: "auto",
+            zIndex: 1200,
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
+            padding: 4,
+            boxSizing: "border-box",
+          }}
+        >
+          {children(() => setOpen(false))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Field wrapper + trigger button for the model / thinking dropdowns. */
+function FieldSelect({
+  label,
+  display,
+  icon,
+  panelWidth,
+  children,
+}: {
+  label: string;
+  display: React.ReactNode;
+  icon?: React.ReactNode;
+  panelWidth?: number;
+  children: (close: () => void) => React.ReactNode;
+}) {
+  return (
+    <Field label={label}>
+      <FieldDropdown
+        panelWidth={panelWidth}
+        trigger={(open, toggle) => (
+          <button
+            data-dropdown-anchor
+            onClick={toggle}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              ...inputStyle,
+              cursor: "pointer",
+              textAlign: "left",
+              background: open ? "var(--bg-hover)" : "var(--bg)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+            }}
+          >
+            {icon}
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", color: "var(--text)" }}>
+              {display}
+            </span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
+      >
+        {children}
+      </FieldDropdown>
+    </Field>
+  );
+}
+
+function ModelSelect({
+  form,
+  setForm,
+  meta,
+}: {
+  form: TaskForm;
+  setForm: (f: TaskForm) => void;
+  meta: ModelMeta | null;
+}) {
+  const { t } = useI18n();
+  const options = meta?.modelList ?? [];
+  const isDefault = !form.provider && !form.modelId;
+  const current = options.find((o) => o.provider === form.provider && o.id === form.modelId);
+  const groups: { provider: string; options: { id: string; name: string; provider: string }[] }[] = [];
+  for (const opt of options) {
+    const g = groups.find((x) => x.provider === opt.provider);
+    if (g) g.options.push(opt);
+    else groups.push({ provider: opt.provider, options: [opt] });
+  }
+
+  return (
+    <FieldSelect
+      label={t("Model")}
+      icon={
+        <ProviderIcon
+          id={current?.provider ?? ""}
+          size={12}
+          fallback={
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="4" width="16" height="16" rx="2" />
+              <rect x="9" y="9" width="6" height="6" />
+              <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
+              <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
+              <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
+              <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
+            </svg>
+          }
+        />
+      }
+      display={
+        isDefault ? (
+          <span style={{ color: "var(--text-dim)" }}>
+            {t("Default model")}
+            {meta?.defaultModel ? ` (${meta.defaultModel.modelId})` : ""}
+          </span>
+        ) : (
+          current?.name ?? `${form.provider}/${form.modelId}`
+        )
+      }
+      panelWidth={300}
+    >
+      {(close) => (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <button
+            onClick={() => { setForm({ ...form, provider: "", modelId: "" }); close(); }}
+            style={optionButtonStyle(isDefault)}
+          >
+            {isDefault ? <CheckIcon /> : <span style={{ width: 10, flexShrink: 0 }} />}
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{t("Default model")}</span>
+            {meta?.defaultModel && (
+              <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 150 }}>
+                {meta.defaultModel.modelId}
+              </span>
+            )}
+          </button>
+          {options.length === 0 && (
+            <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-dim)" }}>{t("No models available")}</div>
+          )}
+          {groups.map((g, gi) => (
+            <div key={g.provider}>
+              <div
+                style={{
+                  padding: "6px 10px 3px",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "var(--text-dim)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  borderTop: gi > 0 ? "1px solid var(--border)" : "none",
+                }}
+              >
+                {g.provider}
+              </div>
+              {g.options.map((opt) => {
+                const active = opt.provider === form.provider && opt.id === form.modelId;
+                return (
+                  <button
+                    key={`${opt.provider}:${opt.id}`}
+                    onClick={() => { setForm({ ...form, provider: opt.provider, modelId: opt.id }); close(); }}
+                    style={optionButtonStyle(active)}
+                  >
+                    {active ? <CheckIcon /> : <span style={{ width: 10, flexShrink: 0 }} />}
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{opt.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </FieldSelect>
+  );
+}
+
+function ThinkingSelect({
+  form,
+  setForm,
+  meta,
+}: {
+  form: TaskForm;
+  setForm: (f: TaskForm) => void;
+  meta: ModelMeta | null;
+}) {
+  const { t } = useI18n();
+  const key = form.provider && form.modelId ? `${form.provider}:${form.modelId}` : null;
+  const available = key ? meta?.thinkingLevels[key] : undefined;
+  const levelMap = key ? meta?.thinkingLevelMaps[key] : undefined;
+  const current = (form.thinkingLevel || "auto") as (typeof THINKING_LEVELS)[number];
+  const currentMapped = current !== "auto" && levelMap ? levelMap[current] : undefined;
+  const currentDisplay = currentMapped != null && currentMapped !== current ? currentMapped : current;
+
+  return (
+    <FieldSelect
+      label={t("Thinking level")}
+      display={
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: THINKING_LEVEL_COLOR[current], flexShrink: 0 }} />
+          {current === "auto" ? t("Use pi default") : currentDisplay}
+        </span>
+      }
+      panelWidth={280}
+    >
+      {(close) => (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {THINKING_LEVELS.filter((lvl) => {
+            if (lvl === "auto") return true;
+            if (!available) return true;
+            return available.includes(lvl);
+          }).map((lvl) => {
+            const active = current === lvl;
+            const mappedVal = lvl !== "auto" && levelMap ? levelMap[lvl] : undefined;
+            const displayLabel = mappedVal != null && mappedVal !== lvl ? mappedVal : lvl;
+            const showOriginal = mappedVal != null && mappedVal !== lvl;
+            return (
+              <button
+                key={lvl}
+                onClick={() => { setForm({ ...form, thinkingLevel: lvl === "auto" ? "" : lvl }); close(); }}
+                style={optionButtonStyle(active)}
+              >
+                {active ? <CheckIcon /> : <span style={{ width: 10, flexShrink: 0 }} />}
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: THINKING_LEVEL_COLOR[lvl], flexShrink: 0 }} />
+                <span style={{ flex: 1 }}>
+                  {displayLabel}
+                  {showOriginal && (
+                    <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>
+                  )}
+                </span>
+                <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{t(THINKING_DESC[lvl])}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </FieldSelect>
+  );
+}
+
+function ToolsSelect({ form, setForm }: { form: TaskForm; setForm: (f: TaskForm) => void }) {
+  const { t } = useI18n();
+  const modes: { id: ToolMode; label: string; desc: string }[] = [
+    { id: "all", label: t("All tools"), desc: t("All available tools") },
+    { id: "none", label: t("No tools"), desc: t("No tools, chat only") },
+    { id: "custom", label: t("Custom tools"), desc: "" },
+  ];
+  return (
+    <Field label={t("Tools")}>
+      <FieldDropdown
+        panelWidth={300}
+        trigger={(open, toggle) => (
+          <button
+            data-dropdown-anchor
+            onClick={toggle}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              ...inputStyle,
+              cursor: "pointer",
+              textAlign: "left",
+              background: open ? "var(--bg-hover)" : "var(--bg)",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+            }}
+          >
+            <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+              {form.toolMode === "all"
+                ? t("All tools")
+                : form.toolMode === "none"
+                  ? t("No tools")
+                  : form.toolNames.trim()
+                    ? form.toolNames
+                    : t("Custom tools")}
+            </span>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        )}
+      >
+        {(close) => (
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {modes.map((m) => {
+              const active = form.toolMode === m.id;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => { setForm({ ...form, toolMode: m.id }); if (m.id !== "custom") close(); }}
+                  style={optionButtonStyle(active)}
+                >
+                  {active ? <CheckIcon /> : <span style={{ width: 10, flexShrink: 0 }} />}
+                  <span style={{ flex: 1 }}>{m.label}</span>
+                  {m.desc && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{m.desc}</span>}
+                </button>
+              );
+            })}
+            {form.toolMode === "custom" && (
+              <div style={{ padding: "6px 8px 8px", borderTop: "1px solid var(--border)", marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{t("Comma-separated tool names")}</div>
+                <input
+                  value={form.toolNames}
+                  onChange={(e) => setForm({ ...form, toolNames: e.target.value })}
+                  placeholder="bash, file_write, agent_todo"
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </FieldDropdown>
+    </Field>
   );
 }
 
