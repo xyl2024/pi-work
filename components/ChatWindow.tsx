@@ -8,12 +8,14 @@ import type {
   SessionInfo,
   ToolCallContent,
   ToolResultMessage,
+  ReadFileInfo,
 } from "@/lib/types";
 import {
   countToolCallsByName,
   getAssistantErrorMessage,
   splitFinalAssistantBlocks,
 } from "@/lib/message-display";
+import { getFileName, joinFilePath } from "@/lib/file-paths";
 import { MessageView, CollapseNonceProvider, useCollapseNonce } from "./MessageView";
 import { SessionLibraryModal } from "./session-library/SessionLibraryModal";
 import { SessionLibraryOpenButton } from "./SessionLibraryOpenButton";
@@ -78,6 +80,18 @@ function phaseLabel(phase: AgentPhase, t: ReturnType<typeof useI18n>["t"]): stri
   }
   if (phase?.kind === "waiting_model") return t("Waiting for model...");
   return t("Thinking...");
+}
+
+/** Resolve a `read` tool's raw path against the session cwd. Mirrors the
+ *  resolver used by the Session Library grid: absolute paths and Windows
+ *  drive/UNC paths pass through; anything else is joined onto cwd. pi itself
+ *  strips a leading "@" from tool paths, so we mirror that too. Returns null
+ *  when a relative path can't be resolved (no cwd known). */
+function resolveReadPath(raw: string, cwd?: string | null): string | null {
+  const p = raw.startsWith("@") ? raw.slice(1) : raw;
+  if (p.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith("\\\\")) return p;
+  if (!cwd) return null;
+  return joinFilePath(cwd, p);
 }
 
 // Starter prompt chips shown on the brand-new (empty) session screen.
@@ -1279,6 +1293,8 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                   showTimestamp?: boolean;
                   keySuffix?: string;
                   afterContent?: React.ReactNode;
+                  readFiles?: ReadFileInfo[];
+                  onOpenFile?: (filePath: string, fileName: string) => void;
                 } = {},
               ): React.ReactNode => {
                 const msg = opts.messageOverride ?? renderMessages[idx];
@@ -1321,6 +1337,8 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     isSearchMatch={matchedEntryIds.has(renderEntryIds[idx])}
                     afterContent={opts.afterContent}
                     turnDuration={turnDurationMap.get(idx)}
+                    readFiles={opts.readFiles}
+                    onOpenFile={opts.onOpenFile}
                   />
                 );
                 if (currentRefIdx === -1) return view;
@@ -1359,6 +1377,34 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                   idx = endIdx;
                   continue;
                 }
+
+                // Turn-level `read` files: collect every read tool call across
+                // this turn's assistant messages, dedupe by resolved path, and
+                // drop errored results (read of a nonexistent path). Surfaced
+                // as footer chips on the final assistant message.
+                const turnCwd = session?.cwd ?? cwd ?? null;
+                const readFiles: ReadFileInfo[] = (() => {
+                  const seen = new Set<string>();
+                  const out: ReadFileInfo[] = [];
+                  for (let i = userIdx + 1; i < endIdx; i++) {
+                    const m = renderMessages[i];
+                    if (m.role !== "assistant") continue;
+                    for (const block of (m as AssistantMessage).content ?? []) {
+                      if (block.type !== "toolCall") continue;
+                      const tc = block as ToolCallContent;
+                      if (tc.toolName !== "read") continue;
+                      const result = toolResultsMap.get(tc.toolCallId);
+                      if (result?.isError) continue;
+                      const raw = tc.input?.path;
+                      if (typeof raw !== "string" || !raw.trim()) continue;
+                      const resolved = resolveReadPath(raw.trim(), turnCwd);
+                      if (!resolved || seen.has(resolved)) continue;
+                      seen.add(resolved);
+                      out.push({ path: resolved, name: getFileName(resolved) });
+                    }
+                  }
+                  return out;
+                })();
 
                 // Anchor message (user)
                 rendered.push(renderOne(userIdx));
@@ -1416,6 +1462,10 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                         attachRef: false,
                         keySuffix: "process-final",
                         showTimestamp: false,
+                        // No answer clone means this is the turn's visual end —
+                        // host the read-file chips here instead.
+                        readFiles: finalAnswerMessage ? undefined : readFiles,
+                        onOpenFile: handleOpenFileFromLibrary,
                       })}
                   </Fragment>
                 );
@@ -1442,6 +1492,8 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                       messageOverride: finalAnswerMessage,
                       keySuffix: "answer",
                       afterContent: null,
+                      readFiles,
+                      onOpenFile: handleOpenFileFromLibrary,
                     }),
                   );
                 }

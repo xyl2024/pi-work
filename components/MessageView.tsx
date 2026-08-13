@@ -16,6 +16,7 @@ import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { useShowFileResults } from "@/hooks/showFileResultsStore";
 import { openSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { ProviderIcon, hasProviderIcon } from "./ProviderIcon";
+import { ReadFileChips } from "./ReadFileChips";
 
 /**
  * Bumped from ChatWindow every time the user clicks "全部折叠". Subscribed
@@ -42,6 +43,7 @@ import type {
   ImageContent,
   ToolCallContent,
   ThinkingContent,
+  ReadFileInfo,
 } from "@/lib/types";
 
 interface Props {
@@ -68,6 +70,11 @@ interface Props {
    *  time of this assistant (missing while the turn is still streaming);
    *  running = the turn's tail is currently streaming (drives the live tick). */
   turnDuration?: { startMs: number; endMs?: number; running?: boolean };
+  /** Files surfaced by this turn's `read` tool calls (footer chips). Only set
+   *  on the anchor message of a turn. */
+  readFiles?: ReadFileInfo[];
+  /** Open a file in the right-hand panel (threaded from AppShell). */
+  onOpenFile?: (filePath: string, fileName: string) => void;
 }
 
 function formatTime(ts?: number): string | null {
@@ -143,7 +150,7 @@ function highlightKeywords(text: string, keywords?: string[], isSearchMatch?: bo
   return parts.length > 0 ? parts : text;
 }
 
-export function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration }: Props) {
+export function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, onOpenFile }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
 
   if (message.role === "user") {
@@ -156,7 +163,7 @@ export function MessageView({ message, isStreaming, toolResults, modelNames, ent
   if (message.role === "assistant") {
     return (
       <div className={isFocused ? "search-flash" : undefined}>
-        <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} />
+        <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} onOpenFile={onOpenFile} />
       </div>
     );
   }
@@ -460,6 +467,8 @@ function AssistantMessageView({
   isSearchMatch,
   afterContent,
   turnDuration,
+  readFiles,
+  onOpenFile,
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
@@ -470,6 +479,8 @@ function AssistantMessageView({
   isSearchMatch?: boolean;
   afterContent?: React.ReactNode;
   turnDuration?: { startMs: number; endMs?: number; running?: boolean };
+  readFiles?: ReadFileInfo[];
+  onOpenFile?: (filePath: string, fileName: string) => void;
   sessionId?: string;
   entryId?: string;
 }) {
@@ -709,6 +720,9 @@ function AssistantMessageView({
             )}
           </button>
           </Tooltip>
+        )}
+        {readFiles && readFiles.length > 0 && onOpenFile && (
+          <ReadFileChips files={readFiles} onOpenFile={onOpenFile} />
         )}
         {turnDuration && (turnDuration.endMs !== undefined || turnDuration.running) && (
           <span style={{ fontSize: 10, color: "var(--text-dim)" }}>

@@ -34,6 +34,14 @@ export interface ToolCallContent {
   input: Record<string, unknown>;
 }
 
+/** One file surfaced by a turn's `read` tool calls (footer chips). */
+export interface ReadFileInfo {
+  /** Absolute path (resolved from the tool input against the session cwd). */
+  path: string;
+  /** Basename shown on the chip. */
+  name: string;
+}
+
 export type AssistantContentBlock = TextContent | ImageContent | ThinkingContent | ToolCallContent;
 
 export interface UserMessage {
