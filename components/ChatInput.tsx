@@ -8,6 +8,7 @@ import { IconHoverButton } from "./IconHoverButton";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "./ProviderIcon";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { CwdPicker } from "./CwdPicker";
+import { AnimatedPopover } from "./AnimatedPopover";
 import { DEFAULT_TYPEWRITER_PHRASES } from "@/lib/typewriter-phrases";
 
 export interface AttachedImage {
@@ -1165,64 +1166,18 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     />
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
                   </button>
-                  {modelDropdownOpen && modelDropdownRect && (() => {
-                    const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
-                    const bottom = viewportHeight - modelDropdownRect.top + 6;
-                    const maxH = Math.max(120, Math.min(modelDropdownRect.top - 8, viewportHeight * 0.6));
-                    return (
-                    <div ref={modelDropdownPanelRef} style={{
-                      position: "fixed",
-                      bottom, left: modelDropdownRect.left,
-                      zIndex: 500, background: "var(--bg)", border: "1px solid var(--border)",
-                      borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                      overflow: "hidden", width: "max-content", minWidth: modelDropdownRect.width, maxHeight: maxH, overflowY: "auto",
-                    }}>
-                      {modelsByProvider.map((group, gi) => (
-                        <div key={group.provider}>
-                          {(modelsByProvider.length > 1) && (
-                            <div style={{
-                              display: "flex", alignItems: "center", gap: 5,
-                              padding: "6px 12px 4px",
-                              fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
-                              textTransform: "uppercase", letterSpacing: "0.07em",
-                              borderTop: gi > 0 ? "1px solid var(--border)" : "none",
-                            }}>
-                              <ProviderIcon id={resolveProviderIcon(group.provider, undefined, modelIcons) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
-                              <span>{group.provider}</span>
-                            </div>
-                          )}
-                          {group.options.map((opt) => {
-                            const isActive = opt.modelId === model?.modelId && opt.provider === model?.provider;
-                            return (
-                              <button
-                                key={`${opt.provider}:${opt.modelId}`}
-                                onClick={() => { setModelDropdownOpen(false); if (!isActive) onModelChange(opt.provider, opt.modelId); }}
-                                style={{
-                                  display: "flex", alignItems: "center", gap: 8,
-                                  width: "100%", padding: "7px 12px",
-                                  background: isActive ? "var(--bg-selected)" : "none",
-                                  border: "none",
-                                  color: isActive ? "var(--text)" : "var(--text-muted)",
-                                  cursor: "pointer", fontSize: 12, textAlign: "left",
-                                  fontWeight: isActive ? 600 : 400,
-                                  whiteSpace: "nowrap",
-                                }}
-                                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                              >
-                                {isActive
-                                  ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                                  : <span style={{ width: 10, flexShrink: 0 }} />}
-                                <ProviderIcon id={resolveProviderIcon(opt.provider, opt.modelId, modelIcons) ?? ""} size={12} fallback={<ProviderGearIcon size={11} />} />
-                                {opt.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ))}
-                    </div>
-                    );
-                  })()}
+                  <ModelDropdownPanel
+                    rect={modelDropdownRect}
+                    open={modelDropdownOpen}
+                    groups={modelsByProvider}
+                    activeModel={model}
+                    modelIcons={modelIcons}
+                    panelRef={modelDropdownPanelRef}
+                    onSelect={(provider, modelId, isActive) => {
+                      setModelDropdownOpen(false);
+                      if (!isActive) onModelChange(provider, modelId);
+                    }}
+                  />
                 </div>
             )}
 
@@ -1324,13 +1279,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }
                   label={t("Thinking")}
                 />
-                {thinkingDropdownOpen && (
-                  <div style={{
+                <AnimatedPopover
+                  open={thinkingDropdownOpen}
+                  style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                    overflow: "hidden", minWidth: 180,
-                  }}>
+                    zIndex: 100, background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    borderRadius: 10, boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+                    minWidth: 180,
+                  }}
+                >
                     {THINKING_LEVELS.filter((lvl) => {
                       if (!availableThinkingLevels) return true;
                       if (lvl === "auto") return true;
@@ -1369,8 +1326,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </button>
                       );
                     })}
-                  </div>
-                )}
+                </AnimatedPopover>
               </div>
             )}
             {!isStreaming && onToolPresetChange && (
@@ -1385,13 +1341,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   }
                   label={t("Tools")}
                 />
-                {toolDropdownOpen && (
-                  <div style={{
+                <AnimatedPopover
+                  open={toolDropdownOpen}
+                  style={{
                     position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg)", border: "1px solid var(--border)",
-                    borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
-                    overflow: "hidden", minWidth: 120,
-                  }}>
+                    zIndex: 100, background: "var(--bg-panel)", border: "1px solid var(--border)",
+                    borderRadius: 10, boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+                    minWidth: 120,
+                  }}
+                >
                     {TOOL_PRESETS.map((lvl) => {
                       const preset = TOOL_PRESET_MAP[lvl];
                       const isActive = toolPreset === preset;
@@ -1421,8 +1379,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                         </button>
                       );
                     })}
-                  </div>
-                )}
+                </AnimatedPopover>
               </div>
             )}
 
@@ -1458,3 +1415,88 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     </div>
   );
 });
+
+/** Model-list popover for the chat input: an upward-expanding list anchored
+ *  to the model button, animated via AnimatedPopover and clamped to the
+ *  space above the input. Stays mounted (measured while invisible) so both
+ *  open and close animate; long lists become scrollable once the height
+ *  transition settles. */
+function ModelDropdownPanel({ rect, open, groups, activeModel, modelIcons, panelRef, onSelect }: {
+  rect: { top: number; left: number; width: number } | null;
+  open: boolean;
+  groups: { provider: string; options: ModelOption[] }[];
+  activeModel: { provider: string; modelId: string } | null | undefined;
+  modelIcons?: Record<string, string>;
+  panelRef?: React.Ref<HTMLDivElement>;
+  onSelect: (provider: string, modelId: string, isActive: boolean) => void;
+}) {
+  // Before the first click `rect` is null: park the invisible panel
+  // off-screen (it is opacity 0 / height 0 / no pointer events when closed).
+  const viewportHeight = typeof window === "undefined" ? 0 : (window.visualViewport?.height ?? window.innerHeight);
+  const maxH = Math.max(120, Math.min((rect?.top ?? viewportHeight) - 8, viewportHeight * 0.6));
+
+  return (
+    <AnimatedPopover
+      open={open}
+      maxHeight={maxH}
+      panelRef={panelRef}
+      style={{
+        position: "fixed",
+        ...(rect
+          ? { bottom: viewportHeight - rect.top + 6, left: rect.left }
+          : { top: -9999, left: 0 }),
+        zIndex: 500,
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+        width: "max-content",
+        minWidth: rect?.width ?? 0,
+      }}
+    >
+      {groups.map((group, gi) => (
+        <div key={group.provider}>
+          {(groups.length > 1) && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 5,
+              padding: "6px 12px 4px",
+              fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
+              textTransform: "uppercase", letterSpacing: "0.07em",
+              borderTop: gi > 0 ? "1px solid var(--border)" : "none",
+            }}>
+              <ProviderIcon id={resolveProviderIcon(group.provider, undefined, modelIcons) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
+              <span>{group.provider}</span>
+            </div>
+          )}
+          {group.options.map((opt) => {
+            const isActive = opt.modelId === activeModel?.modelId && opt.provider === activeModel?.provider;
+            return (
+              <button
+                key={`${opt.provider}:${opt.modelId}`}
+                onClick={() => onSelect(opt.provider, opt.modelId, isActive)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", padding: "7px 12px",
+                  background: isActive ? "var(--bg-selected)" : "none",
+                  border: "none",
+                  color: isActive ? "var(--text)" : "var(--text-muted)",
+                  cursor: "pointer", fontSize: 12, textAlign: "left",
+                  fontWeight: isActive ? 600 : 400,
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+              >
+                {isActive
+                  ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
+                  : <span style={{ width: 10, flexShrink: 0 }} />}
+                <ProviderIcon id={resolveProviderIcon(opt.provider, opt.modelId, modelIcons) ?? ""} size={12} fallback={<ProviderGearIcon size={11} />} />
+                {opt.name}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </AnimatedPopover>
+  );
+}

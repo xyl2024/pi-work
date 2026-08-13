@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkspacesResponse } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
+import { AnimatedPopover } from "./AnimatedPopover";
 import { useToast } from "./Toast";
 
 /**
@@ -232,24 +233,23 @@ export function CwdPicker({
         </button>
       </Tooltip>
 
-      {open && (
-        <div
-          role="listbox"
-          style={{
-            position: "absolute",
-            ...(up ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }),
-            left: 0,
-            zIndex: 100,
-            minWidth: 280,
-            maxWidth: 360,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 6px 20px rgba(0,0,0,0.32)",
-            overflow: "hidden",
-            fontSize: 12,
-          }}
-        >
+      <AnimatedPopover
+        open={open}
+        role="listbox"
+        style={{
+          position: "absolute",
+          ...(up ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }),
+          left: 0,
+          zIndex: 100,
+          minWidth: 280,
+          maxWidth: 360,
+          background: "var(--bg-panel)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+          fontSize: 12,
+        }}
+      >
           <div style={{ maxHeight: 320, overflowY: "auto" }}>
             {/* Pinned section */}
             {pinnedCwds.length > 0 && (
@@ -524,8 +524,7 @@ export function CwdPicker({
               </div>
             </div>
           )}
-        </div>
-      )}
+      </AnimatedPopover>
     </div>
   );
 }

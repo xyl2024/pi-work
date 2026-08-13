@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
 import { Tooltip } from "./Tooltip";
+import { AnimatedPopover } from "./AnimatedPopover";
 import { ProviderIcon } from "./ProviderIcon";
 import {
   DEFAULT_TARGET_LANGUAGE,
@@ -282,6 +283,11 @@ export function TranslatePanel() {
     return modelOptions.find((o) => o.provider === model.provider && o.modelId === model.modelId)?.name ?? model.modelId;
   }, [model, modelOptions]);
 
+  // Height cap for the model dropdown (space below the trigger). SSR-safe:
+  // the dropdown stays mounted even while closed, so `window` is guarded.
+  const viewportHeight = typeof window === "undefined" ? 0 : window.innerHeight;
+  const modelDropdownMaxH = Math.max(120, Math.min(viewportHeight - (modelDropdownRect?.top ?? 0) - 40, 360));
+
   return (
     <div style={{
       display: "flex", flexDirection: "column", height: "100%",
@@ -318,21 +324,24 @@ export function TranslatePanel() {
               {currentName ?? t("Model")}
             </span>
           </button>
-          {modelDropdownOpen && modelDropdownRect && (
-            <div ref={panelRef} style={{
+          <AnimatedPopover
+            open={modelDropdownOpen}
+            maxHeight={modelDropdownMaxH}
+            panelRef={panelRef}
+            style={{
               position: "fixed",
-              top: modelDropdownRect.top + 32,
-              left: modelDropdownRect.left,
+              ...(modelDropdownRect
+                ? { top: modelDropdownRect.top + 32, left: modelDropdownRect.left }
+                : { top: -9999, left: 0 }),
               zIndex: 500,
-              background: "var(--bg)",
+              background: "var(--bg-panel)",
               border: "1px solid var(--border)",
-              borderRadius: 8,
-              boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+              borderRadius: 10,
+              boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
               width: "max-content",
-              minWidth: modelDropdownRect.width,
-              maxHeight: Math.max(120, Math.min(window.innerHeight - modelDropdownRect.top - 40, 360)),
-              overflowY: "auto",
-            }}>
+              minWidth: modelDropdownRect?.width ?? 0,
+            }}
+          >
               {modelsByProvider.map((group, gi) => (
                 <div key={group.provider}>
                   {modelsByProvider.length > 1 && (
@@ -377,8 +386,7 @@ export function TranslatePanel() {
                   })}
                 </div>
               ))}
-            </div>
-          )}
+          </AnimatedPopover>
         </div>
         {/* Target-language toggle. A single button whose label always shows
             the *other* language (the action it performs on click). The label
