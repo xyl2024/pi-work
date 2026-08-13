@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionUiState, useSessionLeafChange, resetSessionUi } from "@/hooks/sessionUiStore";
 import { SessionSidebar } from "./SessionSidebar";
+import { ContextUsageBar } from "./ContextUsageBar";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
@@ -297,7 +298,7 @@ export function AppShell() {
   // stats, context usage) is owned by useAgentSession in ChatWindow and
   // published to a module-level store. The top bar / conversation-tree panel
   // / context panel here read from that store.
-  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning } = useSessionUiState();
+  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, contextUsage } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
 
   // Tools list — fetched once per session, cached for button clicks
@@ -1245,6 +1246,11 @@ export function AppShell() {
               )}
             </div>
           )}
+          {/* Context usage meter — same row as the top-bar buttons,
+              pushed to the right edge with marginLeft auto. Reads
+              contextUsage from the session UI store (published by
+              useAgentSession). */}
+          {showChat && contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
           {/* Top panel dropdown — shared, only one active at a time */}
           <CollapsiblePanel
             open={activeTopPanel !== null}

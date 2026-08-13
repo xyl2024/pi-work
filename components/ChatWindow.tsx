@@ -377,7 +377,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const {
     loading, error, messages, entryIds, entryTimestamps, streamState,
     agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
-    retryInfo, contextUsage,
+    retryInfo,
     displayModel: displayModelValue,
     agentPhase,
     isNew,
@@ -1105,7 +1105,6 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         availableThinkingLevels={availableThinkingLevels}
         thinkingLevelMap={currentThinkingLevelMap}
         retryInfo={retryInfo}
-        contextUsage={contextUsage}
         slashResources={slashResources}
         slashResourceKey={slashResourceKey}
         onSlashAction={(action) => { if (action === "new") onNewSessionRequest?.(); }}

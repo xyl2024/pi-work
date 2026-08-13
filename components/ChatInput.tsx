@@ -54,7 +54,6 @@ interface Props {
   slashResources?: SlashResource[];
   slashResourceKey?: string;
   onSlashAction?: (action: string) => void;
-  contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
   /** Current cwd shown by the CwdPicker (new-session mode only). */
   cwd?: string | null;
   /** Fired when the CwdPicker picks a different cwd. */
@@ -264,7 +263,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   retryInfo,
   slashResources = [], slashResourceKey,
   onSlashAction,
-  contextUsage,
   cwd,
   onCwdChange,
   showCwdPicker,
@@ -733,22 +731,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? currentThinkingMapped
     : currentThinkingLevel;
 
-  // Context usage cells — 10 discrete bars, each covering a 10% bucket. Color
-  // thresholds mirror the top-right status bar (>70% yellow, >90% red).
-  const contextBar = useMemo(() => {
-    if (!contextUsage?.contextWindow || contextUsage.percent === null) return null;
-    const pct = Math.max(0, Math.min(100, contextUsage.percent));
-    const color = pct > 90 ? "#ef4444" : pct > 70 ? "rgba(234,179,8,0.95)" : "var(--accent)";
-    const ctxWindowFmt = contextUsage.contextWindow >= 1_000_000
-      ? `${(contextUsage.contextWindow / 1_000_000).toFixed(1)}M`
-      : contextUsage.contextWindow >= 1000
-        ? `${(contextUsage.contextWindow / 1000).toFixed(0)}k`
-        : String(contextUsage.contextWindow);
-    // 0% → 0 cells lit; 0.1–10% → 1; 10.1–20% → 2; …; 99.1–100% → 10.
-    const filledCells = Math.min(10, Math.ceil(pct / 10));
-    return { pct, color, ctxWindowFmt, filledCells };
-  }, [contextUsage]);
-
   // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -1192,56 +1174,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               />
             )}
           </div>
-
-          {/* CENTER: context usage cells — sits next to the model selector */}
-          {contextBar && (
-            <Tooltip content={`${t("Context")}: ${contextBar.pct.toFixed(1)}% of ${contextUsage!.contextWindow.toLocaleString()} tokens`}>
-              <div
-                aria-label={`${t("Context")}: ${contextBar.pct.toFixed(0)}%`}
-                style={{
-                  flex: "0 0 auto",
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "0 10px",
-                  height: 32,
-                  color: contextBar.color,
-                  fontSize: 12,
-                  fontVariantNumeric: "tabular-nums",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                <div
-                  role="meter"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={contextBar.pct}
-                  style={{
-                    display: "flex",
-                    gap: 2,
-                    width: 65, height: 8,
-                    flexShrink: 0,
-                  }}
-                >
-                  {Array.from({ length: 10 }, (_, i) => {
-                    const active = i < contextBar.filledCells;
-                    return (
-                      <div
-                        key={i}
-                        style={{
-                          flex: 1,
-                          height: "100%",
-                          background: active ? contextBar.color : "color-mix(in srgb, var(--text-muted) 20%, var(--bg-panel))",
-                          borderRadius: 1,
-                          transition: "background 0.2s ease",
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-                <span style={{ fontWeight: 600 }}>{contextBar.pct.toFixed(0)}%</span>
-                <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/ {contextBar.ctxWindowFmt}</span>
-              </div>
-            </Tooltip>
-          )}
 
           {/* spacer */}
           <div style={{ flex: 1 }} />
