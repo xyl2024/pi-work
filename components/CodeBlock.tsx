@@ -6,6 +6,7 @@ import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
+import { Tooltip } from "@/components/Tooltip";
 
 interface Props {
   code: string;
@@ -24,7 +25,6 @@ export function CodeBlock({ code, lang }: Props) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [hovered, setHovered] = useState(false);
-  const [btnHovered, setBtnHovered] = useState(false);
 
   // Floating overlay is fully invisible: no background / border / shadow —
   // the label and copy button read as plain text floating over the code.
@@ -107,25 +107,35 @@ export function CodeBlock({ code, lang }: Props) {
             {lang}
           </span>
         )}
-        <button
-          onClick={copy}
-          onMouseEnter={() => setBtnHovered(true)}
-          onMouseLeave={() => setBtnHovered(false)}
-          style={{
-            background: "none",
-            border: "none",
-            // Copied flips to a single accent color so the success state is
-            // recognizable without reintroducing any background fill.
-            color: copied ? "#22c55e" : buttonColor,
-            cursor: "pointer",
-            fontSize: 11,
-            fontFamily: "var(--font-sans)",
-            padding: "2px 4px",
-            textDecoration: btnHovered ? "underline" : "none",
-          }}
-        >
-          {copied ? t("copied") : t("copy")}
-        </button>
+        <Tooltip content={copied ? t("copied") : t("copy")}>
+          <button
+            onClick={copy}
+            aria-label={copied ? t("copied") : t("copy")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              background: "none",
+              border: "none",
+              // Copied flips the icon to a green checkmark so the success
+              // state is recognizable without reintroducing any text.
+              color: copied ? "#22c55e" : buttonColor,
+              cursor: "pointer",
+              padding: 2,
+              lineHeight: 0,
+            }}
+          >
+            {copied ? (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            )}
+          </button>
+        </Tooltip>
       </div>
     </div>
   );
