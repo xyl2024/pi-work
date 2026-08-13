@@ -183,6 +183,7 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
 }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [avatarOk, setAvatarOk] = useState(true);
   const [avatarLoaded, setAvatarLoaded] = useState(false);
@@ -242,6 +243,8 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
   return (
     <div
       style={{ marginBottom: 16 }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {/* Label row: avatar + username/You — mirrors AssistantMessageView's provider icon + model name */}
       <div
@@ -376,7 +379,7 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
         </div>
       )}
 
-      {/* Bottom metadata row: action buttons (hover) + timestamp (always, right) */}
+      {/* Bottom metadata row: action buttons (hover) + timestamp (hover, right) */}
       {hasMetadata && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
           {content && (
@@ -440,7 +443,7 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
               </Tooltip>
             </div>
           )}
-          {time && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>}
+          {time && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto", opacity: hovered ? 1 : 0, transition: "opacity 0.12s" }}>{time}</span>}
         </div>
       )}
     </div>
