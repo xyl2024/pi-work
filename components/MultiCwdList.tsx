@@ -6,6 +6,7 @@ import type { SessionInfo, Workspace } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { SessionItem } from "./SessionItem";
 import { Tooltip } from "./Tooltip";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 import { useAllPendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 
 /**
@@ -292,6 +293,33 @@ function CwdGroup({
     .filter((s) => !pinnedSessionSet.has(s.id))
     .slice()
     .sort((a, b) => b.modified.localeCompare(a.modified));
+
+  // The dynamic tail of the list: whichever session renders last right now.
+  // Pinned rows render above non-pinned ones, so the tail is the last
+  // non-pinned session when any exist, else the last pinned one. It moves
+  // as more sessions load, which is exactly what "load more" must attach to.
+  const allSessions = [...pinnedInCwd, ...nonPinnedSessions];
+  const lastSessionId = allSessions.length > 0 ? allSessions[allSessions.length - 1].id : null;
+  const canLoadMore = !!group?.hasMore;
+
+  // Shared row renderer — the group's last row gets wrapped with the
+  // hover-revealed "Load more sessions" affordance (see LastSessionLoadMore).
+  // The React key travels through `key` so both callers stay keyed.
+  const sessionRow = (s: SessionInfo, pinned: boolean, key: string) => (
+    <SessionItem
+      key={key}
+      session={s}
+      isSelected={s.id === selectedSessionId}
+      onClick={() => onSelectSession(s)}
+      onRenamed={onSessionRenamed}
+      onDeleted={(id) => onSessionDeleted(id)}
+      isPinned={pinned}
+      onTogglePin={() => onTogglePin(s.id)}
+      isFavorited={favoriteIds.includes(s.id)}
+      onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(s.id) : undefined}
+      hasPendingQuestion={pendingQuestionSessionIds.has(s.id)}
+    />
+  );
 
   // "..." menu state — mirrors SessionItem's pattern. The trigger button
   // (shown only on row hover) opens a portal'd menu panel on click.
@@ -603,21 +631,17 @@ function CwdGroup({
               <div style={{ padding: "2px 6px 1px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 {t("Pinned sessions")}
               </div>
-              {pinnedInCwd.map((s) => (
-                <SessionItem
-                  key={`pinned-${s.id}`}
-                  session={s}
-                  isSelected={s.id === selectedSessionId}
-                  onClick={() => onSelectSession(s)}
-                  onRenamed={onSessionRenamed}
-                  onDeleted={(id) => onSessionDeleted(id)}
-                  isPinned
-                  onTogglePin={() => onTogglePin(s.id)}
-                  isFavorited={favoriteIds.includes(s.id)}
-                  onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(s.id) : undefined}
-                  hasPendingQuestion={pendingQuestionSessionIds.has(s.id)}
-                />
-              ))}
+              {pinnedInCwd.map((s) =>
+                s.id === lastSessionId && canLoadMore ? (
+                  <LastSessionLoadMore
+                    key={`pinned-${s.id}`}
+                    loadingMore={!!group?.loadingMore}
+                    onLoadMore={onLoadMoreSessions}
+                  >
+                    {sessionRow(s, true, `pinned-${s.id}`)}
+                  </LastSessionLoadMore>
+                ) : sessionRow(s, true, `pinned-${s.id}`)
+              )}
             </>
           )}
           {hasUnloadedPinned && pinnedInCwd.length === 0 && group?.loading && (
@@ -642,21 +666,17 @@ function CwdGroup({
             </div>
           )}
 
-          {nonPinnedSessions.map((s) => (
-            <SessionItem
-              key={s.id}
-              session={s}
-              isSelected={s.id === selectedSessionId}
-              onClick={() => onSelectSession(s)}
-              onRenamed={onSessionRenamed}
-              onDeleted={(id) => onSessionDeleted(id)}
-              isPinned={pinnedSessionSet.has(s.id)}
-              onTogglePin={() => onTogglePin(s.id)}
-              isFavorited={favoriteIds.includes(s.id)}
-              onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(s.id) : undefined}
-              hasPendingQuestion={pendingQuestionSessionIds.has(s.id)}
-            />
-          ))}
+          {nonPinnedSessions.map((s) =>
+            s.id === lastSessionId && canLoadMore ? (
+              <LastSessionLoadMore
+                key={s.id}
+                loadingMore={!!group?.loadingMore}
+                onLoadMore={onLoadMoreSessions}
+              >
+                {sessionRow(s, pinnedSessionSet.has(s.id), s.id)}
+              </LastSessionLoadMore>
+            ) : sessionRow(s, pinnedSessionSet.has(s.id), s.id)
+          )}
           </div>
         </div>
       )}
@@ -714,6 +734,76 @@ function CwdMenuRow({
         {icon}
       </span>
       <span style={{ flex: 1 }}>{label}</span>
+    </div>
+  );
+}
+
+/**
+ * Wraps the last session row of a cwd group. While the pointer is over the
+ * row (or the revealed row below it), a "Load more sessions" row smoothly
+ * expands beneath it via CollapsiblePanel. The wrapped row is whatever the
+ * caller passes in, so the trigger follows the list's dynamic tail as more
+ * sessions load.
+ */
+function LastSessionLoadMore({
+  children,
+  loadingMore,
+  onLoadMore,
+}: {
+  children: React.ReactNode;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}
+    >
+      {children}
+      <CollapsiblePanel open={hovered}>
+        <LoadMoreRow loadingMore={loadingMore} onClick={onLoadMore} />
+      </CollapsiblePanel>
+    </div>
+  );
+}
+
+/**
+ * The revealed "load more" row — same height and indent as a session row so
+ * it reads as a sibling of the items it sits under.
+ */
+function LoadMoreRow({ loadingMore, onClick }: { loadingMore: boolean; onClick: () => void }) {
+  const { t } = useI18n();
+  const [hover, setHover] = useState(false);
+  const disabled = loadingMore;
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={() => { if (!disabled) onClick(); }}
+      onKeyDown={(e) => { if (!disabled && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onClick(); } }}
+      style={{
+        height: 28,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        paddingLeft: 18, // matches SessionItem's TEXT_INDENT_PX
+        paddingRight: 8,
+        borderRadius: 8,
+        cursor: disabled ? "default" : "pointer",
+        userSelect: "none",
+        color: disabled ? "var(--text-dim)" : "var(--text-muted)",
+        background: hover && !disabled ? "var(--bg-hover)" : "transparent",
+        fontSize: 12,
+        transition: "background 0.1s",
+      }}
+    >
+      <LoadMoreIcon />
+      <span>{disabled ? t("Loading more...") : t("Load more sessions")}</span>
     </div>
   );
 }
