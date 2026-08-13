@@ -120,7 +120,6 @@ export const ZH_TRANSLATIONS = {
   "Next": "下一张",
   "Go to file {n}": "第 {n} 个文件",
   "{n}× {tool}": "{n} 次 {tool}",
-  "+{n}": "+{n}",
   "No output": "无输出",
   "copy": "复制",
   "copied": "已复制",

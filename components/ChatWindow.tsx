@@ -244,7 +244,7 @@ function ProcessDetailsGroup({
       .map(([name, n]) => t("{n}× {tool}").replace("{n}", String(n)).replace("{tool}", name))
       .join(sep);
     const rest = toolEntries.length - Math.min(toolEntries.length, MAX_TOOL_BREAKDOWN);
-    return ` · ${shown}${rest > 0 ? ` ${t("+{n}").replace("{n}", String(rest))}` : ""}`;
+    return ` · ${shown}${rest > 0 ? " …" : ""}`;
   })();
   const toolFullList =
     toolEntries.length > MAX_TOOL_BREAKDOWN
