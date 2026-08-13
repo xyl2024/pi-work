@@ -490,9 +490,21 @@ function AssistantMessageView({
     .filter((b): b is TextContent => b.type === "text")
     .map((b) => b.text)
     .join("\n");
+  // Copy payload for the footer button: plain text when present, otherwise the
+  // thinking + tool-call trace (intermediate think→tool turns have no text
+  // body but should still copy something meaningful).
+  const copyableContent = textContent || blocks
+    .map((b) => {
+      if (b.type === "text") return b.text;
+      if (b.type === "thinking") return b.thinking;
+      if (b.type === "toolCall") return `${b.toolName}(${JSON.stringify(b.input ?? {})})`;
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
 
   const copyContent = () => {
-    copyText(textContent)
+    copyText(copyableContent)
       .then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
@@ -634,7 +646,7 @@ function AssistantMessageView({
       <div className={MESSAGE_ACTION_ROW_CLASS} style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 8,
       }}>
-        {textContent && !isStreaming && (
+        {!isStreaming && (
           <Tooltip content={t("Copy message")}>
           <button
             onClick={copyContent}
@@ -665,7 +677,7 @@ function AssistantMessageView({
           </button>
           </Tooltip>
         )}
-        {textContent && !isStreaming && (
+        {!isStreaming && (
           <Tooltip content={t("Export as PNG")}>
           <button
             onClick={handleExport}
