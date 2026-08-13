@@ -480,6 +480,7 @@ export function TerminalPanel({ defaultCwd, open, location, onMove, maximized, o
                 fontSize: 12,
               }}
             >
+              <TerminalTabIcon />
               {editingId === tab.id ? (
                 <input
                   autoFocus
@@ -712,5 +713,17 @@ export function TerminalPanel({ defaultCwd, open, location, onMove, maximized, o
         )}
       </div>
     </div>
+  );
+}
+
+function TerminalTabIcon() {
+  // Terminal window + `>_` shell prompt — same glyph family as the reference
+  // icon (rounded window frame, greater-than prompt, cursor underline).
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="3.5" width="19" height="17" rx="2.5" />
+      <path d="M7.3 9.4 L9.6 12.5 L7.3 15.6" />
+      <line x1="12" y1="15.8" x2="16.5" y2="15.8" />
+    </svg>
   );
 }
