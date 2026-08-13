@@ -63,6 +63,11 @@ interface Props {
   /** Content rendered between the assistant message body and its footer row
    *  (used by ChatWindow for the turn-level show_file gallery). */
   afterContent?: React.ReactNode;
+  /** Per-turn duration for the LAST assistant message of a turn (keyed by
+   *  ChatWindow). startMs = user message time; endMs = entry-level persistence
+   *  time of this assistant (missing while the turn is still streaming);
+   *  running = the turn's tail is currently streaming (drives the live tick). */
+  turnDuration?: { startMs: number; endMs?: number; running?: boolean };
 }
 
 function formatTime(ts?: number): string | null {
@@ -76,6 +81,43 @@ function formatTime(ts?: number): string | null {
   if (isToday) return time;
   const date = d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
   return `${date} ${time}`;
+}
+
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 1000) return "<1s";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const remS = s % 60;
+  if (m < 60) return remS > 0 ? `${m}m ${remS}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  const parts = [`${h}h`];
+  if (remM > 0) parts.push(`${remM}m`);
+  if (remM === 0 && remS > 0) parts.push(`${remS}s`);
+  return parts.join(" ");
+}
+
+/** Live per-turn duration label. Ticks every second while running, freezes on
+ *  stop, and becomes fully static once endMs (authoritative, from the session
+ *  file) arrives. Only this tiny component re-renders during ticking. */
+function TurnDuration({ startMs, endMs, running }: { startMs: number; endMs?: number; running: boolean }) {
+  const { t } = useI18n();
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (endMs !== undefined || !running) return;
+    const tick = () => setElapsedMs(Date.now() - startMs);
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [endMs, running, startMs]);
+  const ms = endMs !== undefined ? endMs - startMs : (elapsedMs ?? 0);
+  const isLive = endMs === undefined && running;
+  return (
+    <span>
+      {isLive ? t("Elapsed") : t("Duration")} {formatDuration(ms)}
+    </span>
+  );
 }
 
 /** Wrap occurrences of any keyword in <mark> tags. Returns React nodes. */
@@ -101,7 +143,7 @@ function highlightKeywords(text: string, keywords?: string[], isSearchMatch?: bo
   return parts.length > 0 ? parts : text;
 }
 
-export function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent }: Props) {
+export function MessageView({ message, isStreaming, toolResults, modelNames, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
 
   if (message.role === "user") {
@@ -114,7 +156,7 @@ export function MessageView({ message, isStreaming, toolResults, modelNames, ent
   if (message.role === "assistant") {
     return (
       <div className={isFocused ? "search-flash" : undefined}>
-        <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} />
+        <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} />
       </div>
     );
   }
@@ -415,6 +457,7 @@ function AssistantMessageView({
   keywords,
   isSearchMatch,
   afterContent,
+  turnDuration,
 }: {
   message: AssistantMessage;
   isStreaming?: boolean;
@@ -424,6 +467,7 @@ function AssistantMessageView({
   keywords?: string[];
   isSearchMatch?: boolean;
   afterContent?: React.ReactNode;
+  turnDuration?: { startMs: number; endMs?: number; running?: boolean };
   sessionId?: string;
   entryId?: string;
 }) {
@@ -588,27 +632,20 @@ function AssistantMessageView({
       <div className={MESSAGE_ACTION_ROW_CLASS} style={{
         display: "flex", alignItems: "center", gap: 8, marginTop: 8,
       }}>
-        {message.usage && !isStreaming && (
-          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            {formatUsage(message.usage, t)}
-          </div>
-        )}
         {textContent && !isStreaming && (
           <Tooltip content={t("Copy message")}>
           <button
             onClick={copyContent}
+            aria-label={t("Copy message")}
             style={{
-              display: "flex", alignItems: "center", gap: 4,
-              padding: "3px 8px", height: 22,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 22, height: 22,
+              padding: 0,
               background: "none", border: "none",
               borderRadius: 5,
               color: copied ? "var(--accent)" : "var(--text-dim)",
               cursor: "pointer",
-              fontSize: 11, fontWeight: 400,
-              whiteSpace: "nowrap",
-              opacity: hovered ? 1 : 0,
-              pointerEvents: hovered ? "auto" : "none",
-              transition: "opacity 0.12s, color 0.12s",
+              transition: "color 0.12s",
             }}
             onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
             onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -623,7 +660,6 @@ function AssistantMessageView({
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
               </svg>
             )}
-            {copied ? t("Copied") : t("Copy")}
           </button>
           </Tooltip>
         )}
@@ -632,18 +668,16 @@ function AssistantMessageView({
           <button
             onClick={handleExport}
             disabled={exporting}
+            aria-label={t("Export as PNG")}
             style={{
-              display: "flex", alignItems: "center", gap: 4,
-              padding: "3px 8px", height: 22,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 22, height: 22,
+              padding: 0,
               background: "none", border: "none",
               borderRadius: 5,
               color: "var(--text-dim)",
               cursor: exporting ? "wait" : "pointer",
-              fontSize: 11, fontWeight: 400,
-              whiteSpace: "nowrap",
-              opacity: hovered ? 1 : 0,
-              pointerEvents: hovered ? "auto" : "none",
-              transition: "opacity 0.12s, color 0.12s",
+              transition: "color 0.12s",
             }}
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -659,12 +693,26 @@ function AssistantMessageView({
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
             )}
-            {exporting ? t("Exporting…") : t("Export")}
           </button>
           </Tooltip>
         )}
-        {time && !isStreaming && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>
+        {turnDuration && (turnDuration.endMs !== undefined || turnDuration.running) && (
+          <span style={{ fontSize: 10, color: "var(--text-dim)" }}>
+            <TurnDuration startMs={turnDuration.startMs} endMs={turnDuration.endMs} running={!!turnDuration.running} />
+          </span>
+        )}
+        {/* Hover-revealed meta: usage + timestamp, right-aligned, fade in/out */}
+        {!isStreaming && (message.usage || time) && (
+          <span style={{
+            marginLeft: "auto",
+            display: "flex", alignItems: "center", gap: 8,
+            opacity: hovered ? 1 : 0,
+            pointerEvents: hovered ? "auto" : "none",
+            transition: "opacity 0.12s",
+          }}>
+            {message.usage && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{formatUsage(message.usage, t)}</span>}
+            {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
+          </span>
         )}
       </div>
     </div>
