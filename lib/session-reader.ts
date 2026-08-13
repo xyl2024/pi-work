@@ -225,16 +225,19 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
   const piEntries = entries as unknown as PiSessionEntry[];
   const piCtx = piBuildSessionContext(piEntries, leafId, byId as unknown as Map<string, PiSessionEntry>);
 
-  // Build entryIds: parallel array to messages[], mapping each message back to its entry id.
-  // Needed for navigate_tree calls from the UI.
+  // Build entryIds + entryTimestamps: parallel arrays to messages[], mapping
+  // each message back to its entry id and the entry-level persistence timestamp
+  // (ms). entryIds is needed for navigate_tree calls from the UI; the
+  // timestamps feed the per-turn duration display (turn end = the entry
+  // timestamp of the last assistant message, i.e. when its stream finished).
   let targetLeaf: SessionEntry | undefined;
   if (leafId === null) {
-    return { messages: [], entryIds: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
+    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
   }
   if (leafId) targetLeaf = byId.get(leafId);
   if (!targetLeaf) targetLeaf = entries[entries.length - 1];
   if (!targetLeaf) {
-    return { messages: [], entryIds: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
+    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
   }
 
   // Walk path from target leaf to root
@@ -256,6 +259,12 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
   }
 
   const entryIds: string[] = [];
+  const entryTimestamps: (number | undefined)[] = [];
+  const pushEntry = (e: SessionEntry) => {
+    entryIds.push(e.id);
+    const ts = typeof e.timestamp === "string" ? new Date(e.timestamp).getTime() : undefined;
+    entryTimestamps.push(Number.isFinite(ts) ? ts : undefined);
+  };
   if (compactionId) {
     const compactionIdx = path.findIndex((e) => e.id === compactionId);
     const firstKeptIdx = firstKeptEntryId
@@ -263,14 +272,14 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
       : -1;
     const startIdx = firstKeptIdx >= 0 ? firstKeptIdx : compactionIdx;
     for (let i = startIdx; i < compactionIdx; i++) {
-      if (path[i].type === "message") entryIds.push(path[i].id);
+      if (path[i].type === "message") pushEntry(path[i]);
     }
     for (let i = compactionIdx + 1; i < path.length; i++) {
-      if (path[i].type === "message") entryIds.push(path[i].id);
+      if (path[i].type === "message") pushEntry(path[i]);
     }
   } else {
     for (const e of path) {
-      if (e.type === "message") entryIds.push(e.id);
+      if (e.type === "message") pushEntry(e);
     }
   }
 
@@ -286,6 +295,7 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
   return {
     messages,
     entryIds,
+    entryTimestamps,
     thinkingLevel: piCtx.thinkingLevel,
     model: piCtx.model,
   };

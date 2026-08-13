@@ -361,7 +361,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const statsEmit = useToolCallStatsEmit();
 
   const {
-    loading, error, messages, entryIds, streamState,
+    loading, error, messages, entryIds, entryTimestamps, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
     retryInfo, contextUsage,
     displayModel: displayModelValue,
@@ -737,6 +737,34 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const replayActive = replayOpen && !streamState.isStreaming && !agentRunning;
   const renderMessages = replayActive ? messages.slice(0, replayIndex) : messages;
   const renderEntryIds = replayActive ? entryIds.slice(0, replayIndex) : entryIds;
+  const renderEntryTimestamps = replayActive ? entryTimestamps.slice(0, replayIndex) : entryTimestamps;
+
+  // Per-turn duration map: keyed by the index of the LAST assistant message of
+  // each turn. startMs = the user message timestamp; endMs = the entry-level
+  // persistence timestamp of that assistant (i.e. when its stream finished),
+  // missing while the turn is still streaming or for files without timestamps.
+  // running marks the turn whose tail is currently streaming (last assistant
+  // message), so the footer can show a live "Elapsed" tick without touching
+  // the isStreaming prop path used elsewhere.
+  const turnDurationMap = useMemo(() => {
+    const map = new Map<number, { startMs: number; endMs?: number; running: boolean }>();
+    for (let i = 0; i < renderMessages.length; i++) {
+      const m = renderMessages[i];
+      if (m.role !== "user" || typeof m.timestamp !== "number") continue;
+      let lastAssistant = -1;
+      for (let j = i + 1; j < renderMessages.length && renderMessages[j].role !== "user"; j++) {
+        if (renderMessages[j].role === "assistant") lastAssistant = j;
+      }
+      if (lastAssistant === -1) continue;
+      const endMs = renderEntryTimestamps[lastAssistant];
+      map.set(lastAssistant, {
+        startMs: m.timestamp,
+        endMs: endMs ?? undefined,
+        running: streamState.isStreaming && lastAssistant === renderMessages.length - 1,
+      });
+    }
+    return map;
+  }, [renderMessages, renderEntryTimestamps, streamState.isStreaming]);
 
   // Whether any currently-rendered message contains something foldable.
   // Derived from the same messages slice the scroll list uses so a streamed
@@ -1292,6 +1320,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                     highlightEntryId={highlightEntryId}
                     isSearchMatch={matchedEntryIds.has(renderEntryIds[idx])}
                     afterContent={opts.afterContent}
+                    turnDuration={turnDurationMap.get(idx)}
                   />
                 );
                 if (currentRefIdx === -1) return view;

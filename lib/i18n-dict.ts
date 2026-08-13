@@ -988,6 +988,7 @@ export const ZH_TRANSLATIONS = {
   "Total cost": "总费用",
   "Calls": "调用次数",
   "Duration": "耗时",
+  "Elapsed": "已耗时",
   "No token usage recorded yet.": "暂无 Token 用量记录。",
   "Clear all token audit data?": "清空全部 Token 用量记录？",
   "This will permanently delete all recorded token usage.": "这将永久删除全部已记录的 Token 用量。",

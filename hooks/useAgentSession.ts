@@ -22,6 +22,7 @@ export interface SessionData {
   context: {
     messages: AgentMessage[];
     entryIds: string[];
+    entryTimestamps?: (number | undefined)[];
     thinkingLevel: string;
     model: { provider: string; modelId: string } | null;
   };
@@ -136,6 +137,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
+  // Parallel to entryIds: the entry-level persistence timestamp (ms) for each
+  // message, when present. Feeds the per-turn duration display.
+  const [entryTimestamps, setEntryTimestamps] = useState<(number | undefined)[]>([]);
   // In-flight partial tool results keyed by toolCallId. Populated on
   // tool_execution_start, updated on each tool_execution_update (bash's
   // 100ms-throttled streaming output), and cleared on tool_execution_end.
@@ -272,6 +276,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setActiveLeafId(d.leafId);
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
+      setEntryTimestamps(d.context.entryTimestamps ?? []);
       setCurrentModelOverride(null);
       setError(null);
       // If no live agent state, fall back to thinking level from session file
@@ -294,9 +299,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         : `/api/sessions/${encodeURIComponent(sid)}/context`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[] } };
+      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[]; entryTimestamps?: (number | undefined)[] } };
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
+      setEntryTimestamps(d.context.entryTimestamps ?? []);
     } catch (e) {
       console.error("Failed to load context:", e);
     }
@@ -909,7 +915,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     // State
-    data, loading, error, activeLeafId, messages, entryIds, inFlightToolResults, streamState,
+    data, loading, error, activeLeafId, messages, entryIds, entryTimestamps, inFlightToolResults, streamState,
     agentRunning, modelNames, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
     retryInfo, contextUsage, systemPrompt,
     currentModel, displayModel, sessionStats,

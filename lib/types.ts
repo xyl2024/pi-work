@@ -182,6 +182,8 @@ export interface SessionInfo {
 export interface SessionContext {
   messages: AgentMessage[];
   entryIds: string[]; // parallel to messages — the session entry id for each message
+  /** parallel to entryIds — the entry-level persistence timestamp (ms) for each message, when present */
+  entryTimestamps?: (number | undefined)[];
   thinkingLevel: string;
   model: { provider: string; modelId: string } | null;
 }
