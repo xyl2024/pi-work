@@ -608,6 +608,18 @@ span.linenumber {
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* Tooltips are pure decoration: never capture the mouse. Radix renders the
+   tooltip inside a wrapper div (data-radix-popper-content-wrapper) that stays
+   hit-testable even when the inner content has pointer-events:none — that
+   wrapper is what swallows hover/click and blocks the rows underneath (e.g.
+   hovering the bottom file in the vertical FileExplorer then moving the mouse
+   up). Disable the wrapper and its whole subtree. Scoped via
+   :has([role="tooltip"]) so future Radix popovers/menus stay interactive. */
+[data-radix-popper-content-wrapper]:has([role="tooltip"]),
+[data-radix-popper-content-wrapper]:has([role="tooltip"]) * {
+  pointer-events: none !important;
+}
+
 /* TranslatePanel's target-language toggle: when the user clicks the
    `to中文` / `to英文` button, the label inside is keyed by `target` so
    React remounts the <span>; the entrance plays once per click.

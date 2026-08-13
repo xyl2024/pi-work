@@ -16,7 +16,12 @@ interface Props {
 export function Tooltip({ content, children, side, align, delayDuration = 500, open, onOpenChange }: Props) {
   return (
     <TooltipPrimitive.Provider delayDuration={delayDuration}>
-      <TooltipPrimitive.Root open={open} onOpenChange={onOpenChange}>
+      {/* disableHoverableContent: close immediately on trigger pointer-leave
+          (no "grace area" that keeps the tooltip open while the pointer
+          travels over the gap between trigger and content). Combined with
+          pointerEvents:none below, the tooltip is pure decoration — it can
+          never swallow the mouse and block rows underneath it. */}
+      <TooltipPrimitive.Root open={open} onOpenChange={onOpenChange} disableHoverableContent>
         <TooltipPrimitive.Trigger asChild>
           {children}
         </TooltipPrimitive.Trigger>
@@ -27,6 +32,7 @@ export function Tooltip({ content, children, side, align, delayDuration = 500, o
             sideOffset={5}
             style={{
               zIndex: 9999,
+              pointerEvents: "none", // the wrapper is disabled in globals.css too
               maxWidth: 280,
               padding: "4px 10px",
               background: "var(--bg-panel)",
