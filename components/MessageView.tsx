@@ -727,13 +727,13 @@ function AssistantMessageView({
           </button>
           </Tooltip>
         )}
-        {readFiles && readFiles.length > 0 && onOpenFile && (
-          <ReadFileChips files={readFiles} onOpenFile={onOpenFile} />
-        )}
         {turnDuration && (turnDuration.endMs !== undefined || turnDuration.running) && (
           <span style={{ fontSize: 10, color: "var(--text-dim)" }}>
             <TurnDuration startMs={turnDuration.startMs} endMs={turnDuration.endMs} running={!!turnDuration.running} />
           </span>
+        )}
+        {readFiles && readFiles.length > 0 && onOpenFile && (
+          <ReadFileChips files={readFiles} onOpenFile={onOpenFile} />
         )}
         {/* Hover-revealed meta: usage + timestamp, right-aligned, fade in/out */}
         {!isStreaming && (message.usage || time) && (

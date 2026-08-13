@@ -599,6 +599,17 @@ Conventions:
 
 ---
 
+## Tooltips for New Frontend Interactions
+
+**Hover hints must use the project's unified `Tooltip` component (`components/Tooltip.tsx`, Radix-backed) — never the native `title` attribute.**
+
+When adding a hover explanation (e.g. a truncated filename showing its full path):
+- Wrap the trigger element with `<Tooltip content={...}>` — it renders via portal, follows the app's theme variables, and styles consistently with the rest of the UI.
+- Do **not** set `title="..."` on the same element — the browser's default tooltip is unstyled, delayed differently, and appears on top of the unified one, making them fight.
+- Prefer `content` over `aria-label` for non-interactive hints; keep `aria-label` for interactive semantics (buttons).
+
+---
+
 ## Clipboard in the Electron Shell
 
 When Pi Work is loaded inside the `electron-shell` `<iframe>`, every

@@ -128,7 +128,6 @@ function Chip({ file, onClick }: { file: ReadFileInfo; onClick: () => void }) {
       <button
         type="button"
         onClick={onClick}
-        title={file.path}
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -205,27 +204,26 @@ function FileListBubble({ files, open, maxHeight, onOpen }: {
     >
       <div ref={contentRef} style={{ display: "flex", flexDirection: "column", gap: 2, padding: 6 }}>
         {files.map((f) => (
-          <button
-            key={f.path}
-            type="button"
-            onClick={() => onOpen(f)}
-            title={f.path}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              width: "100%",
-              height: 26,
-              padding: "0 8px",
-              background: "none",
-              border: "none",
-              borderRadius: 6,
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 12,
-              fontFamily: "var(--font-mono)",
-              textAlign: "left",
-            }}
+          <Tooltip key={f.path} content={f.path}>
+            <button
+              type="button"
+              onClick={() => onOpen(f)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                width: "100%",
+                height: 26,
+                padding: "0 8px",
+                background: "none",
+                border: "none",
+                borderRadius: 6,
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                fontSize: 12,
+                fontFamily: "var(--font-mono)",
+                textAlign: "left",
+              }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
           >
@@ -234,6 +232,7 @@ function FileListBubble({ files, open, maxHeight, onOpen }: {
               {f.name}
             </span>
           </button>
+          </Tooltip>
         ))}
       </div>
     </div>
