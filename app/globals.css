@@ -324,10 +324,12 @@ pre, code {
    Same gradient-clip-on-glyph + horizontal-shift pattern as the agent-todo
    live effect, with its own keyframes name so the two don't collide across
    CSS sources. Mirrors the LoadingState label shimmer: a 200%-wide band
-   (dim → text → dim) sweeping across the glyphs at 1.4s. base = --text-muted
-   so when the animation stops or the user has prefers-reduced-motion, the
-   letters fall back to the muted color they already had instead of jumping
-   to a new tone. */
+   (dim → text → dim) sweeping back and forth across the glyphs — 1.4s each
+   way, holding 0.6s at each edge (35%/15%/35%/15% of the 4s cycle), so it
+   breathes symmetrically instead of snapping back to the left. base =
+   --text-muted so when the animation stops or the user has
+   prefers-reduced-motion, the letters fall back to the muted color they
+   already had instead of jumping to a new tone. */
 .thinking-live--muted {
   background-size: 200% 100%;
   background-repeat: no-repeat;
@@ -336,11 +338,14 @@ pre, code {
   -webkit-text-fill-color: transparent;
   background-image: linear-gradient(90deg,
     var(--text-muted) 35%, var(--text) 50%, var(--text-muted) 65%);
-  animation: thinking-live-sweep 1.4s linear infinite;
+  animation: thinking-live-sweep 4s linear infinite;
 }
 @keyframes thinking-live-sweep {
-  from { background-position: 100% 0; }
-  to   { background-position: 0% 0; }
+  0%   { background-position: 100% 0; }
+  35%  { background-position: 0% 0; }
+  50%  { background-position: 0% 0; }
+  85%  { background-position: 100% 0; }
+  100% { background-position: 100% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .thinking-live--muted {
@@ -392,11 +397,14 @@ pre, code {
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
-  animation: ls-shimmer 1.4s linear infinite;
+  animation: ls-shimmer 4s linear infinite;
 }
 @keyframes ls-shimmer {
-  from { background-position: 100% 0; }
-  to   { background-position: 0% 0; }
+  0%   { background-position: 100% 0; }
+  35%  { background-position: 0% 0; }
+  50%  { background-position: 0% 0; }
+  85%  { background-position: 100% 0; }
+  100% { background-position: 100% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ls-pixel {
