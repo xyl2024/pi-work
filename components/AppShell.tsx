@@ -378,14 +378,17 @@ export function AppShell() {
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !searchParams.get("session"));
 
-  // cwd picked in the new-session page (ChatInput's CwdPicker, only visible
-  // when no session is selected). Same reset as handleNewSession — any typed
-  // text / attached images for the previous cwd are discarded on switch.
+  // cwd picked via ChatInput's CwdPicker (always visible). In the new-session
+  // page it picks the project to start in; while a session is open and idle,
+  // picking a different project exits the session into a new-session page for
+  // that project. Same reset as handleNewSession — any typed text / attached
+  // images for the previous cwd are discarded on switch.
   const handleCwdPicked = useCallback((cwd: string) => {
     if (!cwd) return;
-    // Same cwd as the in-flight new session — no-op so re-clicking the
-    // current row doesn't wipe typed text / attached images.
-    if (cwd === newSessionCwd) return;
+    // Same cwd as the in-flight new session, or the open session's own cwd —
+    // no-op so re-clicking the current row doesn't wipe typed text / attached
+    // images or drop the user out of the open session.
+    if (cwd === newSessionCwd || cwd === selectedSession?.cwd) return;
     setSelectedSession(null);
     setNewSessionCwd(cwd);
     setSessionKey((k) => k + 1);
@@ -393,7 +396,7 @@ export function AppShell() {
     setTools([]);
     closeTopPanel();
     router.replace("/", { scroll: false });
-  }, [router, newSessionCwd, closeTopPanel]);
+  }, [router, newSessionCwd, selectedSession?.cwd, closeTopPanel]);
 
   // First entry (no session in URL, nothing selected): land directly on the
   // new-session page with the most recently used cwd pre-picked, so typing
@@ -1431,9 +1434,8 @@ export function AppShell() {
               scrollToEntryId={pendingScrollEntryId}
               onScrollComplete={() => setPendingScrollEntryId(null)}
               onNewSessionRequest={handleSlashNew}
-              cwd={effectiveNewSessionCwd}
+              cwd={selectedSession?.cwd ?? effectiveNewSessionCwd}
               onCwdChange={handleCwdPicked}
-              showCwdPicker={selectedSession === null}
               onRenameCompleted={handleSessionRenameCompleted}
               onSessionNameChange={handleSessionNameChange}
               onOpenFile={handleOpenFile}

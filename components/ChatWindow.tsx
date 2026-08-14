@@ -54,12 +54,12 @@ interface Props {
   /** Called after the scroll-to-entry navigation completes */
   onScrollComplete?: () => void;
   onNewSessionRequest?: () => void;
-  /** Current cwd of the chat context — shown by ChatInput's CwdPicker. */
+  /** Current cwd of the chat context — shown by ChatInput's CwdPicker (the
+   *  active session's cwd, or the new-session pick while no session is selected). */
   cwd?: string | null;
-  /** Fired when the CwdPicker picks a different cwd (new-session mode only). */
+  /** Fired when the CwdPicker picks a different cwd (new-session mode, or
+   *  switching projects while a session is idle). */
   onCwdChange?: (cwd: string) => void;
-  /** When true (new-session mode, no session selected), render the CwdPicker. */
-  showCwdPicker?: boolean;
   /** Fired after the auto-name PATCH succeeds — used to refresh the sidebar. */
   onRenameCompleted?: () => void;
   /** Fired as soon as the user confirms a rename — keeps in-memory state in sync. */
@@ -325,7 +325,7 @@ function ProcessDetailsGroup({
   );
 }
 
-function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, showCwdPicker, onRenameCompleted, onSessionNameChange, onOpenFile }: Props) {
+function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onOpenFile }: Props) {
   const { t, locale } = useI18n();
   const toast = useToast();
   const [slashResources, setSlashResources] = useState<SlashResource[]>([]);
@@ -1112,7 +1112,6 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         userMessageHistory={userMessageHistory}
         cwd={cwd ?? null}
         onCwdChange={onCwdChange ?? (() => {})}
-        showCwdPicker={!!showCwdPicker}
       />
     </>
   );

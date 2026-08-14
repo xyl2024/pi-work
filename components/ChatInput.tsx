@@ -54,12 +54,12 @@ interface Props {
   slashResources?: SlashResource[];
   slashResourceKey?: string;
   onSlashAction?: (action: string) => void;
-  /** Current cwd shown by the CwdPicker (new-session mode only). */
+  /** Current cwd shown by the CwdPicker (the active session's cwd, or the
+   *  new-session pick while no session is selected). */
   cwd?: string | null;
-  /** Fired when the CwdPicker picks a different cwd. */
+  /** Fired when the CwdPicker picks a different cwd (new-session mode, or
+   *  switching projects while a session is idle). */
   onCwdChange?: (cwd: string) => void;
-  /** When true (no session selected), render the CwdPicker right of the model picker. */
-  showCwdPicker?: boolean;
   sessionId?: string | null;
   /**
    * Plain-text user messages from the active session, oldest first. Sourced
@@ -265,7 +265,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSlashAction,
   cwd,
   onCwdChange,
-  showCwdPicker,
   sessionId,
   userMessageHistory,
 }: Props, ref) {
@@ -1164,9 +1163,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </div>
             )}
 
-            {/* CWD picker — only in the new-session flow (no session selected).
-                Sits right of the model picker; disabled while streaming. */}
-            {showCwdPicker && onCwdChange && (
+            {/* CWD picker — always visible (new-session flow picks the project;
+                during a session it mirrors the model selector: disabled while
+                the agent is running, clickable when idle to switch projects). */}
+            {onCwdChange && (
               <CwdPicker
                 cwd={cwd ?? null}
                 onCwdChange={onCwdChange}
