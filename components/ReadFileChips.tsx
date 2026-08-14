@@ -10,6 +10,7 @@ import type { ReadFileInfo } from "@/lib/types";
 const MAX_VISIBLE = 2;
 const BUBBLE_WIDTH = 264;
 const BUBBLE_MAX_HEIGHT = 320;
+const MIN_SPACE = 120;
 const CHIP_MAX_WIDTH = 150;
 
 interface Props {
@@ -19,20 +20,22 @@ interface Props {
 
 /** Turn-level `read` file chips, rendered in the assistant message footer row.
  *  Shows at most {@link MAX_VISIBLE} chips, then a "..." that smoothly expands
- *  an upward bubble with the full list. Every chip/list row opens the file in
- *  the right-hand panel. */
+ *  a bubble (down by default, up only when space below is tight) with the full
+ *  list. Every chip/list row opens the file in the right-hand panel. */
 export function ReadFileChips({ files, onOpenFile }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [direction, setDirection] = useState<"down" | "up">("down");
   const rootRef = useRef<HTMLDivElement>(null);
   const [bubbleMaxHeight, setBubbleMaxHeight] = useState(BUBBLE_MAX_HEIGHT);
 
   const visible = files.slice(0, MAX_VISIBLE);
   const hasMore = files.length > MAX_VISIBLE;
 
-  // Toggle the bubble. On open, cap its height to the space actually visible
-  // above the chips row inside the chat scroll container, so the upward-
-  // expanding list is never clipped out of view at the top edge.
+  // Toggle the bubble. On open, pick a direction — down by default, up only
+  // when there isn't enough room below — and cap its height to the space
+  // actually visible in that direction inside the chat scroll container, so
+  // the expanding list is never clipped out of view.
   const toggle = () => {
     if (!open && rootRef.current) {
       let c: HTMLElement | null = rootRef.current.parentElement;
@@ -41,10 +44,19 @@ export function ReadFileChips({ files, onOpenFile }: Props) {
         if (oy === "auto" || oy === "scroll") break;
         c = c.parentElement;
       }
-      const rootTop = rootRef.current.getBoundingClientRect().top;
-      const containerTop = c ? c.getBoundingClientRect().top : 0;
-      const available = rootTop - containerTop;
-      setBubbleMaxHeight(Math.max(120, Math.min(BUBBLE_MAX_HEIGHT, Math.round(available - 12))));
+      const rootRect = rootRef.current.getBoundingClientRect();
+      const containerRect = c ? c.getBoundingClientRect() : null;
+      const spaceBelow = containerRect
+        ? containerRect.bottom - rootRect.bottom
+        : window.innerHeight - rootRect.bottom;
+      const spaceAbove = rootRect.top - (containerRect ? containerRect.top : 0);
+      if (spaceBelow >= MIN_SPACE) {
+        setDirection("down");
+        setBubbleMaxHeight(Math.max(MIN_SPACE, Math.min(BUBBLE_MAX_HEIGHT, Math.round(spaceBelow - 12))));
+      } else {
+        setDirection("up");
+        setBubbleMaxHeight(Math.max(MIN_SPACE, Math.min(BUBBLE_MAX_HEIGHT, Math.round(spaceAbove - 12))));
+      }
     }
     setOpen((v) => !v);
   };
@@ -87,7 +99,7 @@ export function ReadFileChips({ files, onOpenFile }: Props) {
         <Chip key={f.path} file={f} onClick={() => openFile(f)} />
       ))}
       {hasMore && (
-        <>
+        <div style={{ position: "relative", display: "inline-flex" }}>
           <Tooltip content={t("Show all files")}>
             <button
               type="button"
@@ -113,8 +125,8 @@ export function ReadFileChips({ files, onOpenFile }: Props) {
               ...
             </button>
           </Tooltip>
-          <FileListBubble files={files} open={open} maxHeight={bubbleMaxHeight} onOpen={openFile} />
-        </>
+          <FileListBubble files={files} open={open} maxHeight={bubbleMaxHeight} direction={direction} onOpen={openFile} />
+        </div>
       )}
     </div>
   );
@@ -155,19 +167,24 @@ function Chip({ file, onClick }: { file: ReadFileInfo; onClick: () => void }) {
   );
 }
 
-/** Upward-expanding list bubble. Stays mounted so close animates too: height
- *  transitions 0 ↔ measured content (clamped to BUBBLE_MAX_HEIGHT), then flips
- *  to scrollable once the transition settles for long lists. */
-function FileListBubble({ files, open, maxHeight, onOpen }: {
+/** Expandable list bubble anchored to the "..." button. Defaults to expanding
+ *  downward; flips upward only when there isn't enough room below. Stays
+ *  mounted so close animates too: height transitions 0 ↔ measured content
+ *  (clamped to BUBBLE_MAX_HEIGHT), then flips to scrollable once the
+ *  transition settles for long lists. */
+function FileListBubble({ files, open, maxHeight, direction, onOpen }: {
   files: ReadFileInfo[];
   open: boolean;
   maxHeight: number;
+  direction: "down" | "up";
   onOpen: (f: ReadFileInfo) => void;
 }) {
+  const { t } = useI18n();
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const [scrolled, setScrolled] = useState(false);
   const targetHeight = contentHeight === null ? 0 : Math.min(contentHeight, maxHeight);
   const settled = scrolled || (contentHeight !== null && contentHeight <= maxHeight);
+  const anchor = direction === "down" ? { top: "calc(100% + 8px)" } : { bottom: "calc(100% + 8px)" };
 
   useEffect(() => {
     if (!open) {
@@ -186,7 +203,7 @@ function FileListBubble({ files, open, maxHeight, onOpen }: {
       aria-hidden={!open}
       style={{
         position: "absolute",
-        bottom: "calc(100% + 8px)",
+        ...anchor,
         left: 0,
         zIndex: 50,
         width: BUBBLE_WIDTH,
@@ -199,10 +216,23 @@ function FileListBubble({ files, open, maxHeight, onOpen }: {
         border: "1px solid var(--border)",
         borderRadius: 10,
         boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
-        transformOrigin: "bottom",
+        transformOrigin: direction === "down" ? "top" : "bottom",
       }}
     >
       <div ref={contentRef} style={{ display: "flex", flexDirection: "column", gap: 2, padding: 6 }}>
+        <div
+          style={{
+            padding: "3px 8px 6px",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "var(--text-dim)",
+            borderBottom: "1px solid var(--border)",
+            marginBottom: 2,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {t("Files read this turn:")}
+        </div>
         {files.map((f) => (
           <Tooltip key={f.path} content={f.path}>
             <button
@@ -224,14 +254,14 @@ function FileListBubble({ files, open, maxHeight, onOpen }: {
                 fontFamily: "var(--font-mono)",
                 textAlign: "left",
               }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-          >
-            {getFileIcon(f.name, 13)}
-            <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {f.name}
-            </span>
-          </button>
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+            >
+              {getFileIcon(f.name, 13)}
+              <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {f.name}
+              </span>
+            </button>
           </Tooltip>
         ))}
       </div>

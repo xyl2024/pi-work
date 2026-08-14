@@ -298,6 +298,7 @@ export const ZH_TRANSLATIONS = {
   "Command prefix": "命令前缀",
   "Show all ({n})": "显示全部（{n}）",
   "Show all files": "显示全部文件",
+  "Files read this turn:": "本轮已读文件：",
   "Show less": "收起",
   "No bash commands yet": "暂无 Bash 命令",
   "Exit {code}": "退出码 {code}",
