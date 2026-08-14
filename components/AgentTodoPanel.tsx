@@ -1,54 +1,63 @@
 "use client";
 
 /**
- * AgentTodoPanel — a floating panel in the chat container's left whitespace,
- * vertically centered, that surfaces the agent's live task plan.
+ * AgentTodoPanel — circular button + popover that surfaces the agent's
+ * live task plan for the active session.
  *
- * Position strategy:
- * - Rendered as a sibling of the chat scroll container (inside the same
- *   `position: relative` parent) with `position: absolute`. It is NOT a
- *   flex item, so it does not consume horizontal space — the centered
- *   message column (max-w 820) keeps its natural centered position.
- * - Top-aligned with a small gap from the chat area's upper edge
- *   (`top: 16`), so the panel sits near the top of the chat area (just
- *   below the topbar) rather than floating in the vertical center.
- * - Hidden when there's nothing to render (no empty placeholder) and below
- *   the 1100px responsive threshold (no room for the panel next to messages).
+ * Lifecycle:
+ * - The whole component renders only when there is something to show
+ *   (`enabled && !empty`). When the agent has not called `agent_todo`
+ *   (or the tool is disabled in settings), nothing appears in the chat
+ *   area — same "don't render when empty" semantic as the prior
+ *   always-on left-floating panel.
+ * - While rendered, the button is always visible (affordance is stable);
+ *   click toggles `open`, which runs the popover's scale-fade transition.
  *
- * Layout (post-UI-revamp):
- * - Flat single column of tasks sorted by id ascending (creation order).
- *   No "In progress / Pending / Completed" sections — visual state is the
- *   only status cue: in-progress gets `var(--accent)` text color, completed
- *   gets line-through + `var(--text-dim)`, pending is the default.
- * - The whole header is a `<button>` so the entire row is clickable to
- *   collapse/expand. The header label switches between "Agent Plan" +
- *   `n/m` counter and the in-progress task subject (when collapsed while
- *   an in-progress task exists). Starts collapsed: the default view is the
- *   one-line "what is the agent doing right now" summary, and expanding to
- *   the full plan is an explicit opt-in.
- * - Panel height is capped at 30% of the chat container (`maxHeight: 30%`)
- *   so it never visually competes with the message column. The panel itself
- *   is a `flex column` with `overflow: hidden` and the scroll lives on the
- *   inner task list, so the header stays pinned and visible no matter how
- *   far the list is scrolled. (A `position: sticky` header was rejected: the
- *   panel background is ~50% transparent, so a sticky header would need its
- *   own opaque fill to avoid text-over-text bleed, which would show up as a
- *   color patch on the translucent panel.)
- * - Read-only: no click-to-jump and no tooltip. Tasks are a static
- *   at-a-glance status display; the per-task "<button>" affordance was
- *   removed alongside the tooltip to keep the panel unambiguously passive.
- * - The in-progress subject gets a slow light sweep (`.agent-todo-live`):
- *   a gradient highlight clipped to the glyphs and animated across them.
- *   Applied to the expanded row's subject and to the collapsed header label
- *   (which is that same subject), so "something is running" reads the same
- *   in both states. Text-only — no extra DOM, no layout shift, and nothing
- *   to re-position between the two states.
+ * Popover positioning:
+ * - Button + popover share a `position: relative` wrapper so the popover
+ *   can anchor to its top-right corner via `bottom: calc(100% + 8px);
+ *   right: 0`. The popover sits directly above the button, extending
+ *   leftward into the chat whitespace, with its right edge flush to the
+ *   button's right edge. Width 256px, height 240px (then scrolls) —
+ *   unchanged from the prior panel.
+ * - Popover stays mounted at all times (so toggling `open` runs the
+ *   transition both ways) but starts at `opacity: 0; transform:
+ *   scale(0.96); pointer-events: none`. `transform-origin: bottom
+ *   right` anchors the scale to the button's footprint, so the popover
+ *   visibly grows out of the launcher rather than the page center.
+ *
+ * Close paths:
+ * - Button click toggles `open` (same button, second click closes).
+ * - `keydown` Escape closes.
+ * - Document `mousedown` outside the wrapper closes. Clicks inside any
+ *   `[data-agent-todo-stay-open-zone]` ancestor (the chat input) are
+ *   excluded — see `components/ChatInput.tsx`. We use a data attribute
+ *   rather than a shared ref so the popover doesn't need to know the
+ *   input's DOM node, and the input doesn't need to know about the
+ *   popover.
+ *
+ * Responsive:
+ * - Below 1100px the whole component (button + popover) is hidden.
+ *   Matches the prior panel's breakpoint — the chat area's whitespace
+ *   shrinks below this point and a 256px surface would occlude messages.
+ *
+ * Visual state:
+ * - Tasks are still rendered as a flat id-ascending list (same as
+ *   before). In-progress gets `var(--accent)` text + a 2.6s linear
+ *   gradient sweep; completed gets line-through + `var(--text-dim)`;
+ *   pending is the default text color. The whole panel remains a
+ *   read-only status display.
+ * - When there's an in-progress task, the launcher button shows a small
+ *   accent dot at its top-right with a matching 2.6s pulse — the same
+ *   cadence as the text sweep so "live" reads consistently wherever it
+ *   appears. Hidden when no task is in progress.
  */
 
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentTask } from "@/lib/agent-todo-tool-types";
 import { useAgentTodo } from "@/hooks/useAgentTodo";
 import { useI18n } from "@/hooks/useI18n";
+import { Tooltip } from "@/components/Tooltip";
 
 const PANEL_BREAKPOINT = 1100;
 
@@ -120,12 +129,42 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
 }: {
   sessionId: string | null;
 }) {
-  const { tasks, empty, counts, enabled } = useAgentTodo(sessionId);
+  const { tasks, empty, enabled } = useAgentTodo(sessionId);
   const { t } = useI18n();
-  const [collapsed, setCollapsed] = useState(true);
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
 
-  const handleToggle = useCallback(() => {
-    setCollapsed((v) => !v);
+  // Close on click outside the wrapper, but ignore clicks inside any
+  // [data-agent-todo-stay-open-zone] ancestor — currently the chat
+  // input, so users can reference the task list while typing without
+  // the popover closing underneath them. mousedown (not click) so the
+  // close fires before any click-handler on the target re-opens the
+  // popover.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (wrapperRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest("[data-agent-todo-stay-open-zone]")) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // Esc closes. Bound while open only.
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
+  const handleButtonClick = useCallback(() => {
+    setOpen((v) => !v);
   }, []);
 
   // Flat id-ascending list — visual state is the only status cue.
@@ -134,13 +173,7 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
     [tasks],
   );
   const firstInProgress = sortedTasks.find((t) => t.status === "in_progress");
-
-  // Header label logic:
-  // - Collapsed + ≥1 in-progress task → show the in-progress subject as the
-  //   header (replaces both title and counter for the most informative summary).
-  // - Otherwise → title + counter.
-  const showCollapsedSubject = collapsed && !!firstInProgress;
-  const headerLabel = showCollapsedSubject ? firstInProgress!.subject : t("Agent Plan");
+  const hasInProgress = !!firstInProgress;
 
   if (!enabled || empty) return null;
 
@@ -148,177 +181,139 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
     <>
       <style>{`
         @media (max-width: ${PANEL_BREAKPOINT - 1}px) {
-          .agent-todo-panel { display: none !important; }
+          .agent-todo-launcher { display: none !important; }
         }
       `}</style>
-      <aside
-        className="agent-todo-panel"
-        aria-label={t("Agent Plan")}
-        style={{
-          // Absolute floating panel in the chat area's left whitespace.
-          // Anchored to the chat container (parent is `position: relative`)
-          // so it does not occupy flex space and does not squeeze the
-          // centered message column. Top-aligned with a small gap from the
-          // chat area's upper edge (not flush with the topbar).
-          //
-          // Background is ~50% transparent + backdrop blur: when the panel
-          // overlaps the message column on narrower viewports, the text
-          // behind shows through softly instead of being fully occluded.
-          // The panel's own text/colors stay fully opaque — only the
-          // backdrop fades.
-          //
-          // maxHeight: 30% — caps the panel at 30% of the chat container's
-          // height so it never visually competes with the message column.
-          // The chat container is `flex flex-1 overflow-hidden`, so its
-          // height is well-defined and percentage resolution works.
-          //
-          // The panel clips rather than scrolls (`overflow: hidden`); the
-          // scrollport is the inner task list, which keeps the header row
-          // pinned at the top of the panel.
-          position: "absolute",
-          left: 16,
-          top: 16,
-          width: 256,
-          maxHeight: "30%",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          padding: "10px 6px",
-          background: "color-mix(in srgb, var(--bg-panel) 50%, transparent)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-          border: "1px solid var(--border)",
-          borderRadius: 8,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-          zIndex: 10,
-          fontFamily: "var(--font-sans)",
-          animation: "agent-todo-fade-in 200ms ease",
-        }}
+      <div
+        ref={wrapperRef}
+        className="agent-todo-launcher relative"
       >
-        <button
-          type="button"
-          onClick={handleToggle}
-          aria-label={collapsed ? t("Expand") : t("Collapse")}
-          aria-expanded={!collapsed}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 8,
-            width: "100%",
-            // Never let the flex container squeeze the header when the task
-            // list overflows — the list is the only thing allowed to shrink.
-            flexShrink: 0,
-            padding: collapsed ? "0 8px" : "0 8px 8px",
-            background: "transparent",
-            border: "none",
-            borderBottom: collapsed ? "none" : "1px solid var(--border)",
-            borderRadius: 3,
-            marginBottom: collapsed ? 0 : 8,
-            cursor: "pointer",
-            color: "var(--text)",
-            textAlign: "left",
-            fontFamily: "inherit",
-            // Header's own padding + margin tween in lock-step with the
-            // body (Q5 D1). borderBottom stays as a toggled "none" ↔
-            // "1px solid ..." because border-style can't be smoothly
-            // transitioned; the 1px snap is masked by the padding change.
-            transition:
-              "padding 180ms cubic-bezier(0.32, 0.72, 0, 1), margin-bottom 180ms cubic-bezier(0.32, 0.72, 0, 1)",
-          }}
-        >
-          <span
-            className={showCollapsedSubject ? "agent-todo-live agent-todo-live--title" : undefined}
+        <Tooltip content={t("Agent Plan")}>
+          <button
+            type="button"
+            onClick={handleButtonClick}
+            aria-label={t("Agent Plan")}
+            aria-expanded={open}
+            aria-haspopup="dialog"
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110"
             style={{
-              fontSize: 12,
-              fontWeight: 400,
-              color: "var(--text)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              minWidth: 0,
-              flex: 1,
+              background: "var(--bg-panel)",
+              borderColor: "var(--border)",
+              color: "var(--text-muted)",
+              position: "relative",
             }}
           >
-            {headerLabel}
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {!showCollapsedSubject && (
-              <span
-                style={{
-                  fontSize: 11,
-                  color: "var(--text-muted)",
-                  fontFamily: "var(--font-mono)",
-                }}
-              >
-                {counts.completed}/{counts.total}
-              </span>
-            )}
+            {/* 3-row checklist icon — three lines with checkmarks on the
+                first column, plain rows on the second column. Distinct
+                from SessionLibrary (2x2 grid), Collapse all (chevrons),
+                and Scroll to bottom (single chevron). */}
             <svg
-              width="10"
-              height="10"
-              viewBox="0 0 12 12"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
               fill="none"
-              xmlns="http://www.w3.org/2000/svg"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
               aria-hidden
-              className="agent-todo-chevron"
-              style={{
-                color: "var(--text-muted)",
-                // Single path flipped via rotate — avoids swapping the path
-                // on every state change and gives a smooth rotation tween.
-                transform: collapsed ? "rotate(0deg)" : "rotate(180deg)",
-                transition: "transform 180ms cubic-bezier(0.32, 0.72, 0, 1)",
-              }}
             >
-              <path d="M3 7.5L6 4.5L9 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              <polyline points="3 6 5.5 8.5 10 4" />
+              <line x1="13" y1="6" x2="20" y2="6" />
+              <polyline points="3 13 5.5 15.5 10 11" />
+              <line x1="13" y1="13" x2="20" y2="13" />
+              <polyline points="3 20 5.5 22.5 10 18" />
+              <line x1="13" y1="20" x2="20" y2="20" />
             </svg>
-          </span>
-        </button>
+            {hasInProgress && (
+              <span
+                aria-hidden="true"
+                className="agent-todo-launcher-dot"
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  right: -2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "var(--accent)",
+                  boxShadow: "0 0 0 2px var(--bg-panel)",
+                }}
+              />
+            )}
+          </button>
+        </Tooltip>
         {/*
-          Always rendered so max-height can transition between 0 and 240.
-          The outer layer animates height with overflow: hidden clipping the
-          collapsing content; the inner layer keeps the scroll. The body is a
-          column flex container and the scrollport is a flex item (`flex: 1`
-          + `minHeight: 0`), so it is exactly as tall as the body's used
-          (max-height-clamped) height and overflowY: auto engages once the
-          content exceeds it. Without that flex chain the scrollport would
-          grow to content height and the body's overflow: hidden would just
-          clip the tail — the list would be unscrollable. 240px ≈ 6–7 task
-          rows; beyond that the inner takes over and scrolls. Revisit the
-          constant if task row layout (padding, font-size) changes.
+          Always-mounted popover. Toggling `open` runs scale + opacity
+          in 180ms cubic-bezier(0.32, 0.72, 0, 1) — same easing as the
+          prior panel so motion language stays consistent. The inner
+          body's max-height still tween handles the actual content
+          height change; the outer scale-fade is purely the "growing out
+          of the button" effect.
         */}
         <div
-          className="agent-todo-body"
+          role="dialog"
+          aria-label={t("Agent Plan")}
+          className="agent-todo-popover"
           style={{
-            maxHeight: collapsed ? 0 : 240,
-            overflow: "hidden",
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            right: 0,
+            width: 256,
+            // No maxHeight here on purpose. The popover's containing block
+            // is the launcher wrapper (36px tall — just the button), so a
+            // percentage would resolve to a tiny value and crush the panel.
+            // The inner body's maxHeight: 240 already caps the content
+            // height (240 body + 16 padding = 256px popover upper bound).
             display: "flex",
             flexDirection: "column",
-            transition: "max-height 180ms cubic-bezier(0.32, 0.72, 0, 1)",
+            overflow: "hidden",
+            padding: "10px 6px",
+            background: "color-mix(in srgb, var(--bg-panel) 50%, transparent)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+            zIndex: 20,
+            fontFamily: "var(--font-sans)",
+            transformOrigin: "bottom right",
+            transform: open ? "scale(1)" : "scale(0.96)",
+            opacity: open ? 1 : 0,
+            pointerEvents: open ? "auto" : "none",
+            transition:
+              "transform 180ms cubic-bezier(0.32, 0.72, 0, 1), opacity 180ms cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
-          <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
-            {sortedTasks.map((task, idx) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                isLast={idx === sortedTasks.length - 1}
-              />
-            ))}
+          <div
+            className="agent-todo-body"
+            style={{
+              maxHeight: open ? 240 : 0,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              transition: "max-height 180ms cubic-bezier(0.32, 0.72, 0, 1)",
+            }}
+          >
+            <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+              {sortedTasks.map((task, idx) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  isLast={idx === sortedTasks.length - 1}
+                />
+              ))}
+            </div>
           </div>
         </div>
-      </aside>
+      </div>
       <style>{`
-        @keyframes agent-todo-fade-in {
-          from { opacity: 0; transform: translateY(-6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        /* Light sweep for the in-progress subject. The gradient is 3x the
-           element width so the highlight spends most of the cycle off-screen
-           — that gap between passes is what keeps it calm rather than a
-           constant strobe. Only -webkit-text-fill-color is transparent (not
-           color), so the reduced-motion fallback just restores currentColor
-           and inherits each call site's own inline color. */
+        /* Gradient sweep on the in-progress subject text. The gradient
+           spans 3x the element width so the highlight spends most of
+           the cycle off-screen — that gap between passes is what keeps
+           it calm rather than a constant strobe. -webkit-text-fill-color
+           is the only thing made transparent (not color), so the
+           reduced-motion fallback just restores currentColor. */
         .agent-todo-live {
           background-size: 300% 100%;
           background-repeat: no-repeat;
@@ -333,15 +328,20 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
             color-mix(in srgb, var(--accent) 45%, #fff) 50%,
             var(--accent) 56%, var(--accent) 100%);
         }
-        .agent-todo-live--title {
-          background-image: linear-gradient(100deg,
-            var(--text) 0%, var(--text) 44%,
-            color-mix(in srgb, var(--accent) 55%, #fff) 50%,
-            var(--text) 56%, var(--text) 100%);
-        }
         @keyframes agent-todo-live-sweep {
           from { background-position: 100% 0; }
           to   { background-position: 0% 0; }
+        }
+        /* Launcher dot pulse — same 2.6s cadence as the text sweep so
+           "live" reads the same in both places. Subtle scale + opacity
+           loop; the inner boxShadow ring around the dot gives it the
+           same "above the surface" feel as SessionLibrary's red badge. */
+        .agent-todo-launcher-dot {
+          animation: agent-todo-launcher-pulse 2.6s linear infinite;
+        }
+        @keyframes agent-todo-launcher-pulse {
+          0%, 100% { transform: scale(1);   opacity: 1;   }
+          50%      { transform: scale(1.2); opacity: 0.7; }
         }
         @media (prefers-reduced-motion: reduce) {
           .agent-todo-live {
@@ -349,12 +349,13 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
             background-image: none;
             -webkit-text-fill-color: currentColor;
           }
-          /* Fold/unfold motion collapses to zero — every animated property
-             snaps to its target. The border-bottom toggle (none ↔ 1px
-             solid) is unchanged; only its smooth tween is dropped. */
-          .agent-todo-panel button,
-          .agent-todo-body,
-          .agent-todo-chevron {
+          .agent-todo-launcher-dot {
+            animation: none;
+          }
+          /* Fold/unfold motion collapses to zero — every animated
+             property snaps to its target. */
+          .agent-todo-popover,
+          .agent-todo-body {
             transition: none !important;
           }
         }

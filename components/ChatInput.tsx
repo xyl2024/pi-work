@@ -755,6 +755,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   return (
     <div
+      data-agent-todo-stay-open-zone
       style={{
         flexShrink: 0,
         background: "transparent",

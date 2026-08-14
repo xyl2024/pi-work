@@ -402,7 +402,7 @@ components/
   RichTextEditor.tsx + RichTextEditorInner.tsx
                             Tiptap-based rich text editor (used in TodoPanel)
   TextColorPicker.tsx       editor-scoped Tiptap text color popover
-  AgentTodoPanel.tsx        floating panel showing the agent's live task plan for the active session
+  AgentTodoPanel.tsx        bottom-right circular launcher + click-to-expand popover showing the agent's live task plan for the active session
   HighlightText.tsx         search-term <mark> wrapper (single + recursive)
   ToolCallStatsPanel.tsx    right-panel tab body (reads toolCallStatsStore)
   JsonPanel.tsx             right-panel tab: textarea + tree view, persistent localStorage

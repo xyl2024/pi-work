@@ -1246,12 +1246,6 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
       )}
       <CollapseNonceProvider value={collapseNonce}>
       <div className="relative flex flex-1 overflow-hidden">
-        {/* Agent Todo: absolute-positioned floating panel in the chat area's
-            left whitespace. Lives as a sibling of the scroll container (not
-            a flex item) so it does not squeeze the centered message column. */}
-        <AgentTodoPanel
-          sessionId={session?.id ?? null}
-        />
         <div ref={scrollContainerRef} onScroll={handleScroll} onWheel={handleWheel} onTouchMove={handleTouchMove} className="relative flex-1 overflow-y-auto px-4 pt-4 pb-20">
           <div className="mx-auto max-w-[820px]">
 
@@ -1521,12 +1515,17 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
           </div>
         </div>
 
-        {/* Bottom-right action stack — both buttons stay mounted at all
-            times so the affordance is stable. Disabled + dimmed when the
-            action doesn't apply. Hard-coded bilingual labels for the
+        {/* Bottom-right action stack — all launchers + actions stay mounted
+            at all times so the affordance is stable. Disabled + dimmed when
+            the action doesn't apply. Hard-coded bilingual labels for the
             "回到底部" button per product decision (no i18n key). */}
         <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-end gap-2">
-          {/* Session Library launcher (Q10A: first position). Always
+          {/* Agent Todo launcher (first position). Renders nothing
+              itself when there's no plan — the panel hides entirely so
+              the chat area stays clean. Click opens a popover anchored
+              above-left of this button. */}
+          <AgentTodoPanel sessionId={session?.id ?? null} />
+          {/* Session Library launcher (Q10A: second position). Always
               visible — empty state is shown inside the modal. Unread
               badge appears when entries land while the modal is closed. */}
           <SessionLibraryOpenButton

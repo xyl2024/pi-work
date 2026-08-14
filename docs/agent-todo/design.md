@@ -15,7 +15,7 @@
 - agent 可以 `create` / `update` / `list` / `get` / `delete` / `clear` 任务，action 集合与 rpiv-todo 完全对齐。
 - 状态**绑定到单个会话分支**（这是 agent 的工作记忆，不是跨会话的长期记录）。reload 重新水合；compact 不影响（因为不再依赖 `.jsonl`）。
 - 状态**独立持久化**到 `~/.pi-work/agent-todo/<sessionId>.jsonl`，追加写、保留每次变更的完整快照，方便追溯历史。文件可被 grep / `cat` / 备份工具直接读取。
-- UI 在一个流式 turn 内能感知到每一次变更，渲染**对话区域左侧空白处垂直居中的浮动面板**。
+- UI 在一个流式 turn 内能感知到每一次变更，通过**右下角圆形按钮 + 紧贴 popover** 呈现任务清单（点击按钮展开，agent 不用 plan 时整个 launcher 不渲染）。
 - 不引入新的 DB、不引入新的 RPC 命令。
 
 非目标：
@@ -49,7 +49,7 @@
 | 存储       | `~/.pi-work/todos.db`（SQLite）          | `~/.pi-work/agent-todo/<sessionId>.jsonl`（JSONL 追加写） |
 | 作用域     | 跨会话、跨 pi-work                      | 单个会话分支                              |
 | 历史追溯   | 全部变更都在 DB 里可查                  | 每次 action 写一行 JSONL，含 `stateAfter`，可 `cat` / `grep` |
-| UI         | `TodoPanel` 右栏 tab                   | `AgentTodoPanel`，对话区域**左侧空白处垂直居中浮动** |
+| UI         | `TodoPanel` 右栏 tab                   | `AgentTodoPanel`：右下角圆形按钮 + 紧贴 popover（点击展开） |
 
 `agent_` 前缀 + snake_case 的 `agent_todo` 名字是刻意选的：
 
@@ -390,16 +390,27 @@ reconcile 就是 `setTasks(serverTasks)` —— 简单、无需客户端 reducer
 
 ---
 
-## 7. 前端集成：对话区左侧垂直居中浮动面板
+## 7. 前端集成：右下角圆形按钮 + 紧贴 popover
 
-只有一个落点 —— **`AgentTodoPanel`，作为对话区域左侧空白处的浮动面板，
-垂直居中**。不再有右栏 tab，也不再有 `MessageView` 内联渲染：
-浮动面板由 SSE 驱动实时更新，与 chat 卡片互不干扰，刻意避免视觉
-重复。
+唯一一个落点 —— **圆形按钮在 chat 区域右下角的 action stack 里，
+点击展开紧贴其左上方的 popover，popover 内展示 agent 的 live task
+plan**。不再有右栏 tab，也不再在 `MessageView` 内联渲染：popover
+与 chat 卡片互不干扰，刻意避免视觉重复。
 
-### 7.1 布局定位
+### 7.1 为什么是按钮 + popover 而不是常驻面板
 
-对话区域的当前结构（来自 `components/ChatWindow.tsx:494`）：
+旧版是一个常驻在对话区左侧空白处的浮动面板（`max-w-820` 居中后，
+左侧天然有 sidebar 风格的留白）。重做后改成按钮触发，理由：
+
+1. **不被遮挡的"侧栏位"是稀缺资源**。用户的 left sidebar 已经
+   占了一块，留给 chat 的"左侧留白"在窄屏下会消失。按钮模式把
+   "是否要看 plan"的选择权交给用户，不用就一直不占视觉空间。
+2. **与现有右下角动作栈同规**。session library / collapse all /
+   scroll to bottom 已经是这种"小图标 + popover / 反馈"形态，agent
+   todo 并入之后右下角统一为"动作 / 启动器"的集合，不再有"两块
+   悬浮面板"的视觉分类。
+3. **关闭是显式的**。常驻面板"折叠 vs 展开"是隐式状态；按钮
+   "开了 / 没开"是一目了然的状态，与 SessionLibrary 同构。
 
 ```html
 <div class="scrollContainer" style="overflow-y:auto">
@@ -438,83 +449,136 @@ CSS 关键点（实现期再调，这里只描述定位意图）：
 - **过渡**：plan 从空到非空时 fade-in 200ms；从非空到空
   （`clear` 或会话结束）fade-out 200ms，避免突兀消失。
 
-### 7.2 内容布局
+### 7.2 挂载位置与 popover 定位
+
+挂载点在 `components/ChatWindow.tsx` 的右下角 action stack，是
+该栈的**第一颗按钮**（从左到右顺序：AgentTodo → SessionLibrary →
+Collapse all → Scroll to bottom）。
+
+按钮和 popover 共用一个 `position: relative` wrapper，所以 popover
+可以锚定到 wrapper 的右上角：
 
 ```
-┌─ Agent Plan ───────────  2/5  ✓1 ◐1 ○3 ┐
-│                                          │
-│  ◐  #1  Read rpiv-todo source           │   ← in_progress
-│       reading state-replay.ts            │   ← activeForm
-│                                          │
-│  ○  #2  Sketch persistence design         │   ← pending
-│  ○  #3  Decide tool API                   │
-│  ○  #4  Wire SSE channel                  │
-│  ○  #5  Build left-floating panel         │
-│                                          │
-│  ✓  #0  Define the design doc            │   ← completed
-│                                          │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│  chat content (max-w-820)              ╔═══════╗│
+│                                       ║popover║│
+│                                       ║       ║│
+│                                       ║ tasks ║│
+│                                       ║       ║│
+│                                       ╚═══════╝│
+│                                       ┌───┐     │
+│                                       │ ☐ │ ◀── launcher (button) │
+│                                       └───┘     │
+└──────────────────────────────────────────────────┘
 ```
 
-具体规则：
+具体 CSS：
 
-- **顶栏**：`Agent Plan` 标题（小号、加粗），右侧摘要
-  `done / total · in_progress · pending`，命中后只显示非零
-  计数（如 `2/5  ◐1 ○2`）。
-- **三个分组**：`In progress` / `Pending` / `Completed`，
-  内部按 `id` 升序（即"agent 创建顺序"），与 rpiv-todo overlay
-  的视觉一致。`deleted` tombstone 不渲染（但进 store 的
-  history 行仍在）。
-- **行内容**：
-  - 状态图标（`◐` in_progress 高亮色、`○` pending muted、
-    `✓` completed 带删除线 + muted）。
-  - `#N` 小号 accent 色，等宽字体。
-  - `subject` 主文本；`status === "in_progress"` 时下面补
-    一行 muted 小字 `activeForm`。
-- **点击**：把 `#N` 复制到剪贴板（toast 提示 `Copied #N`），
-  方便用户说"跳过 #3"。
-- **悬停**：行加 `--bg-hover`，光标 `pointer`。
-- **空态**：完全隐藏（见 7.1 过渡），不显示占位文本 —— 不
-  渲染就不抢眼。
+- **wrapper**：`position: relative`，宽度 = 按钮宽度 = 36px
+  （h-9 w-9）。是 flex item，落在 action stack 的第一个槽位。
+- **popover**：`position: absolute; bottom: calc(100% + 8px);
+  right: 0;` —— 底部距按钮顶部 8px，右侧与按钮右侧对齐。宽度
+  256px，高度 `max-height: 240px`（超过则内部滚动）。背景
+  `color-mix(var(--bg-panel) 50%, transparent)` + `backdropFilter:
+  blur(8px)` —— 跟旧面板同款半透明 + 模糊，让 popover 即使压在
+  消息上也不完全遮挡文字。
+- `transform-origin: bottom right` 让 scale 从按钮位置"长出来"
+  而不是从页面中心放大。
+- `z-index: 20`，高于 chat 内容。
 
-### 7.3 Hook：`useAgentTodo`
+### 7.3 Popover 内容
+
+跟旧面板**完全一致** —— 任务按 `id` 升序平铺（不再分组
+In progress / Pending / Completed，视觉状态是唯一区分）：
+
+- **in_progress**：`var(--accent)` 文字 + 2.6s linear gradient
+  sweep 高亮；下面补一行 muted `activeForm`。
+- **completed**：删除线 + `var(--text-dim)`。
+- **pending**：默认 `var(--text)`。
+- **deleted tombstone**：不渲染（但 store 里的 history 行仍存在）。
+- **空状态**：整个组件不渲染（连按钮都不显示），保留旧版的
+  "不抢眼"语义。Agent 一开始没调 `agent_todo`，聊天区右下角就
+  不会出现这颗按钮。
+
+### 7.4 Launcher 按钮细节
+
+- **图标**：3 行 checklist（每行左侧打勾 + 右侧横线），跟
+  SessionLibrary（2x2 网格）/ Collapse all（chevrons）/ Scroll to
+  bottom（单 chevron）在视觉上区分。
+- **圆点指示**：有 `in_progress` 任务时，按钮右上角显示一个
+  8×8 accent 圆点 + 2px `var(--bg-panel)` `boxShadow` 描边，跟
+  SessionLibrary 的红 badge 同款"浮在按钮上方"质感。**圆点有
+  2.6s scale 1→1.2 / opacity 1→0.7 循环 pulse**，跟 in_progress
+  文本的 sweep 同周期，所以"live"在按钮和 popover 内读到的信号
+  是一致的。
+- **hover**：跟同栈兄弟同规 —— `hover:scale-110`。
+- **aria-label / tooltip**：都跟 i18n `Agent Plan` 同键。
+
+### 7.5 动画
+
+- **展开**：外层 popover scale `0.96 → 1.0` + opacity `0 → 1`，
+  180ms `cubic-bezier(0.32, 0.72, 0, 1)`。`transform-origin:
+  bottom right` 让 popover 从按钮位置"长出来"而不是从页面中心
+  放大。
+- **内层 body** 仍走 `max-height: 0 ↔ 240px` 过渡 —— 与旧面板
+  同款节奏，负责实际的内容高度变化。
+- **关闭** 三种路径，任一触发都把 `open` 切 false：
+  1. **点同一按钮再点一下**（基础 toggle）。
+  2. **Esc** 键。
+  3. **mousedown 在 wrapper 外**。但命中
+     `[data-agent-todo-stay-open-zone]` 祖先的元素时**不关** ——
+     当前 `ChatInput` 最外层 wrapper 打了这个属性，所以用户在
+     popover 打开时点聊天输入框参考任务列表打字，popover 不会
+     意外关闭。
+
+为什么用 `mousedown` 而不是 `click`：click 在 mousedown 之后
+触发，如果 target 上的 click handler 重新打开了 popover（比如
+按钮），先 close 再 open 看起来会闪一下。mousedown 先关，后续
+click 再开，流程是干净的。
+
+- **popover 始终挂载在 DOM 里**，关闭时只是
+  `opacity: 0; transform: scale(0.96); pointer-events: none`。
+  这样 toggle 两个方向都走 CSS transition，无需 setTimeout
+  控制 unmount 节奏。
+- **prefers-reduced-motion**：全部 transition 关闭，光扫 / pulse
+  停止，文本恢复 `currentColor`。
+
+### 7.6 响应式
+
+`viewport < 1100px` 时**整个组件（按钮 + popover）都不渲染**，
+沿用旧面板的断点 —— 窄屏 chat 没有足够的右侧留白容纳 256px
+popover。Agent 在窄屏下仍可正常调 `agent_todo`，只是用户看不到
+panel，是显示层的退化，不影响功能。
+
+### 7.7 Hook：`useAgentTodo`
+
+数据流跟旧版完全相同，本节只是确认无变化。Hook 自适应轮询
+（1.5s active / 8s idle）`GET /api/agent/[id]/agent-todo`，按
+`fingerprint(tasks + nextId)` 跳过无变化的 setState。Session
+切换 / enabled toggle 时 effect cleanup 清状态、cancel 定时器。
+新组件复用同一个 hook，数据契约不变：
 
 ```ts
-// hooks/useAgentTodo.tsx
-export function AgentTodoProvider({ sessionId, children }: ...) {
-  const [state, setState] = useState<AgentTaskState>(EMPTY);
-  const [historyCount, setHistoryCount] = useState(0);
-  // mount / sessionId 变化时：GET /api/agent/[id]/agent-todo
-  //   → setState(res.current)
-  // 订阅 SSE：收到 `agent_todo_state` 事件 → setState(event.payload.state)
-  return <AgentTodoCtx.Provider value={...}>{children}</...>;
-}
-
-export function useAgentTodo(): {
-  tasks:        readonly AgentTask[];
-  empty:        boolean;
-  counts:       { pending: number; inProgress: number; completed: number; total: number };
-  historyCount: number;        // 文件里累计的 action 行数（用于未来"查看历史"入口）
+export function useAgentTodo(sessionId: string | null): {
+  tasks:   readonly AgentTask[];   // 已过滤 tombstone
+  empty:   boolean;                // true → caller 整个不渲染
+  enabled: boolean;                // global toggle, false → 整个不渲染
 };
 ```
 
-挂进 `useAgentSession` 的同一棵组件树（很可能挂在 `ChatWindow`
-或 `AppShell` 的 chat 容器节点上，与 `AgentTodoPanel` 兄弟。
-`sessionId` 变化时 Provider 重新拉取（在侧栏点开老会话，面板
-从 `~/.pi-work/agent-todo/<id>.jsonl` 末行水合）。
+### 7.8 与 `MessageView` 的关系
 
-### 7.4 与 `MessageView` 的关系
-
-**`MessageView` 不做特判**。`agent_todo` 工具调用以通用 tool-card
+`MessageView` 仍不做特判。`agent_todo` 工具调用以通用 tool-card
 渲染：header + 可展开的 input + result text，没有额外 inline
 body。理由：
 
-- 浮动面板已是 live 视图，工具调用一 commit 就同步更新；
-  inline 重复显示是噪声。
-- rpiv-todo 的 inline `renderCall` / `renderResult` 是 TUI
-  专有（无独立 panel），到了 web 已经被"侧栏面板"取代。
+- popover 已是 live 视图，工具调用一 commit 就同步更新；inline
+  重复显示是噪声。
+- rpiv-todo 的 inline `renderCall` / `renderResult` 是 TUI 专有
+  （无独立 panel），到了 web 已经被"按钮触发 popover"取代。
 - 想看历史 `details`（含 `params` 回显、状态变化过程）的人，
-  应当走"查看历史"入口（见第 12 节）而不是塞在 chat 流里。
+  应当走 JSON 文件 / JSONL endpoint（见第 8 节）而不是塞在 chat
+  流里。
 
 ---
 
@@ -581,12 +645,12 @@ lib/rpc-manager.ts                     +buildAgentTodoTool() 加进 customTools�
                                        +emit 辅助函数、+connect 时订阅
 
 components/
-  AgentTodoPanel.tsx                   对话区左侧垂直居中浮动面板
-  ChatWindow.tsx（或 AppShell.tsx）    挂载 <AgentTodoPanel /> 到 chat 容器
+  AgentTodoPanel.tsx                   右下角圆形按钮 + 紧贴 popover，点击展开任务清单
+  ChatWindow.tsx                       挂载 <AgentTodoPanel /> 到右下角 action stack（第一顺位）
 
 hooks/
-  useAgentTodo.tsx                     Provider + hook；桥接 SSE
-  useAgentSession.ts                   +1 个 case：agent_todo_state → setAgentTodo
+  useAgentTodo.ts                      自适应轮询（1.5s active / 8s idle）+ fingerprint 跳过无变更 setState
+  useAgentSession.ts                   已有 agent_todo_state SSE 通路（保留以备未来使用）
 
 docs/agent-todo/
   design.md                            本文档
@@ -647,17 +711,19 @@ session `.jsonl`。这是从分支回放改到文件持久化的最大收益。
 是唯一抓手。可以对照现有基线（例如"用 TodoWrite 处理复杂任务"）A/B
 guidance 文案，但这超出本文档范围。
 
-**窄屏没有面板。** viewport < 1100px 时整个 `AgentTodoPanel` 隐藏。
-手机上用户看不到 agent 的 plan，但 agent 仍能正常使用工具 —— 这
-是显示层的退化，不影响功能。如果将来要做 mobile-first，可能
-要把 panel 改成一个可下拉的 sheet。
+**窄屏没有面板。** viewport < 1100px 时整个 `AgentTodoPanel`
+（按钮 + popover）都不渲染。手机上用户看不到 agent 的 plan，
+但 agent 仍能正常使用工具 —— 这是显示层的退化，不影响功能。
+如果将来要做 mobile-first，可能要把 launcher 改成一个可下拉的
+sheet。
 
 ---
 
 ## 12. 明确不在本设计内
 
 - **没有 `/todos` slash command。** pi-work 的 chat 输入框没有 slash
-  command 表面。web 里 `/todos` 的等价物就是始终可见的左侧浮动面板。
+  command 表面。web 里 `/todos` 的等价物就是右下角的 launcher
+  按钮 + popover。
 - **没有"查看历史" UI。** history 数据全在 JSONL 里，可以
   `cat ~/.pi-work/agent-todo/<id>.jsonl | jq`；endpoint
   `GET /api/agent/[id]/agent-todo/history` 也已留好。但不渲染到
