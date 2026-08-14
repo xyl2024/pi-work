@@ -350,6 +350,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunningRef.current = agentRunning;
   }, [agentRunning]);
 
+  // System prompt is runtime-only agent state (never persisted to the .jsonl),
+  // so the top bar can only show it while the RPC wrapper is alive. Pull it at
+  // every turn start (agent_start) instead of waiting for agent_end, and again
+  // right after a brand-new session is created (the SSE connect can miss the
+  // very first agent_start). GET /api/agent/[id] is a cheap get_state and
+  // returns { running: false } without a state when the wrapper is gone.
+  const refreshSystemPrompt = useCallback(() => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    fetch(`/api/agent/${encodeURIComponent(sid)}`)
+      .then((r) => r.json())
+      .then((d: { state?: { systemPrompt?: string } }) => {
+        if (d.state?.systemPrompt !== undefined) setSystemPrompt(d.state.systemPrompt ?? null);
+      })
+      .catch(() => {});
+  }, []);
+
   const handleAgentEvent = useCallback((event: AgentEvent) => {
     switch (event.type) {
       case "agent_start":
@@ -357,6 +374,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setAgentPhase({ kind: "waiting_model" });
         dispatch({ type: "start" });
         statsEmitRef.current?.({ type: "reset" });
+        refreshSystemPrompt();
         break;
       case "agent_end":
         setAgentRunning(false);
@@ -637,7 +655,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
         break;
     }
-  }, [loadSession, onAgentEnd, onFirstAssistantReady, permissionsRef, t, toast]);
+  }, [loadSession, onAgentEnd, onFirstAssistantReady, permissionsRef, refreshSystemPrompt, t, toast]);
   handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
@@ -690,6 +708,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const realId = result.sessionId;
         sessionIdRef.current = realId;
         connectEvents(realId);
+        // The SSE connect can miss the very first agent_start (it fires while
+        // the POST /api/agent/new is still in flight), so pull the system
+        // prompt explicitly right after creation instead of waiting for
+        // agent_end.
+        refreshSystemPrompt();
         // Defer the sidebar refresh until the first assistant message lands:
         // the .jsonl does not exist before that, so a refresh right now would
         // not find the session.
@@ -720,7 +743,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentPhase(null);
       dispatch({ type: "end" });
     }
-  }, [isNew, newSessionCwd, newSessionModel, toolPreset, thinkingLevel, session, agentRunning, connectEvents, onSessionCreated, t, toast]);
+  }, [isNew, newSessionCwd, newSessionModel, toolPreset, thinkingLevel, session, agentRunning, connectEvents, onSessionCreated, refreshSystemPrompt, t, toast]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
