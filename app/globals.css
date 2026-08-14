@@ -713,7 +713,11 @@ span.linenumber {
 @media (min-width: 641px) {
   .right-panel-container {
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    /* ease-out-quart style curve: fast start so the click feels responsive,
+       soft landing. flex-grow animates the normal<->expanded transition
+       (expanded keeps flex-basis auto + the inline 32% width, so width stays
+       interpolatable while flex-grow spreads the remaining space). */
+    transition: width 0.18s cubic-bezier(0.32, 0.72, 0, 1), min-width 0.18s cubic-bezier(0.32, 0.72, 0, 1), flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1);
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-closed {
@@ -722,7 +726,7 @@ span.linenumber {
     border-left: none !important;
   }
   .right-panel-container.right-panel-expanded {
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
   }
   .right-panel-container.right-panel-expanded > * {
@@ -758,7 +762,7 @@ span.linenumber {
 
   .right-panel-container {
     overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    transition: width 0.18s cubic-bezier(0.32, 0.72, 0, 1), min-width 0.18s cubic-bezier(0.32, 0.72, 0, 1);
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
@@ -769,7 +773,6 @@ span.linenumber {
     width: 0 !important;
     min-width: 0 !important;
     border-left: none !important;
-    display: none !important;
   }
   .right-panel-container.right-panel-expanded {
     width: 100%;

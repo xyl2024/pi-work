@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, memo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionUiState, useSessionLeafChange, resetSessionUi } from "@/hooks/sessionUiStore";
 import { SessionSidebar } from "./SessionSidebar";
@@ -9,6 +9,14 @@ import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
 import { TodoPanel } from "./TodoPanel";
+
+// Right panel content re-renders only when its inputs change. TodoPanel has
+// no props, so memoizing it keeps AppShell's per-state-change re-renders
+// (e.g. collapsing the panel) from re-rendering the whole todo list — that
+// synchronous re-render on every click was the main source of the janky
+// collapse/expand animation (the ~200ms main-thread block ate the transition
+// frames).
+const MemoTodoPanel = memo(TodoPanel);
 import { CollectionPanel } from "./CollectionPanel";
 import { TranslatePanel } from "./TranslatePanel";
 import { ToolCallStatsPanel } from "./ToolCallStatsPanel";
@@ -858,23 +866,6 @@ export function AppShell() {
   const [rightPanelRect, setRightPanelRect] = useState<{ left: number; width: number } | null>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const panel = rightPanelRef.current;
-    if (!panel) return;
-    const update = () => {
-      const rect = panel.getBoundingClientRect();
-      setRightPanelRect({ left: rect.left, width: rect.width });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(panel);
-    window.addEventListener("resize", update);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, [rightPanelState]);
-
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const activeRightPanelKind = rightPanelState === "closed" ? null : activeFileTab?.kind ?? null;
 
@@ -888,6 +879,40 @@ export function AppShell() {
     }
   });
   const [terminalMaximized, setTerminalMaximized] = useState(false);
+
+  // The right-panel rect is only consumed by the right-docked terminal
+  // overlay. When the terminal is at the bottom, skip the observer entirely —
+  // the resize callback would otherwise fire a full AppShell re-render on
+  // every animation frame while the panel width animates (the main reason
+  // collapse/expand used to feel janky). When it is needed, rAF-coalesce the
+  // callback and skip no-op updates.
+  useEffect(() => {
+    if (terminalLocation !== "right") return;
+    const panel = rightPanelRef.current;
+    if (!panel) return;
+    let raf = 0;
+    const update = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const rect = panel.getBoundingClientRect();
+        setRightPanelRect((prev) =>
+          prev && Math.abs(prev.left - rect.left) < 0.5 && Math.abs(prev.width - rect.width) < 0.5
+            ? prev
+            : { left: rect.left, width: rect.width }
+        );
+      });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(panel);
+    window.addEventListener("resize", update);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [terminalLocation]);
   const [terminalHeight, setTerminalHeight] = useState<number>(() => {
     if (typeof window === "undefined") return 200;
     try {
@@ -1133,8 +1158,10 @@ export function AppShell() {
 
       {/* Drag handle removed — sidebar width is fixed. */}
 
-      {/* Center: chat */}
-      <div style={{ flex: 1, display: rightPanelState === "expanded" ? "none" : "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      {/* Center: chat — flex-grow animates the squeeze when the right panel
+          goes expanded: center grows 1->0 while the right panel grows 0->1,
+          so the whiteboard takeover slides instead of snapping. */}
+      <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1)" }}>
         {/* Top bar with sidebar toggle */}
         <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)", overflow: "visible", zIndex: 45 }}>
           <Tooltip content={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}>
@@ -1453,8 +1480,8 @@ export function AppShell() {
           flexDirection: "column",
           borderLeft: "1px solid var(--border)",
           background: "var(--bg)",
-          width: rightPanelState === "normal" ? rightWidth : undefined,
-          minWidth: rightPanelState === "normal" ? rightWidth : undefined,
+          width: rightPanelState === "closed" ? 0 : rightWidth,
+          minWidth: rightPanelState === "closed" ? 0 : rightWidth,
         }}
       >
         {/* Right panel tab bar */}
@@ -1479,7 +1506,7 @@ export function AppShell() {
         {/* File content */}
         <div style={{ flex: 1, overflow: "hidden" }}>
           {activeFileTab?.kind === "todo" ? (
-            <TodoPanel />
+            <MemoTodoPanel />
           ) : activeFileTab?.kind === "favorites" ? (
             <CollectionPanel
               favoriteIds={favoriteIds}
