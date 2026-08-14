@@ -155,7 +155,7 @@ export function GrokBotLab({ onClose }: Props) {
           }}
         >
           <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, flex: 1 }}>
-            {t("GrokBot Lab")}
+            {t("Pi Bot Lab")}
             <span style={{ marginLeft: 10, fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
               GB—{String(config.expression).padStart(2, "0")} · {stateName}
             </span>

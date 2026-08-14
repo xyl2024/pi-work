@@ -41,16 +41,16 @@ export function GrokBotStage({ onOpenLab }: Props) {
 
   return (
     <SidebarSection
-      title="GrokBot"
+      title="Pi Bot"
       open={open}
       onToggle={() => setOpen((v) => !v)}
       grow={0}
       actions={
-        <Tooltip content={t("GrokBot Lab")}>
+        <Tooltip content={t("Pi Bot Lab")}>
           <button
             type="button"
             onClick={onOpenLab}
-            aria-label={t("GrokBot Lab")}
+            aria-label={t("Pi Bot Lab")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 26, height: 26, padding: 0,
