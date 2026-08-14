@@ -92,3 +92,15 @@ export const MINIFY =
  *    <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/> */
 export const ESCAPE_DOC =
   "M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 17 21 H 7 A 2 2 0 0 1 5 19 V 5 A 2 2 0 0 1 7 3 H 14 L 19 8 V 19 A 2 2 0 0 1 17 21 Z";
+
+/** Thumbs-up icon (idle like button). Two subpaths: the hand/palm outline
+ *  and the thumb shaft. Source (lucide `thumbs-up`):
+ *    <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/>
+ *    <path d="M7 10v12"/> */
+export const THUMBS_UP =
+  "M 15 5.88 L 14 10 H 19.83 A 2 2 0 0 1 21.75 12.56 L 19.42 20.56 A 2 2 0 0 1 17.5 22 H 4 A 2 2 0 0 1 2 20 V 12 A 2 2 0 0 1 4 10 H 6.76 A 2 2 0 0 0 8.55 8.89 L 12 2 A 3.13 3.13 0 0 1 15 5.88 Z M 7 10 V 22";
+
+/** Heart icon (liked state). Single subpath. Source (lucide `heart`):
+ *    <path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/> */
+export const HEART =
+  "M 2 9.5 A 5.5 5.5 0 0 1 11.591 5.824 A 0.56 0.56 0 0 0 12.409 5.824 A 5.49 5.49 0 0 1 22 9.5 C 22 11.79 20.5 13.5 19 15 L 13.508 20.313 A 2 2 0 0 1 10.508 20.332 L 5 15 C 3.5 13.5 2 11.8 2 9.5";

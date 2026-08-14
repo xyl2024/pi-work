@@ -13,7 +13,7 @@ import { EchartsBlock } from "./EchartsBlock";
 import { SvgBlock } from "./SvgBlock";
 import { CodeBlock, copyText } from "./CodeBlock";
 import { MorphToggleIcon } from "./MorphToggleIcon";
-import { COPY, CHECK } from "@/lib/icon-paths";
+import { COPY, CHECK, THUMBS_UP, HEART } from "@/lib/icon-paths";
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { useShowFileResults } from "@/hooks/showFileResultsStore";
 import { openSessionLibrary } from "@/hooks/sessionLibraryStore";
@@ -109,11 +109,10 @@ function formatDuration(ms: number): string {
   return parts.join(" ");
 }
 
-/** Live per-turn duration label. Ticks every second while running, freezes on
+/** Live per-turn duration. Ticks every second while running, freezes on
  *  stop, and becomes fully static once endMs (authoritative, from the session
  *  file) arrives. Only this tiny component re-renders during ticking. */
 function TurnDuration({ startMs, endMs, running }: { startMs: number; endMs?: number; running: boolean }) {
-  const { t } = useI18n();
   const [elapsedMs, setElapsedMs] = useState<number | null>(null);
   useEffect(() => {
     if (endMs !== undefined || !running) return;
@@ -123,10 +122,9 @@ function TurnDuration({ startMs, endMs, running }: { startMs: number; endMs?: nu
     return () => clearInterval(id);
   }, [endMs, running, startMs]);
   const ms = endMs !== undefined ? endMs - startMs : (elapsedMs ?? 0);
-  const isLive = endMs === undefined && running;
   return (
     <span>
-      {isLive ? t("Elapsed") : t("Duration")} {formatDuration(ms)}
+      {formatDuration(ms)}
     </span>
   );
 }
@@ -496,6 +494,11 @@ function AssistantMessageView({
   const blocks = message.content ?? [];
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [liked, setLiked] = useState(false);
+  // Heart is transient like-feedback: thumbs-up morphs to heart on click,
+  // then settles back to a colored thumbs-up (liked) after a beat.
+  const [heartShown, setHeartShown] = useState(false);
+  const heartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [exporting, setExporting] = useState(false);
   const messageRef = useRef<HTMLDivElement>(null);
   const streamStartRef = useRef<number | null>(null);
@@ -531,6 +534,29 @@ function AssistantMessageView({
         console.warn("clipboard write failed");
       });
   };
+
+  const toggleLike = () => {
+    if (liked) {
+      if (heartTimerRef.current) {
+        clearTimeout(heartTimerRef.current);
+        heartTimerRef.current = null;
+      }
+      setLiked(false);
+      setHeartShown(false);
+    } else {
+      setLiked(true);
+      setHeartShown(true);
+      heartTimerRef.current = setTimeout(() => {
+        // Heart was just feedback — settle on a colored thumbs-up (liked).
+        setHeartShown(false);
+        heartTimerRef.current = null;
+      }, 700);
+    }
+  };
+
+  useEffect(() => () => {
+    if (heartTimerRef.current) clearTimeout(heartTimerRef.current);
+  }, []);
 
   const handleExport = async () => {
     const el = messageRef.current;
@@ -720,6 +746,28 @@ function AssistantMessageView({
           </button>
           </Tooltip>
         )}
+        {!isStreaming && (
+          <Tooltip content={liked ? t("Unlike") : t("Like")}>
+          <button
+            onClick={toggleLike}
+            aria-label={liked ? t("Unlike") : t("Like")}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 22, height: 22,
+              padding: 0,
+              background: "none", border: "none",
+              borderRadius: 5,
+              color: liked ? "#f472b6" : "var(--text-dim)",
+              cursor: "pointer",
+              transition: "color 0.12s",
+            }}
+            onMouseEnter={(e) => { if (!liked) e.currentTarget.style.color = "var(--accent)"; }}
+            onMouseLeave={(e) => { if (!liked) e.currentTarget.style.color = "var(--text-dim)"; }}
+          >
+            <MorphToggleIcon from={THUMBS_UP} to={HEART} active={heartShown} size={11} strokeWidth={1.8} />
+          </button>
+          </Tooltip>
+        )}
         {turnDuration && (turnDuration.endMs !== undefined || turnDuration.running) && (
           <span style={{ fontSize: 10, color: "var(--text-dim)" }}>
             <TurnDuration startMs={turnDuration.startMs} endMs={turnDuration.endMs} running={!!turnDuration.running} />
@@ -737,7 +785,7 @@ function AssistantMessageView({
             pointerEvents: hovered ? "auto" : "none",
             transition: "opacity 0.12s",
           }}>
-            {message.usage && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{formatUsage(message.usage, t)}</span>}
+            {message.usage && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{formatUsage(message.usage)}</span>}
             {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
           </span>
         )}
@@ -1210,15 +1258,14 @@ function formatUsage(usage: {
   cacheRead: number;
   cacheWrite: number;
   cost: { total: number };
-}, t: ReturnType<typeof useI18n>["t"]): string {
+}): string {
   const parts = [];
   if (usage.input) {
     const inputDenom = usage.input + usage.cacheRead;
-    const cacheHitRate = inputDenom > 0 ? usage.cacheRead / inputDenom : 0;
-    const hit = `（${t("Cache hit")}：${(cacheHitRate * 100).toFixed(1)}%）`;
-    parts.push(`${usage.input.toLocaleString()} ${t("in")}${hit}`);
+    const cacheHitRate = inputDenom > 0 ? (usage.cacheRead / inputDenom) * 100 : 0;
+    parts.push(`${usage.input.toLocaleString()} in ${cacheHitRate.toFixed(1)}% cached`);
   }
-  if (usage.output) parts.push(`${usage.output.toLocaleString()} ${t("out")}`);
+  if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
   if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
-  return parts.join(" · ");
+  return parts.join(" ");
 }
