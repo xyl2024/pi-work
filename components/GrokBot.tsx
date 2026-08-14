@@ -26,7 +26,6 @@ import {
   GROKBOT_EXPRESSIONS,
   GROKBOT_POOLS,
   GROKBOT_BLINK,
-  GROKBOT_COLORS,
   GROKBOT_SHAPES,
   type GrokExpression,
   type GrokPoint,
@@ -248,13 +247,10 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.stateKey]);
 
-  // Color + shape + parts + accessories are plain DOM updates.
+  // Body color follows `var(--accent)` via CSS; only shape / parts / accessories
+  // are plain DOM updates.
   useEffect(() => {
-    const color = GROKBOT_COLORS.find((c) => c.id === config.colorId);
     const shape = GROKBOT_SHAPES.find((s) => s.id === config.shapeId);
-    if (color) {
-      stageRef.current?.style.setProperty("--bot-color", color.hex);
-    }
     if (shape) {
       bodyPathRef.current?.setAttribute("d", shape.path);
       clipPathRef.current?.setAttribute("d", shape.path);
@@ -270,7 +266,7 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
         el?.classList.toggle("grokbot-enabled", config.accessories.includes(acc));
       }
     }
-  }, [config.colorId, config.shapeId, config.parts, config.accessories]);
+  }, [config.shapeId, config.parts, config.accessories]);
 
   // ── Animation loop ────────────────────────────────────────────────────
 
@@ -419,14 +415,13 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
     },
   }), []);
 
-  const colorHex = GROKBOT_COLORS.find((c) => c.id === config.colorId)?.hex ?? "#2f86ed";
   const shapePath = GROKBOT_SHAPES.find((s) => s.id === config.shapeId)?.path ?? GROKBOT_SHAPES[0].path;
 
   return (
     <div
       ref={stageRef}
       className={`grokbot-stage${className ? ` ${className}` : ""}`}
-      style={{ ["--bot-color" as string]: colorHex, touchAction: "none" }}
+      style={{ touchAction: "none" }}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
       onPointerDown={handlePointerDown}

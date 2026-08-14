@@ -6,9 +6,7 @@ import {
   GROKBOT_GROUPS,
   GROKBOT_POOLS,
   GROKBOT_EXPR_CADENCE,
-  GROKBOT_COLORS,
   GROKBOT_SHAPES,
-  GROKBOT_DEFAULT_COLOR_ID,
   GROKBOT_DEFAULT_SHAPE_ID,
 } from "@/lib/grokbot-data";
 
@@ -36,7 +34,12 @@ export interface GrokbotConfig {
   expression: number;
   /** Key into GROKBOT_POOLS / GROKBOT_STATE_NAMES, e.g. "idle". */
   stateKey: string;
-  colorId: string;
+  /**
+   * Body color is always the active theme accent (see `var(--accent)` on
+   * `.grokbot-stage` in globals.css). The field is kept only so old
+   * `localStorage` payloads don't trip `isConfig`; new writes ignore it.
+   */
+  colorId?: string;
   shapeId: string;
   /** Enabled body-part ids (hands/feet/tail/antenna). */
   parts: string[];
@@ -51,7 +54,6 @@ const STORAGE_KEY = "pi-work.grokbot.config";
 const DEFAULT_CONFIG: GrokbotConfig = {
   expression: 0,
   stateKey: "idle",
-  colorId: GROKBOT_DEFAULT_COLOR_ID,
   shapeId: GROKBOT_DEFAULT_SHAPE_ID,
   parts: [],
   accessories: [],
@@ -66,14 +68,14 @@ function isConfig(v: unknown): v is GrokbotConfig {
   if (typeof v !== "object" || v === null) return false;
   const c = v as Record<string, unknown>;
   if (typeof c.expression !== "number" || typeof c.stateKey !== "string") return false;
-  if (typeof c.colorId !== "string" || typeof c.shapeId !== "string") return false;
+  if (typeof c.shapeId !== "string") return false;
   if (!Array.isArray(c.parts) || !Array.isArray(c.accessories)) return false;
   if (typeof c.autoPlay !== "boolean") return false;
+  // colorId is tolerated for legacy payloads but not validated.
   return (
     c.expression >= 0 &&
     c.expression < GROKBOT_EXPRESSIONS.length &&
     GROKBOT_POOLS[c.stateKey] !== undefined &&
-    GROKBOT_COLORS.some((col) => col.id === c.colorId) &&
     GROKBOT_SHAPES.some((s) => s.id === c.shapeId)
   );
 }
@@ -166,7 +168,11 @@ export function getGrokbotConfig(): GrokbotConfig {
 }
 
 export function setGrokbotConfig(patch: Partial<GrokbotConfig>): void {
-  const next = { ...state, ...patch };
+  // colorId is no longer user-controllable — strip any stale patch so old
+  // callers (`setGrokbotConfig({ colorId: "..." })`) can't reintroduce it.
+  const { colorId: _colorId, ...rest } = patch;
+  void _colorId;
+  const next = { ...state, ...rest };
   if (next.expression < 0 || next.expression >= GROKBOT_EXPRESSIONS.length) {
     next.expression = DEFAULT_CONFIG.expression;
   }
@@ -183,14 +189,13 @@ export function setGrokbotConfig(patch: Partial<GrokbotConfig>): void {
   emit();
 }
 
-/** Fully randomize color / shape / state / expression / parts. */
+/** Randomize shape / state / expression / parts. Body color is fixed to the
+ *  active theme accent and is intentionally not touched. */
 export function randomizeGrokbot(): void {
   const states = ALL_STATES;
-  const color = GROKBOT_COLORS[Math.floor(Math.random() * GROKBOT_COLORS.length)];
   const shape = GROKBOT_SHAPES[Math.floor(Math.random() * GROKBOT_SHAPES.length)];
   const parts = ["hands", "feet", "tail", "antenna"].filter(() => Math.random() < 0.42);
   setGrokbotConfig({
-    colorId: color.id,
     shapeId: shape.id,
     parts,
     accessories: [],

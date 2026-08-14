@@ -1094,8 +1094,10 @@ li.todo-task-item[data-checked="true"] > div {
 }
 
 /* ── GrokBot animations (vendored from LaoA-GrokBot, MIT) ── */
+/* Bot color follows the active theme accent — GrokBot has no user-facing
+   color picker; switching theme automatically re-tints the body. */
 .grokbot-stage {
-  --bot-color: #2f86ed;
+  --bot-color: var(--accent);
 }
 .grokbot-stage .grokbot-body {
   fill: var(--bot-color);

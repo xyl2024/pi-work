@@ -32,24 +32,6 @@ export const GROKBOT_BLINK: GrokBlinkMap = {"sleeping":null,"waking":null,"idle"
 
 // ── Customization catalogs (from customizer.js / enhancements.js) ──
 
-export interface GrokColorDef {
-  id: string;
-  name: string;
-  hex: string;
-}
-export const GROKBOT_COLORS: GrokColorDef[] = [
-  { id: "cocoa", name: "可可棕", hex: "#9a6737" },
-  { id: "red", name: "活力红", hex: "#ff3347" },
-  { id: "orange", name: "暖橙", hex: "#ff6a00" },
-  { id: "amber", name: "琥珀", hex: "#ff9800" },
-  { id: "green", name: "青绿", hex: "#08c77a" },
-  { id: "teal", name: "湖蓝", hex: "#08b9a9" },
-  { id: "blue", name: "经典蓝", hex: "#2f86ed" },
-  { id: "purple", name: "梦幻紫", hex: "#8656f6" },
-  { id: "pink", name: "桃粉", hex: "#ff2d8b" },
-  { id: "black", name: "纯黑", hex: "#000000" },
-];
-
 export interface GrokShapeDef {
   id: string;
   name: string;
@@ -113,5 +95,4 @@ export const GROKBOT_QUICK_ACTIONS = [
   { id: "wave", name: "挥手" },
 ] as const;
 
-export const GROKBOT_DEFAULT_COLOR_ID = "blue";
 export const GROKBOT_DEFAULT_SHAPE_ID = "blob";

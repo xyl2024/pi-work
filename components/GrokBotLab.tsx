@@ -4,11 +4,15 @@
  * GrokBotLab — full customization modal for the sidebar GrokBot companion.
  *
  * Left column: live preview (pointer-following gaze + blink) plus the six
- * jello quick actions. Right column (scrollable): color / shape / body part /
+ * jello quick actions. Right column (scrollable): shape / body part /
  * accessory pickers, all 25 expressions (paged), and all 39 states grouped by
  * category (tabs + paging). Every pick writes to the shared grokbot store, so
  * the sidebar stage updates live behind the modal. Auto-tour cycles through
  * all states via the store's module-level timer.
+ *
+ * Bot body color is intentionally NOT exposed here — it tracks the active
+ * theme accent (see `--bot-color: var(--accent)` in globals.css) and updates
+ * automatically when the user switches theme.
  *
  * Vendored from https://github.com/zhulin025/LaoA-GrokBot (MIT).
  */
@@ -23,7 +27,6 @@ import {
 import {
   GROKBOT_EXPRESSIONS,
   GROKBOT_GROUPS,
-  GROKBOT_COLORS,
   GROKBOT_SHAPES,
   GROKBOT_PARTS,
   GROKBOT_ACCESSORIES,
@@ -62,7 +65,10 @@ export function GrokBotLab({ onClose }: Props) {
   const stateName = locale === "zh"
     ? (GROKBOT_STATE_NAMES[config.stateKey] ?? config.stateKey)
     : config.stateKey;
-  const colorHex = GROKBOT_COLORS.find((c) => c.id === config.colorId)?.hex ?? "#2f86ed";
+  // Bot body color always tracks the active theme accent (see
+  // `--bot-color: var(--accent)` in globals.css). All preview swatches in
+  // this modal use the same token so the preview matches the rendered bot.
+  const BOT_TINT = "var(--accent)";
 
   // ESC to close (same as other modals).
   useEffect(() => {
@@ -271,30 +277,7 @@ export function GrokBotLab({ onClose }: Props) {
               padding: "12px 16px 20px",
             }}
           >
-            {/* Color */}
-            <Section title={t("Color")}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {GROKBOT_COLORS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    title={c.name}
-                    aria-label={c.name}
-                    aria-pressed={config.colorId === c.id}
-                    onClick={() => setGrokbotConfig({ colorId: c.id })}
-                    style={{
-                      width: 26,
-                      height: 26,
-                      padding: 0,
-                      borderRadius: "50%",
-                      background: c.hex,
-                      border: config.colorId === c.id ? "2px solid var(--text)" : "1px solid var(--border)",
-                      cursor: "pointer",
-                    }}
-                  />
-                ))}
-              </div>
-            </Section>
+            {/* Body color is locked to the active theme accent; no picker. */}
 
             {/* Shape */}
             <Section title={t("Shape")}>
@@ -318,7 +301,7 @@ export function GrokBotLab({ onClose }: Props) {
                     }}
                   >
                     <svg viewBox="0 0 229 229" style={{ width: "100%", height: "100%" }} aria-hidden>
-                      <path d={s.path} fill={colorHex} />
+                      <path d={s.path} fill={BOT_TINT} />
                       <ellipse cx="87" cy="102" rx="9" ry="21" fill="var(--bg)" />
                       <ellipse cx="143" cy="102" rx="9" ry="21" fill="var(--bg)" />
                     </svg>
@@ -339,8 +322,8 @@ export function GrokBotLab({ onClose }: Props) {
                     style={{
                       ...btnBase,
                       padding: "6px 10px",
-                      borderColor: config.parts.includes(p.id) ? colorHex : "var(--border)",
-                      color: config.parts.includes(p.id) ? colorHex : "var(--text-muted)",
+                      borderColor: config.parts.includes(p.id) ? BOT_TINT : "var(--border)",
+                      color: config.parts.includes(p.id) ? BOT_TINT : "var(--text-muted)",
                       background: config.parts.includes(p.id) ? "var(--bg-hover)" : "transparent",
                     }}
                   >
@@ -361,8 +344,8 @@ export function GrokBotLab({ onClose }: Props) {
                     style={{
                       ...btnBase,
                       padding: "6px 10px",
-                      borderColor: config.accessories.includes(a.id) ? colorHex : "var(--border)",
-                      color: config.accessories.includes(a.id) ? colorHex : "var(--text-muted)",
+                      borderColor: config.accessories.includes(a.id) ? BOT_TINT : "var(--border)",
+                      color: config.accessories.includes(a.id) ? BOT_TINT : "var(--text-muted)",
                       background: config.accessories.includes(a.id) ? "var(--bg-hover)" : "transparent",
                     }}
                   >
@@ -398,7 +381,7 @@ export function GrokBotLab({ onClose }: Props) {
                       }}
                     >
                       <svg viewBox="0 0 229 229" style={{ width: 40, height: 40 }} aria-hidden>
-                        <path d={ringPreviewPath(expr)} fill={colorHex} />
+                        <path d={ringPreviewPath(expr)} fill={BOT_TINT} />
                       </svg>
                       <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
                         {String(index).padStart(2, "0")}
