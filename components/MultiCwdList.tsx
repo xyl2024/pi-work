@@ -393,11 +393,16 @@ function CwdGroup({
   }, [loadMenuOpen, cancelMenuClose]);
 
   return (
+    // No gap between header and body here: the 4px spacing lives as
+    // paddingTop on the body's inner content (below) so it animates with
+    // the height. A flex gap here would sit OUTSIDE the height-animated,
+    // overflow-hidden container — collapsing to height 0 would still leave
+    // the 4px gap behind, and when the body unmounts 220ms later the gap
+    // would vanish in a non-animated 4px snap.
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 4,
       }}
     >
       {/* Cwd header — plain row, no hover/active visual. Click anywhere on
@@ -625,7 +630,7 @@ function CwdGroup({
                 : "none",
           }}
         >
-          <div ref={bodyRef} style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 6 }}>
+          <div ref={bodyRef} style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 6, paddingTop: 4 }}>
           {pinnedInCwd.length > 0 && (
             <>
               <div style={{ padding: "2px 6px 1px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
