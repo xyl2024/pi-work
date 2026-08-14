@@ -45,6 +45,8 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { useInboxUnreadCount } from "@/hooks/useInboxUnreadCount";
 import { useRssUnreadCount } from "@/hooks/useRssUnreadCount";
+import { MorphToggleIcon } from "./MorphToggleIcon";
+import { MENU, PANEL_LEFT, DOWNLOAD, LOADER, SPARKLE, CLOCK } from "@/lib/icon-paths";
 import { useToast } from "./Toast";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import type { SessionInfo, SessionSearchResult } from "@/lib/types";
@@ -1176,15 +1178,7 @@ export function AppShell() {
             onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
           >
-            {sidebarOpen ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            )}
+            <MorphToggleIcon from={MENU} to={PANEL_LEFT} active={sidebarOpen} />
           </button>
           </Tooltip>
           {showChat && (
@@ -1230,22 +1224,14 @@ export function AppShell() {
                   )}
                   {headerActions.exportVisible && (
                     <IconHoverButton
-                      icon={headerActions.isExporting ? (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="12" y1="2" x2="12" y2="6" />
-                          <line x1="12" y1="16" x2="12" y2="22" />
-                          <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-                          <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-                          <line x1="2" y1="12" x2="6" y2="12" />
-                          <line x1="16" y1="12" x2="22" y2="12" />
-                        </svg>
-                      ) : (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                          <polyline points="7 10 12 15 17 10" />
-                          <line x1="12" y1="15" x2="12" y2="3" />
-                        </svg>
-                      )}
+                      icon={
+                        <MorphToggleIcon
+                          from={DOWNLOAD}
+                          to={LOADER}
+                          active={headerActions.isExporting}
+                          size={12}
+                        />
+                      }
                       label={headerActions.isExporting ? t("Exporting...") : t("Export session")}
                       onClick={headerActions.onExport}
                       disabled={headerActions.isExporting}
@@ -1254,17 +1240,14 @@ export function AppShell() {
                   )}
                   {headerActions.autoNameVisible && (
                     <IconHoverButton
-                      icon={headerActions.isAutoNaming ? (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="9" />
-                          <path d="M12 7v5l3 2" />
-                        </svg>
-                      ) : (
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z" />
-                          <path d="M19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9L19 14z" />
-                        </svg>
-                      )}
+                      icon={
+                        <MorphToggleIcon
+                          from={SPARKLE}
+                          to={CLOCK}
+                          active={headerActions.isAutoNaming}
+                          size={12}
+                        />
+                      }
                       label={headerActions.isAutoNaming ? t("Naming...") : t("Auto-name session")}
                       onClick={headerActions.onAutoName}
                       disabled={!headerActions.canAutoName}

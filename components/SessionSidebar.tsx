@@ -8,6 +8,8 @@ import { ProfileBlock } from "./ProfileBlock";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
 import { Tooltip } from "./Tooltip";
+import { MorphToggleIcon } from "./MorphToggleIcon";
+import { REFRESH, CHECK } from "@/lib/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
 
 interface Props {
@@ -663,16 +665,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
                 e.currentTarget.style.borderColor = "var(--border)";
               }}
             >
-              {sessionRefreshDone ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              )}
+              <MorphToggleIcon from={REFRESH} to={CHECK} active={sessionRefreshDone} size={15} strokeWidth={2.5} />
             </button>
             </Tooltip>
             {onOpenSearch && (
@@ -820,16 +813,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
               onMouseEnter={(e) => { if (explorerRefreshDone) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
               onMouseLeave={(e) => { if (explorerRefreshDone) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
             >
-              {explorerRefreshDone ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              )}
+              <MorphToggleIcon from={REFRESH} to={CHECK} active={explorerRefreshDone} size={13} strokeWidth={2.5} />
             </button>
             </Tooltip>
           </div>

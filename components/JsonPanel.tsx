@@ -5,6 +5,8 @@ import type { ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
 import { Tooltip } from "./Tooltip";
+import { MorphToggleIcon } from "./MorphToggleIcon";
+import { CHECK, MINIFY, ESCAPE_DOC } from "@/lib/icon-paths";
 import { parseJsonTolerant, escapeJsonString } from "@/lib/json-parser";
 import {
   JsonTreeView,
@@ -39,25 +41,6 @@ const ICON_PROPS = {
 // Lucide-derived icons (24x24, stroke=currentColor, strokeWidth=1.8).
 // Each one is paired with its tooltip label below.
 const ICONS: Record<string, ReactNode> = {
-  // Copy minify (diagonal arrows compressing)
-  minify: (
-    <svg {...ICON_PROPS}>
-      <polyline points="4 14 10 14 10 20" />
-      <polyline points="20 10 14 10 14 4" />
-      <line x1="14" y1="10" x2="21" y2="3" />
-      <line x1="3" y1="21" x2="10" y2="14" />
-    </svg>
-  ),
-  // Copy minify & escape (document with text lines)
-  escape: (
-    <svg {...ICON_PROPS}>
-      <path d="M14 3v4a1 1 0 0 0 1 1h4" />
-      <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
-      <line x1="11" y1="11" x2="14" y2="11" />
-      <line x1="11" y1="15" x2="14" y2="15" />
-      <line x1="11" y1="19" x2="14" y2="19" />
-    </svg>
-  ),
   // Tree view (git-branch)
   tree: (
     <svg {...ICON_PROPS}>
@@ -159,6 +142,10 @@ export function JsonPanel() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (typeof saved === "string") setContent(saved);
     } catch { /* localStorage unavailable — keep default */ }
+  }, []);
+
+  useEffect(() => () => {
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
   }, []);
 
   useEffect(() => {
@@ -301,10 +288,20 @@ export function JsonPanel() {
     }
   }, []);
 
+  const [copiedMinify, setCopiedMinify] = useState(false);
+  const [copiedMinifyEscape, setCopiedMinifyEscape] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashCopied = (setter: (v: boolean) => void) => {
+    setter(true);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setter(false), 1500);
+  };
+
   const handleCopyMinify = useCallback(async () => {
     if (parsed === null) return;
     try {
       await navigator.clipboard.writeText(JSON.stringify(parsed));
+      flashCopied(setCopiedMinify);
       toast.show({ kind: "success", message: t("Copied") });
     } catch {
       toast.show({ kind: "error", message: t("Failed to copy") });
@@ -315,6 +312,7 @@ export function JsonPanel() {
     if (parsed === null) return;
     try {
       await navigator.clipboard.writeText(escapeJsonString(parsed));
+      flashCopied(setCopiedMinifyEscape);
       toast.show({ kind: "success", message: t("Copied") });
     } catch {
       toast.show({ kind: "error", message: t("Failed to copy") });
@@ -368,8 +366,20 @@ export function JsonPanel() {
         <div style={{ flex: 1 }} />
         <ErrorBadge error={error} ignoredPrefix={error?.ignoredPrefix} ignoredSuffix={error?.ignoredSuffix} />
         <IconButton label={t("Clear")} icon={ICONS.clear} onClick={handleClear} disabled={content.length === 0} />
-        <IconButton label={t("Copy minify")} icon={ICONS.minify} onClick={handleCopyMinify} disabled={disableTransform} />
-        <IconButton label={t("Copy minify & escape")} icon={ICONS.escape} onClick={handleCopyMinifyEscape} disabled={disableTransform} />
+        <IconButton
+          label={copiedMinify ? t("Copied") : t("Copy minify")}
+          icon={<MorphToggleIcon from={MINIFY} to={CHECK} active={copiedMinify} size={14} strokeWidth={1.8} />}
+          onClick={handleCopyMinify}
+          disabled={disableTransform}
+          active={copiedMinify}
+        />
+        <IconButton
+          label={copiedMinifyEscape ? t("Copied") : t("Copy minify & escape")}
+          icon={<MorphToggleIcon from={ESCAPE_DOC} to={CHECK} active={copiedMinifyEscape} size={14} strokeWidth={1.8} />}
+          onClick={handleCopyMinifyEscape}
+          disabled={disableTransform}
+          active={copiedMinifyEscape}
+        />
       </div>
 
       {isTreeView && (

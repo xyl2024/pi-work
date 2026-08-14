@@ -11,6 +11,8 @@ import { useContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { Tooltip } from "@/components/Tooltip";
 import { DatePicker } from "./DatePicker";
+import { MorphToggleIcon } from "./MorphToggleIcon";
+import { EMPTY_CHECKBOX, CHECKBOX_CHECKED } from "@/lib/icon-paths";
 import { TodoMonthCalendar, type CalendarMonth } from "./TodoMonthCalendar";
 import { extractImagesFromHtml, ImageLightbox } from "./ImageLightbox";
 import { TodoDescriptionView } from "./TodoDescriptionView";
@@ -3280,11 +3282,14 @@ function TodoItem({
             transition: "background 0.1s, border-color 0.1s",
           }}
         >
-          {todo.done && (
-            <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="2 5 4.5 7.5 8.5 2.5" />
-            </svg>
-          )}
+          <MorphToggleIcon
+            from={EMPTY_CHECKBOX}
+            to={CHECKBOX_CHECKED}
+            active={todo.done}
+            size={9}
+            viewBox="0 0 10 10"
+            strokeWidth={2}
+          />
         </button>
         {/* Priority chip sits between the checkbox and the chevron. Rendered
             only when a priority is set; the title then slides over so an unset

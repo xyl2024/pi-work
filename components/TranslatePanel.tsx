@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
 import { Tooltip } from "./Tooltip";
+import { MorphToggleIcon } from "./MorphToggleIcon";
+import { COPY, CHECK } from "@/lib/icon-paths";
 import { AnimatedPopover } from "./AnimatedPopover";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "./ProviderIcon";
 import {
@@ -56,6 +58,7 @@ export function TranslatePanel() {
   const [target, setTarget] = useState<LanguageCode>(DEFAULT_TARGET_LANGUAGE);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [hoveredAction, setHoveredAction] = useState<"prompts" | "copy" | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
@@ -260,6 +263,8 @@ export function TranslatePanel() {
     if (!output) return;
     try {
       await navigator.clipboard.writeText(output);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
       toast.show({ kind: "success", message: t("Copied") });
     } catch {
       toast.show({ kind: "error", message: t("Translation failed") });
@@ -549,10 +554,7 @@ export function TranslatePanel() {
               transition: "gap 0.15s",
             }}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
+            <MorphToggleIcon from={COPY} to={CHECK} active={copied} size={11} />
             <span style={{
               opacity: hoveredAction === "copy" ? 1 : 0,
               maxWidth: hoveredAction === "copy" ? 80 : 0,

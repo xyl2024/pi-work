@@ -27,7 +27,7 @@
  * stacking context and we can lock body scroll while it's open.
  */
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -38,6 +38,8 @@ import {
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
 import { useToast } from "@/components/Toast";
 import { copyText } from "@/components/CodeBlock";
+import { MorphToggleIcon } from "@/components/MorphToggleIcon";
+import { COPY, CHECK } from "@/lib/icon-paths";
 import { joinFilePath } from "@/lib/file-paths";
 import type { AgentMessage } from "@/lib/types";
 import { SessionLibraryGrid } from "./SessionLibraryGrid";
@@ -109,10 +111,18 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
   }, [ui.viewMode, ui.mediaPreviewTileKey, tiles, cwd]);
 
   const toast = useToast();
+  const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+  }, []);
   const handleCopyPath = async () => {
     if (!previewPath) return;
     try {
       await copyText(previewPath);
+      setCopied(true);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 1500);
       toast.show({ kind: "success", message: t("Path copied") });
     } catch {
       toast.show({ kind: "error", message: t("Failed to copy path") });
@@ -246,14 +256,14 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
             <button
               type="button"
               onClick={handleCopyPath}
-              aria-label={t("Copy path")}
-              title={t("Copy path")}
-              style={headerIconBtnStyle}
+              aria-label={copied ? t("Path copied") : t("Copy path")}
+              title={copied ? t("Path copied") : t("Copy path")}
+              style={{
+                ...headerIconBtnStyle,
+                color: copied ? "#22c55e" : headerIconBtnStyle.color,
+              }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15V5a2 2 0 0 1 2-2h10" />
-              </svg>
+              <MorphToggleIcon from={COPY} to={CHECK} active={copied} size={12} />
             </button>
           )}
 
