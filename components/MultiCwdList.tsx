@@ -7,6 +7,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { SessionItem } from "./SessionItem";
 import { Tooltip } from "./Tooltip";
 import { CollapsiblePanel } from "./CollapsiblePanel";
+import { FolderIcon } from "./FileIcons";
 import { useAllPendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 
 /**
@@ -427,21 +428,21 @@ function CwdGroup({
           cursor: "pointer",
         }}
       >
-        {/* Folder icon — marks this row as a cwd. The fold/unfold chevron
-            moved next to the basename (see below); clicking the header row
-            still toggles expand/collapse. */}
+        {/* Folder icon — marks this row as a cwd. Uses the vscode-icons
+            coloured folder so it stands out from the monochrome sidebar
+            chrome; the open/closed variant flips with `expanded` to give
+            a hint that clicking toggles the group. The fold/unfold chevron
+            next to the basename (see below) is the canonical affordance —
+            this is just visual reinforcement. */}
         <span
           aria-hidden
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 14, height: 22,
-            color: "var(--text-dim)",
             flexShrink: 0,
           }}
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-          </svg>
+          <FolderIcon size={12} open={expanded} />
         </span>
 
         {/* Path — basename, then the fold/unfold chevron immediately after

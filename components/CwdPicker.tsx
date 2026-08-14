@@ -6,6 +6,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 import { AnimatedPopover } from "./AnimatedPopover";
 import { useToast } from "./Toast";
+import { FolderIcon } from "./FileIcons";
 
 /**
  * Reusable cwd picker — the previously inline picker that lived in the
@@ -224,9 +225,12 @@ export function CwdPicker({
             e.currentTarget.style.color = cwd ? "var(--text)" : "var(--text-muted)";
           }}
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-            <path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-          </svg>
+          {/* Coloured vscode-icons folder — no currentColor so the
+              "no-cwd-yet" greying is dropped: when no project is picked
+              the placeholder text ("Select project...") is the cue. */}
+          <span style={{ display: "flex", flexShrink: 0 }}>
+            <FolderIcon size={12} />
+          </span>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, fontFamily: "var(--font-mono)" }}>
             {buttonLabel}
           </span>
