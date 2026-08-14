@@ -87,6 +87,7 @@ export const ZH_TRANSLATIONS = {
   "Open": "打开",
   "Loading...": "正在加载...",
   "No sessions found": "未找到会话",
+  "Sessions": "会话",
   "Explorer": "资源管理器",
   "Refresh explorer": "刷新资源管理器",
   "Delete": "删除",

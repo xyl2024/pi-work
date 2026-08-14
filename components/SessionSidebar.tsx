@@ -156,6 +156,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
   const cwdHeaderRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const [pinnedSessions, setPinnedSessions] = useState<string[]>([]);
+  const [sessionsOpen, setSessionsOpen] = useState(true);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerCollapseKey, setExplorerCollapseKey] = useState(0);
@@ -705,8 +706,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
         </div>
         </div>
 
-      {/* Multi-cwd list: each CwdGroup renders its own pinned + recent
-          sessions. The component owns the scroll container internally. */}
+      {/* Sessions section — cwd groups + their sessions. Collapsible via the
+          shared SidebarSection (same flex-grow animation as Explorer). */}
+      <SidebarSection
+        title={t("Sessions")}
+        open={sessionsOpen}
+        onToggle={() => setSessionsOpen((v) => !v)}
+      >
       <MultiCwdList
         workspaces={orderedWorkspaces}
         loadingWorkspaces={loadingWorkspaces}
@@ -730,6 +736,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
         onSessionDeleted={handleSessionDeleted}
         onNewSession={onNewSession}
       />
+      </SidebarSection>
 
       {/* File Explorer section — collapsible via the shared SidebarSection
           (flex-grow height animation). Future sidebar sections with the same
