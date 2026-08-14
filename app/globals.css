@@ -259,6 +259,13 @@ pre, code {
   line-height: 1.7;
   color: var(--text);
   word-break: break-word;
+  /* The chat area must never grow a horizontal scrollbar: when one axis is
+     `auto` and the other is `visible`, browsers compute the visible axis as
+     `auto` too, so a single wide element in chat (a table cell with a long
+     unbroken path, a non-responsive embedded SVG, etc.) would otherwise
+     push the whole conversation pane sideways. Clip the overflow here and
+     let the inner elements handle their own wrapping/clipping. */
+  overflow-x: hidden;
 }
 .markdown-body p { margin: 0 0 8px; }
 .markdown-body p:last-child { margin-bottom: 0; }

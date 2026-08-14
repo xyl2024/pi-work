@@ -1171,7 +1171,12 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
                   color: "var(--text-muted)",
                   fontSize: 12,
                   lineHeight: 1.5,
-                  overflow: "auto",
+                  // Horizontal scrolling is forbidden in the chat area
+                  // (the container clips at .markdown-body / scrollContainer).
+                  // Vertical scroll still kicks in once the tool-call input
+                  // exceeds maxHeight.
+                  overflowX: "hidden",
+                  overflowY: "auto",
                   background: "var(--bg-subtle)",
                   borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
                   whiteSpace: "pre-wrap",
@@ -1219,7 +1224,11 @@ function PairedResult({ text, isEmpty, isError }: {
           color: isError ? "#f87171" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
           fontSize: 12,
           lineHeight: 1.5,
-          overflow: "auto",
+          // Horizontal scrolling is forbidden in the chat area; long tool
+          // result lines wrap at every character via wordBreak: break-all
+          // (already set below). Vertical scroll still kicks in past maxHeight.
+          overflowX: "hidden",
+          overflowY: "auto",
           maxHeight: 400,
           background: "var(--bg)",
           whiteSpace: "pre-wrap",
