@@ -6,7 +6,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 import { AnimatedPopover } from "./AnimatedPopover";
 import { useToast } from "./Toast";
-import { FolderIcon } from "./FileIcons";
+import { CwdIcon } from "./FileIcons";
 
 /**
  * Reusable cwd picker — the previously inline picker that lived in the
@@ -225,11 +225,11 @@ export function CwdPicker({
             e.currentTarget.style.color = cwd ? "var(--text)" : "var(--text-muted)";
           }}
         >
-          {/* Coloured vscode-icons folder — no currentColor so the
-              "no-cwd-yet" greying is dropped: when no project is picked
-              the placeholder text ("Select project...") is the cue. */}
-          <span style={{ display: "flex", flexShrink: 0 }}>
-            <FolderIcon size={12} />
+          {/* Cwd / project icon — filled, theme-tinted via currentColor.
+              Pinned to var(--accent) so it pops in the trigger pill; the
+              button label keeps the inherited text/text-muted ramp. */}
+          <span style={{ display: "flex", flexShrink: 0, color: "var(--accent)" }}>
+            <CwdIcon size={14} />
           </span>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, fontFamily: "var(--font-mono)" }}>
             {buttonLabel}
