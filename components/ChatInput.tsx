@@ -304,6 +304,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
+  const [thinkingHovered, setThinkingHovered] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
 
   // Input history index: `historyIndex` is null when the user is NOT
@@ -1186,31 +1187,49 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {isStreaming && (
               <span
                 style={{
-                  display: "inline-flex", alignItems: "center",
+                  display: "inline-flex", alignItems: "center", gap: 6,
                   height: 32, padding: "0 10px",
-                  fontSize: 12, color: "var(--text-dim)",
+                  fontSize: 12, color: THINKING_LEVEL_COLOR[currentThinkingLevel],
                   background: "none", border: "none", borderRadius: 9,
                   whiteSpace: "nowrap",
                   fontFamily: "var(--font-mono)",
                 }}
               >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
+                  <line x1="7" y1="18" x2="12" y2="18" />
+                  <line x1="8" y1="21" x2="11" y2="21" />
+                </svg>
                 {currentThinkingDisplay}
               </span>
             )}
             {!isStreaming && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
-                <IconHoverButton
+                <button
+                  type="button"
                   onClick={() => setThinkingDropdownOpen((v) => !v)}
-                  active={thinkingDropdownOpen}
-                  icon={
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
-                      <line x1="7" y1="18" x2="12" y2="18" />
-                      <line x1="8" y1="21" x2="11" y2="21" />
-                    </svg>
-                  }
-                  label={t("Thinking")}
-                />
+                  onMouseEnter={() => setThinkingHovered(true)}
+                  onMouseLeave={() => setThinkingHovered(false)}
+                  aria-label={t("Thinking")}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    height: 32, padding: "0 10px",
+                    background: thinkingDropdownOpen || thinkingHovered ? "var(--bg-hover)" : "none",
+                    border: "none", borderRadius: 9,
+                    color: THINKING_LEVEL_COLOR[currentThinkingLevel],
+                    cursor: "pointer",
+                    fontSize: 12, fontWeight: 500, whiteSpace: "nowrap",
+                    fontFamily: "var(--font-mono)",
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
+                    <line x1="7" y1="18" x2="12" y2="18" />
+                    <line x1="8" y1="21" x2="11" y2="21" />
+                  </svg>
+                  <span>{currentThinkingDisplay}</span>
+                </button>
                 <AnimatedPopover
                   open={thinkingDropdownOpen}
                   style={{
