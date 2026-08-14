@@ -761,14 +761,22 @@ function LastSessionLoadMore({
 }) {
   const [hovered, setHovered] = useState(false);
   return (
+    // No gap on this flex column either: the 6px spacing sits as paddingTop
+    // INSIDE the CollapsiblePanel row (which is overflow:hidden), so it
+    // expands/collapses with the grid height. A flex gap here would sit
+    // outside the animated grid and snap away when the panel unmounts
+    // after the collapse animation — the same non-animated jump as the
+    // cwd group header.
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}
+      style={{ display: "flex", flexDirection: "column", flexShrink: 0 }}
     >
       {children}
       <CollapsiblePanel open={hovered}>
-        <LoadMoreRow loadingMore={loadingMore} onClick={onLoadMore} />
+        <div style={{ paddingTop: 6 }}>
+          <LoadMoreRow loadingMore={loadingMore} onClick={onLoadMore} />
+        </div>
       </CollapsiblePanel>
     </div>
   );
