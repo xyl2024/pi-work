@@ -15,6 +15,14 @@ import { setGrokbotConfig } from "@/lib/grokbot-store";
 import { setPendingAskUserQuestions } from "./askUserQuestionsStore";
 import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
 
+// Sidebar Pi Bot: discrete reactions (waking/suspicious/happy) only
+// flash for BOT_REVERT_MS, then snap back to the daily "searching" loop.
+// Long enough for each state's cadence to swap expressions 2–3 times
+// (cadences range from 0.8s for waking up to 4.5s for happy), short
+// enough that the bot doesn't feel stuck on a reaction between turns.
+const BOT_BASELINE_STATE = "searching";
+const BOT_REVERT_MS = 8000;
+
 export interface SessionData {
   sessionId: string;
   filePath: string;
@@ -180,18 +188,25 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // message_start arrives). auto_retry_end with success=false also
   // clears it to avoid double-toasting.
   const pendingAssistantErrorRef = useRef<string | null>(null);
-  // Sidebar Pi Bot triggers (event-based, see Pi Bot Lab for visuals):
-  //   toolErroredThisTurnRef    — any tool_execution_end with isError
-  //                                this turn; sticky so agent_end knows
-  //                                to keep the bot on "suspicious"
-  //                                instead of flipping to waking/happy.
-  //   lastAssistantIsBodyRef    — the most recent assistant message in
-  //                                this turn had text content with no
-  //                                toolUse; agent_end uses this to pick
-  //                                happy vs waking.
-  // Both are reset in agent_start so each turn starts fresh.
-  const toolErroredThisTurnRef = useRef(false);
+  // Sidebar Pi Bot trigger (event-based, see Pi Bot Lab for visuals):
+  //   lastAssistantIsBodyRef — the most recent assistant message in this
+  //                            turn had text content with no toolUse;
+  //                            agent_end uses this to pick happy vs
+  //                            waking. Reset in agent_start so each turn
+  //                            starts fresh. Tool failures are NOT tracked
+  //                            here: a tool failure triggers "suspicious"
+  //                            on the spot (with its own 8s revert), but
+  //                            it must not suppress the final happy/waking
+  //                            reaction at agent_end — a turn can recover
+  //                            from a failed tool and end with a clean
+  //                            body-text response, and the bot should
+  //                            reflect that.
   const lastAssistantIsBodyRef = useRef(false);
+  // setTimeout handle for the bot's revert-to-baseline timer. Cancel on
+  // every new discrete trigger so the latest reaction always gets the
+  // full BOT_REVERT_MS window. Cleared on unmount so a stale timer from
+  // an unmounted session can't snap the sidebar bot to "searching".
+  const botRevertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   // Set when POST /api/agent/new returns for a brand-new session. Cleared on
   // the first assistant message_end — pi persists the .jsonl lazily at that
@@ -381,6 +396,32 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const handleAgentEvent = useCallback((event: AgentEvent) => {
+    // Sidebar Pi Bot helpers, scoped to this callback so the timer ref
+    // stays a stable capture without enlarging the useCallback dep list.
+    // fireDiscreteBot cancels any pending revert and schedules a fresh
+    // BOT_REVERT_MS timer to snap back to the daily "searching" loop.
+    // setBaselineBot cancels the timer and pins the bot to searching
+    // immediately (used on agent_start so a new turn never inherits a
+    // stale reaction state).
+    const fireDiscreteBot = (stateKey: string) => {
+      if (botRevertTimerRef.current !== null) {
+        clearTimeout(botRevertTimerRef.current);
+        botRevertTimerRef.current = null;
+      }
+      setGrokbotConfig({ stateKey });
+      botRevertTimerRef.current = setTimeout(() => {
+        botRevertTimerRef.current = null;
+        setGrokbotConfig({ stateKey: BOT_BASELINE_STATE });
+      }, BOT_REVERT_MS);
+    };
+    const setBaselineBot = () => {
+      if (botRevertTimerRef.current !== null) {
+        clearTimeout(botRevertTimerRef.current);
+        botRevertTimerRef.current = null;
+      }
+      setGrokbotConfig({ stateKey: BOT_BASELINE_STATE });
+    };
+
     switch (event.type) {
       case "agent_start":
         setAgentRunning(true);
@@ -388,10 +429,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "start" });
         statsEmitRef.current?.({ type: "reset" });
         refreshSystemPrompt();
-        // Reset per-turn Pi Bot trigger refs so each turn's happy/waking/
-        // suspicious decision starts from a clean slate.
-        toolErroredThisTurnRef.current = false;
+        // Reset per-turn Pi Bot trigger refs so each turn's happy/waking
+        // decision starts from a clean slate. Also snap the sidebar bot
+        // back to the daily "searching" loop right away so the user sees
+        // the bot actively working for the new turn.
         lastAssistantIsBodyRef.current = false;
+        setBaselineBot();
         break;
       case "agent_end":
         setAgentRunning(false);
@@ -405,15 +448,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           toast.show({ kind: "error", message: pendingAssistantErrorRef.current });
           pendingAssistantErrorRef.current = null;
         }
-        // Pi Bot trigger: stream is over. Pick happy if the last
-        // assistant message is body text and no tool failed this turn;
-        // otherwise waking (default for tool-call-only turns, errors
-        // that weren't surfaced, user aborts, etc.). If any tool failed
-        // this turn, the bot is already on "suspicious" and we leave it
-        // there.
-        if (!toolErroredThisTurnRef.current) {
-          setGrokbotConfig({ stateKey: lastAssistantIsBodyRef.current ? "happy" : "waking" });
-        }
+        // Pi Bot trigger: stream is over. Pick happy if the last assistant
+        // message is body text; otherwise waking (default for tool-call-
+        // only turns, model errors, user aborts, etc.). Tool failures
+        // already flashed "suspicious" earlier in the turn — they do NOT
+        // suppress this final reaction, since a turn can recover from a
+        // failed tool and end with a clean body-text response. Each
+        // reaction auto-reverts to "searching" after BOT_REVERT_MS via
+        // the timer set in fireDiscreteBot.
+        fireDiscreteBot(lastAssistantIsBodyRef.current ? "happy" : "waking");
         if (sessionIdRef.current) {
           loadSession(sessionIdRef.current);
           fetch(`/api/agent/${encodeURIComponent(sessionIdRef.current)}`)
@@ -555,11 +598,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const id = event.toolCallId as string;
         const isError = event.isError === true;
         // Pi Bot trigger: a failing tool flips the sidebar bot to
-        // "suspicious". The ref is sticky so a later agent_end (which
-        // usually fires after this) won't overwrite it with waking/happy.
+        // "suspicious" for BOT_REVERT_MS, then snaps back to "searching".
+        // Independent of the final happy/waking reaction at agent_end, so
+        // a turn that recovers from a tool failure still gets to celebrate.
         if (isError) {
-          toolErroredThisTurnRef.current = true;
-          setGrokbotConfig({ stateKey: "suspicious" });
+          fireDiscreteBot("suspicious");
         }
         const result = event.result as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
         // Capture show_file results into the Session Library cache so the
@@ -978,6 +1021,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // conversation-tree panel can lock card clicks for the entire turn,
   // not just the streaming sub-window. (See SessionUiState.agentRunning.)
   useEffect(() => { setSessionUiState({ agentRunning }); }, [agentRunning]);
+
+  // Clear any pending bot-revert timer when this session unmounts so
+  // a stale timer doesn't fire `setGrokbotConfig` against an unmounted
+  // hook (which would still mutate the module-level store and silently
+  // snap the sidebar bot to "searching" after the user already moved on).
+  useEffect(() => () => {
+    if (botRevertTimerRef.current !== null) {
+      clearTimeout(botRevertTimerRef.current);
+      botRevertTimerRef.current = null;
+    }
+  }, []);
 
   return {
     // State
