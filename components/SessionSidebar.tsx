@@ -12,6 +12,8 @@ import { MorphToggleIcon } from "./MorphToggleIcon";
 import { REFRESH, CHECK } from "@/lib/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
 import { SidebarSection } from "./SidebarSection";
+import { GrokBotStage } from "./GrokBotStage";
+import { GrokBotLab } from "./GrokBotLab";
 
 interface Props {
   selectedSessionId: string | null;
@@ -140,6 +142,7 @@ const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 export function SessionSidebar({ selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenMcp, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
   const { t } = useI18n();
   const toast = useToast();
+  const [labOpen, setLabOpen] = useState(false);
 
   // Multi-cwd view: workspaces list (top-level, cwd-keyed) + per-cwd
   // session loaders (lazy, paged 3 at a time).
@@ -706,6 +709,10 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
         </div>
         </div>
 
+      {/* GrokBot companion — always-on living bot at the top of the sidebar.
+          Click the bot (or the gear) to open the full lab modal. */}
+      <GrokBotStage onOpenLab={() => setLabOpen(true)} />
+
       {/* Sessions section — cwd groups + their sessions. Collapsible via the
           shared SidebarSection (same flex-grow animation as Explorer). */}
       <SidebarSection
@@ -821,6 +828,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
           refreshKey={profileRefreshKey}
         />
       )}
+
+      {labOpen && <GrokBotLab onClose={() => setLabOpen(false)} />}
     </div>
   );
 }
