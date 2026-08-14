@@ -11,6 +11,7 @@ import { Tooltip } from "./Tooltip";
 import { MorphToggleIcon } from "./MorphToggleIcon";
 import { REFRESH, CHECK } from "@/lib/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
+import { SidebarSection } from "./SidebarSection";
 
 interface Props {
   selectedSessionId: string | null;
@@ -730,107 +731,74 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
         onNewSession={onNewSession}
       />
 
-      {/* File Explorer section */}
+      {/* File Explorer section — collapsible via the shared SidebarSection
+          (flex-grow height animation). Future sidebar sections with the same
+          collapse/expand behavior should reuse SidebarSection. */}
       {selectedCwdProp && (
-        <div
-          style={{
-            borderTop: "1px solid var(--border)",
-            display: "flex",
-            flexDirection: "column",
-            flex: explorerOpen ? "1 1 0" : "0 0 auto",
-            minHeight: 0,
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            <button
-              onClick={() => setExplorerOpen((v) => !v)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                flex: 1,
-                padding: "6px 10px",
-                background: "none",
-                border: "none",
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: "0.05em",
-                textTransform: "uppercase",
-                textAlign: "left",
-              }}
-            >
-              <svg
-                width="9" height="9" viewBox="0 0 10 10" fill="none"
-                stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-                style={{ transform: explorerOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}
+        <SidebarSection
+          title={t("Explorer")}
+          open={explorerOpen}
+          onToggle={() => setExplorerOpen((v) => !v)}
+          actions={
+            <>
+              <Tooltip content={t("Collapse all")}>
+              <button
+                onClick={triggerCollapseAll}
+                aria-label={t("Collapse all")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26, padding: 0, marginRight: 4,
+                  background: "none",
+                  border: "none",
+                  color: "var(--text-dim)",
+                  cursor: "pointer",
+                  borderRadius: 5,
+                  flexShrink: 0,
+                  transition: "color 0.3s, background 0.3s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
               >
-                <polyline points="3 2 7 5 3 8" />
-              </svg>
-              {t("Explorer")}
-            </button>
-            <Tooltip content={t("Collapse all")}>
-            <button
-              onClick={triggerCollapseAll}
-              aria-label={t("Collapse all")}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 26, height: 26, padding: 0, marginRight: 4,
-                background: "none",
-                border: "none",
-                color: "var(--text-dim)",
-                cursor: "pointer",
-                borderRadius: 5,
-                flexShrink: 0,
-                transition: "color 0.3s, background 0.3s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2.5" y="2.5" width="9" height="9" rx="1.2"/>
-                <line x1="5" y1="7" x2="9" y2="7"/>
-                <path d="M8 14 H11 a2 2 0 0 0 2-2 V9"/>
-              </svg>
-            </button>
-            </Tooltip>
-            <Tooltip content={t("Refresh explorer")}>
-            <button
-              onClick={triggerExplorerRefresh}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 26, height: 26, padding: 0, marginRight: 6,
-                background: explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none",
-                border: "none",
-                color: explorerRefreshDone ? "#4ade80" : "var(--text-dim)",
-                cursor: "pointer",
-                borderRadius: 5,
-                flexShrink: 0,
-                transition: "color 0.3s, background 0.3s",
-              }}
-              onMouseEnter={(e) => { if (explorerRefreshDone) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-              onMouseLeave={(e) => { if (explorerRefreshDone) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
-            >
-              <MorphToggleIcon from={REFRESH} to={CHECK} active={explorerRefreshDone} size={13} strokeWidth={2.5} />
-            </button>
-            </Tooltip>
-          </div>
-          {explorerOpen && (
-            <div data-hover-scrollbar style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
-              <FileExplorer
-                cwd={selectedCwdProp!}
-                onOpenFile={onOpenFile ?? (() => {})}
-                refreshKey={explorerKey}
-                onAtMention={onAtMention}
-                onFileMutated={triggerExplorerRefresh}
-                onFileDeleted={onFileDeleted}
-                collapseKey={explorerCollapseKey}
-              />
-            </div>
-          )}
-        </div>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2.5" y="2.5" width="9" height="9" rx="1.2"/>
+                  <line x1="5" y1="7" x2="9" y2="7"/>
+                  <path d="M8 14 H11 a2 2 0 0 0 2-2 V9"/>
+                </svg>
+              </button>
+              </Tooltip>
+              <Tooltip content={t("Refresh explorer")}>
+              <button
+                onClick={triggerExplorerRefresh}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 26, height: 26, padding: 0, marginRight: 6,
+                  background: explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none",
+                  border: "none",
+                  color: explorerRefreshDone ? "#4ade80" : "var(--text-dim)",
+                  cursor: "pointer",
+                  borderRadius: 5,
+                  flexShrink: 0,
+                  transition: "color 0.3s, background 0.3s",
+                }}
+                onMouseEnter={(e) => { if (explorerRefreshDone) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (explorerRefreshDone) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+              >
+                <MorphToggleIcon from={REFRESH} to={CHECK} active={explorerRefreshDone} size={13} strokeWidth={2.5} />
+              </button>
+              </Tooltip>
+            </>
+          }
+        >
+          <FileExplorer
+            cwd={selectedCwdProp!}
+            onOpenFile={onOpenFile ?? (() => {})}
+            refreshKey={explorerKey}
+            onAtMention={onAtMention}
+            onFileMutated={triggerExplorerRefresh}
+            onFileDeleted={onFileDeleted}
+            collapseKey={explorerCollapseKey}
+          />
+        </SidebarSection>
       )}
 
       {onOpenSettings && (

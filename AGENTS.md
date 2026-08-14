@@ -421,6 +421,7 @@ components/
   AudioPlayer.tsx           audio file viewer (vinyl-disc aesthetic, 0.5x–2x speed)
   CommandPalette.tsx        ⌘K Raycast-style palette (reads commands + session results)
   CollapsiblePanel.tsx      CSS-grid-based height-animating wrapper
+  SidebarSection.tsx        collapsible left-sidebar section (flex-grow height animation)
   ContextMenu.tsx           reusable right-click menu
   ConfirmDialog.tsx         reusable confirm dialog
   Toast.tsx                 toast notifications
