@@ -17,6 +17,11 @@ interface Props {
   children: ReactNode;
   /** Height-animation duration; default 180ms — same as CollapsiblePanel. */
   durationMs?: number;
+  /** flex-grow value applied to the section when open. Default 1 (shares
+   *  remaining sidebar space with sibling open sections). Pass 0 for short,
+   *  intrinsically-sized sections like the GrokBot stage — they only claim
+   *  the height of their own header + content. */
+  grow?: number;
 }
 
 // Collapsible section for the left sidebar. Explorer today, future sections
@@ -36,7 +41,7 @@ interface Props {
 // header, open state is header + grow × free space, and the closed header can
 // never be compressed (flexShrink: 0 when closed, matching the previous
 // `flex: 0 0 auto` behavior).
-export function SidebarSection({ title, open, onToggle, actions, children, durationMs = 180 }: Props) {
+export function SidebarSection({ title, open, onToggle, actions, children, durationMs = 180, grow = 1 }: Props) {
   // Keep the content mounted through the collapse animation (it must be in
   // the DOM to squeeze to zero), then unmount it after the transition
   // settles — same lifecycle as MultiCwdList's body. Unmounting releases
@@ -53,6 +58,12 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
   }, [open, durationMs]);
 
   const ease = "cubic-bezier(0.32, 0.72, 0, 1)";
+  // grow=0 sections (e.g. the GrokBot stage) claim only their content's
+  // natural height: the content wrapper must then size itself to its content
+  // (flex 0 0 auto) instead of the flex-basis-0 + flex-grow trick that
+  // grow=1 sections use to absorb free space. A flex-basis-0 wrapper would
+  // collapse to 0 height and clip the content away.
+  const isFixedHeight = grow === 0;
 
   return (
     <div
@@ -60,8 +71,8 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
         borderTop: "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
-        flexGrow: open ? 1 : 0,
-        flexShrink: open ? 1 : 0,
+        flexGrow: open ? grow : 0,
+        flexShrink: open ? (grow > 0 ? 1 : 0) : 0,
         flexBasis: "auto",
         minHeight: 0,
         overflow: "hidden",
@@ -109,8 +120,8 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
         )}
       </div>
       {mounted && (
-        <div style={{ flex: "1 1 0", minHeight: 0, overflow: "hidden" }}>
-          <div data-hover-scrollbar style={{ height: "100%", overflowY: "auto", overflowX: "hidden" }}>
+        <div style={{ flex: isFixedHeight ? "0 0 auto" : "1 1 0", minHeight: 0, overflow: "hidden" }}>
+          <div data-hover-scrollbar style={{ height: isFixedHeight ? "auto" : "100%", overflowY: "auto", overflowX: "hidden" }}>
             {children}
           </div>
         </div>
