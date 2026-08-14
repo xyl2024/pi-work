@@ -106,6 +106,11 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
         alignItems: "center",
         gap: 8,
         background: "var(--bg-panel)",
+        // Always stick to the bottom of the sidebar: when every collapsible
+        // section is folded the sections contribute no flex-grow, so this
+        // auto margin absorbs the leftover space instead of leaving the row
+        // dangling above an empty gap.
+        marginTop: "auto",
       }}
     >
       <button
