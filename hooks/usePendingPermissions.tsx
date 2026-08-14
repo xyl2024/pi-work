@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { PermissionDialog } from "@/components/PermissionDialog";
+import { setHasPendingPermission } from "@/lib/agent-status-store";
 
 export interface PendingPermissionRequest {
   toolCallId: string;
@@ -50,6 +51,13 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const head = queue[0] ?? null;
+
+  // Mirror queue length to the module-level agent-status store so the
+  // sidebar Pi Bot can flip to "surprised" while a permission is open.
+  // The queue itself stays in React state (the dialog renders from it).
+  useEffect(() => {
+    setHasPendingPermission(queue.length > 0);
+  }, [queue.length]);
 
   return (
     <PermissionContext.Provider value={{ addRequest, resolveRequest }}>

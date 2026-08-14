@@ -12,23 +12,42 @@
  * loop until re-expanded.
  */
 
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GrokBot, type GrokBotHandle } from "./GrokBot";
 import { useGrokbotConfig, setGrokbotConfig } from "@/lib/grokbot-store";
 import { GROKBOT_EXPRESSIONS } from "@/lib/grokbot-data";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 import { SidebarSection } from "./SidebarSection";
+import { useSessionUiState } from "@/hooks/sessionUiStore";
+import { useAgentStatusState } from "@/lib/agent-status-store";
+
+/**
+ * Coarse 5-state mapping from agent signals → bot stateKey. Priority is
+ * top-down: a pending permission beats an in-flight turn beats an idle
+ * turn. `idle` is the only default and must always be a valid pool key
+ * (see GROKBOT_POOLS in grokbot-data).
+ */
+type BotStatus = "idle" | "thinking" | "working" | "surprised" | "sad";
 
 interface Props {
   onOpenLab: () => void;
+  /**
+   * Active session id, when one is selected. The bot only mirrors agent
+   * state when this is set; otherwise it stays on whatever the user
+   * manually picked (Lab modal, click-to-randomize) so the sidebar bot
+   * doesn't get yanked around while the user is browsing sessions.
+   */
+  selectedSessionId?: string | null;
 }
 
-export function GrokBotStage({ onOpenLab }: Props) {
+export function GrokBotStage({ onOpenLab, selectedSessionId }: Props) {
   const { t } = useI18n();
   const botRef = useRef<GrokBotHandle>(null);
   const [open, setOpen] = useState(true);
   const config = useGrokbotConfig();
+  const ui = useSessionUiState();
+  const agentStatus = useAgentStatusState();
 
   // Clicking the bot itself switches to a random (different) expression.
   const handleBotClick = () => {
@@ -38,6 +57,36 @@ export function GrokBotStage({ onOpenLab }: Props) {
     }
     setGrokbotConfig({ expression: next });
   };
+
+  // Derive the target stateKey from agent signals. Priority (high→low):
+  //   permission pending → surprised
+  //   lastError sticky   → sad
+  //   isStreaming        → thinking
+  //   agentRunning       → working (tool running between LLM turns)
+  //   otherwise          → idle
+  // Only runs the effect below when an active session is selected.
+  const botStatus: BotStatus = useMemo(() => {
+    if (agentStatus.hasPendingPermission) return "surprised";
+    if (agentStatus.lastError) return "sad";
+    if (ui.isStreaming) return "thinking";
+    if (ui.agentRunning) return "working";
+    return "idle";
+  }, [agentStatus.hasPendingPermission, agentStatus.lastError, ui.isStreaming, ui.agentRunning]);
+
+  // Sync the derived status into the grokbot store. Skipped when no
+  // session is active so the user's manual picks (Lab, click) aren't
+  // clobbered by idle. The store's own cadence will pick a fresh
+  // expression from the new state's pool after GROKBOT_EXPR_CADENCE
+  // milliseconds, so we don't need to touch `expression` here.
+  useEffect(() => {
+    if (!selectedSessionId) return;
+    if (config.stateKey === botStatus) return;
+    setGrokbotConfig({ stateKey: botStatus });
+    // config.stateKey intentionally omitted: re-syncing to the same
+    // status is a no-op above; including it would loop on every store
+    // tick (grokbot-store emits on cadence-driven expression swaps).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSessionId, botStatus]);
 
   return (
     <SidebarSection
