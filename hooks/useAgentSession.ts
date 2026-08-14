@@ -11,7 +11,7 @@ import { usePendingPermissionsRef } from "./usePendingPermissions";
 import { setShowFileResult, resetShowFileResults } from "./showFileResultsStore";
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { setSessionUiState, setLeafChangeHandler } from "./sessionUiStore";
-import { reportAgentError, clearAgentError } from "@/lib/agent-status-store";
+import { setGrokbotConfig } from "@/lib/grokbot-store";
 import { setPendingAskUserQuestions } from "./askUserQuestionsStore";
 import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
 
@@ -180,6 +180,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // message_start arrives). auto_retry_end with success=false also
   // clears it to avoid double-toasting.
   const pendingAssistantErrorRef = useRef<string | null>(null);
+  // Sidebar Pi Bot triggers (event-based, see Pi Bot Lab for visuals):
+  //   toolErroredThisTurnRef    — any tool_execution_end with isError
+  //                                this turn; sticky so agent_end knows
+  //                                to keep the bot on "suspicious"
+  //                                instead of flipping to waking/happy.
+  //   lastAssistantIsBodyRef    — the most recent assistant message in
+  //                                this turn had text content with no
+  //                                toolUse; agent_end uses this to pick
+  //                                happy vs waking.
+  // Both are reset in agent_start so each turn starts fresh.
+  const toolErroredThisTurnRef = useRef(false);
+  const lastAssistantIsBodyRef = useRef(false);
   const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
   // Set when POST /api/agent/new returns for a brand-new session. Cleared on
   // the first assistant message_end — pi persists the .jsonl lazily at that
@@ -376,10 +388,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "start" });
         statsEmitRef.current?.({ type: "reset" });
         refreshSystemPrompt();
-        // New turn starting — drop any sticky "sad" state on the bot so
-        // it flips back to idle/thinking/working instead of staying sad
-        // forever after a single failure.
-        clearAgentError();
+        // Reset per-turn Pi Bot trigger refs so each turn's happy/waking/
+        // suspicious decision starts from a clean slate.
+        toolErroredThisTurnRef.current = false;
+        lastAssistantIsBodyRef.current = false;
         break;
       case "agent_end":
         setAgentRunning(false);
@@ -392,6 +404,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (pendingAssistantErrorRef.current) {
           toast.show({ kind: "error", message: pendingAssistantErrorRef.current });
           pendingAssistantErrorRef.current = null;
+        }
+        // Pi Bot trigger: stream is over. Pick happy if the last
+        // assistant message is body text and no tool failed this turn;
+        // otherwise waking (default for tool-call-only turns, errors
+        // that weren't surfaced, user aborts, etc.). If any tool failed
+        // this turn, the bot is already on "suspicious" and we leave it
+        // there.
+        if (!toolErroredThisTurnRef.current) {
+          setGrokbotConfig({ stateKey: lastAssistantIsBodyRef.current ? "happy" : "waking" });
         }
         if (sessionIdRef.current) {
           loadSession(sessionIdRef.current);
@@ -434,13 +455,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // Capture assistant errors for the upcoming agent_end toast. During
         // retries the SDK emits a fresh message_end per attempt; only the
         // last one wins, which is what we want for the final toast.
-        // Mirror to the agent-status store so the bot can show "sad"
-        // immediately on the first failed message_end (before any retry
-        // finishes), rather than waiting for agent_end.
         if (completed?.role === "assistant" && completed.stopReason === "error") {
-          const errMsg = completed.errorMessage ?? "Model call failed";
-          pendingAssistantErrorRef.current = errMsg;
-          reportAgentError(errMsg);
+          pendingAssistantErrorRef.current = completed.errorMessage ?? "Model call failed";
+        }
+        // Pi Bot trigger: remember whether the most recent assistant
+        // message is "body" (text, no toolUse). agent_end uses this to
+        // pick happy vs waking. Track on every assistant message_end so
+        // the last one wins, mirroring how pendingAssistantErrorRef
+        // captures the last failure across retries.
+        if (completed?.role === "assistant") {
+          lastAssistantIsBodyRef.current = isBodyMessage(completed);
         }
         // Refresh context usage after each assistant message so the progress
         // bar tracks every model API call, not just turn end.
@@ -530,6 +554,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       case "tool_execution_end": {
         const id = event.toolCallId as string;
         const isError = event.isError === true;
+        // Pi Bot trigger: a failing tool flips the sidebar bot to
+        // "suspicious". The ref is sticky so a later agent_end (which
+        // usually fires after this) won't overwrite it with waking/happy.
+        if (isError) {
+          toolErroredThisTurnRef.current = true;
+          setGrokbotConfig({ stateKey: "suspicious" });
+        }
         const result = event.result as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
         // Capture show_file results into the Session Library cache so the
         // modal can render success / failure states correctly. The runtime
@@ -600,13 +631,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // Exhausted retries (or non-retryable failure during a retry chain):
         // the SDK has already finalised the failure here, so toast the
         // finalError and clear the pending-error ref so agent_end doesn't
-        // double-toast. Mirror to the agent-status store so the sidebar
-        // Pi Bot can flip to "sad" too.
+        // double-toast.
         if (event.success === false) {
           const finalError = event.finalError as string | undefined;
           if (finalError) {
             toast.show({ kind: "error", message: finalError });
-            reportAgentError(finalError);
             pendingAssistantErrorRef.current = null;
           }
         }
@@ -970,4 +999,34 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // Subscriptions
     handleAgentEventRef,
   };
+}
+
+/**
+ * True if an assistant message is "body text" for the Pi Bot trigger:
+ * contains at least one non-empty text block and no toolUse blocks.
+ * Defensive about content shape — agent messages come from SDK events
+ * and could in principle be malformed.
+ */
+function isBodyMessage(msg: AgentMessage): boolean {
+  if (msg.role !== "assistant") return false;
+  // Partial answer followed by a failure is not a happy ending — keep
+  // the bot from flipping to "happy" when the model errored out.
+  if ((msg as { stopReason?: unknown }).stopReason === "error") return false;
+  const content = (msg as { content?: unknown }).content;
+  if (!Array.isArray(content)) return false;
+  let hasText = false;
+  let hasToolUse = false;
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const b = block as { type?: unknown; text?: unknown };
+    if (
+      b.type === "text" &&
+      typeof b.text === "string" &&
+      b.text.trim().length > 0
+    ) {
+      hasText = true;
+    }
+    if (b.type === "toolUse") hasToolUse = true;
+  }
+  return hasText && !hasToolUse;
 }

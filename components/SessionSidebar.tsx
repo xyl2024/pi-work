@@ -711,7 +711,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
 
       {/* GrokBot companion — always-on living bot at the top of the sidebar.
           Click the bot (or the gear) to open the full lab modal. */}
-      <GrokBotStage onOpenLab={() => setLabOpen(true)} selectedSessionId={selectedSessionId} />
+      <GrokBotStage onOpenLab={() => setLabOpen(true)} />
 
       {/* Sessions section — cwd groups + their sessions. Collapsible via the
           shared SidebarSection (same flex-grow animation as Explorer). */}
