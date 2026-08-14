@@ -1087,7 +1087,10 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const chatInputElement = (
     <>
-      <AskUserQuestionsPanel sessionId={currentSessionId} />
+      <AskUserQuestionsPanel
+        sessionId={currentSessionId}
+        onAppear={handleToBottom}
+      />
       <ChatInput
         ref={chatInputRef}
         onSend={handleSend}

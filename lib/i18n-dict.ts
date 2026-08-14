@@ -351,6 +351,11 @@ export const ZH_TRANSLATIONS = {
   // tooltip — keep it for that one.
   "Awaiting your answer": "等待你的回答",
   "Required": "必填",
+  // "Other" is the semantic label for the always-appended free-text
+  // option. It renders via t() so the UI shows the localized word while
+  // the underlying label stays the English constant "Other" (which
+  // isOtherOptionLabel matches against).
+  "Other": "其他",
   "Type your own answer…": "请输入自定义回答…",
   "Answers sent": "回答已发送",
   "The agent is continuing…": "智能体会继续处理你的回答…",

@@ -79,7 +79,7 @@ import {
  *  card with options + a small footer without dominating the chat. The
  *  tab bar at the top and the Submit/Cancel row at the bottom sit inside
  *  this height; only the question card scrolls. */
-const PANEL_HEIGHT_PX = 360;
+const PANEL_HEIGHT_PX = 280;
 
 /** Delay before auto-advancing to the next question after a single-select
  *  pick — long enough to register the choice, short enough to feel snappy. */
@@ -94,9 +94,13 @@ const SENT_VIEW_MS = 1400;
 
 interface Props {
   sessionId: string | null;
+  /** Invoked when a new `ask_user_questions` request appears (the panel
+   *  renders from scratch). Used by ChatWindow to force-scroll the message
+   *  list to the bottom so the question sits against the latest messages. */
+  onAppear?: () => void;
 }
 
-export function AskUserQuestionsPanel({ sessionId }: Props) {
+export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
   const { t } = useI18n();
   const pending = usePendingAskUserQuestions(sessionId);
   const submit = useAskUserQuestionsSubmit();
@@ -200,6 +204,15 @@ export function AskUserQuestionsPanel({ sessionId }: Props) {
     setSent(false);
   }, [pending, clearStaleSubmitted]);
 
+  // When a new `ask_user_questions` request appears (pending transitions to
+  // non-null), tell ChatWindow to force-scroll the chat to the bottom so the
+  // newly surfaced panel sits against the latest messages. Store reference is
+  // stable for a given request (server re-emits no-op on reconnect), so this
+  // only fires once per request.
+  useEffect(() => {
+    if (pending) onAppear?.();
+  }, [pending, onAppear]);
+
   // Unmount: cancel timers and drop a submitted-but-not-yet-cleared entry.
   useEffect(() => {
     return () => {
@@ -222,9 +235,11 @@ export function AskUserQuestionsPanel({ sessionId }: Props) {
         const hasOther = a.selectedLabels.some(isOtherOptionLabel);
         return {
           questionIndex: i,
+          // UI text wins over the mirrored copy in answers (they can drift
+          // after an exclusive Other switch, see updateSelection).
           selectedLabels: a.selectedLabels,
           otherText: hasOther
-            ? (a.otherText ?? otherTextsRef.current[i] ?? "").trim()
+            ? (otherTextsRef.current[i] ?? a.otherText ?? "").trim()
             : null,
         };
       }),
@@ -279,21 +294,34 @@ export function AskUserQuestionsPanel({ sessionId }: Props) {
           selectedLabels: [],
           otherText: null,
         };
+        const isOther = isOtherOptionLabel(label);
         let labels: string[];
-        if (multi) {
-          labels = checked
-            ? current.selectedLabels.includes(label)
-              ? current.selectedLabels
-              : [...current.selectedLabels, label]
-            : current.selectedLabels.filter((l) => l !== label);
+        if (checked && isOther) {
+          // 「其他」即独占：无论单选/多选，选中时清空所有预设选项，只留它。
+          labels = [label];
+        } else if (checked) {
+          // 互斥：选中预设选项时剔除已选的「其他」，释放自由输入。
+          const rest = current.selectedLabels.filter((l) => !isOtherOptionLabel(l));
+          labels = multi
+            ? rest.includes(label)
+              ? rest
+              : [...rest, label]
+            : [label];
         } else {
-          labels = checked ? [label] : [];
+          labels = multi
+            ? current.selectedLabels.filter((l) => l !== label)
+            : [];
         }
         const hasOther = labels.some(isOtherOptionLabel);
         next[qIdx] = {
           questionIndex: qIdx,
           selectedLabels: labels,
-          otherText: hasOther ? (current.otherText ?? "") : null,
+          // Restore the previously typed free-text when re-selecting
+          // "Other" after an exclusive switch cleared it — the UI text
+          // (otherTexts) is the authoritative copy, answers mirrors it.
+          otherText: hasOther
+            ? (otherTextsRef.current[qIdx] ?? current.otherText ?? "")
+            : null,
         };
         return next;
       });
@@ -889,12 +917,19 @@ function QuestionCard({
           gap: 4,
         }}
       >
-        {question.options.map((opt) => {
+        {/* Always append a fixed free-text option at the end, regardless of
+            what options the agent authored (even if it also included an
+            "Other" label). It renders the localized word but keeps the
+            English semantic label so isOtherOptionLabel still matches. */}
+        {[
+          ...question.options,
+          { label: ASK_USER_QUESTIONS_OTHER_LABEL, description: "" },
+        ].map((opt, i) => {
           const checked = selectedSet.has(opt.label);
           const isOther = isOtherOptionLabel(opt.label);
-          const inputId = `ask-opt-${question.header}-${opt.label}`.replace(/\s+/g, "-");
+          const inputId = `ask-opt-${question.header}-${i}`.replace(/\s+/g, "-");
           return (
-            <div key={opt.label} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <div key={inputId} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <label
                 htmlFor={inputId}
                 style={{
@@ -934,7 +969,7 @@ function QuestionCard({
                   }}
                 >
                   <span style={{ fontSize: 13, color: "var(--text)", fontWeight: 500 }}>
-                    {opt.label}
+                    {isOther ? t("Other") : opt.label}
                   </span>
                   {opt.description && (
                     <span

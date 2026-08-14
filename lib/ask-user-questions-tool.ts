@@ -199,7 +199,7 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
     name: ASK_USER_QUESTIONS_TOOL_NAME,
     label: "Ask User Questions",
     description:
-      "Ask the user 1-5 multiple-choice questions and wait for their answers. Each question has 2-4 options with a short label and a longer description. Set `multiSelect: true` to allow multiple selections. Questions are required by default; set `required: false` to let the user skip one. Add an option labeled exactly `Other` to allow the user to type a free-text answer for that question. The tool blocks until the user responds or cancels; do not call it from a context where no user is available (e.g. a scheduled task — the tool will return an error in that case).",
+      "Ask the user 1-5 multiple-choice questions and wait for their answers. Each question has 2-4 options with a short label and a longer description. Set `multiSelect: true` to allow multiple selections. Questions are required by default; set `required: false` to let the user skip one. A free-text \"Other\" option is always appended automatically, so the user can always type a custom answer — do not add your own. The tool blocks until the user responds or cancels; do not call it from a context where no user is available (e.g. a scheduled task — the tool will return an error in that case).",
     parameters: AskUserQuestionsParamsSchema,
     executionMode: "sequential",
     promptSnippet: "Ask the user structured multiple-choice questions.",
@@ -209,7 +209,7 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
       "Each question must have 2-4 options. The `header` field is a short (1-12 char) chip label used to reference that question in the answer summary; the `question` field is the long-form prompt shown to the user.",
       "Set `multiSelect: true` when the user may legitimately pick more than one option (e.g. \"which features to include\"). Leave false for exclusive choices.",
       "Questions are required by default (the user must answer to submit). Set `required: false` for open-ended optional questions the user may skip.",
-      "Add an option labeled exactly `Other` to allow the user to type a free-text answer. The frontend will turn that option into a text input.",
+      "A free-text \"Other\" option is always appended to every question automatically — the user can always type a custom answer. Do not add an `Other` option yourself.",
       "Do NOT call this tool from a scheduled task or any context where no user is available — it will return an error. Provide the necessary context to the model directly instead.",
     ],
     async execute(toolCallId, params, signal, _onUpdate, _ctx) {
@@ -304,7 +304,15 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
           });
           continue;
         }
-        const validLabels = new Set(q.options.map((o) => o.label));
+        const validLabels = new Set([
+          ...q.options.map((o) => o.label),
+          // The frontend always appends a fixed free-text "Other" option
+          // to every question (regardless of what the agent authored), so
+          // that label is always a valid selection. Without this the
+          // sanitizer would strip it and the answer would come back as
+          // "(skipped)" even though the user typed a real custom answer.
+          ASK_USER_QUESTIONS_OTHER_LABEL,
+        ]);
         const validSelected = submitted.selectedLabels.filter((l) => validLabels.has(l));
         const otherSelected = validSelected.some(isOtherOptionLabel);
         sanitizedAnswers.push({
