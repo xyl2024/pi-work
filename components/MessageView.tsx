@@ -695,11 +695,11 @@ function AssistantMessageView({
           </Tooltip>
         )}
         {!isStreaming && (
-          <Tooltip content={t("Export as PNG")}>
+          <Tooltip content={t("Share this message card")}>
           <button
             onClick={handleExport}
             disabled={exporting}
-            aria-label={t("Export as PNG")}
+            aria-label={t("Share this message card")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 22, height: 22,
@@ -719,9 +719,9 @@ function AssistantMessageView({
               </svg>
             ) : (
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
               </svg>
             )}
           </button>

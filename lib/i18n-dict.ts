@@ -608,6 +608,7 @@ export const ZH_TRANSLATIONS = {
   "Message card exported": "消息卡片已导出",
   "Failed to export image": "导出图片失败",
   "Export as PNG": "导出为 PNG 图片",
+  "Share this message card": "分享此消息卡片",
   "Exporting…": "导出中…",
   "Failed to load file": "加载文件失败",
   "Unsupported file type: {ext}": "不支持的文件类型：{ext}",
