@@ -1215,10 +1215,8 @@ export function AppShell() {
                   label={tools.length > 0 ? `${t("Tools")} ${tools.filter((t) => t.active).length}` : t("Tools")}
                 />
               </Tooltip>
-              {contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
               {headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible) && (
                 <>
-                  <div style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px", flexShrink: 0 }} />
                   {headerActions.replayVisible && (
                     <IconHoverButton
                       icon={
@@ -1275,6 +1273,7 @@ export function AppShell() {
                   )}
                 </>
               )}
+              {contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
             </div>
           )}
           {/* Top panel dropdown — shared, only one active at a time */}
