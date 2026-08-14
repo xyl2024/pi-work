@@ -17,8 +17,9 @@ interface Props {
 /**
  * Context usage meter — 10 discrete bars, each covering a 10% bucket. Color
  * thresholds mirror the top-right status bar (>70% yellow, >90% red).
- * Rendered as a slim status strip above the top-bar buttons in AppShell
- * (right-aligned via its flex wrapper). Moved here from the ChatInput toolbar.
+ * Rendered as a slim status strip in the top bar of AppShell, placed to the
+ * right of the System Prompts / Tools buttons (left-aligned flow). Moved here
+ * from the ChatInput toolbar.
  */
 export function ContextUsageBar({ contextUsage }: Props) {
   const { t } = useI18n();
@@ -45,7 +46,6 @@ export function ContextUsageBar({ contextUsage }: Props) {
         aria-label={`${t("Context")}: ${contextBar.pct.toFixed(0)}%`}
         style={{
           flexShrink: 0,
-          marginLeft: "auto",
           display: "flex", alignItems: "center", gap: 8,
           padding: "6px 10px 4px",
           color: contextBar.color,

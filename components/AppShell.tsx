@@ -1215,6 +1215,7 @@ export function AppShell() {
                   label={tools.length > 0 ? `${t("Tools")} ${tools.filter((t) => t.active).length}` : t("Tools")}
                 />
               </Tooltip>
+              {contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
               {headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible) && (
                 <>
                   <div style={{ width: 1, height: 18, background: "var(--border)", margin: "0 4px", flexShrink: 0 }} />
@@ -1276,11 +1277,6 @@ export function AppShell() {
               )}
             </div>
           )}
-          {/* Context usage meter — same row as the top-bar buttons,
-              pushed to the right edge with marginLeft auto. Reads
-              contextUsage from the session UI store (published by
-              useAgentSession). */}
-          {showChat && contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
           {/* Top panel dropdown — shared, only one active at a time */}
           <CollapsiblePanel
             open={activeTopPanel !== null}
