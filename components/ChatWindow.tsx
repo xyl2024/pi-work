@@ -1521,8 +1521,21 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         {/* Bottom-right action stack — all launchers + actions stay mounted
             at all times so the affordance is stable. Disabled + dimmed when
             the action doesn't apply. Hard-coded bilingual labels for the
-            "回到底部" button per product decision (no i18n key). */}
-        <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-end gap-2">
+            "回到底部" button per product decision (no i18n key).
+
+            `right` is computed against the parent (`flex-1 overflow-hidden`
+            inside ChatWindowContent — same width as ChatInput's wrapper):
+              width ≤ 852 → 16px (= original `right-4`); chat input fills
+                              the parent and its right edge == 16px in.
+              width > 852 → (W − 820)/2, matching ChatInput's
+                              `maxWidth: 820 + margin: auto` gutter, so the
+                              launcher stack stays flush with the input's
+                              right edge instead of floating into the
+                              sidebar gutter. */}
+        <div
+          className="pointer-events-none absolute bottom-4 z-10 flex items-end gap-2"
+          style={{ right: "max(16px, calc((100% - 820px) / 2))" }}
+        >
           {/* Agent Todo launcher (first position). Renders nothing
               itself when there's no plan — the panel hides entirely so
               the chat area stays clean. Click opens a popover anchored
