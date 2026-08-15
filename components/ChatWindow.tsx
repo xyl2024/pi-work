@@ -23,6 +23,7 @@ import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
 import { resetSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { Tooltip } from "./Tooltip";
+import { usePendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 import { AgentTodoPanel } from "./AgentTodoPanel";
 import { AskUserQuestionsPanel } from "./AskUserQuestionsPanel";
 import { ReplayBar } from "./ReplayBar";
@@ -447,6 +448,16 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   // ── Session Library: derive entries + reset on session change ──
   const { entries: sessionLibraryEntries } = useSessionLibraryEntries(messages);
+
+  // ── AskUserQuestions: when the panel is pending for the active session
+  //    we hide the bottom-right button stack — otherwise the row of
+  //    launchers (AgentTodoPanel, Session Library, Collapse all, Scroll
+  //    to bottom) sits *behind* the question panel and looks like dead
+  //    UI, since the panel takes over the chat area's focused interaction
+  //    surface. Same `usePendingAskUserQuestions` store hook as the panel
+  //    itself, so visibility is automatically in sync without an extra
+  //    layer of state. ──
+  const pendingAskUserQuestions = usePendingAskUserQuestions(currentSessionId);
   useEffect(() => {
     resetSessionLibrary();
   }, [currentSessionId]);
@@ -1525,6 +1536,10 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
             `right` is computed against the parent (`flex-1 overflow-hidden`
             inside ChatWindowContent — same width as ChatInput's wrapper):
+            (also hidden while an AskUserQuestions panel is pending for
+            this session — the panel takes over the focused interaction
+            surface and the row would otherwise look like dead UI behind
+            it)
               width ≤ 852 → 16px (= original `right-4`); chat input fills
                               the parent and its right edge == 16px in.
               width > 852 → (W − 820)/2, matching ChatInput's
@@ -1532,6 +1547,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                               launcher stack stays flush with the input's
                               right edge instead of floating into the
                               sidebar gutter. */}
+        {pendingAskUserQuestions ? null : (
         <div
           className="pointer-events-none absolute bottom-4 z-10 flex items-end gap-2"
           style={{ right: "max(16px, calc((100% - 820px) / 2))" }}
@@ -1589,6 +1605,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
             </button>
           </Tooltip>
         </div>
+        )}
 
         {/* Replay toggle now lives next to the input box (ChatInput bottom
             buttons) — opens the time-travel scrubber. Hidden while the agent
