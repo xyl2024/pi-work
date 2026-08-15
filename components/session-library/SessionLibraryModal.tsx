@@ -167,10 +167,10 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
         onClick={(e) => e.stopPropagation()}
         style={{
           ...panelStyle,
-          width: "min(1100px, 100%)",
+          width: "min(960px, 100%)",
           // Fixed height — the modal never resizes with the current tile
           // (small vs huge images, missing files, etc.). The body flexes.
-          height: "85vh",
+          height: "75vh",
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
           borderRadius: 12,
