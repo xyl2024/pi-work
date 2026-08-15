@@ -27,6 +27,7 @@ import { CanvasPanel } from "./CanvasPanel";
 import { RssPanel } from "./RssPanel";
 import { TerminalPanel } from "./TerminalPanel";
 import { TokensPanel } from "./TokensPanel";
+import { LlmAuditPanel } from "./LlmAuditPanel";
 import { GitDiffPanel } from "./GitDiffPanel";
 import { useToolCallStatsView, useToolCallStatsScroll } from "@/hooks/toolCallStatsStore";
 import { ModelsConfig } from "./ModelsConfig";
@@ -63,6 +64,7 @@ import {
   TOKENS_TAB_ID,
   GIT_DIFF_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
+  LLM_AUDIT_TAB_ID,
   RIGHT_BAR_ID_FOR_TAB_KIND,
 } from "@/lib/types";
 import { isRightBarButtonVisible } from "@/lib/right-bar";
@@ -705,6 +707,16 @@ export function AppShell() {
     setRightPanelState("normal");
   }, [t]);
 
+  // Open the LLM API audit panel.
+  const handleOpenLlmAuditTab = useCallback(() => {
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "llmAudit")) return prev;
+      return [{ kind: "llmAudit", id: LLM_AUDIT_TAB_ID, label: t("LLM API audit") }, ...prev];
+    });
+    setActiveFileTabId(LLM_AUDIT_TAB_ID);
+    setRightPanelState("normal");
+  }, [t]);
+
   // Open the git diff panel — same pattern as translate / rss / tokens.
   const handleOpenGitDiffTab = useCallback(() => {
     setFileTabs((prev) => {
@@ -972,6 +984,7 @@ export function AppShell() {
       tokens: handleOpenTokensTab,
       toolCalls: handleOpenToolCallsTab,
       conversationTree: handleOpenConversationTreeTab,
+      llmAudit: handleOpenLlmAuditTab,
     },
   };
 
@@ -1088,6 +1101,7 @@ export function AppShell() {
     openJsonTab: handleOpenJsonTab,
     openTokensTab: handleOpenTokensTab,
     openGitDiffTab: handleOpenGitDiffTab,
+    openLlmAuditTab: handleOpenLlmAuditTab,
     toggleSidebar: () => setSidebarOpen((v) => !v),
     toggleRightPanel: () => setRightPanelState((v) => v === "closed" ? "normal" : "closed"),
     agentControls,
@@ -1097,7 +1111,7 @@ export function AppShell() {
     theme.setPreset, setLocale, handleSlashNew,
     handleOpenTodoTab, handleOpenFavoritesTab, handleOpenCanvasTab,
     handleOpenTranslateTab, handleOpenToolCallsTab, handleOpenJsonTab,
-    handleOpenTokensTab, handleOpenGitDiffTab,
+    handleOpenTokensTab, handleOpenGitDiffTab, handleOpenLlmAuditTab,
     agentControls,
     selectedSession, newSessionCwd,
   ]);
@@ -1520,6 +1534,8 @@ export function AppShell() {
             <RssPanel />
           ) : activeFileTab?.kind === "tokens" ? (
             <TokensPanel onSelectSession={handleSelectSession} />
+          ) : activeFileTab?.kind === "llmAudit" ? (
+            <LlmAuditPanel currentSessionId={selectedSession?.id ?? null} />
           ) : activeFileTab?.kind === "gitDiff" ? (
             <GitDiffPanel cwd={selectedSession?.cwd ?? newSessionCwd ?? null} />
           ) : activeFileTab?.kind === "conversationTree" ? (

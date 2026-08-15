@@ -23,6 +23,7 @@ export type RightBarButtonId =
   | "toolCalls"
   | "gitDiff"
   | "conversationTree"
+  | "llmAudit"
   | "terminal";
 
 export interface RightSideBarConfig {

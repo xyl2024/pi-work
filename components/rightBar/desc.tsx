@@ -31,6 +31,7 @@ import {
   TOKENS_TAB_ID,
   GIT_DIFF_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
+  LLM_AUDIT_TAB_ID,
 } from "@/lib/types";
 import type { Tab } from "@/components/TabBar";
 import {
@@ -48,6 +49,7 @@ import {
   TokensIcon,
   WrenchIcon,
   TerminalIcon,
+  LlmAuditIcon,
 } from "./icons";
 
 // Tab kinds the right column toggles. Kept narrow so an accidental
@@ -64,6 +66,7 @@ export type RightBarTabKind = Extract<
   | "tokens"
   | "gitDiff"
   | "conversationTree"
+  | "llmAudit"
 >;
 
 export interface RightBarCtx {
@@ -103,6 +106,7 @@ export interface RightBarCtx {
     tokens: () => void;
     toolCalls: () => void;
     conversationTree: () => void;
+    llmAudit: () => void;
   };
 }
 
@@ -310,6 +314,16 @@ const tokensDescriptor: RightBarDescriptor = {
     ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens),
 };
 
+const llmAuditDescriptor: RightBarDescriptor = {
+  id: "llmAudit",
+  kind: "configurable",
+  labelKey: "Open LLM API audit",
+  isActive: (ctx) => ctx.activeTabKind === "llmAudit",
+  content: () => LlmAuditIcon(),
+  onClick: (ctx) =>
+    ctx.toggleRightPanelTab(LLM_AUDIT_TAB_ID, ctx.openTab.llmAudit),
+};
+
 const toolCallsDescriptor: RightBarDescriptor = {
   id: "toolCalls",
   kind: "configurable",
@@ -376,6 +390,7 @@ export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   gitDiffDescriptor,
   favoritesDescriptor,
   tokensDescriptor,
+  llmAuditDescriptor,
   toolCallsDescriptor,
   conversationTreeDescriptor,
 ] as const;

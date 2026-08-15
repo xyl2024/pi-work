@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readFileSync } from "fs";
 import { directPrompt } from "@/lib/llm-direct";
 import { resolveSessionPath } from "@/lib/session-reader";
+import { runWithLlmAuditContext } from "@/lib/llm-audit";
 import { createLogger, elapsedMs } from "@/lib/logger";
 
 const log = createLogger("api/sessions/[id]/auto-name");
@@ -124,11 +125,19 @@ export async function POST(
 
     let raw: string;
     try {
-      raw = await directPrompt(promptText, {
-        systemPrompt: AUTO_NAME_SYSTEM_PROMPT,
-        thinkingLevel: "off",
-        timeoutMs: 50_000,
-      });
+      // Run inside an LLM-audit context so this title-generation call is
+      // attributed to the session (previously it fell outside rpc-manager's
+      // ALS chain and was logged as an orphaned unknown call, invisible when
+      // filtering the panel by session).
+      raw = await runWithLlmAuditContext(
+        { sessionId: id, source: "direct", cwd: null, sessionName: null },
+        () =>
+          directPrompt(promptText, {
+            systemPrompt: AUTO_NAME_SYSTEM_PROMPT,
+            thinkingLevel: "off",
+            timeoutMs: 50_000,
+          }),
+      );
     } catch (error) {
       log.error("auto-name llm failed", { id, error, durationMs: elapsedMs(startedAt) });
       return NextResponse.json(

@@ -1,5 +1,6 @@
 import { createLogger, elapsedMs } from "@/lib/logger";
 import { createDirectLlmSession, resolveDirectModel } from "@/lib/llm-direct";
+import { runWithLlmAuditContext } from "@/lib/llm-audit";
 import {
   DEFAULT_TARGET_LANGUAGE,
   MAX_TRANSLATE_PROMPT_CHARS,
@@ -145,7 +146,10 @@ export async function POST(req: Request) {
           }
         });
 
-        await created.prompt(trimmed);
+        await runWithLlmAuditContext(
+          { sessionId: null, source: "direct", cwd: null, sessionName: null },
+          () => created.prompt(trimmed),
+        );
       } catch (error) {
         log.error("translate failed", { error, durationMs: elapsedMs(startedAt) });
         send({ type: "error", message: String(error) });

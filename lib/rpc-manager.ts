@@ -1,4 +1,4 @@
-import { createAgentSession, DefaultResourceLoader, isToolCallEventType } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, DefaultResourceLoader, isToolCallEventType, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import type { ToolSelection } from "./types";
@@ -8,6 +8,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { recordCall } from "./token-audit-store";
+import { getAuditModelRuntime, installLlmFetchAudit, runWithLlmAuditContext } from "./llm-audit";
+import type { LlmAuditSource } from "./llm-audit-types";
 import { buildTodoTools } from "./todo-tools";
 import { readEnabledTodoTools } from "./todo-tools-config";
 import { buildShowFileTool } from "./show-file-tool";
@@ -97,7 +99,11 @@ export class AgentSessionWrapper {
   private allowedThisSession: Set<string> = new Set();
   private pendingUserInputs: Map<string, PendingUserInput> = new Map();
 
-  constructor(public readonly inner: AgentSessionLike) {}
+  constructor(
+    public readonly inner: AgentSessionLike,
+    public readonly source: LlmAuditSource = "user",
+    public readonly cwd: string | null = null,
+  ) {}
 
   get sessionId(): string {
     return this.inner.sessionId;
@@ -370,6 +376,27 @@ export class AgentSessionWrapper {
   }
 
   async send(command: Record<string, unknown>): Promise<unknown> {
+    // Every command runs inside an LLM-audit context so the fetch patch can
+    // attribute each provider call to this session (AsyncLocalStorage
+    // propagates through the whole prompt → agent-loop → stream → fetch chain,
+    // including fire-and-forget prompts and pi-internal auto-compaction calls).
+    // cwd + sessionName are snapshotted at command time for audit attribution.
+    // Re-install the fetch patch defensively: after an HMR reload of llm-audit.ts
+    // the running session's wrapper may still be old-code, so we make sure the
+    // active patch is the newest incarnation before dispatching.
+    installLlmFetchAudit();
+    return runWithLlmAuditContext(
+      {
+        sessionId: this.sessionId,
+        source: this.source,
+        cwd: this.cwd,
+        sessionName: this.inner.sessionManager.getSessionName() ?? null,
+      },
+      () => this.dispatch(command),
+    );
+  }
+
+  private async dispatch(command: Record<string, unknown>): Promise<unknown> {
     this.resetIdleTimer();
     const type = command.type as string;
     log.debug("agent command dispatch", { sessionId: this.sessionId, type });
@@ -606,6 +633,19 @@ export async function startRpcSession(
     const { SessionManager, getAgentDir } = await import("@earendil-works/pi-coding-agent");
     const agentDir = getAgentDir();
 
+    // Install the LLM API audit fetch patch once per process, and share a
+    // single wrapped ModelRuntime across all sessions so the audit context
+    // (session/source) reaches every provider call and host allowlist stays
+    // fresh. ModelRuntime is a stateless catalog/auth/stream layer, so reuse
+    // across sessions is safe.
+    installLlmFetchAudit();
+    const modelRuntime = getAuditModelRuntime(
+      await ModelRuntime.create({
+        authPath: path.join(agentDir, "auth.json"),
+        modelsPath: path.join(agentDir, "models.json"),
+      }),
+    );
+
     const sessionManager = sessionFile
       ? SessionManager.open(sessionFile, undefined)
       : SessionManager.create(cwd, undefined);
@@ -772,6 +812,7 @@ export async function startRpcSession(
       cwd,
       agentDir,
       sessionManager,
+      modelRuntime,
       resourceLoader,
       // Per-session customTools: user_todos_list / user_todo_description are
       // gated by ~/.pi-work/todo-tools.json (see todo-tools-config); the two
@@ -832,7 +873,7 @@ export async function startRpcSession(
       inner.agent.state.systemPrompt = "";
     }
 
-    const wrapper = new AgentSessionWrapper(inner);
+    const wrapper = new AgentSessionWrapper(inner, source, cwd);
     wrapperRef.current = wrapper;
     requestUserInputRef.current = wrapper;
     wrapper.start();

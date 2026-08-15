@@ -17,6 +17,7 @@ export type Tab =
   | { kind: "tokens"; id: string; label: string }
   | { kind: "gitDiff"; id: string; label: string }
   | { kind: "conversationTree"; id: string; label: string }
+  | { kind: "llmAudit"; id: string; label: string }
   | { kind: "terminal"; id: string; label: string };
 
 interface Props {
@@ -104,6 +105,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
             <RssTabIcon />
           ) : tab.kind === "tokens" ? (
             <TokensTabIcon />
+          ) : tab.kind === "llmAudit" ? (
+            <LlmAuditTabIcon />
           ) : tab.kind === "conversationTree" ? (
             <ConversationTreeTabIcon />
           ) : tab.kind === "terminal" ? (
@@ -269,6 +272,17 @@ function TokensTabIcon() {
       <line x1="6" y1="12" x2="6" y2="4" />
       <line x1="10" y1="12" x2="10" y2="2" />
       <line x1="0.5" y1="12.5" x2="13.5" y2="12.5" />
+    </svg>
+  );
+}
+
+function LlmAuditTabIcon() {
+  // Pulse line + magnifier — "LLM API call inspection".
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1.5 7h2l1.4-2.8 2.1 5.2 1.5-2.4h1.5" />
+      <circle cx="10.8" cy="9.3" r="1.8" />
+      <line x1="12.2" y1="10.7" x2="13.4" y2="11.9" />
     </svg>
   );
 }
