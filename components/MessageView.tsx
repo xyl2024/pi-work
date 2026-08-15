@@ -452,6 +452,33 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
               </Tooltip>
             </div>
           )}
+          {showExpandMask && isOpen && (
+            <div style={{ display: "flex", gap: 3 }}>
+              <Tooltip content={t("Collapse message")}>
+                <button
+                  onClick={() => setExpanded(false)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 4,
+                    padding: "3px 8px", height: 22,
+                    background: "none", border: "none",
+                    borderRadius: 5,
+                    color: "var(--text-dim)",
+                    cursor: "pointer",
+                    fontSize: 11, fontWeight: 400,
+                    whiteSpace: "nowrap",
+                    transition: "color 0.12s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 15 12 9 18 15" />
+                  </svg>
+                  {t("Collapse message")}
+                </button>
+              </Tooltip>
+            </div>
+          )}
           {time && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto", opacity: hovered ? 1 : 0, transition: "opacity 0.12s" }}>{time}</span>}
         </div>
       )}

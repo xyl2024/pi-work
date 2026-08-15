@@ -95,6 +95,7 @@ export const ZH_TRANSLATIONS = {
   "just now": "刚刚",
   "ago": "前",
   "Copy message": "复制消息",
+  "Collapse message": "折叠",
   "Like": "点赞",
   "Unlike": "取消点赞",
   "Copy as Markdown": "复制为 Markdown",
