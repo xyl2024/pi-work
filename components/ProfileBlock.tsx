@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 import { InboxBell } from "./InboxBell";
@@ -46,6 +46,35 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Hover-driven open: hovering the avatar (or the popup itself) opens
+  // the menu; leaving both triggers a delayed close so the cursor has time
+  // to traverse the gap between them. Click still toggles for keyboard /
+  // touch users — it's the accessibility fallback, not the primary trigger.
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const HOVER_CLOSE_DELAY_MS = 250;
+
+  const cancelClose = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      setMenuOpen(false);
+    }, HOVER_CLOSE_DELAY_MS);
+  }, [cancelClose]);
+
+  const openMenu = useCallback(() => {
+    cancelClose();
+    setMenuOpen(true);
+  }, [cancelClose]);
+
+  useEffect(() => () => cancelClose(), [cancelClose]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,8 +163,16 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
           transition: "background 0.12s",
           textAlign: "left",
         }}
-        onMouseEnter={(e) => { if (hasAnyEntry) e.currentTarget.style.background = "var(--bg-hover)"; }}
-        onMouseLeave={(e) => { if (!menuOpen) e.currentTarget.style.background = "none"; }}
+        onMouseEnter={(e) => {
+          if (hasAnyEntry) {
+            e.currentTarget.style.background = "var(--bg-hover)";
+            openMenu();
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!menuOpen) e.currentTarget.style.background = "none";
+          scheduleClose();
+        }}
       >
         <div
           style={{
@@ -227,6 +264,8 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
           role="menu"
           aria-hidden={!menuOpen}
           className="profile-quick-menu"
+          onMouseEnter={openMenu}
+          onMouseLeave={scheduleClose}
           style={{
             position: "absolute",
             bottom: "calc(100% + 4px)",
