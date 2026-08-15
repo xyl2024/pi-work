@@ -9,7 +9,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
 import { Tooltip } from "./Tooltip";
 import { MorphToggleIcon } from "./MorphToggleIcon";
-import { REFRESH, CHECK } from "@/lib/icon-paths";
+import { REFRESH, CHECK, CHEVRONS_UP } from "@/lib/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
 import { SidebarSection } from "./SidebarSection";
 import { GrokBotStage } from "./GrokBotStage";
@@ -163,6 +163,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerCollapseKey, setExplorerCollapseKey] = useState(0);
+  // Number of expanded folders in the explorer (reported by FileExplorer).
+  // 0 → the "collapse all" button has nothing to do and is greyed out.
+  const [explorerExpandedCount, setExplorerExpandedCount] = useState(0);
+  // One-shot ✓ confirmation after a collapse-all click (same REFRESH→CHECK
+  // pattern as the refresh button), so the fold-back is visibly acknowledged.
+  const [explorerCollapseDone, setExplorerCollapseDone] = useState(false);
+  const explorerCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
   const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
   const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -185,10 +192,13 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
   // `explorerCollapseKey` and clears its `expandedPaths` set when this
   // bumps. Bumping (rather than resetting to 0) means clicking twice in
   // a row still fires — without it the second click would be a no-op.
-  // Intentionally silent — the visual change of folders folding back is
-  // its own confirmation.
+  // The ✓ flash gives the instantaneous fold-back a visible confirmation;
+  // the button then greys out via the expanded-count report.
   const triggerCollapseAll = useCallback(() => {
     setExplorerCollapseKey((k) => k + 1);
+    setExplorerCollapseDone(true);
+    if (explorerCollapseTimerRef.current) clearTimeout(explorerCollapseTimerRef.current);
+    explorerCollapseTimerRef.current = setTimeout(() => setExplorerCollapseDone(false), 700);
   }, []);
 
   // Persist expand state to localStorage. Stored as a flat object
@@ -750,25 +760,23 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
               <button
                 onClick={triggerCollapseAll}
                 aria-label={t("Collapse all")}
+                disabled={explorerExpandedCount === 0 && !explorerCollapseDone}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 26, height: 26, padding: 0, marginRight: 4,
-                  background: "none",
+                  background: explorerCollapseDone ? "rgba(74,222,128,0.18)" : "none",
                   border: "none",
-                  color: "var(--text-dim)",
-                  cursor: "pointer",
+                  color: explorerCollapseDone ? "#4ade80" : "var(--text-dim)",
+                  opacity: explorerExpandedCount === 0 && !explorerCollapseDone ? 0.45 : 1,
+                  cursor: explorerExpandedCount === 0 ? "default" : "pointer",
                   borderRadius: 5,
                   flexShrink: 0,
-                  transition: "color 0.3s, background 0.3s",
+                  transition: "color 0.3s, background 0.3s, opacity 0.3s",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+                onMouseEnter={(e) => { if (explorerExpandedCount === 0) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { if (explorerExpandedCount === 0) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
               >
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2.5" y="2.5" width="9" height="9" rx="1.2"/>
-                  <line x1="5" y1="7" x2="9" y2="7"/>
-                  <path d="M8 14 H11 a2 2 0 0 0 2-2 V9"/>
-                </svg>
+                <MorphToggleIcon from={CHEVRONS_UP} to={CHECK} active={explorerCollapseDone} size={13} strokeWidth={2.5} />
               </button>
               </Tooltip>
               <Tooltip content={t("Refresh explorer")}>
@@ -802,6 +810,7 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
             onFileMutated={triggerExplorerRefresh}
             onFileDeleted={onFileDeleted}
             collapseKey={explorerCollapseKey}
+            onExpandedCountChange={setExplorerExpandedCount}
           />
         </SidebarSection>
       )}

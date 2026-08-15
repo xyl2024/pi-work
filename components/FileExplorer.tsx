@@ -39,6 +39,10 @@ interface Props {
   /** Bump to collapse every expanded folder. Initial value (or undefined)
    *  is ignored — only subsequent increments trigger a collapse. */
   collapseKey?: number;
+  /** Reports the current number of expanded folders. The parent uses this
+   *  to disable its "collapse all" button while the tree is already fully
+   *  folded (nothing left to collapse). */
+  onExpandedCountChange?: (count: number) => void;
 }
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
@@ -491,7 +495,7 @@ function TreeNode({
   );
 }
 
-export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted, collapseKey }: Props) {
+export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted, collapseKey, onExpandedCountChange }: Props) {
   const { t } = useI18n();
   const [roots, setRoots] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -568,6 +572,14 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [cwd, refreshKey]);
+
+  // Report how many folders are expanded so the parent can disable its
+  // "collapse all" button while this is 0 (nothing to fold back). Fires on
+  // every expandedPaths change — manual toggles, cwd switches, and the
+  // external collapseKey bump all flow through this one effect.
+  useEffect(() => {
+    onExpandedCountChange?.(expandedPaths.size);
+  }, [expandedPaths, onExpandedCountChange]);
 
   if (loading) {
     return (

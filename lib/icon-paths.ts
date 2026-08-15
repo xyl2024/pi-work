@@ -69,6 +69,14 @@ export const CHECK = "M 20 6 L 9 17 L 4 12";
 export const REFRESH =
   "M 3 12 A 9 9 0 1 0 12 3 A 9.75 9.75 0 0 0 5.26 5.74 L 3 8 M 3 3 V 8 H 8";
 
+/** Chevrons-up (collapse all): two stacked chevrons pointing up — the
+ *  standard "collapse every level" glyph in file-tree UIs (VS Code's
+ *  explorer uses the same shape). Single chevron folds one level, two
+ *  chevrons fold every level. Source: 2 ×
+ *  <polyline points="17 11 12 6 7 11"/> / <polyline points="17 18 12 13 7 18"/> */
+export const CHEVRONS_UP =
+  "M 17 11 L 12 6 L 7 11 M 17 18 L 12 13 L 7 18";
+
 /** Empty checkbox outline on the 10×10 grid. Companion to CHECKBOX_CHECKED
  *  for the TodoPanel row. Source: <rect x="1.5" y="1.5" width="8" height="8"/> */
 export const EMPTY_CHECKBOX = "M 1.5 1.5 H 9.5 V 9.5 H 1.5 Z";
