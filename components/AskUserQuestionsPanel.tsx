@@ -449,88 +449,121 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
       ? t("Awaiting your answer")
       : t("{n} questions pending").replace("{n}", String(count));
     return (
+      // Outer wrapper is purely a spacing-bearing layer that mirrors
+      // ChatInput's padding container (`padding: 0 16px` here; the full
+      // panel below adds `0 16px 8px`). The actual surface lives inside
+      // so its width tracks the same 820-wide centered column as
+      // ChatInput instead of stretching edge-to-edge — keeps the
+      // collapse bar flush with the input box on any chat-area width.
       <div
-        role="region"
-        aria-label={regionLabel}
-        onClick={() => setMinimized(false)}
         className="ask-panel-in"
         style={{
-          margin: "0 12px 8px 12px",
+          padding: "0 16px 8px",
           display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "0 6px 0 12px",
-          height: 34,
-          background: "var(--bg-panel)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          boxShadow: "0 -4px 14px rgba(0, 0, 0, 0.12)",
-          cursor: "pointer",
+          flexDirection: "column",
         }}
       >
-        <span
-          aria-hidden
+        <div
+          role="region"
+          aria-label={regionLabel}
+          onClick={() => setMinimized(false)}
           style={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            background: "var(--accent)",
-            animation: "ask-sidebar-pulse 1.6s ease-in-out infinite",
-            flexShrink: 0,
-          }}
-        />
-        <span
-          style={{
-            flex: 1,
-            fontSize: 12,
-            color: "var(--text-muted)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            maxWidth: 820,
+            margin: "0 auto",
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "0 6px 0 12px",
+            height: 34,
+            background: "var(--bg-panel)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            boxShadow: "0 -4px 14px rgba(0, 0, 0, 0.12)",
+            cursor: "pointer",
           }}
         >
-          {barLabel}
-        </span>
-        <button
-          type="button"
-          aria-label={t("Expand")}
-          onClick={(e) => {
-            e.stopPropagation();
-            setMinimized(false);
-          }}
-          className="askq-icon-btn"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 15l-6-6-6 6" />
-          </svg>
-        </button>
+          <span
+            aria-hidden
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "var(--accent)",
+              animation: "ask-sidebar-pulse 1.6s ease-in-out infinite",
+              flexShrink: 0,
+            }}
+          />
+          <span
+            style={{
+              flex: 1,
+              fontSize: 12,
+              color: "var(--text-muted)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {barLabel}
+          </span>
+          <button
+            type="button"
+            aria-label={t("Expand")}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMinimized(false);
+            }}
+            className="askq-icon-btn"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 15l-6-6-6 6" />
+            </svg>
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
+    // Outer wrapper is purely spacing — mirrors ChatInput's padding
+    // container (`padding: 0 16px 8px` here) so the panel's right edge
+    // lines up with the input box on any chat-area width. The actual
+    // surface (background / border / shadow) lives inside the inner div
+    // below, which adds `maxWidth: 820 + margin: auto` — same pattern
+    // ChatInput uses. Previous single-layer `margin: 0 12px 8px 12px`
+    // stretched the surface edge-to-edge, drifting away from the input
+    // box once the chat area was wider than ~852px.
     <div
-      role="region"
-      aria-label={regionLabel}
       className="ask-panel-in"
       style={{
-        // Plain background (matches other panels in the app). The shadow +
-        // border alone carry the "this is a focused interaction surface"
-        // affordance; tinting with the accent color made the panel feel
-        // louder than necessary when it's a regular in-app UI element.
-        margin: "0 12px 8px 12px",
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        boxShadow: "0 -4px 14px rgba(0, 0, 0, 0.12)",
-        // Fixed height with a flex column so the tab bar and footer stay
-        // pinned while only the active question's body scrolls.
+        padding: "0 16px 8px",
         display: "flex",
         flexDirection: "column",
-        height: PANEL_HEIGHT_PX,
-        overflow: "hidden",
       }}
     >
+      <div
+        role="region"
+        aria-label={regionLabel}
+        style={{
+          // Plain background (matches other panels in the app). The shadow +
+          // border alone carry the "this is a focused interaction surface"
+          // affordance; tinting with the accent color made the panel feel
+          // louder than necessary when it's a regular in-app UI element.
+          maxWidth: 820,
+          margin: "0 auto",
+          width: "100%",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          boxShadow: "0 -4px 14px rgba(0, 0, 0, 0.12)",
+          // Fixed height with a flex column so the tab bar and footer stay
+          // pinned while only the active question's body scrolls.
+          display: "flex",
+          flexDirection: "column",
+          height: PANEL_HEIGHT_PX,
+          overflow: "hidden",
+        }}
+      >
       <style>{`
         @keyframes ask-panel-in {
           from { opacity: 0; transform: translateY(8px); }
@@ -854,6 +887,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
