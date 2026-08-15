@@ -570,23 +570,6 @@ export function AppShell() {
     setRightPanelState("normal");
   }, [t]);
 
-  // Default-open the Todos tab on initial mount. Covers both first entry
-  // and refresh (a refresh tears down and remounts the tree, so this
-  // runs again). After mount, the user's open/close choices take over.
-  // Gated by the right-side bar config so users who hide the Todos button
-  // don't see a brief flash of the panel auto-opened then auto-closed.
-  // The ref ensures this decision is made exactly once — toggling the
-  // Todos visibility later via SettingsModal must not re-trigger the
-  // default-open.
-  const defaultOpenDecidedRef = useRef(false);
-  useEffect(() => {
-    if (defaultOpenDecidedRef.current) return;
-    if (rightSideBarConfig === null) return; // settings haven't loaded yet — wait
-    defaultOpenDecidedRef.current = true;
-    if (rightSideBarConfig.todos === false) return;
-    handleOpenTodoTab();
-  }, [rightSideBarConfig, handleOpenTodoTab]);
-
   // Open the favorites tab — same pattern as todos / file tabs.
   const handleOpenFavoritesTab = useCallback(() => {
     setFileTabs((prev) => {
