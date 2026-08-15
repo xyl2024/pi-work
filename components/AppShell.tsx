@@ -1211,32 +1211,36 @@ export function AppShell() {
           </Tooltip>
           {showChat && (
             <div style={{ display: "flex", alignItems: "center", height: "100%", gap: 2 }}>
-              <IconHoverButton
-                onClick={() => toggleTopPanel("system")}
-                active={activeTopPanel === "system"}
-                icon={
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                    <line x1="8" y1="13" x2="16" y2="13" />
-                    <line x1="8" y1="17" x2="13" y2="17" />
-                  </svg>
-                }
-                label={t("System Prompts")}
-              />
-              <Tooltip content={tools.length > 0 ? `${tools.filter((t) => t.active).length} / ${tools.length} ${t("Active").toLowerCase()}` : t("No tools available for this session")}>
+              {selectedSession && (
                 <IconHoverButton
-                  onClick={() => toggleTopPanel("tools")}
-                  active={activeTopPanel === "tools"}
-                  disabled={tools.length === 0}
+                  onClick={() => toggleTopPanel("system")}
+                  active={activeTopPanel === "system"}
                   icon={
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                      <line x1="8" y1="13" x2="16" y2="13" />
+                      <line x1="8" y1="17" x2="13" y2="17" />
                     </svg>
                   }
-                  label={tools.length > 0 ? `${t("Tools")} ${tools.filter((t) => t.active).length}` : t("Tools")}
+                  label={t("System Prompts")}
                 />
-              </Tooltip>
+              )}
+              {selectedSession && (
+                <Tooltip content={tools.length > 0 ? `${tools.filter((t) => t.active).length} / ${tools.length} ${t("Active").toLowerCase()}` : t("No tools available for this session")}>
+                  <IconHoverButton
+                    onClick={() => toggleTopPanel("tools")}
+                    active={activeTopPanel === "tools"}
+                    disabled={tools.length === 0}
+                    icon={
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                      </svg>
+                    }
+                    label={tools.length > 0 ? `${t("Tools")} ${tools.filter((t) => t.active).length}` : t("Tools")}
+                  />
+                </Tooltip>
+              )}
               {headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible) && (
                 <>
                   {headerActions.replayVisible && (
