@@ -803,16 +803,16 @@ function AssistantMessageView({
         {readFiles && readFiles.length > 0 && onOpenFile && (
           <ReadFileChips files={readFiles} onOpenFile={onOpenFile} />
         )}
-        {/* Hover-revealed meta: usage + timestamp, right-aligned, fade in/out */}
+        {/* Hover-revealed meta: usage icons + timestamp, right-aligned, fade in/out */}
         {!isStreaming && (message.usage || time) && (
           <span style={{
             marginLeft: "auto",
-            display: "flex", alignItems: "center", gap: 8,
+            display: "flex", alignItems: "center", gap: 6,
             opacity: hovered ? 1 : 0,
             pointerEvents: hovered ? "auto" : "none",
             transition: "opacity 0.12s",
           }}>
-            {message.usage && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{formatUsage(message.usage)}</span>}
+            {message.usage && <UsageIcons usage={message.usage} />}
             {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
           </span>
         )}
@@ -1304,20 +1304,79 @@ function getToolPreview(block: ToolCallContent): string {
   return String(first).slice(0, 120);
 }
 
-function formatUsage(usage: {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: { total: number };
-}): string {
-  const parts = [];
+function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } }) {
+  const inputDenom = usage.input + usage.cacheRead;
+  const cacheHitRate = inputDenom > 0 ? (usage.cacheRead / inputDenom) * 100 : 0;
+  const items: Array<{ key: string; label: string; icon: React.ReactNode }> = [];
   if (usage.input) {
-    const inputDenom = usage.input + usage.cacheRead;
-    const cacheHitRate = inputDenom > 0 ? (usage.cacheRead / inputDenom) * 100 : 0;
-    parts.push(`${usage.input.toLocaleString()} in ${cacheHitRate.toFixed(1)}% cached`);
+    items.push({
+      key: "in",
+      label: `${usage.input.toLocaleString()} in · ${cacheHitRate.toFixed(1)}% cached`,
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 2.5v7" /><polyline points="3 6 6 9.5 9 6" />
+        </svg>
+      ),
+    });
   }
-  if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
-  if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
-  return parts.join(" ");
+  if (usage.output) {
+    items.push({
+      key: "out",
+      label: `${usage.output.toLocaleString()} out`,
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 9.5v-7" /><polyline points="3 6 6 2.5 9 6" />
+        </svg>
+      ),
+    });
+  }
+  if (usage.cacheRead || usage.cacheWrite) {
+    const cached = (usage.cacheRead + usage.cacheWrite).toLocaleString();
+    const cacheLabel = cacheHitRate > 0
+      ? `${cached} cached · ${cacheHitRate.toFixed(1)}% hit`
+      : `${cached} cached`;
+    items.push({
+      key: "cache",
+      label: cacheLabel,
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <ellipse cx="6" cy="3.5" rx="3.5" ry="1.4" /><path d="M2.5 3.5v2.6c0 .77 1.57 1.4 3.5 1.4s3.5-.63 3.5-1.4V3.5" /><path d="M2.5 6.1v2.6c0 .77 1.57 1.4 3.5 1.4s3.5-.63 3.5-1.4V6.1" />
+        </svg>
+      ),
+    });
+  }
+  if (usage.cost?.total) {
+    items.push({
+      key: "cost",
+      label: `$${usage.cost.total.toFixed(4)}`,
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 1.5v9" /><path d="M8 3.2c-.5-.9-2.2-1.2-3-.6-.8.6-.7 1.7.2 2.2l1.9.9c1 .5 1 1.7.1 2.3-.9.7-2.7.3-3.2-.7" />
+        </svg>
+      ),
+    });
+  }
+  if (items.length === 0) return null;
+  const compact = (it: typeof items[number]): string => {
+    if (it.key === "in") return usage.input.toLocaleString();
+    if (it.key === "out") return usage.output.toLocaleString();
+    if (it.key === "cache") {
+      const cached = usage.cacheRead + usage.cacheWrite;
+      return cacheHitRate > 0 ? `${cached.toLocaleString()} ${cacheHitRate.toFixed(0)}%` : cached.toLocaleString();
+    }
+    if (it.key === "cost") return `$${usage.cost.total.toFixed(4)}`;
+    return "";
+  };
+  return (
+    <>
+      {items.map((it) => (
+        <Tooltip key={it.key} content={it.label}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--text-dim)", fontSize: 11 }}>
+            {it.icon}
+            <span>{compact(it)}</span>
+          </span>
+        </Tooltip>
+      ))}
+    </>
+  );
 }
