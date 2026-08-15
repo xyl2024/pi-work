@@ -216,23 +216,37 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
         </Tooltip>
       )}
 
-      {menuOpen && hasAnyEntry && (
+      {/* Always-mounted menu — `menuOpen` toggles the scale/fade transition
+          so both open and close animate (conditional render would snap).
+          Width matches the sidebar content column (left/right 10px padding,
+          same as the avatar row) so the menu reads as sidebar-width, not a
+          stray 160px chip. transform-origin: bottom left makes it visibly
+          grow out of the avatar instead of the page center. */}
+      {hasAnyEntry && (
         <div
           role="menu"
+          aria-hidden={!menuOpen}
+          className="profile-quick-menu"
           style={{
             position: "absolute",
             bottom: "calc(100% + 4px)",
             left: 10,
-            minWidth: 160,
+            right: 10,
             zIndex: 100,
             background: "var(--bg)",
             border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 6px 20px rgba(0,0,0,0.18)",
+            borderRadius: 10,
+            boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
             padding: 4,
             display: "flex",
             flexDirection: "column",
             gap: 2,
+            transformOrigin: "bottom left",
+            transform: menuOpen ? "translateY(0) scale(1)" : "translateY(4px) scale(0.97)",
+            opacity: menuOpen ? 1 : 0,
+            pointerEvents: menuOpen ? "auto" : "none",
+            transition:
+              "transform 180ms cubic-bezier(0.32, 0.72, 0, 1), opacity 180ms cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
           {onOpenModels && (
@@ -318,6 +332,13 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
           )}
         </div>
       )}
+      <style>{`
+        @media (prefers-reduced-motion: reduce) {
+          .profile-quick-menu {
+            transition: none !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
