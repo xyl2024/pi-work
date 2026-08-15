@@ -90,6 +90,7 @@ export const ZH_TRANSLATIONS = {
   "Sessions": "会话",
   "Explorer": "资源管理器",
   "Refresh explorer": "刷新资源管理器",
+  "Refresh sessions": "刷新会话",
   "Delete": "删除",
   "Rename": "重命名",
   "msgs": "条消息",

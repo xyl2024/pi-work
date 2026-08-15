@@ -642,37 +642,6 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
                 </Tooltip>
               );
             })()}
-            <Tooltip content={t("Refresh")}>
-            <button
-              onClick={() => loadSessions()}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "var(--bg-hover)",
-                border: `1px solid ${sessionRefreshDone ? "rgba(74,222,128,0.4)" : "var(--border)"}`,
-                color: sessionRefreshDone ? "#4ade80" : "var(--text-muted)",
-                cursor: "pointer",
-                width: 32, height: 32,
-                borderRadius: 7,
-                padding: 0,
-                flexShrink: 0,
-                transition: "background 0.3s, color 0.3s, border-color 0.3s",
-              }}
-              onMouseEnter={(e) => {
-                if (sessionRefreshDone) return;
-                e.currentTarget.style.background = "var(--bg-selected)";
-                e.currentTarget.style.color = "var(--accent)";
-                e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-              }}
-              onMouseLeave={(e) => {
-                if (sessionRefreshDone) return;
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = "var(--text-muted)";
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
-            >
-              <MorphToggleIcon from={REFRESH} to={CHECK} active={sessionRefreshDone} size={15} strokeWidth={2.5} />
-            </button>
-            </Tooltip>
             {onOpenSearch && (
               <Tooltip content={`${t("Command palette")} (⌘K)`}>
               <button
@@ -719,6 +688,28 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
         title={t("Sessions")}
         open={sessionsOpen}
         onToggle={() => setSessionsOpen((v) => !v)}
+        actions={
+          <Tooltip content={t("Refresh sessions")}>
+            <button
+              onClick={() => loadSessions()}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 26, height: 26, padding: 0, marginRight: 6,
+                background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "none",
+                border: "none",
+                color: sessionRefreshDone ? "#4ade80" : "var(--text-dim)",
+                cursor: "pointer",
+                borderRadius: 5,
+                flexShrink: 0,
+                transition: "color 0.3s, background 0.3s",
+              }}
+              onMouseEnter={(e) => { if (sessionRefreshDone) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+              onMouseLeave={(e) => { if (sessionRefreshDone) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+            >
+              <MorphToggleIcon from={REFRESH} to={CHECK} active={sessionRefreshDone} size={13} strokeWidth={2.5} />
+            </button>
+          </Tooltip>
+        }
       >
       <MultiCwdList
         workspaces={orderedWorkspaces}
