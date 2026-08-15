@@ -155,28 +155,62 @@ export function GrokBotLab({ onClose }: Props) {
         >
           <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, flex: 1 }}>
             {t("Pi Bot Lab")}
-            <span style={{ marginLeft: 10, fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-              GB—{String(config.expression).padStart(2, "0")} · {stateName}
+            <span
+              style={{
+                marginLeft: 10,
+                fontSize: 11,
+                fontFamily: "var(--font-mono)",
+                color: config.autoPlay ? "var(--accent)" : "var(--text-dim)",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                transition: "color 0.2s ease",
+              }}
+            >
+              GB—{String(config.expression).padStart(2, "0")} ·
+              {config.autoPlay && (
+                <span
+                  aria-hidden
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "var(--accent)",
+                    animation: "grokbot-beacon 1.2s ease-in-out infinite",
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              <span
+                key={config.autoPlay ? config.stateKey : "static"}
+                style={
+                  config.autoPlay
+                    ? { animation: "grok-tour-name-in 240ms ease-out" }
+                    : undefined
+                }
+              >
+                {stateName}
+              </span>
             </span>
           </h2>
-          <label
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 12,
-              color: "var(--text-muted)",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={config.autoPlay}
-              onChange={(e) => setGrokbotConfig({ autoPlay: e.target.checked })}
-              style={{ cursor: "pointer" }}
-            />
-            {t("Auto tour")}
-          </label>
+          <Tooltip content={t("Cycle through all states automatically")}>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={config.autoPlay}
+              onClick={() => setGrokbotConfig({ autoPlay: !config.autoPlay })}
+              className="grok-tour-toggle"
+            >
+              <svg
+                width="11" height="11" viewBox="0 0 24 24"
+                fill="currentColor" aria-hidden
+              >
+                <path d="M8 5.14v13.72c0 .8.87 1.3 1.56.9l11.2-6.86c.64-.4.64-1.4 0-1.8L9.56 4.24A1.05 1.05 0 0 0 8 5.14Z" />
+              </svg>
+              {t("Auto tour")}
+              <span className="grok-tour-switch" aria-hidden />
+            </button>
+          </Tooltip>
           <button
             type="button"
             onClick={handleRandomize}

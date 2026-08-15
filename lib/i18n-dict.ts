@@ -588,6 +588,7 @@ export const ZH_TRANSLATIONS = {
   "Randomize": "随机组合",
   "Random": "随机",
   "Auto tour": "自动巡演",
+  "Cycle through all states automatically": "自动轮流展示全部状态动作",
   "Quick actions": "快捷动作",
   "All expressions": "全部表情",
   "All states": "全部状态动作",
