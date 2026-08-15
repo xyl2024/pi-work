@@ -68,6 +68,38 @@ function resolvePath(input: string, cwd: string): string {
   return path.isAbsolute(input) ? path.normalize(input) : path.resolve(cwd, input);
 }
 
+/**
+ * Build the model-facing text for a per-file batch. Unlike `details.summary`
+ * (which is a single-line UI breadcrumb preserved for jsonl backward
+ * compatibility), this text is what the LLM actually sees in its context:
+ * the cross-file outcome line, plus a per-file breakdown of the failures
+ * with their concrete reasons. Without this breakdown the model has no way
+ * to learn why a path was rejected (e.g. outside allowed roots, wrong file
+ * category, file missing) and may retry the same bad input indefinitely.
+ */
+function buildModelText(
+  okCount: number,
+  total: number,
+  failedEntries: readonly ShowFileEntry[],
+): string {
+  const failCount = total - okCount;
+  let head: string;
+  if (failCount === 0) {
+    head = `Added ${okCount} file${okCount === 1 ? "" : "s"} to the session library in the Pi Work UI.`;
+  } else if (okCount === 0) {
+    head = `Error: None of the ${total} file${total === 1 ? "" : "s"} were added to the session library in the Pi Work UI; ${failCount} failed.`;
+  } else {
+    head = `Added ${okCount} of ${total} files to the session library in the Pi Work UI; ${failCount} failed.`;
+  }
+  if (failedEntries.length === 0) return head;
+  const lines = failedEntries.map((f) => {
+    const pathLabel = f.path && f.path.length > 0 ? f.path : "(empty path)";
+    const reason = f.error ?? "unknown error";
+    return `  - ${pathLabel}: ${reason}`;
+  });
+  return `${head}\n\nFailed files (${failedEntries.length}):\n${lines.join("\n")}`;
+}
+
 function processOne(absPath: string): ShowFileEntry {
   let stat: fs.Stats;
   try {
@@ -188,12 +220,19 @@ export const showFileTool = defineTool<typeof ShowFileParams, ShowFileDetails>({
 
     const okCount = files.filter((f) => f.exists).length;
     const failCount = files.length - okCount;
-    const summary =
+    // `details.summary` is a single-line UI breadcrumb — keep it stable for
+    // jsonl backward compatibility. The model-facing text lives in
+    // `content[0].text` (see `buildModelText`) so the LLM sees the actual
+    // per-file failure reasons, which `details.files[i].error` alone cannot
+    // deliver (pi does not forward `details` to providers).
+    const uiSummary =
       failCount === 0
         ? `Added ${okCount} file${okCount === 1 ? "" : "s"} to the session library in the Pi Work UI.`
         : `Added ${okCount} of ${files.length} files to the session library in the Pi Work UI; ${failCount} failed.`;
+    const failedEntries = files.filter((f) => !f.exists);
+    const modelText = buildModelText(okCount, files.length, failedEntries);
 
-    return result<ShowFileDetails>(summary, { files, summary });
+    return result<ShowFileDetails>(modelText, { files, summary: uiSummary });
   },
 });
 
