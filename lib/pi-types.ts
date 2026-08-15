@@ -1,4 +1,10 @@
 import type { SessionManager, SettingsManager, AgentSessionEvent, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { ToolInfo } from "./types";
+
+// Re-exported so the existing `import type { ToolInfo } from "./pi-types"`
+// call site in rpc-manager.ts keeps working. Single source of truth lives
+// in lib/types.ts.
+export type { ToolInfo };
 
 interface ContextUsage {
   percent: number | null;
@@ -9,11 +15,6 @@ interface ContextUsage {
 interface ModelLike {
   id: string;
   provider: string;
-}
-
-export interface ToolInfo {
-  name: string;
-  description: string;
 }
 
 interface NavigateTreeResult {

@@ -1,6 +1,7 @@
 import { createAgentSession, DefaultResourceLoader, isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
+import type { ToolSelection } from "./types";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
 import { existsSync } from "node:fs";
@@ -17,7 +18,6 @@ import { readEnabledCustomTools } from "./custom-tools-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 
 const log = createLogger("rpc-manager");
-type ToolSelection = string[] | "all";
 
 export type PermissionDecision = "allow_once" | "allow_similar" | "deny";
 

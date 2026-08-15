@@ -11,12 +11,15 @@ import type { Locale } from "@/hooks/useI18n";
 // `null` when no ChatWindow is mounted (no active session).
 
 export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
-export type ToolPresetOption = "none" | "full";
 
 export interface AgentControls {
   switchModel: (provider: string, modelId: string) => void | Promise<void>;
   switchThinkingLevel: (level: ThinkingLevelOption) => void | Promise<void>;
-  switchToolPreset: (preset: ToolPresetOption) => void | Promise<void>;
+  /** Set the user's tool selection. The keyboard palette only offers Off/Full
+   *  via this method — Custom requires the visual popover. Pass `[]` for Off
+   *  and `"all"` for Full; partial arrays are accepted but unused by the
+   *  built-in command palette. */
+  switchToolSelection: (selection: "off" | "full") => void | Promise<void>;
   abortStreaming: () => void | Promise<void>;
   isStreaming: boolean;
 }
@@ -286,7 +289,7 @@ export function buildCommands(ctx: CommandContext, opts: BuildOptions): Command[
     keywords: ["tools", "none", "off", "disable", "工具", "无", "关闭"],
     icon: <ToolIcon />,
     when: (c) => c.hasSession && !!c.agentControls,
-    run: () => ctx.agentControls?.switchToolPreset("none"),
+    run: () => ctx.agentControls?.switchToolSelection("off"),
   });
   cmds.push({
     id: "tools.full",
@@ -295,7 +298,7 @@ export function buildCommands(ctx: CommandContext, opts: BuildOptions): Command[
     keywords: ["tools", "full", "all", "enable", "工具", "全部", "启用"],
     icon: <ToolIcon />,
     when: (c) => c.hasSession && !!c.agentControls,
-    run: () => ctx.agentControls?.switchToolPreset("full"),
+    run: () => ctx.agentControls?.switchToolSelection("full"),
   });
 
   // ── View (3) ──

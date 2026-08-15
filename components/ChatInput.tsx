@@ -10,6 +10,7 @@ import { CollapsiblePanel } from "./CollapsiblePanel";
 import { CwdPicker } from "./CwdPicker";
 import { AnimatedPopover } from "./AnimatedPopover";
 import { DEFAULT_TYPEWRITER_PHRASES } from "@/lib/typewriter-phrases";
+import type { ToolInfo, ToolSelection } from "@/lib/types";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -44,8 +45,25 @@ interface Props {
   modelIcons?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string }[];
   onModelChange?: (provider: string, modelId: string) => void;
-  toolPreset?: "none" | "full";
-  onToolPresetChange?: (preset: "none" | "full") => void;
+  /** The user's tool selection state. `[]` ≡ Off, `"all"` ≡ High, partial
+   *  array ≡ Custom. Mutually consistent with the wire format of `set_tools`. */
+  toolSelection?: ToolSelection;
+  /** Apply a new tool selection. For existing sessions this fires `set_tools`
+   *  against the agent; for new sessions it just updates local state and the
+   *  selection is serialised into the first prompt's `toolNames`. */
+  onToolSelectionChange?: (selection: ToolSelection) => void;
+  /** Catalog of every tool pi would register for this session's cwd. Sorted
+   *  alphabetically. Empty until `onEnsureAvailableTools()` resolves. */
+  availableTools?: ToolInfo[];
+  /** True while the catalog is being fetched. The Custom row renders a
+   *  spinner in its checklist area while this is true. */
+  toolsLoading?: boolean;
+  /** Last catalog-fetch error message, surfaced inline in the checklist area
+   *  with a Retry button that re-invokes `onEnsureAvailableTools`. */
+  toolsError?: string | null;
+  /** Lazy catalog fetcher. The Custom row calls this the first time it's
+   *  expanded per session if the catalog is empty. */
+  onEnsureAvailableTools?: () => Promise<void>;
   thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
   availableThinkingLevels?: string[] | null;
@@ -77,10 +95,14 @@ export interface ChatInputHandle {
   focus: () => void;
 }
 
-const TOOL_PRESETS = ["off", "full"] as const;
-const TOOL_PRESET_MAP: Record<"off" | "full", "none" | "full"> = { off: "none", full: "full" };
-
 const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
+
+// "Read only" quick preset — the canonical tool names pi's built-in
+// resource loader registers for file inspection. `setActiveToolsByName`
+// silently ignores names not present in `availableTools`, so a missing
+// tool (e.g. a stripped pi build without `grep`) just degrades the preset
+// to its intersection rather than failing outright.
+const READ_ONLY_TOOLS = ["find", "ls", "grep", "read"] as const;
 // Border color reflects the active reasoning intensity: gray = off, then a
 // cool-to-warm gradient up to red for xhigh. "auto" falls back to the
 // neutral border because the UI can't know which level the upstream pi
@@ -258,7 +280,8 @@ function findDirectSlashResource(message: string, resources: SlashResource[]): {
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, isStreaming, model, modelNames, modelIcons, modelList, onModelChange,
-  toolPreset, onToolPresetChange,
+  toolSelection = "all", onToolSelectionChange,
+  availableTools = [], toolsLoading = false, toolsError = null, onEnsureAvailableTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo,
   slashResources = [], slashResourceKey,
@@ -302,6 +325,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
+  // Custom row's expand/collapse state. Sticky within the popover's open
+  // session — collapsing on every outside click would be annoying since the
+  // user frequently toggles a checkbox, clicks outside to close the
+  // popover, then re-opens it to confirm. Collapses when the user picks
+  // Off/High (those rows auto-close the popover, so this state only
+  // persists across open/close cycles within "Custom").
+  const [customExpanded, setCustomExpanded] = useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [thinkingHovered, setThinkingHovered] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
@@ -730,6 +760,27 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const currentThinkingDisplay = (currentThinkingMapped != null && currentThinkingMapped !== currentThinkingLevel)
     ? currentThinkingMapped
     : currentThinkingLevel;
+
+  // Tools trigger button label. "Tools · Off" when no tools, "Tools · Read only"
+  // when the Read-only quick preset is active, "Tools · Custom (N)" when a
+  // partial subset is active, plain "Tools" for Full (the default).
+  // Drives discoverability: the user can tell at a glance which mode they're
+  // in without opening the popover.
+  const isReadOnlySelection = Array.isArray(toolSelection)
+    && toolSelection.length === READ_ONLY_TOOLS.length
+    && toolSelection.every((name) => (READ_ONLY_TOOLS as readonly string[]).includes(name));
+  const toolsTriggerLabel = Array.isArray(toolSelection)
+    ? toolSelection.length === 0
+      ? t("Tools · Off")
+      : isReadOnlySelection
+        ? t("Tools · Read only")
+        : t("Tools · Custom ({count})", { count: toolSelection.length })
+    : t("Tools");
+  // Local capture: `onToolSelectionChange` is declared optional on Props,
+  // but the surrounding `!isStreaming && onToolSelectionChange` guard means
+  // it's always defined inside this block. Capturing it as a non-optional
+  // local lets TS narrow the type for the inline callbacks below.
+  const handleToolSelectionChangeLocal = onToolSelectionChange ?? (() => {});
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -1314,57 +1365,75 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </AnimatedPopover>
               </div>
             )}
-            {!isStreaming && onToolPresetChange && (
+            {!isStreaming && onToolSelectionChange && (
               <div ref={toolDropdownRef} style={{ position: "relative" }}>
-                <IconHoverButton
+                <button
+                  type="button"
                   onClick={() => setToolDropdownOpen((v) => !v)}
-                  active={toolDropdownOpen}
-                  icon={
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                    </svg>
-                  }
-                  label={t("Tools")}
-                />
-                <AnimatedPopover
-                  open={toolDropdownOpen}
+                  aria-label={t("Tools")}
                   style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg-panel)", border: "1px solid var(--border)",
-                    borderRadius: 10, boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
-                    minWidth: 120,
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "0 10px", height: 32,
+                    maxWidth: 220, overflow: "hidden",
+                    background: toolDropdownOpen ? "var(--bg-hover)" : "none",
+                    border: "none", borderRadius: 9,
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    fontSize: 12,
+                    transition: "background 0.12s, color 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (toolDropdownOpen) return;
+                    e.currentTarget.style.background = "var(--bg-hover)";
+                    e.currentTarget.style.color = "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
+                    e.currentTarget.style.color = "var(--text-muted)";
                   }}
                 >
-                    {TOOL_PRESETS.map((lvl) => {
-                      const preset = TOOL_PRESET_MAP[lvl];
-                      const isActive = toolPreset === preset;
-                      const desc = lvl === "off" ? t("No tools, chat only") : t("All available tools");
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => { setToolDropdownOpen(false); if (!isActive) onToolPresetChange(preset); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            background: isActive ? "var(--bg-selected)" : "none",
-                            border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
-                            cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
-                            whiteSpace: "nowrap",
-                          }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                        >
-                          {isActive
-                            ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1 }}>{lvl}</span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                        </button>
-                      );
-                    })}
-                </AnimatedPopover>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                  </svg>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                    {toolsTriggerLabel}
+                  </span>
+                </button>
+                <ToolsDropdownPanel
+                  open={toolDropdownOpen}
+                  toolSelection={toolSelection}
+                  availableTools={availableTools}
+                  toolsLoading={toolsLoading}
+                  toolsError={toolsError}
+                  customExpanded={customExpanded}
+                  onSelectPreset={(preset) => {
+                    // Each preset maps to a fixed ToolSelection:
+                    //   off       → []           (no tools, system prompt cleared)
+                    //   full      → "all"        (sentinel so future tools auto-include)
+                    //   read_only → the named subset (backend ignores missing names)
+                    const next: ToolSelection =
+                      preset === "off" ? []
+                      : preset === "full" ? "all"
+                      : [...READ_ONLY_TOOLS];
+                    handleToolSelectionChangeLocal(next);
+                    setToolDropdownOpen(false);
+                  }}
+                  onToggleTool={handleToolSelectionChangeLocal}
+                  onRetryEnsureTools={onEnsureAvailableTools}
+                  onToggleCustomExpanded={() => {
+                    setCustomExpanded((v) => {
+                      const next = !v;
+                      // First expansion triggers the catalog fetch. After
+                      // that, the in-memory catalog is reused for the rest
+                      // of the session — `ensureAvailableTools` is a no-op
+                      // when the catalog is non-empty.
+                      if (next && onEnsureAvailableTools) {
+                        void onEnsureAvailableTools();
+                      }
+                      return next;
+                    });
+                  }}
+                />
               </div>
             )}
 
@@ -1483,5 +1552,267 @@ function ModelDropdownPanel({ rect, open, groups, activeModel, modelIcons, panel
         </div>
       ))}
     </AnimatedPopover>
+  );
+}
+
+// ── Tools popover panel ─────────────────────────────────────────────────
+// 3-row layout (Off / High / Custom ▶). Custom expands into a per-tool
+// checklist with auto-apply. Off/High are 1-click presets that close the
+// popover. Tools catalog is fetched lazily on first Custom expansion.
+function ToolsDropdownPanel({
+  open,
+  toolSelection,
+  availableTools,
+  toolsLoading,
+  toolsError,
+  customExpanded,
+  panelRef,
+  onSelectPreset,
+  onToggleTool,
+  onToggleCustomExpanded,
+  onRetryEnsureTools: onRetryEnsureToolsProp,
+}: {
+  open: boolean;
+  toolSelection: ToolSelection;
+  availableTools: ToolInfo[];
+  toolsLoading: boolean;
+  toolsError: string | null;
+  customExpanded: boolean;
+  panelRef?: React.Ref<HTMLDivElement>;
+  onSelectPreset: (preset: "off" | "full" | "read_only") => void;
+  onToggleTool: (selection: ToolSelection) => void;
+  onToggleCustomExpanded: () => void;
+  onRetryEnsureTools?: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const allNames = useMemo(() => availableTools.map((tool) => tool.name), [availableTools]);
+  const selectedSet = useMemo(() => {
+    if (toolSelection === "all") return new Set(allNames);
+    return new Set(Array.isArray(toolSelection) ? toolSelection : []);
+  }, [toolSelection, allNames]);
+  const isOff = Array.isArray(toolSelection) && toolSelection.length === 0;
+  const isAll = toolSelection === "all";
+  // "Read only" is a named quick preset — a fixed subset of file-inspection
+  // tools. Detect it here so the row can highlight without colliding with
+  // the generic Custom row (which would also match the partial-array state).
+  const isReadOnly = Array.isArray(toolSelection)
+    && toolSelection.length === READ_ONLY_TOOLS.length
+    && toolSelection.every((name) => (READ_ONLY_TOOLS as readonly string[]).includes(name));
+  // Generic Custom is "any partial selection that isn't a named preset".
+  const isCustom = !isOff && !isAll && !isReadOnly;
+
+  // Compute the next selection for one toggle click. Normalises full →
+  // "all" sentinel so a future tool addition auto-includes; leaves the
+  // empty array as `[]` (matches Off's wire shape).
+  const toggleTool = useCallback(
+    (name: string, willBeChecked: boolean) => {
+      const next = new Set(selectedSet);
+      if (willBeChecked) next.add(name);
+      else next.delete(name);
+      const newSelection: ToolSelection =
+        next.size === allNames.length && allNames.length > 0
+          ? "all"
+          : Array.from(next);
+      onToggleTool(newSelection);
+    },
+    [selectedSet, allNames, onToggleTool],
+  );
+
+  // Viewport-aware cap so the panel doesn't grow taller than the space
+  // above the input. Matches ModelDropdownPanel's approach.
+  const viewportHeight = typeof window === "undefined" ? 720 : (window.visualViewport?.height ?? window.innerHeight);
+  const maxH = Math.max(180, Math.min(viewportHeight * 0.6, 520));
+
+  const customLabel = availableTools.length > 0
+    ? t("Custom selection ({count}/{total})", { count: selectedSet.size, total: availableTools.length })
+    : t("Custom selection");
+
+  return (
+    <AnimatedPopover
+      open={open}
+      maxHeight={maxH}
+      panelRef={panelRef}
+      style={{
+        position: "absolute",
+        bottom: "calc(100% + 6px)", right: 0,
+        zIndex: 100,
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border)",
+        borderRadius: 10,
+        boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+        width: 320,
+        maxWidth: "calc(100vw - 32px)",
+      }}
+    >
+      <PresetRow label={t("Off")} description={t("No tools, chat only")} isActive={isOff} onClick={() => onSelectPreset("off")} />
+      <PresetRow label={t("Full")} description={t("All available tools")} isActive={isAll} onClick={() => onSelectPreset("full")} />
+      <PresetRow label={t("Read only")} description={t("Find, ls, grep, read")} isActive={isReadOnly} onClick={() => onSelectPreset("read_only")} />
+      <button
+        onClick={onToggleCustomExpanded}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          width: "100%", padding: "7px 12px",
+          background: isCustom ? "var(--bg-selected)" : "none",
+          border: "none",
+          color: isCustom ? "var(--text)" : "var(--text-muted)",
+          cursor: "pointer", fontSize: 12, textAlign: "left",
+          fontWeight: isCustom ? 600 : 400,
+          whiteSpace: "nowrap",
+        }}
+        onMouseEnter={(e) => {
+          if (!isCustom) e.currentTarget.style.background = "var(--bg-hover)";
+        }}
+        onMouseLeave={(e) => {
+          if (!isCustom) e.currentTarget.style.background = "none";
+        }}
+      >
+        {isCustom
+          ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
+          : <span style={{ width: 10, flexShrink: 0 }} />}
+        <span style={{ flex: 1 }}>{customLabel}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ flexShrink: 0, transform: customExpanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
+          <polyline points="3 1 7 5 3 9" />
+        </svg>
+      </button>
+
+      {customExpanded && (
+        <div style={{ borderTop: "1px solid var(--border)", padding: "4px 0", overflow: "auto", flex: 1, minHeight: 0 }}>
+          {toolsLoading && (
+            <div style={{ padding: "10px 12px", fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 8 }}>
+              <InlineSpinner />
+              {t("Loading tools...")}
+            </div>
+          )}
+          {toolsError && !toolsLoading && (
+            <div style={{ padding: "10px 12px", fontSize: 11, color: "#ef4444", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+                {t("Failed to load tools")}: {toolsError}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Re-trigger the lazy fetch. ensureAvailableTools itself
+                  // is idempotent on a non-error catalog, so a second click
+                  // after success is a harmless no-op.
+                  onRetryEnsureToolsProp?.();
+                }}
+                style={{ padding: "2px 8px", background: "transparent", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", cursor: "pointer", fontSize: 11 }}
+              >
+                {t("Retry")}
+              </button>
+            </div>
+          )}
+          {!toolsLoading && !toolsError && availableTools.length === 0 && (
+            <div style={{ padding: "10px 12px", fontSize: 11, color: "var(--text-dim)" }}>
+              {t("No tools available for this session")}
+            </div>
+          )}
+          {!toolsLoading && !toolsError && availableTools.length > 0 && (
+            <div>
+              {availableTools.map((tool) => {
+                const isChecked = selectedSet.has(tool.name);
+                return (
+                  <Tooltip key={tool.name} content={tool.description} side="left">
+                    <label
+                      style={{
+                        display: "flex", alignItems: "center", gap: 8,
+                        padding: "5px 12px",
+                        cursor: "pointer",
+                        fontSize: 12,
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                    >
+                      <span style={{
+                        width: 14, height: 14,
+                        borderRadius: 3,
+                        border: `1px solid ${isChecked ? "var(--accent)" : "var(--border)"}`,
+                        background: isChecked ? "var(--accent)" : "var(--bg)",
+                        flexShrink: 0,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {isChecked && (
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="1.5 5 4 7.5 8.5 2.5" />
+                          </svg>
+                        )}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => toggleTool(tool.name, e.target.checked)}
+                        aria-label={tool.name}
+                        style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
+                      />
+                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--text)", flexShrink: 0 }}>
+                        {tool.name}
+                      </span>
+                      <span style={{
+                        fontSize: 11,
+                        color: "var(--text-dim)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        minWidth: 0,
+                        flex: 1,
+                      }}>
+                        {tool.description}
+                      </span>
+                    </label>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </AnimatedPopover>
+  );
+}
+
+function PresetRow({ label, description, isActive, onClick }: {
+  label: string;
+  description: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 8,
+        width: "100%", padding: "7px 12px",
+        background: isActive ? "var(--bg-selected)" : "none",
+        border: "none",
+        color: isActive ? "var(--text)" : "var(--text-muted)",
+        cursor: "pointer", fontSize: 12, textAlign: "left",
+        fontWeight: isActive ? 600 : 400,
+        whiteSpace: "nowrap",
+      }}
+      onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
+      onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
+    >
+      {isActive
+        ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
+        : <span style={{ width: 10, flexShrink: 0 }} />}
+      <span style={{ flex: 1 }}>{label}</span>
+      <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{description}</span>
+    </button>
+  );
+}
+
+function InlineSpinner() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: "inline-block",
+        width: 12, height: 12,
+        border: "1.5px solid color-mix(in srgb, var(--text-dim) 40%, transparent)",
+        borderTopColor: "var(--text-muted)",
+        borderRadius: "50%",
+        animation: "spin 0.8s linear infinite",
+      }}
+    />
   );
 }

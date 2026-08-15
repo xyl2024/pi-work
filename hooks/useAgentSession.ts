@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage, UserMessage } from "@/lib/types";
+import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
-import { sendAgentCommand } from "@/lib/agent-client";
+import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/agent-client";
 import type { ToolCallStatsDispatch } from "./ToolCallStatsContext";
 import { useToast } from "@/components/Toast";
 import { useI18n } from "./useI18n";
@@ -84,7 +84,6 @@ export interface UseAgentSessionOptions {
   modelsRefreshKey?: number;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
   setNewSessionModel?: (model: { provider: string; modelId: string } | null) => void;
-  setToolPreset?: (preset: "none" | "full") => void;
   /** Push tool lifecycle events to the stats panel */
   statsEmit?: ToolCallStatsDispatch;
   /** If set, navigate to this entry after the session finishes loading */
@@ -171,7 +170,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [newSessionModel, setNewSessionModelState] = useState<{ provider: string; modelId: string } | null>(null);
-  const [toolPreset, setToolPreset] = useState<"none" | "full">(() => "full");
+  // The user's tool selection state. `[]` ≡ Off, `"all"` ≡ High (every
+  // registered tool — sentinel so newly-added tools auto-include), a partial
+  // string[] ≡ Custom. Only meaningful for new sessions — the tools popover
+  // is hidden on existing-session pages (button gated on `isNew` in
+  // ChatWindow), so the value for existing sessions is unused.
+  const [toolSelection, setToolSelection] = useState<ToolSelection>(() => "all");
+  // Catalog of every tool pi registered for this session's cwd. Populated
+  // lazily: `ensureAvailableTools` on popover open for new sessions.
+  // Sorted alphabetically by name when set.
+  const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
+  // Fetch lifecycle for availableTools: spinner while in-flight, error string
+  // surfaced to the UI. Cleared on every successful fetch.
+  const [toolsLoading, setToolsLoading] = useState(false);
+  const [toolsError, setToolsError] = useState<string | null>(null);
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
@@ -230,7 +242,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const userJustSentRef = useRef(false);
 
   const setNewSessionModel = opts.setNewSessionModel ?? setNewSessionModelState;
-  const setToolPresetState = opts.setToolPreset ?? setToolPreset;
 
   const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
   const displayModel = isNew ? newSessionModel : currentModel;
@@ -347,13 +358,38 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const loadContextRef = useRef(loadContext);
   loadContextRef.current = loadContext;
 
-  const loadTools = useCallback(async (sid: string) => {
+  // Lazy fetcher for the tool catalog: called by ChatInput when the user
+  // opens the tools popover for the first time. New sessions don't have an
+  // AgentSession yet (they're lazily started by POST /api/agent/new), so
+  // we can't use `get_tools` for them — fall back to the cwd-only endpoint
+  // POST /api/agent/tools which spins up an ephemeral session internally.
+  // Idempotent: if the catalog is already populated, do nothing.
+  const ensureAvailableTools = useCallback(async () => {
+    if (availableTools.length > 0 || toolsLoading) return;
+    setToolsLoading(true);
+    setToolsError(null);
     try {
-      setToolPresetState("full");
+      let catalog: ToolInfo[];
+      if (isNew) {
+        if (!newSessionCwd) {
+          throw new Error("No cwd available for new session");
+        }
+        catalog = await listToolsForCwd(newSessionCwd);
+      } else {
+        const sid = sessionIdRef.current;
+        if (!sid) throw new Error("No session id");
+        const tools = await sendAgentCommand<ToolWithActive[]>(sid, { type: "get_tools" });
+        catalog = tools.map(({ name, description }) => ({ name, description }));
+      }
+      catalog.sort((a, b) => a.name.localeCompare(b.name));
+      setAvailableTools(catalog);
     } catch (e) {
-      console.error("Failed to load tools:", e);
+      console.error("Failed to ensure available tools:", e);
+      setToolsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setToolsLoading(false);
     }
-  }, [setToolPresetState]);
+  }, [availableTools.length, toolsLoading, isNew, newSessionCwd]);
 
   const connectEvents = useCallback((sid: string) => {
     if (eventSourceRef.current) {
@@ -779,8 +815,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (isNew && newSessionCwd) {
         const selectedModel = newSessionModel;
         if (selectedModel) setPendingModel(selectedModel);
-        const { PRESET_NONE } = await import("@/components/ToolPanel");
-        const toolNames = toolPreset === "none" ? PRESET_NONE : "all";
+        // Pass the user's selection through directly — `toolSelection` is
+        // already in the wire shape `ToolSelection` (string[] | "all"), so
+        // empty array = Off, "all" = High, partial = Custom.
+        const toolNames: ToolSelection = toolSelection;
         const res = await fetch("/api/agent/new", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -834,7 +872,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setAgentPhase(null);
       dispatch({ type: "end" });
     }
-  }, [isNew, newSessionCwd, newSessionModel, toolPreset, thinkingLevel, session, agentRunning, connectEvents, onSessionCreated, refreshSystemPrompt, t, toast]);
+  }, [isNew, newSessionCwd, newSessionModel, toolSelection, thinkingLevel, session, agentRunning, connectEvents, onSessionCreated, refreshSystemPrompt, t, toast]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -894,19 +932,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [t, toast]);
 
-  const handleToolPresetChange = useCallback(async (preset: "none" | "full") => {
-    const { PRESET_NONE } = await import("@/components/ToolPanel");
-    const toolNames = preset === "none" ? PRESET_NONE : "all";
-    setToolPresetState(preset);
+  // Apply a new tool selection. For existing sessions, the change is sent
+  // straight to the agent (`set_tools`); for new sessions we only update
+  // local state — the new selection is serialised into `toolNames` at
+  // handleSend time so the brand-new session starts with the right set.
+  // Errors are surfaced via toast (and the UI does NOT roll back the
+  // optimistic local state — the user can retry).
+  const handleToolSelectionChange = useCallback(async (selection: ToolSelection) => {
+    setToolSelection(selection);
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_tools", toolNames });
+      await sendAgentCommand(sid, { type: "set_tools", toolNames: selection });
     } catch (e) {
       console.error("Failed to set tools:", e);
-      toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to change tool preset") });
+      toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to change tools") });
     }
-  }, [setToolPresetState, t, toast]);
+  }, [t, toast]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const container = scrollContainerRef.current;
@@ -928,7 +970,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionIdRef.current = session.id;
       loadSession(session.id, true, true).then(async (agentState) => {
         if (agentState?.running) {
-          loadTools(session.id);
           if (agentState.state?.isStreaming) {
             setAgentRunning(true);
             setAgentPhase({ kind: "waiting_model" });
@@ -1043,7 +1084,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     // State
     data, loading, error, activeLeafId, messages, entryIds, entryTimestamps, inFlightToolResults, streamState,
-    agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel, toolPreset, thinkingLevel,
+    agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel,
+    toolSelection, availableTools, toolsLoading, toolsError,
+    thinkingLevel,
     retryInfo, contextUsage, systemPrompt,
     currentModel, displayModel, sessionStats,
     agentPhase,
@@ -1055,7 +1098,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef, userJustSentRef,
     // Actions
     handleSend, handleAbort, handleNavigate, handleModelChange,
-    handleToolPresetChange, handleThinkingLevelChange, loadTools, setActiveLeafId, setData, setMessages,
+    handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange, setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning,
     // Subscriptions
     handleAgentEventRef,

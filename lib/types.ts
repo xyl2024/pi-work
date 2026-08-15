@@ -82,6 +82,24 @@ export interface ToolResultMessage {
   timestamp?: number;
 }
 
+// ── Tool registry (shared by frontend types and rpc-manager) ──────────────
+// Single source of truth: lib/types.ts. lib/pi-types.ts re-exports `ToolInfo`
+// so the pi-SDK-shaped interface stays where the backend already imports it.
+
+/** A tool registered by pi's resource loader — used to render the
+ *  ChatInput tools checklist. Shape mirrors `inner.getAllTools()` from
+ *  AgentSessionLike in lib/pi-types.ts. */
+export interface ToolInfo {
+  name: string;
+  description: string;
+}
+
+/** The user's tool selection state for a session. `[]` ≡ "Off" (no tools);
+ *  `"all"` ≡ "High" (every registered tool); a non-empty array ≡ "Custom".
+ *  Matches the wire format of `set_tools` and `toolNames` in
+ *  `POST /api/agent/new`, so the frontend serialises it directly. */
+export type ToolSelection = string[] | "all";
+
 export interface CustomMessage {
   role: "custom";
   customType: string;

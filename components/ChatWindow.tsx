@@ -377,7 +377,8 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   const {
     loading, error, messages, entryIds, entryTimestamps, streamState,
-    agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, toolPreset, thinkingLevel,
+    agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps,
+    toolSelection, availableTools, toolsLoading, toolsError, thinkingLevel,
     retryInfo,
     displayModel: displayModelValue,
     agentPhase,
@@ -385,7 +386,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     messagesEndRef, scrollContainerRef,
     lastUserMsgRef, userJustSentRef,
     handleSend, handleAbort, handleNavigate, handleModelChange,
-    handleToolPresetChange, handleThinkingLevelChange,
+    handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     userMessageHistory,
     activeLeafId, currentSessionId,
     inFlightToolResults,
@@ -437,7 +438,11 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     setAgentControls({
       switchModel: handleModelChange,
       switchThinkingLevel: handleThinkingLevelChange,
-      switchToolPreset: handleToolPresetChange,
+      // Keyboard palette only offers the two coarse presets (Off/Full); Custom
+    // requires the visual popover. Adapter: "off" → [], "full" → "all".
+    switchToolSelection: (preset) => {
+      void handleToolSelectionChange(preset === "off" ? [] : "all");
+    },
       abortStreaming: handleAbort,
       isStreaming: agentRunning,
     });
@@ -1112,8 +1117,12 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         modelIcons={modelIcons}
         modelList={modelList}
         onModelChange={handleModelChange}
-        toolPreset={toolPreset}
-        onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
+        toolSelection={toolSelection}
+        availableTools={availableTools}
+        toolsLoading={toolsLoading}
+        toolsError={toolsError}
+        onToolSelectionChange={isNew ? handleToolSelectionChange : undefined}
+        onEnsureAvailableTools={ensureAvailableTools}
         thinkingLevel={thinkingLevel}
         onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
         availableThinkingLevels={availableThinkingLevels}

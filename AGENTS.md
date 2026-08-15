@@ -386,7 +386,7 @@ components/
   MessageView.tsx           renders one message (user/assistant/toolCall/toolResult/show_media)
   BranchNavigator.tsx       in-session branch switcher
   ChatMinimap.tsx           scroll minimap alongside the message list
-  ToolPanel.tsx             exports `PRESET_NONE` (the only named preset constant; `getPresetFromTools` returns "none" / "full" only)
+  ToolsDropdownPanel        4-row popover (Off / Full / Read only / Custom ▶) + per-tool checklist for ChatInput's wrench trigger (inlined as a sibling component inside `components/ChatInput.tsx`)
   ModelsConfig.tsx          modal for editing ~/.pi/agent/models.json
   SkillsConfig.tsx          modal for installing / browsing / toggling skills
   PromptsConfig.tsx         modal for managing slash-command prompts
@@ -497,8 +497,10 @@ Branches live inside a single `.jsonl` file. The `Edit from here` button on any 
 ### ToolCall field normalization
 Pi stores toolCall blocks as `{type:"toolCall", id, name, arguments}` but `ToolCallContent` uses `{toolCallId, toolName, input}`. `normalizeToolCalls()` in `lib/normalize.ts` handles this — called when loading messages from session files (`session-reader.ts`) and when processing streaming events in `useAgentSession`.
 
-### New session tool preset
-Tool names are passed at session creation (`POST /api/agent/new` → `toolNames[]`). `ToolPanel` exports only two presets — `"none"` (empty array) and `"full"` (every tool pi registers at runtime); `PRESET_NONE` is the single named export. When tools are fully disabled (`toolNames = []`), `rpc-manager.ts` clears `agent.state.systemPrompt` directly (the only way to truly blank it — `buildSystemPrompt` always emits non-empty).
+### New session tool selection
+Tool names are passed at session creation (`POST /api/agent/new` → `toolNames: string[] | "all"`). The selection state in `useAgentSession` is `ToolSelection` (defined in `lib/types.ts`): `[]` ≡ Off (no tools, system prompt cleared — see `lib/rpc-manager.ts:831` which is the only way to truly blank it since `buildSystemPrompt` always emits non-empty), `"all"` ≡ Full (every tool pi registers at runtime — a sentinel so future tool additions auto-include), the canonical read-only subset `["find", "ls", "grep", "read"]` ≡ Read only (a named quick preset — `READ_ONLY_TOOLS` constant in `ChatInput.tsx`; `setActiveToolsByName` silently ignores missing names, so a stripped pi build just degrades to its intersection), any other partial `string[]` ≡ Custom (per-tool subset). The ChatInput tools popover (4-row layout) lets the user pick any of these; the wire shape matches the frontend state, so no mapping layer exists. For brand-new sessions that haven't sent their first message yet, the tool catalog is fetched via `POST /api/agent/tools` (spins up an ephemeral session internally).
+
+**Tools button only renders on the new-session page.** Existing sessions cannot change tools mid-flight — the button is hidden (gated on `isNew` in `ChatWindow`). Existing-session tools are whatever the backend has from when the session was last configured (typically the `toolNames` from `POST /api/agent/new` at creation time, possibly mutated by prior `set_tools` calls in this session's lifetime).
 
 ### Model defaults for new sessions
 `GET /api/models` returns `defaultModel` read from `~/.pi/agent/settings.json`, plus per-model `thinkingLevels` and `thinkingLevelMaps`. `useAgentSession` pre-selects `defaultModel` on mount for new sessions.
