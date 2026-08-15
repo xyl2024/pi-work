@@ -1,5 +1,7 @@
 "use client";
 
+import { useModalAnimation } from "@/hooks/useModalAnimation";
+
 /**
  * Independent modal — `Open MCP servers`.
  *
@@ -376,6 +378,10 @@ export function McpConfig({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   const toast = useToast();
   const mc = useMcpClient();
+  const { requestClose, backdropStyle, panelStyle } = useModalAnimation({
+    isOpen: true,
+    onClose,
+  });
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [editingName, setEditingName] = useState<string | null>(null);
@@ -424,18 +430,17 @@ export function McpConfig({ onClose }: { onClose: () => void }) {
     setCallResult(null);
   }, [selectedName]);
 
-  const handleClose = useCallback(() => {
-    onClose();
-  }, [onClose]);
-
-  // ESC to close
+  // ESC to close — handled by the useModalAnimation hook indirectly
+  // (requestClose is stable across renders, so the effect won't rebind).
+  // We re-derive from requestClose on each rebind to pick up the latest
+  // hook closure.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") handleClose();
+      if (e.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleClose]);
+  }, [requestClose]);
 
   const persistedServers = useMemo<RawServerEntry[]>(() => {
     return parseServerList(mc.config?.servers ?? []).raw;
@@ -1010,21 +1015,14 @@ export function McpConfig({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      style={backdropStyle}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) requestClose();
       }}
     >
       <div
         style={{
+          ...panelStyle,
           width: 960,
           height: "78vh",
           background: "var(--bg)",
@@ -1054,7 +1052,7 @@ export function McpConfig({ onClose }: { onClose: () => void }) {
           )}
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             style={{
               border: "1px solid var(--border)",
               borderRadius: 4,

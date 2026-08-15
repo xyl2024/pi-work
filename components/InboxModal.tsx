@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useToast } from "./Toast";
 import { useConfirm } from "./ConfirmDialog";
 import { useInbox, type InboxMessage } from "@/hooks/useInbox";
@@ -38,6 +39,10 @@ export function InboxModal({ open, onClose }: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
+  const { requestClose, backdropStyle, panelStyle, isVisible } = useModalAnimation({
+    isOpen: open,
+    onClose,
+  });
   const [refreshKey, setRefreshKey] = useState(0);
   const { messages, loading, error } = useInbox(open, refreshKey);
 
@@ -50,10 +55,6 @@ export function InboxModal({ open, onClose }: Props) {
       .sort((a, b) => b[1] - a[1])
       .map(([source, count]) => ({ source, count }));
   }, [messages]);
-
-  const handleClose = useCallback(() => {
-    onClose();
-  }, [onClose]);
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -115,25 +116,18 @@ export function InboxModal({ open, onClose }: Props) {
     [confirm, t, toast],
   );
 
-  if (!open) return null;
+  if (!isVisible) return null;
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      style={backdropStyle}
       onClick={(e) => {
-        if (e.target === e.currentTarget) handleClose();
+        if (e.target === e.currentTarget) requestClose();
       }}
     >
       <div
         style={{
+          ...panelStyle,
           width: 720,
           maxWidth: "calc(100vw - 32px)",
           height: "80vh",
@@ -186,7 +180,7 @@ export function InboxModal({ open, onClose }: Props) {
               {t("Clear all")}
             </button>
             <button
-              onClick={handleClose}
+              onClick={requestClose}
               style={{ ...CLOSE_BTN, marginLeft: 4 }}
               aria-label={t("Close")}
             >

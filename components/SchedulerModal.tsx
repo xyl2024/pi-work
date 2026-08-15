@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useToast } from "./Toast";
 import { useConfirm } from "./ConfirmDialog";
 import { Tooltip } from "./Tooltip";
@@ -119,6 +120,10 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
+  const { requestClose, backdropStyle, panelStyle, isVisible } = useModalAnimation({
+    isOpen: open,
+    onClose,
+  });
   const [view, setView] = useState<View>({ kind: "list" });
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(false);
@@ -375,21 +380,18 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
     onClose();
   };
 
-  if (!open) return null;
+  if (!isVisible) return null;
 
   const runsTask = view.kind === "runs" ? tasks.find((t) => t.id === view.taskId) ?? null : null;
 
   return (
     <div
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      style={{
-        position: "fixed", inset: 0, zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}
+      style={backdropStyle}
+      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
     >
       <div
         style={{
+          ...panelStyle,
           background: "var(--bg)",
           border: "1px solid var(--border)",
           borderRadius: 10,
@@ -443,7 +445,7 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
             )}
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             aria-label={t("Close")}
             style={{
               background: "none", border: "none", color: "var(--text-muted)",

@@ -30,6 +30,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import {
   useSessionLibraryUi,
   useSessionLibraryActions,
@@ -56,8 +57,20 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
   const { t } = useI18n();
   const ui = useSessionLibraryUi();
   const actions = useSessionLibraryActions();
+  // Open state comes from the global sessionLibrary store (no `onClose`
+  // prop). The hook drives the open/close animation; `actions.close`
+  // is what the parent uses to flip `isOpen` to false. `backdropAlpha`
+  // is bumped to 0.55 to keep the backdrop visibly dark behind the
+  // backdrop-blur — a 0.35 dim looks washed out through the blur.
+  const { requestClose, backdropStyle, panelStyle, isVisible } = useModalAnimation({
+    isOpen: ui.isOpen,
+    onClose: actions.close,
+    backdropAlpha: 0.55,
+  });
 
   // ── Esc behavior: media-preview → grid → close ──
+  // Routes the close step through `requestClose` so the leaving animation
+  // plays before the store flips `isOpen` to false.
   useEffect(() => {
     if (!ui.isOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -67,12 +80,12 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
       if (ui.viewMode === "media-preview") {
         backToSessionLibraryGrid();
       } else {
-        actions.close();
+        requestClose();
       }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [ui.isOpen, ui.viewMode, actions]);
+  }, [ui.isOpen, ui.viewMode, requestClose]);
 
   // ── Body scroll lock ──
   useEffect(() => {
@@ -129,7 +142,7 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
     }
   };
 
-  if (!ui.isOpen) return null;
+  if (!isVisible) return null;
   if (typeof document === "undefined") return null;
 
   const isEmpty = entries.length === 0;
@@ -140,17 +153,12 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
       aria-modal="true"
       aria-label={t("Session Media Library")}
       onClick={(e) => {
-        if (e.target === e.currentTarget) actions.close();
+        if (e.target === e.currentTarget) requestClose();
       }}
       style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.55)",
+        ...backdropStyle,
         backdropFilter: "blur(2px)",
         WebkitBackdropFilter: "blur(2px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         zIndex: 9999,
         padding: "32px 16px",
       }}
@@ -158,6 +166,7 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
+          ...panelStyle,
           width: "min(1100px, 100%)",
           // Fixed height — the modal never resizes with the current tile
           // (small vs huge images, missing files, etc.). The body flexes.
@@ -269,7 +278,7 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
 
           <button
             type="button"
-            onClick={() => actions.close()}
+            onClick={requestClose}
             aria-label={t("Close")}
             title={t("Close")}
             style={{ ...headerIconBtnStyle, fontSize: 14, lineHeight: 1 }}

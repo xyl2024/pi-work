@@ -37,6 +37,7 @@ import {
   type GrokPoint,
 } from "@/lib/grokbot-data";
 import { useI18n } from "@/hooks/useI18n";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Tooltip } from "./Tooltip";
 
 const EXPR_PER_PAGE = 5;
@@ -57,6 +58,10 @@ export function GrokBotLab({ onClose }: Props) {
   const { t, locale } = useI18n();
   const config = useGrokbotConfig();
   const botRef = useRef<GrokBotHandle>(null);
+  const { requestClose, backdropStyle, panelStyle } = useModalAnimation({
+    isOpen: true,
+    onClose,
+  });
 
   const [exprPage, setExprPage] = useState(0);
   const [groupIndex, setGroupIndex] = useState(0);
@@ -70,14 +75,15 @@ export function GrokBotLab({ onClose }: Props) {
   // this modal use the same token so the preview matches the rendered bot.
   const BOT_TINT = "var(--accent)";
 
-  // ESC to close (same as other modals).
+  // ESC to close (same as other modals) — routes through requestClose so
+  // the leaving animation plays before the modal unmounts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [requestClose]);
 
   const groupKeys = Object.keys(GROKBOT_GROUPS);
   const groupName = (key: string) =>
@@ -115,21 +121,14 @@ export function GrokBotLab({ onClose }: Props) {
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      style={backdropStyle}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) requestClose();
       }}
     >
       <div
         style={{
+          ...panelStyle,
           width: 860,
           maxWidth: "96vw",
           height: "86vh",
@@ -222,7 +221,7 @@ export function GrokBotLab({ onClose }: Props) {
           </Tooltip>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             style={{ ...btnBase, padding: "4px 12px" }}
           >
             {t("Close")}

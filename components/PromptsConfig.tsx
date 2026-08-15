@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useToast } from "./Toast";
 import { useConfirm } from "./ConfirmDialog";
 
@@ -437,6 +438,10 @@ export function PromptsConfig({
   const { t } = useI18n();
   const toast = useToast();
   const confirm = useConfirm();
+  const { requestClose, backdropStyle, panelStyle } = useModalAnimation({
+    isOpen: true,
+    onClose,
+  });
   const [prompts, setPrompts] = useState<PromptTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -520,21 +525,14 @@ export function PromptsConfig({
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      style={backdropStyle}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) requestClose();
       }}
     >
       <div
         style={{
+          ...panelStyle,
           width: 860,
           height: "78vh",
           background: "var(--bg)",
@@ -573,7 +571,7 @@ export function PromptsConfig({
             </code>
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             style={{
               background: "none",
               border: "none",
@@ -769,7 +767,7 @@ export function PromptsConfig({
           }}
         >
           <button
-            onClick={onClose}
+            onClick={requestClose}
             style={{
               padding: "6px 14px",
               background: "none",

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { SkillSearchResult } from "@/app/api/skills/search/route";
 import { useI18n } from "@/hooks/useI18n";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useToast } from "./Toast";
 import { useTheme } from "@/hooks/useTheme";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -827,6 +828,10 @@ export function SkillsConfig({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const { requestClose, backdropStyle, panelStyle } = useModalAnimation({
+    isOpen: true,
+    onClose,
+  });
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -859,21 +864,14 @@ export function SkillsConfig({
 
   return (
     <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      style={backdropStyle}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) requestClose();
       }}
     >
       <div
         style={{
+          ...panelStyle,
           width: 860,
           height: "78vh",
           background: "var(--bg)",
@@ -917,7 +915,7 @@ export function SkillsConfig({
             </code>
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             style={{
               background: "none",
               border: "none",
@@ -1165,7 +1163,7 @@ export function SkillsConfig({
           }}
         >
           <button
-            onClick={onClose}
+            onClick={requestClose}
             style={{
               padding: "6px 14px",
               background: "none",

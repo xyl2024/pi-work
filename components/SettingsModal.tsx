@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme, PRESETS, PRESET_LABELS } from "@/hooks/useTheme";
+import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useToast } from "./Toast";
 import { WeChatSettingsSection } from "./WeChatSettingsSection";
 import { InboxTestSection } from "./InboxTestSection";
@@ -620,24 +621,36 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
     }
   }, [config, t, toast]);
 
-  // Intercept close: warn if there are unsaved changes
+  // (Kept for a planned future feature; not currently consumed.)
   const savedOkRef = useRef(savedOk);
   savedOkRef.current = savedOk;
-  const handleClose = useCallback(() => {
+
+  // ── Open/close animation ────────────────────────────────────────────
+  // Encapsulated in useModalAnimation — backdrop fades + panel slides
+  // on mount and on close. The hook drives a 220ms CSS transition
+  // between phases (entering → open → leaving) and calls `onClose`
+  // after the leaving animation finishes. The `shouldConfirm` hook
+  // returns a string to gate the close on a `window.confirm` prompt,
+  // `true` to close without prompting, or `false` to abort.
+  const shouldConfirm = useCallback(() => {
     if (isDirty || typewriterDirty || appendSystemDirty) {
-      const ok = window.confirm(t("Discard unsaved changes?"));
-      if (!ok) return;
+      return t("Discard unsaved changes?");
     }
-    onClose();
-  }, [isDirty, typewriterDirty, appendSystemDirty, onClose, t]);
+    return true;
+  }, [isDirty, typewriterDirty, appendSystemDirty, t]);
+  const { requestClose, backdropStyle, panelStyle } = useModalAnimation({
+    isOpen: true,
+    onClose,
+    shouldConfirm,
+  });
 
   const clawdOnDeskEnabled = config?.extensions.clawd_on_desk.enabled ?? false;
 
   if (loading) {
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
-        onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
-        <div style={{ width: 800, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+      <div style={backdropStyle}
+        onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
+        <div style={{ ...panelStyle, width: 800, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
           {t("Loading...")}
         </div>
       </div>
@@ -646,9 +659,9 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
 
   if (!config) {
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
-        onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
-        <div style={{ width: 800, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "#ef4444" }}>
+      <div style={backdropStyle}
+        onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
+        <div style={{ ...panelStyle, width: 800, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "#ef4444" }}>
           {t("Failed to load settings")}
         </div>
       </div>
@@ -656,14 +669,14 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}>
-      <div style={{ width: 800, height: "70vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+    <div style={backdropStyle}
+      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
+      <div style={{ ...panelStyle, width: 800, height: "70vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("Settings")}</span>
-          <button onClick={handleClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+          <button onClick={requestClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
         </div>
 
         {/* Body */}
