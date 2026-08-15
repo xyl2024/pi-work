@@ -183,6 +183,15 @@ export function useModalAnimation({
     setPhase("leaving");
     if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = window.setTimeout(() => {
+      // Push phase to "closed" BEFORE calling onClose. For controlled-
+      // visibility modals the `isOpen` flip triggers our own useEffect,
+      // which only starts the close timer when phase is "open"/"entering".
+      // Since requestClose has already set phase to "leaving", that effect
+      // becomes a no-op and the modal would stay mounted forever — which
+      // leaves a backdrop blocking the whole page. Setting "closed" here
+      // ourselves guarantees `isVisible` flips to false and the modal
+      // unmounts regardless of which branch the useEffect ends up taking.
+      setPhase("closed");
       onClose();
       closeTimerRef.current = null;
     }, durationMs);
