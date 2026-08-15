@@ -6,6 +6,7 @@ import { useSessionUiState, useSessionLeafChange, resetSessionUi } from "@/hooks
 import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
 import { SessionSidebar } from "./SessionSidebar";
 import { ContextUsageBar } from "./ContextUsageBar";
+import { SessionTokenTotals } from "./SessionTokenTotals";
 import { ChatWindow } from "./ChatWindow";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
@@ -1240,6 +1241,7 @@ export function AppShell() {
                 </>
               )}
               {contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
+              <SessionTokenTotals />
             </div>
           )}
           {/* Top panel dropdown — shared, only one active at a time */}

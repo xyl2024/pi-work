@@ -27,6 +27,11 @@ import { isContentEqual } from "@/lib/shallowEqual";
 export type SessionStats = {
   tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
   cost?: number;
+  /** Weighted prompt-cache hit rate across all assistant messages in the
+   *  active leaf path: Σ cacheRead / Σ (input + cacheRead), in [0, 1].
+   *  `undefined` when no message has reported cacheRead yet (provider with
+   *  no caching support), so the consumer can render "0% cached" vs hide. */
+  cachedHitRate?: number;
 } | null;
 
 export type ContextUsage = {

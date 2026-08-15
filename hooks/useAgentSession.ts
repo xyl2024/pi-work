@@ -277,7 +277,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       cost += u.cost?.total ?? 0;
     }
     const total = tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite;
-    return total > 0 ? { tokens, cost } : null;
+    if (total <= 0) return null;
+    // Weighted cache-hit rate across the active leaf path: total cacheRead
+    // over total billable prompt (input + cacheRead). cacheWrite is
+    // deliberately excluded — it's a one-time write cost, not a recurring
+    // read. Providers that don't report caching (OpenAI-style) yield 0.
+    const inputDenom = tokens.input + tokens.cacheRead;
+    const cachedHitRate = inputDenom > 0 ? tokens.cacheRead / inputDenom : 0;
+    return { tokens, cost, cachedHitRate };
   })();
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
