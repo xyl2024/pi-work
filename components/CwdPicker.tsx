@@ -14,10 +14,10 @@ import { CwdIcon } from "./FileIcons";
  *
  * UI matches the model picker in ChatInput's bottom toolbar (folder icon +
  * basename pill), while the dropdown mirrors the original sidebar menu:
- * Pinned / Recent list, plus Use default / Create space / Custom path
- * entries at the bottom. Dropdown opens upward by default since the parent
- * is anchored at the bottom of the chat area — pass `dropdownDirection`
- * to flip it if needed.
+ * Pinned / Recent list, plus Use default / Custom path entries at the
+ * bottom. Dropdown opens upward by default since the parent is anchored
+ * at the bottom of the chat area — pass `dropdownDirection` to flip it if
+ * needed.
  */
 interface CwdPickerProps {
   /** Current cwd; null means "no project selected yet". */
@@ -69,12 +69,7 @@ export function CwdPicker({
   const [homeDir, setHomeDir] = useState<string>("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathValue, setCustomPathValue] = useState("");
-  const [createSpaceOpen, setCreateSpaceOpen] = useState(false);
-  const [createSpaceValue, setCreateSpaceValue] = useState("");
-  const [createSpaceError, setCreateSpaceError] = useState<string | null>(null);
-  const [creatingSpace, setCreatingSpace] = useState(false);
   const customPathInputRef = useRef<HTMLInputElement>(null);
-  const createSpaceInputRef = useRef<HTMLInputElement>(null);
   // Single click target — both the trigger and dropdown live under it, so
   // outside-click detection just walks up the DOM for this data attribute.
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -105,9 +100,6 @@ export function CwdPicker({
         setOpen(false);
         setCustomPathOpen(false);
         setCustomPathValue("");
-        setCreateSpaceOpen(false);
-        setCreateSpaceValue("");
-        setCreateSpaceError(null);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -119,9 +111,6 @@ export function CwdPicker({
     setOpen(false);
     setCustomPathOpen(false);
     setCustomPathValue("");
-    setCreateSpaceOpen(false);
-    setCreateSpaceValue("");
-    setCreateSpaceError(null);
   }, [onCwdChange]);
 
   const togglePin = useCallback(async (targetCwd: string) => {
@@ -146,35 +135,6 @@ export function CwdPicker({
     const path = customPathValue.trim();
     if (path) handlePick(path);
   }, [customPathValue, handlePick]);
-
-  const handleCommitCreateSpace = useCallback(async () => {
-    const dirName = createSpaceValue.trim();
-    if (!dirName || creatingSpace) return;
-    setCreatingSpace(true);
-    setCreateSpaceError(null);
-    try {
-      const res = await fetch("/api/create-space", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dir_name: dirName }),
-      });
-      const data = await res.json() as { cwd?: string; error?: string };
-      if (!res.ok || !data.cwd) {
-        const msg = data.error ?? `HTTP ${res.status}`;
-        setCreateSpaceError(msg);
-        toast.show({ kind: "error", message: msg });
-        return;
-      }
-      handlePick(data.cwd);
-      toast.show({ kind: "success", message: t("Space created") });
-    } catch (e) {
-      const msg = String(e);
-      setCreateSpaceError(msg);
-      toast.show({ kind: "error", message: msg });
-    } finally {
-      setCreatingSpace(false);
-    }
-  }, [createSpaceValue, creatingSpace, handlePick, t, toast]);
 
   const handleDefaultCwd = useCallback(async () => {
     try {
@@ -348,7 +308,7 @@ export function CwdPicker({
           </div>
 
           {/* Footer entries */}
-          {!customPathOpen && !createSpaceOpen && (
+          {!customPathOpen && (
             <>
               <button
                 onClick={(e) => { e.stopPropagation(); void handleDefaultCwd(); }}
@@ -369,32 +329,7 @@ export function CwdPicker({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setCreateSpaceOpen(true);
-                  setCreateSpaceError(null);
-                  setTimeout(() => createSpaceInputRef.current?.focus(), 0);
-                }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 7,
-                  width: "100%", padding: "8px 10px",
-                  background: "none", border: "none",
-                  color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11,
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <path d="M1 3A1 1 0 0 1 2 2H4L5 3.5H8.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 1 8V3Z" />
-                  <line x1="5" y1="4.3" x2="5" y2="7.3" />
-                  <line x1="3.5" y1="5.8" x2="6.5" y2="5.8" />
-                </svg>
-                <span>{t("Create space...")}</span>
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
                   setCustomPathOpen(true);
-                  setCreateSpaceOpen(false);
-                  setCreateSpaceValue("");
-                  setCreateSpaceError(null);
                   setTimeout(() => customPathInputRef.current?.focus(), 0);
                 }}
                 style={{
@@ -411,73 +346,6 @@ export function CwdPicker({
                 <span>{t("Custom path...")}</span>
               </button>
             </>
-          )}
-
-          {createSpaceOpen && (
-            <div style={{ padding: "6px 8px", borderTop: "1px solid var(--border)" }}>
-              <input
-                ref={createSpaceInputRef}
-                value={createSpaceValue}
-                onChange={(e) => {
-                  setCreateSpaceValue(e.target.value);
-                  setCreateSpaceError(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleCommitCreateSpace();
-                  if (e.key === "Escape") {
-                    setCreateSpaceOpen(false);
-                    setCreateSpaceValue("");
-                    setCreateSpaceError(null);
-                  }
-                }}
-                placeholder={t("dir name")}
-                disabled={creatingSpace}
-                style={{
-                  width: "100%", fontSize: 11, fontFamily: "var(--font-mono)",
-                  padding: "5px 8px",
-                  border: "1px solid var(--accent)", borderRadius: 5,
-                  outline: "none", background: "var(--bg)", color: "var(--text)",
-                  boxSizing: "border-box",
-                }}
-              />
-              {createSpaceError && (
-                <div style={{ marginTop: 5, color: "#f87171", fontSize: 11, lineHeight: 1.35 }}>
-                  {createSpaceError}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
-                <button
-                  onClick={() => { void handleCommitCreateSpace(); }}
-                  disabled={creatingSpace || !createSpaceValue.trim()}
-                  style={{
-                    flex: 1, padding: "4px 0",
-                    background: "var(--accent)", border: "none", borderRadius: 5,
-                    color: "#fff", fontSize: 11, fontWeight: 600,
-                    cursor: creatingSpace || !createSpaceValue.trim() ? "default" : "pointer",
-                    opacity: creatingSpace || !createSpaceValue.trim() ? 0.6 : 1,
-                  }}
-                >
-                  {creatingSpace ? t("Creating...") : t("Create")}
-                </button>
-                <button
-                  onClick={() => {
-                    setCreateSpaceOpen(false);
-                    setCreateSpaceValue("");
-                    setCreateSpaceError(null);
-                  }}
-                  disabled={creatingSpace}
-                  style={{
-                    flex: 1, padding: "4px 0",
-                    background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5,
-                    color: "var(--text-muted)", fontSize: 11,
-                    cursor: creatingSpace ? "default" : "pointer",
-                    opacity: creatingSpace ? 0.6 : 1,
-                  }}
-                >
-                  {t("Cancel")}
-                </button>
-              </div>
-            </div>
           )}
 
           {customPathOpen && (
