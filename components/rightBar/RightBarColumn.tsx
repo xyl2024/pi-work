@@ -94,16 +94,16 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
       }}
     >
       {/* Top: always-visible fixed buttons (panel show/hide today). */}
-      {topFixed.map((d) => renderDescriptor(d, ctx, cfg))}
+      {topFixed.map((d) => renderDescriptor(d, ctx, cfg, `top-${d.id}`))}
 
       {/* Configurable row, user-ordered. Includes terminal — it's no
           longer pinned to the bottom of the column. */}
-      {orderedDescriptors.map((d) => renderDescriptor(d, ctx, cfg))}
+      {orderedDescriptors.map((d) => renderDescriptor(d, ctx, cfg, `cfg-${d.id}`))}
 
       {/* Inline fixed (expand/collapse), conditional — rendered after
           the user-ordered list so it sits just below it. */}
       {inlineFixed.map((d) =>
-        d.isVisible && !d.isVisible(ctx) ? null : renderDescriptor(d, ctx, cfg),
+        d.isVisible && !d.isVisible(ctx) ? null : renderDescriptor(d, ctx, cfg, `fixed-${d.id}`),
       )}
     </div>
   );
@@ -113,6 +113,7 @@ function renderDescriptor(
   desc: RightBarDescriptor,
   ctx: RightBarCtx,
   cfg: RightSideBarConfig | null,
+  key: string,
 ): React.ReactNode {
   // Configurable descriptors are gated by cfg[id] !== false. Missing keys
   // (settings not loaded yet) → visible. Fixed descriptors always render.
@@ -122,6 +123,7 @@ function renderDescriptor(
 
   return (
     <RightBarButton
+      key={key}
       label={resolveButtonLabel(desc, ctx)}
       onClick={() => desc.onClick(ctx)}
       active={desc.isActive(ctx)}
