@@ -15,22 +15,12 @@ import {
   parseTypewriterPhraseList,
 } from "@/lib/typewriter-phrases";
 import type { Locale } from "@/lib/i18n-dict";
+import { RIGHT_BAR_BUTTON_IDS, RIGHT_BAR_DESCRIPTOR_BY_ID } from "./rightBar/desc";
 
-// Display order for the "Right-side buttons" section checkboxes. Each row
-// reuses an existing i18n key (originally written for the right-bar button
-// tooltip) — one key per concept keeps the dictionary small.
-const RIGHT_BAR_BUTTONS_UI: Array<{ id: RightBarButtonId; labelKey: string }> = [
-  { id: "todos",     labelKey: "Open todos" },
-  { id: "canvas",    labelKey: "Open canvas" },
-  { id: "translate", labelKey: "Open translate" },
-  { id: "json",      labelKey: "JSON" },
-  { id: "rss",       labelKey: "RSS" },
-  { id: "favorites", labelKey: "Open favorites" },
-  { id: "tokens",    labelKey: "Open token audit" },
-  { id: "toolCalls", labelKey: "Tool Calls" },
-  { id: "gitDiff",   labelKey: "Open git diff" },
-  { id: "conversationTree", labelKey: "Open conversation tree" },
-];
+// Display order for the "Right-side buttons" section checkboxes. The id
+// set + default order comes from RIGHT_BAR_BUTTON_IDS (descriptor module)
+// — when the user has set `cfg.right_side_bar.order`, that list is used
+// instead; this section also has the up/down controls that mutate it.
 
 // Display order for the "Custom Tools" section checkboxes. Tools are
 // registered on `createAgentSession` (see lib/rpc-manager.ts) and the
@@ -443,6 +433,101 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
     setConfig(nextConfig);
     setOriginalConfig(nextConfig); // keep isDirty=false → no "discard changes?" prompt
     setSettings(nextConfig);       // publish → AppShell re-renders / auto-closes active panel
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextConfig),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.show({ kind: "success", message: t("Settings saved") });
+    } catch (e) {
+      toast.show({
+        kind: "error",
+        message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),
+      });
+    }
+  }, [config, t, toast]);
+
+  // Resolve the right-bar button order: user's override takes precedence,
+  // fall back to the descriptor registry's default. Filters out any id in
+  // cfg.order that's no longer a known button (a removed descriptor must
+  // not leave a dangling entry forever), then appends any new ids at the
+  // tail so the list stays canonical without forcing a settings write.
+  const resolveRightBarOrder = useCallback((
+    overrides: readonly RightBarButtonId[] | undefined,
+  ): RightBarButtonId[] => {
+    const valid = new Set<string>(RIGHT_BAR_BUTTON_IDS);
+    const out: RightBarButtonId[] = [];
+    const seen = new Set<string>();
+    if (overrides) {
+      for (const id of overrides) {
+        if (valid.has(id) && !seen.has(id)) {
+          out.push(id);
+          seen.add(id);
+        }
+      }
+    }
+    for (const id of RIGHT_BAR_BUTTON_IDS) {
+      if (!seen.has(id)) {
+        out.push(id);
+        seen.add(id);
+      }
+    }
+    return out;
+  }, []);
+
+  // Right-bar button reorder. `nextOrder` is the new full-ordered list;
+  // we PUT the same immediate-apply pattern as the visibility toggles.
+  const currentRightBarOrder = resolveRightBarOrder(
+    config?.right_side_bar.order,
+  );
+
+  const handleRightBarMove = useCallback(async (
+    id: RightBarButtonId,
+    direction: "up" | "down",
+  ) => {
+    if (!config) return;
+    const order = [...currentRightBarOrder];
+    const idx = order.indexOf(id);
+    if (idx === -1) return;
+    const target = direction === "up" ? idx - 1 : idx + 1;
+    if (target < 0 || target >= order.length) return;
+    [order[idx], order[target]] = [order[target], order[idx]];
+    const nextRightSideBar: RightSideBarConfig = {
+      ...config.right_side_bar,
+      order,
+    };
+    const nextConfig: PiWorkConfig = { ...config, right_side_bar: nextRightSideBar };
+    setConfig(nextConfig);
+    setOriginalConfig(nextConfig);
+    setSettings(nextConfig);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextConfig),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.show({ kind: "success", message: t("Settings saved") });
+    } catch (e) {
+      toast.show({
+        kind: "error",
+        message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),
+      });
+    }
+  }, [config, currentRightBarOrder, t, toast]);
+
+  // Drop `cfg.order` entirely → resolver falls back to the descriptor
+  // default. We persist by omitting the field on the PUT payload.
+  const handleRightBarResetOrder = useCallback(async () => {
+    if (!config) return;
+    const nextRightSideBar: RightSideBarConfig = { ...config.right_side_bar };
+    delete nextRightSideBar.order;
+    const nextConfig: PiWorkConfig = { ...config, right_side_bar: nextRightSideBar };
+    setConfig(nextConfig);
+    setOriginalConfig(nextConfig);
+    setSettings(nextConfig);
     try {
       const res = await fetch("/api/settings", {
         method: "PUT",
@@ -1205,7 +1290,8 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
                 {t("Choose which buttons appear in the right-side bar. Hidden buttons can still be opened from the command palette. Changes apply immediately.")}
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {RIGHT_BAR_BUTTONS_UI.map(({ id, labelKey }) => {
+                {currentRightBarOrder.map((id) => {
+                  const labelKey = RIGHT_BAR_DESCRIPTOR_BY_ID.get(id)?.labelKey ?? "";
                   const checked = config.right_side_bar[id] !== false;
                   return (
                     <label
@@ -1222,6 +1308,98 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
                     </label>
                   );
                 })}
+              </div>
+
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: 0 }}>
+                    {t("Button order")}
+                  </h4>
+                  {config.right_side_bar.order !== undefined && (
+                    <button
+                      type="button"
+                      onClick={handleRightBarResetOrder}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid var(--border)",
+                        color: "var(--text-muted)",
+                        borderRadius: 4,
+                        padding: "4px 10px",
+                        fontSize: 12,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {t("Reset to default")}
+                    </button>
+                  )}
+                </div>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
+                  {t("Reorder the buttons shown in the right-side bar. Up / Down buttons swap adjacent entries; the result is saved immediately.")}
+                </p>
+                <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+                  {currentRightBarOrder.map((id, idx) => {
+                    const labelKey = RIGHT_BAR_DESCRIPTOR_BY_ID.get(id)?.labelKey ?? "";
+                    const isFirst = idx === 0;
+                    const isLast = idx === currentRightBarOrder.length - 1;
+                    return (
+                      <li
+                        key={id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "6px 10px",
+                          background: "var(--bg-subtle)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 4,
+                          fontSize: 13,
+                          color: "var(--text)",
+                        }}
+                      >
+                        <span style={{ minWidth: 20, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 12, textAlign: "right" }}>
+                          {idx + 1}
+                        </span>
+                        <span style={{ flex: 1 }}>{t(labelKey)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRightBarMove(id, "up")}
+                          disabled={isFirst}
+                          aria-label={t("Move up")}
+                          style={{
+                            background: "transparent",
+                            border: "1px solid var(--border)",
+                            borderRadius: 3,
+                            padding: "2px 8px",
+                            color: isFirst ? "var(--text-dim)" : "var(--text-muted)",
+                            cursor: isFirst ? "not-allowed" : "pointer",
+                            opacity: isFirst ? 0.5 : 1,
+                            fontSize: 11,
+                          }}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRightBarMove(id, "down")}
+                          disabled={isLast}
+                          aria-label={t("Move down")}
+                          style={{
+                            background: "transparent",
+                            border: "1px solid var(--border)",
+                            borderRadius: 3,
+                            padding: "2px 8px",
+                            color: isLast ? "var(--text-dim)" : "var(--text-muted)",
+                            cursor: isLast ? "not-allowed" : "pointer",
+                            opacity: isLast ? 0.5 : 1,
+                            fontSize: 11,
+                          }}
+                        >
+                          ↓
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
               </div>
             </div>
           )}

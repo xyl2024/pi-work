@@ -65,13 +65,15 @@ import {
   CONVERSATION_TREE_TAB_ID,
   RIGHT_BAR_ID_FOR_TAB_KIND,
 } from "@/lib/types";
-import type { RightSideBarConfig, RightBarButtonId } from "@/lib/config";
+import { isRightBarButtonVisible } from "@/lib/right-bar";
 import { useEnsureSettings } from "@/hooks/settingsStore";
 import type { ChatInputHandle } from "./ChatInput";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { buildCommands, type Command, type CommandContext } from "@/lib/commands";
 import { useAgentControls } from "@/hooks/sessionUiStore";
 import { useChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
+import { RightBarColumn } from "./rightBar/RightBarColumn";
+import type { RightBarCtx } from "./rightBar/desc";
 
 interface ToolInfo {
   name: string;
@@ -91,11 +93,8 @@ const MIN_TERMINAL_HEIGHT = 80;
 
 // True while settings haven't been fetched (or the fetch failed).
 // Until then, all right-bar buttons render as visible — the conservative
-// default that matches the on-disk default config.
-function isButtonVisible(cfg: RightSideBarConfig | null, id: RightBarButtonId): boolean {
-  if (cfg === null) return true;
-  return cfg[id] !== false;
-}
+// default that matches the on-disk default config. (The helper itself
+// lives in lib/config so SettingsModal can reuse it.)
 
 // Walk the entry tree starting at `entryId` and return the entry id of the
 // deepest leaf reachable from it. A leaf is any entry whose `children` list
@@ -753,18 +752,6 @@ export function AppShell() {
     openTab();
   }, [activeFileTabId, rightPanelState]);
 
-  // Canvas takes the full right column when activated from its right-bar
-  // button so the whiteboard has room to breathe; toggling it again restores
-  // the normal split.
-  const handleToggleCanvasTab = useCallback(() => {
-    if (activeFileTabId === CANVAS_TAB_ID && rightPanelState === "expanded") {
-      setRightPanelState("normal");
-      return;
-    }
-    handleToggleRightPanelTab(CANVAS_TAB_ID, handleOpenCanvasTab);
-    setRightPanelState("expanded");
-  }, [activeFileTabId, rightPanelState, handleToggleRightPanelTab, handleOpenCanvasTab]);
-
   const handleCloseFileTab = useCallback((tabId: string) => {
     setFileTabs((prev) => {
       const next = prev.filter((t) => t.id !== tabId);
@@ -947,6 +934,47 @@ export function AppShell() {
     setTerminalOpen((v) => !v);
   }, [terminalLocation, terminalOpen, activeFileTabId, rightPanelState, handleCloseFileTab, openTerminalOnRight]);
 
+  // ── Right-bar button column context ──
+  // Built late because it depends on toggleTerminal, which is declared
+  // just above. The descriptor list itself is stable so the column only
+  // re-renders on actual state change, not on every callback-identity
+  // mutation. ctx is rebuilt every render anyway — RightBarColumn memoizes
+  // what matters (cfg.order → ordered ids).
+  const selectedSessionId = selectedSession?.id ?? null;
+  const selectedCwd = selectedSession?.cwd ?? newSessionCwd ?? null;
+  const { snapshot: toolStatsSnapshot } = useToolCallStatsView();
+  const rightBarCtx: RightBarCtx = {
+    rightPanelState,
+    activeTabKind: activeRightPanelKind,
+    hasOpenTabs: fileTabs.length > 0,
+    selectedSessionId,
+    selectedCwd,
+    terminalOpen,
+    rssUnread,
+    toolStats: {
+      runningCount: toolStatsSnapshot.runningCount,
+      totalCount: toolStatsSnapshot.totalCount,
+    },
+    t,
+    toggleRightPanel: () =>
+      setRightPanelState((v) => (v === "closed" ? "normal" : "closed")),
+    toggleRightPanelTab: handleToggleRightPanelTab,
+    setRightPanelState,
+    toggleTerminal,
+    openTab: {
+      todo: handleOpenTodoTab,
+      canvas: handleOpenCanvasTab,
+      translate: handleOpenTranslateTab,
+      json: handleOpenJsonTab,
+      rss: handleOpenRssTab,
+      gitDiff: handleOpenGitDiffTab,
+      favorites: handleOpenFavoritesTab,
+      tokens: handleOpenTokensTab,
+      toolCalls: handleOpenToolCallsTab,
+      conversationTree: handleOpenConversationTreeTab,
+    },
+  };
+
   const moveTerminal = useCallback(() => {
     if (terminalLocation === "bottom") {
       setTerminalLocation("right");
@@ -1026,13 +1054,15 @@ export function AppShell() {
   // When the user hides a button whose panel is currently active, the right
   // panel would otherwise sit open with no toggle in the bar. Auto-close the
   // panel — the tab itself stays in the tab strip so re-enabling the button
-  // and clicking it again reopens the same view.
+  // and clicking it again reopens the same view. "file" and "terminal"
+  // kinds have no configurable button behind them so the lookup returns
+  // undefined and the panel stays open.
   useEffect(() => {
     if (rightPanelState === "closed") return;
     if (activeRightPanelKind === null) return;
     const id = RIGHT_BAR_ID_FOR_TAB_KIND[activeRightPanelKind];
-    if (id === undefined) return; // "file" kind — no configurable button
-    if (isButtonVisible(rightSideBarConfig, id)) return;
+    if (id === undefined) return; // "file" / "terminal" kind — no configurable button
+    if (isRightBarButtonVisible(rightSideBarConfig, id)) return;
     setRightPanelState("closed");
   }, [rightPanelState, activeRightPanelKind, rightSideBarConfig]);
 
@@ -1506,341 +1536,10 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* Right button bar — dedicated column for panel toggle buttons, always visible */}
-      <div style={{
-        display: "flex",
-        flexDirection: "column",
-        flexShrink: 0,
-        width: 36,
-        background: "var(--bg-panel)",
-        borderLeft: "1px solid var(--border)",
-      }}>
-        {/* Show/hide file panel — always visible */}
-        <Tooltip content={rightPanelState !== "closed" ? t("Hide file panel") : t("Show file panel")} side="left">
-        <button
-          onClick={() => setRightPanelState((v) => v === "closed" ? "normal" : "closed")}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 36, height: 36, padding: 0,
-            background: "transparent", border: "none",
-            color: rightPanelState !== "closed" ? "var(--accent)" : "var(--text-muted)",
-            cursor: "pointer", transition: "color 0.12s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelState !== "closed" ? "var(--accent)" : "var(--text-muted)"; }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
-          </svg>
-        </button>
-        </Tooltip>
-        {/* Open todos — always visible */}
-        {isButtonVisible(rightSideBarConfig, "todos") && (
-        <Tooltip content={t("Open todos")} side="left">
-        <button
-          onClick={() => handleToggleRightPanelTab(TODO_TAB_ID, handleOpenTodoTab)}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 36, height: 36, padding: 0,
-            background: "transparent", border: "none",
-            color: activeRightPanelKind === "todo" ? "var(--accent)" : "var(--text-muted)",
-            cursor: "pointer", transition: "color 0.12s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "todo" ? "var(--accent)" : "var(--text-muted)"; }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <polyline points="8 12 11 15 17 9" />
-          </svg>
-        </button>
-        </Tooltip>
-        )}
-        {/* Open canvas — single global whiteboard */}
-        {isButtonVisible(rightSideBarConfig, "canvas") && (
-        <Tooltip content={activeRightPanelKind === "canvas" ? t("Hide canvas") : t("Open canvas")} side="left">
-          <button
-            onClick={handleToggleCanvasTab}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none",
-              color: activeRightPanelKind === "canvas" ? "var(--accent)" : "var(--text-muted)",
-              cursor: "pointer", transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "canvas" ? "var(--accent)" : "var(--text-muted)"; }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18.37 2.63a1.75 1.75 0 0 1 2.48 2.48L9 16.96l-4.5 1.04 1.04-4.5Z" />
-              <path d="M14 7l3 3" />
-            </svg>
-          </button>
-        </Tooltip>
-        )}
-        {/* Open translate — always visible */}
-        {isButtonVisible(rightSideBarConfig, "translate") && (
-        <Tooltip content={t("Open translate")} side="left">
-        <button
-          onClick={() => handleToggleRightPanelTab(TRANSLATE_TAB_ID, handleOpenTranslateTab)}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 36, height: 36, padding: 0,
-            background: "transparent", border: "none",
-            color: activeRightPanelKind === "translate" ? "var(--accent)" : "var(--text-muted)",
-            cursor: "pointer", transition: "color 0.12s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "translate" ? "var(--accent)" : "var(--text-muted)"; }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 5h12" />
-            <path d="M9 3v2" />
-            <path d="M5 5c0 4 3 7 6 9" />
-            <path d="M11 5c0 3-2 6-6 8" />
-            <path d="M14 21l5-12 5 12" />
-            <path d="M15.5 17h7" />
-          </svg>
-        </button>
-        </Tooltip>
-        )}
-        {/* Open JSON formatter panel */}
-        {isButtonVisible(rightSideBarConfig, "json") && (
-        <Tooltip content={t("JSON")} side="left">
-          <button
-            onClick={() => handleToggleRightPanelTab(JSON_TAB_ID, handleOpenJsonTab)}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none",
-              color: activeRightPanelKind === "json" ? "var(--accent)" : "var(--text-muted)",
-              cursor: "pointer", transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "json" ? "var(--accent)" : "var(--text-muted)"; }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 3 H6 a2 2 0 0 0 -2 2 v3 a2 2 0 0 1 -2 2 a2 2 0 0 1 2 2 v3 a2 2 0 0 0 2 2 h2" />
-              <path d="M16 3 h2 a2 2 0 0 1 2 2 v3 a2 2 0 0 0 2 2 a2 2 0 0 0 -2 2 v3 a2 2 0 0 1 -2 2 h-2" />
-            </svg>
-          </button>
-        </Tooltip>
-        )}
-        {/* Open RSS panel */}
-        {isButtonVisible(rightSideBarConfig, "rss") && (
-        <Tooltip content={t("RSS")} side="left">
-          <button
-            onClick={() => handleToggleRightPanelTab(RSS_TAB_ID, handleOpenRssTab)}
-            style={{
-              position: "relative",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none",
-              color: activeRightPanelKind === "rss" ? "var(--accent)" : "var(--text-muted)",
-              cursor: "pointer", transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "rss" ? "var(--accent)" : "var(--text-muted)"; }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="3.5" cy="12.5" r="1.2" fill="currentColor" stroke="none" />
-              <path d="M2 8a6 6 0 0 1 6 6" />
-              <path d="M2 4a10 10 0 0 1 10 10" />
-            </svg>
-            {rssUnread > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: 2,
-                  right: 2,
-                  minWidth: 16,
-                  height: 16,
-                  padding: rssUnread > 99 ? "0 4px" : 0,
-                  borderRadius: rssUnread > 99 ? 8 : "50%",
-                  background: "#ef4444",
-                  color: "#fff",
-                  fontSize: 9,
-                  fontWeight: 700,
-                  lineHeight: "16px",
-                  textAlign: "center",
-                  boxSizing: "border-box",
-                  pointerEvents: "none",
-                }}
-              >
-                {rssUnread > 99 ? "99+" : rssUnread}
-              </span>
-            )}
-        </button>
-        </Tooltip>
-        )}
-        {/* Open git diff panel */}
-        {isButtonVisible(rightSideBarConfig, "gitDiff") && (
-        <Tooltip content={(selectedSession?.cwd ?? newSessionCwd) ? t("Open git diff") : t("Open a session first")} side="left">
-          <button
-            onClick={() => handleToggleRightPanelTab(GIT_DIFF_TAB_ID, handleOpenGitDiffTab)}
-            disabled={!(selectedSession?.cwd ?? newSessionCwd)}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none",
-              color: activeRightPanelKind === "gitDiff" ? "var(--accent)" : "var(--text-muted)",
-              cursor: (selectedSession?.cwd ?? newSessionCwd) ? "pointer" : "not-allowed",
-              opacity: (selectedSession?.cwd ?? newSessionCwd) ? 1 : 0.4,
-              transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { if (selectedSession?.cwd ?? newSessionCwd) e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "gitDiff" ? "var(--accent)" : "var(--text-muted)"; }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="6" cy="6" r="3" />
-              <circle cx="6" cy="18" r="3" />
-              <circle cx="18" cy="6" r="3" />
-              <path d="M6 9v6" />
-              <path d="M18 9a9 9 0 0 1-9 9" />
-            </svg>
-          </button>
-        </Tooltip>
-        )}
-        {/* Expand/collapse — only when panel is open and has tabs */}
-        {rightPanelState !== "closed" && fileTabs.length > 0 && (
-          <Tooltip content={rightPanelState === "expanded" ? t("Collapse file panel") : t("Expand file panel")} side="left">
-          <button
-            onClick={() => setRightPanelState((v) => v === "expanded" ? "normal" : "expanded")}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none",
-              color: "var(--text-muted)", cursor: "pointer", transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            {rightPanelState === "expanded" ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="13 7 18 12 13 17" />
-                <polyline points="6 7 11 12 6 17" />
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="11 17 6 12 11 7" />
-                <polyline points="18 17 13 12 18 7" />
-              </svg>
-            )}
-          </button>
-          </Tooltip>
-        )}
-        {/* Favorites + Tool Calls + Focus — grouped at the bottom of the button bar */}
-        <div style={{ marginTop: "auto" }}>
-          {/* Open conversation tree — always visible when toggled on */}
-          {isButtonVisible(rightSideBarConfig, "conversationTree") && (
-            <Tooltip content={(selectedSession?.id ?? newSessionCwd) ? t("Open conversation tree") : t("Open a session first")} side="left">
-              <button
-                onClick={() => handleToggleRightPanelTab(CONVERSATION_TREE_TAB_ID, handleOpenConversationTreeTab)}
-                disabled={!selectedSession?.id && !newSessionCwd}
-                aria-label={t("Open conversation tree")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 36, height: 36, padding: 0,
-                  background: "transparent", border: "none",
-                  color: activeRightPanelKind === "conversationTree" ? "var(--accent)" : "var(--text-muted)",
-                  cursor: (selectedSession?.id ?? newSessionCwd) ? "pointer" : "not-allowed",
-                  opacity: (selectedSession?.id ?? newSessionCwd) ? 1 : 0.4,
-                  transition: "color 0.12s",
-                }}
-                onMouseEnter={(e) => { if (selectedSession?.id ?? newSessionCwd) e.currentTarget.style.color = "var(--accent)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "conversationTree" ? "var(--accent)" : "var(--text-muted)"; }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  {/* 对话树：父气泡 + 主干分叉 + 两个子气泡 */}
-                  <rect x="8" y="2" width="8" height="6" rx="2.5" />
-                  <path d="M10.5 8 L12 10.5 L13.5 8" />
-                  <path d="M12 10.5 L12 12" />
-                  <path d="M6.5 12 L17.5 12" />
-                  <path d="M6.5 12 L6.5 13.5" />
-                  <path d="M17.5 12 L17.5 13.5" />
-                  <path d="M5.2 15 L6.5 13.5 L7.8 15" />
-                  <path d="M16.2 15 L17.5 13.5 L18.8 15" />
-                  <rect x="3" y="15" width="7" height="5.5" rx="2" />
-                  <rect x="14" y="15" width="7" height="5.5" rx="2" />
-                </svg>
-              </button>
-            </Tooltip>
-          )}
-          {/* Open favorites — always visible */}
-          {isButtonVisible(rightSideBarConfig, "favorites") && (
-          <Tooltip content={t("Open favorites")} side="left">
-          <button
-            onClick={() => handleToggleRightPanelTab(FAVORITES_TAB_ID, handleOpenFavoritesTab)}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "transparent", border: "none",
-              color: activeRightPanelKind === "favorites" ? "var(--accent)" : "var(--text-muted)",
-              cursor: "pointer", transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "favorites" ? "var(--accent)" : "var(--text-muted)"; }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill={activeRightPanelKind === "favorites" ? "var(--accent)" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
-          </button>
-          </Tooltip>
-          )}
-          {/* Open Token audit panel — sits with the bottom-of-bar group */}
-          {isButtonVisible(rightSideBarConfig, "tokens") && (
-          <Tooltip content={t("Open token audit")} side="left">
-            <button
-              onClick={() => handleToggleRightPanelTab(TOKENS_TAB_ID, handleOpenTokensTab)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 36, height: 36, padding: 0,
-                background: "transparent", border: "none",
-                color: activeRightPanelKind === "tokens" ? "var(--accent)" : "var(--text-muted)",
-                cursor: "pointer", transition: "color 0.12s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = activeRightPanelKind === "tokens" ? "var(--accent)" : "var(--text-muted)"; }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="2" y1="14" x2="2" y2="9" />
-                <line x1="7" y1="14" x2="7" y2="5" />
-                <line x1="12" y1="14" x2="12" y2="2" />
-                <line x1="0.5" y1="14.5" x2="15.5" y2="14.5" />
-              </svg>
-            </button>
-          </Tooltip>
-          )}
-          {/* Open tool calls — always visible; shows running/total badge */}
-          {isButtonVisible(rightSideBarConfig, "toolCalls") && (
-          <ToolCallsVerticalButton
-            active={activeRightPanelKind === "toolCalls"}
-            onClick={() => handleToggleRightPanelTab(TOOL_CALLS_TAB_ID, handleOpenToolCallsTab)}
-          />
-          )}
-          {/* Open terminal — bottom-panel toggle */}
-          <Tooltip content={terminalOpen ? t("Hide terminal") : t("Open terminal")} side="left">
-            <button
-              onClick={toggleTerminal}
-              aria-label={terminalOpen ? t("Hide terminal") : t("Open terminal")}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 36, height: 36, padding: 0,
-                background: "transparent", border: "none",
-                color: terminalOpen ? "var(--accent)" : "var(--text-muted)",
-                cursor: "pointer", transition: "color 0.12s",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = terminalOpen ? "var(--accent)" : "var(--text-muted)"; }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="4 17 10 11 4 5" />
-                <line x1="12" y1="19" x2="20" y2="19" />
-              </svg>
-            </button>
-          </Tooltip>
-        </div>
-      </div>
+      {/* Right button bar — every toggle is driven by the
+          components/rightBar descriptor registry now. Adding a new button
+          is a one-line append to RIGHT_BAR_DESCRIPTORS. */}
+      <RightBarColumn cfg={rightSideBarConfig} ctx={rightBarCtx} />
     </div>
 
     {/* Bottom terminal panel — floats OVER the page (fixed overlay) instead of
@@ -1932,49 +1631,10 @@ export function AppShell() {
 // ── Tool-calls vertical button ────────────────────────────────────────────
 // Mirrors the style of the other right-bar buttons (todos / favorites /
 // translate) and overlays a tiny live badge for the running / total count.
-
-function ToolCallsVerticalButton({ active, onClick }: { active: boolean; onClick: () => void }) {
-  const { t } = useI18n();
-  const { snapshot } = useToolCallStatsView();
-  const { runningCount, totalCount } = snapshot;
-
-  const badgeColor = runningCount > 0
-    ? "var(--accent)"
-    : totalCount > 0
-      ? "var(--text-muted)"
-      : null;
-
-  return (
-    <Tooltip content={t("Tool Calls")}>
-      <button
-        onClick={onClick}
-        style={{
-          position: "relative",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          width: 36, height: 36, padding: 0,
-          background: "transparent", border: "none",
-          color: active ? "var(--accent)" : "var(--text-muted)",
-          cursor: "pointer", transition: "color 0.12s",
-          gap: 1,
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = active ? "var(--accent)" : "var(--text-muted)"; }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-        </svg>
-        {badgeColor !== null && (
-          <span style={{
-            fontSize: 9, lineHeight: "10px", fontFamily: "var(--font-mono)", fontWeight: 600,
-            color: badgeColor,
-          }}>
-            {runningCount > 0 ? `${runningCount}/${totalCount}` : totalCount}
-          </span>
-        )}
-      </button>
-    </Tooltip>
-  );
-}
+// Tool-calls button rendering now lives in the rightBar descriptor
+// registry (see components/rightBar/desc.tsx) — `ToolCallsVerticalButton`
+// was a one-off wrapper duplicated against every other button; the
+// unified `RightBarButton` covers it through `bodyLayout: column + gap:1`.
 
 // ── Tool-calls tab body ───────────────────────────────────────────────────
 // Wires the published snapshot + scroll callback into the panel component.

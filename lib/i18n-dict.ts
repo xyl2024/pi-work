@@ -791,6 +791,11 @@ export const ZH_TRANSLATIONS = {
   "Translation failed": "翻译失败",
   "Prompt preview": "提示词预览",
   "Reset to default": "恢复默认",
+  "Move up": "上移",
+  "Move down": "下移",
+  "Button order": "按钮顺序",
+  "Reorder the buttons shown in the right-side bar. Up / Down buttons swap adjacent entries; the result is saved immediately.":
+    "重新排列右侧按钮的显示顺序。上下按钮交换相邻条目，结果立即保存。",
   // Git diff panel (right-panel tab)
   "Git Diff": "Git 变更",
   "Open git diff": "打开 Git 变更",

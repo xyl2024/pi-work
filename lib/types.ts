@@ -303,10 +303,32 @@ export const CONVERSATION_TREE_TAB_ID = "conversationTree:global";
 
 // Map a Tab.kind back to the corresponding configurable right-bar button id.
 // Used by AppShell's auto-close effect: when a panel whose button was just
-// hidden is currently active, close the panel. "file" is intentionally
-// absent — the file-panel toggle is always-visible (Q1).
+// hidden is currently active, close the panel. "file" + "terminal"
+// intentionally return undefined — those panels have no configurable
+// button behind them and must stay open even if every toggle-button is
+// hidden.
+//
+// Lives in lib/types.ts (not in components/rightBar/desc) to keep
+// dependencies one-way: desc.tsx imports tab id constants from here,
+// so this module can't re-export from desc without creating a cycle
+// that crashes Turbopack at module evaluation time.
 import type { RightBarButtonId } from "./config";
-export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<Record<"file" | "todo" | "canvas" | "translate" | "toolCalls" | "json" | "rss" | "favorites" | "tokens" | "gitDiff" | "conversationTree" | "terminal", RightBarButtonId>> = {
+type TabKindForAutoClose =
+  | "file"
+  | "todo"
+  | "canvas"
+  | "translate"
+  | "toolCalls"
+  | "json"
+  | "rss"
+  | "favorites"
+  | "tokens"
+  | "gitDiff"
+  | "conversationTree"
+  | "terminal";
+export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<
+  Record<TabKindForAutoClose, RightBarButtonId>
+> = {
   todo: "todos",
   canvas: "canvas",
   translate: "translate",

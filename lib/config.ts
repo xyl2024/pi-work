@@ -50,35 +50,20 @@ export interface ExtensionsConfig {
 }
 
 // ── Right-side button bar visibility ──────────────────────────────────────
-// Each key is the user-facing id of a configurable right-bar tab button.
-// Missing keys default to true (visible) — both in defaults and in the parser.
+// Types and helpers live in `lib/right-bar.ts` (client-safe). They're
+// re-exported from here so server-side callers can continue to import
+// them from `@/lib/config` without a second import path. Client-side
+// 'use client' components should import from `@/lib/right-bar` directly
+// to avoid pulling this server-only module (fs/js-yaml/logger) into the
+// client bundle.
 
-export type RightBarButtonId =
-  | "todos"
-  | "canvas"
-  | "translate"
-  | "json"
-  | "rss"
-  | "favorites"
-  | "tokens"
-  | "toolCalls"
-  | "gitDiff"
-  | "conversationTree";
-
-export const RIGHT_BAR_BUTTON_IDS: readonly RightBarButtonId[] = [
-  "todos",
-  "canvas",
-  "translate",
-  "json",
-  "rss",
-  "favorites",
-  "tokens",
-  "toolCalls",
-  "gitDiff",
-  "conversationTree",
-] as const;
-
-export type RightSideBarConfig = Record<RightBarButtonId, boolean>;
+// Re-export the client-safe right-bar types/helpers for backward compat.
+// 'use client' components should import directly from "@/lib/right-bar"
+// instead — importing through here drags in fs/js-yaml/logger.
+import type { RightBarButtonId, RightSideBarConfig } from "./right-bar";
+import { isRightBarButtonVisible } from "./right-bar";
+export { isRightBarButtonVisible };
+export type { RightBarButtonId, RightSideBarConfig };
 
 // ── Custom tools enabled by `customTools` on createAgentSession ───────────
 // Names match the tool names registered in lib/rpc-manager.ts. The two
@@ -203,9 +188,22 @@ function parseRightSideBar(raw: unknown): RightSideBarConfig {
   const out: RightSideBarConfig = { ...DEFAULT_RIGHT_SIDE_BAR };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
-  for (const key of RIGHT_BAR_BUTTON_IDS) {
-    if (typeof obj[key] === "boolean") out[key] = obj[key] as boolean;
+  for (const key of Object.keys(out)) {
+    if (key === "order") continue;
+    const v = obj[key];
+    if (typeof v === "boolean") out[key] = v;
     // missing or non-boolean → keep default (true)
+  }
+  // `order` is parsed at the consumer side (lib/config doesn't import
+  // RIGHT_BAR_BUTTON_IDS — the descriptor module owns the canonical id
+  // set, and any stale/unknown entries are filtered there). Here we
+  // just hand the raw array through when it's structurally valid.
+  if (Array.isArray(obj.order)) {
+    const arr: RightBarButtonId[] = [];
+    for (const item of obj.order) {
+      if (typeof item === "string") arr.push(item as RightBarButtonId);
+    }
+    if (arr.length > 0) out.order = arr;
   }
   return out;
 }
