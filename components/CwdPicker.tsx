@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WorkspacesResponse } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
+import { useCwdList, initCwdList } from "@/hooks/cwdListStore";
 import { Tooltip } from "./Tooltip";
 import { AnimatedPopover } from "./AnimatedPopover";
 import { CwdIcon } from "./FileIcons";
@@ -30,8 +30,6 @@ interface CwdPickerProps {
   dropdownDirection?: "up" | "down";
 }
 
-const WORKSPACE_LIMIT = 5;
-
 function basenameOf(cwd: string): string {
   // Pick the separator that actually appears in the path. Windows uses
   // backslashes; POSIX uses slashes. If both are present (unusual but
@@ -51,9 +49,9 @@ export function CwdPicker({
   dropdownDirection = "up",
 }: CwdPickerProps) {
   const { t } = useI18n();
+  const { cwds } = useCwdList();
 
   const [open, setOpen] = useState(false);
-  const [workspaces, setWorkspaces] = useState<{ cwd: string }[] | null>(null);
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathValue, setCustomPathValue] = useState("");
   const customPathInputRef = useRef<HTMLInputElement>(null);
@@ -61,18 +59,10 @@ export function CwdPicker({
   // outside-click detection just walks up the DOM for this data attribute.
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // Fetch dropdown contents once on mount so the list is ready before the
-  // picker is ever opened.
+  // Kick off the one-time app-wide fetch if it hasn't started yet (idempotent;
+  // AppShell also calls it on mount).
   useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/workspaces?limit=${WORKSPACE_LIMIT}`)
-      .then((r) => r.json() as Promise<WorkspacesResponse>)
-      .then((ws) => {
-        if (cancelled) return;
-        setWorkspaces(ws.workspaces.map((w) => ({ cwd: w.cwd })));
-      })
-      .catch(() => { /* best-effort */ });
-    return () => { cancelled = true; };
+    initCwdList();
   }, []);
 
   // Close on outside mousedown.
@@ -110,7 +100,7 @@ export function CwdPicker({
     } catch { /* ignore */ }
   }, [handlePick]);
 
-  const recentCwds = (workspaces ?? []).map((w) => w.cwd);
+  const recentCwds = cwds ?? [];
 
   const up = dropdownDirection === "up";
   const buttonLabel = cwd ? basenameOf(cwd) : t("Select project...");
@@ -204,7 +194,7 @@ export function CwdPicker({
             ))}
 
             {/* Empty state inside the dropdown */}
-            {recentCwds.length === 0 && (
+            {cwds !== null && recentCwds.length === 0 && (
               <div style={{ padding: "10px", fontSize: 11, color: "var(--text-dim)" }}>
                 {t("No projects yet")}
               </div>
@@ -220,7 +210,7 @@ export function CwdPicker({
                   display: "flex", alignItems: "center", gap: 7,
                   width: "100%", padding: "8px 10px",
                   background: "none", border: "none",
-                  borderTop: (workspaces?.length ?? 0) > 0 ? "1px solid var(--border)" : "none",
+                  borderTop: (cwds?.length ?? 0) > 0 ? "1px solid var(--border)" : "none",
                   color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11,
                 }}
               >

@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect, memo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionUiState, useSessionLeafChange, resetSessionUi } from "@/hooks/sessionUiStore";
+import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
 import { SessionSidebar } from "./SessionSidebar";
 import { ContextUsageBar } from "./ContextUsageBar";
 import { ChatWindow } from "./ChatWindow";
@@ -185,6 +186,13 @@ export function AppShell() {
   const { unread: rssUnread } = useRssUnreadCount();
   const settings = useEnsureSettings();
   const rightSideBarConfig = settings?.right_side_bar ?? null;
+  const { cwds: recentCwds } = useCwdList();
+
+  // Fetch the recent-cwd list exactly once at app start (shared with the
+  // CwdPicker, which never refetches on open or remount).
+  useEffect(() => {
+    initCwdList();
+  }, []);
 
   useEffect(() => {
     if (window.parent === window) return;
@@ -415,17 +423,9 @@ export function AppShell() {
   useEffect(() => {
     if (!initialSessionRestored) return;
     if (selectedSession !== null || newSessionCwd !== null) return;
-    let cancelled = false;
-    fetch("/api/workspaces?limit=1")
-      .then((r) => r.json())
-      .then((d: { workspaces?: { cwd: string }[] }) => {
-        if (cancelled) return;
-        const first = d.workspaces?.[0]?.cwd;
-        if (first) setNewSessionCwd(first);
-      })
-      .catch(() => { /* best-effort */ });
-    return () => { cancelled = true; };
-  }, [initialSessionRestored, selectedSession, newSessionCwd]);
+    const first = recentCwds?.[0];
+    if (first) setNewSessionCwd(first);
+  }, [initialSessionRestored, selectedSession, newSessionCwd, recentCwds]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
     setNewSessionCwd(null);
