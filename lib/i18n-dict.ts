@@ -311,6 +311,7 @@ export const ZH_TRANSLATIONS = {
   "Total": "总数",
   // Settings / system prompt replacements
   "Settings": "设置",
+  "Settings sections": "设置项导航",
   "System Prompt Replacements": "系统提示词替换",
   "Replace literal strings in the system prompt. Changes take effect on new sessions. Existing sessions are unaffected.": "替换系统提示词中的字面量字符串。对新建会话生效，已有会话不受影响。",
   "Enable replacements": "启用替换",

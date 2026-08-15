@@ -54,6 +54,24 @@ const FILE_VIEWER_UI: Array<{ kind: FileViewerKind; labelKey: string }> = [
   { kind: "pdf",   labelKey: "Max size for PDF files" },
 ];
 
+// Sidebar nav entries for the modal body. The id is the value of
+// `data-settings-section` on each section's wrapper div; clicking an entry
+// scrolls the body to that section. Order here is the display order in
+// the sidebar (same as the body's top-to-bottom order) — keep them in
+// sync if you reorder sections.
+const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
+  { id: "settings-section-profile",       labelKey: "Profile" },
+  { id: "settings-section-appearance",    labelKey: "Appearance" },
+  { id: "settings-section-wechat",        labelKey: "WeChat Connection" },
+  { id: "settings-section-append-system", labelKey: "Append System Prompt" },
+  { id: "settings-section-clawd",         labelKey: "Clawd on Desk" },
+  { id: "settings-section-custom-tools",  labelKey: "Custom Tools" },
+  { id: "settings-section-right-bar",     labelKey: "Right-side buttons" },
+  { id: "settings-section-inbox-test",    labelKey: "Inbox Test" },
+  { id: "settings-section-file-preview",  labelKey: "File preview limits" },
+  { id: "settings-section-typewriter",    labelKey: "Typewriter phrases" },
+];
+
 /**
  * One row in the "File preview limits" section. The row owns a local
  * `draft` string so the user can type freely (including transient
@@ -210,6 +228,57 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
     setTypewriterDraft(seeded);
     setOriginalTypewriterDraft(seeded);
   }, [config]);
+
+  // ── Sidebar nav: active section + scroll-spy ──
+  // Default to the first nav item so the sidebar shows a highlighted item
+  // before the user has scrolled. The IntersectionObserver below updates
+  // this as the user scrolls past each section's top edge into the
+  // trigger zone (top 40% of the scroll container).
+  const [activeSectionId, setActiveSectionId] = useState<string>(NAV_ITEMS[0].id);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  // Depend on `config` so the observer is set up the first time the body
+  // div actually mounts (the loading screen renders before it). When
+  // `config` later changes (e.g. after a Save), the cleanup disconnect +
+  // re-observe cost is negligible — there are ~10 targets and the body
+  // div's identity is stable across saves, so the observer's `root`
+  // reference stays valid.
+  useEffect(() => {
+    const root = bodyRef.current;
+    if (!root) return;
+    const targets = Array.from(
+      root.querySelectorAll<HTMLElement>("[data-settings-section]"),
+    );
+    if (targets.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Of the entries that just crossed into the trigger zone, the
+        // topmost one (lowest boundingClientRect.top) wins. Picking
+        // from the entries array (rather than re-querying all sections)
+        // keeps updates bounded to what actually changed this tick.
+        const intersecting = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (intersecting.length > 0) {
+          const id = intersecting[0].target.getAttribute("data-settings-section");
+          if (id) setActiveSectionId(id);
+        }
+      },
+      { root, rootMargin: "0px 0px -60% 0px", threshold: 0 },
+    );
+    targets.forEach((t) => observer.observe(t));
+    return () => observer.disconnect();
+  }, [config]);
+
+  const handleNavClick = useCallback((id: string) => {
+    setActiveSectionId(id);
+    const root = bodyRef.current;
+    if (!root) return;
+    const target = root.querySelector<HTMLElement>(
+      `[data-settings-section="${id}"]`,
+    );
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -650,7 +719,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
     return (
       <div style={backdropStyle}
         onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-        <div style={{ ...panelStyle, width: 800, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+        <div style={{ ...panelStyle, width: 880, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
           {t("Loading...")}
         </div>
       </div>
@@ -661,7 +730,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
     return (
       <div style={backdropStyle}
         onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-        <div style={{ ...panelStyle, width: 800, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "#ef4444" }}>
+        <div style={{ ...panelStyle, width: 880, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "#ef4444" }}>
           {t("Failed to load settings")}
         </div>
       </div>
@@ -671,7 +740,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
   return (
     <div style={backdropStyle}
       onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <div style={{ ...panelStyle, width: 800, height: "70vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div style={{ ...panelStyle, width: 880, height: "70vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
@@ -680,9 +749,72 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "18px" }}>
+        <div
+          ref={bodyRef}
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            display: "grid",
+            gridTemplateColumns: "180px 1fr",
+            columnGap: 0,
+            padding: "18px",
+          }}
+        >
+          {/* Sidebar nav — sticky so it stays in view while the content
+              column scrolls. alignSelf: start lets the nav shrink to its
+              own height instead of stretching to fill the grid row. */}
+          <nav
+            aria-label={t("Settings sections")}
+            style={{
+              position: "sticky",
+              top: 0,
+              alignSelf: "start",
+              paddingRight: 12,
+              marginRight: 12,
+              borderRight: "1px solid var(--border)",
+              maxHeight: "calc(100% - 0px)",
+            }}
+          >
+            {NAV_ITEMS.map((item) => {
+              const active = activeSectionId === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavClick(item.id)}
+                  aria-current={active ? "true" : undefined}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "6px 10px",
+                    marginBottom: 2,
+                    background: active ? "var(--bg-selected)" : "transparent",
+                    border: "none",
+                    borderRadius: 6,
+                    color: active ? "var(--text)" : "var(--text-muted)",
+                    fontSize: 13,
+                    fontWeight: active ? 600 : 400,
+                    cursor: "pointer",
+                    transition: "background-color 0.15s, color 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) e.currentTarget.style.background = "var(--bg-hover)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  {t(item.labelKey)}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Content column — all section wrappers go in here so the grid
+              layout only sees two columns (nav + content). */}
+          <div>
           {/* ── Section 0: Profile (avatar + username) ── */}
-          <div style={{ marginBottom: 24 }}>
+          <div data-settings-section="settings-section-profile" style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Profile")}</h3>
               <button
@@ -808,7 +940,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
           </div>
 
           {/* ── Section 1: Appearance (theme + language, applied immediately) ── */}
-          <div style={{ marginBottom: 24 }}>
+          <div data-settings-section="settings-section-appearance" style={{ marginBottom: 24 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 12px 0" }}>{t("Appearance")}</h3>
 
             {/* Theme swatches */}
@@ -886,7 +1018,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
           </div>
 
           {/* ── Section 2: WeChat Connection ── */}
-          <div style={{ marginBottom: 24 }}>
+          <div data-settings-section="settings-section-wechat" style={{ marginBottom: 24 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>{t("WeChat Connection")}</h3>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0", lineHeight: 1.5 }}>
               {t("Manage WeChat connection.")}
@@ -895,7 +1027,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
           </div>
 
           {/* ── Section 3: Append System Prompt (~/.pi/agent/APPEND_SYSTEM.md) ── */}
-          <div style={{ marginBottom: 24 }}>
+          <div data-settings-section="settings-section-append-system" style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Append System Prompt")}</h3>
               <button
@@ -979,7 +1111,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
           </div>
 
           {/* ── Section 4: Built-in Extensions ── */}
-          <div style={{ marginBottom: 0 }}>
+          <div data-settings-section="settings-section-clawd" style={{ marginBottom: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Clawd on Desk")}</h3>
               <button
@@ -1031,7 +1163,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
           {/* ── Section 5: Custom Tools (agent_todo, show_media, ask_user_questions) ── */}
           {/* Immediate-apply checkboxes, same shape as Section 6. */}
           {config && (
-            <div style={{ marginBottom: 24, marginTop: 24 }}>
+            <div data-settings-section="settings-section-custom-tools" style={{ marginBottom: 24, marginTop: 24 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
                 {t("Custom Tools")}
               </h3>
@@ -1065,7 +1197,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
               checkbox toggle calls handleRightBarToggle, which updates local
               state + the global settings store + PUTs to /api/settings. */}
           {config && (
-            <div style={{ marginBottom: 24, marginTop: 24 }}>
+            <div data-settings-section="settings-section-right-bar" style={{ marginBottom: 24, marginTop: 24 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
                 {t("Right-side buttons")}
               </h3>
@@ -1094,7 +1226,9 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
             </div>
           )}
 
-          <InboxTestSection />
+          <div data-settings-section="settings-section-inbox-test">
+            <InboxTestSection />
+          </div>
 
           {/* ── Section 7: File preview limits ── */}
           {/* Per-kind MB caps. Renders FILE_VIEWER_UI rows; each row's
@@ -1103,7 +1237,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
               Already-open file tabs are not force-refetched — the new
               limit applies on the next read (Q9 decision). */}
           {config && (
-            <div style={{ marginBottom: 24, marginTop: 24 }}>
+            <div data-settings-section="settings-section-file-preview" style={{ marginBottom: 24, marginTop: 24 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
                 {t("File preview limits")}
               </h3>
@@ -1133,7 +1267,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
               whole PiWorkConfig and immediately publishes to the settings
               store so the chat input re-renders with the new phrases. */}
           {config && (
-            <div style={{ marginBottom: 24, marginTop: 24 }}>
+            <div data-settings-section="settings-section-typewriter" style={{ marginBottom: 24, marginTop: 24 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>
                   {t("Typewriter phrases")}
@@ -1186,6 +1320,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
               ))}
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>
