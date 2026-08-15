@@ -620,6 +620,10 @@ export const ZH_TRANSLATIONS = {
   "Failed to rename session": "重命名会话失败",
   "Failed to update pin": "更新置顶失败",
   "Settings saved": "设置已保存",
+  // Scheduler
+  "All runs marked as read": "全部运行记录已标记为已读",
+  "Failed to toggle task": "操作定时任务失败",
+  "Please fix form errors first": "请先修正表单错误",
   "Failed to save settings": "保存设置失败",
   "Models saved": "模型配置已保存",
   "Failed to save models": "模型配置失败",

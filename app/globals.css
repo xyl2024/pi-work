@@ -42,6 +42,16 @@
   --git-status-untracked: #2da44e;
   --git-status-renamed: #3b82f6;
   --git-status-conflict: #cf222e;
+
+  /* ── Scheduler status palette (StatusBadge, run history) ───── */
+  --success: #16a34a;
+  --success-bg: rgba(22, 163, 74, 0.10);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.10);
+  --error: #dc2626;
+  --error-bg: rgba(220, 38, 38, 0.10);
+  --info: #2563eb;
+  --info-bg: rgba(37, 99, 235, 0.10);
 }
 
 /* ── Preset: midnight (dark) ───────────────────────────────── */
@@ -67,6 +77,15 @@
   --git-status-untracked: #73c991;
   --git-status-renamed: #79c0ff;
   --git-status-conflict: #ff6e6e;
+
+  --success: #7ee787;
+  --success-bg: rgba(126, 231, 135, 0.14);
+  --warning: #e3b341;
+  --warning-bg: rgba(227, 179, 65, 0.14);
+  --error: #ff7b72;
+  --error-bg: rgba(255, 123, 114, 0.14);
+  --info: #7aa2f7;
+  --info-bg: rgba(122, 162, 247, 0.14);
 }
 
 /* ── Preset: synthwave ─────────────────────────────────────── */
@@ -92,6 +111,15 @@
   --git-status-untracked: #67e8f9;
   --git-status-renamed: #c4b5fd;
   --git-status-conflict: #ff5577;
+
+  --success: #6ee7b7;
+  --success-bg: rgba(110, 231, 183, 0.14);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.14);
+  --error: #ff6ec7;
+  --error-bg: rgba(255, 110, 199, 0.14);
+  --info: #67e8f9;
+  --info-bg: rgba(103, 232, 249, 0.14);
 }
 
 /* ── Preset: forest ────────────────────────────────────────── */
@@ -117,6 +145,15 @@
   --git-status-untracked: #4d7c0f;
   --git-status-renamed: #1e40af;
   --git-status-conflict: #991b1b;
+
+  --success: #2e7d32;
+  --success-bg: rgba(46, 125, 50, 0.12);
+  --warning: #c2410c;
+  --warning-bg: rgba(194, 65, 12, 0.12);
+  --error: #b91c1c;
+  --error-bg: rgba(185, 28, 28, 0.12);
+  --info: #1e40af;
+  --info-bg: rgba(30, 64, 175, 0.12);
 }
 
 /* ── Preset: sepia ─────────────────────────────────────────── */
@@ -142,6 +179,15 @@
   --git-status-untracked: #65764b;
   --git-status-renamed: #1e40af;
   --git-status-conflict: #7c2d12;
+
+  --success: #4d7c0f;
+  --success-bg: rgba(77, 124, 15, 0.12);
+  --warning: #b45309;
+  --warning-bg: rgba(180, 83, 9, 0.12);
+  --error: #991b1b;
+  --error-bg: rgba(153, 27, 27, 0.12);
+  --info: #1e40af;
+  --info-bg: rgba(30, 64, 175, 0.12);
 }
 
 /* Theme toggle: circular wipe via View Transitions API.
@@ -601,6 +647,25 @@ span.linenumber {
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
+}
+
+/* Pulsing dot for in-progress runs / running-task indicators.
+   Slower than blink so it doesn't compete with the typing cursor. */
+@keyframes scheduler-running-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(1.4); opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-running-pulse] {
+    animation: none !important;
+  }
+}
+
+/* Skeleton shimmer for loading states in the scheduler UI (e.g. while
+   fetching runs for a freshly selected task). */
+@keyframes scheduler-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 @keyframes spin {

@@ -38,7 +38,7 @@ import { PromptsConfig } from "./PromptsConfig";
 import { SettingsModal } from "./SettingsModal";
 import { McpConfig } from "./McpConfig";
 
-import { SchedulerModal } from "./SchedulerModal";
+import { SchedulerModal } from "./Scheduler";
 import { ConversationTreePanel } from "./ConversationTreePanel";
 import type { SessionTreeNode } from "@/lib/types";
 import { CommandPalette } from "./CommandPalette";
