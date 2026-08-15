@@ -5,7 +5,6 @@ import type { WorkspacesResponse } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 import { AnimatedPopover } from "./AnimatedPopover";
-import { useToast } from "./Toast";
 import { CwdIcon } from "./FileIcons";
 
 /**
@@ -14,10 +13,9 @@ import { CwdIcon } from "./FileIcons";
  *
  * UI matches the model picker in ChatInput's bottom toolbar (folder icon +
  * basename pill), while the dropdown mirrors the original sidebar menu:
- * Pinned / Recent list, plus Use default / Custom path entries at the
- * bottom. Dropdown opens upward by default since the parent is anchored
- * at the bottom of the chat area — pass `dropdownDirection` to flip it if
- * needed.
+ * Recent list, plus Use default / Custom path entries at the bottom.
+ * Dropdown opens upward by default since the parent is anchored at the
+ * bottom of the chat area — pass `dropdownDirection` to flip it if needed.
  */
 interface CwdPickerProps {
   /** Current cwd; null means "no project selected yet". */
@@ -45,28 +43,17 @@ function basenameOf(cwd: string): string {
   return parts[parts.length - 1] ?? cwd;
 }
 
-function shortenPath(cwd: string, homeDir: string): string {
-  const path = homeDir && cwd.startsWith(homeDir) ? "~" + cwd.slice(homeDir.length) : cwd;
-  const sep = path.includes("/") ? "/" : "\\";
-  const parts = path.split(sep).filter(Boolean);
-  if (parts.length <= 5) return path;
-  return "…/" + parts.slice(-5).join(sep);
-}
-
 export function CwdPicker({
   cwd,
   onCwdChange,
   disabled = false,
-  maxWidth = 220,
+  maxWidth = 160,
   dropdownDirection = "up",
 }: CwdPickerProps) {
   const { t } = useI18n();
-  const toast = useToast();
 
   const [open, setOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<{ cwd: string }[] | null>(null);
-  const [pinnedCwds, setPinnedCwds] = useState<string[]>([]);
-  const [homeDir, setHomeDir] = useState<string>("");
   const [customPathOpen, setCustomPathOpen] = useState(false);
   const [customPathValue, setCustomPathValue] = useState("");
   const customPathInputRef = useRef<HTMLInputElement>(null);
@@ -74,22 +61,19 @@ export function CwdPicker({
   // outside-click detection just walks up the DOM for this data attribute.
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // Refresh dropdown contents whenever it opens.
+  // Fetch dropdown contents once on mount so the list is ready before the
+  // picker is ever opened.
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
-    Promise.all([
-      fetch(`/api/workspaces?limit=${WORKSPACE_LIMIT}`).then((r) => r.json() as Promise<WorkspacesResponse>),
-      fetch("/api/pinned-cwds").then((r) => r.json() as Promise<{ cwds?: string[] }>),
-      fetch("/api/home").then((r) => r.json() as Promise<{ home?: string }>),
-    ]).then(([ws, pin, hd]) => {
-      if (cancelled) return;
-      setWorkspaces(ws.workspaces.map((w) => ({ cwd: w.cwd })));
-      if (Array.isArray(pin.cwds)) setPinnedCwds(pin.cwds);
-      if (hd.home) setHomeDir(hd.home);
-    }).catch(() => { /* best-effort */ });
+    fetch(`/api/workspaces?limit=${WORKSPACE_LIMIT}`)
+      .then((r) => r.json() as Promise<WorkspacesResponse>)
+      .then((ws) => {
+        if (cancelled) return;
+        setWorkspaces(ws.workspaces.map((w) => ({ cwd: w.cwd })));
+      })
+      .catch(() => { /* best-effort */ });
     return () => { cancelled = true; };
-  }, [open]);
+  }, []);
 
   // Close on outside mousedown.
   useEffect(() => {
@@ -113,24 +97,6 @@ export function CwdPicker({
     setCustomPathValue("");
   }, [onCwdChange]);
 
-  const togglePin = useCallback(async (targetCwd: string) => {
-    const prev = pinnedCwds;
-    const next = prev.includes(targetCwd)
-      ? prev.filter((p) => p !== targetCwd)
-      : [...prev, targetCwd];
-    setPinnedCwds(next);
-    try {
-      await fetch("/api/pinned-cwds", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cwds: next }),
-      });
-    } catch {
-      setPinnedCwds(prev);
-      toast.show({ kind: "error", message: t("Failed to update pin") });
-    }
-  }, [pinnedCwds, t, toast]);
-
   const handleCommitCustomPath = useCallback(() => {
     const path = customPathValue.trim();
     if (path) handlePick(path);
@@ -144,10 +110,7 @@ export function CwdPicker({
     } catch { /* ignore */ }
   }, [handlePick]);
 
-  const pinnedCwdSet = new Set(pinnedCwds);
-  const unpinnedCwds = (workspaces ?? [])
-    .filter((w) => !pinnedCwdSet.has(w.cwd))
-    .map((w) => w.cwd);
+  const recentCwds = (workspaces ?? []).map((w) => w.cwd);
 
   const up = dropdownDirection === "up";
   const buttonLabel = cwd ? basenameOf(cwd) : t("Select project...");
@@ -205,8 +168,8 @@ export function CwdPicker({
           ...(up ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }),
           left: 0,
           zIndex: 100,
-          minWidth: 280,
-          maxWidth: 360,
+          minWidth: 240,
+          maxWidth: 300,
           background: "var(--bg-panel)",
           border: "1px solid var(--border)",
           borderRadius: 10,
@@ -215,92 +178,33 @@ export function CwdPicker({
         }}
       >
           <div style={{ maxHeight: 320, overflowY: "auto" }}>
-            {/* Pinned section */}
-            {pinnedCwds.length > 0 && (
-              <>
-                <div style={{ padding: "6px 10px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  {t("Pinned")}
-                </div>
-                {pinnedCwds.map((pcwd) => (
-                  <Tooltip key={`pinned-${pcwd}`} content={pcwd}>
-                    <button
-                      onClick={() => handlePick(pcwd)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 7,
-                        width: "100%",
-                        padding: "8px 10px",
-                        background: pcwd === cwd ? "var(--bg-selected)" : "none",
-                        border: "none", borderBottom: "1px solid var(--border)",
-                        color: pcwd === cwd ? "var(--text)" : "var(--text-muted)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        fontSize: 11,
-                        fontFamily: "var(--font-mono)",
-                      }}
-                    >
-                      <Tooltip content="Unpin">
-                        <span
-                          onClick={(e) => { e.stopPropagation(); togglePin(pcwd); }}
-                          style={{ display: "flex", alignItems: "center", flexShrink: 0, cursor: "pointer", padding: 2 }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--accent)" stroke="none">
-                            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2Z" />
-                          </svg>
-                        </span>
-                      </Tooltip>
-                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {shortenPath(pcwd, homeDir)}
-                      </span>
-                    </button>
-                  </Tooltip>
-                ))}
-              </>
-            )}
-
-            {/* Recent section */}
-            {unpinnedCwds.length > 0 && (
-              <>
-                <div style={{ padding: pinnedCwds.length > 0 ? "4px 10px 3px" : "6px 10px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                  {t("Recent")}
-                </div>
-                {unpinnedCwds.map((rcwd) => (
-                  <Tooltip key={`recent-${rcwd}`} content={rcwd}>
-                    <button
-                      onClick={() => handlePick(rcwd)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 7,
-                        width: "100%",
-                        padding: "8px 10px",
-                        background: rcwd === cwd ? "var(--bg-selected)" : "none",
-                        border: "none", borderBottom: "1px solid var(--border)",
-                        color: rcwd === cwd ? "var(--text)" : "var(--text-muted)",
-                        cursor: "pointer",
-                        textAlign: "left",
-                        fontSize: 11,
-                        fontFamily: "var(--font-mono)",
-                      }}
-                    >
-                      <Tooltip content="Pin">
-                        <span
-                          onClick={(e) => { e.stopPropagation(); togglePin(rcwd); }}
-                          style={{ display: "flex", alignItems: "center", flexShrink: 0, cursor: "pointer", padding: 2, opacity: 0.45 }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2Z" />
-                          </svg>
-                        </span>
-                      </Tooltip>
-                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {shortenPath(rcwd, homeDir)}
-                      </span>
-                    </button>
-                  </Tooltip>
-                ))}
-              </>
-            )}
+            {/* Recent list */}
+            {recentCwds.map((rcwd) => (
+              <Tooltip key={`recent-${rcwd}`} content={rcwd}>
+                <button
+                  onClick={() => handlePick(rcwd)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 7,
+                    width: "100%",
+                    padding: "8px 10px",
+                    background: rcwd === cwd ? "var(--bg-selected)" : "none",
+                    border: "none", borderBottom: "1px solid var(--border)",
+                    color: rcwd === cwd ? "var(--text)" : "var(--text-muted)",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    fontSize: 11,
+                    fontFamily: "var(--font-mono)",
+                  }}
+                >
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {basenameOf(rcwd)}
+                  </span>
+                </button>
+              </Tooltip>
+            ))}
 
             {/* Empty state inside the dropdown */}
-            {pinnedCwds.length === 0 && unpinnedCwds.length === 0 && (
+            {recentCwds.length === 0 && (
               <div style={{ padding: "10px", fontSize: 11, color: "var(--text-dim)" }}>
                 {t("No projects yet")}
               </div>
@@ -316,7 +220,7 @@ export function CwdPicker({
                   display: "flex", alignItems: "center", gap: 7,
                   width: "100%", padding: "8px 10px",
                   background: "none", border: "none",
-                  borderTop: (pinnedCwds.length > 0 || unpinnedCwds.length > 0) ? "1px solid var(--border)" : "none",
+                  borderTop: (workspaces?.length ?? 0) > 0 ? "1px solid var(--border)" : "none",
                   color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11,
                 }}
               >
