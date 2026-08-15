@@ -1129,6 +1129,10 @@ export const ZH_TRANSLATIONS = {
   "Open MCP servers": "打开 MCP 服务",
   "MCP Servers": "MCP 服务",
   "Enable MCP integration": "启用 MCP 集成",
+  "Coming soon": "即将上线",
+  "MCP Servers support is coming soon": "MCP 服务支持即将上线",
+  "We're polishing the integration. The full MCP server management UI will land in a future release. Press Esc or click outside to close this preview.":
+    "我们正在打磨这个集成,完整的 MCP 服务管理界面将在后续版本中推出。按 Esc 或点击外部区域可关闭此预览。",
   "+ Add server": "+ 新建服务",
   "Cancel add": "取消新增",
   "Servers": "服务列表",

@@ -1023,6 +1023,7 @@ export function McpConfig({ onClose }: { onClose: () => void }) {
       <div
         style={{
           ...panelStyle,
+          position: "relative",
           width: 960,
           height: "78vh",
           background: "var(--bg)",
@@ -1083,6 +1084,72 @@ export function McpConfig({ onClose }: { onClose: () => void }) {
         <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
           {renderLeftPane()}
           {renderRightPane()}
+        </div>
+        {/* Temporary "coming soon" overlay — sits above the panel body so
+            the user can see the placeholder without losing the Close
+            affordance. Closes via backdrop click or ESC. */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "color-mix(in srgb, var(--bg) 78%, transparent)",
+            backdropFilter: "blur(2px)",
+            zIndex: 10,
+            pointerEvents: "auto",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 460,
+              padding: "28px 32px",
+              borderRadius: 12,
+              border: "1px solid var(--border)",
+              background: "var(--bg-panel)",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: "var(--accent)",
+              }}
+            >
+              {t("Coming soon")}
+            </div>
+            <div
+              style={{
+                fontSize: 20,
+                fontWeight: 600,
+                color: "var(--text)",
+                lineHeight: 1.35,
+              }}
+            >
+              {t("MCP Servers support is coming soon")}
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: "var(--text-muted)",
+                lineHeight: 1.55,
+              }}
+            >
+              {t(
+                "We're polishing the integration. The full MCP server management UI will land in a future release. Press Esc or click outside to close this preview.",
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
