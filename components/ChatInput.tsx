@@ -1093,6 +1093,39 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
           {/* LEFT: attach + model selector */}
           <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2 }}>
+            {/* New session — circular icon button. Same action as the /new
+                slash command: starts a fresh session in the current cwd
+                (selected session's cwd, or the in-flight new-session cwd). */}
+            <Tooltip content={t("New session")}>
+              <button
+                type="button"
+                onClick={() => onSlashAction?.("new")}
+                aria-label={t("New session")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 32, height: 32, padding: 0, flexShrink: 0,
+                  background: "none",
+                  border: "none",
+                  borderRadius: "50%",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = "var(--text)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "none";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </button>
+            </Tooltip>
             {!isStreaming && (
             <IconHoverButton
               onClick={() => fileInputRef.current?.click()}
