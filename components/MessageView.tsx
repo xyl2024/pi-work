@@ -943,6 +943,7 @@ function TextBlock({ block, keywords, isSearchMatch, isStreaming }: { block: Tex
 }
 
 function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming }: { block: ThinkingContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean }) {
+  const { t } = useI18n();
   // Thinking blocks start collapsed. The only exception is when this block
   // contains a search match — in that case we auto-expand so the highlighted
   // keyword is visible. A user click is remembered (userExpandedRef) so the
@@ -986,6 +987,11 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming }: { block:
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
 
   const text = highlightTextAsHtml(block.thinking, keywords, isSearchMatch);
+  // The arrow is part of the header row in both states (collapsed: preview
+  // fills the rest; expanded: markdown body sits below the header). Keeping
+  // it visible after expansion preserves the "I can collapse this again"
+  // affordance and avoids the block visually swelling — only the body
+  // grows under the header, the header itself never changes.
   return (
     <div
       onClick={handleClick}
@@ -1006,35 +1012,45 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming }: { block:
       }}
     >
       <div ref={contentRef} style={{ overflow: "hidden" }}>
-        {expanded ? (
-          <div className="markdown-body" style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-              {text}
-            </ReactMarkdown>
-          </div>
-        ) : (
-          <div
-            className="thinking-collapsed"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "2px 4px",
-              fontSize: 12.5,
-              textAlign: "left",
-            }}
+        <div
+          className="thinking-header"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "2px 4px",
+            fontSize: 12.5,
+            textAlign: "left",
+          }}
+        >
+          <span
+            aria-hidden
+            className="thinking-chevron"
+            data-expanded={expanded ? "true" : "false"}
+            style={{ display: "inline-flex", width: 10, color: "var(--text-dim)", flexShrink: 0 }}
           >
-            <span aria-hidden style={{ display: "inline-block", width: 10, color: "var(--text-dim)", flexShrink: 0 }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polyline points="9 6 15 12 9 18" />
-              </svg>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="9 6 15 12 9 18" />
+            </svg>
+          </span>
+          {expanded ? (
+            <span className="thinking-header-label" style={{ flexShrink: 0, color: "var(--text-dim)" }}>
+              {t("Thinking")}
             </span>
+          ) : (
             <span
-              className={isStreaming && !expanded && block.thinking.trim().length > 0 ? "thinking-live--muted" : undefined}
+              className={`thinking-collapsed${isStreaming && !expanded && block.thinking.trim().length > 0 ? " thinking-live--muted" : ""}`}
               style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
             >
               {thinkingPreview}
             </span>
+          )}
+        </div>
+        {expanded && (
+          <div className="thinking-expanded markdown-body">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+              {text}
+            </ReactMarkdown>
           </div>
         )}
       </div>

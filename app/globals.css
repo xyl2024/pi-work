@@ -321,10 +321,39 @@ pre, code {
   accent-color: var(--accent);
 }
 
-/* Thinking blocks — rendered inline like the message body, but smaller & dimmer */
+/* Thinking blocks — rendered inline like the message body, but smaller & dimmer.
+   The header (chevron + collapsed preview OR chevron + "Thinking" label)
+   stays at exactly the same size in both states so the block never visually
+   swells when toggled — only the body below it appears/disappears.
+   The chevron is always rendered so users keep the "I can collapse again"
+   affordance after expanding. */
 .thinking-collapsed {
   font-family: inherit;
   color: var(--text-muted);
+}
+.thinking-header {
+  font-family: inherit;
+  color: var(--text-muted);
+}
+.thinking-chevron svg {
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.thinking-chevron[data-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.thinking-expanded {
+  /* Match the header so the block doesn't grow in font size on expand.
+   Tighten line-height and zero out the bottom spacing so the body butts up
+   against the header with the same rhythm the preview had in collapsed mode. */
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  padding: 2px 4px 4px 20px; /* indent to align with chevron's center */
+}
+.thinking-expanded > *:first-child { margin-top: 0 !important; }
+.thinking-expanded > *:last-child  { margin-bottom: 0 !important; }
+@media (prefers-reduced-motion: reduce) {
+  .thinking-chevron svg { transition: none; }
 }
 
 /* Light sweep for an in-progress thinking block (folded view only).
