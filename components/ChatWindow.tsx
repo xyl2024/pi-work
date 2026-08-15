@@ -3,7 +3,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AgentMessage,
-  AssistantContentBlock,
   AssistantMessage,
   SessionInfo,
   ToolCallContent,
@@ -12,7 +11,6 @@ import type {
 } from "@/lib/types";
 import {
   countToolCallsByName,
-  getAssistantErrorMessage,
   splitFinalAssistantBlocks,
 } from "@/lib/message-display";
 import { getFileName, joinFilePath } from "@/lib/file-paths";
@@ -192,14 +190,6 @@ function hasDisplayableProcessMessage(msg: AgentMessage): boolean {
   if (msg.role !== "assistant") return false;
   const blocks = msg.content ?? [];
   return blocks.some((b) => b.type === "thinking" || b.type === "toolCall");
-}
-
-/** Clone an assistant message with a different content array. */
-function withAssistantBlocks(
-  message: AssistantMessage,
-  blocks: AssistantContentBlock[],
-): AssistantMessage {
-  return { ...message, content: blocks };
 }
 
 /** How many tool names the process summary lists before falling back to "+N". */
@@ -1426,26 +1416,17 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 // Anchor message (user)
                 rendered.push(renderOne(userIdx));
 
-                // Intermediate assistant messages in the turn
+                // Intermediate assistant messages in the turn — these are
+                // wrapped in the per-turn fold group. The final assistant
+                // message is rendered as a whole below (one MessageView per
+                // LLM API call, all its blocks intact).
                 const processIndices: number[] = [];
                 for (let i = userIdx + 1; i < finalAssistantIdx; i++) processIndices.push(i);
-
-                // Split the final assistant: everything before the last
-                // text/image is "process", the trailing text/image is "answer".
-                const finalAssistant = renderMessages[finalAssistantIdx] as AssistantMessage;
-                const split = splitFinalAssistantBlocks(finalAssistant);
-                const finalProcessMessage = split.processBlocks.length > 0
-                  ? withAssistantBlocks(finalAssistant, split.processBlocks)
-                  : null;
-                const finalAnswerMessage =
-                  split.answerBlocks.length > 0 || getAssistantErrorMessage(finalAssistant)
-                    ? withAssistantBlocks(finalAssistant, split.answerBlocks)
-                    : null;
 
                 const visibleProcessIndices = processIndices.filter((i) =>
                   hasDisplayableProcessMessage(renderMessages[i]),
                 );
-                const processCount = visibleProcessIndices.length + (finalProcessMessage ? 1 : 0);
+                const processCount = visibleProcessIndices.length;
 
                 // While the agent is still running on this turn, render the
                 // process inline instead of folding it. Folding only kicks in
@@ -1457,33 +1438,9 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 const isCurrentTurnInProgress =
                   agentRunning && userIdx === lastUserIdx && lastUserIdx !== -1;
 
-                // The gallery only renders once the turn is fully settled:
-                // while the agent is still working on this turn it is omitted
-                // entirely, so the streaming answer text isn't pushed around
-                // by files appearing beneath it.
-                // (Kept as a no-op comment — formerly guarded turn-level gallery
-                //  rendering which the Session Library modal now owns.)
-
-                // The show_file gallery is now served by the Session Library
-                // modal (see SessionLibraryOpenButton + SessionLibraryModal).
-                // Each ToolCallCard surfaces a "已添加 N 个文件 · M 个失败"
-                // status row that opens the modal focused on the matching
-                // entries; the modal is the only place files are rendered.
-
                 const processChildren = (
                   <Fragment>
                     {visibleProcessIndices.map((i) => renderOne(i, { keySuffix: "process" }))}
-                    {finalProcessMessage &&
-                      renderOne(finalAssistantIdx, {
-                        messageOverride: finalProcessMessage,
-                        attachRef: false,
-                        keySuffix: "process-final",
-                        showTimestamp: false,
-                        // No answer clone means this is the turn's visual end —
-                        // host the read-file chips here instead.
-                        readFiles: finalAnswerMessage ? undefined : readFiles,
-                        onOpenFile: handleOpenFileFromLibrary,
-                      })}
                   </Fragment>
                 );
 
@@ -1495,7 +1452,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                       <ProcessDetailsGroup
                         key={`process-${userIdx}`}
                         messageCount={processCount}
-                        toolCallCounts={countToolCallsByName(renderMessages, visibleProcessIndices, split.processBlocks)}
+                        toolCallCounts={countToolCallsByName(renderMessages, visibleProcessIndices, [])}
                       >
                         {processChildren}
                       </ProcessDetailsGroup>,
@@ -1503,17 +1460,18 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                   }
                 }
 
-                if (finalAnswerMessage) {
-                  rendered.push(
-                    renderOne(finalAssistantIdx, {
-                      messageOverride: finalAnswerMessage,
-                      keySuffix: "answer",
-                      afterContent: null,
-                      readFiles,
-                      onOpenFile: handleOpenFileFromLibrary,
-                    }),
-                  );
-                }
+                // Final assistant message: one MessageView for the whole
+                // .jsonl entry. All its blocks (thinking + tool calls + text)
+                // render in order; the leading ThinkingBlock(s) inside still
+                // default to collapsed and fold along with "全部折叠", while
+                // the trailing text/image is always visible.
+                rendered.push(
+                  renderOne(finalAssistantIdx, {
+                    keySuffix: "answer",
+                    readFiles,
+                    onOpenFile: handleOpenFileFromLibrary,
+                  }),
+                );
 
                 idx = endIdx;
               }
