@@ -109,18 +109,21 @@ const TaskRow = memo(function TaskRow({ task, isLast }: TaskRowProps) {
       >
         {task.subject}
       </span>
-      {isInProgress && task.activeForm ? (
+      {isInProgress && task.description ? (
         <span
           style={{
             fontSize: 11,
+            lineHeight: 1.4,
             color: "var(--text-muted)",
-            fontStyle: "italic",
             overflow: "hidden",
             textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+            wordBreak: "break-word",
           }}
         >
-          {task.activeForm}
+          {task.description}
         </span>
       ) : null}
     </div>

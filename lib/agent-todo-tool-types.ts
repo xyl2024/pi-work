@@ -15,21 +15,16 @@ export type AgentTodoAction =
   | "create"
   | "update"
   | "list"
-  | "get"
   | "delete"
   | "clear";
 
-export type AgentTaskStatus = "pending" | "in_progress" | "completed" | "deleted";
+export type AgentTaskStatus = "pending" | "in_progress" | "completed";
 
 export interface AgentTask {
   id: number;
   subject: string;
   description?: string;
-  activeForm?: string;
   status: AgentTaskStatus;
-  blockedBy?: number[];
-  owner?: string;
-  metadata?: Record<string, unknown>;
 }
 
 export interface AgentTaskState {
@@ -38,10 +33,7 @@ export interface AgentTaskState {
 }
 
 export interface AgentTodoDetails {
-  action: AgentTodoAction;
-  params: Record<string, unknown>;
   tasks: AgentTask[];
-  nextId: number;
   error?: string;
 }
 
@@ -65,24 +57,6 @@ export interface AgentTaskCounts {
   total: number;
 }
 
-/** True iff the task is visible to the agent (i.e. not tombstoned). */
-export function isVisible(task: AgentTask): boolean {
-  return task.status !== "deleted";
-}
-
-/** Drop tombstoned tasks. */
-export function selectVisible(tasks: readonly AgentTask[]): AgentTask[] {
-  return tasks.filter(isVisible);
-}
-
-/** Filter by status; useful for "list" with a filter. */
-export function selectByStatus(
-  tasks: readonly AgentTask[],
-  status: AgentTaskStatus,
-): AgentTask[] {
-  return tasks.filter((t) => t.status === status);
-}
-
 /** Counts used in the panel header. */
 export function countTasks(tasks: readonly AgentTask[]): AgentTaskCounts {
   let pending = 0;
@@ -94,9 +68,4 @@ export function countTasks(tasks: readonly AgentTask[]): AgentTaskCounts {
     else if (t.status === "completed") completed++;
   }
   return { pending, inProgress, completed, total: pending + inProgress + completed };
-}
-
-/** True when there is nothing to render. */
-export function isStateEmpty(state: AgentTaskState): boolean {
-  return selectVisible(state.tasks).length === 0;
 }

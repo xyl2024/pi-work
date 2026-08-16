@@ -12,7 +12,7 @@
 
 设计目标：
 
-- agent 可以 `create` / `update` / `list` / `get` / `delete` / `clear` 任务，action 集合与 rpiv-todo 完全对齐。
+- agent 可以 `create` / `update` / `list` / `delete` / `clear` 任务。
 - 状态**绑定到单个会话分支**（这是 agent 的工作记忆，不是跨会话的长期记录）。reload 重新水合；compact 不影响（因为不再依赖 `.jsonl`）。
 - 状态**独立持久化**到 `~/.pi-work/agent-todo/<sessionId>.jsonl`，追加写、保留每次变更的完整快照，方便追溯历史。文件可被 grep / `cat` / 备份工具直接读取。
 - UI 在一个流式 turn 内能感知到每一次变更，通过**右下角圆形按钮 + 紧贴 popover** 呈现任务清单（点击按钮展开，agent 不用 plan 时整个 launcher 不渲染）。
@@ -63,33 +63,30 @@
 
 ## 4. 工具接口
 
-单工具、action 区分，与 rpiv-todo 一致。模型每做一次变更就调一次；`list` 和 `get` 是只读。
+单工具、action 区分。模型每做一次变更就调一次；`list` 是只读。
 
 ```ts
-const AgentTodoParams = Type.Object({
-  action: StringEnum(["create", "update", "list", "get", "delete", "clear"] as const),
-
-  // create 专用
-  subject:           Type.Optional(Type.String({ description: "任务标题（create 必填）。简短、祈使句，例如 'Research rpiv-todo replay'。" })),
-  blockedBy:         Type.Optional(Type.Array(Type.Number(), { description: "初始 blockedBy id 列表（仅 create）。" })),
-
-  // create + update
-  description:       Type.Optional(Type.String({ description: "长文本描述。" })),
-  activeForm:        Type.Optional(Type.String({ description: "状态为 in_progress 时展示的进行时标签，例如 'reading rpiv-todo source'。" })),
-  owner:             Type.Optional(Type.String({ description: "负责的 agent / 子 agent。" })),
-  metadata:          Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: "任意元数据；update 时传 null 删除该 key。" })),
-
-  // update 专用（增量合并）
-  addBlockedBy:      Type.Optional(Type.Array(Type.Number(), { description: "加入 blockedBy 的 id（仅 update，增量）。" })),
-  removeBlockedBy:   Type.Optional(Type.Array(Type.Number(), { description: "从 blockedBy 移除的 id（仅 update，增量）。" })),
-
-  // update / get / delete
-  id:                Type.Optional(Type.Number({ description: "任务 id（update、get、delete 必填）。" })),
-  status:            Type.Optional(StringEnum(["pending", "in_progress", "completed", "deleted"] as const, { description: "update 时的目标状态；list 时的过滤状态。" })),
-
-  // list 专用
-  includeDeleted:    Type.Optional(Type.Boolean({ description: "list 时是否包含已 tombstone 的任务，默认 false。" })),
-});
+const AgentTodoParams = Type.Union([
+  Type.Object({
+    action: Type.Literal("create"),
+    subject: Type.String({ description: "任务标题。简短、祈使句。" }),
+    description: Type.Optional(Type.String({ description: "长文本描述。" })),
+  }),
+  Type.Object({
+    action: Type.Literal("update"),
+    id: Type.Number({ description: "任务 ID。" }),
+    subject: Type.Optional(Type.String({ description: "新的任务标题。" })),
+    description: Type.Optional(Type.String({ description: "新的长文本描述。" })),
+    status: Type.Optional(
+      StringEnum(["pending", "in_progress", "completed"] as const, {
+        description: "目标状态。",
+      }),
+    ),
+  }),
+  Type.Object({ action: Type.Literal("list") }),
+  Type.Object({ action: Type.Literal("delete"), id: Type.Number({ description: "任务 ID。" }) }),
+  Type.Object({ action: Type.Literal("clear") }),
+]);
 ```
 
 ### 任务模型（沿用 rpiv-todo）
@@ -99,11 +96,7 @@ interface AgentTask {
   id:          number;
   subject:     string;
   description?: string;
-  activeForm?: string;
-  status:      "pending" | "in_progress" | "completed" | "deleted";
-  blockedBy?:  number[];
-  owner?:      string;
-  metadata?:   Record<string, unknown>;
+  status:      "pending" | "in_progress" | "completed";
 }
 
 interface AgentTaskState {
@@ -112,34 +105,21 @@ interface AgentTaskState {
 }
 
 interface AgentTodoDetails {
-  action:  "create" | "update" | "list" | "get" | "delete" | "clear";
-  params:  Record<string, unknown>;   // 回放自描述：把入参也带回
-  tasks:   AgentTask[];
-  nextId:  number;
-  error?:  string;                    // 校验 / 状态迁移失败时存在
+  tasks:   AgentTask[];               // 操作完成后的完整当前状态
+  error?:  string;                    // 操作失败时存在
 }
 ```
 
 ### Reducer 契约（沿用 rpiv-todo）
 
 `applyAgentTaskMutation(state, action, params) → { state, op }`，其中 `op`
-是 tagged union（`create | update | delete | list | get | clear | error`）。
-校验全部内联到 reducer：create 必填 `subject`、update/get/delete 必填 `id`、
-状态迁移合法性、`blockedBy` 是否指向已删除 / 不存在的任务、自阻塞、环检测。
+是 tagged union（`create | update | delete | list | clear | error`）。
+校验全部内联到 reducer：create 必填 `subject`、update/delete 必填 `id`。
+状态只有 `pending`、`in_progress`、`completed`，update 可以直接设置任意状态；
+`delete` 从当前 state 移除任务，审计记录仍然保留历史。
 reducer 是纯函数；工具的 `execute` 调它，commit 新状态，返回结果信封。
 
-状态迁移表（放 `lib/agent-todo-tool/invariants.ts`）：
-
-| from          | to                                     |
-| ------------- | -------------------------------------- |
-| `pending`     | `in_progress`、`completed`、`deleted`  |
-| `in_progress` | `pending`、`completed`、`deleted`      |
-| `completed`   | `deleted`（单向）                      |
-| `deleted`     | —（终态）                              |
-
-允许同状态自迁移（idempotent），重复 emit 同一 status 不会报错。
-`delete` 是 tombstone：状态翻成 `deleted`、任务保留，方便 `blockedBy`
-历史引用仍然能解析，也保留审计链。
+`clear` 清空任务，但保留 `nextId`，避免后续任务复用旧 ID。
 
 ### 返回值
 
@@ -154,8 +134,7 @@ reducer 是纯函数；工具的 `execute` 调它，commit 新状态，返回结
 
 `details` 仍会进 session `.jsonl`（这是 pi 自己决定的，我们管不了），
 但**不**再依赖它做持久化 —— 真正的状态在 `~/.pi-work/agent-todo/<sessionId>.jsonl`
-里，第 5 节会展开。`details` 只在 agent 自己的回放需要时作为 fallback
-（比如 agent 在另一个工具里读 `toolResult.details` 之类的场景）。
+里，第 5 节会展开。`details.tasks` 始终是操作完成后的完整当前任务列表。
 
 ### promptSnippet 与 promptGuidelines
 
@@ -164,33 +143,22 @@ reducer 是纯函数；工具的 `execute` 调它，commit 新状态，返回结
 （`todo.ts:65-74`）：
 
 ```
+description:
+  "Track a small task list for multi-step work. Each task has a subject, an optional description, and one of three statuses: pending, in_progress, or completed."
+
 promptSnippet:
-  "Manage a task list to track multi-step progress."
+  "Track a small task list for multi-step work."
 
 promptGuidelines:
-  1. Use `agent_todo` for complex work with 3+ steps, when the user gives
-     you a list of tasks, or immediately after receiving new instructions
-     to capture requirements. Skip it for single trivial tasks and
-     purely conversational requests.
-  2. When starting any task, mark it in_progress BEFORE beginning work.
-     Mark it completed IMMEDIATELY when done — never batch completions.
-     Exactly one task should be in_progress at a time.
-  3. Never mark a task completed if tests are failing, the implementation
-     is partial, or you hit unresolved errors — keep it in_progress and
-     create a new task for the blocker instead.
-  4. Task status is a 4-state machine: pending → in_progress → completed,
-     plus deleted as a tombstone. Pass activeForm (present-continuous
-     label, e.g. 'researching existing tool') when marking in_progress.
-  5. Use blockedBy to express dependencies (A is blocked by B). On
-     create, pass blockedBy as the initial set. On update, use
-     addBlockedBy / removeBlockedBy (additive merge — do not resend the
-     full array). Cycles are rejected.
-  6. list hides tombstoned (deleted) tasks by default; pass
-     includeDeleted:true to see them. Pass status to filter by a single
-     status.
-  7. Subject must be short and imperative (e.g. 'Research existing
-     tool'); description is for long-form detail. activeForm is a
-     present-continuous label shown while in_progress.
+  1. Use agent_todo for complex work with 5+ steps or when the user gives
+     a task list. Skip trivial or conversational requests.
+  2. Create tasks before starting multi-step work. Mark tasks in_progress
+     before starting them and completed only when they are actually done.
+  3. Use create with a subject and optional description; use update with an
+     id and only changed fields; use list to view all tasks; use delete to
+     remove one task; use clear when the current plan is no longer relevant.
+  4. Statuses are pending, in_progress, and completed. Keep subjects short
+     and imperative, and keep descriptions concise and focused on the work.
 ```
 
 ---
@@ -225,8 +193,8 @@ interface AgentTodoLogEntry {
   v:          1;                                    // schema 版本
   ts:         number;                                // wall-clock (ms)
   sessionId:  string;                                // 反范式存一份，便于 grep
-  action:     "create" | "update" | "list" | "get" | "delete" | "clear";
-  params:     Record<string, unknown>;               // 模型的入参（去敏感后）
+  action:     "create" | "update" | "list" | "delete" | "clear";
+  params:     Record<string, unknown>;               // action-specific 入参（不含 action）
   stateAfter: AgentTaskState;                        // 本次 action 之后的状态
   error?:     string;                                // 校验 / 迁移失败时存在
 }
@@ -238,7 +206,7 @@ interface AgentTodoLogEntry {
 {"v":1,"ts":1700000000000,"sessionId":"abc","action":"create","params":{"subject":"Research foo"},"stateAfter":{"tasks":[{"id":1,"subject":"Research foo","status":"pending"}],"nextId":2}}
 {"v":1,"ts":1700000001000,"sessionId":"abc","action":"update","params":{"id":1,"status":"in_progress"},"stateAfter":{"tasks":[{"id":1,"subject":"Research foo","status":"in_progress"}],"nextId":2}}
 {"v":1,"ts":1700000002000,"sessionId":"abc","action":"update","params":{"id":1,"status":"completed"},"stateAfter":{"tasks":[{"id":1,"subject":"Research foo","status":"completed"}],"nextId":2}}
-{"v":1,"ts":1700000003000,"sessionId":"abc","action":"clear","params":{},"stateAfter":{"tasks":[],"nextId":1}}
+{"v":1,"ts":1700000003000,"sessionId":"abc","action":"clear","params":{},"stateAfter":{"tasks":[],"nextId":2}}
 ```
 
 ### 5.3 读写 API
@@ -283,8 +251,8 @@ O(n)，仅在用户主动查看历史时调用。
 ```
 
 第 4 步是**唯一的持久化动作**。第 5 步保证事件下发时文件已落盘。
-`details` 字段的 `stateAfter` 与文件末行一致，前端 SSE 拿到 state
-之后渲染，与"再读一遍文件"得到的值等价。
+日志中的 `stateAfter` 与文件末行一致，前端读取到的 state
+与"再读一遍文件"得到的值等价。
 
 ### 5.5 删除、reload
 
@@ -492,10 +460,9 @@ Collapse all → Scroll to bottom）。
 In progress / Pending / Completed，视觉状态是唯一区分）：
 
 - **in_progress**：`var(--accent)` 文字 + 2.6s linear gradient
-  sweep 高亮；下面补一行 muted `activeForm`。
+  sweep 高亮；下面显示任务的 `description`（最多三行）。
 - **completed**：删除线 + `var(--text-dim)`。
 - **pending**：默认 `var(--text)`。
-- **deleted tombstone**：不渲染（但 store 里的 history 行仍存在）。
 - **空状态**：整个组件不渲染（连按钮都不显示），保留旧版的
   "不抢眼"语义。Agent 一开始没调 `agent_todo`，聊天区右下角就
   不会出现这颗按钮。
@@ -560,7 +527,7 @@ panel，是显示层的退化，不影响功能。
 
 ```ts
 export function useAgentTodo(sessionId: string | null): {
-  tasks:   readonly AgentTask[];   // 已过滤 tombstone
+  tasks:   readonly AgentTask[];   // 当前全部任务
   empty:   boolean;                // true → caller 整个不渲染
   enabled: boolean;                // global toggle, false → 整个不渲染
 };
@@ -576,9 +543,8 @@ body。理由：
   重复显示是噪声。
 - rpiv-todo 的 inline `renderCall` / `renderResult` 是 TUI 专有
   （无独立 panel），到了 web 已经被"按钮触发 popover"取代。
-- 想看历史 `details`（含 `params` 回显、状态变化过程）的人，
-  应当走 JSON 文件 / JSONL endpoint（见第 8 节）而不是塞在 chat
-  流里。
+- 想看状态变化历史的人，应当走 JSON 文件 / JSONL endpoint（见第 8 节），
+  而不是塞在 chat 流里。
 
 ---
 
@@ -626,13 +592,11 @@ lib/
   agent-todo-tool.ts                   服务端；defineTool<Schema, Details>；
                                        内部组合 reducer + store + 推送
   agent-todo-tool-types.ts             客户端可导入：AGENT_TODO_TOOL_NAME、
-                                       EMPTY_STATE、类型、selectors
+                                       EMPTY_STATE、类型、countTasks
   agent-todo-tool/
     reducer.ts                         applyAgentTaskMutation — 纯函数
-    invariants.ts                      VALID_TRANSITIONS、isTransitionValid
     response-envelope.ts               buildToolResult — 组装 content+details
-    select.ts                          selectByStatus、selectVisible、counts
-                                       （面板用）
+                                       （完整当前 tasks + error）
 
 app/api/agent/[id]/
   agent-todo/route.ts                  GET — 读 ~/.pi-work/agent-todo/<id>.jsonl
@@ -729,8 +693,7 @@ sheet。
   `GET /api/agent/[id]/agent-todo/history` 也已留好。但不渲染到
   UI —— 历史是给排查用的，UI 上展示反而抢戏。如果将来要做"历史
   抽屉"，可以另起一节。
-- **没有子 agent / 并行任务支持。** 一棵任务树对应一个分支。`owner`
-  字段仅作元数据。
+- **没有子 agent / 并行任务支持。** 一棵任务树对应一个分支。
 - **不是用户可编辑的列表。** UI 上只读。agent 是唯一的 writer。
 - **不做用户 todo 的迁移路径。** 两套系统保持独立。如果将来要
   "agent plan → user todo"，那是另一个路由读一个 store 写另一个

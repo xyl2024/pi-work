@@ -56,7 +56,7 @@
 | HTTP 入口 | `POST /api/agent/new`（创建）；`POST /api/agent/[id]`（12 种命令：`prompt` / `navigate_tree` / `set_model` / `set_tools` / `compact` 等）；`GET /api/agent/[id]/events`（SSE，30s 心跳） |
 | Frontend 状态 | `useAgentSession` 聚合 SSE 事件；UI 表面：`ChatWindow` / `ChatInput` / `SessionSidebar` / `TabBar` |
 | "工具正在跑"指示 | `agentPhase`：`{ kind: "waiting_model" }` / `{ kind: "running_tools", tools: [...] }`，在 ChatWindow 顶部 |
-| subagent 代码 | **无**。`lib/agent-todo-tool.ts:62` 有个 `owner: "Owning agent or sub-agent name."` 字段占位，但调用链未实现 |
+| subagent 代码 | **无**。当前 agent todo 不包含子 agent 分派字段 |
 | 扩展加载 | `startRpcSession` 用 `DefaultResourceLoader` 配合内联扩展工厂，`additionalExtensionPaths` 走 `jiti.import`（必须是文件路径，不是目录） |
 
 **关键洞见**：pi-work 已经有完整的"开第二个 AgentSession + 流式推消息"基础设施，所以 subagent 完全可以在**进程内**跑，不必走子进程路线。

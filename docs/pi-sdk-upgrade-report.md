@@ -115,7 +115,7 @@ node_modules/.bin/eslint lib/rpc-manager.ts lib/session-reader.ts lib/todo-tools
 
 1. **会话读写**（风险最高，因 0.84.0 内部换了 v4 存储实现）：新建会话 → 发消息 → 侧栏列表 → 重开既有会话（`session-reader` 解析新格式 .jsonl 正常）。
 2. **SSE 流式**：流式输出、`message_update` 增量渲染、工具流式输出（`tool_execution_update`）、中断/重试。
-3. **工具调用**：`agent_todo`（create/update/blockedBy）、`show_media`、`user_todos_list`、`ask_user_questions`（若启用）——验证 TypeBox 1.3.7 下 schema 校验正常。
+3. **工具调用**：`agent_todo`（create/update/status）、`show_media`、`user_todos_list`、`ask_user_questions`（若启用）——验证 TypeBox 1.3.7 下 schema 校验正常。
 4. **工具选择**：Off / Full / Read only / Custom 四种模式（含 `agent.state.systemPrompt = ""` 清空路径）。
 5. **分支导航**：`Edit from here` → 切换叶子 → `/api/sessions/[id]/context?leafId=`。
 6. **压缩**：手动 compact（`compaction_start/end` 事件）与自动压缩阈值。

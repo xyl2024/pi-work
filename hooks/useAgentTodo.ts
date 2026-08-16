@@ -35,8 +35,6 @@ import {
   AGENT_TODO_TOOL_NAME,
   EMPTY_STATE,
   countTasks,
-  isStateEmpty,
-  selectVisible,
   type AgentTask,
   type AgentTaskCounts,
 } from "@/lib/agent-todo-tool-types";
@@ -56,7 +54,7 @@ const ACTIVE_POLL_INTERVAL_MS = 1500;
 const IDLE_POLL_INTERVAL_MS = 8000;
 
 export interface UseAgentTodoResult {
-  /** Tasks filtered to non-deleted (tombstoned tasks are hidden). */
+  /** Current tasks from the active session. */
   tasks: readonly AgentTask[];
   /** True when there's nothing to render — caller should hide the panel. */
   empty: boolean;
@@ -67,9 +65,7 @@ export interface UseAgentTodoResult {
 
 /**
  * Cheap fingerprint over the panel's render-relevant fields: `nextId` (the
- * task-creation counter) plus per-task id/status/subject/activeForm. The
- * panel does not render `description` / `metadata` / `blockedBy`, so changes
- * to those fields are intentionally ignored — a re-render would be wasted.
+ * task-creation counter) plus per-task id/status/subject/description.
  * `<50` tasks makes string concat fast enough; this is not a security hash.
  */
 function computeAgentTodoFingerprint(
@@ -79,7 +75,7 @@ function computeAgentTodoFingerprint(
   let fp = `${nextId}:`;
   for (let i = 0; i < tasks.length; i++) {
     const t = tasks[i];
-    fp += `${t.id}/${t.status}/${t.subject}/${t.activeForm ?? ""};`;
+    fp += `${t.id}/${t.status}/${t.subject}/${t.description ?? ""};`;
   }
   return fp;
 }
@@ -141,11 +137,10 @@ export function useAgentTodo(sessionId: string | null): UseAgentTodoResult {
     };
   }, [sessionId, agentTodoEnabled]);
 
-  const visible = selectVisible(state.tasks);
   return {
-    tasks: visible,
-    empty: isStateEmpty(state),
-    counts: countTasks(visible),
+    tasks: state.tasks,
+    empty: state.tasks.length === 0,
+    counts: countTasks(state.tasks),
     enabled: agentTodoEnabled,
   };
 }

@@ -31,8 +31,7 @@ const AGENT_TODO_DIR = path.join(os.homedir(), ".pi-work", "agent-todo");
 /**
  * Read this many bytes from the end of the file when tail-reading. Bounded
  * so the operation stays O(1) regardless of file size; comfortably larger
- * than any realistic agent-todo line (a 50-task plan with activeForms
- * fits in well under 16KB).
+ * than any realistic agent-todo line fits in well under 16KB.
  */
 const TAIL_READ_BYTES = 256 * 1024;
 
@@ -44,6 +43,24 @@ function ensureDir(): void {
 
 export function agentTodoPath(sessionId: string): string {
   return path.join(AGENT_TODO_DIR, `${sessionId}.jsonl`);
+}
+
+/**
+ * Normalize state loaded from older JSONL rows by dropping removed fields and
+ * old tombstoned tasks.
+ */
+function normalizeState(state: AgentTaskState): AgentTaskState {
+  return {
+    tasks: state.tasks
+      .filter((task) => (task.status as string) !== "deleted")
+      .map((task) => ({
+        id: task.id,
+        subject: task.subject,
+        ...(task.description !== undefined ? { description: task.description } : {}),
+        status: task.status,
+      })),
+    nextId: state.nextId,
+  };
 }
 
 /**
@@ -95,7 +112,8 @@ export function readAgentTodoState(sessionId: string): AgentTaskState {
     const last = readLastLine(filePath);
     if (!last) return EMPTY_STATE;
     const entry = JSON.parse(last) as AgentTodoLogEntry;
-    return entry.stateAfter ?? EMPTY_STATE;
+    // Drop fields removed from the task model when reading older JSONL rows.
+    return normalizeState(entry.stateAfter ?? EMPTY_STATE);
   } catch (error) {
     log.warn("agent-todo tail read failed", { sessionId, error });
     return EMPTY_STATE;
