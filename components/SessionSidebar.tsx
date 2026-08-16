@@ -136,7 +136,7 @@ function PiAgentTitle() {
 }
 
 const WORKSPACE_PAGE_SIZE = 5;
-const SESSION_PAGE_SIZE_GROUPED = 5;
+const SESSION_PAGE_SIZE_GROUPED = 3;
 const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 
 export function SessionSidebar({ selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenMcp, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
