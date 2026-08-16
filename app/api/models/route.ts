@@ -52,7 +52,21 @@ async function readModelIcons(): Promise<Record<string, string>> {
 export async function GET() {
   const startedAt = Date.now();
   const nameMap = new Map<string, string>();
-  let modelList: { id: string; name: string; provider: string }[] = [];
+  let modelList: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    api: string;
+    baseUrl: string;
+    reasoning: boolean;
+    thinkingLevelMap?: Record<string, string | null>;
+    input: string[];
+    cost: unknown;
+    contextWindow: number;
+    maxTokens: number;
+    headers?: Record<string, string>;
+    compat?: Record<string, unknown>;
+  }> = [];
   let defaultModel: { provider: string; modelId: string } | null = null;
   const thinkingLevels: Record<string, string[]> = {};
   const thinkingLevelMaps: Record<string, Record<string, string | null>> = {};
@@ -62,10 +76,20 @@ export async function GET() {
     const agentDir = getAgentDir();
     const runtime = await ModelRuntime.create();
     const available = await runtime.getAvailable();
-    modelList = available.map((m: { id: string; name: string; provider: string }) => ({
+    modelList = available.map((m) => ({
       id: m.id,
       name: m.name,
       provider: m.provider,
+      api: m.api,
+      baseUrl: m.baseUrl,
+      reasoning: m.reasoning,
+      thinkingLevelMap: m.thinkingLevelMap ? { ...m.thinkingLevelMap } : undefined,
+      input: [...m.input],
+      cost: m.cost,
+      contextWindow: m.contextWindow,
+      maxTokens: m.maxTokens,
+      headers: m.headers ? { ...m.headers } : undefined,
+      compat: m.compat ? { ...m.compat } : undefined,
     }));
     for (const m of available) {
       const key = `${m.provider}:${m.id}`;
