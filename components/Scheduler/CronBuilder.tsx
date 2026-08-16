@@ -28,6 +28,7 @@ import { DatePicker } from "@/components/DatePicker";
 import { TimePicker, type TimeValue } from "@/components/TimePicker";
 import { inputStyle } from "./styles";
 import { cronHumanize, parseDowList, DAY_ORDER } from "./utils";
+import { NumberStepper } from "./NumberStepper";
 
 // ── Constants ───────────────────────────────────────────────────
 
@@ -398,13 +399,12 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{t("Every")}</span>
-            <input
-              type="number"
+            <NumberStepper
+              value={state.hours}
+              onChange={(hours) => patch({ ...state, mode: "interval", hours })}
               min={1}
               max={23}
-              value={Number.isInteger(state.hours) ? state.hours : ""}
-              onChange={(e) => patch({ ...state, mode: "interval", hours: e.target.value === "" ? NaN : Number(e.target.value) })}
-              style={{ ...inputStyle, width: 72, fontFamily: "var(--font-mono)" }}
+              ariaLabel={t("Hours")}
             />
             <span style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{t("Hours")}</span>
           </label>
