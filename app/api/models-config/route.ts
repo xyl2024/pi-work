@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createLogger, elapsedMs } from "@/lib/logger";
+import { refreshAuditModelRuntime } from "@/lib/llm-audit";
 
 export const dynamic = "force-dynamic";
 
@@ -53,13 +54,14 @@ export async function PUT(req: Request) {
   try {
     const body = await req.json() as Record<string, unknown>;
     writeModelsJson(body);
-    // Model registry refreshes on each /api/models request (no local cache to invalidate)
+    const runtimeRefreshed = await refreshAuditModelRuntime();
     const providers = body.providers && typeof body.providers === "object"
       ? Object.keys(body.providers as Record<string, unknown>).length
       : 0;
     log.info("models config written", {
       path: getModelsPath(),
       providers,
+      runtimeRefreshed,
       durationMs: elapsedMs(startedAt),
     });
     return NextResponse.json({ success: true });

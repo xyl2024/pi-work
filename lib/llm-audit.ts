@@ -269,6 +269,15 @@ export function getAuditModelRuntime(runtime: ModelRuntime): ModelRuntime {
   return globalThis.__piLlmAuditModelRuntime;
 }
 
+/** Reload models.json in the shared runtime after an in-process config write. */
+export async function refreshAuditModelRuntime(): Promise<boolean> {
+  const runtime = globalThis.__piLlmAuditModelRuntime;
+  if (!runtime) return false;
+  await runtime.refresh({ allowNetwork: false });
+  collectProviderHosts(runtime);
+  return true;
+}
+
 // ── fetch patch ────────────────────────────────────────────────────────────
 
 /**
