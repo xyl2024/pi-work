@@ -382,7 +382,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
           >
             {([
               { id: "basics", label: t("Basic config") },
-              { id: "schedule", label: t("Schedule") },
+              { id: "schedule", label: t("Scheduler") },
             ] as const).map((s) => {
               const err = errors[s.id];
               const active = section === s.id;

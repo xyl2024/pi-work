@@ -627,7 +627,7 @@ export const ZH_TRANSLATIONS = {
   "paused": "已暂停",
   "Config": "配置",
   "Basic config": "基本配置",
-  "Schedule": "计划",
+  "Scheduler": "调度器",
   "Save changes": "保存修改",
   "Create & enable": "创建并启用",
   "Please enter a task name": "请输入任务名称",
