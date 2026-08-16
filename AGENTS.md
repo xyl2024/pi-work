@@ -553,7 +553,7 @@ Location: `~/.pi-work/agent-todo/<sessionId>.jsonl`
 {"ts":<ms>,"action":"update","stateAfter":{...}}
 ```
 
-Append-only snapshots — current state is the last parsed line's `stateAfter`. O(1) tail read. `agent-todo-store.ts` always `fsync`s before returning the tool result, and the frontend picks up new state via 1.5s HTTP polling on `/api/agent/[id]/agent-todo` (`useAgentTodo.ts`), not via SSE. Tombstoned tasks are kept (not deleted) so `blockedBy` references and audit history still resolve.
+Append-only snapshots — current state is the last parsed line's `stateAfter`. O(1) tail read. `agent-todo-store.ts` always `fsync`s before returning the tool result. The frontend fetches once when entering a session and fetches again after each `agent_todo` `tool_execution_end` event; there is no background polling. Deleted tasks are removed from current state while the audit history remains.
 
 ---
 

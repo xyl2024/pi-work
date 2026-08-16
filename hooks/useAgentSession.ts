@@ -10,6 +10,7 @@ import { useI18n } from "./useI18n";
 import { usePendingPermissionsRef } from "./usePendingPermissions";
 import { setShowFileResult, resetShowFileResults } from "./showFileResultsStore";
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
+import { AGENT_TODO_TOOL_NAME } from "@/lib/agent-todo-tool-types";
 import { setSessionUiState, setLeafChangeHandler } from "./sessionUiStore";
 import { setGrokbotConfig } from "@/lib/grokbot-store";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/thinking-level-utils";
@@ -165,6 +166,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const toolCallNameRef = useRef<Map<string, string>>(new Map());
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const [agentRunning, setAgentRunning] = useState(false);
+  const [agentTodoRefreshKey, setAgentTodoRefreshKey] = useState(0);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<{ id: string; name: string; provider: string }[]>([]);
@@ -677,6 +679,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // cache is module-scoped so it survives ChatWindow re-renders but
         // is reset on session switches (see below).
         const toolNameForEnd = toolCallNameRef.current.get(id);
+        if (toolNameForEnd === AGENT_TODO_TOOL_NAME) {
+          setAgentTodoRefreshKey((key) => key + 1);
+        }
         if (toolNameForEnd && isShowFileToolName(toolNameForEnd) && result?.details) {
           const files = (result.details as { files?: unknown }).files;
           if (Array.isArray(files)) {
@@ -1175,6 +1180,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     retryInfo, contextUsage, systemPrompt,
     currentModel, displayModel, sessionStats,
     agentPhase,
+    agentTodoRefreshKey,
     isNew,
     currentSessionId,
     userMessageHistory,

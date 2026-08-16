@@ -519,14 +519,14 @@ panel，是显示层的退化，不影响功能。
 
 ### 7.7 Hook：`useAgentTodo`
 
-数据流跟旧版完全相同，本节只是确认无变化。Hook 自适应轮询
-（1.5s active / 8s idle）`GET /api/agent/[id]/agent-todo`，按
-`fingerprint(tasks + nextId)` 跳过无变化的 setState。Session
-切换 / enabled toggle 时 effect cleanup 清状态、cancel 定时器。
-新组件复用同一个 hook，数据契约不变：
+Hook 不再后台轮询。进入已有 session 时执行一次
+`GET /api/agent/[id]/agent-todo`；流式期间由 `useAgentSession` 在
+`agent_todo` 的 `tool_execution_end` 事件后递增 `refreshKey`，Hook
+收到后再执行一次请求。Session 切换 / enabled toggle 时清空当前状态。
+新组件复用同一个 hook，数据契约如下：
 
 ```ts
-export function useAgentTodo(sessionId: string | null): {
+export function useAgentTodo(sessionId: string | null, refreshKey: number): {
   tasks:   readonly AgentTask[];   // 当前全部任务
   empty:   boolean;                // true → caller 整个不渲染
   enabled: boolean;                // global toggle, false → 整个不渲染
@@ -613,8 +613,8 @@ components/
   ChatWindow.tsx                       挂载 <AgentTodoPanel /> 到右下角 action stack（第一顺位）
 
 hooks/
-  useAgentTodo.ts                      自适应轮询（1.5s active / 8s idle）+ fingerprint 跳过无变更 setState
-  useAgentSession.ts                   已有 agent_todo_state SSE 通路（保留以备未来使用）
+  useAgentTodo.ts                      session 初始拉取 + refreshKey 触发的按需拉取
+  useAgentSession.ts                   在 agent_todo tool_execution_end 后递增 refreshKey
 
 docs/agent-todo/
   design.md                            本文档

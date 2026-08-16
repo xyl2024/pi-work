@@ -372,6 +372,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     retryInfo,
     displayModel: displayModelValue,
     agentPhase,
+    agentTodoRefreshKey,
     isNew,
     messagesEndRef, scrollContainerRef,
     lastUserMsgRef, userJustSentRef,
@@ -1523,7 +1524,10 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
               itself when there's no plan — the panel hides entirely so
               the chat area stays clean. Click opens a popover anchored
               above-left of this button. */}
-          <AgentTodoPanel sessionId={session?.id ?? null} />
+          <AgentTodoPanel
+            sessionId={session?.id ?? currentSessionId}
+            refreshKey={agentTodoRefreshKey}
+          />
           {/* Session Library launcher (Q10A: second position). Always
               visible — empty state is shown inside the modal. Unread
               badge appears when entries land while the modal is closed. */}

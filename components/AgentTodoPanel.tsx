@@ -132,10 +132,12 @@ const TaskRow = memo(function TaskRow({ task, isLast }: TaskRowProps) {
 
 export const AgentTodoPanel = memo(function AgentTodoPanel({
   sessionId,
+  refreshKey,
 }: {
   sessionId: string | null;
+  refreshKey: number;
 }) {
-  const { tasks, empty, enabled } = useAgentTodo(sessionId);
+  const { tasks, empty, enabled } = useAgentTodo(sessionId, refreshKey);
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
