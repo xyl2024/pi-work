@@ -46,10 +46,10 @@ export const fieldLabelStyle: CSSProperties = {
 };
 
 export const fieldHintStyle: CSSProperties = {
-  fontSize: 10,
-  color: "var(--text-dim)",
-  marginTop: 4,
-  lineHeight: 1.4,
+  fontSize: 11,
+  color: "var(--text-muted)",
+  marginTop: 5,
+  lineHeight: 1.45,
 };
 
 export const fieldErrorStyle: CSSProperties = {
