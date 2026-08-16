@@ -104,6 +104,9 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [section, setSection] = useState<"basics" | "schedule" | "execution">("basics");
+  /** Validation errors are suppressed until the user first clicks Save;
+   *  flipping this on reveals field red-text and the per-section nav dots. */
+  const [submitted, setSubmitted] = useState(false);
 
   // Initial / reset form whenever the open state changes (a different
   // task, or a fresh create).
@@ -128,6 +131,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
       setForm({ ...EMPTY, cwd: initialCwd ?? "" });
     }
     setSection("basics");
+    setSubmitted(false);
   }, [open, task, initialCwd]);
 
   if (!isVisible) return null;
@@ -136,10 +140,14 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const nameError = form.name.trim().length === 0 ? "请输入任务名称" : null;
-  const cwdError = form.cwd.trim().length === 0 ? "请输入工作目录" : null;
-  const promptError = form.prompt.trim().length === 0 ? "请输入提示词" : null;
-  const cronError = form.cronValid ? null : "Cron 语法错误";
+  const nameError = submitted && form.name.trim().length === 0 ? "请输入任务名称" : null;
+  const cwdError = submitted && form.cwd.trim().length === 0 ? "请输入工作目录" : null;
+  const promptError = submitted && form.prompt.trim().length === 0 ? "请输入提示词" : null;
+  // Cron builder has its own inline error (red border + '语法错误' label) that
+  // shows immediately while the user is editing — this is builder-internal
+  // feedback, not form-level required-field validation, so it's intentional
+  // that it surfaces before submit.
+  const cronError = submitted && !form.cronValid ? "Cron 语法错误" : null;
   const errors: Record<string, string | null> = {
     basics: nameError ?? promptError,
     schedule: cronError,
@@ -148,10 +156,19 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
 
   const submit = async () => {
     if (saving) return;
-    if (nameError || cwdError || promptError || cronError) {
+    // First click reveals validation; subsequent edits keep the red text
+    // visible until the next successful submit (which closes the modal).
+    setSubmitted(true);
+    const hasError = !form.name.trim() || !form.cwd.trim() || !form.prompt.trim() || !form.cronValid;
+    if (hasError) {
       onToast("error", t("Please fix form errors first"));
       // Jump to the first section that has an error
-      const firstError = (["basics", "schedule", "execution"] as const).find((s) => errors[s]);
+      const firstError = (["basics", "schedule", "execution"] as const).find((s) => {
+        if (s === "basics") return !form.name.trim() || !form.prompt.trim();
+        if (s === "schedule") return !form.cronValid;
+        if (s === "execution") return !form.cwd.trim();
+        return false;
+      });
       if (firstError) setSection(firstError);
       return;
     }
