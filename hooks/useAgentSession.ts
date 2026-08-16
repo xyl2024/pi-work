@@ -12,7 +12,7 @@ import { setShowFileResult, resetShowFileResults } from "./showFileResultsStore"
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { setSessionUiState, setLeafChangeHandler } from "./sessionUiStore";
 import { setGrokbotConfig } from "@/lib/grokbot-store";
-import { pickClosestAvailableThinkingLevel } from "@/lib/thinking-level-utils";
+import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/thinking-level-utils";
 import { setPendingAskUserQuestions } from "./askUserQuestionsStore";
 import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
 
@@ -93,7 +93,7 @@ export interface UseAgentSessionOptions {
   onScrollComplete?: () => void;
 }
 
-export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export interface ChatInputHandle {
   insertText: (text: string) => void;
@@ -185,7 +185,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // surfaced to the UI. Cleared on every successful fetch.
   const [toolsLoading, setToolsLoading] = useState(false);
   const [toolsError, setToolsError] = useState<string | null>(null);
-  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("auto");
+  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("off");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
@@ -327,10 +327,33 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setEntryTimestamps(d.context.entryTimestamps ?? []);
       setCurrentModelOverride(null);
       setError(null);
-      // If no live agent state, fall back to thinking level from session file
-      if (!d.agentState?.state?.thinkingLevel && d.context.thinkingLevel && d.context.thinkingLevel !== "off") {
-        setThinkingLevel(d.context.thinkingLevel as ThinkingLevelOption);
-      }
+      // Helper: pick the highest thinking level the current model supports, or
+      // fall back to the raw value if it isn't the legacy "auto" sentinel.
+      // Older sessions may persist "auto" — a frontend-only sentinel that
+      // is no longer offered — so map it to the model's highest level so
+      // the badge matches what the agent is actually using.
+      const migrateLegacyAuto = (raw: string | undefined): ThinkingLevelOption | null => {
+        if (typeof raw !== "string") return null;
+        if (raw !== "auto") return raw as ThinkingLevelOption;
+        const modelKey = d.context.model
+          ? `${d.context.model.provider}:${d.context.model.modelId}`
+          : null;
+        const available = modelKey ? modelThinkingLevels[modelKey] ?? null : null;
+        return pickHighestAvailableThinkingLevel(available);
+      };
+
+      // Apply thinking-level migration centrally: prefer the live agent
+      // state when present, else fall back to the level recorded in the
+      // session file. Older sessions may persist "auto" — map it to the
+      // model's highest supported level so the badge always matches the
+      // agent's actual setting.
+      const liveLevel = d.agentState?.state?.thinkingLevel;
+      const fileLevel = d.context.thinkingLevel && d.context.thinkingLevel !== "off"
+        ? d.context.thinkingLevel
+        : null;
+      const migrated = migrateLegacyAuto(liveLevel ?? fileLevel ?? undefined);
+      if (migrated !== null) setThinkingLevel(migrated);
+
       return d.agentState ?? null;
     } catch (e) {
       setError(String(e));
@@ -338,7 +361,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [modelThinkingLevels]);
 
   const loadContext = useCallback(async (sid: string, leafId: string | null) => {
     try {
@@ -845,7 +868,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             toolNames,
             ...(piImages?.length ? { images: piImages } : {}),
             ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
-            ...(thinkingLevel !== "auto" ? { thinkingLevel } : {}),
+            thinkingLevel,
           }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -927,14 +950,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // supports "high"), pi would silently clamp on the server side
     // and the UI would drift out of sync with what the agent is using
     // — or, on stricter providers, the next prompt call could error.
-    // Walk to the closest available level here, mirror it both locally
-    // and (for live sessions) on the agent, and toast so the user
-    // sees the auto-correction. "auto" is always valid and never
-    // triggers a fallback.
+    //
+    // - Existing sessions: walk to the closest available level (preserve
+    //   the user's pick when possible).
+    // - New sessions: no session exists yet, so the "user pick" is really
+    //   the model-derived default — jump straight to the new model's
+    //   highest supported level so the displayed default always matches
+    //   the selected model.
     const newModelLevels = modelThinkingLevels[`${provider}:${modelId}`] ?? null;
-    const prevLevel = thinkingLevel;
-    const nextLevel = pickClosestAvailableThinkingLevel(prevLevel, newModelLevels);
-    const levelChanged = nextLevel !== prevLevel;
+    const nextLevel = isNew
+      ? pickHighestAvailableThinkingLevel(newModelLevels)
+      : pickClosestAvailableThinkingLevel(thinkingLevel, newModelLevels);
+    const levelChanged = nextLevel !== thinkingLevel;
     if (levelChanged) {
       setThinkingLevel(nextLevel);
     }
@@ -974,7 +1001,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     setThinkingLevel(level);
-    if (level === "auto") return; // "auto" leaves pi's current setting untouched
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
@@ -1032,7 +1058,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         if (agentState?.state) {
           if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
           if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
-          if (agentState.state.thinkingLevel !== undefined) setThinkingLevel((agentState.state.thinkingLevel as ThinkingLevelOption) ?? "auto");
+          // thinkingLevel was already migrated + applied inside loadSession
+          // (handles the legacy "auto" sentinel against the current model).
         }
 
         // If a specific entry was requested via search, navigate to it
@@ -1106,6 +1133,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ? { provider: match.provider, modelId: match.id }
             : { provider: d.modelList[0].provider, modelId: d.modelList[0].id };
           setNewSessionModel(selected);
+          // Seed the thinking level to the freshly-selected model's highest
+          // supported level. Models without reasoning capability report
+          // ["off"] only, which pickHighestAvailableThinkingLevel returns as-is.
+          const available = d.thinkingLevels?.[`${selected.provider}:${selected.modelId}`] ?? null;
+          setThinkingLevel(pickHighestAvailableThinkingLevel(available));
         }
       }
     }).catch(() => {});

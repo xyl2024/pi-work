@@ -72,7 +72,6 @@ export const ZH_TRANSLATIONS = {
   "Stop agent": "停止 Agent",
   "Turn completion sound off": "关闭完成提示音",
   "Turn completion sound on": "开启完成提示音",
-  "Use pi default": "沿用 pi 默认设置",
   "Disable reasoning": "关闭推理",
   "Minimal reasoning": "最少推理",
   "Low reasoning": "低强度推理",

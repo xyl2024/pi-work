@@ -70,9 +70,8 @@ const EMPTY: FormState = {
 
 // ── Thinking levels (mirror ChatInput) ──────────────────────────
 
-const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 const THINKING_COLOR: Record<(typeof THINKING_LEVELS)[number], string> = {
-  auto: "var(--text-dim)",
   off: "#94a3b8",
   minimal: "#38bdf8",
   low: "#3b82f6",
@@ -663,11 +662,11 @@ function ThinkingSelect({ form, update, meta, error }: { form: FormState; update
   const key = form.provider && form.modelId ? `${form.provider}:${form.modelId}` : null;
   const available = key ? meta?.thinkingLevels[key] : undefined;
   const levelMap = key ? meta?.thinkingLevelMaps[key] : undefined;
-  // Tasks must run with an explicit thinking level — "auto" silently inherits
-  // whatever the model default is, which can drift underneath us. So the
-  // dropdown never offers "auto" and an empty form state means "not chosen".
+  // Tasks must run with an explicit thinking level. The dropdown never offers
+  // "auto" (now removed from the project entirely) and an empty form state
+  // means "not chosen".
   const current = form.thinkingLevel
-    ? (form.thinkingLevel as Exclude<(typeof THINKING_LEVELS)[number], "auto">)
+    ? (form.thinkingLevel as (typeof THINKING_LEVELS)[number])
     : null;
   const { open, setOpen, rootRef } = useDropdown();
   const currentMapped = current && levelMap ? levelMap[current] : undefined;
@@ -697,8 +696,6 @@ function ThinkingSelect({ form, update, meta, error }: { form: FormState; update
         </button>
         <AnimatedPopover open={open} style={dropdownPanelStyle} maxHeight={320}>
           {THINKING_LEVELS.filter((lvl) => {
-            // "auto" is intentionally never offered in scheduled tasks.
-            if (lvl === "auto") return false;
             if (!available) return true;
             return available.includes(lvl);
           }).map((lvl) => {

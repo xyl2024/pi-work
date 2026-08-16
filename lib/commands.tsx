@@ -10,7 +10,7 @@ import type { Locale } from "@/hooks/useI18n";
 // reads them via useAgentControls() and threads them into CommandContext.
 // `null` when no ChatWindow is mounted (no active session).
 
-export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export interface AgentControls {
   switchModel: (provider: string, modelId: string) => void | Promise<void>;
@@ -251,10 +251,9 @@ export function buildCommands(ctx: CommandContext, opts: BuildOptions): Command[
     });
   }
 
-  // ── Thinking (7) ──
-  const thinkingLevels: ThinkingLevelOption[] = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"];
+  // ── Thinking (6) ──
+  const thinkingLevels: ThinkingLevelOption[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
   const thinkingTitleKeys: Record<ThinkingLevelOption, string> = {
-    auto: "Thinking: Auto",
     off: "Thinking: Off",
     minimal: "Thinking: Minimal",
     low: "Thinking: Low",
@@ -263,7 +262,6 @@ export function buildCommands(ctx: CommandContext, opts: BuildOptions): Command[
     xhigh: "Thinking: Extra High",
   };
   const thinkingKeywords: Record<ThinkingLevelOption, string[]> = {
-    auto: ["thinking", "reasoning", "auto", "推理", "自动"],
     off: ["thinking", "reasoning", "off", "none", "推理", "关闭"],
     minimal: ["thinking", "reasoning", "minimal", "推理", "最少"],
     low: ["thinking", "reasoning", "low", "推理", "低"],

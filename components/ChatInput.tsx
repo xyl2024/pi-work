@@ -64,8 +64,8 @@ interface Props {
   /** Lazy catalog fetcher. The Custom row calls this the first time it's
    *  expanded per session if the catalog is empty. */
   onEnsureAvailableTools?: () => Promise<void>;
-  thinkingLevel?: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
-  onThinkingLevelChange?: (level: "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
+  thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+  onThinkingLevelChange?: (level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
@@ -95,7 +95,7 @@ export interface ChatInputHandle {
   focus: () => void;
 }
 
-const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 
 // "Read only" quick preset — the canonical tool names pi's built-in
 // resource loader registers for file inspection. `setActiveToolsByName`
@@ -104,11 +104,8 @@ const THINKING_LEVELS = ["auto", "off", "minimal", "low", "medium", "high", "xhi
 // to its intersection rather than failing outright.
 const READ_ONLY_TOOLS = ["find", "ls", "grep", "read"] as const;
 // Border color reflects the active reasoning intensity: gray = off, then a
-// cool-to-warm gradient up to red for xhigh. "auto" falls back to the
-// neutral border because the UI can't know which level the upstream pi
-// actually resolved to.
+// cool-to-warm gradient up to red for xhigh.
 const THINKING_BORDER_COLOR: Record<typeof THINKING_LEVELS[number], string> = {
-  auto: "color-mix(in srgb, var(--border) 70%, transparent)",
   off: "rgba(148,163,184,0.55)",   // slate-400
   minimal: "rgba(56,189,248,0.55)", // sky-400
   low: "rgba(59,130,246,0.55)",    // blue-500
@@ -120,7 +117,6 @@ const THINKING_BORDER_COLOR: Record<typeof THINKING_LEVELS[number], string> = {
 // paint the per-level indicator inside the thinking picker so each option
 // is visually tied to the color the input border will adopt when picked.
 const THINKING_LEVEL_COLOR: Record<typeof THINKING_LEVELS[number], string> = {
-  auto: "var(--text-dim)",
   off: "#94a3b8",   // slate-400
   minimal: "#38bdf8", // sky-400
   low: "#3b82f6",    // blue-500
@@ -741,7 +737,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     : modelOptions.length > 0 ? modelOptions[0].name : null;
 
   const thinkingLevelDesc: Record<typeof THINKING_LEVELS[number], string> = {
-    auto: t("Use pi default"),
     off: t("Disable reasoning"),
     minimal: t("Minimal reasoning"),
     low: t("Low reasoning"),
@@ -753,8 +748,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // Current thinking level's display label — mirrors the per-option
   // computation inside the dropdown, so the streaming badge shows the
   // same value the user picked (mapped level names via thinkingLevelMap).
-  const currentThinkingLevel = thinkingLevel ?? "auto";
-  const currentThinkingMapped = (currentThinkingLevel !== "auto" && thinkingLevelMap)
+  const currentThinkingLevel = thinkingLevel ?? "off";
+  const currentThinkingMapped = thinkingLevelMap
     ? thinkingLevelMap[currentThinkingLevel]
     : undefined;
   const currentThinkingDisplay = (currentThinkingMapped != null && currentThinkingMapped !== currentThinkingLevel)
@@ -925,7 +920,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             gap: 8,
             alignItems: "center",
             background: "var(--bg)",
-            border: `1.5px solid ${THINKING_BORDER_COLOR[thinkingLevel ?? "auto"]}`,
+            border: `1.5px solid ${THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
             borderRadius: 14,
             padding: "10px 10px 10px 14px",
             boxShadow: "none",
@@ -1326,12 +1321,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 >
                     {THINKING_LEVELS.filter((lvl) => {
                       if (!availableThinkingLevels) return true;
-                      if (lvl === "auto") return true;
                       return availableThinkingLevels.includes(lvl);
                     }).map((lvl) => {
-                      const isActive = (thinkingLevel ?? "auto") === lvl;
+                      const isActive = (thinkingLevel ?? "off") === lvl;
                       const desc = thinkingLevelDesc[lvl];
-                      const mappedVal = (lvl !== "auto" && thinkingLevelMap) ? thinkingLevelMap[lvl] : undefined;
+                      const mappedVal = thinkingLevelMap ? thinkingLevelMap[lvl] : undefined;
                       const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
                       const showOriginal = mappedVal != null && mappedVal !== lvl;
                       return (
