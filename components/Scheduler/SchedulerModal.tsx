@@ -73,6 +73,7 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
         thinkingLevels: data.thinkingLevels ?? {},
         thinkingLevelMaps: data.thinkingLevelMaps ?? {},
         defaultModel: data.defaultModel ?? null,
+        modelIcons: data.modelIcons ?? {},
       });
     } catch {
       // Models are optional — fall back to defaults silently.

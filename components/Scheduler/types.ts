@@ -92,6 +92,8 @@ export interface ModelMeta {
   thinkingLevels: Record<string, string[]>;
   thinkingLevelMaps: Record<string, Record<string, string | null>>;
   defaultModel: { provider: string; modelId: string } | null;
+  /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
+  modelIcons?: Record<string, string>;
 }
 
 /** Wire shape of `/api/scheduled-tasks/runs/[runId]` PATCH. */
