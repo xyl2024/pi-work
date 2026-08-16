@@ -1304,7 +1304,7 @@ function getToolPreview(block: ToolCallContent): string {
   return String(first).slice(0, 120);
 }
 
-function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } }) {
+function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRead: number; cacheWrite: number } }) {
   const inputDenom = usage.input + usage.cacheRead;
   const cacheHitRate = inputDenom > 0 ? (usage.cacheRead / inputDenom) * 100 : 0;
   const items: Array<{ key: string; label: string; icon: React.ReactNode }> = [];
@@ -1331,27 +1331,12 @@ function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRe
     });
   }
   if (usage.cacheRead || usage.cacheWrite) {
-    const cached = (usage.cacheRead + usage.cacheWrite).toLocaleString();
-    const cacheLabel = cacheHitRate > 0
-      ? `${cached} cached · ${cacheHitRate.toFixed(1)}% hit`
-      : `${cached} cached`;
     items.push({
       key: "cache",
-      label: cacheLabel,
+      label: `${cacheHitRate.toFixed(1)}% cache hit`,
       icon: (
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <ellipse cx="6" cy="3.5" rx="3.5" ry="1.4" /><path d="M2.5 3.5v2.6c0 .77 1.57 1.4 3.5 1.4s3.5-.63 3.5-1.4V3.5" /><path d="M2.5 6.1v2.6c0 .77 1.57 1.4 3.5 1.4s3.5-.63 3.5-1.4V6.1" />
-        </svg>
-      ),
-    });
-  }
-  if (usage.cost?.total) {
-    items.push({
-      key: "cost",
-      label: `$${usage.cost.total.toFixed(4)}`,
-      icon: (
-        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M6 1.5v9" /><path d="M8 3.2c-.5-.9-2.2-1.2-3-.6-.8.6-.7 1.7.2 2.2l1.9.9c1 .5 1 1.7.1 2.3-.9.7-2.7.3-3.2-.7" />
         </svg>
       ),
     });
@@ -1360,11 +1345,7 @@ function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRe
   const compact = (it: typeof items[number]): string => {
     if (it.key === "in") return usage.input.toLocaleString();
     if (it.key === "out") return usage.output.toLocaleString();
-    if (it.key === "cache") {
-      const cached = usage.cacheRead + usage.cacheWrite;
-      return cacheHitRate > 0 ? `${cached.toLocaleString()} ${cacheHitRate.toFixed(0)}%` : cached.toLocaleString();
-    }
-    if (it.key === "cost") return `$${usage.cost.total.toFixed(4)}`;
+    if (it.key === "cache") return `${cacheHitRate.toFixed(0)}%`;
     return "";
   };
   return (
