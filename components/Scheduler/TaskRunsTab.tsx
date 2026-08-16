@@ -209,6 +209,13 @@ export function TaskRunsTab({
   );
 }
 
+/** Threshold over which a running run is flagged as "long-running" in the
+ *  UI. The status stays `running` (the agent is still doing real work) but
+ *  the user gets a visible warning so they can decide whether to wait or
+ *  abort. 10 minutes — matches the previous blanket timeout, but this is
+ *  advisory only; the agent is allowed to keep running. */
+const LONG_RUNNING_THRESHOLD_MS = 10 * 60 * 1000;
+
 // ── Single run card ──────────────────────────────────────────────
 
 function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now: number; onToggleRead: () => void; onOpenSession: (id: string) => void }) {
@@ -216,6 +223,13 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
   const isUnread = run.readAt === null;
   const replyPreview = run.replyText?.slice(0, 240).trim() ?? null;
   const replyMore = run.replyText && run.replyText.length > 240;
+
+  // For in-flight runs we don't know the duration yet, so we surface the
+  // live elapsed time instead — and flag it as "long-running" once the
+  // threshold is crossed so the user knows the agent is still busy.
+  const isRunning = run.status === "running";
+  const elapsedMs = isRunning ? Math.max(0, now - run.startedAt) : null;
+  const isLongRunning = elapsedMs !== null && elapsedMs >= LONG_RUNNING_THRESHOLD_MS;
 
   return (
     <div
@@ -233,12 +247,42 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
       {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <StatusBadge status={run.status} size="md" />
+        {isLongRunning && (
+          <Tooltip content={t("Long-running run warning")}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "2px 7px",
+                background: "var(--warning-bg)",
+                color: "var(--warning)",
+                borderRadius: 999,
+                fontSize: 10,
+                fontWeight: 600,
+                lineHeight: 1.4,
+              }}
+            >
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {t("Long-running")}
+            </span>
+          </Tooltip>
+        )}
         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
           {formatRelative(now, run.startedAt, locale)}
         </span>
         {run.durationMs !== null && (
           <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
             {formatDuration(run.durationMs)}
+          </span>
+        )}
+        {elapsedMs !== null && (
+          <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+            {formatDuration(elapsedMs)}
           </span>
         )}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>

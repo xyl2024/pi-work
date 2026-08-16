@@ -1,12 +1,13 @@
 /**
  * Executes one scheduled task: cold-start a fresh pi session, send the
- * configured prompt, wait for `agent_end`, and record the outcome on the
- * pre-created `task_runs` row.
+ * configured prompt, wait for the real `agent_end`, and record the
+ * outcome on the pre-created `task_runs` row.
  *
- * Pattern mirrors `lib/wechat/inbound.ts:coldStart` + `waitForAgentReply`.
- * The key difference: every scheduled run uses a brand-new session (the
- * scheduler must never share a wrapper with a user's open session), so we
- * always go through `coldStart`.
+ * Pattern mirrors `lib/wechat/inbound.ts:coldStart` + `waitForAgentReply`
+ * without the 5-minute blanket timeout: the scheduler waits as long as
+ * the real agent needs to finish. The only cap is the task's
+ * `maxLifetimeMs` (or the global default), which is a safety net that
+ * force-destroys the wrapper if the agent truly never reports back.
  *
  * Concurrency: a per-task FIFO chain (`taskChains`) prevents the same task
  * from running twice in parallel if a previous run is still in flight.
@@ -22,8 +23,15 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("scheduler/runner");
 
-/** Match WeChat's safety net — even slow tasks shouldn't hang forever. */
-const AGENT_END_TIMEOUT_MS = 5 * 60 * 1000;
+/**
+ * Global fallback for the per-task max lifetime. The scheduler really does
+ * wait for the real `agent_end` — the previous 5-min blanket timeout was
+ * killing legitimate long-running tasks mid-flight. This default is just
+ * a safety net for a stuck agent that never reports back; pick it big
+ * enough that no real task should hit it, but small enough that a runaway
+ * agent can't pin a slot forever.
+ */
+const DEFAULT_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
 
 interface TextBlock { type: string; text?: string }
 interface AssistantMsg {
@@ -31,6 +39,18 @@ interface AssistantMsg {
   content: Array<{ type: string; text?: string }>;
   stopReason?: string;
   errorMessage?: string;
+}
+
+/** Thrown by waitForAgentReply when the per-task max lifetime is reached
+ *  and the wrapper is force-destroyed. The executeRun catch maps this to
+ *  status="timeout" via instanceof (not a regex on the message), so the
+ *  status enum stays a deliberate signalling choice rather than a string
+ *  match against an error message. */
+class MaxLifetimeExceededError extends Error {
+  constructor(public readonly maxLifetimeMs: number) {
+    super(`max lifetime exceeded: ${maxLifetimeMs}ms`);
+    this.name = "MaxLifetimeExceededError";
+  }
 }
 
 /** Per-task FIFO chain so two overlapping triggers don't run concurrently. */
@@ -98,7 +118,14 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
     // session.send for prompt is fire-and-forget; results arrive via onEvent
     session.send({ type: "prompt", message: task.prompt }).catch(() => undefined);
 
-    const reply = await waitForAgentReply(session, runId);
+    const maxLifetimeMs = task.maxLifetimeMs ?? DEFAULT_MAX_LIFETIME_MS;
+    log.debug("waiting for agent_end", {
+      taskId: task.id,
+      runId,
+      maxLifetimeMs,
+      maxLifetimeSource: task.maxLifetimeMs !== null ? "task" : "default",
+    });
+    const reply = await waitForAgentReply(session, runId, maxLifetimeMs);
     const durationMs = Date.now() - startedAt;
     log.info("run success", { taskId: task.id, runId, sessionId, durationMs });
     recordRunEnd(runId, {
@@ -115,7 +142,7 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
     });
   } catch (err) {
     const errorStr = err instanceof Error ? err.message : String(err);
-    const isTimeout = /timed out/i.test(errorStr);
+    const isTimeout = err instanceof MaxLifetimeExceededError;
     const status = isTimeout ? "timeout" : "error";
     const durationMs = Date.now() - startedAt;
     log.error("run failed", { taskId: task.id, runId, sessionId, status, error: errorStr });
@@ -129,34 +156,63 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
   }
 }
 
+type SessionWithDestroy = {
+  onEvent: (cb: (event: AgentEvent) => void) => () => void;
+  destroy: () => void;
+};
+
 /**
  * Subscribe to the wrapper's event stream and resolve on `agent_end`,
- * extracting the last assistant message text. Mirrors
- * `lib/wechat/inbound.ts:waitForAgentReply` exactly.
+ * extracting the last assistant message text.
+ *
+ * No artificial agent_end timeout — we wait for the real result. The
+ * `maxLifetimeMs` cap is a safety net: if the agent truly never reports
+ * back (stuck loop, network hang, etc.) we force-destroy the wrapper so
+ * the slot is freed and the run is recorded as `timeout`. The actual
+ * return value is otherwise the real assistant text from the agent.
+ *
+ * Mirrors `lib/wechat/inbound.ts:waitForAgentReply` in spirit (event
+ * subscription + single resolution) but without the 5-min blanket cap.
  */
 function waitForAgentReply(
-  session: { onEvent: (cb: (event: AgentEvent) => void) => () => void },
+  session: SessionWithDestroy,
   runId: string,
+  maxLifetimeMs: number,
 ): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     let done = false;
-    const timer = setTimeout(() => {
+    const finish = (err: Error | null, reply: string) => {
       if (done) return;
       done = true;
+      clearTimeout(lifetimeTimer);
       unsubscribe();
-      reject(new Error(`agent_end timed out after ${AGENT_END_TIMEOUT_MS}ms`));
-    }, AGENT_END_TIMEOUT_MS);
+      if (err) reject(err);
+      else resolve(reply);
+    };
+
+    const lifetimeTimer = setTimeout(() => {
+      log.warn("max lifetime reached, destroying wrapper", {
+        runId,
+        maxLifetimeMs,
+      });
+      // Force-destroy so the agent actually stops (otherwise a stuck
+      // session would keep the slot pinned and the model provider would
+      // continue to be billed). The session file on disk is left as-is
+      // for post-mortem — the recorded sessionId lets the user inspect
+      // whatever the agent had actually written.
+      try {
+        session.destroy();
+      } catch (err) {
+        log.warn("destroy failed during lifetime cap", { runId, error: String(err) });
+      }
+      finish(new MaxLifetimeExceededError(maxLifetimeMs), "");
+    }, maxLifetimeMs);
 
     const unsubscribe = session.onEvent((event: AgentEvent) => {
       if (event.type !== "agent_end") return;
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      unsubscribe();
-
       const error = typeof event.error === "string" ? event.error : null;
       if (error) {
-        reject(new Error(error));
+        finish(new Error(error), "");
         return;
       }
       const messages = Array.isArray((event as Record<string, unknown>).messages)
@@ -166,7 +222,7 @@ function waitForAgentReply(
         // No messages snapshot — treat as success with empty reply so the run
         // is recorded. This can happen if pi changed its event shape.
         log.warn("agent_end without messages snapshot", { runId });
-        resolve("");
+        finish(null, "");
         return;
       }
 
@@ -174,17 +230,17 @@ function waitForAgentReply(
         const m = messages[i];
         if (m.role !== "assistant") continue;
         if (m.stopReason === "error" || m.stopReason === "aborted") {
-          reject(new Error(m.errorMessage || `assistant stopReason=${m.stopReason}`));
+          finish(new Error(m.errorMessage || `assistant stopReason=${m.stopReason}`), "");
           return;
         }
         const text = m.content
           .filter((b): b is TextBlock => b.type === "text")
           .map((b) => b.text ?? "")
           .join("");
-        resolve(text);
+        finish(null, text);
         return;
       }
-      resolve("");
+      finish(null, "");
     });
   });
 }

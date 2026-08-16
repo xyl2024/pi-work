@@ -94,6 +94,7 @@ interface TaskRow {
   model_id: string | null;
   thinking_level: string | null;
   tool_names: string | null;
+  max_lifetime_ms: number | null;
   created_at: number;
   updated_at: number;
   last_run_at: number | null;
@@ -121,6 +122,7 @@ function rowToTask(row: TaskRow): ScheduledTask {
     modelId: row.model_id,
     thinkingLevel: row.thinking_level,
     toolNames,
+    maxLifetimeMs: row.max_lifetime_ms,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastRunAt: row.last_run_at,
@@ -134,7 +136,7 @@ function loadDueTasks(now: number): ScheduledTask[] {
   const rows = getSchedulerDb()
     .prepare(
       `SELECT id, name, cron, cwd, prompt, enabled, provider, model_id,
-              thinking_level, tool_names, created_at, updated_at,
+              thinking_level, tool_names, max_lifetime_ms, created_at, updated_at,
               last_run_at, next_run_at
          FROM scheduled_tasks
         WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?

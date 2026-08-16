@@ -53,6 +53,8 @@ interface FormState {
   thinkingLevel: string;
   toolMode: ToolMode;
   toolNames: string; // comma-separated
+  /** Max lifetime in minutes. Empty / 0 ⇒ use the runner's default (2h). */
+  maxLifetimeMinutes: string;
 }
 
 const EMPTY: FormState = {
@@ -66,7 +68,33 @@ const EMPTY: FormState = {
   thinkingLevel: "",
   toolMode: "all",
   toolNames: "",
+  maxLifetimeMinutes: "",
 };
+
+// Server-side bounds (kept in sync with lib/scheduler-store.ts).
+const MIN_MAX_LIFETIME_MS = 1_000;
+const MAX_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
+const RUNNER_DEFAULT_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
+
+/** Convert minutes-string from the form to ms. Returns null for empty /
+ *  invalid input (the user wants the runner default). */
+function parseMaxLifetimeMinutes(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const ms = Math.round(n * 60_000);
+  if (ms < MIN_MAX_LIFETIME_MS) return null;
+  if (ms > MAX_MAX_LIFETIME_MS) return null;
+  return ms;
+}
+
+/** Format ms max lifetime for the form (as minutes, or fallback). Used to
+ *  pre-populate when editing an existing task. */
+function formatMaxLifetimeForForm(ms: number | null): string {
+  if (ms === null) return "";
+  return String(Math.round(ms / 60_000));
+}
 
 // ── Thinking levels (mirror ChatInput) ──────────────────────────
 
@@ -236,6 +264,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         thinkingLevel: task.thinkingLevel && task.thinkingLevel !== "auto" ? task.thinkingLevel : "",
         toolMode: task.toolNames === null ? "all" : toolNames.length === 0 ? "none" : "custom",
         toolNames: toolNames.join(", "),
+        maxLifetimeMinutes: formatMaxLifetimeForForm(task.maxLifetimeMs),
       });
     } else {
       setForm({ ...EMPTY, cwd: initialCwd ?? "" });
@@ -258,6 +287,14 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   // active in settings.json at run time, so we force a concrete choice.
   const modelError = submitted && (!form.provider.trim() || !form.modelId.trim()) ? t("Please select a model") : null;
   const thinkingError = submitted && !form.thinkingLevel.trim() ? t("Please select a thinking level") : null;
+  // Max lifetime is optional. If the user typed something, it must parse
+  // to a positive integer within the server-side bounds; otherwise we
+  // fall back to the runner default silently (so empty input is fine).
+  const maxLifetimeRaw = form.maxLifetimeMinutes.trim();
+  const maxLifetimeMs = parseMaxLifetimeMinutes(maxLifetimeRaw);
+  const maxLifetimeError = submitted && maxLifetimeRaw && maxLifetimeMs === null
+    ? t("Max lifetime must be between 1 and 1440 minutes")
+    : null;
   // Cron builder has its own inline error (red border + syntax-error label) that
   // shows immediately while the user is editing — this is builder-internal
   // feedback, not form-level required-field validation, so it's intentional
@@ -265,7 +302,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   const cronError = submitted && !form.cronValid ? t("Schedule syntax error") : null;
   const errors: Record<string, string | null> = {
     basics: nameError ?? promptError ?? cwdError ?? modelError ?? thinkingError,
-    schedule: cronError,
+    schedule: cronError ?? maxLifetimeError,
   };
 
   const submit = async () => {
@@ -280,7 +317,8 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
       !form.provider.trim() ||
       !form.modelId.trim() ||
       !form.thinkingLevel.trim() ||
-      !form.cronValid;
+      !form.cronValid ||
+      (maxLifetimeRaw.length > 0 && maxLifetimeMs === null);
     if (hasError) {
       onToast("error", t("Please fix form errors first"));
       // Jump to the first section that has an error
@@ -316,6 +354,8 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         modelId: form.modelId.trim() || null,
         thinkingLevel: form.thinkingLevel.trim() || null,
         toolNames: form.toolMode === "custom" && toolNames && toolNames.length > 0 ? toolNames : toolNames ?? null,
+        // null = use runner default; otherwise send the parsed ms.
+        maxLifetimeMs: form.maxLifetimeMinutes.trim() === "" ? null : maxLifetimeMs,
       };
 
       let saved: { task: ScheduledTask };
@@ -447,7 +487,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
               <BasicConfigSection form={form} update={update} meta={meta} errors={{ name: nameError, prompt: promptError, cwd: cwdError, model: modelError, thinking: thinkingError }} />
             )}
             {section === "schedule" && (
-              <ScheduleSection form={form} update={update} cronError={cronError} />
+              <ScheduleSection form={form} update={update} cronError={cronError} maxLifetimeError={maxLifetimeError} />
             )}
           </div>
         </div>
@@ -522,7 +562,7 @@ function BasicConfigSection({ form, update, meta, errors }: { form: FormState; u
   );
 }
 
-function ScheduleSection({ form, update, cronError }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; cronError: string | null }) {
+function ScheduleSection({ form, update, cronError, maxLifetimeError }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; cronError: string | null; maxLifetimeError: string | null }) {
   const { t } = useI18n();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -534,6 +574,26 @@ function ScheduleSection({ form, update, cronError }: { form: FormState; update:
             update("cronValid", valid);
           }}
         />
+      </Field>
+      <Field
+        label={t("Max lifetime")}
+        hint={t("Max lifetime hint")}
+        error={maxLifetimeError}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input
+            type="number"
+            min={1}
+            max={1440}
+            step={1}
+            value={form.maxLifetimeMinutes}
+            placeholder={String(Math.round(RUNNER_DEFAULT_MAX_LIFETIME_MS / 60_000))}
+            onChange={(e) => update("maxLifetimeMinutes", e.target.value)}
+            className="scheduler-text-input"
+            style={{ ...inputMonoStyle, width: 120 }}
+          />
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("minutes")}</span>
+        </div>
       </Field>
     </div>
   );

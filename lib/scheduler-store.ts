@@ -22,6 +22,12 @@ const MAX_PROMPT_LENGTH = 50_000;
 const MAX_CRON_LENGTH = 100;
 const DEFAULT_RUNS_LIMIT = 50;
 
+/** Bounds for the per-task max lifetime. 1s floor so a typo doesn't kill
+ *  the run instantly; 24h ceiling keeps a buggy cron from hogging a slot
+ *  forever. `null` (or absent) ⇒ use the runner's global default. */
+const MIN_MAX_LIFETIME_MS = 1_000;
+const MAX_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
 export type TaskRunStatus = "running" | "success" | "error" | "timeout";
 
 export interface ScheduledTask {
@@ -35,6 +41,11 @@ export interface ScheduledTask {
   modelId: string | null;
   thinkingLevel: string | null;
   toolNames: string[] | null;
+  /** Hard cap on how long a single run may take before the runner force-
+   *  destroys the wrapper. `null` ⇒ use the runner's global default. The
+   *  scheduler otherwise waits for the real `agent_end` — there's no
+   *  5-minute blanket timeout (long tasks deserve the real result). */
+  maxLifetimeMs: number | null;
   createdAt: number;
   updatedAt: number;
   lastRunAt: number | null;
@@ -66,6 +77,7 @@ export interface CreateTaskInput {
   modelId?: string | null;
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
+  maxLifetimeMs?: number | null;
 }
 
 export interface UpdateTaskInput {
@@ -79,6 +91,7 @@ export interface UpdateTaskInput {
   modelId?: string | null;
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
+  maxLifetimeMs?: number | null;
 }
 
 export interface RecordRunEndInput {
@@ -159,6 +172,31 @@ function validateToolNames(raw: unknown): string[] | null {
   throw new SchedulerValidationError("toolNames", "toolNames must be an array or null");
 }
 
+/** null/undefined ⇒ leave as null (use runner default). 0/negative/fractional
+ *  ⇒ validation error. Above the 24h ceiling ⇒ validation error. */
+function validateMaxLifetimeMs(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
+    throw new SchedulerValidationError("maxLifetimeMs", "maxLifetimeMs must be a number");
+  }
+  if (!Number.isInteger(raw)) {
+    throw new SchedulerValidationError("maxLifetimeMs", "maxLifetimeMs must be an integer");
+  }
+  if (raw < MIN_MAX_LIFETIME_MS) {
+    throw new SchedulerValidationError(
+      "maxLifetimeMs",
+      `maxLifetimeMs must be ≥ ${MIN_MAX_LIFETIME_MS} (1 second)`,
+    );
+  }
+  if (raw > MAX_MAX_LIFETIME_MS) {
+    throw new SchedulerValidationError(
+      "maxLifetimeMs",
+      `maxLifetimeMs must be ≤ ${MAX_MAX_LIFETIME_MS} (24 hours)`,
+    );
+  }
+  return raw;
+}
+
 /** Compute next_run_at for an enabled task; null if disabled or cron invalid. */
 function computeNextRun(cron: string, enabled: boolean): number | null {
   if (!enabled) return null;
@@ -188,6 +226,7 @@ interface Row {
   model_id: string | null;
   thinking_level: string | null;
   tool_names: string | null;
+  max_lifetime_ms: number | null;
   created_at: number;
   updated_at: number;
   last_run_at: number | null;
@@ -225,6 +264,7 @@ function rowToTask(row: Row): ScheduledTask {
     modelId: row.model_id,
     thinkingLevel: row.thinking_level,
     toolNames: parseToolNames(row.tool_names),
+    maxLifetimeMs: row.max_lifetime_ms,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastRunAt: row.last_run_at,
@@ -269,6 +309,7 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
   const modelId = validateOptionalString("modelId", input.modelId);
   const thinkingLevel = validateOptionalString("thinkingLevel", input.thinkingLevel);
   const toolNames = validateToolNames(input.toolNames);
+  const maxLifetimeMs = validateMaxLifetimeMs(input.maxLifetimeMs);
   const now = Date.now();
   const id = newId();
   const nextRunAt = computeNextRun(cron, enabled);
@@ -277,13 +318,14 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
     .prepare(
       `INSERT INTO scheduled_tasks
         (id, name, cron, cwd, prompt, enabled, provider, model_id, thinking_level, tool_names,
-         created_at, updated_at, last_run_at, next_run_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
+         max_lifetime_ms, created_at, updated_at, last_run_at, next_run_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
     )
     .run(
       id, name, cron, cwd, prompt, enabled ? 1 : 0,
       provider, modelId, thinkingLevel,
       toolNames ? JSON.stringify(toolNames) : null,
+      maxLifetimeMs,
       now, now, nextRunAt,
     );
 
@@ -305,6 +347,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
   if (input.modelId !== undefined) patch.modelId = validateOptionalString("modelId", input.modelId);
   if (input.thinkingLevel !== undefined) patch.thinkingLevel = validateOptionalString("thinkingLevel", input.thinkingLevel);
   if (input.toolNames !== undefined) patch.toolNames = validateToolNames(input.toolNames);
+  if (input.maxLifetimeMs !== undefined) patch.maxLifetimeMs = validateMaxLifetimeMs(input.maxLifetimeMs);
 
   const merged: ScheduledTask = { ...existing, ...patch };
   const nextRunAt = computeNextRun(merged.cron, merged.enabled);
@@ -314,6 +357,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
       `UPDATE scheduled_tasks SET
         name = ?, cron = ?, cwd = ?, prompt = ?, enabled = ?,
         provider = ?, model_id = ?, thinking_level = ?, tool_names = ?,
+        max_lifetime_ms = ?,
         updated_at = ?, next_run_at = ?
        WHERE id = ?`
     )
@@ -321,6 +365,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
       merged.name, merged.cron, merged.cwd, merged.prompt, merged.enabled ? 1 : 0,
       merged.provider, merged.modelId, merged.thinkingLevel,
       merged.toolNames ? JSON.stringify(merged.toolNames) : null,
+      merged.maxLifetimeMs,
       Date.now(), nextRunAt, input.id,
     );
 

@@ -42,6 +42,7 @@ const SCHEMA = `
     model_id        TEXT,
     thinking_level  TEXT,
     tool_names      TEXT,
+    max_lifetime_ms INTEGER,
     created_at      INTEGER NOT NULL,
     updated_at      INTEGER NOT NULL,
     last_run_at     INTEGER,
@@ -84,6 +85,13 @@ function runMigrations(db: Database.Database): void {
   if (!hasReadAt) {
     db.exec("ALTER TABLE task_runs ADD COLUMN read_at INTEGER");
     log.info("migration: added task_runs.read_at column");
+  }
+
+  const taskColumns = db.prepare("PRAGMA table_info(scheduled_tasks)").all() as Array<{ name: string }>;
+  const hasMaxLifetime = taskColumns.some((c) => c.name === "max_lifetime_ms");
+  if (!hasMaxLifetime) {
+    db.exec("ALTER TABLE scheduled_tasks ADD COLUMN max_lifetime_ms INTEGER");
+    log.info("migration: added scheduled_tasks.max_lifetime_ms column");
   }
 }
 

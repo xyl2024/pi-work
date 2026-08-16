@@ -48,6 +48,7 @@ export async function POST(req: Request) {
       modelId: body.modelId,
       thinkingLevel: body.thinkingLevel,
       toolNames: body.toolNames,
+      maxLifetimeMs: body.maxLifetimeMs,
     });
     reschedule();
     log.info("task created via api", { id: task.id, durationMs: elapsedMs(startedAt) });

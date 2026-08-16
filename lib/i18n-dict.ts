@@ -864,6 +864,13 @@ export const ZH_TRANSLATIONS = {
   "Mark all as read": "全部标记为已读",
   "Failed to update runs": "更新运行历史失败",
   "Failed to update run": "更新运行失败",
+  "Max lifetime": "最大运行时长",
+  "Max lifetime hint": "单次运行的最长等待时间。超过则强制结束。留空使用默认（120 分钟）。",
+  "Max lifetime must be between 1 and 1440 minutes": "最大运行时长需在 1 ~ 1440 分钟之间",
+  "minutes": "分钟",
+  "Long-running": "长时间运行",
+  "Long-running run warning": "该任务已运行超过 10 分钟，agent 仍在正常工作，可继续等待真实结果",
+  "default": "默认",
   // Mermaid renderer
   "Failed to render Mermaid diagram": "Mermaid 图渲染失败",
   "Failed to render SVG": "SVG 渲染失败",

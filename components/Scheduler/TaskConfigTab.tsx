@@ -18,7 +18,20 @@ interface Props {
 
 export function TaskConfigTab({ task, onEdit }: Props) {
   const { t } = useI18n();
-  const { provider, modelId, thinkingLevel, toolNames, cwd } = task;
+  const { provider, modelId, thinkingLevel, toolNames, cwd, maxLifetimeMs } = task;
+
+  // Render the max lifetime as a human-friendly "Xh Ym" string. The
+  // server-side default is 2h, kept in sync with lib/scheduler/runner.ts.
+  const DEFAULT_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
+  const lifetimeDisplay = (() => {
+    const ms = maxLifetimeMs ?? DEFAULT_MAX_LIFETIME_MS;
+    const totalMinutes = Math.round(ms / 60_000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours && minutes) return `${hours}h ${minutes}m`;
+    if (hours) return `${hours}h`;
+    return `${minutes}m`;
+  })();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -58,6 +71,17 @@ export function TaskConfigTab({ task, onEdit }: Props) {
         }
       />
       <ConfigRow label={t("Working directory")} value={<code style={mono}>{cwd}</code>} />
+      <ConfigRow
+        label={t("Max lifetime")}
+        value={
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <code style={mono}>{lifetimeDisplay}</code>
+            {maxLifetimeMs === null && (
+              <span style={{ fontSize: 10, color: "var(--text-dim)" }}>({t("default")})</span>
+            )}
+          </span>
+        }
+      />
     </div>
   );
 }

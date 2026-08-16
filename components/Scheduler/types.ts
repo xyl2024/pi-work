@@ -23,6 +23,11 @@ export interface ScheduledTask {
   thinkingLevel: string | null;
   /** `null` = use all tools, `[]` = no tools, partial = custom subset. */
   toolNames: string[] | null;
+  /** Hard cap on a single run before the runner force-destroys the
+   *  wrapper. `null` = use the runner's global default (currently 2h).
+   *  The scheduler waits for the real `agent_end` otherwise — long
+   *  tasks deserve the real result, not a 5-min blanket cutoff. */
+  maxLifetimeMs: number | null;
   createdAt: number;
   updatedAt: number;
   lastRunAt: number | null;
@@ -64,6 +69,7 @@ export interface TaskCreatePayload {
   modelId?: string | null;
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
+  maxLifetimeMs?: number | null;
 }
 
 /** Match `UpdateTaskInput` on the server. */
@@ -78,6 +84,7 @@ export interface TaskUpdatePayload {
   modelId?: string | null;
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
+  maxLifetimeMs?: number | null;
 }
 
 /**
