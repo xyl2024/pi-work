@@ -212,13 +212,13 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("Scheduled tasks")}</span>
             <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
-              {tasks.length > 0 ? `${tasks.length} 个` : ""}
+              {tasks.length > 0 ? t("{n} tasks", { n: tasks.length }) : ""}
             </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <button
               onClick={requestClose}
-              aria-label="关闭"
+              aria-label={t("Close")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -291,18 +291,19 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
 // ── Right-pane empty / loading state ─────────────────────────────
 
 function EmptyDetail({ loading }: { loading: boolean }) {
+  const { t } = useI18n();
   if (loading) {
     return (
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-        加载中...
+        {t("Loading...")}
       </div>
     );
   }
   return (
     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center", color: "var(--text-muted)" }}>
-        <div style={{ fontSize: 13, marginBottom: 6, color: "var(--text)" }}>从左侧选择一个任务</div>
-        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>或创建一个新任务</div>
+        <div style={{ fontSize: 13, marginBottom: 6, color: "var(--text)" }}>{t("Select a task from the list on the left")}</div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("or create a new task")}</div>
       </div>
     </div>
   );

@@ -140,14 +140,14 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const nameError = submitted && form.name.trim().length === 0 ? "请输入任务名称" : null;
-  const cwdError = submitted && form.cwd.trim().length === 0 ? "请输入工作目录" : null;
-  const promptError = submitted && form.prompt.trim().length === 0 ? "请输入提示词" : null;
-  // Cron builder has its own inline error (red border + '语法错误' label) that
+  const nameError = submitted && form.name.trim().length === 0 ? t("Please enter a task name") : null;
+  const cwdError = submitted && form.cwd.trim().length === 0 ? t("Please enter a working directory") : null;
+  const promptError = submitted && form.prompt.trim().length === 0 ? t("Please enter a prompt") : null;
+  // Cron builder has its own inline error (red border + syntax-error label) that
   // shows immediately while the user is editing — this is builder-internal
   // feedback, not form-level required-field validation, so it's intentional
   // that it surfaces before submit.
-  const cronError = submitted && !form.cronValid ? "Cron 语法错误" : null;
+  const cronError = submitted && !form.cronValid ? t("Schedule syntax error") : null;
   const errors: Record<string, string | null> = {
     basics: nameError ?? promptError,
     schedule: cronError,
@@ -208,7 +208,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
       await onSaved(saved.task.id);
       requestClose();
     } catch (e) {
-      onToast("error", e instanceof Error ? e.message : "保存失败");
+      onToast("error", e instanceof Error ? e.message : t("Save failed"));
     } finally {
       setSaving(false);
     }
@@ -276,9 +276,9 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
             }}
           >
             {([
-              { id: "basics", label: "基本" },
-              { id: "schedule", label: "计划" },
-              { id: "execution", label: "执行" },
+              { id: "basics", label: t("Basics") },
+              { id: "schedule", label: t("Schedule") },
+              { id: "execution", label: t("Execution") },
             ] as const).map((s) => {
               const err = errors[s.id];
               const active = section === s.id;
@@ -354,7 +354,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={requestClose} disabled={saving} style={btnGhost}>{t("Cancel")}</button>
             <button onClick={() => void submit()} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
-              {saving ? "保存中..." : task ? "保存修改" : "创建并启用"}
+              {saving ? t("Saving...") : task ? t("Save changes") : t("Create & enable")}
             </button>
           </div>
         </div>
@@ -366,23 +366,24 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
 // ── Sections ─────────────────────────────────────────────────────
 
 function BasicsSection({ form, update, errors }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; errors: { name: string | null; prompt: string | null } }) {
+  const { t } = useI18n();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Field label="任务名称" hint="简洁描述,如:每日工作报告" error={errors.name}>
+      <Field label={t("Task name")} hint={t("Concise description, e.g. daily report")} error={errors.name}>
         <input
           value={form.name}
           onChange={(e) => update("name", e.target.value)}
-          placeholder="例如:每日工作报告"
+          placeholder={t("e.g. daily report")}
           autoFocus
           style={inputStyle}
         />
       </Field>
-      <Field label="提示词" hint="触发时发送给 agent 的完整提示内容" error={errors.prompt}>
+      <Field label={t("Prompt")} hint={t("Full prompt sent to agent at trigger time")} error={errors.prompt}>
         <textarea
           value={form.prompt}
           onChange={(e) => update("prompt", e.target.value)}
           rows={8}
-          placeholder="请检查昨日 PR 是否有未处理的评论,并汇总..."
+          placeholder={t("Check yesterday's PRs for unhandled comments and summarize...")}
           style={textareaStyle}
         />
       </Field>
@@ -394,7 +395,7 @@ function ScheduleSection({ form, update, cronError }: { form: FormState; update:
   const { t } = useI18n();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <Field label="Cron 表达式" hint={t("Cron examples hint")} error={cronError}>
+      <Field label={t("Cron expression")} hint={t("Cron examples hint")} error={cronError}>
         <CronBuilder
           value={form.cron}
           onChange={(cron, valid) => {
@@ -408,9 +409,10 @@ function ScheduleSection({ form, update, cronError }: { form: FormState; update:
 }
 
 function ExecutionSection({ form, update, meta, cwdError }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null; cwdError: string | null }) {
+  const { t } = useI18n();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Field label="工作目录" hint="agent 运行时的 cwd,目录必须存在" error={cwdError}>
+      <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={cwdError}>
         <input
           value={form.cwd}
           onChange={(e) => update("cwd", e.target.value)}
@@ -451,7 +453,7 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
   }
 
   return (
-    <Field label="模型" hint="留空则使用默认模型">
+    <Field label={t("Model")} hint={t("Leave empty to use the default model")}>
       <details style={{ position: "relative" }}>
         <summary
           style={{
@@ -471,7 +473,7 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
             {isDefault ? (
               <span style={{ color: "var(--text-muted)" }}>
-                默认模型{meta?.defaultModel ? ` (${meta.defaultModel.modelId})` : ""}
+                {t("Default model")}{meta?.defaultModel ? ` (${meta.defaultModel.modelId})` : ""}
               </span>
             ) : current?.name ?? `${form.provider}/${form.modelId}`}
           </span>
@@ -542,15 +544,13 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
 
 function ThinkingSelect({ form, update, meta }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null }) {
   const { t } = useI18n();
-  // t() reserved for future "Use model default" translation override
-  void t;
   const key = form.provider && form.modelId ? `${form.provider}:${form.modelId}` : null;
   const available = key ? meta?.thinkingLevels[key] : undefined;
   const levelMap = key ? meta?.thinkingLevelMaps[key] : undefined;
   const current = (form.thinkingLevel || "auto") as (typeof THINKING_LEVELS)[number];
 
   return (
-    <Field label="推理强度" hint="auto 使用模型默认设置">
+    <Field label={t("Thinking level")} hint={t("auto uses the model default")}>
       <details style={{ position: "relative" }}>
         <summary
           style={{
@@ -563,7 +563,7 @@ function ThinkingSelect({ form, update, meta }: { form: FormState; update: <K ex
           }}
         >
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: THINKING_COLOR[current], flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>{current === "auto" ? "使用模型默认" : current}</span>
+          <span style={{ flex: 1 }}>{current === "auto" ? t("Use model default") : current}</span>
           <span style={{ fontSize: 10, color: "var(--text-dim)" }}>▾</span>
         </summary>
         <div
@@ -612,13 +612,14 @@ function ThinkingSelect({ form, update, meta }: { form: FormState; update: <K ex
 }
 
 function ToolsSelect({ form, update }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
+  const { t } = useI18n();
   const modes: { id: ToolMode; label: string; desc: string }[] = [
-    { id: "all",    label: "全部工具", desc: "使用所有可用工具" },
-    { id: "none",   label: "无工具",   desc: "纯对话,不可执行命令" },
-    { id: "custom", label: "自定义",   desc: "指定工具名称列表" },
+    { id: "all",    label: t("All tools"),     desc: t("Use all available tools") },
+    { id: "none",   label: t("No tools"),      desc: t("Chat only, no commands") },
+    { id: "custom", label: t("Custom"),        desc: t("Specify a list of tool names") },
   ];
   return (
-    <Field label="工具集" hint="auto: 全工具, 无: 仅对话, 自定义: 逗号分隔的工具名">
+    <Field label={t("Tool set")} hint={t("all: all tools, none: chat only, custom: comma-separated tool names")}>
       <details style={{ position: "relative" }}>
         <summary
           style={{
@@ -631,7 +632,7 @@ function ToolsSelect({ form, update }: { form: FormState; update: <K extends key
           }}
         >
           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
-            {form.toolMode === "all" ? "全部工具" : form.toolMode === "none" ? "无工具" : (form.toolNames.trim() || "自定义 (空)")}
+            {form.toolMode === "all" ? t("All tools") : form.toolMode === "none" ? t("No tools") : (form.toolNames.trim() || t("Custom (empty)"))}
           </span>
           <span style={{ fontSize: 10, color: "var(--text-dim)" }}>▾</span>
         </summary>
@@ -667,7 +668,7 @@ function ToolsSelect({ form, update }: { form: FormState; update: <K extends key
           })}
           {form.toolMode === "custom" && (
             <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border)", marginTop: 4 }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>逗号分隔的工具名称</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{t("Comma-separated tool names")}</div>
               <input
                 value={form.toolNames}
                 onChange={(e) => update("toolNames", e.target.value)}

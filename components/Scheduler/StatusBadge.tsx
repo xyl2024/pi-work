@@ -9,7 +9,8 @@
  */
 
 import type { CSSProperties } from "react";
-import { statusLabel, statusVar, type StatusVariant } from "./utils";
+import { useI18n } from "@/hooks/useI18n";
+import { statusVar, type StatusVariant } from "./utils";
 
 interface Props {
   status: StatusVariant;
@@ -35,6 +36,7 @@ function iconFor(variant: StatusVariant): string | null {
 }
 
 export function StatusBadge({ status, size = "sm", bare = false, className, style }: Props) {
+  const { t } = useI18n();
   const { fg, bg } = statusVar(status);
   const icon = iconFor(status);
   const padding = size === "md" ? "3px 9px" : "2px 7px";
@@ -72,7 +74,7 @@ export function StatusBadge({ status, size = "sm", bare = false, className, styl
           }}
         />
       )}
-      {!bare && <span>{statusLabel(status)}</span>}
+      {!bare && <span>{status ? t(status) : "—"}</span>}
     </span>
   );
 }

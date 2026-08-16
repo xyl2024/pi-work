@@ -8,6 +8,7 @@
  */
 
 import type { CSSProperties } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import type { ScheduledTask } from "./types";
 
 interface Props {
@@ -16,13 +17,14 @@ interface Props {
 }
 
 export function TaskConfigTab({ task, onEdit }: Props) {
+  const { t } = useI18n();
   const { provider, modelId, thinkingLevel, toolNames, cwd } = task;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          以下是任务当前的执行配置。点击修改按钮跳转到编辑表单。
+          {t("Here is the task's current execution config. Click modify to jump to the edit form.")}
         </span>
         <button
           onClick={onEdit}
@@ -38,24 +40,24 @@ export function TaskConfigTab({ task, onEdit }: Props) {
             fontFamily: "inherit",
           }}
         >
-          修改配置
+          {t("Modify config")}
         </button>
       </header>
 
-      <ConfigRow label="Provider" value={provider ? <code style={mono}>{provider}</code> : <Muted>使用默认</Muted>} />
-      <ConfigRow label="模型" value={modelId ? <code style={mono}>{modelId}</code> : <Muted>使用默认</Muted>} />
-      <ConfigRow label="推理强度" value={thinkingLevel ?? <Muted>默认</Muted>} />
+      <ConfigRow label="Provider" value={provider ? <code style={mono}>{provider}</code> : <Muted>{t("Use default")}</Muted>} />
+      <ConfigRow label={t("Model")} value={modelId ? <code style={mono}>{modelId}</code> : <Muted>{t("Use default")}</Muted>} />
+      <ConfigRow label={t("Thinking level")} value={thinkingLevel ?? <Muted>{t("Default")}</Muted>} />
       <ConfigRow
-        label="工具"
+        label={t("Tools")}
         value={
           toolNames === null
-            ? "全部可用工具"
+            ? t("All available tools")
             : toolNames.length === 0
-              ? <Muted>无工具,纯对话</Muted>
+              ? <Muted>{t("No tools, chat only")}</Muted>
               : toolNames.join(", ")
         }
       />
-      <ConfigRow label="工作目录" value={<code style={mono}>{cwd}</code>} />
+      <ConfigRow label={t("Working directory")} value={<code style={mono}>{cwd}</code>} />
     </div>
   );
 }

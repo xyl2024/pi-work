@@ -18,6 +18,7 @@
 
 import { useCallback, useMemo } from "react";
 import { Cron } from "croner";
+import { useI18n, type Locale } from "@/hooks/useI18n";
 import { IconChevronDown } from "./icons";
 import { inputStyle, optionButtonStyle } from "./styles";
 import { cronHumanize } from "./utils";
@@ -42,8 +43,14 @@ const DOM_MAX = 31;
 const MONTH_MAX = 12;
 const DOW_MAX = 6;
 
-const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-const WEEKDAY_SHORT = ["日", "一", "二", "三", "四", "五", "六"];
+const WEEKDAY_LABELS: Record<Locale, string[]> = {
+  zh: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+  en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+};
+const WEEKDAY_SHORT: Record<Locale, string[]> = {
+  zh: ["日", "一", "二", "三", "四", "五", "六"],
+  en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+};
 
 /** Parse a single cron segment into one of our three modes. Best-effort:
  *  unrecognized patterns fall back to "any" so the editor stays usable. */
@@ -96,14 +103,14 @@ function renderField(field: ParsedField, max: number): string {
 // ── Presets ──────────────────────────────────────────────────────
 
 const PRESETS: { id: string; cron: string; label: string }[] = [
-  { id: "every-minute",    cron: "* * * * *",   label: "每分钟" },
-  { id: "every-5-minutes", cron: "*/5 * * * *", label: "每 5 分钟" },
-  { id: "every-15-minutes",cron: "*/15 * * * *",label: "每 15 分钟" },
-  { id: "every-hour",      cron: "0 * * * *",   label: "每小时整点" },
-  { id: "every-6-hours",   cron: "0 */6 * * *", label: "每 6 小时" },
-  { id: "daily-9am",       cron: "0 9 * * *",   label: "每天 09:00" },
-  { id: "weekdays-9am",    cron: "0 9 * * 1-5", label: "工作日 09:00" },
-  { id: "monday-8am",      cron: "0 8 * * 1",   label: "周一 08:00" },
+  { id: "every-minute",    cron: "* * * * *",   label: "Every minute" },
+  { id: "every-5-minutes", cron: "*/5 * * * *", label: "Every 5 minutes" },
+  { id: "every-15-minutes",cron: "*/15 * * * *",label: "Every 15 minutes" },
+  { id: "every-hour",      cron: "0 * * * *",   label: "Every hour" },
+  { id: "every-6-hours",   cron: "0 */6 * * *", label: "Every 6 hours" },
+  { id: "daily-9am",       cron: "0 9 * * *",   label: "Daily at 09:00" },
+  { id: "weekdays-9am",    cron: "0 9 * * 1-5", label: "Weekdays at 09:00" },
+  { id: "monday-8am",      cron: "0 8 * * 1",   label: "Monday at 08:00" },
 ];
 
 // ── Segment dropdown ─────────────────────────────────────────────
@@ -121,12 +128,13 @@ interface SegmentProps {
 }
 
 function SegmentDropdown({ label, field, max, everyPresets, namedValues, onChange }: SegmentProps) {
+  const { t } = useI18n();
   const summary = (() => {
-    if (field.mode === "any") return "任意";
-    if (field.mode === "every") return `每 ${field.every ?? 1}`;
+    if (field.mode === "any") return t("Any");
+    if (field.mode === "every") return t("Every {n}", { n: field.every ?? 1 });
     if (field.mode === "specific") {
       const vs = field.values ?? [];
-      if (vs.length === 0) return "任意";
+      if (vs.length === 0) return t("Any");
       if (namedValues) {
         return vs.map((v) => namedValues[v]?.label ?? String(v)).join("、");
       }
@@ -177,10 +185,10 @@ function SegmentDropdown({ label, field, max, everyPresets, namedValues, onChang
             style={optionButtonStyle(field.mode === "any")}
           >
             <span style={{ width: 10 }} />
-            <span style={{ flex: 1 }}>任意 (*)</span>
+            <span style={{ flex: 1 }}>{t("Any (*)")}</span>
           </button>
           <div style={{ padding: "4px 10px 2px", fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            每 N
+            {t("Every N")}
           </div>
           {everyPresets.map((n) => (
             <button
@@ -190,12 +198,12 @@ function SegmentDropdown({ label, field, max, everyPresets, namedValues, onChang
               style={optionButtonStyle(field.mode === "every" && field.every === n)}
             >
               <span style={{ width: 10 }} />
-              <span style={{ flex: 1 }}>每 {n}</span>
+              <span style={{ flex: 1 }}>{t("Every {n}", { n })}</span>
               <code style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>*/{n}</code>
             </button>
           ))}
           <div style={{ padding: "4px 10px 2px", fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", borderTop: "1px solid var(--border)", marginTop: 4 }}>
-            特定
+            {t("Specific")}
           </div>
           <SpecificChips field={field} max={max} namedValues={namedValues} onChange={onChange} />
         </div>
@@ -258,6 +266,8 @@ interface CronBuilderProps {
 }
 
 export function CronBuilder({ value, onChange, showPreview = true }: CronBuilderProps) {
+  const { t, locale } = useI18n();
+  const weekdayNames = WEEKDAY_LABELS[locale];
   const segments = useMemo(() => value.trim().split(/\s+/), [value]);
   const padded = useMemo(() => {
     return segments.length === 5
@@ -317,39 +327,39 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <SegmentDropdown
-          label="分钟"
+          label={t("Minute")}
           field={fields[0]}
           max={MINUTE_MAX}
           everyPresets={[1, 5, 10, 15, 20, 30]}
           onChange={(f) => compose(0, f)}
         />
         <SegmentDropdown
-          label="小时"
+          label={t("Hour")}
           field={fields[1]}
           max={HOUR_MAX}
           everyPresets={[1, 2, 3, 4, 6, 12]}
           onChange={(f) => compose(1, f)}
         />
         <SegmentDropdown
-          label="日"
+          label={t("Day")}
           field={fields[2]}
           max={DOM_MAX}
           everyPresets={[]}
           onChange={(f) => compose(2, f)}
         />
         <SegmentDropdown
-          label="月"
+          label={t("Month")}
           field={fields[3]}
           max={MONTH_MAX}
           everyPresets={[]}
           onChange={(f) => compose(3, f)}
         />
         <SegmentDropdown
-          label="周"
+          label={t("Week")}
           field={fields[4]}
           max={DOW_MAX}
           everyPresets={[]}
-          namedValues={WEEKDAY_LABELS.map((label, value) => ({ value, label }))}
+          namedValues={weekdayNames.map((label, value) => ({ value, label }))}
           onChange={(f) => compose(4, f)}
         />
       </div>
@@ -370,7 +380,7 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
           {value}
         </code>
         {!validity && (
-          <span style={{ fontSize: 11, color: "var(--error)" }}>语法错误</span>
+          <span style={{ fontSize: 11, color: "var(--error)" }}>{t("Syntax error")}</span>
         )}
       </div>
 
@@ -389,7 +399,7 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
           }}
         >
           <div>
-            <span style={{ fontWeight: 600, color: "var(--text)" }}>说明:</span> {cronHumanize(value)}
+            <span style={{ fontWeight: 600, color: "var(--text)" }}>{t("Description:")}</span> {cronHumanize(value, locale)}
           </div>
           {upcoming.length > 0 && (
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontFamily: "var(--font-mono)" }}>
@@ -403,7 +413,7 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>
-          预设
+          {t("Presets")}
         </span>
         {PRESETS.map((p) => (
           <button
@@ -422,7 +432,7 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
               fontFamily: "inherit",
             }}
           >
-            {p.label}
+            {t(p.label)}
           </button>
         ))}
       </div>

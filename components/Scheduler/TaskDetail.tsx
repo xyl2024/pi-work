@@ -57,11 +57,11 @@ export function TaskDetail({
       const data = await apiFetch<{ runs: TaskRun[] }>(`/api/scheduled-tasks/${encodeURIComponent(task.id)}/runs`);
       setRuns(data.runs ?? []);
     } catch (e) {
-      toast.show({ kind: "error", message: e instanceof Error ? e.message : "加载运行历史失败" });
+      toast.show({ kind: "error", message: e instanceof Error ? e.message : t("Failed to load runs") });
     } finally {
       setRunsLoading(false);
     }
-  }, [task.id, toast]);
+  }, [task.id, toast, t]);
 
   // Fetch runs when the tab changes to "runs" or when the task id changes.
   useEffect(() => {
@@ -93,7 +93,7 @@ export function TaskDetail({
   const handleDelete = async () => {
     const ok = await confirm({
       title: t("Delete task"),
-      description: "删除定时任务及其所有运行历史？此操作不可撤销。",
+      description: t("Delete this task and all its run history? This cannot be undone."),
       confirmLabel: t("Delete"),
       destructive: true,
     });
@@ -147,7 +147,7 @@ export function TaskDetail({
             }}
           >
             <IconPlay width={11} height={11} />
-            {triggering ? "触发中..." : "立即运行"}
+            {triggering ? t("Triggering...") : t("Run now")}
           </button>
           <button
             onClick={() => void handleToggle()}
@@ -166,7 +166,7 @@ export function TaskDetail({
             }}
           >
             {task.enabled ? <IconPause width={11} height={11} /> : <IconPlay width={11} height={11} />}
-            {task.enabled ? "暂停" : "启用"}
+            {task.enabled ? t("Pause") : t("Enable")}
           </button>
           <button
             onClick={() => onEdit(task)}
@@ -185,12 +185,12 @@ export function TaskDetail({
             }}
           >
             <IconEdit width={11} height={11} />
-            编辑
+            {t("Edit")}
           </button>
-          <Tooltip content="删除任务">
+          <Tooltip content={t("Delete task")}>
             <button
               onClick={() => void handleDelete()}
-              aria-label="删除任务"
+              aria-label={t("Delete task")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -214,13 +214,13 @@ export function TaskDetail({
       {/* Tabs */}
       <div style={tabBarStyle}>
         {([
-          { id: "overview", label: "概览" },
-          { id: "runs",     label: `运行历史${runs.length > 0 ? ` (${runs.length})` : ""}` },
-          { id: "prompt",   label: "提示词" },
-          { id: "config",   label: "配置" },
-        ] as const).map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={tabItemStyle(tab === t.id)}>
-            {t.label}
+          { id: "overview", label: t("Overview") },
+          { id: "runs",     label: `${t("Runs history")}${runs.length > 0 ? ` (${runs.length})` : ""}` },
+          { id: "prompt",   label: t("Prompt") },
+          { id: "config",   label: t("Config") },
+        ] as const).map((item) => (
+          <button key={item.id} onClick={() => setTab(item.id)} style={tabItemStyle(tab === item.id)}>
+            {item.label}
           </button>
         ))}
       </div>

@@ -37,7 +37,7 @@ export function TaskPromptTab({ task }: Props) {
     <div style={{ display: "flex", flexDirection: "column", gap: 10, height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          触发时发送给 agent 的提示词
+          {t("Prompt (sent to agent at trigger time)")}
         </span>
         <button
           onClick={() => void copy()}

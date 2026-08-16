@@ -4,6 +4,7 @@
  * errors. No React imports here — keeps it easy to unit-test in plain TS.
  */
 
+import type { Locale } from "@/lib/i18n-dict";
 import type { TaskRun, TaskRunStatus } from "./types";
 
 // ── Time helpers ─────────────────────────────────────────────────
@@ -13,25 +14,33 @@ import type { TaskRun, TaskRunStatus } from "./types";
  * timestamp once the gap exceeds 7 days in either direction. Always
  * stable for a given `(now, ts)` pair so the UI doesn't flicker.
  */
-export function formatRelative(now: number, ts: number | null): string {
+export function formatRelative(now: number, ts: number | null, locale: Locale = "zh"): string {
   if (ts === null || !Number.isFinite(ts)) return "—";
   const diffMs = ts - now;
   const abs = Math.abs(diffMs);
   const past = diffMs < 0;
 
-  if (abs < 30_000) return past ? "刚刚" : "即将";
+  if (abs < 30_000) return past ? (locale === "zh" ? "刚刚" : "just now") : (locale === "zh" ? "即将" : "in a moment");
 
   const sec = Math.round(abs / 1000);
-  if (sec < 60) return past ? `${sec} 秒前` : `${sec} 秒后`;
+  if (sec < 60) return past
+    ? (locale === "zh" ? `${sec} 秒前` : `${sec} seconds ago`)
+    : (locale === "zh" ? `${sec} 秒后` : `in ${sec} seconds`);
 
   const min = Math.round(sec / 60);
-  if (min < 60) return past ? `${min} 分钟前` : `${min} 分钟后`;
+  if (min < 60) return past
+    ? (locale === "zh" ? `${min} 分钟前` : `${min} minutes ago`)
+    : (locale === "zh" ? `${min} 分钟后` : `in ${min} minutes`);
 
   const hr = Math.round(min / 60);
-  if (hr < 24) return past ? `${hr} 小时前` : `${hr} 小时后`;
+  if (hr < 24) return past
+    ? (locale === "zh" ? `${hr} 小时前` : `${hr} hours ago`)
+    : (locale === "zh" ? `${hr} 小时后` : `in ${hr} hours`);
 
   const day = Math.round(hr / 24);
-  if (day < 7) return past ? `${day} 天前` : `${day} 天后`;
+  if (day < 7) return past
+    ? (locale === "zh" ? `${day} 天前` : `${day} days ago`)
+    : (locale === "zh" ? `${day} 天后` : `in ${day} days`);
 
   return new Date(ts).toLocaleString();
 }
@@ -40,15 +49,17 @@ export function formatRelative(now: number, ts: number | null): string {
  * Compact "Next 2h14m" / "Last 3d". Used in the list rows where the full
  * "2 hours 14 minutes from now" would be too wide.
  */
-export function formatCompactRelative(now: number, ts: number | null): string {
+export function formatCompactRelative(now: number, ts: number | null, locale: Locale = "zh"): string {
   if (ts === null || !Number.isFinite(ts)) return "—";
   const diffMs = ts - now;
   const abs = Math.abs(diffMs);
   const past = diffMs < 0;
-  if (abs < 30_000) return past ? "刚刚" : "即将";
+  if (abs < 30_000) return past
+    ? (locale === "zh" ? "刚刚" : "now")
+    : (locale === "zh" ? "即将" : "soon");
 
   const min = Math.round(abs / 60_000);
-  if (min < 60) return `${past ? "" : ""}${min}m`;
+  if (min < 60) return `${min}m`;
   const hr = Math.floor(min / 60);
   const remMin = min - hr * 60;
   if (hr < 24) return remMin > 0 ? `${hr}h${remMin}m` : `${hr}h`;
@@ -71,7 +82,10 @@ export function formatDuration(ms: number | null): string | null {
 
 // ── Cron → natural language ──────────────────────────────────────
 
-const WEEKDAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"] as const;
+const WEEKDAY_NAMES: Record<Locale, readonly string[]> = {
+  zh: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
+  en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+};
 
 /**
  * Convert a 5-segment cron (minute hour day-of-month month day-of-week)
@@ -80,48 +94,49 @@ const WEEKDAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五
  * never throw on parse failures so the UI can render a row even with a
  * broken cron (the form's cron builder will show the syntax error).
  */
-export function cronHumanize(cron: string): string {
+export function cronHumanize(cron: string, locale: Locale = "zh"): string {
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 5) return cron;
 
   const [min, hour, dom, mon, dow] = parts;
+  const zh = locale === "zh";
 
   // Special: "@every minute"
   if (min === "*" && hour === "*" && dom === "*" && mon === "*" && dow === "*") {
-    return "每分钟";
+    return zh ? "每分钟" : "every minute";
   }
 
   // @hourly / @daily / @weekly / @monthly / @yearly
-  if (min === "0" && hour === "*" && dom === "*" && mon === "*" && dow === "*") return "每小时整点";
-  if (min === "0" && hour === "0" && dom === "*" && mon === "*" && dow === "*") return "每天 00:00";
+  if (min === "0" && hour === "*" && dom === "*" && mon === "*" && dow === "*") return zh ? "每小时整点" : "every hour";
+  if (min === "0" && hour === "0" && dom === "*" && mon === "*" && dow === "*") return zh ? "每天 00:00" : "daily at 00:00";
   if (min === "0" && hour === "0" && dom === "*" && mon === "*" && (dow === "1" || dow === "1-5" || dow === "MON-FRI")) {
-    if (dow === "1") return "每周一";
-    return "每个工作日";
+    if (dow === "1") return zh ? "每周一" : "every Monday";
+    return zh ? "每个工作日" : "every weekday";
   }
 
   // Specific minute + hour + everything wildcard  → "每天 HH:MM"
   if (isInt(min) && isInt(hour) && dom === "*" && mon === "*" && dow === "*") {
-    return `每天 ${pad(hour)}:${pad(min)}`;
+    return zh ? `每天 ${pad(hour)}:${pad(min)}` : `daily at ${pad(hour)}:${pad(min)}`;
   }
 
   // "工作日 HH:MM"
   if (isInt(min) && isInt(hour) && dom === "*" && mon === "*" && dow === "1-5") {
-    return `每个工作日 ${pad(hour)}:${pad(min)}`;
+    return zh ? `每个工作日 ${pad(hour)}:${pad(min)}` : `every weekday at ${pad(hour)}:${pad(min)}`;
   }
 
   // "每周D HH:MM"
   if (isInt(min) && isInt(hour) && dom === "*" && mon === "*" && isInt(dow) && Number(dow) >= 0 && Number(dow) <= 6) {
-    return `每${WEEKDAY_NAMES[Number(dow)]} ${pad(hour)}:${pad(min)}`;
+    return `${zh ? "每" : "every "}${WEEKDAY_NAMES[locale][Number(dow)]} ${pad(hour)}:${pad(min)}`;
   }
 
   // "每 N 分钟" — */N in minute field
   if (min.startsWith("*/") && hour === "*" && dom === "*" && mon === "*" && dow === "*") {
-    return `每 ${min.slice(2)} 分钟`;
+    return zh ? `每 ${min.slice(2)} 分钟` : `every ${min.slice(2)} minutes`;
   }
 
   // "每 N 小时" — 0 in minute, */N in hour
   if (min === "0" && hour.startsWith("*/") && dom === "*" && mon === "*" && dow === "*") {
-    return `每 ${hour.slice(2)} 小时`;
+    return zh ? `每 ${hour.slice(2)} 小时` : `every ${hour.slice(2)} hours`;
   }
 
   // Generic fallback: show raw cron in a code-like phrase
@@ -200,19 +215,6 @@ export function computeStats(runs: TaskRun[]): TaskRunStats {
 // ── Status helpers ───────────────────────────────────────────────
 
 export type StatusVariant = TaskRunStatus | "paused" | "disabled" | "enabled";
-
-export function statusLabel(s: StatusVariant | null): string {
-  switch (s) {
-    case "running":  return "运行中";
-    case "success":  return "成功";
-    case "error":    return "失败";
-    case "timeout":  return "超时";
-    case "paused":   return "已暂停";
-    case "disabled": return "已停用";
-    case "enabled":  return "已启用";
-    default:         return "—";
-  }
-}
 
 export function statusVar(s: StatusVariant | null): { fg: string; bg: string } {
   switch (s) {

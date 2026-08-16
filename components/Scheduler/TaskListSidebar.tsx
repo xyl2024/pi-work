@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
+import { useI18n } from "@/hooks/useI18n";
 import { StatusBadge } from "./StatusBadge";
 import { CronHumanizer } from "./CronHumanizer";
 import { useNow } from "./useNow";
@@ -38,10 +39,10 @@ interface Props {
 }
 
 const FILTERS: { id: SidebarFilter; label: string }[] = [
-  { id: "all",      label: "全部" },
-  { id: "enabled",  label: "已启用" },
-  { id: "disabled", label: "已暂停" },
-  { id: "error",    label: "有错误" },
+  { id: "all",      label: "All" },
+  { id: "enabled",  label: "Enabled" },
+  { id: "disabled", label: "Paused" },
+  { id: "error",    label: "Has errors" },
 ];
 
 export function TaskListSidebar({
@@ -57,6 +58,7 @@ export function TaskListSidebar({
   onQueryChange,
   runningCount,
 }: Props) {
+  const { t } = useI18n();
   const now = useNow(30_000);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -119,7 +121,7 @@ export function TaskListSidebar({
           }}
         >
           <IconPlus width={12} height={12} />
-          新建任务
+          {t("New task")}
         </button>
       </div>
 
@@ -140,7 +142,7 @@ export function TaskListSidebar({
         <input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="搜索名称、cron、提示词..."
+          placeholder={t("Search name, cron, prompt...")}
           style={{
             width: "100%",
             padding: "5px 10px 5px 26px",
@@ -180,7 +182,7 @@ export function TaskListSidebar({
                 gap: 4,
               }}
             >
-              {f.label}
+              {t(f.label)}
               {count > 0 && <span style={{ fontSize: 11, color: active ? "var(--accent)" : "var(--text-muted)" }}>{count}</span>}
             </button>
           );
@@ -213,23 +215,23 @@ export function TaskListSidebar({
               background: "currentColor",
             }}
           />
-          {runningCount} 个任务正在运行
+          {t("{n} tasks running", { n: runningCount })}
         </div>
       )}
 
       {/* List */}
       <div ref={listRef} style={{ flex: 1, overflowY: "auto", borderTop: "1px solid var(--border)" }}>
         {loading && tasks.length === 0 && (
-          <EmptyHint text="加载中..." />
+          <EmptyHint text={t("Loading...")} />
         )}
         {error && (
-          <EmptyHint text={`加载失败: ${error}`} variant="error" />
+          <EmptyHint text={t("Failed to load: {error}", { error })} variant="error" />
         )}
         {!loading && !error && tasks.length === 0 && (
           <EmptyState onCreate={onCreate} />
         )}
         {!loading && !error && tasks.length > 0 && filtered.length === 0 && (
-          <EmptyHint text="没有匹配的任务" />
+          <EmptyHint text={t("No matching tasks")} />
         )}
         {filtered.map((task) => (
           <TaskRow
@@ -249,6 +251,7 @@ export function TaskListSidebar({
 // ── Single row ───────────────────────────────────────────────────
 
 function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: number; selected: boolean; onSelect: () => void }) {
+  const { t, locale } = useI18n();
   const lastStatus: TaskRunStatus | null = task.lastRunStatus;
   const showErrorBadge = lastStatus === "error" || lastStatus === "timeout";
 
@@ -310,8 +313,8 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
       </div>
       <div style={{ marginTop: 3, fontSize: 11, color: "var(--text-muted)" }}>
         {task.enabled
-          ? `下次: ${formatCompactRelative(now, task.nextRunAt)}`
-          : "已暂停"}
+          ? t("Next: {time}", { time: formatCompactRelative(now, task.nextRunAt, locale) })
+          : t("Paused")}
       </div>
     </div>
   );
@@ -335,6 +338,7 @@ function EmptyHint({ text, variant = "muted" }: { text: string; variant?: "muted
 }
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
+  const { t } = useI18n();
   return (
     <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--text-muted)" }}>
       <svg
@@ -352,11 +356,11 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         <polyline points="12 7 12 12 15 14" />
       </svg>
       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>
-        还没有定时任务
+        {t("No scheduled tasks yet")}
       </div>
       <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 14 }}>
-        让 agent 在指定时间自动运行任何任务<br />
-        例如每日工作报告、每小时巡检
+        {t("Let the agent run any task automatically at a scheduled time")}<br />
+        {t("e.g. daily report, hourly checks")}
       </div>
       <button
         onClick={onCreate}
@@ -376,7 +380,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         }}
       >
         <IconPlus width={11} height={11} />
-        新建任务
+        {t("New task")}
       </button>
     </div>
   );

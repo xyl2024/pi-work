@@ -38,11 +38,11 @@ interface Props {
 }
 
 const FILTERS: { id: RunFilter; label: string }[] = [
-  { id: "all",     label: "全部" },
-  { id: "success", label: "成功" },
-  { id: "error",   label: "失败" },
-  { id: "timeout", label: "超时" },
-  { id: "running", label: "运行中" },
+  { id: "all",     label: "All" },
+  { id: "success", label: "Success" },
+  { id: "error",   label: "Errors" },
+  { id: "timeout", label: "Timeout" },
+  { id: "running", label: "Running" },
 ];
 
 export function TaskRunsTab({
@@ -115,7 +115,7 @@ export function TaskRunsTab({
                   gap: 4,
                 }}
               >
-                {f.label}
+                {t(f.label)}
                 {count > 0 && <span style={{ fontSize: 11, color: active ? "var(--accent)" : "var(--text-muted)" }}>{count}</span>}
               </button>
             );
@@ -136,7 +136,7 @@ export function TaskRunsTab({
                 fontFamily: "inherit",
               }}
             >
-              全部标记已读
+              {t("Mark all as read")}
             </button>
           )}
           <button
@@ -155,7 +155,7 @@ export function TaskRunsTab({
               fontFamily: "inherit",
             }}
           >
-            {triggering ? "触发中..." : "立即运行"}
+            {triggering ? t("Triggering...") : t("Run now")}
           </button>
         </div>
       </div>
@@ -174,7 +174,7 @@ export function TaskRunsTab({
           }}
         >
           <span data-running-pulse="true" style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
-          有任务正在运行,自动刷新中…
+          {t("Task running, auto-refreshing…")}
         </div>
       )}
 
@@ -182,17 +182,17 @@ export function TaskRunsTab({
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {loading && runs.length === 0 && (
           <div style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            加载中...
+            {t("Loading...")}
           </div>
         )}
         {!loading && runs.length === 0 && (
           <div style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            暂无运行记录
+            {t("No runs yet")}
           </div>
         )}
         {!loading && runs.length > 0 && filtered.length === 0 && (
           <div style={{ padding: "20px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            该筛选条件下暂无记录
+            {t("No runs match this filter")}
           </div>
         )}
         {filtered.map((run) => (
@@ -212,6 +212,7 @@ export function TaskRunsTab({
 // ── Single run card ──────────────────────────────────────────────
 
 function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now: number; onToggleRead: () => void; onOpenSession: (id: string) => void }) {
+  const { t, locale } = useI18n();
   const isUnread = run.readAt === null;
   const replyPreview = run.replyText?.slice(0, 240).trim() ?? null;
   const replyMore = run.replyText && run.replyText.length > 240;
@@ -233,7 +234,7 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <StatusBadge status={run.status} size="md" />
         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          {formatRelative(now, run.startedAt)}
+          {formatRelative(now, run.startedAt, locale)}
         </span>
         {run.durationMs !== null && (
           <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
@@ -241,10 +242,10 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
           </span>
         )}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
-          <Tooltip content={isUnread ? "标记已读" : "标记未读"}>
+          <Tooltip content={isUnread ? t("Mark as read") : t("Mark as unread")}>
             <button
               onClick={onToggleRead}
-              aria-label={isUnread ? "标记已读" : "标记未读"}
+              aria-label={isUnread ? t("Mark as read") : t("Mark as unread")}
               style={{
                 background: "transparent",
                 border: "1px solid var(--border)",
@@ -260,10 +261,10 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
             </button>
           </Tooltip>
           {run.sessionId && (
-            <Tooltip content="打开会话">
+            <Tooltip content={t("Open session")}>
               <button
                 onClick={() => onOpenSession(run.sessionId!)}
-                aria-label="打开会话"
+                aria-label={t("Open session")}
                 style={{
                   background: "transparent",
                   border: "1px solid var(--border)",
@@ -313,7 +314,7 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
         </div>
       )}
       {run.status === "success" && !replyPreview && (
-        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>(无回复内容)</div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("(no reply content)")}</div>
       )}
     </div>
   );

@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Cron } from "croner";
 import { Tooltip } from "@/components/Tooltip";
+import { useI18n } from "@/hooks/useI18n";
 import { cronHumanize } from "./utils";
 
 interface Props {
@@ -42,7 +43,8 @@ function nextRuns(cron: string, count: number): number[] {
 }
 
 export function CronHumanizer({ cron, previewCount = 3, showCode = false }: Props) {
-  const human = useMemo(() => cronHumanize(cron), [cron]);
+  const { t, locale } = useI18n();
+  const human = useMemo(() => cronHumanize(cron, locale), [cron, locale]);
   const upcoming = useMemo(() => nextRuns(cron, previewCount), [cron, previewCount]);
   const isValid = upcoming.length > 0;
 
@@ -57,7 +59,7 @@ export function CronHumanizer({ cron, previewCount = 3, showCode = false }: Prop
   const previewBlock = (
     <div style={{ padding: "8px 10px", maxWidth: 260, lineHeight: 1.55 }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>
-        {upcoming.length > 0 ? "下次运行" : "无效的 cron 表达式"}
+        {upcoming.length > 0 ? t("Next run") : t("Invalid cron expression")}
       </div>
       {upcoming.map((ts) => (
         <div key={ts} style={{ fontSize: 11, color: "var(--text)", fontFamily: "var(--font-mono)" }}>
