@@ -1,7 +1,7 @@
 /**
  * TaskConfigTab — read-only view of a task's execution config.
  *
- * Mirrors the structure of the form's "Execution" section so the user
+ * Mirrors the structure of the form's "Basic config" section so the user
  * can review what the task will run with without accidentally editing
  * anything. Each row has a small "modify" link that scrolls up to the
  * edit button (parent handler will pop the form modal).

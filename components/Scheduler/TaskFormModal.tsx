@@ -1,7 +1,7 @@
 /**
  * TaskFormModal — create / edit dialog for a single scheduled task.
  *
- * Three-section form (Basics / Schedule / Execution) with a left-side
+ * Two-section form (Basic config / Schedule) with a left-side
  * jump nav. The cron editor is the visual CronBuilder; model / thinking /
  * tools are dropdowns mirroring the chat input bar so the UI is consistent
  * across the two surfaces.
@@ -101,7 +101,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
 
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
-  const [section, setSection] = useState<"basics" | "schedule" | "execution">("basics");
+  const [section, setSection] = useState<"basics" | "schedule">("basics");
   /** Validation errors are suppressed until the user first clicks Save;
    *  flipping this on reveals field red-text and the per-section nav dots. */
   const [submitted, setSubmitted] = useState(false);
@@ -146,9 +146,8 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   // that it surfaces before submit.
   const cronError = submitted && !form.cronValid ? t("Schedule syntax error") : null;
   const errors: Record<string, string | null> = {
-    basics: nameError ?? promptError,
+    basics: nameError ?? promptError ?? cwdError,
     schedule: cronError,
-    execution: cwdError,
   };
 
   const submit = async () => {
@@ -160,10 +159,9 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
     if (hasError) {
       onToast("error", t("Please fix form errors first"));
       // Jump to the first section that has an error
-      const firstError = (["basics", "schedule", "execution"] as const).find((s) => {
-        if (s === "basics") return !form.name.trim() || !form.prompt.trim();
+      const firstError = (["basics", "schedule"] as const).find((s) => {
+        if (s === "basics") return !form.name.trim() || !form.prompt.trim() || !form.cwd.trim();
         if (s === "schedule") return !form.cronValid;
-        if (s === "execution") return !form.cwd.trim();
         return false;
       });
       if (firstError) setSection(firstError);
@@ -272,9 +270,8 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
             }}
           >
             {([
-              { id: "basics", label: t("Basics") },
+              { id: "basics", label: t("Basic config") },
               { id: "schedule", label: t("Schedule") },
-              { id: "execution", label: t("Execution") },
             ] as const).map((s) => {
               const err = errors[s.id];
               const active = section === s.id;
@@ -314,13 +311,10 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
           {/* Form scroll */}
           <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
             {section === "basics" && (
-              <BasicsSection form={form} update={update} errors={{ name: nameError, prompt: promptError }} />
+              <BasicConfigSection form={form} update={update} meta={meta} errors={{ name: nameError, prompt: promptError, cwd: cwdError }} />
             )}
             {section === "schedule" && (
               <ScheduleSection form={form} update={update} cronError={cronError} />
-            )}
-            {section === "execution" && (
-              <ExecutionSection form={form} update={update} meta={meta} cwdError={cwdError} />
             )}
           </div>
         </div>
@@ -352,7 +346,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
 
 // ── Sections ─────────────────────────────────────────────────────
 
-function BasicsSection({ form, update, errors }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; errors: { name: string | null; prompt: string | null } }) {
+function BasicConfigSection({ form, update, meta, errors }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null; errors: { name: string | null; prompt: string | null; cwd: string | null } }) {
   const { t } = useI18n();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -374,6 +368,17 @@ function BasicsSection({ form, update, errors }: { form: FormState; update: <K e
           style={textareaStyle}
         />
       </Field>
+      <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={errors.cwd}>
+        <input
+          value={form.cwd}
+          onChange={(e) => update("cwd", e.target.value)}
+          placeholder="/path/to/project"
+          style={inputMonoStyle}
+        />
+      </Field>
+      <ModelSelect form={form} update={update} meta={meta} />
+      <ThinkingSelect form={form} update={update} meta={meta} />
+      <ToolsSelect form={form} update={update} />
     </div>
   );
 }
@@ -395,24 +400,6 @@ function ScheduleSection({ form, update, cronError }: { form: FormState; update:
   );
 }
 
-function ExecutionSection({ form, update, meta, cwdError }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null; cwdError: string | null }) {
-  const { t } = useI18n();
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={cwdError}>
-        <input
-          value={form.cwd}
-          onChange={(e) => update("cwd", e.target.value)}
-          placeholder="/path/to/project"
-          style={inputMonoStyle}
-        />
-      </Field>
-      <ModelSelect form={form} update={update} meta={meta} />
-      <ThinkingSelect form={form} update={update} meta={meta} />
-      <ToolsSelect form={form} update={update} />
-    </div>
-  );
-}
 
 function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string | null; children: React.ReactNode }) {
   return (
