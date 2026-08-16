@@ -181,7 +181,7 @@ export function TaskListSidebar({
               }}
             >
               {f.label}
-              {count > 0 && <span style={{ fontSize: 10, color: active ? "var(--accent)" : "var(--text-dim)" }}>{count}</span>}
+              {count > 0 && <span style={{ fontSize: 11, color: active ? "var(--accent)" : "var(--text-muted)" }}>{count}</span>}
             </button>
           );
         })}
@@ -303,12 +303,12 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
           <IconAlert width={11} height={11} style={{ color: lastStatus === "timeout" ? "var(--warning)" : "var(--error)", flexShrink: 0 }} />
         )}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text)", fontWeight: 500 }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           <CronHumanizer cron={task.cron} showCode={false} />
         </span>
       </div>
-      <div style={{ marginTop: 2, fontSize: 10, color: "var(--text-dim)" }}>
+      <div style={{ marginTop: 3, fontSize: 11, color: "var(--text-muted)" }}>
         {task.enabled
           ? `下次: ${formatCompactRelative(now, task.nextRunAt)}`
           : "已暂停"}
@@ -325,7 +325,7 @@ function EmptyHint({ text, variant = "muted" }: { text: string; variant?: "muted
       style={{
         padding: "20px 16px",
         fontSize: 12,
-        color: variant === "error" ? "var(--error)" : "var(--text-dim)",
+        color: variant === "error" ? "var(--error)" : "var(--text-muted)",
         textAlign: "center",
       }}
     >
@@ -346,7 +346,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         strokeWidth={1.2}
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{ color: "var(--text-dim)", margin: "0 auto 12px", display: "block" }}
+        style={{ color: "var(--text-muted)", margin: "0 auto 12px", display: "block" }}
       >
         <circle cx="12" cy="12" r="9" />
         <polyline points="12 7 12 12 15 14" />

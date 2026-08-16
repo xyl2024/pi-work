@@ -83,7 +83,7 @@ function ConfigRow({ label, value }: { label: string; value: React.ReactNode }) 
 }
 
 function Muted({ children }: { children: React.ReactNode }) {
-  return <span style={{ color: "var(--text-dim)" }}>{children}</span>;
+  return <span style={{ color: "var(--text-muted)" }}>{children}</span>;
 }
 
 const mono: CSSProperties = {

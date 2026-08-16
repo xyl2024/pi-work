@@ -302,7 +302,7 @@ function EmptyDetail({ loading }: { loading: boolean }) {
     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center", color: "var(--text-muted)" }}>
         <div style={{ fontSize: 13, marginBottom: 6, color: "var(--text)" }}>从左侧选择一个任务</div>
-        <div style={{ fontSize: 11, color: "var(--text-dim)" }}>或创建一个新任务</div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>或创建一个新任务</div>
       </div>
     </div>
   );

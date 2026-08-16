@@ -78,13 +78,13 @@ export function TaskOverviewTab({ task, runs }: Props) {
         <SectionTitle>执行配置</SectionTitle>
         <dl style={dlStyle}>
           <Row label="Provider">
-            {task.provider ? <code style={monoStyle}>{task.provider}</code> : <span style={{ color: "var(--text-dim)" }}>使用默认</span>}
+            {task.provider ? <code style={monoStyle}>{task.provider}</code> : <span style={{ color: "var(--text-muted)" }}>使用默认</span>}
           </Row>
           <Row label="模型">
-            {task.modelId ? <code style={monoStyle}>{task.modelId}</code> : <span style={{ color: "var(--text-dim)" }}>使用默认</span>}
+            {task.modelId ? <code style={monoStyle}>{task.modelId}</code> : <span style={{ color: "var(--text-muted)" }}>使用默认</span>}
           </Row>
           <Row label="推理强度">
-            {task.thinkingLevel ?? <span style={{ color: "var(--text-dim)" }}>默认</span>}
+            {task.thinkingLevel ?? <span style={{ color: "var(--text-muted)" }}>默认</span>}
           </Row>
           <Row label="工具">
             {task.toolNames === null
@@ -121,9 +121,9 @@ function KpiCard({ label, value, hint, tone }: { label: string; value: string; h
         gap: 2,
       }}
     >
-      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 700, color: kpiToneColor[tone], fontFamily: "var(--font-mono)" }}>{value}</div>
-      {hint && <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{hint}</div>}
     </div>
   );
 }

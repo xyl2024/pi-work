@@ -116,7 +116,7 @@ export function TaskRunsTab({
                 }}
               >
                 {f.label}
-                {count > 0 && <span style={{ fontSize: 10, color: active ? "var(--accent)" : "var(--text-dim)" }}>{count}</span>}
+                {count > 0 && <span style={{ fontSize: 11, color: active ? "var(--accent)" : "var(--text-muted)" }}>{count}</span>}
               </button>
             );
           })}
@@ -236,7 +236,7 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
           {formatRelative(now, run.startedAt)}
         </span>
         {run.durationMs !== null && (
-          <span style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+          <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
             {formatDuration(run.durationMs)}
           </span>
         )}
@@ -309,11 +309,11 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
           }}
         >
           {replyPreview}
-          {replyMore && <span style={{ color: "var(--text-dim)" }}> ...</span>}
+          {replyMore && <span style={{ color: "var(--text-muted)" }}> ...</span>}
         </div>
       )}
       {run.status === "success" && !replyPreview && (
-        <div style={{ fontSize: 11, color: "var(--text-dim)" }}>(无回复内容)</div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>(无回复内容)</div>
       )}
     </div>
   );

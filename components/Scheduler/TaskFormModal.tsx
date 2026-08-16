@@ -453,7 +453,7 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
           />
           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
             {isDefault ? (
-              <span style={{ color: "var(--text-dim)" }}>
+              <span style={{ color: "var(--text-muted)" }}>
                 默认模型{meta?.defaultModel ? ` (${meta.defaultModel.modelId})` : ""}
               </span>
             ) : current?.name ?? `${form.provider}/${form.modelId}`}
@@ -483,7 +483,7 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
             {isDefault ? <IconCheck width={10} height={10} /> : <span style={{ width: 10 }} />}
             <span style={{ flex: 1 }}>{t("Default model")}</span>
             {meta?.defaultModel && (
-              <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 {meta.defaultModel.modelId}
               </span>
             )}
@@ -644,7 +644,7 @@ function ToolsSelect({ form, update }: { form: FormState; update: <K extends key
               >
                 {active ? <IconCheck width={10} height={10} /> : <span style={{ width: 10 }} />}
                 <span style={{ flex: 1 }}>{m.label}</span>
-                <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{m.desc}</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{m.desc}</span>
               </button>
             );
           })}
