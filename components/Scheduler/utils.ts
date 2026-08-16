@@ -87,6 +87,47 @@ const WEEKDAY_NAMES: Record<Locale, readonly string[]> = {
   en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
 };
 
+/** UI 展示顺序：周一到周日（cron 值 1..6, 0）。 */
+export const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/**
+ * 解析 cron day-of-week 字段（`*` / `1,3,5` / `1-5` / `7`），按 UI 顺序
+ * （周一到周日）返回选中的 cron 值集合。`*` 视为全选。
+ */
+export function parseDowList(dow: string): number[] {
+  if (dow === "*") return [...DAY_ORDER];
+  const set = new Set<number>();
+  for (const part of dow.split(",").map((s) => s.trim()).filter(Boolean)) {
+    if (part.includes("-")) {
+      const [lo, hi] = part.split("-").map(Number);
+      if (Number.isInteger(lo) && Number.isInteger(hi) && lo >= 0 && hi <= 7 && lo <= hi) {
+        for (let i = lo; i <= hi; i++) set.add(i % 7);
+      }
+    } else {
+      const n = Number(part);
+      if (Number.isInteger(n) && n >= 0 && n <= 7) set.add(n % 7);
+    }
+  }
+  return DAY_ORDER.filter((d) => set.has(d));
+}
+
+/**
+ * 是否为 7 段单次 cron（秒=0、周=*、年具体）。单次任务执行后 croner
+ * 的 `nextRun()` 返回 null，调度 loop 把 `next_run_at` 置空、任务自动停止。
+ */
+export function isOnceCron(cron: string): boolean {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 7) return false;
+  const [sec, min, hour, dom, mon, dow, year] = parts;
+  return sec === "0" && dow === "*" && /^\d{4}$/.test(year)
+    && isInt(min) && isInt(hour) && isInt(dom) && isInt(mon);
+}
+
+function joinNames(locale: Locale, days: number[]): string {
+  const names = days.map((d) => WEEKDAY_NAMES[locale][d]);
+  return locale === "zh" ? names.join("、") : names.join(", ");
+}
+
 /**
  * Convert a 5-segment cron (minute hour day-of-month month day-of-week)
  * into a short human sentence. Best-effort: any segment we can't fully
@@ -96,10 +137,26 @@ const WEEKDAY_NAMES: Record<Locale, readonly string[]> = {
  */
 export function cronHumanize(cron: string, locale: Locale = "zh"): string {
   const parts = cron.trim().split(/\s+/);
+  const zh = locale === "zh";
+
+  // 单次（7 段：秒 分 时 日 月 周 年）→ "一次性 · YYYY年M月D日 HH:MM"
+  if (parts.length === 7) {
+    const [sec, min, hour, dom, mon, dow, year] = parts;
+    if (sec === "0" && dow === "*" && /^\d{4}$/.test(year)
+      && isInt(min) && isInt(hour) && isInt(dom) && isInt(mon)) {
+      const d = new Date(Number(year), Number(mon) - 1, Number(dom), Number(hour), Number(min));
+      if (!Number.isNaN(d.getTime())) {
+        return zh
+          ? `一次性 · ${year}年${Number(mon)}月${Number(dom)}日 ${pad(hour)}:${pad(min)}`
+          : `once · ${year}-${pad(mon)}-${pad(dom)} ${pad(hour)}:${pad(min)}`;
+      }
+    }
+    return cron;
+  }
+
   if (parts.length !== 5) return cron;
 
   const [min, hour, dom, mon, dow] = parts;
-  const zh = locale === "zh";
 
   // Special: "@every minute"
   if (min === "*" && hour === "*" && dom === "*" && mon === "*" && dow === "*") {
@@ -124,9 +181,12 @@ export function cronHumanize(cron: string, locale: Locale = "zh"): string {
     return zh ? `每个工作日 ${pad(hour)}:${pad(min)}` : `every weekday at ${pad(hour)}:${pad(min)}`;
   }
 
-  // "每周D HH:MM"
-  if (isInt(min) && isInt(hour) && dom === "*" && mon === "*" && isInt(dow) && Number(dow) >= 0 && Number(dow) <= 6) {
-    return `${zh ? "每" : "every "}${WEEKDAY_NAMES[locale][Number(dow)]} ${pad(hour)}:${pad(min)}`;
+  // "每周X HH:MM"（X 为 1-7 天）
+  if (isInt(min) && isInt(hour) && dom === "*" && mon === "*") {
+    const days = parseDowList(dow);
+    if (days.length > 0) {
+      return zh ? `每${joinNames(locale, days)} ${pad(hour)}:${pad(min)}` : `every ${joinNames(locale, days)} at ${pad(hour)}:${pad(min)}`;
+    }
   }
 
   // "每 N 分钟" — */N in minute field
@@ -134,9 +194,14 @@ export function cronHumanize(cron: string, locale: Locale = "zh"): string {
     return zh ? `每 ${min.slice(2)} 分钟` : `every ${min.slice(2)} minutes`;
   }
 
-  // "每 N 小时" — 0 in minute, */N in hour
-  if (min === "0" && hour.startsWith("*/") && dom === "*" && mon === "*" && dow === "*") {
-    return zh ? `每 ${hour.slice(2)} 小时` : `every ${hour.slice(2)} hours`;
+  // "每 N 小时" — 0 in minute, */N in hour（可带星期限定）
+  if (min === "0" && hour.startsWith("*/") && dom === "*" && mon === "*") {
+    const n = hour.slice(2);
+    if (dow === "*") return zh ? `每 ${n} 小时` : `every ${n} hours`;
+    const days = parseDowList(dow);
+    if (days.length > 0) {
+      return zh ? `每 ${n} 小时（${joinNames(locale, days)}）` : `every ${n} hours (${joinNames(locale, days)})`;
+    }
   }
 
   // Generic fallback: show raw cron in a code-like phrase
@@ -212,9 +277,17 @@ export function computeStats(runs: TaskRun[]): TaskRunStats {
   };
 }
 
+/**
+ * 单次任务是否已执行完毕：7 段 cron + 无下次运行时间 + 已有历史运行。
+ * 执行后 loop 会把 next_run_at 置空，任务不会再次触发。
+ */
+export function isOnceDone(task: { cron: string; nextRunAt: number | null; lastRunAt: number | null }): boolean {
+  return isOnceCron(task.cron) && task.nextRunAt === null && task.lastRunAt !== null;
+}
+
 // ── Status helpers ───────────────────────────────────────────────
 
-export type StatusVariant = TaskRunStatus | "paused" | "disabled" | "enabled";
+export type StatusVariant = TaskRunStatus | "paused" | "disabled" | "enabled" | "done";
 
 export function statusVar(s: StatusVariant | null): { fg: string; bg: string } {
   switch (s) {
@@ -225,6 +298,7 @@ export function statusVar(s: StatusVariant | null): { fg: string; bg: string } {
     case "paused":   return { fg: "var(--text-muted)", bg: "var(--bg-subtle)" };
     case "disabled": return { fg: "var(--text-muted)", bg: "var(--bg-subtle)" };
     case "enabled":  return { fg: "var(--success)", bg: "var(--success-bg)" };
+    case "done":     return { fg: "var(--text-muted)", bg: "var(--bg-subtle)" };
     default:         return { fg: "var(--text-muted)", bg: "var(--bg-subtle)" };
   }
 }

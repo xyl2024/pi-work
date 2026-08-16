@@ -10,7 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Cron } from "croner";
 import { Tooltip } from "@/components/Tooltip";
 import { useI18n } from "@/hooks/useI18n";
-import { cronHumanize } from "./utils";
+import { cronHumanize, isOnceCron } from "./utils";
 
 interface Props {
   cron: string;
@@ -47,6 +47,8 @@ export function CronHumanizer({ cron, previewCount = 3, showCode = false }: Prop
   const human = useMemo(() => cronHumanize(cron, locale), [cron, locale]);
   const upcoming = useMemo(() => nextRuns(cron, previewCount), [cron, previewCount]);
   const isValid = upcoming.length > 0;
+  // 单次 cron 执行后 nextRun() 返回 null —— 不是无效，是已经过期/执行完毕
+  const doneOnce = isOnceCron(cron) && !isValid;
 
   // Live-update the human preview so "in 2h" stays accurate as time passes
   // while the modal is open. Refresh every 30s; cheap.
@@ -59,7 +61,7 @@ export function CronHumanizer({ cron, previewCount = 3, showCode = false }: Prop
   const previewBlock = (
     <div style={{ padding: "8px 10px", maxWidth: 260, lineHeight: 1.55 }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 6 }}>
-        {upcoming.length > 0 ? t("Next run") : t("Invalid cron expression")}
+        {upcoming.length > 0 ? t("Next run") : doneOnce ? t("This time has passed") : t("Invalid cron expression")}
       </div>
       {upcoming.map((ts) => (
         <div key={ts} style={{ fontSize: 11, color: "var(--text)", fontFamily: "var(--font-mono)" }}>
@@ -82,7 +84,7 @@ export function CronHumanizer({ cron, previewCount = 3, showCode = false }: Prop
           alignItems: "center",
           gap: 6,
           fontSize: 11,
-          color: isValid ? "var(--text-muted)" : "var(--error)",
+          color: isValid ? "var(--text-muted)" : doneOnce ? "var(--text-dim)" : "var(--error)",
           cursor: "help",
           whiteSpace: "nowrap",
           overflow: "hidden",

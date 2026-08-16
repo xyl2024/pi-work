@@ -31,6 +31,7 @@ function iconFor(variant: StatusVariant): string | null {
     case "paused":
     case "disabled": return "⏸";
     case "enabled":  return "●";
+    case "done":     return "✓";
     default:         return null;
   }
 }

@@ -1,106 +1,167 @@
 /**
- * CronBuilder — 5-segment visual cron editor.
+ * CronBuilder — 引导式 cron 编辑器：三种可视化模式 + 高级模式折叠。
  *
- * Each segment is a dropdown that supports three modes:
- *   - `*`     → every
- *   - `star/N`   → every N units (preset values for speed)
- *   - specific value(s) → specific values (multi-select chips)
+ * 模式（顶部 tab 切换）：
+ *   - 每天    时间选择器                  → 5 段 cron（分 时 日 月 周，日月周为通配）
+ *   - 每周    星期多选（至少一天）+ 时间    → 5 段 cron，周段为选中天列表
+ *   - 每 N 小时  小时数 + 星期多选          → 5 段 cron（分=0，时=步进 N，周=选中天）
+ *   - 单次    日期 + 时间（一次性）         → 7 段 cron：秒 分 时 日 月 周 年
+ *   - 高级    直接输入 cron 表达式 + 预设
  *
- * The composited cron is shown live below the dropdowns, plus the
- * natural-language humanization and a 3-row next-runs preview.
- * Any invalid state surfaces inline; the parent's `onChange` only
- * fires with syntactically valid expressions so a Save button can
- * gate purely on the boolean.
+ * 单次用 7 段 cron（秒 分 时 日 月 周 年）表达：年份过去后 croner 的
+ * `nextRun()` 返回 null，调度 loop 会把 `next_run_at` 置空、任务自然停止，
+ * 后端零改动。不能用 ISO 字符串 —— croner 的 once 模式无状态，执行后
+ * `nextRun()` 仍返回同一时刻，会导致单次任务无限重跑。
  *
- * `value` is a 5-segment cron string. `onChange` is called whenever
- * the user finishes editing a segment.
+ * 存量 cron 打开时会反向解析成对应模式；解析不了（含 `* * * * *` 等
+ * 每分钟表达）落入高级模式。高级模式下 5 段编辑器直接以 `value` 为准。
+ *
+ * `value` 是 cron 字符串（5 段或 7 段）。`onChange(cron, valid)` 在用户
+ * 完成一次编辑后触发；invalid（语法错误、没选星期、单次时间已过）时
+ * 由调用方决定是否阻止保存。
  */
 
-import { useCallback, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Cron } from "croner";
 import { useI18n, type Locale } from "@/hooks/useI18n";
-import { IconChevronDown } from "./icons";
-import { inputStyle, optionButtonStyle } from "./styles";
-import { cronHumanize } from "./utils";
+import { inputStyle } from "./styles";
+import { cronHumanize, parseDowList, DAY_ORDER } from "./utils";
 
-// ── Field model ──────────────────────────────────────────────────
-
-type FieldMode = "any" | "every" | "specific";
-
-interface ParsedField {
-  mode: FieldMode;
-  /** For mode="every": the N value (e.g. 5 maps to `star/5`). */
-  every?: number;
-  /** For mode="specific": the list of values. */
-  values?: number[];
-  /** Raw segment text — used as fallback when nothing else fits. */
-  raw: string;
-}
-
-const MINUTE_MAX = 59;
-const HOUR_MAX = 23;
-const DOM_MAX = 31;
-const MONTH_MAX = 12;
-const DOW_MAX = 6;
+// ── Constants ───────────────────────────────────────────────────
 
 const WEEKDAY_LABELS: Record<Locale, string[]> = {
   zh: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"],
   en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
 };
-const WEEKDAY_SHORT: Record<Locale, string[]> = {
-  zh: ["日", "一", "二", "三", "四", "五", "六"],
-  en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-};
 
-/** Parse a single cron segment into one of our three modes. Best-effort:
- *  unrecognized patterns fall back to "any" so the editor stays usable. */
-function parseField(segment: string, max: number): ParsedField {
-  const trimmed = segment.trim();
-  if (!trimmed || trimmed === "*") return { mode: "any", raw: "*" };
-  if (trimmed.startsWith("*/")) {
-    const n = Number(trimmed.slice(2));
-    if (Number.isFinite(n) && n > 0) return { mode: "every", every: n, raw: trimmed };
-    return { mode: "any", raw: trimmed };
+function todayStr(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+const isInt = (s: string) => /^\d{1,2}$/.test(s);
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// ── Schedule state（四种可视化模式共用的表单状态）────────────────
+
+export type CronMode = "daily" | "weekly" | "interval" | "once" | "advanced";
+
+export interface ScheduleState {
+  mode: CronMode;
+  /** daily / weekly 的触发时间（24h）。 */
+  h: number;
+  m: number;
+  /** weekly / interval 的星期选择，cron 值（周一=1 … 周日=0）。 */
+  days: number[];
+  /** interval：每 N 小时。 */
+  hours: number;
+  /** once：日期（YYYY-MM-DD）+ 时间（HH:MM）。 */
+  date: string;
+  time: string;
+}
+
+function defaultState(): ScheduleState {
+  return {
+    mode: "daily",
+    h: 9,
+    m: 0,
+    days: [1, 2, 3, 4, 5], // 默认工作日
+    hours: 2,
+    date: "",
+    time: "09:00",
+  };
+}
+
+/** 把任意 cron 反向解析成 ScheduleState；解析不了的落入 advanced。 */
+export function parseCronToState(cron: string): ScheduleState {
+  const parts = cron.trim().split(/\s+/);
+  const base = defaultState();
+
+  // 单次：7 段 `0 M H D MON * YYYY`
+  if (parts.length === 7 && parts[0] === "0" && parts[5] === "*" && /^\d{4}$/.test(parts[6])) {
+    const [y, mon, d, h, m] = [Number(parts[6]), Number(parts[4]), Number(parts[3]), Number(parts[2]), Number(parts[1])];
+    if (Number.isInteger(y) && Number.isInteger(mon) && Number.isInteger(d) && Number.isInteger(h) && Number.isInteger(m)
+      && mon >= 1 && mon <= 12 && d >= 1 && d <= 31 && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return { ...base, mode: "once", date: `${y}-${pad(mon)}-${pad(d)}`, time: `${pad(h)}:${pad(m)}` };
+    }
   }
-  // Specific values: "1", "1,2,3", "1-5"
-  const parts = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
-  const values: number[] = [];
-  for (const p of parts) {
-    if (p.includes("-")) {
-      const [lo, hi] = p.split("-").map(Number);
-      if (Number.isFinite(lo) && Number.isFinite(hi) && lo >= 0 && hi <= max && lo <= hi) {
-        for (let i = lo; i <= hi; i++) values.push(i);
-        continue;
-      }
-    } else {
-      const n = Number(p);
-      if (Number.isFinite(n) && n >= 0 && n <= max) {
-        values.push(n);
-        continue;
+
+  // 5 段
+  if (parts.length === 5) {
+    const [min, hour, dom, mon, dow] = parts;
+    // 每天：M H * * *
+    if (isInt(min) && isInt(hour) && dom === "*" && mon === "*" && dow === "*") {
+      return { ...base, mode: "daily", h: Number(hour), m: Number(min) };
+    }
+    // 每 N 小时：0 */N * * <dow>
+    if (min === "0" && hour.startsWith("*/") && dom === "*" && mon === "*") {
+      const n = Number(hour.slice(2));
+      if (Number.isInteger(n) && n > 0) {
+        return { ...base, mode: "interval", hours: n, days: parseDowList(dow) };
       }
     }
-    // Unrecognized token — give up on parse, fall back
-    return { mode: "any", raw: trimmed };
+    // 每周：M H * * <dow>
+    if (isInt(min) && isInt(hour) && dom === "*" && mon === "*") {
+      const days = parseDowList(dow);
+      if (days.length > 0) {
+        return { ...base, mode: "weekly", h: Number(hour), m: Number(min), days };
+      }
+    }
   }
-  return { mode: "specific", values: Array.from(new Set(values)).sort((a, b) => a - b), raw: trimmed };
+
+  return { ...base, mode: "advanced" };
 }
 
-function renderField(field: ParsedField, max: number): string {
-  if (field.mode === "any") return "*";
-  if (field.mode === "every") {
-    const n = field.every ?? 1;
-    if (n <= 0) return "*";
-    return `*/${n}`;
+/** 把当前模式 + 表单字段合成 cron 字符串。 */
+export function stateToCron(state: ScheduleState): string {
+  switch (state.mode) {
+    case "daily":
+      return `${state.m} ${state.h} * * *`;
+    case "weekly":
+      return `${state.m} ${state.h} * * ${dowStr(state.days)}`;
+    case "interval":
+      return `0 */${state.hours} * * ${dowStr(state.days)}`;
+    case "once": {
+      const [y, mon, d] = state.date.split("-").map(Number);
+      const [h, mi] = state.time.split(":").map(Number);
+      return `0 ${mi} ${h} ${d} ${mon} * ${y}`;
+    }
+    case "advanced":
+      return ""; // unreachable — advanced 模式由 5 段编辑器直接驱动
   }
-  if (field.mode === "specific") {
-    const vs = (field.values ?? []).filter((v) => v >= 0 && v <= max).sort((a, b) => a - b);
-    if (vs.length === 0) return "*";
-    return vs.join(",");
-  }
-  return field.raw;
 }
 
-// ── Presets ──────────────────────────────────────────────────────
+/** days 全选 7 天时写 `*`，否则逗号连接（按 cron 值排序）。 */
+function dowStr(days: number[]): string {
+  if (days.length === 0) return "*";
+  if (days.length === 7) return "*";
+  return days.slice().sort((a, b) => a - b).join(",");
+}
+
+const timeInRange = (h: number, m: number) =>
+  Number.isInteger(h) && h >= 0 && h <= 23 && Number.isInteger(m) && m >= 0 && m <= 59;
+
+/** 当前模式下的编辑是否产出可用的 cron。`now` 用于单次模式的过期判断。 */
+export function stateValid(state: ScheduleState, now: number): boolean {
+  switch (state.mode) {
+    case "daily":
+      return timeInRange(state.h, state.m);
+    case "weekly":
+      return state.days.length > 0 && timeInRange(state.h, state.m);
+    case "interval":
+      return Number.isInteger(state.hours) && state.hours >= 1 && state.hours <= 23 && state.days.length > 0;
+    case "once": {
+      if (!state.date || !state.time) return false;
+      const ts = new Date(`${state.date}T${state.time}`).getTime();
+      return Number.isFinite(ts) && ts > now;
+    }
+    case "advanced":
+      return false; // advanced 模式不经过这里
+  }
+}
+
+// ── 高级模式：直接编辑 cron 表达式 ───────────────────────────────
 
 const PRESETS: { id: string; cron: string; label: string }[] = [
   { id: "every-minute",    cron: "* * * * *",   label: "Every minute" },
@@ -113,192 +174,112 @@ const PRESETS: { id: string; cron: string; label: string }[] = [
   { id: "monday-8am",      cron: "0 8 * * 1",   label: "Monday at 08:00" },
 ];
 
-// ── Segment dropdown ─────────────────────────────────────────────
 
-interface SegmentProps {
-  label: string;
-  field: ParsedField;
-  max: number;
-  /** Presets for the "every N" mode. Empty falls back to N=1. */
-  everyPresets: number[];
-  /** If set, "specific" mode shows these named chips instead of raw numbers
-   *  (used for day-of-week to render 周一/周二/...). */
-  namedValues?: { value: number; label: string }[];
-  onChange: (field: ParsedField) => void;
+function TimeField({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  const timeValue = /^\d{2}:\d{2}$/.test(value) ? value : "";
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</span>
+      <input
+        type="time"
+        value={timeValue}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ ...inputStyle, width: 130, fontFamily: "var(--font-mono)" }}
+      />
+    </label>
+  );
 }
 
-function SegmentDropdown({ label, field, max, everyPresets, namedValues, onChange }: SegmentProps) {
-  const { t } = useI18n();
-  const summary = (() => {
-    if (field.mode === "any") return t("Any");
-    if (field.mode === "every") return t("Every {n}", { n: field.every ?? 1 });
-    if (field.mode === "specific") {
-      const vs = field.values ?? [];
-      if (vs.length === 0) return t("Any");
-      if (namedValues) {
-        return vs.map((v) => namedValues[v]?.label ?? String(v)).join("、");
-      }
-      return vs.join(", ");
-    }
-    return field.raw;
-  })();
-
+function DayChips({ days, onChange, invalid }: { days: number[]; onChange: (d: number[]) => void; invalid: boolean }) {
+  const { t, locale } = useI18n();
   return (
-    <div style={{ flex: "1 1 0", minWidth: 110 }}>
-      <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
-        {label}
-      </div>
-      <details style={{ position: "relative" }}>
-        <summary
-          style={{
-            ...inputStyle,
-            listStyle: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 6,
-          }}
-        >
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
-          <IconChevronDown width={10} height={10} />
-        </summary>
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            zIndex: 1100,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-            padding: 4,
-            maxHeight: 280,
-            overflowY: "auto",
-          }}
-        >
-          <button
-            type="button"
-            onClick={(e) => { e.preventDefault(); onChange({ mode: "any", raw: "*" }); }}
-            style={optionButtonStyle(field.mode === "any")}
-          >
-            <span style={{ width: 10 }} />
-            <span style={{ flex: 1 }}>{t("Any (*)")}</span>
-          </button>
-          <div style={{ padding: "4px 10px 2px", fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            {t("Every N")}
-          </div>
-          {everyPresets.map((n) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{t("Only on these days")}</span>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+        {DAY_ORDER.map((v) => {
+          const active = days.includes(v);
+          return (
             <button
-              key={n}
+              key={v}
               type="button"
-              onClick={(e) => { e.preventDefault(); onChange({ mode: "every", every: n, raw: `*/${n}` }); }}
-              style={optionButtonStyle(field.mode === "every" && field.every === n)}
+              onClick={() => {
+                const next = active ? days.filter((d) => d !== v) : [...days, v];
+                onChange(next);
+              }}
+              style={{
+                padding: "4px 11px",
+                borderRadius: 999,
+                border: "1px solid",
+                borderColor: active ? "var(--accent)" : "var(--border)",
+                background: active ? "var(--bg-selected)" : "transparent",
+                color: active ? "var(--accent)" : "var(--text-muted)",
+                fontSize: 12,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
             >
-              <span style={{ width: 10 }} />
-              <span style={{ flex: 1 }}>{t("Every {n}", { n })}</span>
-              <code style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>*/{n}</code>
+              {WEEKDAY_LABELS[locale][v]}
             </button>
-          ))}
-          <div style={{ padding: "4px 10px 2px", fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", borderTop: "1px solid var(--border)", marginTop: 4 }}>
-            {t("Specific")}
-          </div>
-          <SpecificChips field={field} max={max} namedValues={namedValues} onChange={onChange} />
-        </div>
-      </details>
+          );
+        })}
+      </div>
+      {invalid && (
+        <span style={{ fontSize: 11, color: "var(--error)" }}>{t("At least one day required")}</span>
+      )}
     </div>
   );
 }
 
-function SpecificChips({ field, max, namedValues, onChange }: { field: ParsedField; max: number; namedValues?: { value: number; label: string }[]; onChange: (f: ParsedField) => void }) {
-  const items = namedValues
-    ? namedValues
-    : Array.from({ length: max + 1 }, (_, i) => ({ value: i, label: String(i) }));
-  const active = new Set(field.mode === "specific" ? field.values ?? [] : []);
-
-  const toggle = (v: number) => {
-    const next = new Set(active);
-    if (next.has(v)) next.delete(v);
-    else next.add(v);
-    onChange({
-      mode: "specific",
-      values: Array.from(next).sort((a, b) => a - b),
-      raw: Array.from(next).sort((a, b) => a - b).join(","),
-    });
-  };
-
-  return (
-    <div style={{ padding: "4px 8px 8px", display: "flex", flexWrap: "wrap", gap: 4 }}>
-      {items.map((it) => (
-        <button
-          key={it.value}
-          type="button"
-          onClick={(e) => { e.preventDefault(); toggle(it.value); }}
-          style={{
-            padding: "3px 8px",
-            borderRadius: 999,
-            border: "1px solid",
-            borderColor: active.has(it.value) ? "var(--accent)" : "var(--border)",
-            background: active.has(it.value) ? "var(--bg-selected)" : "transparent",
-            color: active.has(it.value) ? "var(--accent)" : "var(--text-muted)",
-            fontSize: 11,
-            cursor: "pointer",
-            fontFamily: namedValues ? "inherit" : "var(--font-mono)",
-            minWidth: 30,
-          }}
-        >
-          {it.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Top-level component ──────────────────────────────────────────
+// ── 主组件 ───────────────────────────────────────────────────────
 
 interface CronBuilderProps {
   value: string;
   onChange: (cron: string, valid: boolean) => void;
-  /** When true, show the natural-language description + next-runs preview. */
   showPreview?: boolean;
 }
 
 export function CronBuilder({ value, onChange, showPreview = true }: CronBuilderProps) {
   const { t, locale } = useI18n();
-  const weekdayNames = WEEKDAY_LABELS[locale];
-  const segments = useMemo(() => value.trim().split(/\s+/), [value]);
-  const padded = useMemo(() => {
-    return segments.length === 5
-      ? segments
-      : segments.length < 5
-        ? [...segments, ...Array(5 - segments.length).fill("*")]
-        : segments.slice(0, 5);
-  }, [segments]);
+  const [state, setState] = useState<ScheduleState>(() => parseCronToState(value));
+  // 单次模式的过期判断需要当前时间；每 30s 刷新一次即可（与 CronHumanizer 一致）
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
-  const fields: [ParsedField, ParsedField, ParsedField, ParsedField, ParsedField] = useMemo(() => [
-    parseField(padded[0], MINUTE_MAX),
-    parseField(padded[1], HOUR_MAX),
-    parseField(padded[2], DOM_MAX),
-    parseField(padded[3], MONTH_MAX),
-    parseField(padded[4], DOW_MAX),
-  ], [padded]);
+  const patch = (next: ScheduleState) => {
+    setState(next);
+    onChange(stateToCron(next), stateValid(next, nowMs));
+  };
 
-  const validity = useMemo(() => {
-    try { new Cron(padded.join(" ")); return true; }
-    catch { return false; }
-  }, [padded]);
+  /** 切换模式：保留已编辑字段，用当前 value 预填目标模式的表单。 */
+  const switchMode = (mode: CronMode) => {
+    if (mode === "advanced") {
+      // 高级模式由 5 段编辑器接管，value 原样保留
+      setState((prev) => ({ ...prev, mode }));
+      return;
+    }
+    const parsed = parseCronToState(value);
+    const next: ScheduleState = {
+      ...defaultState(),
+      mode,
+      // 保留当前编辑的字段，便于来回切换不丢数据
+      ...(state.mode !== "advanced" ? { h: state.h, m: state.m, days: state.days, hours: state.hours, date: state.date, time: state.time } : {}),
+    };
+    // 当前 value 恰好属于目标模式时，以 value 为准预填
+    if (mode === "daily" && parsed.mode === "daily") { next.h = parsed.h; next.m = parsed.m; }
+    if (mode === "weekly" && parsed.mode === "weekly") { next.h = parsed.h; next.m = parsed.m; next.days = parsed.days; }
+    if (mode === "interval" && parsed.mode === "interval") { next.hours = parsed.hours; next.days = parsed.days; }
+    if (mode === "once" && parsed.mode === "once") { next.date = parsed.date; next.time = parsed.time; }
+    setState(next);
+    onChange(stateToCron(next), stateValid(next, nowMs));
+  };
 
-  const compose = useCallback((idx: number, next: ParsedField) => {
-    const newFields = [...fields];
-    newFields[idx] = next;
-    const segs = newFields.map((f, i) => renderField(f, [MINUTE_MAX, HOUR_MAX, DOM_MAX, MONTH_MAX, DOW_MAX][i]));
-    const cron = segs.join(" ");
-    let valid = true;
-    try { new Cron(cron); } catch { valid = false; }
-    onChange(cron, valid);
-  }, [fields, onChange]);
+  // 高级模式：直接编辑 cron 字符串
+  const advancedValid = useMemo(() => {
+    try { new Cron(value); return true; } catch { return false; }
+  }, [value]);
 
   const applyPreset = (cron: string) => {
     let valid = true;
@@ -306,6 +287,8 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
     onChange(cron, valid);
   };
 
+  // 统一预览区数据
+  const cronValid = state.mode === "advanced" ? advancedValid : stateValid(state, nowMs);
   const upcoming = useMemo(() => {
     try {
       const c = new Cron(value);
@@ -323,140 +306,224 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
     }
   }, [value]);
 
+  // 模式内警告（阻止保存的具体原因）
+  const inlineWarning = (() => {
+    if (state.mode === "advanced") return null;
+    if (state.mode === "daily" || state.mode === "weekly") {
+      if (!timeInRange(state.h, state.m)) return t("Pick a time");
+    }
+    if ((state.mode === "weekly" || state.mode === "interval") && state.days.length === 0) {
+      return t("At least one day required");
+    }
+    if (state.mode === "interval" && !(Number.isInteger(state.hours) && state.hours >= 1 && state.hours <= 23)) {
+      return t("Hours must be between 1 and 23");
+    }
+    if (state.mode === "once") {
+      if (!state.date || !state.time) return t("Pick a date and time");
+      const ts = new Date(`${state.date}T${state.time}`).getTime();
+      if (!Number.isFinite(ts)) return t("Invalid date");
+      if (ts <= nowMs) return t("This time has passed");
+    }
+    return null;
+  })();
+
+  const modeTabs: { id: CronMode; label: string }[] = [
+    { id: "daily", label: t("Daily") },
+    { id: "weekly", label: t("Weekly") },
+    { id: "interval", label: t("Every N hours") },
+    { id: "once", label: t("Once") },
+    { id: "advanced", label: t("Advanced") },
+  ];
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <SegmentDropdown
-          label={t("Minute")}
-          field={fields[0]}
-          max={MINUTE_MAX}
-          everyPresets={[1, 5, 10, 15, 20, 30]}
-          onChange={(f) => compose(0, f)}
-        />
-        <SegmentDropdown
-          label={t("Hour")}
-          field={fields[1]}
-          max={HOUR_MAX}
-          everyPresets={[1, 2, 3, 4, 6, 12]}
-          onChange={(f) => compose(1, f)}
-        />
-        <SegmentDropdown
-          label={t("Day")}
-          field={fields[2]}
-          max={DOM_MAX}
-          everyPresets={[]}
-          onChange={(f) => compose(2, f)}
-        />
-        <SegmentDropdown
-          label={t("Month")}
-          field={fields[3]}
-          max={MONTH_MAX}
-          everyPresets={[]}
-          onChange={(f) => compose(3, f)}
-        />
-        <SegmentDropdown
-          label={t("Week")}
-          field={fields[4]}
-          max={DOW_MAX}
-          everyPresets={[]}
-          namedValues={weekdayNames.map((label, value) => ({ value, label }))}
-          onChange={(f) => compose(4, f)}
-        />
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <code
-          style={{
-            ...inputStyle,
-            width: "auto",
-            padding: "4px 10px",
-            fontFamily: "var(--font-mono)",
-            background: validity ? "var(--bg-subtle)" : "var(--error-bg)",
-            color: validity ? "var(--text)" : "var(--error)",
-            borderColor: validity ? "var(--border)" : "var(--error)",
-            fontSize: 12,
-          }}
-        >
-          {value}
-        </code>
-        {!validity && (
-          <span style={{ fontSize: 11, color: "var(--error)" }}>{t("Syntax error")}</span>
-        )}
-      </div>
-
-      {showPreview && (
-        <div
-          style={{
-            fontSize: 11,
-            color: "var(--text-muted)",
-            background: "var(--bg-subtle)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            padding: "8px 10px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-          }}
-        >
-          <div>
-            <span style={{ fontWeight: 600, color: "var(--text)" }}>{t("Description:")}</span> {cronHumanize(value, locale)}
-          </div>
-          {upcoming.length > 0 && (
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontFamily: "var(--font-mono)" }}>
-              {upcoming.map((ts) => (
-                <span key={ts}>{new Date(ts).toLocaleString()}</span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>
-          {t("Presets")}
-        </span>
-        {PRESETS.map((p) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* 模式切换 */}
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {modeTabs.map((tab) => (
           <button
-            key={p.id}
+            key={tab.id}
             type="button"
-            onClick={() => applyPreset(p.cron)}
+            onClick={() => switchMode(tab.id)}
             style={{
-              padding: "3px 9px",
-              fontSize: 11,
-              background: value === p.cron ? "var(--bg-selected)" : "transparent",
-              border: "1px solid var(--border)",
-              borderColor: value === p.cron ? "var(--accent)" : "var(--border)",
+              padding: "5px 12px",
               borderRadius: 999,
-              color: value === p.cron ? "var(--accent)" : "var(--text-muted)",
+              border: "1px solid",
+              borderColor: state.mode === tab.id ? "var(--accent)" : "var(--border)",
+              background: state.mode === tab.id ? "var(--bg-selected)" : "transparent",
+              color: state.mode === tab.id ? "var(--accent)" : "var(--text-muted)",
+              fontSize: 12,
+              fontWeight: state.mode === tab.id ? 600 : 400,
               cursor: "pointer",
               fontFamily: "inherit",
             }}
           >
-            {t(p.label)}
+            {tab.label}
           </button>
         ))}
+      </div>
+
+      {/* 模式表单 */}
+      {state.mode === "daily" && (
+        <TimeField
+          label={t("Time")}
+          value={`${pad(state.h)}:${pad(state.m)}`}
+          onChange={(v) => {
+            const [h, m] = v.split(":").map(Number);
+            patch({ ...state, mode: "daily", h: Number.isFinite(h) ? h : NaN, m: Number.isFinite(m) ? m : NaN });
+          }}
+        />
+      )}
+
+      {state.mode === "weekly" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <TimeField
+            label={t("Time")}
+            value={`${pad(state.h)}:${pad(state.m)}`}
+            onChange={(v) => {
+              const [h, m] = v.split(":").map(Number);
+              patch({ ...state, mode: "weekly", h: Number.isFinite(h) ? h : NaN, m: Number.isFinite(m) ? m : NaN });
+            }}
+          />
+          <DayChips days={state.days} invalid={state.days.length === 0} onChange={(days) => patch({ ...state, mode: "weekly", days })} />
+        </div>
+      )}
+
+      {state.mode === "interval" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{t("Every")}</span>
+            <input
+              type="number"
+              min={1}
+              max={23}
+              value={Number.isInteger(state.hours) ? state.hours : ""}
+              onChange={(e) => patch({ ...state, mode: "interval", hours: e.target.value === "" ? NaN : Number(e.target.value) })}
+              style={{ ...inputStyle, width: 72, fontFamily: "var(--font-mono)" }}
+            />
+            <span style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{t("Hours")}</span>
+          </label>
+          <DayChips days={state.days} invalid={state.days.length === 0} onChange={(days) => patch({ ...state, mode: "interval", days })} />
+        </div>
+      )}
+
+      {state.mode === "once" && (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{t("Date")}</span>
+            <input
+              type="date"
+              min={todayStr()}
+              value={state.date}
+              onChange={(e) => patch({ ...state, mode: "once", date: e.target.value })}
+              style={{ ...inputStyle, width: 150, fontFamily: "var(--font-mono)" }}
+            />
+          </label>
+          <TimeField
+            label={t("Time")}
+            value={state.time}
+            onChange={(v) => patch({ ...state, mode: "once", time: v })}
+          />
+        </div>
+      )}
+
+      {state.mode === "advanced" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <input
+            type="text"
+            value={value}
+            spellCheck={false}
+            autoComplete="off"
+            placeholder="*/30 * * * *"
+            onChange={(e) => {
+              const v = e.target.value;
+              let valid = true;
+              try { new Cron(v); } catch { valid = false; }
+              onChange(v, valid);
+            }}
+            style={{
+              ...inputStyle,
+              fontFamily: "var(--font-mono)",
+              fontSize: 12.5,
+              borderColor: advancedValid ? "var(--border)" : "var(--error)",
+            }}
+          />
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 4 }}>
+              {t("Presets")}
+            </span>
+            {PRESETS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => applyPreset(p.cron)}
+                style={{
+                  padding: "3px 9px",
+                  fontSize: 11,
+                  background: value === p.cron ? "var(--bg-selected)" : "transparent",
+                  border: "1px solid var(--border)",
+                  borderColor: value === p.cron ? "var(--accent)" : "var(--border)",
+                  borderRadius: 999,
+                  color: value === p.cron ? "var(--accent)" : "var(--text-muted)",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                {t(p.label)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 统一预览区 */}
+      <div
+        style={{
+          fontSize: 11,
+          color: "var(--text-muted)",
+          background: "var(--bg-subtle)",
+          border: "1px solid var(--border)",
+          borderRadius: 6,
+          padding: "8px 10px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <code
+            style={{
+              fontFamily: "var(--font-mono)",
+              padding: "2px 7px",
+              borderRadius: 4,
+              background: cronValid ? "var(--bg)" : "var(--error-bg)",
+              color: cronValid ? "var(--text)" : "var(--error)",
+              border: "1px solid",
+              borderColor: cronValid ? "var(--border)" : "var(--error)",
+              fontSize: 11,
+            }}
+          >
+            {value}
+          </code>
+          {!cronValid && <span style={{ color: "var(--error)" }}>{inlineWarning ?? t("Syntax error")}</span>}
+        </div>
+
+        {showPreview && (
+          <>
+            <div>
+              <span style={{ fontWeight: 600, color: "var(--text)" }}>{t("Description:")}</span> {cronHumanize(value, locale)}
+            </div>
+            {upcoming.length > 0 ? (
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontFamily: "var(--font-mono)" }}>
+                {upcoming.map((ts) => (
+                  <span key={ts}>{new Date(ts).toLocaleString()}</span>
+                ))}
+              </div>
+            ) : cronValid ? (
+              <div style={{ color: "var(--warning)" }}>{t("This time has passed")}</div>
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   );
 }
-
-// Helper export for the form: turn a raw cron string into the
-// 5-field shape so we can pre-populate the builder from a fresh
-// task's stored cron.
-export function getInitialFieldsFromCron(cron: string): [ParsedField, ParsedField, ParsedField, ParsedField, ParsedField] {
-  const segments = cron.trim().split(/\s+/);
-  const padded = segments.length === 5
-    ? segments
-    : segments.length < 5
-      ? [...segments, ...Array(5 - segments.length).fill("*")]
-      : segments.slice(0, 5);
-  return [
-    parseField(padded[0], MINUTE_MAX),
-    parseField(padded[1], HOUR_MAX),
-    parseField(padded[2], DOM_MAX),
-    parseField(padded[3], MONTH_MAX),
-    parseField(padded[4], DOW_MAX),
-  ];
-}
-
-export { WEEKDAY_SHORT, WEEKDAY_LABELS };

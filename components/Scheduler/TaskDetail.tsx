@@ -23,7 +23,7 @@ import { TaskOverviewTab } from "./TaskOverviewTab";
 import { TaskRunsTab, type RunFilter } from "./TaskRunsTab";
 import { TaskPromptTab } from "./TaskPromptTab";
 import { TaskConfigTab } from "./TaskConfigTab";
-import { apiFetch } from "./utils";
+import { apiFetch, isOnceDone } from "./utils";
 import { tabBarStyle, tabItemStyle } from "./styles";
 import type { DetailTab, ScheduledTask, TaskRun } from "./types";
 import { IconEdit, IconPause, IconPlay, IconTrash } from "./icons";
@@ -119,7 +119,7 @@ export function TaskDetail({
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {task.name}
           </h2>
-          <StatusBadge status={task.enabled ? "enabled" : "paused"} size="md" />
+          <StatusBadge status={isOnceDone(task) ? "done" : task.enabled ? "enabled" : "paused"} size="md" />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--text-muted)" }}>

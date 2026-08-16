@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { StatusBadge } from "./StatusBadge";
 import { CronHumanizer } from "./CronHumanizer";
+import { isOnceDone } from "./utils";
 import { useNow } from "./useNow";
 import { formatCompactRelative } from "./utils";
 import type { ScheduledTask, TaskRunStatus } from "./types";
@@ -271,7 +272,7 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <StatusBadge status={task.enabled ? "enabled" : "paused"} size="sm" />
+        <StatusBadge status={isOnceDone(task) ? "done" : task.enabled ? "enabled" : "paused"} size="sm" />
         <span
           style={{
             flex: 1,
@@ -313,9 +314,11 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
         </span>
       </div>
       <div style={{ marginTop: 3, fontSize: 11, color: "var(--text-muted)" }}>
-        {task.enabled
-          ? t("Next: {time}", { time: formatCompactRelative(now, task.nextRunAt, locale) })
-          : t("Paused")}
+        {!task.enabled
+          ? t("Paused")
+          : isOnceDone(task)
+            ? t("Executed")
+            : t("Next: {time}", { time: formatCompactRelative(now, task.nextRunAt, locale) })}
       </div>
     </div>
   );
