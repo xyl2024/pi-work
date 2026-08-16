@@ -45,7 +45,6 @@ interface FormState {
   cronValid: boolean;
   cwd: string;
   prompt: string;
-  enabled: boolean;
   provider: string;
   modelId: string;
   thinkingLevel: string;
@@ -59,7 +58,6 @@ const EMPTY: FormState = {
   cronValid: true,
   cwd: "",
   prompt: "",
-  enabled: true,
   provider: "",
   modelId: "",
   thinkingLevel: "",
@@ -120,7 +118,6 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         cronValid: (() => { try { new Cron(task.cron); return true; } catch { return false; } })(),
         cwd: task.cwd,
         prompt: task.prompt,
-        enabled: task.enabled,
         provider: task.provider ?? "",
         modelId: task.modelId ?? "",
         thinkingLevel: task.thinkingLevel ?? "",
@@ -184,7 +181,6 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         cron: form.cron.trim(),
         cwd: form.cwd.trim(),
         prompt: form.prompt.trim(),
-        enabled: form.enabled,
         provider: form.provider.trim() || null,
         modelId: form.modelId.trim() || null,
         thinkingLevel: form.thinkingLevel.trim() || null,
@@ -333,7 +329,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         <div
           style={{
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent: "flex-end",
             alignItems: "center",
             gap: 8,
             padding: "12px 18px",
@@ -342,15 +338,6 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
             flexShrink: 0,
           }}
         >
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)", cursor: "pointer", userSelect: "none" }}>
-            <input
-              type="checkbox"
-              checked={form.enabled}
-              onChange={(e) => update("enabled", e.target.checked)}
-              style={{ accentColor: "var(--accent)" }}
-            />
-            {form.enabled ? t("enabled") : t("disabled")}
-          </label>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={requestClose} disabled={saving} style={btnGhost}>{t("Cancel")}</button>
             <button onClick={() => void submit()} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
