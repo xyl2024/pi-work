@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useToast } from "./Toast";
 import { Tooltip } from "./Tooltip";
 import { EchartsChart } from "./EchartsChart";
@@ -38,12 +39,6 @@ function fmtNum(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(Math.round(n));
-}
-
-function fmtCost(n: number): string {
-  if (n === 0) return "$0";
-  if (n < 0.01) return `$${n.toFixed(4)}`;
-  return `$${n.toFixed(2)}`;
 }
 
 function fmtPct(n: number): string {
@@ -368,6 +363,7 @@ interface KpiStripProps {
 
 function KpiStrip({ totals, totalCalls, errorCount }: KpiStripProps) {
   const { t } = useI18n();
+  const { formatCost } = useFormatCurrency();
   if (!totals) {
     return (
       <div style={kpiGridStyle}>
@@ -385,7 +381,7 @@ function KpiStrip({ totals, totalCalls, errorCount }: KpiStripProps) {
   const errorRate = totalCalls > 0 ? errorCount / totalCalls : 0;
   return (
     <div style={kpiGridStyle}>
-      <KpiCard label={t("Total cost")} value={fmtCost(totals.costTotal)} accent />
+      <KpiCard label={t("Total cost")} value={formatCost(totals.costTotal)} accent />
       <KpiCard label={t("Calls")} value={fmtNum(totalCalls || totals.calls)} sub={totals.calls > 0 ? `${totals.calls} ${t("audit")}` : undefined} />
       <KpiCard label={t("Total tokens")} value={fmtNum(totalTokens)} sub={t("incl. cache")} />
       <KpiCard label={t("Avg duration")} value={avgMs > 0 ? `${(avgMs / 1000).toFixed(1)}s` : "—"} />
@@ -511,6 +507,7 @@ function padTimeBuckets(range: Range, raw: SummaryBucket[]): { ts: number; b: Su
 function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryBucket[] }) {
   const { t } = useI18n();
   const theme = useChartTheme();
+  const { formatCost } = useFormatCurrency();
   const series = useMemo(() => padTimeBuckets(range, buckets), [range, buckets]);
   const option = useMemo<echarts.EChartsCoreOption>(() => {
     const xs = series.map((p) => (range === "today" ? fmtHour(p.ts) : fmtMonthDay(p.ts)));
@@ -531,7 +528,7 @@ function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryB
           type: "value",
           name: t("Cost"),
           nameTextStyle: { color: theme.text, fontSize: 10 },
-          axisLabel: { color: theme.text, fontSize: 10, formatter: (v: number) => `$${v}` },
+          axisLabel: { color: theme.text, fontSize: 10, formatter: (v: number) => formatCost(v) },
           splitLine: { lineStyle: { color: theme.axis, type: "dashed", opacity: 0.4 } },
         },
         {
@@ -564,7 +561,7 @@ function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryB
         },
       ],
     };
-  }, [series, theme, t, range]);
+  }, [series, theme, t, range, formatCost]);
   return <EchartsChart option={option} height={220} ariaLabel={t("Cost over time")} />;
 }
 
@@ -614,9 +611,10 @@ function CostByCategoryChart({
 }) {
   const { t } = useI18n();
   const theme = useChartTheme();
+  const { formatCost } = useFormatCurrency();
   const option = useMemo<echarts.EChartsCoreOption>(() => {
     if (buckets.length === 0) {
-      return emptyDonut(theme, totalCost);
+      return emptyDonut(theme, totalCost, formatCost);
     }
     const top = buckets.slice(0, 6);
     const rest = buckets.slice(6);
@@ -633,7 +631,7 @@ function CostByCategoryChart({
       animation: false,
       tooltip: { trigger: "item", backgroundColor: theme.tooltipBg, borderColor: theme.axis, textStyle: { color: theme.text, fontSize: 11 }, formatter: ((p: unknown): string => {
           const pp = p as { marker?: string; name?: string; value?: number; percent?: number };
-          return `${pp.marker ?? ""} ${pp.name ?? ""}<br/>${fmtCost(pp.value ?? 0)} (${pp.percent ?? 0}%)`;
+          return `${pp.marker ?? ""} ${pp.name ?? ""}<br/>${formatCost(pp.value ?? 0)} (${pp.percent ?? 0}%)`;
         }) as never },
       legend: {
         type: "scroll",
@@ -662,7 +660,7 @@ function CostByCategoryChart({
           type: "text",
           left: "38%",
           top: "46%",
-          style: { text: fmtCost(totalCost), fill: theme.text, fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "center" },
+          style: { text: formatCost(totalCost), fill: theme.text, fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "center" },
         },
         {
           type: "text",
@@ -672,7 +670,7 @@ function CostByCategoryChart({
         },
       ],
     };
-  }, [buckets, totalCost, theme, labelKey, t, unknownLabel]);
+  }, [buckets, totalCost, theme, labelKey, t, unknownLabel, formatCost]);
   return <EchartsChart option={option} height={260} ariaLabel={t("Cost by category")} />;
 }
 
@@ -725,6 +723,7 @@ function CacheHitRateChart({ range, buckets }: { range: Range; buckets: SummaryB
 function TopSessionsChart({ buckets }: { buckets: SummaryBucket[] }) {
   const { t } = useI18n();
   const theme = useChartTheme();
+  const { formatCost } = useFormatCurrency();
   const option = useMemo<echarts.EChartsCoreOption>(() => {
     if (buckets.length === 0) return emptyBars(theme, t("No token usage recorded yet."));
     const sorted = [...buckets].sort((a, b) => b.costTotal - a.costTotal);
@@ -734,11 +733,11 @@ function TopSessionsChart({ buckets }: { buckets: SummaryBucket[] }) {
       tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, backgroundColor: theme.tooltipBg, borderColor: theme.axis, textStyle: { color: theme.text, fontSize: 11 }, formatter: ((params: unknown): string => {
         const arr = Array.isArray(params) ? params : [params];
         const p = arr[0] as { name?: string; value?: number };
-        return `<div style="font-family:var(--font-mono);font-size:11px">${shortLabel(p.name ?? "")}<br/>${fmtCost(p.value ?? 0)}</div>`;
+        return `<div style="font-family:var(--font-mono);font-size:11px">${shortLabel(p.name ?? "")}<br/>${formatCost(p.value ?? 0)}</div>`;
       }) as never },
       xAxis: {
         type: "value",
-        axisLabel: { color: theme.text, fontSize: 10, formatter: (v: number) => `$${v}` },
+        axisLabel: { color: theme.text, fontSize: 10, formatter: (v: number) => formatCost(v) },
         splitLine: { lineStyle: { color: theme.axis, type: "dashed", opacity: 0.4 } },
       },
       yAxis: {
@@ -755,7 +754,7 @@ function TopSessionsChart({ buckets }: { buckets: SummaryBucket[] }) {
         },
       ],
     };
-  }, [buckets, theme, t]);
+  }, [buckets, theme, t, formatCost]);
   return <EchartsChart option={option} height={260} ariaLabel={t("Top sessions by cost")} />;
 }
 
@@ -835,6 +834,7 @@ function RecentCalls({ rows, total, offset, loading, onSelectSession, onChangeOf
 }
 
 function CallRow({ row, onSelectSession }: { row: TokenCall; onSelectSession: (s: SessionInfo) => void }) {
+  const { formatCost } = useFormatCurrency();
   const handleClick = useCallback(() => {
     onSelectSession({
       id: row.sessionId,
@@ -876,7 +876,7 @@ function CallRow({ row, onSelectSession }: { row: TokenCall; onSelectSession: (s
         {row.provider}/{row.modelId}
       </span>
       <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtNum(tokenIn + row.outputTokens)}</span>
-      <span style={{ textAlign: "right", color: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>{fmtCost(row.costTotal)}</span>
+      <span style={{ textAlign: "right", color: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>{formatCost(row.costTotal)}</span>
       <span style={{ textAlign: "right", color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{(row.durationMs / 1000).toFixed(1)}s</span>
       <span style={{ textAlign: "center", color: isError ? "#f87171" : "var(--text-dim)", fontSize: 12 }}>
         {isError ? <Tooltip content={row.error ?? "error"}><span>!</span></Tooltip> : ""}
@@ -962,7 +962,7 @@ function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
 }
 
-function emptyDonut(theme: ReturnType<typeof useChartTheme>, totalCost: number): echarts.EChartsCoreOption {
+function emptyDonut(theme: ReturnType<typeof useChartTheme>, totalCost: number, formatCost: (usd: number) => string): echarts.EChartsCoreOption {
   return {
     animation: false,
     series: [
@@ -976,7 +976,7 @@ function emptyDonut(theme: ReturnType<typeof useChartTheme>, totalCost: number):
       },
     ],
     graphic: [
-      { type: "text", left: "38%", top: "46%", style: { text: fmtCost(totalCost), fill: theme.text, fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "center" } },
+      { type: "text", left: "38%", top: "46%", style: { text: formatCost(totalCost), fill: theme.text, fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "center" } },
       { type: "text", left: "38%", top: "60%", style: { text: "—", fill: theme.text, fontSize: 10, textAlign: "center" } },
     ],
   };

@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Tooltip } from "./Tooltip";
 import { useI18n } from "@/hooks/useI18n";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { useToast } from "./Toast";
 import { exportMessageAsPng, MESSAGE_ACTION_ROW_CLASS } from "@/lib/export-message-card";
@@ -1304,7 +1305,8 @@ function getToolPreview(block: ToolCallContent): string {
   return String(first).slice(0, 120);
 }
 
-function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRead: number; cacheWrite: number } }) {
+function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } }) {
+  const { formatCost, currency } = useFormatCurrency();
   const inputDenom = usage.input + usage.cacheRead;
   const cacheHitRate = inputDenom > 0 ? (usage.cacheRead / inputDenom) * 100 : 0;
   const items: Array<{ key: string; label: string; icon: React.ReactNode }> = [];
@@ -1341,11 +1343,32 @@ function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRe
       ),
     });
   }
+  if (typeof usage.cost?.total === "number" && usage.cost.total > 0) {
+    const usd = usage.cost.total;
+    const formatted = formatCost(usd);
+    // Tooltip shows the *converted* amount plus the original USD so the user
+    // can verify the math (and confirm we're falling back when rate is null).
+    const tooltipLabel = currency === "CNY"
+      ? `${formatted}  (≈ $${usd.toFixed(4)} USD)`
+      : formatted;
+    items.push({
+      key: "cost",
+      label: tooltipLabel,
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 1.5v9" /><path d="M8 3.2c-.5-.9-2.2-1.2-3-.6-.8.6-.7 1.7.2 2.2l1.9.9c1 .5 1 1.7.1 2.3-.9.7-2.7.3-3.2-.7" />
+        </svg>
+      ),
+    });
+  }
   if (items.length === 0) return null;
   const compact = (it: typeof items[number]): string => {
     if (it.key === "in") return usage.input.toLocaleString();
     if (it.key === "out") return usage.output.toLocaleString();
     if (it.key === "cache") return `${cacheHitRate.toFixed(0)}%`;
+    if (it.key === "cost") {
+      return formatCost(usage.cost.total);
+    }
     return "";
   };
   return (

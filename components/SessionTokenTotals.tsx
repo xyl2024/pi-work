@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
 import { useI18n } from "@/hooks/useI18n";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Tooltip } from "./Tooltip";
 
 /**
@@ -29,6 +30,7 @@ import { Tooltip } from "./Tooltip";
 export function SessionTokenTotals() {
   const { t } = useI18n();
   const stats = useSessionUiState().sessionStats;
+  const { formatCost } = useFormatCurrency();
 
   const formatted = useMemo(() => {
     if (!stats) return null;
@@ -39,10 +41,10 @@ export function SessionTokenTotals() {
     const hitPct = ((stats.cachedHitRate ?? 0) * 100).toFixed(1);
     const parts = [`${inFmt} ${t("in")}`, `${outFmt} ${t("out")}`, `${hitPct}% ${t("cache")}`];
     if (stats.cost && stats.cost > 0) {
-      parts.push(`$${stats.cost.toFixed(4)}`);
+      parts.push(formatCost(stats.cost));
     }
     return parts;
-  }, [stats, t]);
+  }, [stats, t, formatCost]);
 
   if (!formatted) return null;
 
