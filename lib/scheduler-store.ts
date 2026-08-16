@@ -28,7 +28,7 @@ const DEFAULT_RUNS_LIMIT = 50;
 const MIN_MAX_LIFETIME_MS = 1_000;
 const MAX_MAX_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
-export type TaskRunStatus = "running" | "success" | "error" | "timeout";
+export type TaskRunStatus = "running" | "success" | "error" | "timeout" | "interrupted";
 
 export interface ScheduledTask {
   id: string;
@@ -100,6 +100,12 @@ export interface RecordRunEndInput {
   error?: string | null;
   sessionId?: string | null;
   durationMs?: number;
+}
+
+export interface RunningTaskRun {
+  id: string;
+  startedAt: number;
+  sessionId: string | null;
 }
 
 export class SchedulerValidationError extends Error {
@@ -382,6 +388,17 @@ export function deleteTask(id: string): void {
 
 export function setEnabled(id: string, enabled: boolean): ScheduledTask {
   return updateTask({ id, enabled });
+}
+
+export function listRunningRuns(): RunningTaskRun[] {
+  const rows = getSchedulerDb()
+    .prepare("SELECT id, started_at, session_id FROM task_runs WHERE status = 'running'")
+    .all() as Array<{ id: string; started_at: number; session_id: string | null }>;
+  return rows.map((row) => ({
+    id: row.id,
+    startedAt: row.started_at,
+    sessionId: row.session_id,
+  }));
 }
 
 export function listRuns(taskId: string, limit: number = DEFAULT_RUNS_LIMIT): TaskRun[] {

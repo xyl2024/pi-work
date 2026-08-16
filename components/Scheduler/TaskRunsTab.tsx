@@ -2,7 +2,7 @@
  * TaskRunsTab — run history for one task.
  *
  * Card-style list (vs. the old cramped rows) that shows:
- *   - status pill (success / error / timeout / running)
+ *   - status pill (success / error / timeout / interrupted / running)
  *   - relative timestamp + duration + read state
  *   - reply preview (expandable), or error message
  *   - "open session" link when a session id is attached
@@ -21,7 +21,7 @@ import { apiFetch, formatDuration, formatRelative } from "./utils";
 import type { ScheduledTask, TaskRun } from "./types";
 import { IconExternal } from "./icons";
 
-export type RunFilter = "all" | "success" | "error" | "timeout" | "running";
+export type RunFilter = "all" | "success" | "error" | "timeout" | "interrupted" | "running";
 
 interface Props {
   task: ScheduledTask;
@@ -42,6 +42,7 @@ const FILTERS: { id: RunFilter; label: string }[] = [
   { id: "success", label: "Success" },
   { id: "error",   label: "Errors" },
   { id: "timeout", label: "Timeout" },
+  { id: "interrupted", label: "Interrupted" },
   { id: "running", label: "Running" },
 ];
 
@@ -332,15 +333,15 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
         <div
           style={{
             fontSize: 11,
-            color: run.status === "timeout" ? "var(--warning)" : "var(--error)",
+            color: run.status === "timeout" || run.status === "interrupted" ? "var(--warning)" : "var(--error)",
             fontFamily: "var(--font-mono)",
-            background: run.status === "timeout" ? "var(--warning-bg)" : "var(--error-bg)",
+            background: run.status === "timeout" || run.status === "interrupted" ? "var(--warning-bg)" : "var(--error-bg)",
             padding: "6px 10px",
             borderRadius: 4,
             wordBreak: "break-word",
           }}
         >
-          {run.error}
+          {t(run.error)}
         </div>
       )}
       {replyPreview && (

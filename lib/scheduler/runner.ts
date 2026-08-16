@@ -53,6 +53,14 @@ class MaxLifetimeExceededError extends Error {
   }
 }
 
+/** The wrapper disappeared before pi emitted its terminal agent_end event. */
+class SessionInterruptedError extends Error {
+  constructor() {
+    super("agent session destroyed before agent_end");
+    this.name = "SessionInterruptedError";
+  }
+}
+
 /** Per-task FIFO chain so two overlapping triggers don't run concurrently. */
 const taskChains = new Map<string, Promise<void>>();
 
@@ -115,9 +123,6 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       await session.send({ type: "set_thinking_level", level: task.thinkingLevel });
     }
 
-    // session.send for prompt is fire-and-forget; results arrive via onEvent
-    session.send({ type: "prompt", message: task.prompt }).catch(() => undefined);
-
     const maxLifetimeMs = task.maxLifetimeMs ?? DEFAULT_MAX_LIFETIME_MS;
     log.debug("waiting for agent_end", {
       taskId: task.id,
@@ -125,7 +130,13 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       maxLifetimeMs,
       maxLifetimeSource: task.maxLifetimeMs !== null ? "task" : "default",
     });
-    const reply = await waitForAgentReply(session, runId, maxLifetimeMs);
+    // Install the terminal-event listener before dispatching the prompt so a
+    // very short turn cannot emit agent_end before the scheduler is listening.
+    const waiter = waitForAgentReply(session, runId, maxLifetimeMs);
+    void session.send({ type: "prompt", message: task.prompt }).catch((err: unknown) => {
+      waiter.fail(err instanceof Error ? err : new Error(String(err)));
+    });
+    const reply = await waiter.promise;
     const durationMs = Date.now() - startedAt;
     log.info("run success", { taskId: task.id, runId, sessionId, durationMs });
     recordRunEnd(runId, {
@@ -143,13 +154,14 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
   } catch (err) {
     const errorStr = err instanceof Error ? err.message : String(err);
     const isTimeout = err instanceof MaxLifetimeExceededError;
-    const status = isTimeout ? "timeout" : "error";
+    const isInterrupted = err instanceof SessionInterruptedError;
+    const status = isTimeout ? "timeout" : isInterrupted ? "interrupted" : "error";
     const durationMs = Date.now() - startedAt;
     log.error("run failed", { taskId: task.id, runId, sessionId, status, error: errorStr });
     recordRunEnd(runId, { status, error: errorStr, sessionId, durationMs });
     safePush(task.id, {
       source: "scheduler",
-      level: isTimeout ? "warn" : "error",
+      level: isTimeout || isInterrupted ? "warn" : "error",
       title: task.name,
       payload: { body: errorStr.slice(0, 200) },
     });
@@ -158,8 +170,14 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
 
 type SessionWithDestroy = {
   onEvent: (cb: (event: AgentEvent) => void) => () => void;
+  onDestroy: (cb: () => void) => () => void;
   destroy: () => void;
 };
+
+interface AgentReplyWaiter {
+  promise: Promise<string>;
+  fail: (err: Error) => void;
+}
 
 /**
  * Subscribe to the wrapper's event stream and resolve on `agent_end`,
@@ -178,69 +196,101 @@ function waitForAgentReply(
   session: SessionWithDestroy,
   runId: string,
   maxLifetimeMs: number,
-): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    let done = false;
-    const finish = (err: Error | null, reply: string) => {
-      if (done) return;
-      done = true;
-      clearTimeout(lifetimeTimer);
-      unsubscribe();
-      if (err) reject(err);
-      else resolve(reply);
-    };
+): AgentReplyWaiter {
+  let done = false;
+  let lifetimeTimer: ReturnType<typeof setTimeout> | null = null;
+  let unsubscribe = () => {};
+  let removeDestroyListener = () => {};
+  let destroyingForTimeout = false;
+  let resolvePromise: (reply: string) => void = () => {};
+  let rejectPromise: (err: Error) => void = () => {};
 
-    const lifetimeTimer = setTimeout(() => {
-      log.warn("max lifetime reached, destroying wrapper", {
-        runId,
-        maxLifetimeMs,
-      });
-      // Force-destroy so the agent actually stops (otherwise a stuck
-      // session would keep the slot pinned and the model provider would
-      // continue to be billed). The session file on disk is left as-is
-      // for post-mortem — the recorded sessionId lets the user inspect
-      // whatever the agent had actually written.
-      try {
-        session.destroy();
-      } catch (err) {
-        log.warn("destroy failed during lifetime cap", { runId, error: String(err) });
-      }
-      finish(new MaxLifetimeExceededError(maxLifetimeMs), "");
-    }, maxLifetimeMs);
-
-    const unsubscribe = session.onEvent((event: AgentEvent) => {
-      if (event.type !== "agent_end") return;
-      const error = typeof event.error === "string" ? event.error : null;
-      if (error) {
-        finish(new Error(error), "");
-        return;
-      }
-      const messages = Array.isArray((event as Record<string, unknown>).messages)
-        ? ((event as Record<string, unknown>).messages as AssistantMsg[])
-        : null;
-      if (!messages) {
-        // No messages snapshot — treat as success with empty reply so the run
-        // is recorded. This can happen if pi changed its event shape.
-        log.warn("agent_end without messages snapshot", { runId });
-        finish(null, "");
-        return;
-      }
-
-      for (let i = messages.length - 1; i >= 0; i--) {
-        const m = messages[i];
-        if (m.role !== "assistant") continue;
-        if (m.stopReason === "error" || m.stopReason === "aborted") {
-          finish(new Error(m.errorMessage || `assistant stopReason=${m.stopReason}`), "");
-          return;
-        }
-        const text = m.content
-          .filter((b): b is TextBlock => b.type === "text")
-          .map((b) => b.text ?? "")
-          .join("");
-        finish(null, text);
-        return;
-      }
-      finish(null, "");
-    });
+  const promise = new Promise<string>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = (err) => reject(err);
   });
+
+  const finish = (err: Error | null, reply: string) => {
+    if (done) return;
+    done = true;
+    if (lifetimeTimer !== null) clearTimeout(lifetimeTimer);
+    unsubscribe();
+    removeDestroyListener();
+    if (err) rejectPromise(err);
+    else resolvePromise(reply);
+  };
+
+  const fail = (err: Error) => finish(err, "");
+
+  const onDestroy = () => {
+    if (destroyingForTimeout) return;
+    log.warn("agent session destroyed before agent_end", { runId });
+    fail(new SessionInterruptedError());
+  };
+
+  lifetimeTimer = setTimeout(() => {
+    log.warn("max lifetime reached, destroying wrapper", {
+      runId,
+      maxLifetimeMs,
+    });
+    // Force-destroy so the agent actually stops (otherwise a stuck
+    // session would keep the slot pinned and the model provider would
+    // continue to be billed). The session file on disk is left as-is
+    // for post-mortem — the recorded sessionId lets the user inspect
+    // whatever the agent had actually written.
+    destroyingForTimeout = true;
+    try {
+      session.destroy();
+    } catch (err) {
+      log.warn("destroy failed during lifetime cap", { runId, error: String(err) });
+    }
+    finish(new MaxLifetimeExceededError(maxLifetimeMs), "");
+  }, maxLifetimeMs);
+
+  // Register both listeners before the prompt is dispatched. This closes
+  // the short-task race where agent_end could otherwise arrive first.
+  unsubscribe = session.onEvent((event: AgentEvent) => {
+    if (event.type === "prompt_failed") {
+      const message = typeof event.error === "string" && event.error
+        ? event.error
+        : "prompt failed";
+      fail(new Error(message));
+      return;
+    }
+    if (event.type !== "agent_end") return;
+    const error = typeof event.error === "string" ? event.error : null;
+    if (error) {
+      fail(new Error(error));
+      return;
+    }
+    const messages = Array.isArray((event as Record<string, unknown>).messages)
+      ? ((event as Record<string, unknown>).messages as AssistantMsg[])
+      : null;
+    if (!messages) {
+      // No messages snapshot — treat as success with empty reply so the run
+      // is recorded. This can happen if pi changed its event shape.
+      log.warn("agent_end without messages snapshot", { runId });
+      finish(null, "");
+      return;
+    }
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== "assistant") continue;
+      if (m.stopReason === "error" || m.stopReason === "aborted") {
+        fail(new Error(m.errorMessage || `assistant stopReason=${m.stopReason}`));
+        return;
+      }
+      const text = m.content
+        .filter((b): b is TextBlock => b.type === "text")
+        .map((b) => b.text ?? "")
+        .join("");
+      finish(null, text);
+      return;
+    }
+    finish(null, "");
+  });
+  removeDestroyListener = session.onDestroy(onDestroy);
+
+  return { promise, fail };
 }

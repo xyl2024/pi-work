@@ -221,8 +221,9 @@ function pad(s: string): string {
 export interface TaskRunStats {
   total: number;
   success: number;
-  failed: number;          // error + timeout
+  failed: number;          // error + timeout + interrupted
   timedOut: number;
+  interrupted: number;
   successRate: number;     // 0..1, or 0 if no completed runs
   avgDurationMs: number | null;
   lastSuccessAt: number | null;
@@ -240,6 +241,7 @@ export function computeStats(runs: TaskRun[]): TaskRunStats {
   let success = 0;
   let error = 0;
   let timeout = 0;
+  let interrupted = 0;
   let durSum = 0;
   let durCount = 0;
   let lastSuccessAt: number | null = null;
@@ -257,6 +259,9 @@ export function computeStats(runs: TaskRun[]): TaskRunStats {
     } else if (r.status === "timeout") {
       timeout++;
       if (lastFailedAt === null || r.startedAt > lastFailedAt) lastFailedAt = r.startedAt;
+    } else if (r.status === "interrupted") {
+      interrupted++;
+      if (lastFailedAt === null || r.startedAt > lastFailedAt) lastFailedAt = r.startedAt;
     }
     if (r.durationMs !== null) {
       durSum += r.durationMs;
@@ -264,12 +269,13 @@ export function computeStats(runs: TaskRun[]): TaskRunStats {
     }
   }
 
-  const completed = success + error + timeout;
+  const completed = success + error + timeout + interrupted;
   return {
     total,
     success,
-    failed: error + timeout,
+    failed: error + timeout + interrupted,
     timedOut: timeout,
+    interrupted,
     successRate: completed === 0 ? 0 : success / completed,
     avgDurationMs: durCount === 0 ? null : Math.round(durSum / durCount),
     lastSuccessAt,
@@ -295,6 +301,7 @@ export function statusVar(s: StatusVariant | null): { fg: string; bg: string } {
     case "success":  return { fg: "var(--success)", bg: "var(--success-bg)" };
     case "error":    return { fg: "var(--error)",   bg: "var(--error-bg)" };
     case "timeout":  return { fg: "var(--warning)", bg: "var(--warning-bg)" };
+    case "interrupted": return { fg: "var(--warning)", bg: "var(--warning-bg)" };
     case "paused":   return { fg: "var(--text-muted)", bg: "var(--bg-subtle)" };
     case "disabled": return { fg: "var(--text-muted)", bg: "var(--bg-subtle)" };
     case "enabled":  return { fg: "var(--success)", bg: "var(--success-bg)" };

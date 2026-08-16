@@ -89,7 +89,7 @@ export class AgentSessionWrapper {
   private listeners: EventListener[] = [];
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
-  private onDestroyCallback: (() => void) | null = null;
+  private readonly destroyCallbacks = new Set<() => void>();
   private _alive = true;
   // True between agent_start and agent_end (and during compaction). Spans the
   // whole turn including tool calls so the sidebar dot covers the full
@@ -205,8 +205,9 @@ export class AgentSessionWrapper {
     };
   }
 
-  onDestroy(cb: () => void): void {
-    this.onDestroyCallback = cb;
+  onDestroy(cb: () => void): () => void {
+    this.destroyCallbacks.add(cb);
+    return () => this.destroyCallbacks.delete(cb);
   }
 
   /**
@@ -534,7 +535,17 @@ export class AgentSessionWrapper {
     this._running = false;
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.unsubscribe?.();
-    this.onDestroyCallback?.();
+    for (const cb of this.destroyCallbacks) {
+      try {
+        cb();
+      } catch (error) {
+        log.warn("agent destroy callback failed", {
+          sessionId: this.sessionId,
+          error: String(error),
+        });
+      }
+    }
+    this.destroyCallbacks.clear();
     for (const [, pending] of this.pendingPermissions) {
       clearTimeout(pending.timeoutHandle);
       pending.reject("destroyed");

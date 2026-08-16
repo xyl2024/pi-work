@@ -1,7 +1,8 @@
 /**
  * StatusBadge — compact pill for task / run status.
  *
- * Renders one of five variants: success, error, timeout, running, paused.
+ * Renders run variants (success, error, timeout, interrupted, running) and
+ * task variants (paused, enabled, disabled, done).
  * The "running" variant has a soft pulse to signal live activity (uses
  * the global `scheduler-running-pulse` keyframes defined in globals.css).
  *
@@ -27,6 +28,7 @@ function iconFor(variant: StatusVariant): string | null {
     case "success":  return "✓";
     case "error":    return "✕";
     case "timeout":  return "⏱";
+    case "interrupted": return "!";
     case "running":  return "●";
     case "paused":
     case "disabled": return "⏸";

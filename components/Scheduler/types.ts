@@ -9,7 +9,7 @@
  * server, the resulting TypeScript error here is the canary.
  */
 
-export type TaskRunStatus = "running" | "success" | "error" | "timeout";
+export type TaskRunStatus = "running" | "success" | "error" | "timeout" | "interrupted";
 
 export interface ScheduledTask {
   id: string;

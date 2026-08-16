@@ -45,7 +45,7 @@ export function TaskOverviewTab({ task, runs }: Props) {
         <KpiCard
           label={t("Failures")}
           value={stats.failed.toString()}
-          hint={stats.timedOut > 0 ? t("{n} timed out", { n: stats.timedOut }) : t("Includes errors and timeouts")}
+          hint={stats.timedOut > 0 ? t("{n} timed out", { n: stats.timedOut }) : stats.interrupted > 0 ? t("{n} interrupted", { n: stats.interrupted }) : t("Includes errors, timeouts and interruptions")}
           tone={stats.failed === 0 ? "muted" : stats.failed > 3 ? "error" : "warning"}
         />
       </div>

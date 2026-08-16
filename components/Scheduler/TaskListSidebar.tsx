@@ -69,7 +69,7 @@ export function TaskListSidebar({
       // Status filter
       if (filter === "enabled" && !task.enabled) return false;
       if (filter === "disabled" && task.enabled) return false;
-      if (filter === "error" && task.lastRunStatus !== "error" && task.lastRunStatus !== "timeout") return false;
+      if (filter === "error" && task.lastRunStatus !== "error" && task.lastRunStatus !== "timeout" && task.lastRunStatus !== "interrupted") return false;
       // Text search across name + cron + prompt
       if (q.length > 0) {
         const haystack = `${task.name} ${task.cron} ${task.prompt}`.toLowerCase();
@@ -255,7 +255,7 @@ export function TaskListSidebar({
 function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: number; selected: boolean; onSelect: () => void }) {
   const { t, locale } = useI18n();
   const lastStatus: TaskRunStatus | null = task.lastRunStatus;
-  const showErrorBadge = lastStatus === "error" || lastStatus === "timeout";
+  const showErrorBadge = lastStatus === "error" || lastStatus === "timeout" || lastStatus === "interrupted";
 
   return (
     <div
@@ -305,7 +305,7 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
           </span>
         )}
         {showErrorBadge && (
-          <IconAlert width={11} height={11} style={{ color: lastStatus === "timeout" ? "var(--warning)" : "var(--error)", flexShrink: 0 }} />
+          <IconAlert width={11} height={11} style={{ color: lastStatus === "timeout" || lastStatus === "interrupted" ? "var(--warning)" : "var(--error)", flexShrink: 0 }} />
         )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text)", fontWeight: 500 }}>
@@ -395,6 +395,6 @@ function filterCount(tasks: ScheduledTask[], f: SidebarFilter): number {
     case "all":      return tasks.length;
     case "enabled":  return tasks.filter((t) => t.enabled).length;
     case "disabled": return tasks.filter((t) => !t.enabled).length;
-    case "error":    return tasks.filter((t) => t.lastRunStatus === "error" || t.lastRunStatus === "timeout").length;
+    case "error":    return tasks.filter((t) => t.lastRunStatus === "error" || t.lastRunStatus === "timeout" || t.lastRunStatus === "interrupted").length;
   }
 }
