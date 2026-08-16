@@ -11,7 +11,12 @@
  *   area — same "don't render when empty" semantic as the prior
  *   always-on left-floating panel.
  * - While rendered, the button is always visible (affordance is stable);
- *   click toggles `open`, which runs the popover's scale-fade transition.
+ *   hovering it (`mouseenter`) opens the popover, running the popover's
+ *   scale-fade transition. Moving the mouse away (`mouseleave`) schedules
+ *   a close after HOVER_CLOSE_DELAY — the grace period lets the pointer
+ *   cross the 8px gap between button and popover without the popover
+ *   closing underneath it. Clicking the button still toggles `open`
+ *   (quick dismiss while open; keyboard users can still summon it).
  *
  * Popover positioning:
  * - Button + popover share a `position: relative` wrapper so the popover
@@ -27,14 +32,10 @@
  *   visibly grows out of the launcher rather than the page center.
  *
  * Close paths:
+ * - `mouseleave` on the wrapper (after HOVER_CLOSE_DELAY, so moving onto
+ *   the popover itself doesn't close it).
  * - Button click toggles `open` (same button, second click closes).
  * - `keydown` Escape closes.
- * - Document `mousedown` outside the wrapper closes. Clicks inside any
- *   `[data-agent-todo-stay-open-zone]` ancestor (the chat input) are
- *   excluded — see `components/ChatInput.tsx`. We use a data attribute
- *   rather than a shared ref so the popover doesn't need to know the
- *   input's DOM node, and the input doesn't need to know about the
- *   popover.
  *
  * Responsive:
  * - Below 1100px the whole component (button + popover) is hidden.
@@ -57,9 +58,11 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentTask } from "@/lib/agent-todo-tool-types";
 import { useAgentTodo } from "@/hooks/useAgentTodo";
 import { useI18n } from "@/hooks/useI18n";
-import { Tooltip } from "@/components/Tooltip";
 
 const PANEL_BREAKPOINT = 1100;
+/** Grace period (ms) before closing after the pointer leaves the wrapper —
+    long enough to cross the 8px button→popover gap without flicker. */
+const HOVER_CLOSE_DELAY = 200;
 
 interface TaskRowProps {
   task: AgentTask;
@@ -132,26 +135,40 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
   const { tasks, empty, enabled } = useAgentTodo(sessionId);
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
 
-  // Close on click outside the wrapper, but ignore clicks inside any
-  // [data-agent-todo-stay-open-zone] ancestor — currently the chat
-  // input, so users can reference the task list while typing without
-  // the popover closing underneath them. mousedown (not click) so the
-  // close fires before any click-handler on the target re-opens the
-  // popover.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node | null;
-      if (!target) return;
-      if (wrapperRef.current?.contains(target)) return;
-      if (target instanceof Element && target.closest("[data-agent-todo-stay-open-zone]")) return;
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  // Hover summon: entering the wrapper opens immediately; leaving
+  // schedules a close after HOVER_CLOSE_DELAY. The timer is what makes
+  // the 8px button→popover gap crossable — a fast pointer move over the
+  // gap fires mouseleave then mouseenter on the wrapper, and the
+  // enter-side cancels the pending close. The popover is a DOM child of
+  // the wrapper, so moving onto it never fires mouseleave at all.
+  const handleMouseEnter = useCallback(() => {
+    clearCloseTimer();
+    setOpen(true);
+  }, [clearCloseTimer]);
+
+  const handleMouseLeave = useCallback(() => {
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
       setOpen(false);
+      closeTimerRef.current = null;
+    }, HOVER_CLOSE_DELAY);
+  }, [clearCloseTimer]);
+
+  // Clear any pending close timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  }, []);
 
   // Esc closes. Bound while open only.
   useEffect(() => {
@@ -163,6 +180,8 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
     return () => document.removeEventListener("keydown", handler);
   }, [open]);
 
+  // Click still toggles — a quick dismiss while hovered open, and the
+  // only way a keyboard user (focus + Enter/Space) can summon it.
   const handleButtonClick = useCallback(() => {
     setOpen((v) => !v);
   }, []);
@@ -185,24 +204,24 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
         }
       `}</style>
       <div
-        ref={wrapperRef}
         className="agent-todo-launcher relative"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
-        <Tooltip content={t("Agent Plan")}>
-          <button
-            type="button"
-            onClick={handleButtonClick}
-            aria-label={t("Agent Plan")}
-            aria-expanded={open}
-            aria-haspopup="dialog"
-            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110"
-            style={{
-              background: "var(--bg-panel)",
-              borderColor: "var(--border)",
-              color: "var(--text-muted)",
-              position: "relative",
-            }}
-          >
+        <button
+          type="button"
+          onClick={handleButtonClick}
+          aria-label={t("Agent Plan")}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110"
+          style={{
+            background: "var(--bg-panel)",
+            borderColor: "var(--border)",
+            color: "var(--text-muted)",
+            position: "relative",
+          }}
+        >
             {/* 3-row checklist icon — three lines with checkmarks on the
                 first column, plain rows on the second column. Distinct
                 from SessionLibrary (2x2 grid), Collapse all (chevrons),
@@ -242,7 +261,6 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
               />
             )}
           </button>
-        </Tooltip>
         {/*
           Always-mounted popover. Toggling `open` runs scale + opacity
           in 180ms cubic-bezier(0.32, 0.72, 0, 1) — same easing as the
