@@ -26,6 +26,8 @@ interface CwdPickerProps {
   disabled?: boolean;
   /** Max width of the trigger pill in pixels. */
   maxWidth?: number;
+  /** Make the trigger pill fill its container width (form usage). */
+  fill?: boolean;
   /** Open upward (default) or downward. */
   dropdownDirection?: "up" | "down";
 }
@@ -47,6 +49,7 @@ export function CwdPicker({
   disabled = false,
   maxWidth = 160,
   dropdownDirection = "up",
+  fill = false,
 }: CwdPickerProps) {
   const { t } = useI18n();
   const { cwds } = useCwdList();
@@ -117,7 +120,10 @@ export function CwdPicker({
             display: "flex", alignItems: "center", gap: 6,
             padding: "8px 12px",
             height: 32,
-            maxWidth, overflow: "hidden",
+            width: fill ? "100%" : undefined,
+            maxWidth: fill ? "none" : maxWidth,
+            boxSizing: "border-box",
+            overflow: "hidden",
             background: open ? "var(--bg-hover)" : "none",
             border: "none",
             borderRadius: 9,

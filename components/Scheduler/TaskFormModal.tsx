@@ -14,10 +14,13 @@
  * error message.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
-import { ProviderIcon } from "@/components/ProviderIcon";
+import { ProviderIcon, ProviderGearIcon } from "@/components/ProviderIcon";
+import { CwdPicker } from "@/components/CwdPicker";
+import { AnimatedPopover } from "@/components/AnimatedPopover";
 import { Cron } from "croner";
 import { CronBuilder } from "./CronBuilder";
 import { apiFetch } from "./utils";
@@ -30,10 +33,9 @@ import {
   fieldLabelStyle,
   inputStyle,
   inputMonoStyle,
-  optionButtonStyle,
   textareaStyle,
 } from "./styles";
-import { IconCheck, IconClose } from "./icons";
+import { IconClose } from "./icons";
 
 // ── Form state ───────────────────────────────────────────────────
 
@@ -77,6 +79,115 @@ const THINKING_COLOR: Record<(typeof THINKING_LEVELS)[number], string> = {
   high: "#f97316",
   xhigh: "#ef4444",
 };
+
+// ── Chat-input-style selector primitives ─────────────────────────
+//
+// The model / thinking / tools controls reuse the chat input bar's pill
+// language: a borderless rounded trigger (hover/selected background only)
+// with an AnimatedPopover panel using the same chrome (bg-panel, 10px
+// radius, deep shadow). The cwd control reuses the actual CwdPicker used
+// in ChatInput.
+
+/** Trigger pill matching ChatInput's model/thinking/tools buttons. */
+function pillTriggerStyle(open: boolean): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    width: "100%",
+    height: 32,
+    padding: "0 10px",
+    boxSizing: "border-box",
+    background: open ? "var(--bg-hover)" : "none",
+    border: "none",
+    borderRadius: 9,
+    color: "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 12,
+    fontFamily: "inherit",
+    transition: "background 0.12s, color 0.12s",
+    overflow: "hidden",
+  };
+}
+
+/** Dropdown panel chrome matching ChatInput's AnimatedPopover panels. */
+const dropdownPanelStyle: CSSProperties = {
+  position: "absolute",
+  bottom: "calc(100% + 6px)",
+  left: 0,
+  right: 0,
+  zIndex: 1100,
+  background: "var(--bg-panel)",
+  border: "1px solid var(--border)",
+  borderRadius: 10,
+  boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+};
+
+/** Option row matching ChatInput dropdown rows. */
+function dropdownOptionStyle(active: boolean): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    padding: "7px 12px",
+    background: active ? "var(--bg-selected)" : "none",
+    border: "none",
+    color: active ? "var(--text)" : "var(--text-muted)",
+    cursor: "pointer",
+    fontSize: 12,
+    textAlign: "left",
+    fontWeight: active ? 600 : 400,
+    whiteSpace: "nowrap",
+    fontFamily: "inherit",
+  };
+}
+
+/** Open state + outside-click close for one dropdown trigger. */
+function useDropdown() {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+  return { open, setOpen, rootRef };
+}
+
+/** Active checkmark / inactive spacer — ChatInput's row leading column. */
+function CheckOrGap({ active }: { active: boolean }) {
+  return active ? (
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <polyline points="1.5 5 4 7.5 8.5 2.5" />
+    </svg>
+  ) : (
+    <span style={{ width: 10, flexShrink: 0 }} />
+  );
+}
+
+/** Lightbulb icon — same glyph as ChatInput's thinking trigger. */
+function ThinkingIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
+      <line x1="7" y1="18" x2="12" y2="18" />
+      <line x1="8" y1="21" x2="11" y2="21" />
+    </svg>
+  );
+}
+
+/** Wrench icon — same glyph as ChatInput's tools trigger. */
+function ToolsIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
+  );
+}
 
 // ── Props ────────────────────────────────────────────────────────
 
@@ -370,18 +481,21 @@ function BasicConfigSection({ form, update, meta, errors }: { form: FormState; u
           style={textareaStyle}
         />
       </Field>
-      <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={errors.cwd}>
-        <input
-          value={form.cwd}
-          onChange={(e) => update("cwd", e.target.value)}
-          placeholder="/path/to/project"
-          className="scheduler-text-input"
-          style={inputMonoStyle}
-        />
-      </Field>
-      <ModelSelect form={form} update={update} meta={meta} />
-      <ThinkingSelect form={form} update={update} meta={meta} />
-      <ToolsSelect form={form} update={update} />
+      {/* The four runtime selectors sit in a 2×2 grid, mirroring the chat
+          input bar's pills (cwd + model on the first row, thinking + tools
+          on the second). */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px 14px" }}>
+        <Field label={t("Working directory")} hint={t("The cwd the agent runs in; must exist")} error={errors.cwd}>
+          <CwdPicker
+            cwd={form.cwd || null}
+            onCwdChange={(c) => update("cwd", c)}
+            fill
+          />
+        </Field>
+        <ModelSelect form={form} update={update} meta={meta} />
+        <ThinkingSelect form={form} update={update} meta={meta} />
+        <ToolsSelect form={form} update={update} />
+      </div>
     </div>
   );
 }
@@ -428,55 +542,53 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
     if (g) g.options.push(opt);
     else groups.push({ provider: opt.provider, options: [opt] });
   }
+  const { open, setOpen, rootRef } = useDropdown();
 
   return (
     <Field label={t("Model")} hint={t("Leave empty to use the default model")}>
-      <details style={{ position: "relative" }}>
-        <summary
-          style={{
-            ...inputStyle,
-            listStyle: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
+      <div ref={rootRef} style={{ position: "relative" }}>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          style={pillTriggerStyle(open)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--bg-hover)";
+            e.currentTarget.style.color = "var(--text)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = open ? "var(--bg-hover)" : "none";
+            e.currentTarget.style.color = "var(--text-muted)";
           }}
         >
           <ProviderIcon
             id={current?.provider ?? ""}
             size={12}
-            fallback={<span style={{ width: 12, height: 12, display: "inline-block", borderRadius: 3, background: "var(--bg-subtle)" }} />}
+            fallback={<ProviderGearIcon size={11} />}
           />
-          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0 }}>
             {isDefault ? (
-              <span style={{ color: "var(--text-muted)" }}>
-                {t("Default model")}{meta?.defaultModel ? ` (${meta.defaultModel.modelId})` : ""}
-              </span>
+              <>
+                {t("Default model")}
+                {meta?.defaultModel && (
+                  <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 6 }}>
+                    {meta.defaultModel.modelId}
+                  </span>
+                )}
+              </>
             ) : current?.name ?? `${form.provider}/${form.modelId}`}
           </span>
-          <span style={{ fontSize: 10, color: "var(--text-dim)" }}>▾</span>
-        </summary>
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            zIndex: 1100,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-            padding: 4,
-            maxHeight: 320,
-            overflowY: "auto",
-          }}
-        >
+        </button>
+        <AnimatedPopover open={open} style={dropdownPanelStyle} maxHeight={320}>
           <button
-            onClick={(e) => { e.preventDefault(); update("provider", ""); update("modelId", ""); }}
-            style={optionButtonStyle(isDefault)}
+            type="button"
+            onClick={() => {
+              update("provider", "");
+              update("modelId", "");
+              setOpen(false);
+            }}
+            style={dropdownOptionStyle(isDefault)}
           >
-            {isDefault ? <IconCheck width={10} height={10} /> : <span style={{ width: 10 }} />}
+            <CheckOrGap active={isDefault} />
             <span style={{ flex: 1 }}>{t("Default model")}</span>
             {meta?.defaultModel && (
               <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
@@ -496,14 +608,15 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
                     return (
                       <button
                         key={`${opt.provider}:${opt.id}`}
-                        onClick={(e) => {
-                          e.preventDefault();
+                        type="button"
+                        onClick={() => {
                           update("provider", opt.provider);
                           update("modelId", opt.id);
+                          setOpen(false);
                         }}
-                        style={optionButtonStyle(active)}
+                        style={dropdownOptionStyle(active)}
                       >
-                        {active ? <IconCheck width={10} height={10} /> : <span style={{ width: 10 }} />}
+                        <CheckOrGap active={active} />
                         <ProviderIcon id={opt.provider} size={11} fallback={<span style={{ width: 11 }} />} />
                         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{opt.name}</span>
                       </button>
@@ -513,8 +626,8 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
               ))}
             </div>
           )}
-        </div>
-      </details>
+        </AnimatedPopover>
+      </div>
     </Field>
   );
 }
@@ -525,40 +638,33 @@ function ThinkingSelect({ form, update, meta }: { form: FormState; update: <K ex
   const available = key ? meta?.thinkingLevels[key] : undefined;
   const levelMap = key ? meta?.thinkingLevelMaps[key] : undefined;
   const current = (form.thinkingLevel || "auto") as (typeof THINKING_LEVELS)[number];
+  const { open, setOpen, rootRef } = useDropdown();
+  const currentMapped = current !== "auto" && levelMap ? levelMap[current] : undefined;
+  const displayLabel = (currentMapped != null && currentMapped !== current)
+    ? currentMapped
+    : current === "auto" ? t("Use model default") : current;
 
   return (
     <Field label={t("Thinking level")} hint={t("auto uses the model default")}>
-      <details style={{ position: "relative" }}>
-        <summary
+      <div ref={rootRef} style={{ position: "relative" }}>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
           style={{
-            ...inputStyle,
-            listStyle: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
+            ...pillTriggerStyle(open),
+            color: THINKING_COLOR[current],
+            fontFamily: "var(--font-mono)",
+            fontWeight: 500,
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = open ? "var(--bg-hover)" : "none"; }}
         >
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: THINKING_COLOR[current], flexShrink: 0 }} />
-          <span style={{ flex: 1 }}>{current === "auto" ? t("Use model default") : current}</span>
-          <span style={{ fontSize: 10, color: "var(--text-dim)" }}>▾</span>
-        </summary>
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            zIndex: 1100,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-            padding: 4,
-            maxHeight: 320,
-            overflowY: "auto",
-          }}
-        >
+          <ThinkingIcon />
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0 }}>
+            {displayLabel}
+          </span>
+        </button>
+        <AnimatedPopover open={open} style={dropdownPanelStyle} maxHeight={320}>
           {THINKING_LEVELS.filter((lvl) => {
             if (lvl === "auto") return true;
             if (!available) return true;
@@ -566,24 +672,28 @@ function ThinkingSelect({ form, update, meta }: { form: FormState; update: <K ex
           }).map((lvl) => {
             const active = current === lvl;
             const mappedVal = lvl !== "auto" && levelMap ? levelMap[lvl] : undefined;
-            const displayLabel = mappedVal != null && mappedVal !== lvl ? mappedVal : lvl;
+            const label = mappedVal != null && mappedVal !== lvl ? mappedVal : lvl;
             return (
               <button
                 key={lvl}
-                onClick={(e) => { e.preventDefault(); update("thinkingLevel", lvl === "auto" ? "" : lvl); }}
-                style={optionButtonStyle(active)}
+                type="button"
+                onClick={() => {
+                  update("thinkingLevel", lvl === "auto" ? "" : lvl);
+                  setOpen(false);
+                }}
+                style={dropdownOptionStyle(active)}
               >
-                {active ? <IconCheck width={10} height={10} /> : <span style={{ width: 10 }} />}
+                <CheckOrGap active={active} />
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: THINKING_COLOR[lvl], flexShrink: 0 }} />
-                <span style={{ flex: 1 }}>{displayLabel}</span>
+                <span style={{ flex: 1 }}>{lvl === "auto" ? t("Use model default") : label}</span>
                 {mappedVal != null && mappedVal !== lvl && (
                   <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>({lvl})</span>
                 )}
               </button>
             );
           })}
-        </div>
-      </details>
+        </AnimatedPopover>
+      </div>
     </Field>
   );
 }
@@ -595,51 +705,52 @@ function ToolsSelect({ form, update }: { form: FormState; update: <K extends key
     { id: "none",   label: t("No tools"),      desc: t("Chat only, no commands") },
     { id: "custom", label: t("Custom"),        desc: t("Specify a list of tool names") },
   ];
+  const { open, setOpen, rootRef } = useDropdown();
+  const triggerLabel = form.toolMode === "all"
+    ? t("All tools")
+    : form.toolMode === "none"
+      ? t("No tools")
+      : form.toolNames.trim() || t("Custom (empty)");
+
   return (
     <Field label={t("Tool set")} hint={t("all: all tools, none: chat only, custom: comma-separated tool names")}>
-      <details style={{ position: "relative" }}>
-        <summary
-          style={{
-            ...inputStyle,
-            listStyle: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
+      <div ref={rootRef} style={{ position: "relative" }}>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          style={pillTriggerStyle(open)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--bg-hover)";
+            e.currentTarget.style.color = "var(--text)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = open ? "var(--bg-hover)" : "none";
+            e.currentTarget.style.color = "var(--text-muted)";
           }}
         >
-          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
-            {form.toolMode === "all" ? t("All tools") : form.toolMode === "none" ? t("No tools") : (form.toolNames.trim() || t("Custom (empty)"))}
+          <ToolsIcon />
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0 }}>
+            {triggerLabel}
           </span>
-          <span style={{ fontSize: 10, color: "var(--text-dim)" }}>▾</span>
-        </summary>
-        <div
-          style={{
-            position: "absolute",
-            top: "calc(100% + 4px)",
-            left: 0,
-            right: 0,
-            zIndex: 1100,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.16)",
-            padding: 4,
-            maxHeight: 320,
-            overflowY: "auto",
-          }}
-        >
+        </button>
+        <AnimatedPopover open={open} style={dropdownPanelStyle} maxHeight={320}>
           {modes.map((m) => {
             const active = form.toolMode === m.id;
             return (
               <button
                 key={m.id}
-                onClick={(e) => { e.preventDefault(); update("toolMode", m.id); }}
-                style={optionButtonStyle(active)}
+                type="button"
+                onClick={() => {
+                  update("toolMode", m.id);
+                  // Custom keeps the panel open so the user can immediately
+                  // type tool names (mirrors ChatInput's expandable Custom row).
+                  if (m.id !== "custom") setOpen(false);
+                }}
+                style={dropdownOptionStyle(active)}
               >
-                {active ? <IconCheck width={10} height={10} /> : <span style={{ width: 10 }} />}
+                <CheckOrGap active={active} />
                 <span style={{ flex: 1 }}>{m.label}</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{m.desc}</span>
+                <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{m.desc}</span>
               </button>
             );
           })}
@@ -656,8 +767,8 @@ function ToolsSelect({ form, update }: { form: FormState; update: <K extends key
               />
             </div>
           )}
-        </div>
-      </details>
+        </AnimatedPopover>
+      </div>
     </Field>
   );
 }
