@@ -18,7 +18,7 @@ import { CronHumanizer } from "./CronHumanizer";
 import { useNow } from "./useNow";
 import { formatCompactRelative } from "./utils";
 import type { ScheduledTask, TaskRunStatus } from "./types";
-import { IconAlert, IconPlus, IconRefresh, IconSearch } from "./icons";
+import { IconAlert, IconPlus, IconSearch } from "./icons";
 
 export type SidebarFilter = "all" | "enabled" | "disabled" | "error";
 
@@ -29,7 +29,6 @@ interface Props {
   selectedId: string | null;
   onSelect: (taskId: string) => void;
   onCreate: () => void;
-  onRefresh: () => void;
   filter: SidebarFilter;
   onFilterChange: (f: SidebarFilter) => void;
   query: string;
@@ -52,7 +51,6 @@ export function TaskListSidebar({
   selectedId,
   onSelect,
   onCreate,
-  onRefresh,
   filter,
   onFilterChange,
   query,
@@ -60,7 +58,6 @@ export function TaskListSidebar({
   runningCount,
 }: Props) {
   const now = useNow(30_000);
-  const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
@@ -105,7 +102,6 @@ export function TaskListSidebar({
         <button
           onClick={onCreate}
           style={{
-            flex: 1,
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
@@ -119,29 +115,11 @@ export function TaskListSidebar({
             fontWeight: 600,
             cursor: "pointer",
             fontFamily: "inherit",
+            width: "100%",
           }}
         >
           <IconPlus width={12} height={12} />
           新建任务
-        </button>
-        <button
-          onClick={onRefresh}
-          aria-label="刷新"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 28,
-            height: 28,
-            padding: 0,
-            background: "transparent",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            color: "var(--text-muted)",
-            cursor: "pointer",
-          }}
-        >
-          <IconRefresh width={12} height={12} />
         </button>
       </div>
 
@@ -160,7 +138,6 @@ export function TaskListSidebar({
           }}
         />
         <input
-          ref={searchRef}
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="搜索名称、cron、提示词..."
@@ -265,25 +242,7 @@ export function TaskListSidebar({
         ))}
       </div>
 
-      {/* Footer hint */}
-      <div
-        style={{
-          padding: "6px 12px",
-          borderTop: "1px solid var(--border)",
-          fontSize: 10,
-          color: "var(--text-dim)",
-          display: "flex",
-          gap: 8,
-          justifyContent: "space-between",
-          background: "var(--bg-panel)",
-          flexShrink: 0,
-        }}
-      >
-        <span><kbd style={kbdStyle}>j</kbd><kbd style={kbdStyle}>k</kbd> 切换</span>
-        <span><kbd style={kbdStyle}>Enter</kbd> 打开</span>
-        <span><kbd style={kbdStyle}>n</kbd> 新建</span>
       </div>
-    </div>
   );
 }
 
@@ -422,19 +381,6 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
     </div>
   );
 }
-
-const kbdStyle: React.CSSProperties = {
-  display: "inline-block",
-  padding: "0 4px",
-  margin: "0 1px",
-  fontSize: 9,
-  fontFamily: "var(--font-mono)",
-  background: "var(--bg)",
-  border: "1px solid var(--border)",
-  borderRadius: 3,
-  color: "var(--text-muted)",
-  lineHeight: 1.5,
-};
 
 function filterCount(tasks: ScheduledTask[], f: SidebarFilter): number {
   switch (f) {
