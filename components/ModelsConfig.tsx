@@ -44,7 +44,7 @@ interface ModelEntry {
   input?: string[];
   contextWindow?: number;
   maxTokens?: number;
-  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; tiers?: unknown[] };
   compat?: Record<string, unknown>;
   /** Provider id whose icon this model should display (chosen in the UI). */
   icon?: string;
@@ -462,7 +462,30 @@ function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
 
 function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; onChange: (m: ModelEntry) => void; onDelete: () => void }) {
   const { t } = useI18n();
+  const [fillPickerOpen, setFillPickerOpen] = useState(false);
   const set = <K extends keyof ModelEntry>(k: K, v: ModelEntry[K]) => onChange({ ...model, [k]: v });
+  const fillFromCatalog = (source: RuntimeModelInfo) => {
+    onChange({
+      ...model,
+      id: source.id,
+      name: source.name,
+      api: source.api,
+      reasoning: source.reasoning,
+      thinkingLevelMap: source.thinkingLevelMap ? { ...source.thinkingLevelMap } : undefined,
+      input: [...source.input],
+      contextWindow: source.contextWindow,
+      maxTokens: source.maxTokens,
+      cost: {
+        input: source.cost.input,
+        output: source.cost.output,
+        cacheRead: source.cost.cacheRead,
+        cacheWrite: source.cost.cacheWrite,
+        tiers: source.cost.tiers ? [...source.cost.tiers] : undefined,
+      },
+      compat: source.compat ? { ...source.compat } : undefined,
+    });
+    setFillPickerOpen(false);
+  };
   const costVal = (k: keyof NonNullable<ModelEntry["cost"]>) => model.cost?.[k] !== undefined ? String(model.cost[k]) : "";
   const setCost = (k: keyof NonNullable<ModelEntry["cost"]>, v: string) => {
     const n = parseFloat(v);
@@ -470,13 +493,22 @@ function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; onChang
   };
 
   return (
+    <>
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <SectionTitle>{t("Model")}</SectionTitle>
-        <button onClick={onDelete}
-          style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11 }}>
-          {t("Delete")}
-        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            onClick={() => setFillPickerOpen(true)}
+            style={{ padding: "3px 8px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11 }}
+          >
+            {t("Fill from model catalog")}
+          </button>
+          <button onClick={onDelete}
+            style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11 }}>
+            {t("Delete")}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
@@ -545,6 +577,8 @@ function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; onChang
         </div>
       </div>
     </div>
+    {fillPickerOpen && <ModelCatalogPicker onSelect={fillFromCatalog} onClose={() => setFillPickerOpen(false)} />}
+    </>
   );
 }
 
@@ -959,6 +993,108 @@ function RuntimeModelCatalog() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ModelCatalogPicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (model: RuntimeModelInfo) => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const toast = useToast();
+  const [models, setModels] = useState<Array<{ model: RuntimeModelInfo; providerName: string }>>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 30);
+    let cancelled = false;
+    fetch("/api/models", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+      .then((data: { catalog?: RuntimeCatalog }) => {
+        if (cancelled) return;
+        setModels((data.catalog?.providers ?? []).flatMap((provider) =>
+          provider.models.map((model) => ({ model, providerName: provider.name })),
+        ));
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        const message = e instanceof Error && e.message ? e.message : t("Failed to load model catalog");
+        setError(message);
+        toast.show({ kind: "error", message });
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [t, toast]);
+
+  const query = search.trim().toLowerCase();
+  const visibleModels = useMemo(() => models.filter(({ model, providerName }) => {
+    if (!query) return true;
+    return `${providerName} ${model.provider} ${JSON.stringify(model)}`.toLowerCase().includes(query);
+  }), [models, query]);
+  const displayedModels = visibleModels.slice(0, 200);
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 1300, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ width: 760, maxWidth: "calc(100vw - 32px)", height: "min(76vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          <div>
+            <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 700 }}>{t("Fill from model catalog")}</div>
+            <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11 }}>{t("Only model fields are filled; provider settings stay unchanged.")}</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+        </div>
+
+        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          <input
+            ref={inputRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+            placeholder={t("Search all providers and models...")}
+            style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+          />
+          {!loading && !error && <div style={{ marginTop: 5, color: "var(--text-dim)", fontSize: 10 }}>{t("{n} matching models", { n: visibleModels.length })}</div>}
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
+          {loading ? (
+            <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("Loading catalog...")}</div>
+          ) : error ? (
+            <div style={{ padding: 20, color: "#f87171", fontSize: 12, textAlign: "center" }}>{error}</div>
+          ) : displayedModels.length === 0 ? (
+            <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("No matching providers or models")}</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {displayedModels.map(({ model, providerName }) => (
+                <button
+                  key={`${model.provider}:${model.id}`}
+                  onClick={() => onSelect(model)}
+                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 10px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", cursor: "pointer", textAlign: "left" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
+                >
+                  <ProviderIcon id={model.provider} size={20} fallback={<ProviderGearIcon size={16} />} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600 }}>{model.name}</span>
+                    <span style={{ display: "block", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{model.provider} / {model.id}</span>
+                  </span>
+                  <span style={{ color: "var(--text-muted)", fontSize: 10, flexShrink: 0 }}>{providerName}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
