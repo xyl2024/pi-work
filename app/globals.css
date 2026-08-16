@@ -1415,3 +1415,21 @@ li.todo-task-item[data-checked="true"] > div {
   from { opacity: 0; transform: translateY(3px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ---------------------------------------------------------------------
+   Scheduler text inputs — darken the border while focused.
+   The input's border color is written inline as
+   var(--scheduler-input-border, var(--border)) (see
+   components/Scheduler/styles.ts), so this class only flips the CSS
+   variable — no !important needed, and non-input elements that reuse
+   inputStyle (dropdown summaries, cron code chips) stay unchanged.
+   --------------------------------------------------------------------- */
+
+.scheduler-text-input {
+  --scheduler-input-border: var(--border);
+  transition: border-color 0.15s ease;
+}
+.scheduler-text-input:focus,
+.scheduler-text-input:focus-visible {
+  --scheduler-input-border: var(--text-muted);
+}

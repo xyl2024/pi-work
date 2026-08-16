@@ -356,6 +356,7 @@ function BasicConfigSection({ form, update, meta, errors }: { form: FormState; u
           onChange={(e) => update("name", e.target.value)}
           placeholder={t("e.g. daily report")}
           autoFocus
+          className="scheduler-text-input"
           style={inputStyle}
         />
       </Field>
@@ -365,6 +366,7 @@ function BasicConfigSection({ form, update, meta, errors }: { form: FormState; u
           onChange={(e) => update("prompt", e.target.value)}
           rows={8}
           placeholder={t("Check yesterday's PRs for unhandled comments and summarize...")}
+          className="scheduler-text-input"
           style={textareaStyle}
         />
       </Field>
@@ -373,6 +375,7 @@ function BasicConfigSection({ form, update, meta, errors }: { form: FormState; u
           value={form.cwd}
           onChange={(e) => update("cwd", e.target.value)}
           placeholder="/path/to/project"
+          className="scheduler-text-input"
           style={inputMonoStyle}
         />
       </Field>
@@ -647,6 +650,7 @@ function ToolsSelect({ form, update }: { form: FormState; update: <K extends key
                 value={form.toolNames}
                 onChange={(e) => update("toolNames", e.target.value)}
                 placeholder="bash, file_write, agent_todo"
+                className="scheduler-text-input"
                 style={inputMonoStyle}
                 onClick={(e) => e.stopPropagation()}
               />

@@ -14,7 +14,7 @@ export const inputStyle: CSSProperties = {
   width: "100%",
   fontSize: 12,
   padding: "6px 9px",
-  border: "1px solid var(--border)",
+  border: "1px solid var(--scheduler-input-border, var(--border))",
   borderRadius: 6,
   outline: "none",
   background: "var(--bg)",
