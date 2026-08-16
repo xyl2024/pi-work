@@ -8,6 +8,54 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("api/models");
 
+type RuntimeModelInfo = {
+  id: string;
+  name: string;
+  provider: string;
+  api: string;
+  baseUrl: string;
+  reasoning: boolean;
+  thinkingLevelMap?: Record<string, string | null>;
+  input: string[];
+  cost: unknown;
+  contextWindow: number;
+  maxTokens: number;
+  headers?: Record<string, string>;
+  compat?: Record<string, unknown>;
+};
+
+function serializeModel(model: {
+  id: string;
+  name: string;
+  provider: string;
+  api: string;
+  baseUrl: string;
+  reasoning: boolean;
+  thinkingLevelMap?: Record<string, string | null>;
+  input: readonly string[];
+  cost: unknown;
+  contextWindow: number;
+  maxTokens: number;
+  headers?: Record<string, string>;
+  compat?: object;
+}): RuntimeModelInfo {
+  return {
+    id: model.id,
+    name: model.name,
+    provider: model.provider,
+    api: model.api,
+    baseUrl: model.baseUrl,
+    reasoning: model.reasoning,
+    thinkingLevelMap: model.thinkingLevelMap ? { ...model.thinkingLevelMap } : undefined,
+    input: [...model.input],
+    cost: model.cost,
+    contextWindow: model.contextWindow,
+    maxTokens: model.maxTokens,
+    headers: model.headers ? { ...model.headers } : undefined,
+    compat: model.compat ? { ...model.compat } : undefined,
+  };
+}
+
 /**
  * Custom-model icon map, read from ~/.pi/agent/models.json. Both custom
  * providers and custom models can carry an `icon` field whose value is a
@@ -49,24 +97,23 @@ async function readModelIcons(): Promise<Record<string, string>> {
   return icons;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const startedAt = Date.now();
+  const refreshCatalog = new URL(req.url).searchParams.get("refresh") === "true";
   const nameMap = new Map<string, string>();
-  let modelList: Array<{
-    id: string;
-    name: string;
-    provider: string;
-    api: string;
-    baseUrl: string;
-    reasoning: boolean;
-    thinkingLevelMap?: Record<string, string | null>;
-    input: string[];
-    cost: unknown;
-    contextWindow: number;
-    maxTokens: number;
-    headers?: Record<string, string>;
-    compat?: Record<string, unknown>;
-  }> = [];
+  let modelList: RuntimeModelInfo[] = [];
+  let catalog: {
+    providers: Array<{
+      id: string;
+      name: string;
+      baseUrl?: string;
+      headers?: Record<string, string | null>;
+      dynamic: boolean;
+      auth: ReturnType<ModelRuntime["getProviderAuthStatus"]>;
+      models: RuntimeModelInfo[];
+    }>;
+    modelCount: number;
+  } = { providers: [], modelCount: 0 };
   let defaultModel: { provider: string; modelId: string } | null = null;
   const thinkingLevels: Record<string, string[]> = {};
   const thinkingLevelMaps: Record<string, Record<string, string | null>> = {};
@@ -75,22 +122,37 @@ export async function GET() {
   try {
     const agentDir = getAgentDir();
     const runtime = await ModelRuntime.create();
+    if (refreshCatalog) {
+      await runtime.refresh({ allowNetwork: true, force: true });
+    }
     const available = await runtime.getAvailable();
-    modelList = available.map((m) => ({
-      id: m.id,
-      name: m.name,
-      provider: m.provider,
-      api: m.api,
-      baseUrl: m.baseUrl,
-      reasoning: m.reasoning,
-      thinkingLevelMap: m.thinkingLevelMap ? { ...m.thinkingLevelMap } : undefined,
-      input: [...m.input],
-      cost: m.cost,
-      contextWindow: m.contextWindow,
-      maxTokens: m.maxTokens,
-      headers: m.headers ? { ...m.headers } : undefined,
-      compat: m.compat ? { ...m.compat } : undefined,
-    }));
+    modelList = available.map(serializeModel);
+
+    // Keep the selectable `modelList` auth-filtered, but expose the complete
+    // credential-blind runtime catalog separately for the Models settings UI.
+    // `getModels()` includes providers/models that are not currently
+    // authenticated, plus models loaded from models.json and the cached pi.dev
+    // catalog.
+    const allModels = runtime.getModels();
+    const modelsByProvider = new Map<string, RuntimeModelInfo[]>();
+    for (const model of allModels) {
+      const models = modelsByProvider.get(model.provider) ?? [];
+      models.push(serializeModel(model));
+      modelsByProvider.set(model.provider, models);
+    }
+    catalog = {
+      providers: runtime.getProviders().map((provider) => ({
+        id: provider.id,
+        name: provider.name,
+        baseUrl: provider.baseUrl,
+        headers: provider.headers ? { ...provider.headers } : undefined,
+        dynamic: typeof provider.refreshModels === "function",
+        auth: runtime.getProviderAuthStatus(provider.id),
+        models: modelsByProvider.get(provider.id) ?? [],
+      })),
+      modelCount: allModels.length,
+    };
+
     for (const m of available) {
       const key = `${m.provider}:${m.id}`;
       nameMap.set(key, m.name);
@@ -108,11 +170,12 @@ export async function GET() {
       count: modelList.length,
       defaultProvider: defaultModel?.provider,
       defaultModelId: defaultModel?.modelId,
+      refreshCatalog,
       durationMs: elapsedMs(startedAt),
     });
   } catch (error) {
     log.warn("models load failed; returning empty list", { error, durationMs: elapsedMs(startedAt) });
   }
 
-  return Response.json({ models: Object.fromEntries(nameMap), modelList, defaultModel, thinkingLevels, thinkingLevelMaps, modelIcons });
+  return Response.json({ models: Object.fromEntries(nameMap), modelList, catalog, defaultModel, thinkingLevels, thinkingLevelMaps, modelIcons });
 }
