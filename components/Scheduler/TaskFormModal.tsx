@@ -24,6 +24,7 @@ import { AnimatedPopover } from "@/components/AnimatedPopover";
 import { Cron } from "croner";
 import { CronBuilder } from "./CronBuilder";
 import { apiFetch } from "./utils";
+import { pickClosestAvailableThinkingLevel, THINKING_LEVEL_ORDER } from "@/lib/thinking-level-utils";
 import type { ModelMeta, ScheduledTask, TaskCreatePayload, TaskUpdatePayload } from "./types";
 import {
   btnGhost,
@@ -613,6 +614,30 @@ function ModelSelect({ form, update, meta, error }: { form: FormState; update: <
                         onClick={() => {
                           update("provider", opt.provider);
                           update("modelId", opt.id);
+                          // Sync the thinking level to whatever the freshly
+                          // selected model actually supports. Scheduled
+                          // tasks have to run with an explicit level (no
+                          // "auto"), so when the user picks a new model
+                          // and their previous level isn't supported we
+                          // jump to the closest valid one — otherwise the
+                          // task would persist a level that the run-time
+                          // set_thinking_level call would silently clamp,
+                          // leaving the saved task out of sync with what
+                          // the agent actually uses. An empty string
+                          // (user hasn't picked yet) is left alone — the
+                          // form's submit-time validation owns that case.
+                          const nextKey = `${opt.provider}:${opt.id}`;
+                          const nextAvailable = meta?.thinkingLevels[nextKey] ?? null;
+                          const currentLevel = form.thinkingLevel;
+                          if (currentLevel && (THINKING_LEVEL_ORDER as readonly string[]).includes(currentLevel)) {
+                            const nextLevel = pickClosestAvailableThinkingLevel(
+                              currentLevel as (typeof THINKING_LEVEL_ORDER)[number],
+                              nextAvailable,
+                            );
+                            if (nextLevel !== currentLevel) {
+                              update("thinkingLevel", nextLevel);
+                            }
+                          }
                           setOpen(false);
                         }}
                         style={dropdownOptionStyle(active)}

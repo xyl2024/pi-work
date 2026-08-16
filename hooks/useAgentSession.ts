@@ -12,6 +12,7 @@ import { setShowFileResult, resetShowFileResults } from "./showFileResultsStore"
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { setSessionUiState, setLeafChangeHandler } from "./sessionUiStore";
 import { setGrokbotConfig } from "@/lib/grokbot-store";
+import { pickClosestAvailableThinkingLevel } from "@/lib/thinking-level-utils";
 import { setPendingAskUserQuestions } from "./askUserQuestionsStore";
 import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
 
@@ -781,6 +782,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           if (sessionIdRef.current) loadSession(sessionIdRef.current);
         }
         break;
+      // Pi re-emits this whenever the agent's thinking level actually
+      // changes — including the implicit clamp that fires inside
+      // `setModel` when the new model doesn't support the previous
+      // level. Without this handler the UI would silently drift away
+      // from the agent's real setting after a model switch (or any
+      // other server-side clamp), and the next prompt would either
+      // race the clamp or carry a stale level. Treat the SDK as the
+      // source of truth and mirror whatever level it reports.
+      case "thinking_level_changed": {
+        const level = event.level;
+        if (typeof level === "string") {
+          setThinkingLevel(level as ThinkingLevelOption);
+        }
+        break;
+      }
     }
   }, [loadSession, onAgentEnd, onFirstAssistantReady, permissionsRef, refreshSystemPrompt, t, toast]);
   handleAgentEventRef.current = handleAgentEvent;
@@ -904,8 +920,33 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [loadContext]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
+    // Sync the thinking level to whatever the freshly-selected model
+    // actually supports. If the user's current level isn't in the new
+    // model's available list (e.g. they had "medium" on a model that
+    // supports low/medium/high, then switched to one that only
+    // supports "high"), pi would silently clamp on the server side
+    // and the UI would drift out of sync with what the agent is using
+    // — or, on stricter providers, the next prompt call could error.
+    // Walk to the closest available level here, mirror it both locally
+    // and (for live sessions) on the agent, and toast so the user
+    // sees the auto-correction. "auto" is always valid and never
+    // triggers a fallback.
+    const newModelLevels = modelThinkingLevels[`${provider}:${modelId}`] ?? null;
+    const prevLevel = thinkingLevel;
+    const nextLevel = pickClosestAvailableThinkingLevel(prevLevel, newModelLevels);
+    const levelChanged = nextLevel !== prevLevel;
+    if (levelChanged) {
+      setThinkingLevel(nextLevel);
+    }
+
     if (isNew) {
       setNewSessionModel({ provider, modelId });
+      if (levelChanged) {
+        toast.show({
+          kind: "info",
+          message: t("Thinking level adjusted to {level} for the new model", { level: nextLevel }),
+        });
+      }
       return;
     }
     const sid = sessionIdRef.current;
@@ -913,11 +954,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     try {
       await sendAgentCommand(sid, { type: "set_model", provider, modelId });
       setCurrentModelOverride({ provider, modelId });
+      if (levelChanged) {
+        // Push the clamped value to the live agent so the persisted
+        // session state matches what the UI now shows. Pi would have
+        // done this anyway on the next setModel — but that fires
+        // asynchronously, and a prompt arriving in the gap would still
+        // see the stale level. Doing it here closes that window.
+        await sendAgentCommand(sid, { type: "set_thinking_level", level: nextLevel });
+        toast.show({
+          kind: "info",
+          message: t("Thinking level adjusted to {level} for the new model", { level: nextLevel }),
+        });
+      }
     } catch (e) {
       console.error("Failed to set model:", e);
       toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to switch model") });
     }
-  }, [isNew, setNewSessionModel, t, toast]);
+  }, [isNew, modelThinkingLevels, thinkingLevel, setNewSessionModel, t, toast]);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     setThinkingLevel(level);

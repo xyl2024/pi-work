@@ -613,6 +613,7 @@ export const ZH_TRANSLATIONS = {
   "Failed to stop agent": "停止会话失败",
   "Failed to switch model": "切换模型失败",
   "Failed to change thinking level": "切换思考级别失败",
+  "Thinking level adjusted to {level} for the new model": "已根据新模型调整思考强度到 {level}",
   "Failed to change tool preset": "切换工具失败",
   "Session deleted": "会话已删除",
   "Session renamed": "会话已重命名",
