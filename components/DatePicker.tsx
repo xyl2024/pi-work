@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n, type Locale } from "@/hooks/useI18n";
+import { usePopoverPosition } from "@/hooks/usePopoverPosition";
 
 interface DatePickerProps {
   /** Selected day as a unix-ms timestamp. The time component is ignored — the
@@ -37,6 +39,10 @@ interface DatePickerProps {
    *  open/close state and `onOpenChange` is required. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Trigger visual sizing. `compact` matches the default (small, row-friendly)
+   *  style; `regular` produces a full-size form input suitable for standalone
+   *  forms (e.g. the scheduler task dialog). Default: `"compact"`. */
+  size?: "compact" | "regular";
 }
 
 function startOfDay(ts: number): number {
@@ -87,6 +93,7 @@ export function DatePicker({
   clearable = true,
   open: openProp,
   onOpenChange,
+  size = "compact",
 }: DatePickerProps) {
   const { t, locale: ctxLocale } = useI18n();
   const loc = locale ?? ctxLocale;
@@ -131,72 +138,22 @@ export function DatePicker({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
-  // Computed popover position in viewport coordinates. Using `fixed` here
-  // (positioned from getBoundingClientRect) bypasses any positioned ancestors
-  // the trigger might be nested inside — important because the popover often
-  // lives inside other absolutely-positioned menus (filter popover, etc.)
-  // whose own right edge sits at the page edge.
-  const [popoverPos, setPopoverPos] = useState<{ left: number; top: number } | null>(null);
+  const popoverPos = usePopoverPosition({
+    triggerRef,
+    popoverRef,
+    open,
+    align,
+    gap: 4,
+    contentDeps: [viewYear, viewMonth],
+  });
 
-  // Measure the trigger + popover, then place the popover in viewport space
-  // so it always stays inside the visible area. Re-runs on scroll/resize and
-  // when the viewed month changes (the popover can change height).
-  useLayoutEffect(() => {
-    if (!open) {
-      setPopoverPos(null);
-      return;
-    }
-    const trigger = triggerRef.current;
-    const popover = popoverRef.current;
-    if (!trigger || !popover) return;
-
-    const GAP = 4;
-    const MARGIN = 8;
-    const measure = () => {
-      const tr = trigger.getBoundingClientRect();
-      const pr = popover.getBoundingClientRect();
-      const vw = document.documentElement.clientWidth;
-      const vh = document.documentElement.clientHeight;
-
-      // Horizontal: try the requested alignment first; flip if it overflows.
-      let left: number;
-      if (align === "start") {
-        left = tr.left;
-        if (left + pr.width > vw - MARGIN) left = tr.right - pr.width;
-      } else {
-        left = tr.right - pr.width;
-        if (left < MARGIN) left = tr.left;
-      }
-      // Clamp inside the viewport.
-      left = Math.max(MARGIN, Math.min(left, vw - pr.width - MARGIN));
-
-      // Vertical: prefer below the trigger; flip above if it would overflow.
-      let top: number;
-      const belowTop = tr.bottom + GAP;
-      const aboveTop = tr.top - GAP - pr.height;
-      if (belowTop + pr.height <= vh - MARGIN) {
-        top = belowTop;
-      } else if (aboveTop >= MARGIN) {
-        top = aboveTop;
-      } else {
-        // Both sides are tight — pick whichever has more room.
-        const belowRoom = vh - MARGIN - belowTop;
-        const aboveRoom = aboveTop - MARGIN;
-        top = belowRoom >= aboveRoom ? belowTop : Math.max(MARGIN, aboveTop);
-      }
-
-      setPopoverPos({ left, top });
-    };
-    measure();
-
-    // Re-measure on scroll/resize so the popover tracks the trigger.
-    window.addEventListener("scroll", measure, true);
-    window.addEventListener("resize", measure);
-    return () => {
-      window.removeEventListener("scroll", measure, true);
-      window.removeEventListener("resize", measure);
-    };
-  }, [open, align, viewYear, viewMonth]);
+  // Mount flag: only render the portal after the first client effect so SSR
+  // produces a stable tree (no portal) and the post-hydration render starts
+  // the portal cleanly without a hydration mismatch.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close on outside click / Escape.
   useEffect(() => {
@@ -286,10 +243,10 @@ export function DatePicker({
       style={{
         display: "inline-flex", alignItems: "center", gap: 6,
         width: "100%",
-        fontSize: 11,
-        padding: "1px 4px",
+        fontSize: size === "regular" ? 12 : 11,
+        padding: size === "regular" ? "6px 9px" : "1px 4px",
         border: "1px solid var(--border)",
-        borderRadius: 3,
+        borderRadius: size === "regular" ? 6 : 3,
         outline: "none",
         background: "var(--bg)",
         color: value != null ? "var(--text)" : "var(--text-dim)",
@@ -297,11 +254,11 @@ export function DatePicker({
         cursor: "pointer",
         boxSizing: "border-box",
         textAlign: "left",
-        minHeight: 22,
+        minHeight: size === "regular" ? undefined : 22,
         ...triggerStyle,
       }}
     >
-      <CalendarIcon size={10} />
+      <CalendarIcon size={size === "regular" ? 12 : 10} />
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {value != null ? formatTriggerLabel(value, loc) : (placeholder ?? t("Pick a date"))}
       </span>
@@ -330,33 +287,30 @@ export function DatePicker({
     ? renderTrigger({ open, ref: triggerRef, onClick: triggerClick, formatted: value != null ? formatTriggerLabel(value, loc) : "", hasValue: value != null })
     : defaultTrigger;
 
-  return (
-    <div ref={containerRef} style={{ position: "relative", display: renderTrigger ? "inline-block" : "block", width: renderTrigger ? undefined : "100%" }}>
-      {trigger}
-      {open && (
-        <div
-          ref={popoverRef}
-          role="dialog"
-          aria-label={t("Pick a date")}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            position: "fixed",
-            left: popoverPos?.left ?? -9999,
-            top: popoverPos?.top ?? -9999,
-            visibility: popoverPos ? "visible" : "hidden",
-            zIndex: 1000,
-            background: "var(--bg-panel)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            boxShadow: "0 10px 28px rgba(0,0,0,0.32)",
-            padding: 10,
-            width: 240,
-            userSelect: "none",
-            color: "var(--text)",
-            fontFamily: "inherit",
-          }}
-        >
+  const popoverNode = mounted ? createPortal(
+    <div
+      ref={popoverRef}
+      role="dialog"
+      aria-label={t("Pick a date")}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        position: "fixed",
+        left: popoverPos?.left ?? -9999,
+        top: popoverPos?.top ?? -9999,
+        visibility: popoverPos ? "visible" : "hidden",
+        zIndex: 1000,
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border)",
+        borderRadius: 8,
+        boxShadow: "0 10px 28px rgba(0,0,0,0.32)",
+        padding: 10,
+        width: 240,
+        userSelect: "none",
+        color: "var(--text)",
+        fontFamily: "inherit",
+      }}
+    >
           {/* Header: prev / month-year / next */}
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8 }}>
             <button type="button" onClick={goPrevMonth} aria-label={t("Previous month")} style={navBtnStyle}>
@@ -445,8 +399,14 @@ export function DatePicker({
               {t("Today")}
             </button>
           </div>
-        </div>
-      )}
+        </div>,
+    document.body,
+  ) : null;
+
+  return (
+    <div ref={containerRef} style={{ position: "relative", display: renderTrigger ? "inline-block" : "block", width: renderTrigger ? undefined : "100%" }}>
+      {trigger}
+      {open && popoverNode}
     </div>
   );
 }

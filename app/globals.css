@@ -1433,3 +1433,12 @@ li.todo-task-item[data-checked="true"] > div {
 .scheduler-text-input:focus-visible {
   --scheduler-input-border: var(--text-muted);
 }
+
+/* TimePicker column wheel: focus ring only for keyboard focus (not mouse click). */
+.timepicker-wheel:focus {
+  outline: none;
+}
+.timepicker-wheel:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  transition: box-shadow 0.12s;
+}

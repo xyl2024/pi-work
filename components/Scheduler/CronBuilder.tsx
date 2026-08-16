@@ -24,6 +24,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Cron } from "croner";
 import { useI18n, type Locale } from "@/hooks/useI18n";
+import { DatePicker } from "@/components/DatePicker";
+import { TimePicker, type TimeValue } from "@/components/TimePicker";
 import { inputStyle } from "./styles";
 import { cronHumanize, parseDowList, DAY_ORDER } from "./utils";
 
@@ -34,10 +36,19 @@ const WEEKDAY_LABELS: Record<Locale, string[]> = {
   en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
 };
 
-function todayStr(): string {
+function startOfToday(): number {
   const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function parseHHMM(v: string): TimeValue | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(v);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mi = Number(m[2]);
+  if (!timeInRange(h, mi)) return null;
+  return { h, m: mi };
 }
 
 const isInt = (s: string) => /^\d{1,2}$/.test(s);
@@ -175,17 +186,18 @@ const PRESETS: { id: string; cron: string; label: string }[] = [
 ];
 
 
-function TimeField({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
-  const timeValue = /^\d{2}:\d{2}$/.test(value) ? value : "";
+function TimeField({ value, onChange, label }: { value: TimeValue | null; onChange: (v: TimeValue) => void; label: string }) {
   return (
     <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <span style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{label}</span>
-      <input
-        type="time"
-        value={timeValue}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ ...inputStyle, width: 130, fontFamily: "var(--font-mono)" }}
-      />
+      <div style={{ width: 130 }}>
+        <TimePicker
+          size="regular"
+          value={value}
+          onChange={(v) => v && onChange(v)}
+          ariaLabel={label}
+        />
+      </div>
     </label>
   );
 }
@@ -366,11 +378,8 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
       {state.mode === "daily" && (
         <TimeField
           label={t("Time")}
-          value={`${pad(state.h)}:${pad(state.m)}`}
-          onChange={(v) => {
-            const [h, m] = v.split(":").map(Number);
-            patch({ ...state, mode: "daily", h: Number.isFinite(h) ? h : NaN, m: Number.isFinite(m) ? m : NaN });
-          }}
+          value={timeInRange(state.h, state.m) ? { h: state.h, m: state.m } : null}
+          onChange={(v) => patch({ ...state, mode: "daily", h: v.h, m: v.m })}
         />
       )}
 
@@ -378,11 +387,8 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <TimeField
             label={t("Time")}
-            value={`${pad(state.h)}:${pad(state.m)}`}
-            onChange={(v) => {
-              const [h, m] = v.split(":").map(Number);
-              patch({ ...state, mode: "weekly", h: Number.isFinite(h) ? h : NaN, m: Number.isFinite(m) ? m : NaN });
-            }}
+            value={timeInRange(state.h, state.m) ? { h: state.h, m: state.m } : null}
+            onChange={(v) => patch({ ...state, mode: "weekly", h: v.h, m: v.m })}
           />
           <DayChips days={state.days} invalid={state.days.length === 0} onChange={(days) => patch({ ...state, mode: "weekly", days })} />
         </div>
@@ -410,18 +416,27 @@ export function CronBuilder({ value, onChange, showPreview = true }: CronBuilder
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap" }}>{t("Date")}</span>
-            <input
-              type="date"
-              min={todayStr()}
-              value={state.date}
-              onChange={(e) => patch({ ...state, mode: "once", date: e.target.value })}
-              style={{ ...inputStyle, width: 150, fontFamily: "var(--font-mono)" }}
-            />
+            <div style={{ width: 170 }}>
+              <DatePicker
+                size="regular"
+                value={state.date ? new Date(state.date).getTime() : null}
+                onChange={(ts) => {
+                  if (ts == null) {
+                    patch({ ...state, mode: "once", date: "" });
+                    return;
+                  }
+                  const d = new Date(ts);
+                  patch({ ...state, mode: "once", date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` });
+                }}
+                min={startOfToday()}
+                ariaLabel={t("Date")}
+              />
+            </div>
           </label>
           <TimeField
             label={t("Time")}
-            value={state.time}
-            onChange={(v) => patch({ ...state, mode: "once", time: v })}
+            value={parseHHMM(state.time)}
+            onChange={(v) => patch({ ...state, mode: "once", time: `${pad(v.h)}:${pad(v.m)}` })}
           />
         </div>
       )}
