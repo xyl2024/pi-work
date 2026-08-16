@@ -64,8 +64,8 @@ interface Props {
   /** Lazy catalog fetcher. The Custom row calls this the first time it's
    *  expanded per session if the catalog is empty. */
   onEnsureAvailableTools?: () => Promise<void>;
-  thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
-  onThinkingLevelChange?: (level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh") => void;
+  thinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+  onThinkingLevelChange?: (level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
@@ -95,7 +95,7 @@ export interface ChatInputHandle {
   focus: () => void;
 }
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
 // "Read only" quick preset — the canonical tool names pi's built-in
 // resource loader registers for file inspection. `setActiveToolsByName`
@@ -112,6 +112,7 @@ const THINKING_BORDER_COLOR: Record<typeof THINKING_LEVELS[number], string> = {
   medium: "rgba(139,92,246,0.55)",  // violet-500
   high: "rgba(249,115,22,0.55)",    // orange-500
   xhigh: "rgba(239,68,68,0.55)",    // red-500
+  max: "rgba(185,28,28,0.65)",       // red-700
 };
 // Solid (opaque) palette — same hues as THINKING_BORDER_COLOR, used to
 // paint the per-level indicator inside the thinking picker so each option
@@ -123,6 +124,7 @@ const THINKING_LEVEL_COLOR: Record<typeof THINKING_LEVELS[number], string> = {
   medium: "#8b5cf6",  // violet-500
   high: "#f97316",    // orange-500
   xhigh: "#ef4444",   // red-500
+  max: "#b91c1c",      // red-700
 };
 const SLASH_PAGE_SIZE = 5;
 
@@ -743,6 +745,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     medium: t("Medium reasoning"),
     high: t("High reasoning"),
     xhigh: t("Highest reasoning"),
+    max: t("Maximum reasoning"),
   };
 
   // Current thinking level's display label — mirrors the per-option

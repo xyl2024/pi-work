@@ -18,7 +18,7 @@ import {
   type ResourceLoader,
 } from "@earendil-works/pi-coding-agent";
 
-export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ResolvedModel {
   provider: string;

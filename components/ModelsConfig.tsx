@@ -300,7 +300,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
 
 // ── ThinkingLevelMap editor ───────────────────────────────────────────────────
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 type ThinkingLevel = typeof THINKING_LEVELS[number];
 
 const LEVEL_COLORS: Record<ThinkingLevel, string> = {
@@ -310,7 +310,18 @@ const LEVEL_COLORS: Record<ThinkingLevel, string> = {
   medium:  "#a78bfa",
   high:    "#f472b6",
   xhigh:   "#fb923c",
+  max:     "#b91c1c",
 };
+
+function getDisplayedThinkingLevels(model: RuntimeModelInfo): string[] {
+  if (!model.reasoning) return [];
+  return THINKING_LEVELS.filter((level) => {
+    const mapped = model.thinkingLevelMap?.[level];
+    if (mapped === null) return false;
+    if (level === "xhigh" || level === "max") return mapped !== undefined;
+    return true;
+  });
+}
 
 function ThinkingLevelMapEditor({
   value,
@@ -1138,7 +1149,7 @@ function RuntimeModelList({ providerId, configured }: { providerId: string; conf
               <span style={{ color: "var(--text-muted)" }}>{t("Max output")}: <b style={{ color: "var(--text)" }}>{model.maxTokens.toLocaleString()}</b></span>
               <span style={{ color: "var(--text-muted)" }}>{t("Input")}: <b style={{ color: "var(--text)" }}>{model.input.join(", ")}</b></span>
               <span style={{ color: "var(--text-muted)" }}>{t("Reasoning")}: <b style={{ color: "var(--text)" }}>{model.reasoning ? t("Supported") : t("Not supported")}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Thinking levels")}: <b style={{ color: "var(--text)" }}>{Object.keys(model.thinkingLevelMap ?? {}).join(", ") || t("Provider default")}</b></span>
+              <span style={{ color: "var(--text-muted)" }}>{t("Thinking levels")}: <b style={{ color: "var(--text)" }}>{getDisplayedThinkingLevels(model).join(", ") || t("Provider default")}</b></span>
             </div>
             <div>
               <SectionTitle>{t("Cost (per million tokens)")}</SectionTitle>

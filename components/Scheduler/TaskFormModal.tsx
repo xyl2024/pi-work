@@ -98,7 +98,7 @@ function formatMaxLifetimeForForm(ms: number | null): string {
 
 // ── Thinking levels (mirror ChatInput) ──────────────────────────
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const THINKING_COLOR: Record<(typeof THINKING_LEVELS)[number], string> = {
   off: "#94a3b8",
   minimal: "#38bdf8",
@@ -106,6 +106,7 @@ const THINKING_COLOR: Record<(typeof THINKING_LEVELS)[number], string> = {
   medium: "#8b5cf6",
   high: "#f97316",
   xhigh: "#ef4444",
+  max: "#b91c1c",
 };
 
 // ── Chat-input-style selector primitives ─────────────────────────

@@ -93,7 +93,7 @@ export interface UseAgentSessionOptions {
   onScrollComplete?: () => void;
 }
 
-export type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ChatInputHandle {
   insertText: (text: string) => void;

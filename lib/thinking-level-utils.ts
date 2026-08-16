@@ -15,7 +15,8 @@ export type ThinkingLevelOption =
   | "low"
   | "medium"
   | "high"
-  | "xhigh";
+  | "xhigh"
+  | "max";
 
 // Canonical ordering of explicit thinking levels, mirroring
 // EXTENDED_THINKING_LEVELS in @earendil-works/pi-ai (which our pi
@@ -29,11 +30,12 @@ export const THINKING_LEVEL_ORDER = [
   "medium",
   "high",
   "xhigh",
+  "max",
 ] as const;
 
 /**
  * Pick the highest thinking level the given model actually supports.
- * Walks THINKING_LEVEL_ORDER from strongest (xhigh) to weakest (off)
+ * Walks THINKING_LEVEL_ORDER from strongest (max) to weakest (off)
  * and returns the first one present in `available`. Falls back to
  * "off" when no reasoning-capable levels are advertised — that is the
  * safe default for non-reasoning models and matches what pi does when
