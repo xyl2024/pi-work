@@ -80,13 +80,13 @@ export function TaskOverviewTab({ task, runs }: Props) {
         <SectionTitle>{t("Execution config")}</SectionTitle>
         <dl style={dlStyle}>
           <Row label="Provider">
-            {task.provider ? <code style={monoStyle}>{task.provider}</code> : <span style={{ color: "var(--text-muted)" }}>{t("Use default")}</span>}
+            {task.provider ? <code style={monoStyle}>{task.provider}</code> : <Missing>{t("Not set")}</Missing>}
           </Row>
           <Row label={t("Model")}>
-            {task.modelId ? <code style={monoStyle}>{task.modelId}</code> : <span style={{ color: "var(--text-muted)" }}>{t("Use default")}</span>}
+            {task.modelId ? <code style={monoStyle}>{task.modelId}</code> : <Missing>{t("Not set")}</Missing>}
           </Row>
           <Row label={t("Thinking level")}>
-            {task.thinkingLevel ?? <span style={{ color: "var(--text-muted)" }}>{t("Default")}</span>}
+            {task.thinkingLevel && task.thinkingLevel !== "auto" ? task.thinkingLevel : <Missing>{t("Not set")}</Missing>}
           </Row>
           <Row label={t("Tools")}>
             {task.toolNames === null
@@ -165,3 +165,11 @@ const monoStyle: CSSProperties = {
   borderRadius: 3,
   color: "var(--text)",
 };
+
+// `Provider` / `Model` / `Thinking level` are all required on scheduled tasks.
+// A missing or "auto" value means an old task needs re-picking — surface that
+// as an obvious error-tinted "Not set" so the user can see at a glance that
+// the task has dangling required fields.
+function Missing({ children }: { children: React.ReactNode }) {
+  return <span style={{ color: "var(--error)", fontSize: 11 }}>{children}</span>;
+}

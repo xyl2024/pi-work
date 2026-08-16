@@ -44,9 +44,9 @@ export function TaskConfigTab({ task, onEdit }: Props) {
         </button>
       </header>
 
-      <ConfigRow label="Provider" value={provider ? <code style={mono}>{provider}</code> : <Muted>{t("Use default")}</Muted>} />
-      <ConfigRow label={t("Model")} value={modelId ? <code style={mono}>{modelId}</code> : <Muted>{t("Use default")}</Muted>} />
-      <ConfigRow label={t("Thinking level")} value={thinkingLevel ?? <Muted>{t("Default")}</Muted>} />
+      <ConfigRow label="Provider" value={provider ? <code style={mono}>{provider}</code> : <Missing>{t("Not set")}</Missing>} />
+      <ConfigRow label={t("Model")} value={modelId ? <code style={mono}>{modelId}</code> : <Missing>{t("Not set")}</Missing>} />
+      <ConfigRow label={t("Thinking level")} value={thinkingLevel && thinkingLevel !== "auto" ? thinkingLevel : <Missing>{t("Not set")}</Missing>} />
       <ConfigRow
         label={t("Tools")}
         value={
@@ -86,6 +86,13 @@ function ConfigRow({ label, value }: { label: string; value: React.ReactNode }) 
 
 function Muted({ children }: { children: React.ReactNode }) {
   return <span style={{ color: "var(--text-muted)" }}>{children}</span>;
+}
+
+// `Provider` / `Model` / `Thinking level` are all required on scheduled tasks.
+// A missing or "auto" value means an old task needs re-picking — surface that
+// as an obvious error-tinted "Not set" so the user knows to open Modify.
+function Missing({ children }: { children: React.ReactNode }) {
+  return <span style={{ color: "var(--error)", fontSize: 11 }}>{children}</span>;
 }
 
 const mono: CSSProperties = {

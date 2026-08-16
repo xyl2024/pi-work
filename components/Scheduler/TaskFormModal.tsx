@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
-import { ProviderIcon, ProviderGearIcon } from "@/components/ProviderIcon";
+import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ProviderIcon";
 import { CwdPicker } from "@/components/CwdPicker";
 import { AnimatedPopover } from "@/components/AnimatedPopover";
 import { Cron } from "croner";
@@ -231,7 +231,9 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         prompt: task.prompt,
         provider: task.provider ?? "",
         modelId: task.modelId ?? "",
-        thinkingLevel: task.thinkingLevel ?? "",
+        // Old tasks that stored thinkingLevel="auto" or null have to be re-picked
+        // on next edit — "auto" is no longer offered in the dropdown.
+        thinkingLevel: task.thinkingLevel && task.thinkingLevel !== "auto" ? task.thinkingLevel : "",
         toolMode: task.toolNames === null ? "all" : toolNames.length === 0 ? "none" : "custom",
         toolNames: toolNames.join(", "),
       });
@@ -251,13 +253,18 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   const nameError = submitted && form.name.trim().length === 0 ? t("Please enter a task name") : null;
   const cwdError = submitted && form.cwd.trim().length === 0 ? t("Please enter a working directory") : null;
   const promptError = submitted && form.prompt.trim().length === 0 ? t("Please enter a prompt") : null;
+  // Scheduled tasks must run with an explicit model + thinking level — falling
+  // back to "default" silently would couple the task to whichever default is
+  // active in settings.json at run time, so we force a concrete choice.
+  const modelError = submitted && (!form.provider.trim() || !form.modelId.trim()) ? t("Please select a model") : null;
+  const thinkingError = submitted && !form.thinkingLevel.trim() ? t("Please select a thinking level") : null;
   // Cron builder has its own inline error (red border + syntax-error label) that
   // shows immediately while the user is editing — this is builder-internal
   // feedback, not form-level required-field validation, so it's intentional
   // that it surfaces before submit.
   const cronError = submitted && !form.cronValid ? t("Schedule syntax error") : null;
   const errors: Record<string, string | null> = {
-    basics: nameError ?? promptError ?? cwdError,
+    basics: nameError ?? promptError ?? cwdError ?? modelError ?? thinkingError,
     schedule: cronError,
   };
 
@@ -266,12 +273,27 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
     // First click reveals validation; subsequent edits keep the red text
     // visible until the next successful submit (which closes the modal).
     setSubmitted(true);
-    const hasError = !form.name.trim() || !form.cwd.trim() || !form.prompt.trim() || !form.cronValid;
+    const hasError =
+      !form.name.trim() ||
+      !form.cwd.trim() ||
+      !form.prompt.trim() ||
+      !form.provider.trim() ||
+      !form.modelId.trim() ||
+      !form.thinkingLevel.trim() ||
+      !form.cronValid;
     if (hasError) {
       onToast("error", t("Please fix form errors first"));
       // Jump to the first section that has an error
       const firstError = (["basics", "schedule"] as const).find((s) => {
-        if (s === "basics") return !form.name.trim() || !form.prompt.trim() || !form.cwd.trim();
+        if (s === "basics")
+          return (
+            !form.name.trim() ||
+            !form.prompt.trim() ||
+            !form.cwd.trim() ||
+            !form.provider.trim() ||
+            !form.modelId.trim() ||
+            !form.thinkingLevel.trim()
+          );
         if (s === "schedule") return !form.cronValid;
         return false;
       });
@@ -422,7 +444,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
           {/* Form scroll */}
           <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
             {section === "basics" && (
-              <BasicConfigSection form={form} update={update} meta={meta} errors={{ name: nameError, prompt: promptError, cwd: cwdError }} />
+              <BasicConfigSection form={form} update={update} meta={meta} errors={{ name: nameError, prompt: promptError, cwd: cwdError, model: modelError, thinking: thinkingError }} />
             )}
             {section === "schedule" && (
               <ScheduleSection form={form} update={update} cronError={cronError} />
@@ -457,7 +479,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
 
 // ── Sections ─────────────────────────────────────────────────────
 
-function BasicConfigSection({ form, update, meta, errors }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null; errors: { name: string | null; prompt: string | null; cwd: string | null } }) {
+function BasicConfigSection({ form, update, meta, errors }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null; errors: { name: string | null; prompt: string | null; cwd: string | null; model: string | null; thinking: string | null } }) {
   const { t } = useI18n();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -492,8 +514,8 @@ function BasicConfigSection({ form, update, meta, errors }: { form: FormState; u
             fill
           />
         </Field>
-        <ModelSelect form={form} update={update} meta={meta} />
-        <ThinkingSelect form={form} update={update} meta={meta} />
+        <ModelSelect form={form} update={update} meta={meta} error={errors.model} />
+        <ThinkingSelect form={form} update={update} meta={meta} error={errors.thinking} />
         <ToolsSelect form={form} update={update} />
       </div>
     </div>
@@ -531,10 +553,11 @@ function Field({ label, hint, error, children }: { label: string; hint?: string;
 
 // ── Selector sub-components (mirror ChatInput style) ─────────────
 
-function ModelSelect({ form, update, meta }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null }) {
+function ModelSelect({ form, update, meta, error }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null; error?: string | null }) {
   const { t } = useI18n();
   const options = meta?.modelList ?? [];
-  const isDefault = !form.provider && !form.modelId;
+  const modelIcons = meta?.modelIcons;
+  const isUnselected = !form.provider || !form.modelId;
   const current = options.find((o) => o.provider === form.provider && o.id === form.modelId);
   const groups: { provider: string; options: typeof options }[] = [];
   for (const opt of options) {
@@ -543,9 +566,10 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
     else groups.push({ provider: opt.provider, options: [opt] });
   }
   const { open, setOpen, rootRef } = useDropdown();
+  const triggerIconId = resolveProviderIcon(current?.provider, current?.id, modelIcons);
 
   return (
-    <Field label={t("Model")} hint={t("Leave empty to use the default model")}>
+    <Field label={t("Model")} hint={t("Scheduler field required")} error={error}>
       <div ref={rootRef} style={{ position: "relative" }}>
         <button
           type="button"
@@ -561,47 +585,24 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
           }}
         >
           <ProviderIcon
-            id={current?.provider ?? ""}
+            id={triggerIconId ?? ""}
             size={12}
             fallback={<ProviderGearIcon size={11} />}
           />
           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0 }}>
-            {isDefault ? (
-              <>
-                {t("Default model")}
-                {meta?.defaultModel && (
-                  <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 6 }}>
-                    {meta.defaultModel.modelId}
-                  </span>
-                )}
-              </>
-            ) : current?.name ?? `${form.provider}/${form.modelId}`}
+            {isUnselected
+              ? t("Select a model")
+              : current?.name ?? `${form.provider}/${form.modelId}`}
           </span>
         </button>
         <AnimatedPopover open={open} style={dropdownPanelStyle} maxHeight={320}>
-          <button
-            type="button"
-            onClick={() => {
-              update("provider", "");
-              update("modelId", "");
-              setOpen(false);
-            }}
-            style={dropdownOptionStyle(isDefault)}
-          >
-            <CheckOrGap active={isDefault} />
-            <span style={{ flex: 1 }}>{t("Default model")}</span>
-            {meta?.defaultModel && (
-              <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                {meta.defaultModel.modelId}
-              </span>
-            )}
-          </button>
           {groups.length > 0 && (
-            <div style={{ borderTop: "1px solid var(--border)", marginTop: 4, paddingTop: 4 }}>
+            <div>
               {groups.map((g) => (
                 <div key={g.provider}>
-                  <div style={{ padding: "4px 10px", fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    {g.provider}
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <ProviderIcon id={resolveProviderIcon(g.provider, undefined, modelIcons) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
+                    <span>{g.provider}</span>
                   </div>
                   {g.options.map((opt) => {
                     const active = opt.provider === form.provider && opt.id === form.modelId;
@@ -617,7 +618,7 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
                         style={dropdownOptionStyle(active)}
                       >
                         <CheckOrGap active={active} />
-                        <ProviderIcon id={opt.provider} size={11} fallback={<span style={{ width: 11 }} />} />
+                        <ProviderIcon id={resolveProviderIcon(opt.provider, opt.id, modelIcons) ?? ""} size={11} fallback={<ProviderGearIcon size={10} />} />
                         <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{opt.name}</span>
                       </button>
                     );
@@ -632,27 +633,32 @@ function ModelSelect({ form, update, meta }: { form: FormState; update: <K exten
   );
 }
 
-function ThinkingSelect({ form, update, meta }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null }) {
+function ThinkingSelect({ form, update, meta, error }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null; error?: string | null }) {
   const { t } = useI18n();
   const key = form.provider && form.modelId ? `${form.provider}:${form.modelId}` : null;
   const available = key ? meta?.thinkingLevels[key] : undefined;
   const levelMap = key ? meta?.thinkingLevelMaps[key] : undefined;
-  const current = (form.thinkingLevel || "auto") as (typeof THINKING_LEVELS)[number];
+  // Tasks must run with an explicit thinking level — "auto" silently inherits
+  // whatever the model default is, which can drift underneath us. So the
+  // dropdown never offers "auto" and an empty form state means "not chosen".
+  const current = form.thinkingLevel
+    ? (form.thinkingLevel as Exclude<(typeof THINKING_LEVELS)[number], "auto">)
+    : null;
   const { open, setOpen, rootRef } = useDropdown();
-  const currentMapped = current !== "auto" && levelMap ? levelMap[current] : undefined;
-  const displayLabel = (currentMapped != null && currentMapped !== current)
-    ? currentMapped
-    : current === "auto" ? t("Use model default") : current;
+  const currentMapped = current && levelMap ? levelMap[current] : undefined;
+  const displayLabel = current
+    ? (currentMapped != null && currentMapped !== current ? currentMapped : current)
+    : t("Select a thinking level");
 
   return (
-    <Field label={t("Thinking level")} hint={t("auto uses the model default")}>
+    <Field label={t("Thinking level")} hint={t("Scheduler field required")} error={error}>
       <div ref={rootRef} style={{ position: "relative" }}>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           style={{
             ...pillTriggerStyle(open),
-            color: THINKING_COLOR[current],
+            color: current ? THINKING_COLOR[current] : "var(--text-muted)",
             fontFamily: "var(--font-mono)",
             fontWeight: 500,
           }}
@@ -666,26 +672,27 @@ function ThinkingSelect({ form, update, meta }: { form: FormState; update: <K ex
         </button>
         <AnimatedPopover open={open} style={dropdownPanelStyle} maxHeight={320}>
           {THINKING_LEVELS.filter((lvl) => {
-            if (lvl === "auto") return true;
+            // "auto" is intentionally never offered in scheduled tasks.
+            if (lvl === "auto") return false;
             if (!available) return true;
             return available.includes(lvl);
           }).map((lvl) => {
             const active = current === lvl;
-            const mappedVal = lvl !== "auto" && levelMap ? levelMap[lvl] : undefined;
+            const mappedVal = levelMap ? levelMap[lvl] : undefined;
             const label = mappedVal != null && mappedVal !== lvl ? mappedVal : lvl;
             return (
               <button
                 key={lvl}
                 type="button"
                 onClick={() => {
-                  update("thinkingLevel", lvl === "auto" ? "" : lvl);
+                  update("thinkingLevel", lvl);
                   setOpen(false);
                 }}
                 style={dropdownOptionStyle(active)}
               >
                 <CheckOrGap active={active} />
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: THINKING_COLOR[lvl], flexShrink: 0 }} />
-                <span style={{ flex: 1 }}>{lvl === "auto" ? t("Use model default") : label}</span>
+                <span style={{ flex: 1 }}>{label}</span>
                 {mappedVal != null && mappedVal !== lvl && (
                   <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>({lvl})</span>
                 )}
