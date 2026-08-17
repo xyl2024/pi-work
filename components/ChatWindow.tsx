@@ -85,6 +85,21 @@ function phaseLabel(phase: AgentPhase, t: ReturnType<typeof useI18n>["t"]): stri
   return t("Thinking...");
 }
 
+function phaseLoaderVariant(phase: AgentPhase) {
+  if (phase?.kind === "waiting_model") return "domino" as const;
+  if (phase?.kind === "running_tools") return "rotor" as const;
+  if (phase?.kind === "compacting") return "fold" as const;
+  return "spark" as const;
+}
+
+function hasStreamingThinking(message: Partial<AgentMessage> | null): boolean {
+  if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return false;
+  const currentBlock = message.content[message.content.length - 1];
+  return currentBlock?.type === "thinking" &&
+    typeof currentBlock.thinking === "string" &&
+    currentBlock.thinking.trim().length > 0;
+}
+
 /** Resolve a `read` tool's raw path against the session cwd. Mirrors the
  *  resolver used by the Session Library grid: absolute paths and Windows
  *  drive/UNC paths pass through; anything else is joined onto cwd. pi itself
@@ -916,6 +931,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [handleScrollToToolCall]);
 
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
+  const isStreamingThinking = streamState.isStreaming && hasStreamingThinking(streamState.streamingMessage);
 
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
@@ -1584,9 +1600,18 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <CompactionDivider key={`comp-tail-${point.entryId}`} point={point} />
             ))}
 
+            {isStreamingThinking && (
+              <div className="py-2">
+                <LoadingState label={t("Thinking...")} variant="spark" />
+              </div>
+            )}
+
             {agentRunning && !streamState.streamingMessage && (
               <div className="py-2">
-                <LoadingState label={phaseLabel(agentPhase, t)} />
+                <LoadingState
+                  label={phaseLabel(agentPhase, t)}
+                  variant={phaseLoaderVariant(agentPhase)}
+                />
               </div>
             )}
 

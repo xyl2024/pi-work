@@ -437,68 +437,6 @@ pre, code {
   }
 }
 
-/* Loading state — pixel-grid wavefront (chat waiting indicator).
-   Each cell's delay/duration come in via --ls-delay / --ls-dur custom
-   properties set inline by components/LoadingState.tsx; the keyframes
-   only control the pop-on → hold → fade-out arc. Reduced motion freezes
-   the grid to its dim state and turns the shimmering label into plain
-   text (the elapsed timer still ticks — it lives in JS). */
-.ls-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 4px);
-  gap: 1.5px;
-}
-.ls-pixel {
-  width: 4px;
-  height: 4px;
-  background: var(--accent);
-  border-radius: 1px;
-  opacity: 0.15;
-  animation: ls-pixel-on var(--ls-dur, 650ms) ease-in-out var(--ls-delay, 0ms) infinite;
-}
-.ls-pixel--round {
-  border-radius: 50%;
-}
-.ls-pixel--dim {
-  opacity: 0.07;
-  animation: none;
-}
-@keyframes ls-pixel-on {
-  0%   { opacity: 0.15; }
-  14%  { opacity: 1; }
-  44%  { opacity: 1; }
-  60%  { opacity: 0.15; }
-  100% { opacity: 0.15; }
-}
-.ls-label {
-  font-size: 13px;
-  font-weight: 500;
-  background-image: linear-gradient(90deg,
-    var(--text-dim) 35%, var(--text) 50%, var(--text-dim) 65%);
-  background-size: 200% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  animation: ls-shimmer 4s linear infinite;
-}
-@keyframes ls-shimmer {
-  0%   { background-position: 100% 0; }
-  35%  { background-position: 0% 0; }
-  50%  { background-position: 0% 0; }
-  85%  { background-position: 100% 0; }
-  100% { background-position: 100% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ls-pixel {
-    animation: none;
-  }
-  .ls-label {
-    animation: none;
-    background-image: none;
-    color: var(--text);
-  }
-}
-
 /* Streaming text — words resolve out of blur (assistant output).
    The settled prefix keeps rendering as live markdown; the in-flight tail
    animates word-by-word via .streaming-word, with a blinking caret at the

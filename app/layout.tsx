@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Sans_Mono } from "next/font/google";
 import "./globals.css";
+import "generative-loaders/styles.css";
 
 const notoSansMono = Noto_Sans_Mono({
   subsets: ["latin", "cyrillic"],
