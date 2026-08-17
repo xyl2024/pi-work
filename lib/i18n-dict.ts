@@ -1252,7 +1252,6 @@ export const ZH_TRANSLATIONS = {
   "Cost by provider": "按提供方分摊",
   "Cost by category": "按类别分摊",
   "Top sessions by cost": "Top 会话成本",
-  "Recent calls": "最近调用",
   "Time": "时间",
   "Tokens": "Tokens",
   "Cost": "成本",

@@ -3,11 +3,11 @@
 /**
  * Token audit panel — a small dashboard for `~/.pi-work/token-audit.db`.
  *
- * Fetches four parallel JSON snapshots from `/api/token-audit/*` and lays them
- * out as a KPI strip + a 2-column ECharts grid + a compact recent-calls table.
- * The `EchartsChart` wrapper handles the dynamic import, dark-mode theme, and
- * dispose/re-init on option identity change, so each chart below is just a
- * `useMemo` of an `EChartsCoreOption`.
+ * Fetches three parallel JSON snapshots from `/api/token-audit/summary` and
+ * lays them out as a KPI strip + a 2-column ECharts grid. The `EchartsChart`
+ * wrapper handles the dynamic import, dark-mode theme, and dispose/re-init
+ * on option identity change, so each chart below is just a `useMemo` of an
+ * `EChartsCoreOption`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -15,23 +15,15 @@ import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useToast } from "./Toast";
-import { Tooltip } from "./Tooltip";
 import { EchartsChart } from "./EchartsChart";
 import { useTheme } from "@/hooks/useTheme";
-import type { SessionInfo } from "@/lib/types";
 import type {
   Range,
   SummaryBucket,
   SummarizeResult,
-  TokenCall,
 } from "@/lib/token-audit-types";
 
-interface TokensPanelProps {
-  onSelectSession: (session: SessionInfo) => void;
-}
-
 const RANGES: Range[] = ["today", "7d", "30d", "all"];
-const PAGE_LIMIT = 50;
 
 // ── formatters ────────────────────────────────────────────────────────────
 
@@ -53,12 +45,6 @@ function fmtHour(ts: number): string {
 function fmtMonthDay(ts: number): string {
   const d = new Date(ts);
   return `${d.getMonth() + 1}/${d.getDate()}`;
-}
-
-function fmtTime(ts: number): string {
-  const d = new Date(ts);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function fmtDayKey(key: string): number | null {
@@ -152,10 +138,9 @@ interface FetchState {
   time: SummarizeResult | null;
   model: SummarizeResult | null;
   session: SummarizeResult | null;
-  calls: { rows: TokenCall[]; total: number } | null;
 }
 
-export function TokensPanel({ onSelectSession }: TokensPanelProps) {
+export function TokensPanel() {
   const { t } = useI18n();
   const toast = useToast();
 
@@ -164,49 +149,35 @@ export function TokensPanel({ onSelectSession }: TokensPanelProps) {
     time: null,
     model: null,
     session: null,
-    calls: null,
   });
-  const [loading, setLoading] = useState(false);
-  const [offset, setOffset] = useState(0);
 
   const timeGroupBy: "hour" | "day" = range === "today" ? "hour" : "day";
 
   const reload = useCallback(async () => {
-    setLoading(true);
     try {
-      const [timeRes, modelRes, sessionRes, callsRes] = await Promise.all([
+      const [timeRes, modelRes, sessionRes] = await Promise.all([
         fetch(`/api/token-audit/summary?range=${range}&groupBy=${timeGroupBy}`),
         fetch(`/api/token-audit/summary?range=${range}&groupBy=model`),
         fetch(`/api/token-audit/summary?range=${range}&groupBy=session`),
-        fetch(`/api/token-audit/calls?range=${range}&limit=${PAGE_LIMIT}&offset=${offset}`),
       ]);
-      if (!timeRes.ok || !modelRes.ok || !sessionRes.ok || !callsRes.ok) {
-        throw new Error(`HTTP ${timeRes.status}/${modelRes.status}/${sessionRes.status}/${callsRes.status}`);
+      if (!timeRes.ok || !modelRes.ok || !sessionRes.ok) {
+        throw new Error(`HTTP ${timeRes.status}/${modelRes.status}/${sessionRes.status}`);
       }
-      const [time, model, session, calls] = (await Promise.all([
+      const [time, model, session] = (await Promise.all([
         timeRes.json(),
         modelRes.json(),
         sessionRes.json(),
-        callsRes.json(),
-      ])) as [SummarizeResult, SummarizeResult, SummarizeResult, { rows: TokenCall[]; total: number }];
-      setState({ time, model, session, calls });
-      if (offset > 0 && offset >= calls.total) setOffset(0);
+      ])) as [SummarizeResult, SummarizeResult, SummarizeResult];
+      setState({ time, model, session });
     } catch (e) {
       toast.show({ kind: "error", message: `${t("Failed to load token audit")}: ${String(e)}` });
-    } finally {
-      setLoading(false);
     }
     // timeGroupBy is derived in render from range; range triggers the refetch.
-  }, [range, timeGroupBy, offset, toast, t]);
+  }, [range, timeGroupBy, toast, t]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  // Reset paging on range change.
-  useEffect(() => {
-    setOffset(0);
-  }, [range]);
 
   const totals = state.time?.totals;
 
@@ -214,11 +185,10 @@ export function TokensPanel({ onSelectSession }: TokensPanelProps) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg)" }}>
       <Toolbar
         range={range}
-        calls={state.calls}
         onChangeRange={setRange}
       />
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
-        <KpiStrip totals={totals} totalCalls={state.calls?.total ?? 0} errorCount={countErrors(state.calls?.rows)} />
+        <KpiStrip totals={totals} />
 
         <div
           style={{
@@ -256,28 +226,12 @@ export function TokensPanel({ onSelectSession }: TokensPanelProps) {
             <TopSessionsChart buckets={state.session?.buckets.slice(0, 10) ?? []} />
           </ChartCard>
         </div>
-
-        <RecentCalls
-          rows={state.calls?.rows ?? []}
-          total={state.calls?.total ?? 0}
-          offset={offset}
-          loading={loading}
-          onSelectSession={onSelectSession}
-          onChangeOffset={setOffset}
-        />
       </div>
     </div>
   );
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
-
-function countErrors(rows: TokenCall[] | undefined): number {
-  if (!rows) return 0;
-  let n = 0;
-  for (const r of rows) if (r.error) n++;
-  return n;
-}
 
 /** The model key is "provider/model_id". Aggregate by provider. */
 function groupByProvider(buckets: SummaryBucket[]): SummaryBucket[] {
@@ -309,11 +263,10 @@ function groupByProvider(buckets: SummaryBucket[]): SummaryBucket[] {
 
 interface ToolbarProps {
   range: Range;
-  calls: { rows: TokenCall[]; total: number } | null;
   onChangeRange: (r: Range) => void;
 }
 
-function Toolbar({ range, calls, onChangeRange }: ToolbarProps) {
+function Toolbar({ range, onChangeRange }: ToolbarProps) {
   const { t } = useI18n();
   return (
     <div
@@ -334,14 +287,6 @@ function Toolbar({ range, calls, onChangeRange }: ToolbarProps) {
       {RANGES.map((r) => (
         <ChipButton key={r} active={range === r} onClick={() => onChangeRange(r)} label={rangeLabel(r, t)} />
       ))}
-      <div style={{ flex: 1 }} />
-      {calls && (
-        <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-          {t("Showing {n} of {total}")
-            .replace("{n}", String(calls.rows.length))
-            .replace("{total}", String(calls.total))}
-        </span>
-      )}
     </div>
   );
 }
@@ -357,18 +302,16 @@ function rangeLabel(r: Range, t: (k: string) => string): string {
 
 interface KpiStripProps {
   totals: SummaryBucket | undefined;
-  totalCalls: number;
-  errorCount: number;
 }
 
-function KpiStrip({ totals, totalCalls, errorCount }: KpiStripProps) {
+function KpiStrip({ totals }: KpiStripProps) {
   const { t } = useI18n();
   const { formatCost } = useFormatCurrency();
   if (!totals) {
     return (
       <div style={kpiGridStyle}>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <KpiCard key={i} label={i === 0 ? t("Total cost") : i === 1 ? t("Calls") : i === 2 ? t("Total tokens") : i === 3 ? t("Avg duration") : i === 4 ? t("Cache hit rate") : t("Errors")} value="—" />
+        {[0, 1, 2, 3, 4].map((i) => (
+          <KpiCard key={i} label={i === 0 ? t("Total cost") : i === 1 ? t("Calls") : i === 2 ? t("Total tokens") : i === 3 ? t("Avg duration") : t("Cache hit rate")} value="—" />
         ))}
       </div>
     );
@@ -378,19 +321,13 @@ function KpiStrip({ totals, totalCalls, errorCount }: KpiStripProps) {
   const hitDenom = totals.inputTokens + totals.cacheReadTokens;
   const hitRate = hitDenom > 0 ? totals.cacheReadTokens / hitDenom : null;
   const avgMs = totals.calls > 0 ? totals.durationMs / totals.calls : 0;
-  const errorRate = totalCalls > 0 ? errorCount / totalCalls : 0;
   return (
     <div style={kpiGridStyle}>
       <KpiCard label={t("Total cost")} value={formatCost(totals.costTotal)} accent />
-      <KpiCard label={t("Calls")} value={fmtNum(totalCalls || totals.calls)} sub={totals.calls > 0 ? `${totals.calls} ${t("audit")}` : undefined} />
+      <KpiCard label={t("Calls")} value={fmtNum(totals.calls)} sub={totals.calls > 0 ? `${totals.calls} ${t("audit")}` : undefined} />
       <KpiCard label={t("Total tokens")} value={fmtNum(totalTokens)} sub={t("incl. cache")} />
       <KpiCard label={t("Avg duration")} value={avgMs > 0 ? `${(avgMs / 1000).toFixed(1)}s` : "—"} />
       <KpiCard label={t("Cache hit rate")} value={hitRate === null ? "—" : fmtPct(hitRate)} sub={hitRate !== null ? fmtNum(totals.cacheReadTokens) : undefined} />
-      <KpiCard
-        label={t("Errors")}
-        value={totalCalls > 0 ? `${errorCount} · ${fmtPct(errorRate)}` : "—"}
-        warn={errorCount > 0}
-      />
     </div>
   );
 }
@@ -758,175 +695,7 @@ function TopSessionsChart({ buckets }: { buckets: SummaryBucket[] }) {
   return <EchartsChart option={option} height={260} ariaLabel={t("Top sessions by cost")} />;
 }
 
-// ── recent calls table ────────────────────────────────────────────────────
-
-interface RecentCallsProps {
-  rows: TokenCall[];
-  total: number;
-  offset: number;
-  loading: boolean;
-  onSelectSession: (s: SessionInfo) => void;
-  onChangeOffset: (n: number) => void;
-}
-
-function RecentCalls({ rows, total, offset, loading, onSelectSession, onChangeOffset }: RecentCallsProps) {
-  const { t } = useI18n();
-  return (
-    <div
-      style={{
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          padding: "8px 12px",
-          fontSize: 11,
-          fontWeight: 600,
-          color: "var(--text-muted)",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <span>{t("Recent calls")}</span>
-        {loading && <span style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 400 }}>{t("Loading...")}</span>}
-      </div>
-      {rows.length === 0 ? (
-        <div style={{ padding: "20px 12px", textAlign: "center", fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
-          {t("No token usage recorded yet.")}
-        </div>
-      ) : (
-        <div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "70px 1fr 60px 100px 70px 24px",
-              gap: 8,
-              padding: "6px 12px",
-              fontSize: 10,
-              color: "var(--text-dim)",
-              fontFamily: "var(--font-mono)",
-              borderBottom: "1px solid var(--border)",
-              background: "var(--bg)",
-            }}
-          >
-            <span>{t("Time")}</span>
-            <span>{t("Model")}</span>
-            <span style={{ textAlign: "right" }}>{t("Tokens")}</span>
-            <span style={{ textAlign: "right" }}>{t("Cost")}</span>
-            <span style={{ textAlign: "right" }}>{t("Duration")}</span>
-            <span />
-          </div>
-          {rows.map((r) => (
-            <CallRow key={r.id} row={r} onSelectSession={onSelectSession} />
-          ))}
-        </div>
-      )}
-      {total > PAGE_LIMIT && (
-        <Pagination offset={offset} total={total} onChange={onChangeOffset} />
-      )}
-    </div>
-  );
-}
-
-function CallRow({ row, onSelectSession }: { row: TokenCall; onSelectSession: (s: SessionInfo) => void }) {
-  const { formatCost } = useFormatCurrency();
-  const handleClick = useCallback(() => {
-    onSelectSession({
-      id: row.sessionId,
-      path: "",
-      cwd: "",
-      created: "",
-      modified: "",
-      messageCount: 0,
-    } as SessionInfo);
-  }, [onSelectSession, row.sessionId]);
-  const tokenIn = row.inputTokens + row.cacheReadTokens + row.cacheWriteTokens;
-  const isError = !!row.error;
-  return (
-    <div
-      onClick={handleClick}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "70px 1fr 60px 100px 70px 24px",
-        gap: 8,
-        padding: "6px 12px",
-        fontSize: 11,
-        fontFamily: "var(--font-mono)",
-        color: "var(--text)",
-        borderBottom: "1px solid var(--border)",
-        background: isError ? "rgba(239, 68, 68, 0.06)" : "transparent",
-        cursor: "pointer",
-        transition: "background 0.1s",
-        alignItems: "center",
-      }}
-      onMouseEnter={(e) => {
-        if (!isError) e.currentTarget.style.background = "var(--bg-hover)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = isError ? "rgba(239, 68, 68, 0.06)" : "transparent";
-      }}
-    >
-      <span style={{ color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{fmtTime(row.ts)}</span>
-      <span title={`${row.provider}/${row.modelId}`} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-        {row.provider}/{row.modelId}
-      </span>
-      <span style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtNum(tokenIn + row.outputTokens)}</span>
-      <span style={{ textAlign: "right", color: "var(--accent)", fontVariantNumeric: "tabular-nums" }}>{formatCost(row.costTotal)}</span>
-      <span style={{ textAlign: "right", color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>{(row.durationMs / 1000).toFixed(1)}s</span>
-      <span style={{ textAlign: "center", color: isError ? "#f87171" : "var(--text-dim)", fontSize: 12 }}>
-        {isError ? <Tooltip content={row.error ?? "error"}><span>!</span></Tooltip> : ""}
-      </span>
-    </div>
-  );
-}
-
-function Pagination({ offset, total, onChange }: { offset: number; total: number; onChange: (n: number) => void }) {
-  const { t } = useI18n();
-  const page = Math.floor(offset / PAGE_LIMIT) + 1;
-  const pages = Math.ceil(total / PAGE_LIMIT);
-  return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        padding: "6px 12px",
-        borderTop: "1px solid var(--border)",
-        background: "var(--bg)",
-        fontSize: 11,
-      }}
-    >
-      <button onClick={() => onChange(Math.max(0, offset - PAGE_LIMIT))} disabled={offset === 0} style={pageBtnStyle(offset === 0)}>
-        {t("Previous page")}
-      </button>
-      <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-        {page} / {pages}
-      </span>
-      <button onClick={() => onChange(offset + PAGE_LIMIT < total ? offset + PAGE_LIMIT : offset)} disabled={offset + PAGE_LIMIT >= total} style={pageBtnStyle(offset + PAGE_LIMIT >= total)}>
-        {t("Next page")}
-      </button>
-    </div>
-  );
-}
-
 // ── atoms ─────────────────────────────────────────────────────────────────
-
-function pageBtnStyle(disabled: boolean): React.CSSProperties {
-  return {
-    padding: "2px 10px",
-    background: "transparent",
-    border: "1px solid var(--border)",
-    borderRadius: 4,
-    color: disabled ? "var(--text-dim)" : "var(--text)",
-    cursor: disabled ? "default" : "pointer",
-    fontSize: 11,
-  };
-}
 
 function ChipButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (

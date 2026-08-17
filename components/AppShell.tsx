@@ -1552,7 +1552,7 @@ export function AppShell() {
           ) : activeFileTab?.kind === "rss" ? (
             <RssPanel />
           ) : activeFileTab?.kind === "tokens" ? (
-            <TokensPanel onSelectSession={handleSelectSession} />
+            <TokensPanel />
           ) : activeFileTab?.kind === "llmAudit" ? (
             <LlmAuditPanel currentSessionId={selectedSession?.id ?? null} />
           ) : activeFileTab?.kind === "gitDiff" ? (
