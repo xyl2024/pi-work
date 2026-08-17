@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useRef, useEffect, useMemo } from "react";
+import { createContext, useCallback, useContext, useState, useRef, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Tooltip } from "./Tooltip";
@@ -14,6 +14,7 @@ import { EchartsBlock } from "./EchartsBlock";
 import { SvgBlock } from "./SvgBlock";
 import { CodeBlock, copyText } from "./CodeBlock";
 import { MorphToggleIcon } from "./MorphToggleIcon";
+import { ImageLightbox, MarkdownImage, extractImageGallery, type ImageItem } from "./ImageLightbox";
 import { COPY, CHECK, THUMBS_UP, HEART } from "@/lib/icon-paths";
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { useShowFileResults } from "@/hooks/showFileResultsStore";
@@ -234,6 +235,23 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
     typeof message.content === "string"
       ? []
       : message.content.filter((b): b is ImageContent => b.type === "image");
+  // Per-message image gallery used by the click-to-zoom lightbox. Mirrors
+  // ImageContent → { src, alt } exactly like MarkdownImage expects. Same
+  // src-derivation logic as the inline <img> below so the click → open
+  // round-trip resolves to the right gallery slot. Empty array when the
+  // user sent no images, so the lightbox never opens in that case.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const imageGallery: ImageItem[] = imageBlocks.map((img) => {
+    const flat = img as unknown as { data?: string; mimeType?: string };
+    const src = img.source
+      ? img.source.type === "base64"
+        ? `data:${img.source.media_type};base64,${img.source.data}`
+        : img.source.url ?? ""
+      : flat.data
+        ? `data:${flat.mimeType};base64,${flat.data}`
+        : "";
+    return { alt: "", src };
+  });
 
   const time = formatTime(message.timestamp);
   const canNavigate = !!prevAssistantEntryId && !!onNavigate;
@@ -337,7 +355,12 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
                     key={i}
                     src={src}
                     alt=""
-                    style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)" }}
+                    onClick={() => {
+                      const idx = imageGallery.findIndex((g) => g.src === src);
+                      if (idx >= 0) setLightboxIndex(idx);
+                    }}
+                    title={t("Click to expand")}
+                    style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)", cursor: "zoom-in" }}
                   />
                 );
               })}
@@ -483,6 +506,14 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
           {time && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto", opacity: hovered ? 1 : 0, transition: "opacity 0.12s" }}>{time}</span>}
         </div>
       )}
+      {lightboxIndex !== null && imageGallery.length > 0 && (
+        <ImageLightbox
+          images={imageGallery}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onIndexChange={setLightboxIndex}
+        />
+      )}
     </div>
   );
 }
@@ -519,7 +550,33 @@ function AssistantMessageView({
   const { t } = useI18n();
   const toast = useToast();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
-  const blocks = message.content ?? [];
+  const blocks = useMemo(() => message.content ?? [], [message.content]);
+  // Gallery of every image reference across all text + thinking blocks of
+  // this assistant message, in render order. Drives the click-to-zoom
+  // lightbox: each MarkdownImage calls onImageClick(src), we resolve that
+  // back to an index here. Same regex/resolve strategy as FileViewer's
+  // markdown branch — src in chat markdown is already browser-fetchable
+  // (http/data/blob), so identity resolveSrc is the right choice.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const gallery = useMemo<ImageItem[]>(() => {
+    const out: ImageItem[] = [];
+    for (const b of blocks) {
+      if (b.type === "text" || b.type === "thinking") {
+        const md = b.type === "text" ? b.text : b.thinking;
+        // Resolve src against identity (chat markdown uses absolute URLs);
+        // duplicates collapse to the first occurrence so the index lookup
+        // stays stable when the same image is referenced twice.
+        for (const item of extractImageGallery(md)) {
+          if (!out.some((g) => g.src === item.src)) out.push(item);
+        }
+      }
+    }
+    return out;
+  }, [blocks]);
+  const handleImageClick = useCallback((src: string) => {
+    const idx = gallery.findIndex((g) => g.src === src);
+    if (idx >= 0) setLightboxIndex(idx);
+  }, [gallery]);
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState(false);
@@ -710,7 +767,7 @@ function AssistantMessageView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blocks.map((block, i) => (
-          <BlockView key={i} block={block} toolResults={toolResults} isStreaming={isStreaming} isLast={i === blocks.length - 1} keywords={keywords} isSearchMatch={isSearchMatch} />
+          <BlockView key={i} block={block} toolResults={toolResults} isStreaming={isStreaming} isLast={i === blocks.length - 1} keywords={keywords} isSearchMatch={isSearchMatch} onImageClick={handleImageClick} />
         ))}
       </div>
 
@@ -818,16 +875,24 @@ function AssistantMessageView({
           </span>
         )}
       </div>
+      {lightboxIndex !== null && gallery.length > 0 && (
+        <ImageLightbox
+          images={gallery}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onIndexChange={setLightboxIndex}
+        />
+      )}
     </div>
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, isLast, keywords, isSearchMatch }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; isLast?: boolean; keywords?: string[]; isSearchMatch?: boolean }) {
+function BlockView({ block, toolResults, isStreaming, isLast, keywords, isSearchMatch, onImageClick }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; isLast?: boolean; keywords?: string[]; isSearchMatch?: boolean; onImageClick?: (src: string) => void }) {
   if (block.type === "text") {
-    return <TextBlock block={block as TextContent} keywords={keywords} isSearchMatch={isSearchMatch} isStreaming={isStreaming} />;
+    return <TextBlock block={block as TextContent} keywords={keywords} isSearchMatch={isSearchMatch} isStreaming={isStreaming} onImageClick={onImageClick} />;
   }
   if (block.type === "thinking") {
-    return <ThinkingBlock block={block as ThinkingContent} keywords={keywords} isSearchMatch={isSearchMatch} isStreaming={isLast && isStreaming} />;
+    return <ThinkingBlock block={block as ThinkingContent} keywords={keywords} isSearchMatch={isSearchMatch} isStreaming={isLast && isStreaming} onImageClick={onImageClick} />;
   }
   if (block.type === "toolCall") {
     const tc = block as ToolCallContent;
@@ -854,7 +919,10 @@ function highlightTextAsHtml(text: string, keywords?: string[], isSearchMatch?: 
  * re-parse (visible as flicker). The stable `key={raw}` on MermaidBlock is a
  * second line of defense.
  */
-function useMarkdownComponents(isStreaming?: boolean) {
+function useMarkdownComponents(
+  isStreaming?: boolean,
+  onImageClick?: (src: string) => void,
+) {
   return useMemo(
     () => ({
       code({ className, children, ...props }: { className?: string; children?: React.ReactNode } & React.HTMLAttributes<HTMLElement>) {
@@ -893,14 +961,28 @@ function useMarkdownComponents(isStreaming?: boolean) {
         // Unwrap <pre> wrapper — CodeBlock handles its own container
         return <>{children}</>;
       },
+      // Markdown images default to ReactMarkdown's plain <img>, which has no
+      // zoom affordance. When the parent message provides onImageClick we
+      // route through MarkdownImage so the lightbox can take over. The src
+      // chat markdown uses is already browser-fetchable (https/data/blob),
+      // so identity resolveSrc is correct.
+      img: onImageClick
+        ? (props: { src?: string | Blob; alt?: string }) => (
+            <MarkdownImage
+              {...props}
+              resolveSrc={(s) => (typeof s === "string" ? s : "")}
+              onImageClick={onImageClick}
+            />
+          )
+        : undefined,
     }),
-    [isStreaming],
+    [isStreaming, onImageClick],
   );
 }
 
-function TextBlock({ block, keywords, isSearchMatch, isStreaming }: { block: TextContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean }) {
+function TextBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }: { block: TextContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean; onImageClick?: (src: string) => void }) {
   const text = highlightTextAsHtml(block.text, keywords, isSearchMatch);
-  const components = useMarkdownComponents(isStreaming);
+  const components = useMarkdownComponents(isStreaming, onImageClick);
   // Streaming reveal: the settled prefix (text as of the last update) keeps
   // rendering as live markdown, while the newest slice animates in as plain
   // words resolving out of blur (.streaming-word) with a blinking caret.
@@ -943,7 +1025,7 @@ function TextBlock({ block, keywords, isSearchMatch, isStreaming }: { block: Tex
   );
 }
 
-function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming }: { block: ThinkingContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean }) {
+function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }: { block: ThinkingContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean; onImageClick?: (src: string) => void }) {
   const { t } = useI18n();
   // Thinking blocks start collapsed. The only exception is when this block
   // contains a search match — in that case we auto-expand so the highlighted
@@ -971,7 +1053,7 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming }: { block:
   // spaces so multi-line reasoning reads as one continuous snippet. The
   // ellipsis in the JSX cuts off anything that overflows the available width.
   const thinkingPreview = useMemo(() => block.thinking.replace(/\s+/g, " ").trim(), [block.thinking]);
-  const components = useMarkdownComponents(isStreaming);
+  const components = useMarkdownComponents(isStreaming, onImageClick);
   // Clicks on interactive elements inside the expanded thinking (copy buttons,
   // links, inputs) must not collapse the block; neither should a text drag
   // selection.

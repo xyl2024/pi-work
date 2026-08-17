@@ -514,6 +514,7 @@ function ImageViewer({ filePath }: { filePath: string }) {
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
@@ -524,6 +525,7 @@ function ImageViewer({ filePath }: { filePath: string }) {
     setNaturalSize(null);
     setError(null);
     setWatching(false);
+    setLightboxOpen(false);
 
     if (esRef.current) {
       esRef.current.close();
@@ -614,6 +616,7 @@ function ImageViewer({ filePath }: { filePath: string }) {
           <img
             src={src}
             alt={filePath}
+            onClick={() => setLightboxOpen(true)}
             onLoad={(e) => {
               const img = e.currentTarget;
               setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
@@ -622,15 +625,25 @@ function ImageViewer({ filePath }: { filePath: string }) {
               if (!error) toast.show({ kind: "error", message: t("Failed to load file") });
               setError(t("Failed to load image"));
             }}
+            title={t("Click to expand")}
             style={{
               maxWidth: "100%",
               maxHeight: "100%",
               objectFit: "contain",
               boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              cursor: "zoom-in",
             }}
           />
         )}
       </div>
+      {lightboxOpen && (
+        <ImageLightbox
+          images={[{ src, alt: filePath }]}
+          index={0}
+          onClose={() => setLightboxOpen(false)}
+          onIndexChange={() => {}}
+        />
+      )}
     </div>
   );
 }
