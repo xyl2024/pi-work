@@ -290,8 +290,21 @@ const tokensDescriptor: RightBarDescriptor = {
   labelKey: "Open token audit",
   isActive: (ctx) => ctx.activeTabKind === "tokens",
   content: () => TokensIcon(),
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens),
+  // Mirrors canvasDescriptor: open the tab and widen the panel to
+  // "expanded" so the token-audit dashboard gets the full right column
+  // (chat flex shrinks to 0). Re-clicking when already expanded falls
+  // back to "normal".
+  onClick: (ctx) => {
+    if (
+      ctx.activeTabKind === "tokens" &&
+      ctx.rightPanelState === "expanded"
+    ) {
+      ctx.setRightPanelState("normal");
+      return;
+    }
+    ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens);
+    ctx.setRightPanelState("expanded");
+  },
 };
 
 const llmAuditDescriptor: RightBarDescriptor = {
