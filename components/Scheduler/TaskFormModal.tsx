@@ -23,6 +23,7 @@ import { CwdPicker } from "@/components/CwdPicker";
 import { AnimatedPopover } from "@/components/AnimatedPopover";
 import { Cron } from "croner";
 import { CronBuilder } from "./CronBuilder";
+import { NumberStepper } from "./NumberStepper";
 import { apiFetch } from "./utils";
 import { pickClosestAvailableThinkingLevel, THINKING_LEVEL_ORDER } from "@/lib/thinking-level-utils";
 import type { ModelMeta, ScheduledTask, TaskCreatePayload, TaskUpdatePayload } from "./types";
@@ -582,16 +583,13 @@ function ScheduleSection({ form, update, cronError, maxLifetimeError }: { form: 
         error={maxLifetimeError}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input
-            type="number"
+          <NumberStepper
+            value={form.maxLifetimeMinutes ? Number(form.maxLifetimeMinutes) : NaN}
+            onChange={(minutes) => update("maxLifetimeMinutes", Number.isInteger(minutes) ? String(minutes) : "")}
             min={1}
             max={1440}
-            step={1}
-            value={form.maxLifetimeMinutes}
+            ariaLabel={t("Max lifetime")}
             placeholder={String(Math.round(RUNNER_DEFAULT_MAX_LIFETIME_MS / 60_000))}
-            onChange={(e) => update("maxLifetimeMinutes", e.target.value)}
-            className="scheduler-text-input"
-            style={{ ...inputMonoStyle, width: 120 }}
           />
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("minutes")}</span>
         </div>

@@ -20,6 +20,7 @@ interface NumberStepperProps {
   max?: number;
   step?: number;
   ariaLabel?: string;
+  placeholder?: string;
   disabled?: boolean;
   /** 数字框宽度（px）。 */
   width?: number;
@@ -32,6 +33,7 @@ export function NumberStepper({
   max = 99,
   step = 1,
   ariaLabel,
+  placeholder,
   disabled = false,
   width = 44,
 }: NumberStepperProps) {
@@ -145,6 +147,7 @@ export function NumberStepper({
         inputMode="numeric"
         pattern="[0-9]*"
         value={draft}
+        placeholder={placeholder}
         aria-label={ariaLabel}
         disabled={disabled}
         onChange={(e) => {
