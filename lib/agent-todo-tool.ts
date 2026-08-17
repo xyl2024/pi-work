@@ -35,36 +35,33 @@ export { AGENT_TODO_TOOL_NAME };
 export type { AgentTodoAction, AgentTask, AgentTaskState, AgentTodoDetails, AgentTodoLogEntry } from "./agent-todo-tool-types";
 const log = createLogger("agent-todo-tool");
 
-const AgentTodoParams = Type.Union([
-  Type.Object({
-    action: Type.Literal("create"),
-    subject: Type.String({
-      description: "Task title. Short, imperative, e.g. 'Research rpiv-todo replay'.",
+// OpenAI-compatible providers require function.parameters to have a root
+// `type: "object"`. A top-level Type.Union emits only `anyOf`, which worked
+// through the Anthropic adapter's legacy input_schema wrapper but is rejected
+// by providers such as DeepSeek. Keep action-specific requiredness in the
+// reducer instead of making the wire schema a root union.
+const AgentTodoParams = Type.Object(
+  {
+    action: StringEnum(["create", "update", "list", "delete", "clear"] as const, {
+      description: "Operation to perform.",
     }),
-    description: Type.Optional(Type.String({ description: "Long-form description." })),
-  }),
-  Type.Object({
-    action: Type.Literal("update"),
-    id: Type.Number({ description: "Task id." }),
-    subject: Type.Optional(Type.String({ description: "Updated task title." })),
-    description: Type.Optional(Type.String({ description: "Updated long-form description." })),
-    status: Type.Optional(
-      StringEnum(["pending", "in_progress", "completed"] as const, {
-        description: "Target status.",
+    subject: Type.Optional(
+      Type.String({
+        description: "Task title for create, or updated title for update.",
       }),
     ),
-  }),
-  Type.Object({
-    action: Type.Literal("list"),
-  }),
-  Type.Object({
-    action: Type.Literal("delete"),
-    id: Type.Number({ description: "Task id." }),
-  }),
-  Type.Object({
-    action: Type.Literal("clear"),
-  }),
-]);
+    description: Type.Optional(
+      Type.String({ description: "Long-form description for create or update." }),
+    ),
+    id: Type.Optional(Type.Number({ description: "Task id for update or delete." })),
+    status: Type.Optional(
+      StringEnum(["pending", "in_progress", "completed"] as const, {
+        description: "Target status for update.",
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
 
 type AgentTodoParamsType = Static<typeof AgentTodoParams>;
 

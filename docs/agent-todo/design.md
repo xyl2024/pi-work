@@ -66,28 +66,31 @@
 单工具、action 区分。模型每做一次变更就调一次；`list` 是只读。
 
 ```ts
-const AgentTodoParams = Type.Union([
-  Type.Object({
-    action: Type.Literal("create"),
-    subject: Type.String({ description: "任务标题。简短、祈使句。" }),
-    description: Type.Optional(Type.String({ description: "长文本描述。" })),
-  }),
-  Type.Object({
-    action: Type.Literal("update"),
-    id: Type.Number({ description: "任务 ID。" }),
-    subject: Type.Optional(Type.String({ description: "新的任务标题。" })),
-    description: Type.Optional(Type.String({ description: "新的长文本描述。" })),
+const AgentTodoParams = Type.Object(
+  {
+    action: StringEnum(["create", "update", "list", "delete", "clear"] as const, {
+      description: "要执行的操作。",
+    }),
+    subject: Type.Optional(
+      Type.String({ description: "create 时的新任务标题，或 update 时的更新标题。" }),
+    ),
+    description: Type.Optional(
+      Type.String({ description: "create / update 使用的长文本描述。" }),
+    ),
+    id: Type.Optional(Type.Number({ description: "update / delete 使用的任务 ID。" })),
     status: Type.Optional(
       StringEnum(["pending", "in_progress", "completed"] as const, {
-        description: "目标状态。",
+        description: "update 使用的目标状态。",
       }),
     ),
-  }),
-  Type.Object({ action: Type.Literal("list") }),
-  Type.Object({ action: Type.Literal("delete"), id: Type.Number({ description: "任务 ID。" }) }),
-  Type.Object({ action: Type.Literal("clear") }),
-]);
+  },
+  { additionalProperties: false },
+);
 ```
+
+> **Schema 兼容性约束：** 根节点必须是 `Type.Object`。顶层 `Type.Union` 生成的
+> JSON Schema 只有 `anyOf`、没有 `type: "object"`，会被 OpenAI-compatible provider
+> 拒绝。各 action 的条件必填项由 reducer 校验，而不是放在根 union 中。
 
 ### 任务模型（沿用 rpiv-todo）
 
