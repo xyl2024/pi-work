@@ -16,6 +16,7 @@ import { GrokBotStage } from "./GrokBotStage";
 import { GrokBotLab } from "./GrokBotLab";
 
 interface Props {
+  selectedSession?: SessionInfo | null;
   selectedSessionId: string | null;
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
   initialSessionId?: string | null;
@@ -139,7 +140,7 @@ const WORKSPACE_PAGE_SIZE = 5;
 const SESSION_PAGE_SIZE_GROUPED = 3;
 const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 
-export function SessionSidebar({ selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenMcp, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenMcp, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const [labOpen, setLabOpen] = useState(false);
@@ -363,6 +364,23 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
     }
   }, []);
 
+  // Synchronize historical-session selection with the sidebar: reveal the
+  // target cwd, refresh its first page, and bring the active group into view.
+  // MultiCwdList separately injects the selected session when it falls outside
+  // that first page.
+  useEffect(() => {
+    const cwd = selectedSession?.cwd;
+    if (!cwd) return;
+
+    setExpandedCwds((prev) => prev[cwd] === true ? prev : { ...prev, [cwd]: true });
+    void fetchCwdSessions(cwd, null, "reset");
+
+    const frame = requestAnimationFrame(() => {
+      cwdHeaderRefs.current[cwd]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectedSession?.id, selectedSession?.cwd, fetchCwdSessions]);
+
   // Refresh button handler — reload workspaces + each expanded cwd's first page.
   const refreshAll = useCallback(() => {
     void fetchWorkspaces(null, "reset");
@@ -559,10 +577,25 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
     }
   }, [pinnedSessions, t, toast]);
 
-  // Workspaces come pre-sorted by lastUsed desc from /api/workspaces;
-  // no client-side reorder needed since the picker that previously
-  // elevated the active cwd is gone.
-  const orderedWorkspaces = workspaces;
+  // Keep the active cwd at the top. Historical-session jumps can target a
+  // cwd outside the currently loaded workspace page, so synthesize its row
+  // from the selected session until pagination reaches the real aggregate.
+  const activeWorkspace = selectedCwdProp
+    ? workspaces.find((workspace) => workspace.cwd === selectedCwdProp)
+      ?? (selectedSession?.cwd === selectedCwdProp
+        ? {
+            cwd: selectedSession.cwd,
+            lastUsed: selectedSession.modified,
+            totalSessions: 1,
+            runningCount: selectedSession.running ? 1 : 0,
+            firstMessage: selectedSession.firstMessage,
+            latestSessionName: selectedSession.name,
+          }
+        : null)
+    : null;
+  const orderedWorkspaces = activeWorkspace
+    ? [activeWorkspace, ...workspaces.filter((workspace) => workspace.cwd !== activeWorkspace.cwd)]
+    : workspaces;
 
   const toggleExpandCwd = useCallback((cwd: string) => {
     setExpandedCwds((prev) => {
@@ -732,7 +765,8 @@ export function SessionSidebar({ selectedSessionId, onSelectSession, initialSess
         pinnedSessions={pinnedSessions}
         favoriteIds={favoriteIds}
         selectedSessionId={selectedSessionId}
-        
+        activeSession={selectedSession}
+
         onCwdHeaderRef={(cwd, el) => { cwdHeaderRefs.current[cwd] = el; }}
         onToggleExpand={handleToggleExpand}
         onSelectSession={onSelectSession}

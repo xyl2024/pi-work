@@ -1124,6 +1124,7 @@ export function AppShell() {
 
   const sidebarContent = (
     <SessionSidebar
+      selectedSession={selectedSession}
       selectedSessionId={selectedSession?.id ?? null}
       onSelectSession={handleSelectSession}
       initialSessionId={initialSessionId}

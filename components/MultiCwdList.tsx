@@ -39,6 +39,8 @@ interface MultiCwdListProps {
   pinnedSessions: string[];
   favoriteIds: string[];
   selectedSessionId: string | null;
+  /** Full active session metadata, used when the selected row is outside the loaded page. */
+  activeSession?: SessionInfo | null;
 
   /** Tell the parent about cwd header refs so it can scrollIntoView on activate. */
   onCwdHeaderRef: (cwd: string, el: HTMLDivElement | null) => void;
@@ -73,6 +75,7 @@ export function MultiCwdList({
   pinnedSessions,
   favoriteIds,
   selectedSessionId,
+  activeSession,
   onCwdHeaderRef,
   onToggleExpand,
   onSelectSession,
@@ -118,9 +121,20 @@ export function MultiCwdList({
         // any prior collapsed state — first-writer-wins per cwd.
         const expanded = expandedCwds[ws.cwd] ?? true;
         const group = perCwdSessions[ws.cwd];
+        const activeSessionInCwd = activeSession?.cwd === ws.cwd ? activeSession : null;
+        const displayGroup = activeSessionInCwd && !group?.sessions.some((session) => session.id === activeSessionInCwd.id)
+          ? {
+              sessions: [activeSessionInCwd, ...(group?.sessions ?? [])],
+              cursor: group?.cursor ?? null,
+              hasMore: group?.hasMore ?? false,
+              loading: group?.loading ?? false,
+              loadingMore: group?.loadingMore ?? false,
+              loadError: group?.loadError ?? null,
+            }
+          : group;
         // Sessions pinned to this cwd (insertion order preserved)
         const pinnedInCwd = pinnedSessions
-          .map((id) => (group?.sessions ?? []).find((s) => s.id === id))
+          .map((id) => (displayGroup?.sessions ?? []).find((s) => s.id === id))
           .filter((s): s is SessionInfo => s !== undefined);
         // Pinned sessions might not be in the loaded page yet (lazy pagination).
         // We can't show them until the group has been loaded at least once.
@@ -133,7 +147,7 @@ export function MultiCwdList({
             key={ws.cwd}
             workspace={ws}
             expanded={expanded}
-            group={group}
+            group={displayGroup}
             pinnedInCwd={pinnedInCwd}
             hasUnloadedPinned={hasUnloadedPinned}
             pinnedSessionSet={pinnedSessionSet}
@@ -288,18 +302,30 @@ function CwdGroup({
   }, [expanded]);
 
   const sessions = group?.sessions ?? [];
-  // Non-pinned sessions, sorted by modified desc (the API already returns
-  // them sorted, but re-sort here defensively for cross-cwd consistency).
+  const selectedSession = selectedSessionId
+    ? sessions.find((session) => session.id === selectedSessionId) ?? null
+    : null;
+  const selectedNonPinnedSession = selectedSession && !pinnedSessionSet.has(selectedSession.id)
+    ? selectedSession
+    : null;
+  const orderedPinnedSessions = selectedSession && pinnedSessionSet.has(selectedSession.id)
+    ? [selectedSession, ...pinnedInCwd.filter((session) => session.id !== selectedSession.id)]
+    : pinnedInCwd;
+  // The active non-pinned session renders before the pinned section; the
+  // remaining non-pinned rows retain their usual modified-desc ordering.
   const nonPinnedSessions = sessions
-    .filter((s) => !pinnedSessionSet.has(s.id))
+    .filter((session) => !pinnedSessionSet.has(session.id) && session.id !== selectedSession?.id)
     .slice()
     .sort((a, b) => b.modified.localeCompare(a.modified));
 
   // The dynamic tail of the list: whichever session renders last right now.
-  // Pinned rows render above non-pinned ones, so the tail is the last
-  // non-pinned session when any exist, else the last pinned one. It moves
-  // as more sessions load, which is exactly what "load more" must attach to.
-  const allSessions = [...pinnedInCwd, ...nonPinnedSessions];
+  // It moves as more sessions load, which is exactly what "load more" must
+  // attach to.
+  const allSessions = [
+    ...(selectedNonPinnedSession ? [selectedNonPinnedSession] : []),
+    ...orderedPinnedSessions,
+    ...nonPinnedSessions,
+  ];
   const lastSessionId = allSessions.length > 0 ? allSessions[allSessions.length - 1].id : null;
   const canLoadMore = !!group?.hasMore;
 
@@ -321,6 +347,17 @@ function CwdGroup({
       hasPendingQuestion={pendingQuestionSessionIds.has(s.id)}
     />
   );
+
+  const sessionRowWithLoadMore = (s: SessionInfo, pinned: boolean, key: string) =>
+    s.id === lastSessionId && canLoadMore ? (
+      <LastSessionLoadMore
+        key={key}
+        loadingMore={!!group?.loadingMore}
+        onLoadMore={onLoadMoreSessions}
+      >
+        {sessionRow(s, pinned, key)}
+      </LastSessionLoadMore>
+    ) : sessionRow(s, pinned, key);
 
   // "..." menu state — mirrors SessionItem's pattern. The trigger button
   // (shown only on row hover) opens a portal'd menu panel on click.
@@ -633,25 +670,22 @@ function CwdGroup({
           }}
         >
           <div ref={bodyRef} style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 6, paddingTop: 4 }}>
-          {pinnedInCwd.length > 0 && (
+          {selectedNonPinnedSession && sessionRowWithLoadMore(
+            selectedNonPinnedSession,
+            false,
+            selectedNonPinnedSession.id,
+          )}
+          {orderedPinnedSessions.length > 0 && (
             <>
               <div style={{ padding: "2px 6px 1px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 {t("Pinned sessions")}
               </div>
-              {pinnedInCwd.map((s) =>
-                s.id === lastSessionId && canLoadMore ? (
-                  <LastSessionLoadMore
-                    key={`pinned-${s.id}`}
-                    loadingMore={!!group?.loadingMore}
-                    onLoadMore={onLoadMoreSessions}
-                  >
-                    {sessionRow(s, true, `pinned-${s.id}`)}
-                  </LastSessionLoadMore>
-                ) : sessionRow(s, true, `pinned-${s.id}`)
+              {orderedPinnedSessions.map((s) =>
+                sessionRowWithLoadMore(s, true, `pinned-${s.id}`)
               )}
             </>
           )}
-          {hasUnloadedPinned && pinnedInCwd.length === 0 && group?.loading && (
+          {hasUnloadedPinned && orderedPinnedSessions.length === 0 && group?.loading && (
             <div style={{ padding: "4px 6px", color: "var(--text-dim)", fontSize: 10 }}>
               {t("Loading pinned sessions...")}
             </div>
@@ -674,15 +708,7 @@ function CwdGroup({
           )}
 
           {nonPinnedSessions.map((s) =>
-            s.id === lastSessionId && canLoadMore ? (
-              <LastSessionLoadMore
-                key={s.id}
-                loadingMore={!!group?.loadingMore}
-                onLoadMore={onLoadMoreSessions}
-              >
-                {sessionRow(s, pinnedSessionSet.has(s.id), s.id)}
-              </LastSessionLoadMore>
-            ) : sessionRow(s, pinnedSessionSet.has(s.id), s.id)
+            sessionRowWithLoadMore(s, false, s.id)
           )}
           </div>
         </div>
