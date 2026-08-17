@@ -112,13 +112,20 @@ export function MultiCwdList({
         // any prior collapsed state — first-writer-wins per cwd.
         const expanded = expandedCwds[ws.cwd] ?? true;
         const group = perCwdSessions[ws.cwd];
-        // 选中的会话若不在 group 已加载页面里，注入到列表最前；
+        // 选中的会话若不在 group 已加载页面里，额外插到第 3 项之后，
+        // 让用户既能看到原本的 3 条最近会话，又能直接定位到选中项。
         // 已加载时 group 原样显示 —— SessionItem 自己根据 selectedSessionId
-        // 渲染选中态。
+        // 渲染选中态，不再重排。
         const activeSessionInCwd = activeSession?.cwd === ws.cwd ? activeSession : null;
-        const displayGroup = activeSessionInCwd && !group?.sessions.some((session) => session.id === activeSessionInCwd.id)
+        const activeNotInGroup = activeSessionInCwd && !group?.sessions.some((session) => session.id === activeSessionInCwd.id);
+        const PAGE_SIZE = 3; // 与 SessionSidebar.SESSION_PAGE_SIZE_GROUPED 保持一致
+        const displayGroup = activeNotInGroup
           ? {
-              sessions: [activeSessionInCwd, ...(group?.sessions ?? [])],
+              sessions: [
+                ...(group?.sessions ?? []).slice(0, PAGE_SIZE),
+                activeSessionInCwd,
+                ...(group?.sessions ?? []).slice(PAGE_SIZE),
+              ],
               cursor: group?.cursor ?? null,
               hasMore: group?.hasMore ?? false,
               loading: group?.loading ?? false,
