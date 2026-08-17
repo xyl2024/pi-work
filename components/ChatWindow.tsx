@@ -32,7 +32,6 @@ import { useDragDrop } from "@/hooks/useDragDrop";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "./ConfirmDialog";
-import { CompactDialog } from "./CompactDialog";
 import { CompactionDivider } from "./CompactionDivider";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { setChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
@@ -326,12 +325,6 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const toast = useToast();
   const [slashResources, setSlashResources] = useState<SlashResource[]>([]);
   const [isExporting, setIsExporting] = useState(false);
-  // Manual compaction: dialog open flag. The actual lifecycle (RPC,
-  // SSE subscription, post-RPC reload, busy cleanup) is owned by
-  // useAgentSession so an idle session without an open EventSource still
-  // refreshes its chat stream after a successful compact. ChatWindow
-  // only renders the dialog and forwards the confirm.
-  const [compactDialogOpen, setCompactDialogOpen] = useState(false);
 
   // ── Auto-name scheduling for brand-new sessions ──────────────────────
   // The first assistant message of a new session lands only after pi lazily
@@ -523,34 +516,20 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [currentSessionId, activeLeafId, locale, isExporting, t, toast]);
 
   // ── Manual compaction lifecycle lives in useAgentSession (see
-  // handleCompact). ChatWindow only opens/closes the dialog and forwards
-  // the confirm; the hook guarantees SSE connection, busy state, explicit
-  // reload on success, and busy cleanup on failure, so a compact against
-  // an idle session whose EventSource was never open still renders the
-  // compaction divider + tree card without a manual reload.
-  const handleCompactConfirm = useCallback(
-    async (focus: string) => {
-      if (!currentSessionId) return;
-      if (agentRunning || compactDialogOpen === false) return;
-      setCompactDialogOpen(false);
-      await handleCompact(focus);
-    },
-    [currentSessionId, agentRunning, handleCompact, compactDialogOpen],
-  );
-
+  // handleCompact). The hook owns the SSE connection, busy state,
+  // explicit post-success reload, and busy cleanup on failure — so a
+  // compact against an idle session whose EventSource was never open
+  // still renders the compaction divider + tree card without a manual
+  // reload. Reachable from both the toolbar `Compact` button and the
+  // `/compact` slash command (both go through handleCompactClick).
   const handleCompactClick = useCallback(() => {
     if (!currentSessionId) return;
     if (agentRunning) {
       toast.show({ kind: "error", message: t("Wait for the current turn to end before compacting.") });
       return;
     }
-    setCompactDialogOpen(true);
-  }, [currentSessionId, agentRunning, t, toast]);
-
-  const handleCompactCancel = useCallback(() => {
-    if (agentPhase?.kind === "compacting") return;
-    setCompactDialogOpen(false);
-  }, [agentPhase]);
+    void handleCompact();
+  }, [currentSessionId, agentRunning, handleCompact, t, toast]);
 
   // Running summary for the vertical toolbar badge
   const runningSummary = agentPhase?.kind === "running_tools" && agentPhase.tools.length > 0
@@ -1209,7 +1188,10 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         retryInfo={retryInfo}
         slashResources={slashResources}
         slashResourceKey={slashResourceKey}
-        onSlashAction={(action) => { if (action === "new") onNewSessionRequest?.(); }}
+        onSlashAction={(action) => {
+          if (action === "new") onNewSessionRequest?.();
+          else if (action === "compact") handleCompactClick();
+        }}
         sessionId={currentSessionId}
         userMessageHistory={userMessageHistory}
         cwd={cwd ?? null}
@@ -1729,13 +1711,6 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         messages={messages}
         cwd={session?.cwd}
         onOpenFile={handleOpenFileFromLibrary}
-      />
-      {/* Manual compaction dialog — mirrors pi TUI's `/compact [focus]`. */}
-      <CompactDialog
-        open={compactDialogOpen}
-        busy={agentPhase?.kind === "compacting"}
-        onCancel={handleCompactCancel}
-        onConfirm={handleCompactConfirm}
       />
       </>
       )}

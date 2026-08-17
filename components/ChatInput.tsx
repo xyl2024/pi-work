@@ -143,6 +143,21 @@ const BUILTIN_NEW_SESSION: SlashResource = {
   content: "",
 };
 
+// Built-in `/compact` slash command — triggers the same path as the
+// toolbar's `Compact` button (handleCompact in ChatWindow → useAgentSession).
+// `source: "action"` skips the prompt-template expansion step in
+// selectSlashResource and just invokes `onSlashAction?.("compact")`.
+const BUILTIN_COMPACT: SlashResource = {
+  source: "action",
+  name: "Compact",
+  command: "compact",
+  description: "压缩当前会话上下文",
+  path: "",
+  content: "",
+};
+
+const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT];
+
 const TYPEWRITER_PHRASES: Record<Locale, string[]> = {
   en: [...DEFAULT_TYPEWRITER_PHRASES.en],
   zh: [...DEFAULT_TYPEWRITER_PHRASES.zh],
@@ -360,16 +375,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const filteredSlashResources = useMemo(() => {
     if (!slashMenuOpen || !slashQuery) return [];
     const q = slashQuery.query.toLowerCase();
-    const builtinMatch =
-      BUILTIN_NEW_SESSION.command.toLowerCase().includes(q) ||
-      BUILTIN_NEW_SESSION.name.toLowerCase().includes(q) ||
-      BUILTIN_NEW_SESSION.description.toLowerCase().includes(q);
+    const builtinMatches = BUILTIN_SLASH_ACTIONS.filter((item) =>
+      item.command.toLowerCase().includes(q) ||
+      item.name.toLowerCase().includes(q) ||
+      item.description.toLowerCase().includes(q),
+    );
     const matches = slashResources.filter((item) => {
       return item.command.toLowerCase().includes(q) ||
         item.name.toLowerCase().includes(q) ||
         item.description.toLowerCase().includes(q);
     });
-    return builtinMatch ? [BUILTIN_NEW_SESSION, ...matches] : matches;
+    return builtinMatches.length > 0 ? [...builtinMatches, ...matches] : matches;
   }, [slashMenuOpen, slashQuery, slashResources]);
   const slashPageCount = Math.max(1, Math.ceil(filteredSlashResources.length / SLASH_PAGE_SIZE));
   const slashCurrentPage = Math.min(slashPage, slashPageCount - 1);
@@ -684,9 +700,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       }
       if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
-        // /new as a bare message triggers the action directly
-        if (value.trim() === "/new") {
-          onSlashAction?.("new");
+        // Bare built-in slash actions (no trailing args) trigger the action
+        // directly, bypassing the prompt-template expansion that prompt/skill
+        // commands go through in selectSlashResource.
+        const trimmed = value.trim();
+        if (trimmed === "/new" || trimmed === "/compact") {
+          const action = trimmed.slice(1);
+          onSlashAction?.(action);
           setValue("");
           setCursorPosition(0);
           setSelectedSlashResource(null);

@@ -1157,7 +1157,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   //      whose EventSource hadn't been opened).
   //   5. Always clears busy state in `finally`, so a server rejection or
   //      network error doesn't strand the UI in "compacting" forever.
-  const handleCompact = useCallback(async (focus: string) => {
+  // Manual compaction: empty-payload RPC. Compresses the visible message
+  // path using the kernel's default summarization prompt. Mirrors the
+  // `/compact` slash command in pi TUI (the optional `[focus]` tail was
+  // dropped — there's no UI surface for it anymore).
+  const handleCompact = useCallback(async () => {
     const sid = sessionIdRef.current;
     if (!sid) return;
     if (agentRunningRef.current || compactInFlightRef.current) {
@@ -1170,21 +1174,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setAgentPhase({ kind: "compacting" });
     connectEvents(sid);
 
-    const customInstructions = focus.trim() ? focus : undefined;
     try {
-      await sendAgentCommand(sid, {
-        type: "compact",
-        ...(customInstructions ? { customInstructions } : {}),
-      });
-      const tokensBefore = (() => {
-        // Pi didn't return tokensBefore on success; fall back to refetching
-        // the live session so the toast and divider can show the latest
-        // numbers after the RPC resolves.
-        return 0;
-      })();
+      await sendAgentCommand(sid, { type: "compact" });
       toast.show({
         kind: "success",
-        message: t("Compacted {n} tokens", { n: tokensBefore.toLocaleString() }),
+        // Pi doesn't yet return token counts here — show a generic success
+        // message until /api/sessions/[id] round-trips with fresh numbers.
+        message: t("Compacted context"),
       });
       // Reload from disk so the visible message list, compaction divider,
       // and conversation-tree card all reflect the new compaction entry

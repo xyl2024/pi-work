@@ -433,18 +433,19 @@ export class AgentSessionWrapper {
         return null;
 
       case "compact": {
-        // Manual compaction, mirroring pi TUI's `/compact [customInstructions]`.
-        // Pi's `AgentSession.compact()` first aborts any in-progress agent run,
-        // then synchronously waits for the summary call to finish and emits
-        // `compaction_start` / `compaction_end` via the same `subscribe()`
-        // channel that the SSE route forwards. The compact() promise resolves
-        // with the persisted `CompactionResult`, which we narrow to the subset
-        // the UI actually needs.
+        // Manual compaction. Mirrors pi TUI's bare `/compact` (the optional
+        // `[focus]` tail the kernel previously accepted was dropped to match
+        // the simplified UI). Pi's `AgentSession.compact()` first aborts any
+        // in-progress agent run, then synchronously waits for the summary
+        // call to finish and emits `compaction_start` / `compaction_end` via
+        // the same `subscribe()` channel that the SSE route forwards. The
+        // compact() promise resolves with the persisted `CompactionResult`,
+        // which we narrow to the subset the UI actually needs.
         //
         // Front-end should refuse to dispatch when `agentRunning` is true on a
-        // different path (UI button gated on !isStreaming); if it slips
-        // through, the upstream abort() makes the call safe but cancels the
-        // user's in-flight turn, which we treat as a caller bug.
+        // different path (UI button + slash command gated on !isStreaming);
+        // if it slips through, the upstream abort() makes the call safe but
+        // cancels the user's in-flight turn, which we treat as a caller bug.
         //
         // Server-side guard for multi-tab / stale-widget races: if the
         // session is actually mid-turn, refuse instead of aborting the user's
@@ -457,12 +458,9 @@ export class AgentSessionWrapper {
         ) {
           throw new Error("Agent is busy; wait for the current operation to finish before compacting.");
         }
-        const customInstructions = typeof command.customInstructions === "string"
-          ? command.customInstructions.trim() || undefined
-          : undefined;
         this.compactInFlight = true;
         try {
-          const result = await this.inner.compact(customInstructions);
+          const result = await this.inner.compact();
           log.info("manual compact completed", {
             sessionId: this.sessionId,
             tokensBefore: result.tokensBefore,

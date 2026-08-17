@@ -65,9 +65,8 @@ export interface AgentSessionLike {
   setActiveToolsByName(names: string[]): void;
   getContextUsage(): ContextUsage | undefined;
   /** Manually trigger context compaction. Aborts any in-progress run first.
-   *  Mirrors pi TUI's `/compact [customInstructions]` — the string is appended
-   *  to the default summarization prompt as an "Additional focus" section, so
-   *  callers wanting a complete override must use the `session_before_compact`
-   *  extension hook instead. */
-  compact(customInstructions?: string): Promise<CompactResult>;
+   *  Mirrors pi TUI's bare `/compact` — the optional `[focus]` tail is not
+   *  surfaced by the web UI. Callers wanting to fully override the summary
+   *  prompt should use the `session_before_compact` extension hook. */
+  compact(): Promise<CompactResult>;
 }
