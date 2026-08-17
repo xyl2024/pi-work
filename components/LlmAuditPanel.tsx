@@ -21,7 +21,7 @@ import { Tooltip } from "./Tooltip";
 import { copyText } from "./CodeBlock";
 import type { ProviderCall } from "@/lib/llm-audit-types";
 
-const PAGE_LIMIT = 50;
+const PAGE_LIMIT = 10;
 
 type StatusFilter = "" | "ok" | "error";
 
@@ -155,6 +155,17 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
       <Toolbar filter={filter} onChangeFilter={setFilter} onRefresh={() => load()} />
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Pagination — at the top so the page controls stay adjacent to the
+            controls (Toolbar) and the user can jump pages without scrolling. */}
+        {total > PAGE_LIMIT && (
+          <Pagination
+            offset={offset}
+            total={total}
+            pageSize={PAGE_LIMIT}
+            onChangeOffset={setOffset}
+          />
+        )}
+
         {/* KPI strip */}
         <div style={{ display: "flex", gap: 12 }}>
           <Kpi label={t("Total calls")} value={String(total)} accent={false} />
@@ -178,16 +189,6 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
             onToggle={toggleDetail}
           />
         )}
-
-        {/* Pagination */}
-        {total > PAGE_LIMIT && (
-          <Pagination
-            offset={offset}
-            total={total}
-            pageSize={PAGE_LIMIT}
-            onChangeOffset={setOffset}
-          />
-        )}
       </div>
     </div>
   );
@@ -205,6 +206,13 @@ const pageBtnStyle = (active: boolean, disabled: boolean): CSSProperties => ({
   color: active ? "#fff" : "var(--text-muted)",
   fontSize: 12,
   opacity: disabled ? 0.5 : 1,
+  // Keep buttons at their natural content width. Without flexShrink: 0 the
+  // flex algorithm squeezes them below `minWidth`, which forces CJK text
+  // (e.g. "上一页") to wrap character-by-character. `whiteSpace: nowrap` is
+  // a defensive belt-and-braces — if the container ever does overflow, the
+  // text clips horizontally instead of breaking mid-character.
+  whiteSpace: "nowrap",
+  flexShrink: 0,
 });
 
 /** Page-number navigation with a jump-to-page input. */
@@ -229,10 +237,12 @@ function Pagination({
     onChangeOffset((clamped - 1) * pageSize);
   };
 
-  // Window of page numbers: current ± 2, with first/last pinned.
+  // Window of page numbers: current ± 1, with first/last pinned. Most
+  // navigation goes through the jump-to-page input, so the buttons are
+  // just for stepping ±1 from the current page.
   const pages: number[] = [];
-  const start = Math.max(1, currentPage - 2);
-  const end = Math.min(pageCount, currentPage + 2);
+  const start = Math.max(1, currentPage - 1);
+  const end = Math.min(pageCount, currentPage + 1);
   for (let p = start; p <= end; p++) pages.push(p);
   const showFirstEllipsis = start > 2;
   const showLastEllipsis = end < pageCount - 1;
@@ -248,9 +258,11 @@ function Pagination({
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)" }}>
-      <button disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)} style={pageBtnStyle(false, currentPage <= 1)}>
-        {t("Previous page")}
-      </button>
+      <Tooltip content={t("Previous page")} side="top">
+        <button disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)} style={pageBtnStyle(false, currentPage <= 1)} aria-label={t("Previous page")}>
+          ‹
+        </button>
+      </Tooltip>
 
       {start > 1 && (
         <button onClick={() => goToPage(1)} style={pageBtnStyle(false, false)}>
@@ -272,11 +284,18 @@ function Pagination({
         </button>
       )}
 
-      <button disabled={currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} style={pageBtnStyle(false, currentPage >= pageCount)}>
-        {t("Next page")}
-      </button>
+      <Tooltip content={t("Next page")} side="top">
+        <button disabled={currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)} style={pageBtnStyle(false, currentPage >= pageCount)} aria-label={t("Next page")}>
+          ›
+        </button>
+      </Tooltip>
 
-      <span>
+      <span
+        style={{
+          whiteSpace: "nowrap",
+          flexShrink: 0,
+        }}
+      >
         {t("Showing {n} of {total}", {
           n: String(Math.min(offset + pageSize, total)),
           total: String(total),
