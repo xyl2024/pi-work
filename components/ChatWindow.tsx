@@ -817,6 +817,18 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     return { dividerBefore: m, trailingCompactionPoints: tail };
   }, [compactionPoints]);
 
+  // A freshly sent user message, or a message continuing an auto-compacted
+  // turn, is added to `messages` before pi persists its entry, so `entryIds`
+  // temporarily ends earlier. If a compaction point is still a tail marker
+  // during that window, it belongs immediately before the first such message
+  // rather than below the whole turn. Once the next context load supplies the
+  // real entry id, `dividerBefore` takes over automatically.
+  const optimisticCompactionMessageIdx = useMemo(() => {
+    if (trailingCompactionPoints.length === 0) return -1;
+    const idx = renderEntryIds.length;
+    return renderMessages[idx] ? idx : -1;
+  }, [renderEntryIds, renderMessages, trailingCompactionPoints]);
+
   // Per-turn duration map: keyed by the index of the LAST assistant message of
   // each turn. startMs = the user message timestamp; endMs = the entry-level
   // persistence timestamp of that assistant (i.e. when its stream finished),
@@ -1445,7 +1457,13 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
               // first kept message of a compaction point.
               const maybeDivider = (idx: number): React.ReactNode => {
                 const point = dividerBefore.get(renderEntryIds[idx]);
-                return point ? <CompactionDivider key={`comp-${point.entryId}`} point={point} /> : null;
+                if (point) return <CompactionDivider key={`comp-${point.entryId}`} point={point} />;
+                if (idx === optimisticCompactionMessageIdx) {
+                  return trailingCompactionPoints.map((pendingPoint) => (
+                    <CompactionDivider key={`comp-tail-${pendingPoint.entryId}`} point={pendingPoint} />
+                  ));
+                }
+                return null;
               };
               for (let idx = 0; idx < renderMessages.length;) {
                 const div = maybeDivider(idx);
@@ -1466,7 +1484,9 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 const finalAssistantIdx = findFinalAssistantIndex(renderMessages, userIdx, endIdx);
                 if (finalAssistantIdx === -1) {
                   for (let i = userIdx; i < endIdx; i++) {
-                    const d = maybeDivider(i);
+                    // The outer loop already checked the anchor at userIdx;
+                    // checking it again here would duplicate its divider.
+                    const d = i === userIdx ? null : maybeDivider(i);
                     if (d) rendered.push(d);
                     rendered.push(renderOne(i));
                   }
@@ -1582,7 +1602,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 doesn't exist yet (compaction just landed at the tail). Renders
                 after the last message so a freshly compacted session shows
                 the marker immediately, before the next user prompt. */}
-            {trailingCompactionPoints.map((point) => (
+            {optimisticCompactionMessageIdx === -1 && trailingCompactionPoints.map((point) => (
               <CompactionDivider key={`comp-tail-${point.entryId}`} point={point} />
             ))}
 
