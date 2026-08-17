@@ -102,6 +102,11 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
 
   const selectedTask = selectedId ? tasks.find((t) => t.id === selectedId) ?? null : null;
 
+  const handleOpenSession = useCallback((sessionId: string) => {
+    requestClose();
+    onOpenSession(sessionId);
+  }, [onOpenSession, requestClose]);
+
   // ── CRUD ─────────────────────────────────────────────────────
 
   const createTask = () => setForm({ open: true, task: null });
@@ -265,7 +270,7 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
               onTrigger={handleTrigger}
               onEdit={editTask}
               onDelete={handleDelete}
-              onOpenSession={onOpenSession}
+              onOpenSession={handleOpenSession}
               onTaskUpdated={(t) => setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...t } : x)))}
             />
           ) : (
