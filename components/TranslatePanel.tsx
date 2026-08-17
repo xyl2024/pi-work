@@ -646,6 +646,7 @@ export function TranslatePanel() {
             }
           }}
           placeholder={t("Type text to translate…")}
+          spellCheck={false}
           style={{
             width: "100%", flex: 1, minHeight: 0, resize: "none",
             padding: "8px 10px",
