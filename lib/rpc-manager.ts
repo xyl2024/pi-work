@@ -95,6 +95,10 @@ export class AgentSessionWrapper {
   // whole turn including tool calls so the sidebar dot covers the full
   // "agent is busy" window, not just the model streaming phase.
   private _running = false;
+  // Set synchronously before awaiting AgentSession.compact(). SDK compaction
+  // state is not observable until compact() advances past its initial abort,
+  // so this closes the same-tick race between concurrent compact requests.
+  private compactInFlight = false;
   private pendingPermissions: Map<string, PendingPermission> = new Map();
   private allowedThisSession: Set<string> = new Set();
   private pendingUserInputs: Map<string, PendingUserInput> = new Map();
@@ -119,7 +123,7 @@ export class AgentSessionWrapper {
 
   /** True while the agent is between agent_start and agent_end (or compacting). */
   isRunning(): boolean {
-    return this._running;
+    return this._running || this.compactInFlight || this.inner.isStreaming || this.inner.isCompacting;
   }
 
   start(): void {
@@ -445,49 +449,65 @@ export class AgentSessionWrapper {
         // Server-side guard for multi-tab / stale-widget races: if the
         // session is actually mid-turn, refuse instead of aborting the user's
         // in-flight work (the kernel's compact() would abort it).
-        if (this.inner.isStreaming) {
-          throw new Error("Agent is still running — wait for the current turn to end before compacting.");
+        if (
+          this.compactInFlight ||
+          this.isRunning() ||
+          this.inner.isStreaming ||
+          this.inner.isCompacting
+        ) {
+          throw new Error("Agent is busy; wait for the current operation to finish before compacting.");
         }
         const customInstructions = typeof command.customInstructions === "string"
           ? command.customInstructions.trim() || undefined
           : undefined;
-        const result = await this.inner.compact(customInstructions);
-        log.info("manual compact completed", {
-          sessionId: this.sessionId,
-          tokensBefore: result.tokensBefore,
-          summaryLength: result.summary.length,
-        });
-        return {
-          summary: result.summary,
-          firstKeptEntryId: result.firstKeptEntryId,
-          tokensBefore: result.tokensBefore,
-          estimatedTokensAfter: result.estimatedTokensAfter,
-          usage: result.usage
-            ? {
-                input: result.usage.input,
-                output: result.usage.output,
-                cacheRead: result.usage.cacheRead,
-                cacheWrite: result.usage.cacheWrite,
-                totalTokens: result.usage.totalTokens,
-                cost: {
-                  input: result.usage.cost.input,
-                  output: result.usage.cost.output,
-                  cacheRead: result.usage.cost.cacheRead,
-                  cacheWrite: result.usage.cost.cacheWrite,
-                  total: result.usage.cost.total,
-                },
-              }
-            : undefined,
-        };
+        this.compactInFlight = true;
+        try {
+          const result = await this.inner.compact(customInstructions);
+          log.info("manual compact completed", {
+            sessionId: this.sessionId,
+            tokensBefore: result.tokensBefore,
+            summaryLength: result.summary.length,
+          });
+          return {
+            summary: result.summary,
+            firstKeptEntryId: result.firstKeptEntryId,
+            tokensBefore: result.tokensBefore,
+            estimatedTokensAfter: result.estimatedTokensAfter,
+            usage: result.usage
+              ? {
+                  input: result.usage.input,
+                  output: result.usage.output,
+                  cacheRead: result.usage.cacheRead,
+                  cacheWrite: result.usage.cacheWrite,
+                  totalTokens: result.usage.totalTokens,
+                  cost: {
+                    input: result.usage.cost.input,
+                    output: result.usage.cost.output,
+                    cacheRead: result.usage.cost.cacheRead,
+                    cacheWrite: result.usage.cost.cacheWrite,
+                    total: result.usage.cost.total,
+                  },
+                }
+              : undefined,
+          };
+        } finally {
+          this.compactInFlight = false;
+        }
       }
 
       case "get_state": {
         const model = this.inner.model;
         const contextUsage = this.inner.getContextUsage();
+        const isStreaming = this.inner.isStreaming;
+        const isCompacting = this.compactInFlight || this.inner.isCompacting;
+        const isRunning = this.isRunning();
         return {
           sessionId: this.inner.sessionId,
           sessionFile: this.inner.sessionFile ?? "",
-          isStreaming: this.inner.isStreaming,
+          isStreaming,
+          isCompacting,
+          isRunning,
+          phase: isCompacting ? "compacting" : isRunning ? "streaming" : null,
           model: model ? { id: model.id, provider: model.provider } : undefined,
           messageCount: 0,
           pendingMessageCount: 0,

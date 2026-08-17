@@ -45,6 +45,7 @@ export interface AgentSessionLike {
   readonly sessionId: string;
   readonly sessionFile: string | undefined;
   readonly isStreaming: boolean;
+  readonly isCompacting: boolean;
   readonly model: ModelLike | undefined;
   readonly modelRuntime: Pick<ModelRuntime, "getModel" | "getModels">;
   readonly sessionManager: SessionManager;

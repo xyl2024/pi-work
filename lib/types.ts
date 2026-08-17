@@ -252,8 +252,11 @@ export interface CompactionPoint {
   tokensBefore: number;
   /** The kernel's generated summary (markdown). */
   summary: string;
-  /** First visible message after this compaction — divider goes right before it. */
-  beforeMessageEntryId: string;
+  /** First visible message after this compaction — divider goes right before it.
+   *  Undefined when no visible message remains after this compaction (the
+   *  session was compacted and no new messages were appended yet — the
+   *  UI renders the divider as a trailing marker). */
+  beforeMessageEntryId?: string;
   /** Compaction entry timestamp, when present. */
   timestamp?: string;
 }

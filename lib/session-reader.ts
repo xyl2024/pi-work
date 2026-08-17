@@ -292,12 +292,13 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     return [normalizeToolCalls(msg)];
   });
 
-  // Compaction points: every `compaction` entry on the visible path that still
-  // has at least one kept message after it. `beforeMessageEntryId` is the id of
-  // the first visible message that comes after this compaction — the UI inserts
-  // a divider right before that message so the user can see where history was
-  // folded. Multiple entries appear when the session was compacted several times
-  // and the kept messages still straddle more than one boundary.
+  // Compaction points: every `compaction` entry on the visible path. The
+  // divider belongs before the first kept message after the compaction;
+  // `beforeMessageEntryId` is set to that id when one exists. When the
+  // compaction is at the tail of the path (e.g. just compacted, no new
+  // messages yet), we still surface the point so the chat stream renders
+  // a trailing divider instead of waiting for the user to send another
+  // message — otherwise the chat looks unchanged until the next prompt.
   const visibleEntryIds = new Set(entryIds);
   const compactionPoints: CompactionPoint[] = [];
   for (const e of path) {
@@ -317,15 +318,13 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
         break;
       }
     }
-    if (afterId) {
-      compactionPoints.push({
-        entryId: ce.id,
-        tokensBefore: ce.tokensBefore,
-        summary: ce.summary,
-        beforeMessageEntryId: afterId,
-        timestamp: ce.timestamp,
-      });
-    }
+    compactionPoints.push({
+      entryId: ce.id,
+      tokensBefore: ce.tokensBefore,
+      summary: ce.summary,
+      beforeMessageEntryId: afterId,
+      timestamp: ce.timestamp,
+    });
   }
 
   return {
