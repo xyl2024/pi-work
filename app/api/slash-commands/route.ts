@@ -27,6 +27,7 @@ type CachedSlash = {
   expiresAt: number;
 };
 const slashCache = new Map<string, CachedSlash>();
+const slashInflight = new Map<string, Promise<CachedSlash>>();
 
 async function resolveCwd(url: URL): Promise<string | null> {
   const cwd = url.searchParams.get("cwd");
@@ -41,31 +42,31 @@ async function resolveCwd(url: URL): Promise<string | null> {
   return SessionManager.open(filePath).getHeader()?.cwd ?? null;
 }
 
-export async function GET(req: Request) {
-  const startedAt = Date.now();
+async function loadSlashCommands(cwd: string, startedAt: number): Promise<CachedSlash> {
+  const cached = slashCache.get(cwd);
+  if (cached && cached.expiresAt > startedAt) {
+    log.debug("slash commands cached", {
+      cwd,
+      promptCount: cached.prompts.length,
+      skillCount: cached.skills.length,
+      durationMs: elapsedMs(startedAt),
+    });
+    return cached;
+  }
 
-  try {
-    const url = new URL(req.url);
-    const cwd = await resolveCwd(url);
+  const existing = slashInflight.get(cwd);
+  if (existing) {
+    const result = await existing;
+    log.debug("slash commands joined in-flight load", {
+      cwd,
+      promptCount: result.prompts.length,
+      skillCount: result.skills.length,
+      durationMs: elapsedMs(startedAt),
+    });
+    return result;
+  }
 
-    if (!cwd) {
-      return NextResponse.json({ error: "cwd or sessionId is required" }, { status: 400 });
-    }
-    if (!existsSync(cwd)) {
-      return NextResponse.json({ error: `Directory does not exist: ${cwd}` }, { status: 400 });
-    }
-
-    const cached = slashCache.get(cwd);
-    if (cached && cached.expiresAt > startedAt) {
-      log.debug("slash commands cached", {
-        cwd,
-        promptCount: cached.prompts.length,
-        skillCount: cached.skills.length,
-        durationMs: elapsedMs(startedAt),
-      });
-      return NextResponse.json({ prompts: cached.prompts, skills: cached.skills, commands: cached.commands });
-    }
-
+  const loadPromise = (async (): Promise<CachedSlash> => {
     const loader = new DefaultResourceLoader({ cwd, agentDir: getAgentDir() });
     await loader.reload();
 
@@ -93,7 +94,8 @@ export async function GET(req: Request) {
     );
 
     const commands = [...prompts, ...skills];
-    slashCache.set(cwd, { prompts, skills, commands, expiresAt: startedAt + SLASH_CACHE_TTL_MS });
+    const result: CachedSlash = { prompts, skills, commands, expiresAt: startedAt + SLASH_CACHE_TTL_MS };
+    slashCache.set(cwd, result);
 
     log.info("slash commands loaded", {
       cwd,
@@ -102,7 +104,39 @@ export async function GET(req: Request) {
       durationMs: elapsedMs(startedAt),
     });
 
-    return NextResponse.json({ prompts, skills, commands });
+    return result;
+  })();
+
+  slashInflight.set(cwd, loadPromise);
+  try {
+    return await loadPromise;
+  } finally {
+    if (slashInflight.get(cwd) === loadPromise) {
+      slashInflight.delete(cwd);
+    }
+  }
+}
+
+export async function GET(req: Request) {
+  const startedAt = Date.now();
+
+  try {
+    const url = new URL(req.url);
+    const cwd = await resolveCwd(url);
+
+    if (!cwd) {
+      return NextResponse.json({ error: "cwd or sessionId is required" }, { status: 400 });
+    }
+    if (!existsSync(cwd)) {
+      return NextResponse.json({ error: `Directory does not exist: ${cwd}` }, { status: 400 });
+    }
+
+    const result = await loadSlashCommands(cwd, startedAt);
+    return NextResponse.json({
+      prompts: result.prompts,
+      skills: result.skills,
+      commands: result.commands,
+    });
   } catch (error) {
     log.error("slash commands failed", { error, durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ error: String(error) }, { status: 500 });

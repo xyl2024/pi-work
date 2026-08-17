@@ -1062,15 +1062,23 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
       return;
     }
 
-    fetch(`/api/slash-commands?${params}`, { signal: controller.signal })
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((d: { commands?: SlashResource[] }) => setSlashResources(d.commands ?? []))
-      .catch((e) => {
-        if ((e as { name?: string }).name !== "AbortError") {
-          console.error("Failed to load slash commands:", e);
-        }
+    const loadSlashResources = async () => {
+      try {
+        const response = await fetch(`/api/slash-commands?${params}`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json() as { commands?: SlashResource[] };
+        if (!controller.signal.aborted) setSlashResources(data.commands ?? []);
+      } catch (error) {
+        // A request can reject as TypeError: Failed to fetch when its
+        // AbortController is triggered during a session/cwd switch. Treat
+        // every rejection after abort as stale, not as a real load failure.
+        if (controller.signal.aborted || (error as { name?: string }).name === "AbortError") return;
+        console.error("Failed to load slash commands:", error);
         setSlashResources([]);
-      });
+      }
+    };
+
+    void loadSlashResources();
 
     return () => controller.abort();
   }, [sessionId, newSessionCwd]);
