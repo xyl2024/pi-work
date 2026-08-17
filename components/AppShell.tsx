@@ -234,22 +234,9 @@ export function AppShell() {
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
 
-  // ── Command palette: models + agent controls bridge ──
-  // The palette builds its command list from these two inputs. Models come
-  // from /api/models once on mount; agent controls come from ChatWindow via
-  // the sessionUiStore (null when no session is mounted).
-  const [models, setModels] = useState<Array<{ id: string; name: string; provider: string }>>([]);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/models")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d: { modelList?: Array<{ id: string; name: string; provider: string }> } | null) => {
-        if (cancelled || !d) return;
-        setModels(d.modelList ?? []);
-      })
-      .catch(() => { /* leave empty — palette hides model commands via when() */ });
-    return () => { cancelled = true; };
-  }, []);
+  // ── Command palette: agent controls bridge ──
+  // ChatWindow registers these on mount via the sessionUiStore (null when
+  // no session is mounted).
   const agentControls = useAgentControls();
   const headerActions = useChatHeaderActions();
 
@@ -1131,8 +1118,8 @@ export function AppShell() {
   ]);
 
   const commands = useMemo<Command[]>(
-    () => buildCommands(commandContext, { t, models }),
-    [commandContext, t, models],
+    () => buildCommands(commandContext, t),
+    [commandContext, t],
   );
 
   const sidebarContent = (

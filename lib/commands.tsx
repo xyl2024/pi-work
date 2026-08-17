@@ -10,16 +10,7 @@ import type { Locale } from "@/hooks/useI18n";
 // reads them via useAgentControls() and threads them into CommandContext.
 // `null` when no ChatWindow is mounted (no active session).
 
-export type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-
 export interface AgentControls {
-  switchModel: (provider: string, modelId: string) => void | Promise<void>;
-  switchThinkingLevel: (level: ThinkingLevelOption) => void | Promise<void>;
-  /** Set the user's tool selection. The keyboard palette only offers Off/Full
-   *  via this method — Custom requires the visual popover. Pass `[]` for Off
-   *  and `"all"` for Full; partial arrays are accepted but unused by the
-   *  built-in command palette. */
-  switchToolSelection: (selection: "off" | "full") => void | Promise<void>;
   abortStreaming: () => void | Promise<void>;
   isStreaming: boolean;
 }
@@ -51,8 +42,6 @@ const MoonIcon = () => I(<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79
 const TreeIcon = () => I(<><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></>);
 const MountainIcon = () => I(<><path d="M3 20l6-12 4 8 3-6 5 10" /></>);
 const FlameIcon = () => I(<path d="M12 2c2 4-2 6 0 9 2 3 5 2 5 6a5 5 0 0 1-10 0c0-3 2-4 2-7 0-3-1-5 3-8z" />);
-const BrainIcon = () => I(<><path d="M9 4a3 3 0 0 0-3 3v0a3 3 0 0 0-3 3v1a3 3 0 0 0 1 2.2A3 3 0 0 0 3 16v0a3 3 0 0 0 3 3h0a3 3 0 0 0 3-3" /><path d="M15 4a3 3 0 0 1 3 3v0a3 3 0 0 1 3 3v1a3 3 0 0 1-1 2.2A3 3 0 0 1 21 16v0a3 3 0 0 1-3 3h0a3 3 0 0 1-3-3" /><line x1="12" y1="4" x2="12" y2="19" /></>);
-const ToolIcon = () => I(<><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-7 7 2.6 2.6 7-7a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-2.4 2.3-2.7z" /></>);
 const SidebarIcon = () => I(<><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /></>);
 const PanelRightIcon = () => I(<><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" /></>);
 const CheckIcon = () => I(<polyline points="20 6 9 17 4 12" />);
@@ -105,9 +94,6 @@ const ThemeIcon = ({ preset }: { preset: ThemePreset }) => {
 export const COMMAND_GROUPS = [
   "Session",
   "Theme",
-  "Model",
-  "Thinking",
-  "Tools",
   "View",
   "Panel",
   "Modal",
@@ -174,17 +160,9 @@ export interface CommandContext {
   hasCwd: boolean;
 }
 
-// ── Theme metadata (for buildCommands) ──────────────────────────────────
-
-interface BuildOptions {
-  t: (key: string) => string;
-  models: Array<{ id: string; name: string; provider: string }>;
-}
-
 // ── buildCommands ────────────────────────────────────────────────────────
 
-export function buildCommands(ctx: CommandContext, opts: BuildOptions): Command[] {
-  const { t, models } = opts;
+export function buildCommands(ctx: CommandContext, t: (key: string) => string): Command[] {
   const cmds: Command[] = [];
 
   // ── Session ──
@@ -233,75 +211,6 @@ export function buildCommands(ctx: CommandContext, opts: BuildOptions): Command[
       run: () => ctx.setTheme(preset),
     });
   }
-
-  // ── Model (dynamic) ──
-  // One command per (provider, modelId). Model id strings are provider-specific
-  // (e.g. "claude-sonnet-4-6"); include both provider and name as keywords so
-  // "claude" / "sonnet" / "zenmux" all find it.
-  for (const m of models) {
-    const modelTitle = `${m.name}`;
-    cmds.push({
-      id: `model.${m.provider}.${m.id}`,
-      title: modelTitle,
-      group: "Model",
-      keywords: [m.provider, m.id, m.name.toLowerCase(), "model", "模型"],
-      icon: <ChipIcon />,
-      when: (c) => c.hasSession && !!c.agentControls,
-      run: () => ctx.agentControls?.switchModel(m.provider, m.id),
-    });
-  }
-
-  // ── Thinking (7) ──
-  const thinkingLevels: ThinkingLevelOption[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-  const thinkingTitleKeys: Record<ThinkingLevelOption, string> = {
-    off: "Thinking: Off",
-    minimal: "Thinking: Minimal",
-    low: "Thinking: Low",
-    medium: "Thinking: Medium",
-    high: "Thinking: High",
-    xhigh: "Thinking: Extra High",
-    max: "Thinking: Maximum",
-  };
-  const thinkingKeywords: Record<ThinkingLevelOption, string[]> = {
-    off: ["thinking", "reasoning", "off", "none", "推理", "关闭"],
-    minimal: ["thinking", "reasoning", "minimal", "推理", "最少"],
-    low: ["thinking", "reasoning", "low", "推理", "低"],
-    medium: ["thinking", "reasoning", "medium", "推理", "中"],
-    high: ["thinking", "reasoning", "high", "推理", "高"],
-    xhigh: ["thinking", "reasoning", "xhigh", "extra", "推理", "最高"],
-    max: ["thinking", "reasoning", "max", "maximum", "推理", "最大"],
-  };
-  for (const lvl of thinkingLevels) {
-    cmds.push({
-      id: `thinking.${lvl}`,
-      title: t(thinkingTitleKeys[lvl]),
-      group: "Thinking",
-      keywords: thinkingKeywords[lvl],
-      icon: <BrainIcon />,
-      when: (c) => c.hasSession && !!c.agentControls,
-      run: () => ctx.agentControls?.switchThinkingLevel(lvl),
-    });
-  }
-
-  // ── Tools (2) ──
-  cmds.push({
-    id: "tools.none",
-    title: t("Tools: None"),
-    group: "Tools",
-    keywords: ["tools", "none", "off", "disable", "工具", "无", "关闭"],
-    icon: <ToolIcon />,
-    when: (c) => c.hasSession && !!c.agentControls,
-    run: () => ctx.agentControls?.switchToolSelection("off"),
-  });
-  cmds.push({
-    id: "tools.full",
-    title: t("Tools: Full"),
-    group: "Tools",
-    keywords: ["tools", "full", "all", "enable", "工具", "全部", "启用"],
-    icon: <ToolIcon />,
-    when: (c) => c.hasSession && !!c.agentControls,
-    run: () => ctx.agentControls?.switchToolSelection("full"),
-  });
 
   // ── View (3) ──
   cmds.push({

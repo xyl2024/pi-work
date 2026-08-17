@@ -427,18 +427,14 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   // ── Register agent controls with the palette store ──
   // The ⌘K command palette in AppShell reads these via useAgentControls().
-  // Each entry is a stable callback owned by useAgentSession — including
-  // them in the dep list would churn the ref every render, so we register
-  // once on mount and update isStreaming imperatively.
+  // Model / thinking / tools are intentionally NOT exposed here — those are
+  // picked via the visual controls in ChatInput (which call the same
+  // handlers below). Each entry is a stable callback owned by
+  // useAgentSession — including them in the dep list would churn the ref
+  // every render, so we register once on mount and update isStreaming
+  // imperatively.
   useEffect(() => {
     setAgentControls({
-      switchModel: handleModelChange,
-      switchThinkingLevel: handleThinkingLevelChange,
-      // Keyboard palette only offers the two coarse presets (Off/Full); Custom
-    // requires the visual popover. Adapter: "off" → [], "full" → "all".
-    switchToolSelection: (preset) => {
-      void handleToolSelectionChange(preset === "off" ? [] : "all");
-    },
       abortStreaming: handleAbort,
       isStreaming: agentRunning,
     });
