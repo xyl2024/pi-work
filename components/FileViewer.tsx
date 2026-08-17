@@ -11,6 +11,7 @@ import { useToast } from "./Toast";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 import { extractImageGallery, MarkdownImage, ImageLightbox } from "./ImageLightbox";
+import { SmartImage } from "./SmartImage";
 import { MermaidBlock } from "./MermaidBlock";
 import { EchartsBlock } from "./EchartsBlock";
 import { SvgBlock } from "./SvgBlock";
@@ -612,8 +613,7 @@ function ImageViewer({ filePath }: { filePath: string }) {
         {error ? (
           <div style={{ color: "#f87171", fontSize: 13 }}>{error}</div>
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <SmartImage
             src={src}
             alt={filePath}
             onClick={() => setLightboxOpen(true)}
@@ -626,6 +626,7 @@ function ImageViewer({ filePath }: { filePath: string }) {
               setError(t("Failed to load image"));
             }}
             title={t("Click to expand")}
+            loaderSize={192}
             style={{
               maxWidth: "100%",
               maxHeight: "100%",

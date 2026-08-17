@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { SmartImage } from "./SmartImage";
 
 export interface ImageItem {
   alt: string;
@@ -88,12 +89,12 @@ export function MarkdownImage({ src, alt, resolveSrc, onImageClick, maxWidth = "
     );
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <SmartImage
       src={finalSrc}
       alt={alt ?? ""}
       onClick={handleClick}
       onError={() => setErrored(true)}
+      loaderSize={96}
       style={{ maxWidth, cursor: onImageClick ? "zoom-in" : "default" }}
     />
   );
@@ -291,13 +292,13 @@ export function ImageLightbox({ images, index, onClose, onIndexChange }: {
         {loadError ? (
           <div style={{ color: "#f87171", fontSize: 13 }}>{t("Failed to load image")}</div>
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <SmartImage
             src={current.src}
             alt={current.alt}
             draggable={false}
             onError={() => setLoadError(true)}
             onMouseDown={handleMouseDown}
+            loaderSize={192}
             style={{
               maxWidth: "100%",
               maxHeight: "100%",

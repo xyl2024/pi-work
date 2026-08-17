@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTheme, PRESETS, PRESET_LABELS } from "@/hooks/useTheme";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useToast } from "./Toast";
+import { SmartImage } from "./SmartImage";
 import { WeChatSettingsSection } from "./WeChatSettingsSection";
 import { InboxTestSection } from "./InboxTestSection";
 import type { PiWorkConfig, RightBarButtonId, RightSideBarConfig, AgentCustomToolName } from "@/lib/config";
@@ -941,10 +942,11 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
                 }}
               >
                 {hasAvatar && !avatarRemoved ? (
-                  <img
+                  <SmartImage
                     key={`preview-${avatarAttempt}`}
                     src={`/api/profile/avatar?k=${avatarAttempt}`}
                     alt=""
+                    loaderSize={28}
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     onError={() => setHasAvatar(false)}
                   />

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { EqualizerBars } from "./session-library/MediaBits";
+import { SmartImage } from "./SmartImage";
 
 interface Props {
   src: string;
@@ -330,11 +331,11 @@ export function AudioPlayer({ src, title, subtitle, cover = DEFAULT_COVER, varia
           }}
         >
           {/* Cover artwork — fills the disc and rotates with it. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <SmartImage
             src={cover}
             alt=""
             draggable={false}
+            loaderSize={64}
             style={{
               position: "absolute",
               inset: 0,

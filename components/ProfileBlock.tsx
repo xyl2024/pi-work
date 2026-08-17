@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 import { InboxBell } from "./InboxBell";
+import { SmartImage } from "./SmartImage";
 
 interface Props {
   onOpenSettings?: () => void;
@@ -42,7 +43,6 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
   const [username, setUsername] = useState<string | null>(null);
   const [avatarAttempted, setAvatarAttempted] = useState(0);
   const [avatarOk, setAvatarOk] = useState(false);
-  const [avatarLoaded, setAvatarLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -102,7 +102,6 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
   useEffect(() => {
     setAvatarAttempted((n) => n + 1);
     setAvatarOk(true);
-    setAvatarLoaded(false);
   }, [refreshKey]);
 
   // Close the menu on outside click.
@@ -119,7 +118,7 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
 
   const avatarSrc = `/api/profile/avatar?k=${encodeURIComponent(`${refreshKey ?? 0}-${avatarAttempted}`)}`;
   const showImg = avatarOk;
-  const showPlaceholder = !avatarOk || !avatarLoaded;
+  const showPlaceholder = !avatarOk;
 
   const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenPrompts || onOpenScheduler || onOpenMcp);
 
@@ -184,16 +183,13 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
           }}
         >
           {showImg && (
-            <img
+            <SmartImage
               key={avatarSrc}
               src={avatarSrc}
               alt=""
-              onLoad={() => setAvatarLoaded(true)}
-              onError={() => { setAvatarOk(false); setAvatarLoaded(false); }}
-              style={{
-                width: "100%", height: "100%", objectFit: "cover",
-                display: avatarLoaded ? "block" : "none",
-              }}
+              onError={() => setAvatarOk(false)}
+              loaderSize={14}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           )}
           {showPlaceholder && (

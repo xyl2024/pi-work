@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
+import { SmartImage } from "./SmartImage";
 
 type Status =
   | { configured: false }
@@ -492,8 +493,7 @@ export function WeChatSettingsSection() {
           {login && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "center" }}>
               <div style={{ padding: 12, background: "#fff", borderRadius: 8, border: "1px solid var(--border)" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={login.qrDataUrl} alt="WeChat login QR" width={224} height={224} style={{ display: "block" }} />
+                <SmartImage src={login.qrDataUrl} alt="WeChat login QR" loaderSize={96} width={224} height={224} style={{ display: "block" }} />
               </div>
               <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5, textAlign: "center" }}>
                 {t("Scan with WeChat, or open the URL on your phone:")}

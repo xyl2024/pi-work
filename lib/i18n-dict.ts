@@ -467,6 +467,7 @@ export const ZH_TRANSLATIONS = {
   "WeChat": "微信",
   "WeChat Demo": "微信演示",
   "Loading…": "加载中…",
+  "Loading image": "正在加载图片",
   "Not logged in": "未登录",
   "Start QR login": "开始扫码登录",
   "Pairing code": "配对码",

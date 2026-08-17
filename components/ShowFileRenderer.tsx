@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 import { useI18n } from "@/hooks/useI18n";
 import { ImageLightbox } from "@/components/ImageLightbox";
+import { SmartImage } from "@/components/SmartImage";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { MermaidBlock } from "@/components/MermaidBlock";
 import { EchartsBlock } from "@/components/EchartsBlock";
@@ -107,11 +108,11 @@ export function ShowFileRenderer({ filePath, cwd, fill }: Props) {
     return (
       <>
         <div style={containerStyle}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <SmartImage
             src={url}
             alt={alt}
             loading="lazy"
+            loaderSize={128}
             style={imgStyle}
           />
           <ExpandButton onClick={() => setLightbox({ kind: "image", src: url, alt })} />

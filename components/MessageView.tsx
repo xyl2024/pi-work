@@ -15,6 +15,7 @@ import { SvgBlock } from "./SvgBlock";
 import { CodeBlock, copyText } from "./CodeBlock";
 import { MorphToggleIcon } from "./MorphToggleIcon";
 import { ImageLightbox, MarkdownImage, extractImageGallery, type ImageItem } from "./ImageLightbox";
+import { SmartImage } from "./SmartImage";
 import { COPY, CHECK, THUMBS_UP, HEART } from "@/lib/icon-paths";
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { useShowFileResults } from "@/hooks/showFileResultsStore";
@@ -198,7 +199,6 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
   const [hovered, setHovered] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [avatarOk, setAvatarOk] = useState(true);
-  const [avatarLoaded, setAvatarLoaded] = useState(false);
   const [avatarCacheKey] = useState(() => `${Date.now()}`);
   // Long user messages collapse to COLLAPSED_USER_MSG_HEIGHT with a
   // click-to-expand gradient mask; expand is one-way and search hits
@@ -267,7 +267,7 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
 
   const avatarSrc = `/api/profile/avatar?k=${encodeURIComponent(avatarCacheKey)}`;
   const showAvatarImg = avatarOk;
-  const showAvatarPlaceholder = !avatarOk || !avatarLoaded;
+  const showAvatarPlaceholder = !avatarOk;
 
   return (
     <div
@@ -296,17 +296,13 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
           }}
         >
           {showAvatarImg && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <SmartImage
               key={avatarSrc}
               src={avatarSrc}
               alt=""
-              onLoad={() => setAvatarLoaded(true)}
-              onError={() => { setAvatarOk(false); setAvatarLoaded(false); }}
-              style={{
-                width: "100%", height: "100%", objectFit: "cover",
-                display: avatarLoaded ? "block" : "none",
-              }}
+              onError={() => setAvatarOk(false)}
+              loaderSize={14}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           )}
           {showAvatarPlaceholder && (
@@ -351,8 +347,7 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
                     ? `data:${flat.mimeType};base64,${flat.data}`
                     : "";
                 return (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <SmartImage
                     key={i}
                     src={src}
                     alt=""
@@ -361,6 +356,7 @@ function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId,
                       if (idx >= 0) setLightboxIndex(idx);
                     }}
                     title={t("Click to expand")}
+                    loaderSize={96}
                     style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--border)", cursor: "zoom-in" }}
                   />
                 );

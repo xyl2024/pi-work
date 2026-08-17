@@ -25,6 +25,7 @@ import { useRss } from "@/hooks/useRss";
 import { clearRssScrollForFeed, flushRssScroll, scrollTopForView, setRssScroll } from "@/hooks/rssStore";
 import { sanitizeRssHtml } from "@/lib/rss-sanitize";
 import { ImageLightbox, extractImagesFromHtml, type ImageItem } from "@/components/ImageLightbox";
+import { SmartImage } from "@/components/SmartImage";
 import type { RssArticle, RssFeed } from "@/lib/rss-schema";
 
 // ---------------------------------------------------------------------------
@@ -791,11 +792,11 @@ function ReaderView({ feed, article, onBack, t }: ReaderViewProps): ReactElement
       const idx = images.findIndex((it) => it.src === src);
       if (idx === -1) return undefined;
       return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <SmartImage
           src={src}
           alt={el.attribs?.alt ?? ""}
           loading="lazy"
+          loaderSize={96}
           style={{ cursor: "zoom-in" }}
           onClick={(e: React.MouseEvent) => {
             e.preventDefault();
