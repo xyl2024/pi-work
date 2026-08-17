@@ -10,6 +10,15 @@ export type Locale = "en" | "zh";
 
 export const ZH_TRANSLATIONS = {
   "Models": "模型",
+  "About model catalog sources": "关于模型目录来源",
+  "Pi's pi-ai SDK builds the static catalog with generate-models.ts. It combines external catalogs with Pi-maintained provider-specific overrides, then generates the bundled model metadata files.": "Pi 的 pi-ai SDK 会在构建时运行 generate-models.ts，合并外部目录与 Pi 维护的 provider 专属覆盖配置，再生成随 SDK 发布的模型元数据文件。",
+  "Build-time sources": "构建时数据来源",
+  "Base model metadata": "基础模型元数据",
+  "OpenRouter model list": "OpenRouter 模型列表",
+  "NVIDIA NIM model list": "NVIDIA NIM 模型列表",
+  "Vercel AI Gateway model list": "Vercel AI Gateway 模型列表",
+  "Generated files": "生成文件",
+  "At runtime, pi-coding-agent loads the bundled static catalog. An optional refresh can fetch newer entries from pi.dev and cache them in ~/.pi/agent/models-store.json.": "运行时，pi-coding-agent 会加载随 SDK 发布的静态目录；可选的刷新操作会从 pi.dev 获取更新条目，并缓存到 ~/.pi/agent/models-store.json。",
   "Available models": "可用模型",
   "View all model data": "查看所有模型数据",
   "All model data": "所有模型数据",

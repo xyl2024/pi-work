@@ -1,7 +1,7 @@
 "use client";
 
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 interface Props {
   content: ReactNode;
@@ -11,17 +11,34 @@ interface Props {
   delayDuration?: number;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Keep the content interactive until the user clicks outside it. */
+  interactive?: boolean;
 }
 
-export function Tooltip({ content, children, side, align, delayDuration = 500, open, onOpenChange }: Props) {
+export function Tooltip({ content, children, side, align, delayDuration = 500, open, onOpenChange, interactive = false }: Props) {
+  const [interactiveOpen, setInteractiveOpen] = useState(false);
+  const interactiveUncontrolled = interactive && open === undefined;
+  const effectiveOpen = interactiveUncontrolled ? interactiveOpen : open;
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (interactiveUncontrolled && nextOpen) setInteractiveOpen(true);
+    onOpenChange?.(nextOpen);
+  };
+  const handlePointerDownOutside = interactive
+    ? () => {
+        if (interactiveUncontrolled) setInteractiveOpen(false);
+      }
+    : undefined;
+
   return (
     <TooltipPrimitive.Provider delayDuration={delayDuration}>
-      {/* disableHoverableContent: close immediately on trigger pointer-leave
-          (no "grace area" that keeps the tooltip open while the pointer
-          travels over the gap between trigger and content). Combined with
-          pointerEvents:none below, the tooltip is pure decoration — it can
-          never swallow the mouse and block rows underneath it. */}
-      <TooltipPrimitive.Root open={open} onOpenChange={onOpenChange} disableHoverableContent>
+      {/* Decorative tooltips close on trigger leave and do not capture the mouse.
+          Interactive tooltips opt into hoverable content and close on outside
+          pointer-down instead. */}
+      <TooltipPrimitive.Root
+        open={effectiveOpen}
+        onOpenChange={handleOpenChange}
+        disableHoverableContent={!interactive}
+      >
         <TooltipPrimitive.Trigger asChild>
           {children}
         </TooltipPrimitive.Trigger>
@@ -30,9 +47,11 @@ export function Tooltip({ content, children, side, align, delayDuration = 500, o
             side={side}
             align={align}
             sideOffset={5}
+            onPointerDownOutside={handlePointerDownOutside}
+            data-interactive-tooltip={interactive ? "true" : undefined}
             style={{
               zIndex: 9999,
-              pointerEvents: "none", // the wrapper is disabled in globals.css too
+              pointerEvents: interactive ? "auto" : "none", // the wrapper is disabled in globals.css for decorative tooltips
               maxWidth: 280,
               padding: "4px 10px",
               background: "var(--bg-panel)",

@@ -714,10 +714,10 @@ span.linenumber {
    hit-testable even when the inner content has pointer-events:none — that
    wrapper is what swallows hover/click and blocks the rows underneath (e.g.
    hovering the bottom file in the vertical FileExplorer then moving the mouse
-   up). Disable the wrapper and its whole subtree. Scoped via
-   :has([role="tooltip"]) so future Radix popovers/menus stay interactive. */
-[data-radix-popper-content-wrapper]:has([role="tooltip"]),
-[data-radix-popper-content-wrapper]:has([role="tooltip"]) * {
+   up). Disable the wrapper and its whole subtree. Interactive tooltips opt out
+   with data-interactive-tooltip. */
+[data-radix-popper-content-wrapper]:has([role="tooltip"]):not(:has([data-interactive-tooltip])),
+[data-radix-popper-content-wrapper]:has([role="tooltip"]):not(:has([data-interactive-tooltip])) * {
   pointer-events: none !important;
 }
 
