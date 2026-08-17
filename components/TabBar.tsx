@@ -277,12 +277,13 @@ function TokensTabIcon() {
 }
 
 function LlmAuditTabIcon() {
-  // Pulse line + magnifier — "LLM API call inspection".
+  // Code brackets `</>` — HTTP API / devtools. Mirrors LlmAuditIcon in
+  // components/rightBar/icons.tsx.
   return (
     <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1.5 7h2l1.4-2.8 2.1 5.2 1.5-2.4h1.5" />
-      <circle cx="10.8" cy="9.3" r="1.8" />
-      <line x1="12.2" y1="10.7" x2="13.4" y2="11.9" />
+      <polyline points="5 4 2 7 5 10" />
+      <polyline points="9 4 12 7 9 10" />
+      <line x1="8" y1="3" x2="6" y2="11" />
     </svg>
   );
 }

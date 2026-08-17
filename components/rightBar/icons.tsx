@@ -118,12 +118,13 @@ export const TokensIcon = (): ReactElement => (
   </svg>
 );
 
-// LLM API audit: pulse line (monitoring) + magnifier (inspection). 16×16.
+// LLM API audit: code brackets `</>` — single metaphor for HTTP API / devtools,
+// matches the JSON request/response bodies the panel expands to.
 export const LlmAuditIcon = (): ReactElement => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1.5 8h2.2l1.6-3.2 2.4 6 1.7-2.8h1.6" />
-    <circle cx="12.4" cy="10.4" r="2.1" />
-    <line x1="14" y1="12" x2="15.5" y2="13.5" />
+    <polyline points="6 4 2 8 6 12" />
+    <polyline points="10 4 14 8 10 12" />
+    <line x1="9" y1="3" x2="7" y2="13" />
   </svg>
 );
 
