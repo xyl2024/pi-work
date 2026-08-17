@@ -57,6 +57,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentTask } from "@/lib/agent-todo-tool-types";
 import { useAgentTodo } from "@/hooks/useAgentTodo";
 import { useI18n } from "@/hooks/useI18n";
+import { InlineLoader } from "generative-loaders";
 
 const PANEL_BREAKPOINT = 1100;
 /** Grace period (ms) before closing after the pointer leaves the wrapper —
@@ -94,7 +95,7 @@ const TaskRow = memo(function TaskRow({ task, isLast }: TaskRowProps) {
     >
       <span
         aria-hidden="true"
-        className={isInProgress ? "agent-todo-status-icon agent-todo-status-icon--loading" : "agent-todo-status-icon"}
+        className="agent-todo-status-icon"
         style={{
           display: "flex",
           alignItems: "center",
@@ -120,17 +121,7 @@ const TaskRow = memo(function TaskRow({ task, isLast }: TaskRowProps) {
             <polyline points="3 8.25 6.25 11.25 13 4.5" />
           </svg>
         ) : isInProgress ? (
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          >
-            <circle cx="8" cy="8" r="5.5" strokeDasharray="20 14" />
-          </svg>
+          <InlineLoader variant="signal" size={15} color="var(--accent)" />
         ) : null}
       </span>
       <div
@@ -380,13 +371,6 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
         </div>
       </div>
       <style>{`
-        .agent-todo-status-icon--loading {
-          animation: agent-todo-status-spin 900ms linear infinite;
-          transform-origin: center;
-        }
-        @keyframes agent-todo-status-spin {
-          to { transform: rotate(360deg); }
-        }
         /* Gradient sweep on the in-progress subject text. The gradient
            spans 3x the element width so the highlight spends most of
            the cycle off-screen — that gap between passes is what keeps
@@ -428,7 +412,6 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
             background-image: none;
             -webkit-text-fill-color: currentColor;
           }
-          .agent-todo-status-icon--loading,
           .agent-todo-launcher-dot {
             animation: none;
           }
