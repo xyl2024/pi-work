@@ -781,8 +781,8 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const renderEntryIds = replayActive ? entryIds.slice(0, replayIndex) : entryIds;
   const renderEntryTimestamps = replayActive ? entryTimestamps.slice(0, replayIndex) : entryTimestamps;
 
-  // Map each compaction point's first-kept-message entry id → the point, so
-  // the chat list can insert a divider right before that message. Points
+  // Map each compaction point's first displayed message entry id → the point,
+  // so the chat list can insert a divider right before that message. Points
   // with no `beforeMessageEntryId` are tail-markers (compaction landed at
   // the end of the visible path with no new messages after it) and get
   // rendered as a trailing divider below the message list.
@@ -1436,7 +1436,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
               // process portion of the final assistant are collapsed by default.
               const rendered: React.ReactNode[] = [];
               // Divider before the message at `idx` if that message is the
-              // first kept message of a compaction point.
+              // first displayed message after a compaction point.
               const maybeDivider = (idx: number): React.ReactNode => {
                 const point = dividerBefore.get(renderEntryIds[idx]);
                 if (point) return <CompactionDivider key={`comp-${point.entryId}`} point={point} />;

@@ -1,8 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline";
-import { SessionManager, buildSessionContext as piBuildSessionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
-import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, AssistantMessage, SessionSearchResult, SessionSearchResponse, SessionMessageSearchResult, SessionMessageSearchResponse, CompactionEntry, CompactionPoint } from "./types";
+import { SessionManager, buildSessionContext as piBuildSessionContext, getAgentDir, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
+import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, AgentMessage, SessionSearchResult, SessionSearchResponse, SessionMessageSearchResult, SessionMessageSearchResponse, CompactionEntry, CompactionPoint } from "./types";
 import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize";
 
@@ -218,6 +218,12 @@ export function buildTree(entries: SessionEntry[]): SessionTreeNode[] {
   return roots;
 }
 
+/**
+ * Build the full active-branch history for the browser. This deliberately does
+ * not use pi's compaction-trimmed message list: that list is the runtime context
+ * sent to the model, while the UI must keep showing messages already summarized
+ * by a compaction entry.
+ */
 export function buildSessionContext(entries: SessionEntry[], leafId?: string | null): SessionContext {
   const byId = new Map<string, SessionEntry>();
   for (const e of entries) byId.set(e.id, e);
@@ -248,52 +254,28 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     cur = cur.parentId ? byId.get(cur.parentId) : undefined;
   }
 
-  // Find the last compaction on path (mirrors pi's buildSessionContext logic)
-  let compactionId: string | undefined;
-  let firstKeptEntryId: string | undefined;
-  for (const e of path) {
-    if (e.type === "compaction") {
-      compactionId = e.id;
-      firstKeptEntryId = (e as { firstKeptEntryId: string }).firstKeptEntryId;
-    }
-  }
-
+  // Project every displayable entry on the full path and build all parallel
+  // arrays in the same loop. Compaction entries are rendered separately as
+  // dividers, so their synthetic compactionSummary messages stay out of the
+  // normal message list.
+  const messages: AgentMessage[] = [];
   const entryIds: string[] = [];
   const entryTimestamps: (number | undefined)[] = [];
-  const pushEntry = (e: SessionEntry) => {
-    entryIds.push(e.id);
-    const ts = typeof e.timestamp === "string" ? new Date(e.timestamp).getTime() : undefined;
-    entryTimestamps.push(Number.isFinite(ts) ? ts : undefined);
-  };
-  if (compactionId) {
-    const compactionIdx = path.findIndex((e) => e.id === compactionId);
-    const firstKeptIdx = firstKeptEntryId
-      ? path.findIndex((e, i) => i < compactionIdx && e.id === firstKeptEntryId)
-      : -1;
-    const startIdx = firstKeptIdx >= 0 ? firstKeptIdx : compactionIdx;
-    for (let i = startIdx; i < compactionIdx; i++) {
-      if (path[i].type === "message") pushEntry(path[i]);
-    }
-    for (let i = compactionIdx + 1; i < path.length; i++) {
-      if (path[i].type === "message") pushEntry(path[i]);
-    }
-  } else {
-    for (const e of path) {
-      if (e.type === "message") pushEntry(e);
+  for (const entry of path) {
+    if (entry.type === "compaction") continue;
+    const projectedMessages = sessionEntryToContextMessages(
+      entry as unknown as PiSessionEntry,
+    ) as unknown as AgentMessage[];
+    for (const message of projectedMessages) {
+      messages.push(normalizeToolCalls(message));
+      entryIds.push(entry.id);
+      const ts = typeof entry.timestamp === "string" ? new Date(entry.timestamp).getTime() : undefined;
+      entryTimestamps.push(Number.isFinite(ts) ? ts : undefined);
     }
   }
 
-  // pi injects the compaction summary as {role:"compactionSummary", summary, tokensBefore}.
-  // Drop it — compaction history is no longer surfaced in the UI; the kept
-  // pre-compaction messages follow directly after the last kept message.
-  const messages = (piCtx.messages as AssistantMessage[]).flatMap((msg) => {
-    const raw = msg as unknown as Record<string, unknown>;
-    if (raw.role === "compactionSummary") return [];
-    return [normalizeToolCalls(msg)];
-  });
-
   // Compaction points: every `compaction` entry on the visible path. The
-  // divider belongs before the first kept message after the compaction;
+  // divider belongs before the first displayed message after the compaction;
   // `beforeMessageEntryId` is set to that id when one exists. When the
   // compaction is at the tail of the path (e.g. just compacted, no new
   // messages yet), we still surface the point so the chat stream renders
@@ -313,7 +295,7 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
         continue;
       }
       if (!afterSelf) continue;
-      if (p.type === "message" && visibleEntryIds.has(p.id)) {
+      if (visibleEntryIds.has(p.id)) {
         afterId = p.id;
         break;
       }
