@@ -3,7 +3,7 @@
  *
  * Card-style list (vs. the old cramped rows) that shows:
  *   - status pill (success / error / timeout / interrupted / running)
- *   - relative timestamp + duration + read state
+ *   - relative timestamp + duration
  *   - reply preview (expandable), or error message
  *   - "open session" link when a session id is attached
  *
@@ -14,26 +14,21 @@
 import { useMemo } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "@/components/Tooltip";
-import { useToast } from "@/components/Toast";
 import { StatusBadge } from "./StatusBadge";
 import { useNow } from "./useNow";
-import { apiFetch, formatDuration, formatRelative } from "./utils";
-import type { ScheduledTask, TaskRun } from "./types";
+import { formatDuration, formatRelative } from "./utils";
+import type { TaskRun } from "./types";
 import { IconExternal } from "./icons";
 
 export type RunFilter = "all" | "success" | "error" | "timeout" | "interrupted" | "running";
 
 interface Props {
-  task: ScheduledTask;
   runs: TaskRun[];
   loading: boolean;
   filter: RunFilter;
   onFilterChange: (f: RunFilter) => void;
   triggering: boolean;
   onTrigger: () => void;
-  onRefresh: () => void;
-  onRunsChange: (runs: TaskRun[]) => void;
-  onTaskRefresh: () => void;
   onOpenSession: (sessionId: string) => void;
 }
 
@@ -47,11 +42,10 @@ const FILTERS: { id: RunFilter; label: string }[] = [
 ];
 
 export function TaskRunsTab({
-  task, runs, loading, filter, onFilterChange,
-  triggering, onTrigger, onRefresh, onRunsChange, onTaskRefresh, onOpenSession,
+  runs, loading, filter, onFilterChange,
+  triggering, onTrigger, onOpenSession,
 }: Props) {
   const { t } = useI18n();
-  const toast = useToast();
   const now = useNow(2_000);
 
   const filtered = useMemo(() => {
@@ -60,34 +54,6 @@ export function TaskRunsTab({
   }, [runs, filter]);
 
   const inFlight = runs.some((r) => r.status === "running");
-
-  const toggleRead = async (run: TaskRun) => {
-    const nextRead = run.readAt === null;
-    onRunsChange(runs.map((r) => (r.id === run.id ? { ...r, readAt: nextRead ? Date.now() : null } : r)));
-    try {
-      await apiFetch(`/api/scheduled-tasks/runs/${encodeURIComponent(run.id)}`, {
-        method: "PATCH",
-        body: JSON.stringify({ read: nextRead }),
-      });
-      onTaskRefresh();
-    } catch (e) {
-      onRunsChange(runs.map((r) => (r.id === run.id ? { ...r, readAt: run.readAt } : r)));
-      toast.show({ kind: "error", message: e instanceof Error ? e.message : t("Failed to update run") });
-    }
-  };
-
-  const markAllRead = async () => {
-    try {
-      await apiFetch(`/api/scheduled-tasks/${encodeURIComponent(task.id)}/runs/mark-all-read`, { method: "POST" });
-      onRefresh();
-      onTaskRefresh();
-      toast.show({ kind: "success", message: t("All runs marked as read") });
-    } catch (e) {
-      toast.show({ kind: "error", message: e instanceof Error ? e.message : t("Failed to toggle task") });
-    }
-  };
-
-  const unreadExists = runs.some((r) => r.readAt === null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -123,23 +89,6 @@ export function TaskRunsTab({
           })}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          {unreadExists && (
-            <button
-              onClick={() => void markAllRead()}
-              style={{
-                padding: "4px 10px",
-                fontSize: 11,
-                background: "transparent",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                color: "var(--text-muted)",
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              {t("Mark all as read")}
-            </button>
-          )}
           <button
             onClick={onTrigger}
             disabled={triggering}
@@ -201,7 +150,6 @@ export function TaskRunsTab({
             key={run.id}
             run={run}
             now={now}
-            onToggleRead={() => void toggleRead(run)}
             onOpenSession={onOpenSession}
           />
         ))}
@@ -219,9 +167,8 @@ const LONG_RUNNING_THRESHOLD_MS = 10 * 60 * 1000;
 
 // ── Single run card ──────────────────────────────────────────────
 
-function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now: number; onToggleRead: () => void; onOpenSession: (id: string) => void }) {
+function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpenSession: (id: string) => void }) {
   const { t, locale } = useI18n();
-  const isUnread = run.readAt === null;
   const replyPreview = run.replyText?.slice(0, 240).trim() ?? null;
   const replyMore = run.replyText && run.replyText.length > 240;
 
@@ -235,9 +182,8 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
   return (
     <div
       style={{
-        background: isUnread ? "var(--bg-subtle)" : "var(--bg-panel)",
+        background: "var(--bg-panel)",
         border: "1px solid var(--border)",
-        borderLeft: isUnread ? "2px solid var(--accent)" : "2px solid transparent",
         borderRadius: 8,
         padding: "10px 12px",
         display: "flex",
@@ -287,24 +233,6 @@ function RunCard({ run, now, onToggleRead, onOpenSession }: { run: TaskRun; now:
           </span>
         )}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 4 }}>
-          <Tooltip content={isUnread ? t("Mark as read") : t("Mark as unread")}>
-            <button
-              onClick={onToggleRead}
-              aria-label={isUnread ? t("Mark as read") : t("Mark as unread")}
-              style={{
-                background: "transparent",
-                border: "1px solid var(--border)",
-                borderRadius: 4,
-                color: isUnread ? "var(--accent)" : "var(--text-dim)",
-                padding: "1px 6px",
-                fontSize: 10,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              {isUnread ? "●" : "○"}
-            </button>
-          </Tooltip>
           {run.sessionId && (
             <Tooltip content={t("Open session")}>
               <button

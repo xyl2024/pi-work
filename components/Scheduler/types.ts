@@ -33,7 +33,6 @@ export interface ScheduledTask {
   lastRunAt: number | null;
   nextRunAt: number | null;
   lastRunStatus: TaskRunStatus | null;
-  unreadCount: number;
 }
 
 export interface TaskRun {
@@ -46,7 +45,6 @@ export interface TaskRun {
   error: string | null;
   sessionId: string | null;
   durationMs: number | null;
-  readAt: number | null;
 }
 
 /** Match `RecordRunEndInput` on the server. */
@@ -101,9 +99,4 @@ export interface ModelMeta {
   defaultModel: { provider: string; modelId: string } | null;
   /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
   modelIcons?: Record<string, string>;
-}
-
-/** Wire shape of `/api/scheduled-tasks/runs/[runId]` PATCH. */
-export interface ToggleRunReadPayload {
-  read: boolean;
 }

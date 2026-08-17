@@ -51,7 +51,6 @@ export interface ScheduledTask {
   lastRunAt: number | null;
   nextRunAt: number | null;
   lastRunStatus: TaskRunStatus | null;
-  unreadCount: number;
 }
 
 export interface TaskRun {
@@ -64,7 +63,6 @@ export interface TaskRun {
   error: string | null;
   sessionId: string | null;
   durationMs: number | null;
-  readAt: number | null;
 }
 
 export interface CreateTaskInput {
@@ -238,7 +236,6 @@ interface Row {
   last_run_at: number | null;
   next_run_at: number | null;
   last_run_status: TaskRunStatus | null;
-  unread_count: number;
 }
 
 function parseToolNames(raw: string | null): string[] | null {
@@ -276,7 +273,6 @@ function rowToTask(row: Row): ScheduledTask {
     lastRunAt: row.last_run_at,
     nextRunAt,
     lastRunStatus: row.last_run_status,
-    unreadCount: row.unread_count ?? 0,
   };
 }
 
@@ -285,11 +281,7 @@ const TASK_WITH_LAST_RUN_QUERY = `
     SELECT status FROM task_runs r
     WHERE r.task_id = t.id
     ORDER BY r.started_at DESC LIMIT 1
-  ) AS last_run_status,
-  (
-    SELECT COUNT(*) FROM task_runs r
-    WHERE r.task_id = t.id AND r.read_at IS NULL
-  ) AS unread_count
+  ) AS last_run_status
   FROM scheduled_tasks t
 `;
 
@@ -406,7 +398,7 @@ export function listRuns(taskId: string, limit: number = DEFAULT_RUNS_LIMIT): Ta
   const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
   const rows = db
     .prepare(
-      `SELECT id, task_id, started_at, ended_at, status, reply_text, error, session_id, duration_ms, read_at
+      `SELECT id, task_id, started_at, ended_at, status, reply_text, error, session_id, duration_ms
          FROM task_runs
         WHERE task_id = ?
         ORDER BY started_at DESC
@@ -422,7 +414,6 @@ export function listRuns(taskId: string, limit: number = DEFAULT_RUNS_LIMIT): Ta
       error: string | null;
       session_id: string | null;
       duration_ms: number | null;
-      read_at: number | null;
     }>;
   return rows.map((r) => ({
     id: r.id,
@@ -434,7 +425,6 @@ export function listRuns(taskId: string, limit: number = DEFAULT_RUNS_LIMIT): Ta
     error: r.error,
     sessionId: r.session_id,
     durationMs: r.duration_ms,
-    readAt: r.read_at,
   }));
 }
 
@@ -442,7 +432,7 @@ export function getRun(runId: string): TaskRun | null {
   const db = getSchedulerDb();
   const row = db
     .prepare(
-      `SELECT id, task_id, started_at, ended_at, status, reply_text, error, session_id, duration_ms, read_at
+      `SELECT id, task_id, started_at, ended_at, status, reply_text, error, session_id, duration_ms
          FROM task_runs WHERE id = ?`
     )
     .get(runId) as
@@ -456,7 +446,6 @@ export function getRun(runId: string): TaskRun | null {
         error: string | null;
         session_id: string | null;
         duration_ms: number | null;
-        read_at: number | null;
       }
     | undefined;
   if (!row) return null;
@@ -470,7 +459,6 @@ export function getRun(runId: string): TaskRun | null {
     error: row.error,
     sessionId: row.session_id,
     durationMs: row.duration_ms,
-    readAt: row.read_at,
   };
 }
 
@@ -492,7 +480,6 @@ export function recordRunStart(taskId: string): TaskRun {
     error: null,
     sessionId: null,
     durationMs: null,
-    readAt: null,
   };
 }
 
@@ -515,31 +502,4 @@ export function recordRunEnd(runId: string, input: RecordRunEndInput): TaskRun {
     .run(now, existing.taskId);
 
   return getRun(runId)!;
-}
-
-/** Mark a single run as read or unread. Returns the updated run. */
-export function setRunRead(runId: string, read: boolean): TaskRun {
-  const existing = getRun(runId);
-  if (!existing) throw new SchedulerNotFoundError(runId);
-  const readAt = read ? Date.now() : null;
-  getSchedulerDb()
-    .prepare("UPDATE task_runs SET read_at = ? WHERE id = ?")
-    .run(readAt, runId);
-  return getRun(runId)!;
-}
-
-/** Mark every run of a task as read. Returns the number of rows updated. */
-export function markAllRunsRead(taskId: string): number {
-  const res = getSchedulerDb()
-    .prepare("UPDATE task_runs SET read_at = ? WHERE task_id = ? AND read_at IS NULL")
-    .run(Date.now(), taskId);
-  return res.changes;
-}
-
-/** Unread count for one task. 0 if none unread. */
-export function getUnreadRunCount(taskId: string): number {
-  const row = getSchedulerDb()
-    .prepare("SELECT COUNT(*) AS n FROM task_runs WHERE task_id = ? AND read_at IS NULL")
-    .get(taskId) as { n: number } | undefined;
-  return row?.n ?? 0;
 }

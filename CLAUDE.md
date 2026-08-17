@@ -255,7 +255,6 @@ app/api/
   scheduled-tasks/route.ts          GET/POST/PATCH/DELETE scheduled cron tasks
   scheduled-tasks/[id]/run/route.ts POST run a task now (ad-hoc)
   scheduled-tasks/[id]/runs/route.ts GET last N runs for one task
-  scheduled-tasks/[id]/runs/mark-all-read/route.ts POST mark all runs as read
   scheduled-tasks/runs/[runId]/route.ts GET one run detail
   favorites/route.ts                GET/PUT pinned session list (~/.pi-work/favorites.json)
   translate/route.ts                POST { text, provider, modelId, target } — in-memory LLM call, no disk

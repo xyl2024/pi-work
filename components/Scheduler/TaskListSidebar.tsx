@@ -5,7 +5,7 @@
  *  - filter pills (All / Enabled / Paused / Errors)
  *  - live search across name + prompt + cron
  *  - j/k keyboard navigation + Enter to open
- *  - unread badge + status dot + relative "next run" time
+ *  - status dot + relative "next run" time
  *  - empty state with onboarding copy when zero tasks
  *
  * Click a row to select it (handled by parent). Long-press / right-click
@@ -278,7 +278,7 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
             flex: 1,
             fontSize: 13,
             color: "var(--text)",
-            fontWeight: task.unreadCount > 0 ? 600 : 500,
+            fontWeight: 500,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -286,24 +286,6 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
         >
           {task.name}
         </span>
-        {task.unreadCount > 0 && (
-          <span
-            style={{
-              background: "var(--accent)",
-              color: "#fff",
-              fontSize: 9,
-              fontWeight: 700,
-              padding: "1px 5px",
-              borderRadius: 8,
-              lineHeight: 1.4,
-              minWidth: 16,
-              textAlign: "center",
-              flexShrink: 0,
-            }}
-          >
-            {task.unreadCount > 99 ? "99+" : task.unreadCount}
-          </span>
-        )}
         {showErrorBadge && (
           <IconAlert width={11} height={11} style={{ color: lastStatus === "timeout" || lastStatus === "interrupted" ? "var(--warning)" : "var(--error)", flexShrink: 0 }} />
         )}

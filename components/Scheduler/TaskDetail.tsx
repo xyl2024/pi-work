@@ -230,16 +230,12 @@ export function TaskDetail({
         {tab === "overview" && <TaskOverviewTab task={task} runs={runs} />}
         {tab === "runs" && (
           <TaskRunsTab
-            task={task}
             runs={runs}
             loading={runsLoading}
             filter={runFilter}
             onFilterChange={setRunFilter}
             triggering={triggering}
             onTrigger={() => void onTrigger(task)}
-            onRefresh={() => void loadRuns()}
-            onRunsChange={setRuns}
-            onTaskRefresh={() => onTaskUpdated({ ...task })}
             onOpenSession={onOpenSession}
           />
         )}
