@@ -1,6 +1,7 @@
 "use client";
 
 import { Tooltip } from "./Tooltip";
+import { CountBadge } from "./CountBadge";
 
 interface Props {
   unread: number;
@@ -52,28 +53,7 @@ export function InboxBell({ unread, onClick, tooltip = "Open inbox" }: Props) {
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
-        {unread > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: 2,
-              right: 2,
-              minWidth: 14,
-              height: 14,
-              padding: "0 4px",
-              borderRadius: 7,
-              background: "#ef4444",
-              color: "#fff",
-              fontSize: 9,
-              fontWeight: 700,
-              lineHeight: "14px",
-              textAlign: "center",
-              boxSizing: "border-box",
-            }}
-          >
-            {unread > 99 ? "99+" : unread}
-          </span>
-        )}
+        <CountBadge count={unread} size="sm" />
       </button>
     </Tooltip>
   );

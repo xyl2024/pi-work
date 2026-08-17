@@ -77,6 +77,7 @@ import { useAgentControls } from "@/hooks/sessionUiStore";
 import { useChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
 import { RightBarColumn } from "./rightBar/RightBarColumn";
 import type { RightBarCtx } from "./rightBar/desc";
+import { useGitStatusStore } from "@/lib/git-status-store";
 
 interface ToolInfo {
   name: string;
@@ -956,6 +957,15 @@ export function AppShell() {
   const selectedSessionId = selectedSession?.id ?? null;
   const selectedCwd = selectedSession?.cwd ?? newSessionCwd ?? null;
   const { snapshot: toolStatsSnapshot } = useToolCallStatsView();
+  // Number of changed files for the active cwd's git repo — drives the
+  // badge on the git-diff right-bar button. The store is event-driven
+  // now (refreshes on edit/write tool ends), so this stays live without
+  // polling. Falls back to 0 when there's no cwd, the cwd isn't a repo,
+  // or the repo has no changes — in all three cases the badge hides.
+  const gitStore = useGitStatusStore();
+  const gitChangedCount = selectedCwd
+    ? (gitStore.entriesByCwd.get(selectedCwd)?.files.length ?? 0)
+    : 0;
   const rightBarCtx: RightBarCtx = {
     rightPanelState,
     activeTabKind: activeRightPanelKind,
@@ -964,6 +974,7 @@ export function AppShell() {
     selectedCwd,
     terminalOpen,
     rssUnread,
+    gitChangedCount,
     toolStats: {
       runningCount: toolStatsSnapshot.runningCount,
       totalCount: toolStatsSnapshot.totalCount,

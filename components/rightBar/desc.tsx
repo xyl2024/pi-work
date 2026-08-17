@@ -20,6 +20,7 @@
 
 import type { ReactNode } from "react";
 import type { RightBarButtonId } from "@/lib/config";
+import { CountBadge } from "@/components/CountBadge";
 import {
   TODO_TAB_ID,
   FAVORITES_TAB_ID,
@@ -80,6 +81,10 @@ export interface RightBarCtx {
   selectedCwd: string | null;
   terminalOpen: boolean;
   rssUnread: number;
+  /** Number of changed files (M/A/D/R/C/T/? ?) for the active cwd's git
+   *  repo. 0 when there's no cwd, the cwd isn't a repo, or the repo has
+   *  no changes. Drives the badge on the git-diff button. */
+  gitChangedCount: number;
   toolStats: { runningCount: number; totalCount: number };
   /** Active tool-call counter is the only thing that requires i18n inside
    *  the descriptor body, so we expose the AppShell-bound t() to avoid
@@ -247,33 +252,7 @@ const rssDescriptor: RightBarDescriptor = {
   kind: "configurable",
   labelKey: "RSS",
   isActive: (ctx) => ctx.activeTabKind === "rss",
-  badge: (ctx) => {
-    if (ctx.rssUnread <= 0) return null;
-    const capped = ctx.rssUnread > 99 ? "99+" : String(ctx.rssUnread);
-    return (
-      <span
-        style={{
-          position: "absolute",
-          top: 2,
-          right: 2,
-          minWidth: 16,
-          height: 16,
-          padding: ctx.rssUnread > 99 ? "0 4px" : 0,
-          borderRadius: ctx.rssUnread > 99 ? 8 : "50%",
-          background: "#ef4444",
-          color: "#fff",
-          fontSize: 9,
-          fontWeight: 700,
-          lineHeight: "16px",
-          textAlign: "center",
-          boxSizing: "border-box",
-          pointerEvents: "none",
-        }}
-      >
-        {capped}
-      </span>
-    );
-  },
+  badge: (ctx) => <CountBadge count={ctx.rssUnread} />,
   content: () => RssIcon(),
   onClick: (ctx) => ctx.toggleRightPanelTab(RSS_TAB_ID, ctx.openTab.rss),
 };
@@ -286,6 +265,7 @@ const gitDiffDescriptor: RightBarDescriptor = {
   // Disabled when there's no cwd at all (no selected session, no
   // in-flight new-session cwd) — matches the original inline guard.
   isDisabled: (ctx) => !ctx.selectedCwd,
+  badge: (ctx) => <CountBadge count={ctx.gitChangedCount} />,
   content: () => GitDiffIcon(),
   onClick: (ctx) =>
     ctx.toggleRightPanelTab(GIT_DIFF_TAB_ID, ctx.openTab.gitDiff),
