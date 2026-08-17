@@ -23,8 +23,7 @@
  *   can anchor to its top-right corner via `bottom: calc(100% + 8px);
  *   right: 0`. The popover sits directly above the button, extending
  *   leftward into the chat whitespace, with its right edge flush to the
- *   button's right edge. Width 256px, height 240px (then scrolls) —
- *   unchanged from the prior panel.
+ *   button's right edge. Width 320px, height 240px (then scrolls).
  * - Popover stays mounted at all times (so toggling `open` runs the
  *   transition both ways) but starts at `opacity: 0; transform:
  *   scale(0.96); pointer-events: none`. `transform-origin: bottom
@@ -40,14 +39,14 @@
  * Responsive:
  * - Below 1100px the whole component (button + popover) is hidden.
  *   Matches the prior panel's breakpoint — the chat area's whitespace
- *   shrinks below this point and a 256px surface would occlude messages.
+ *   shrinks below this point and a 320px surface would occlude messages.
  *
  * Visual state:
  * - Tasks are still rendered as a flat id-ascending list (same as
- *   before). In-progress gets `var(--accent)` text + a 2.6s linear
- *   gradient sweep; completed gets line-through + `var(--text-dim)`;
- *   pending is the default text color. The whole panel remains a
- *   read-only status display.
+ *   before). In-progress gets a loading icon, `var(--accent)` text + a
+ *   2.6s linear gradient sweep; completed gets an accent check +
+ *   `var(--text-dim)` text; pending is the default text color. The whole
+ *   panel remains a read-only status display.
  * - When there's an in-progress task, the launcher button shows a small
  *   accent dot at its top-right with a matching 2.6s pulse — the same
  *   cadence as the text sweep so "live" reads consistently wherever it
@@ -83,8 +82,8 @@ const TaskRow = memo(function TaskRow({ task, isLast }: TaskRowProps) {
     <div
       style={{
         display: "flex",
-        flexDirection: "column",
-        gap: 2,
+        alignItems: "flex-start",
+        gap: 8,
         width: "100%",
         padding: "6px 8px",
         border: "none",
@@ -94,38 +93,88 @@ const TaskRow = memo(function TaskRow({ task, isLast }: TaskRowProps) {
       }}
     >
       <span
-        className={isInProgress ? "agent-todo-live agent-todo-live--accent" : undefined}
+        aria-hidden="true"
+        className={isInProgress ? "agent-todo-status-icon agent-todo-status-icon--loading" : "agent-todo-status-icon"}
         style={{
-          fontSize: 13,
-          lineHeight: 1.4,
-          textDecoration: isCompleted ? "line-through" : "none",
-          color: subjectColor,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 15,
+          height: 18,
+          flexShrink: 0,
+          marginTop: 1,
+          color: isCompleted || isInProgress ? "var(--accent)" : "transparent",
         }}
       >
-        {task.subject}
+        {isCompleted ? (
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="3 8.25 6.25 11.25 13 4.5" />
+          </svg>
+        ) : isInProgress ? (
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          >
+            <circle cx="8" cy="8" r="5.5" strokeDasharray="20 14" />
+          </svg>
+        ) : null}
       </span>
-      {isInProgress && task.description ? (
+      <div
+        style={{
+          minWidth: 0,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
+        }}
+      >
         <span
+          className={isInProgress ? "agent-todo-live agent-todo-live--accent" : undefined}
           style={{
-            fontSize: 11,
+            fontSize: 13,
             lineHeight: 1.4,
-            color: "var(--text-muted)",
+            color: subjectColor,
             overflow: "hidden",
             textOverflow: "ellipsis",
             display: "-webkit-box",
-            WebkitLineClamp: 3,
+            WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
-            wordBreak: "break-word",
           }}
         >
-          {task.description}
+          {task.subject}
         </span>
-      ) : null}
+        {isInProgress && task.description ? (
+          <span
+            style={{
+              fontSize: 11,
+              lineHeight: 1.4,
+              color: "var(--text-muted)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              display: "-webkit-box",
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: "vertical",
+              wordBreak: "break-word",
+            }}
+          >
+            {task.description}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 });
@@ -282,7 +331,7 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
             position: "absolute",
             bottom: "calc(100% + 8px)",
             right: 0,
-            width: 256,
+            width: 320,
             // No maxHeight here on purpose. The popover's containing block
             // is the launcher wrapper (36px tall — just the button), so a
             // percentage would resolve to a tiny value and crush the panel.
@@ -331,6 +380,13 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
         </div>
       </div>
       <style>{`
+        .agent-todo-status-icon--loading {
+          animation: agent-todo-status-spin 900ms linear infinite;
+          transform-origin: center;
+        }
+        @keyframes agent-todo-status-spin {
+          to { transform: rotate(360deg); }
+        }
         /* Gradient sweep on the in-progress subject text. The gradient
            spans 3x the element width so the highlight spends most of
            the cycle off-screen — that gap between passes is what keeps
@@ -372,6 +428,7 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
             background-image: none;
             -webkit-text-fill-color: currentColor;
           }
+          .agent-todo-status-icon--loading,
           .agent-todo-launcher-dot {
             animation: none;
           }
