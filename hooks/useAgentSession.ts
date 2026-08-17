@@ -18,11 +18,10 @@ import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } 
 import { setPendingAskUserQuestions } from "./askUserQuestionsStore";
 import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
 
-// Pi's runtime tool names (from @earendil-works/pi-coding-agent). Any tool
-// that can mutate the worktree belongs here so `useAgentSession` can poke
-// the git-status store the moment one of them finishes — replacing the
-// old 3s poll loop. Mirrors how `AGENT_TODO_TOOL_NAME` flags the
-// agent_todo refresh below.
+// Pi's runtime tool names (from @earendil-works/pi-coding-agent). `edit`
+// and `write` are direct file mutators — flagging them by name is enough.
+// `bash` is handled separately below because the trigger condition is on
+// the args (the command string contains `git`), not on the tool name.
 const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
 
 // Sidebar Pi Bot: discrete reactions (waking/suspicious/happy) only
@@ -190,6 +189,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // doesn't carry the tool name, so we can't tell e.g. `show_file` apart from
   // `read` without this). Component-scope, so a session remount resets it.
   const toolCallNameRef = useRef<Map<string, string>>(new Map());
+  // Parallel scratchpad for tool args, used to inspect bash command strings
+  // on tool_execution_end (the end event doesn't carry args). Same
+  // lifecycle as toolCallNameRef: populated on _start, consumed+cleared
+  // on _end. Component-scoped so a session remount resets it.
+  const toolCallArgsRef = useRef<Map<string, unknown>>(new Map());
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const [agentRunning, setAgentRunning] = useState(false);
   const [isCompacting, setIsCompacting] = useState(false);
@@ -683,6 +687,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const name = event.toolName as string;
         const args = event.args;
         toolCallNameRef.current.set(id, name);
+        toolCallArgsRef.current.set(id, args);
         statsEmitRef.current?.({
           type: "tool_start",
           toolCallId: id,
@@ -770,6 +775,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const gitCwd = session?.cwd ?? newSessionCwd;
           if (gitCwd) notifyMutated(gitCwd);
         }
+        // bash can also mutate the worktree when the command runs a git
+        // subcommand. The end event doesn't carry args, so we read them
+        // from the scratchpad we populated on _start. Read-only commands
+        // (git status, git log) match too, but the server-side 2s cache +
+        // abort controller makes the wasted fetch negligible.
+        if (toolNameForEnd === "bash") {
+          const gitCwd = session?.cwd ?? newSessionCwd;
+          if (gitCwd && bashCommandTouchesGit(toolCallArgsRef.current.get(id))) {
+            notifyMutated(gitCwd);
+          }
+        }
+        toolCallArgsRef.current.delete(id);
         if (toolNameForEnd && isShowFileToolName(toolNameForEnd) && result?.details) {
           const files = (result.details as { files?: unknown }).files;
           if (Array.isArray(files)) {
@@ -1284,6 +1301,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // ref is component-scoped and disappears with the next mount anyway.
       // eslint-disable-next-line react-hooks/exhaustive-deps
       toolCallNameRef.current.clear();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      toolCallArgsRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1419,4 +1438,23 @@ function isBodyMessage(msg: AgentMessage): boolean {
     if (b.type === "toolUse") hasToolUse = true;
   }
   return hasText && !hasToolUse;
+}
+
+/**
+ * True when a bash tool call's args.command contains the word `git`
+ * somewhere (whole-word match via \b boundaries). Triggers on every
+ * git invocation including read-only ones (git status, git log); the
+ * server-side 2s status cache + abort controller in `git-status-store`
+ * make the wasted fetch negligible, and a heuristic mutating-vs-read
+ * split would miss indirect mutations (custom aliases, shell scripts
+ * invoked from the command, etc.).
+ *
+ * Defensive about the args shape — pi events are SDK-emitted and could
+ * in principle be malformed.
+ */
+function bashCommandTouchesGit(args: unknown): boolean {
+  if (!args || typeof args !== "object") return false;
+  const cmd = (args as { command?: unknown }).command;
+  if (typeof cmd !== "string" || cmd.length === 0) return false;
+  return /\bgit\b/.test(cmd);
 }
