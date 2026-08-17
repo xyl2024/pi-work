@@ -36,6 +36,8 @@ export interface ChatHeaderActions {
   compactVisible: boolean;
   /** True while the RPC `compact` call is in flight (shows the spinner glyph). */
   isCompacting: boolean;
+  /** Session is busy with another turn (compact button is disabled). */
+  compactDisabled: boolean;
 }
 
 let state: ChatHeaderActions | null = null;

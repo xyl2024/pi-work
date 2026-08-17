@@ -39,6 +39,12 @@ interface Props {
   onSend: (message: string, images?: AttachedImage[]) => void;
   onAbort: () => void;
   isStreaming: boolean;
+  /** True while the session is mid-turn (including compaction). Same gate
+   *  as `isStreaming`, exposed separately so a parent can disable just the
+   *  submit affordance without forcing the rest of the input into a
+   *  streaming-only mode (e.g. compacting disables only the send button,
+   *  not the textarea or model selector). */
+  sessionBusy?: boolean;
   model?: { provider: string; modelId: string } | null;
   modelNames?: Record<string, string>;
   /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
@@ -277,7 +283,7 @@ function findDirectSlashResource(message: string, resources: SlashResource[]): {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, isStreaming, model, modelNames, modelIcons, modelList, onModelChange,
+  onSend, onAbort, isStreaming, sessionBusy = false, model, modelNames, modelIcons, modelList, onModelChange,
   toolSelection = "all", onToolSelectionChange,
   availableTools = [], toolsLoading = false, toolsError = null, onEnsureAvailableTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
@@ -1005,7 +1011,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {!isStreaming && (
             <button
               onClick={handleSend}
-              disabled={!value.trim() && !attachedImages.length && !selectedSlashResource}
+              disabled={sessionBusy || (!value.trim() && !attachedImages.length && !selectedSlashResource)}
               aria-label={t("Send")}
               style={{
                 flexShrink: 0,

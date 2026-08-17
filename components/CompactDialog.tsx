@@ -125,7 +125,10 @@ export function CompactDialog({
           border: "1px solid var(--border)",
           borderRadius: 8,
           padding: 20,
-          minWidth: 360,
+          // `min(540px, calc(100vw - 32px))` keeps the dialog responsive on
+          // narrow mobile viewports where a hard maxWidth would force
+          // horizontal scrolling on top of the 16px gutter padding.
+          width: "min(540px, calc(100vw - 32px))",
           maxWidth: 540,
           boxShadow: "0 8px 24px rgba(0,0,0,0.32)",
           display: "flex",

@@ -1297,7 +1297,7 @@ export function AppShell() {
                       }
                       label={headerActions.isCompacting ? t("Compacting...") : t("Compact")}
                       onClick={headerActions.onCompact}
-                      disabled={headerActions.isCompacting}
+                      disabled={headerActions.isCompacting || headerActions.compactDisabled}
                       variant={headerActions.isCompacting ? "accent" : "default"}
                     />
                   )}

@@ -70,6 +70,19 @@ interface AgentEvent {
   [key: string]: unknown;
 }
 
+interface AgentRuntimeState {
+  running: boolean;
+  state?: {
+    isStreaming?: boolean;
+    isCompacting?: boolean;
+    isRunning?: boolean;
+    phase?: "compacting" | "streaming" | null;
+    contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
+    systemPrompt?: string;
+    thinkingLevel?: string;
+  };
+}
+
 export type AgentPhase =
   | { kind: "waiting_model" }
   | { kind: "running_tools"; tools: { id: string; name: string }[] }
@@ -171,6 +184,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const toolCallNameRef = useRef<Map<string, string>>(new Map());
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const [agentRunning, setAgentRunning] = useState(false);
+  const [isCompacting, setIsCompacting] = useState(false);
   const [agentTodoRefreshKey, setAgentTodoRefreshKey] = useState(0);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
@@ -203,6 +217,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
   const agentRunningRef = useRef(false);
+  const compactInFlightRef = useRef(false);
+  const setAgentRunningSync = useCallback((running: boolean) => {
+    agentRunningRef.current = running;
+    setAgentRunning(running);
+  }, []);
+  const setCompactingSync = useCallback((compacting: boolean) => {
+    setIsCompacting(compacting);
+  }, []);
   // Holds the most recent assistant error message during a turn, so
   // agent_end can toast it. Cleared after the toast (or when the next
   // message_start arrives). auto_retry_end with success=false also
@@ -323,7 +345,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return null;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as SessionData & { agentState?: { running: boolean; state?: { isStreaming?: boolean; contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; systemPrompt?: string; thinkingLevel?: string } } };
+      const d = await res.json() as SessionData & { agentState?: AgentRuntimeState };
       setData(d);
       // data.tree is now authoritative (fresh from disk); drop any live tree
       // pushed during the previous streaming window so it can't go stale.
@@ -454,6 +476,44 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunningRef.current = agentRunning;
   }, [agentRunning]);
 
+  const applyAgentRuntimeState = useCallback((agentState: AgentRuntimeState | null | undefined) => {
+    const state = agentState?.state;
+    if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
+    if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
+
+    const compacting = state?.isCompacting === true || state?.phase === "compacting";
+    const running = Boolean(
+      compacting ||
+      state?.isRunning === true ||
+      state?.isStreaming === true ||
+      (agentState?.running === true && !state),
+    );
+
+    if (compacting) {
+      setAgentRunningSync(true);
+      setCompactingSync(true);
+      setAgentPhase({ kind: "compacting" });
+    } else if (running) {
+      setAgentRunningSync(true);
+      setCompactingSync(false);
+      setAgentPhase({ kind: "waiting_model" });
+    } else {
+      setAgentRunningSync(false);
+      setCompactingSync(false);
+      setAgentPhase(null);
+      dispatch({ type: "end" });
+    }
+  }, [setAgentRunningSync, setCompactingSync]);
+
+  const refreshAgentRuntimeState = useCallback(async (sid = sessionIdRef.current) => {
+    if (!sid) return null;
+    const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const runtimeState = await res.json() as AgentRuntimeState;
+    applyAgentRuntimeState(runtimeState);
+    return runtimeState;
+  }, [applyAgentRuntimeState]);
+
   // System prompt is runtime-only agent state (never persisted to the .jsonl),
   // so the top bar can only show it while the RPC wrapper is alive. Pull it at
   // every turn start (agent_start) instead of waiting for agent_end, and again
@@ -500,7 +560,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     switch (event.type) {
       case "agent_start":
-        setAgentRunning(true);
+        setAgentRunningSync(true);
+        setCompactingSync(false);
         setAgentPhase({ kind: "waiting_model" });
         dispatch({ type: "start" });
         statsEmitRef.current?.({ type: "reset" });
@@ -513,7 +574,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setBaselineBot();
         break;
       case "agent_end":
-        setAgentRunning(false);
+        setAgentRunningSync(false);
+        setCompactingSync(false);
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
@@ -740,7 +802,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // Emitted by rpc-manager when the inner prompt() rejects (missing
         // API key, unregistered model, etc.) before agent_start fires.
         // Reset local running state so the UI isn't stuck mid-turn.
-        setAgentRunning(false);
+        setAgentRunningSync(false);
+        setCompactingSync(false);
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
@@ -813,19 +876,29 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // chat shows the loading row. compaction_end clears it.
       case "compaction_start":
       case "auto_compaction_start":
-        setAgentRunning(true);
+        setAgentRunningSync(true);
+        setCompactingSync(true);
         setAgentPhase({ kind: "compacting" });
         break;
       case "compaction_end":
-      case "auto_compaction_end":
-        setAgentRunning(false);
-        setAgentPhase(null);
-        if (event.errorMessage) {
+      case "auto_compaction_end": {
+        const willRetry = event.willRetry === true;
+        setCompactingSync(false);
+        if (willRetry) {
+          setAgentRunningSync(true);
+          setAgentPhase({ kind: "waiting_model" });
+        } else {
+          setAgentRunningSync(false);
+          setAgentPhase(null);
+          dispatch({ type: "end" });
+        }
+        if (event.errorMessage && !compactInFlightRef.current) {
           toast.show({ kind: "error", message: event.errorMessage as string });
         } else if (!event.aborted) {
           if (sessionIdRef.current) loadSession(sessionIdRef.current);
         }
         break;
+      }
       // Pi re-emits this whenever the agent's thinking level actually
       // changes — including the implicit clamp that fires inside
       // `setModel` when the new model doesn't support the previous
@@ -847,7 +920,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     if (!message.trim() && !images?.length) return;
-    if (agentRunning) return;
+    if (agentRunningRef.current) return;
     // New-session page with no cwd picked yet — can't create a session.
     if (isNew && !newSessionCwd) {
       toast.show({ kind: "error", message: t("Select a project first") });
@@ -863,7 +936,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, userMsg]);
-    setAgentRunning(true);
+    setAgentRunningSync(true);
+    setCompactingSync(false);
     setAgentPhase({ kind: "waiting_model" });
     dispatch({ type: "start" });
     pendingScrollToUserRef.current = true;
@@ -928,11 +1002,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } catch (e) {
       console.error("Failed to send message:", e);
       toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to send message") });
-      setAgentRunning(false);
+      setAgentRunningSync(false);
+      setCompactingSync(false);
       setAgentPhase(null);
       dispatch({ type: "end" });
     }
-  }, [isNew, newSessionCwd, newSessionModel, toolSelection, thinkingLevel, session, agentRunning, connectEvents, onSessionCreated, refreshSystemPrompt, t, toast]);
+  }, [isNew, newSessionCwd, newSessionModel, toolSelection, thinkingLevel, session, connectEvents, onSessionCreated, refreshSystemPrompt, setAgentRunningSync, setCompactingSync, t, toast]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -1064,24 +1139,111 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     container.scrollTo({ top: elAbsTop - 16, behavior: "smooth" });
   }, []);
 
+  // Manual compaction lifecycle. Lives in the hook so all the related state
+  // (busy flag, agentPhase, SSE subscription, post-RPC reload) is owned in
+  // one place — the previous ChatWindow-local implementation relied on SSE
+  // to refresh the UI, but idle sessions don't keep an EventSource open, so
+  // the divider + tree card would never render until the user switched tabs.
+  // This implementation:
+  //   1. Refuses early if anything is already running (including compact) so
+  //      a double-click can't dispatch two compactions in the same tick.
+  //   2. Sets busy + phase synchronously (ref + state) so the toolbar
+  //      disables, the input locks, and any subsequent click is a no-op.
+  //   3. Ensures the SSE stream is open before posting — guarantees we
+  //      receive compaction_start / compaction_end even if the request races
+  //      a fresh chat session.
+  //   4. On RPC success, unconditionally reloads from disk regardless of
+  //      whether the SSE end event arrived (which can be lost on idle tabs
+  //      whose EventSource hadn't been opened).
+  //   5. Always clears busy state in `finally`, so a server rejection or
+  //      network error doesn't strand the UI in "compacting" forever.
+  const handleCompact = useCallback(async (focus: string) => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    if (agentRunningRef.current || compactInFlightRef.current) {
+      toast.show({ kind: "error", message: t("Wait for the current turn to end before compacting.") });
+      return;
+    }
+    compactInFlightRef.current = true;
+    setAgentRunningSync(true);
+    setCompactingSync(true);
+    setAgentPhase({ kind: "compacting" });
+    connectEvents(sid);
+
+    const customInstructions = focus.trim() ? focus : undefined;
+    try {
+      await sendAgentCommand(sid, {
+        type: "compact",
+        ...(customInstructions ? { customInstructions } : {}),
+      });
+      const tokensBefore = (() => {
+        // Pi didn't return tokensBefore on success; fall back to refetching
+        // the live session so the toast and divider can show the latest
+        // numbers after the RPC resolves.
+        return 0;
+      })();
+      toast.show({
+        kind: "success",
+        message: t("Compacted {n} tokens", { n: tokensBefore.toLocaleString() }),
+      });
+      // Reload from disk so the visible message list, compaction divider,
+      // and conversation-tree card all reflect the new compaction entry
+      // even if the SSE compaction_end event was missed.
+      await loadSession(sid);
+    } catch (error) {
+      console.error("Manual compact failed:", error);
+      toast.show({
+        kind: "error",
+        message: `${t("Compact failed")}: ${
+          error instanceof Error && error.message ? error.message : t("Network error")
+        }`,
+      });
+      // Refresh runtime state — if the server rejected because compaction
+      // was already running, surface its real phase so the UI isn't stuck
+      // on the optimistic "compacting" badge.
+      try { await refreshAgentRuntimeState(sid); } catch { /* best-effort */ }
+    } finally {
+      compactInFlightRef.current = false;
+      setCompactingSync(false);
+      if (!agentRunningRef.current) {
+        setAgentRunningSync(false);
+        setAgentPhase(null);
+      }
+    }
+  }, [
+    connectEvents,
+    loadSession,
+    refreshAgentRuntimeState,
+    setAgentRunningSync,
+    setCompactingSync,
+    t,
+    toast,
+  ]);
+
   // Load session on mount
   useEffect(() => {
     if (session) {
       sessionIdRef.current = session.id;
       loadSession(session.id, true, true).then(async (agentState) => {
-        if (agentState?.running) {
-          if (agentState.state?.isStreaming) {
-            setAgentRunning(true);
-            setAgentPhase({ kind: "waiting_model" });
-            connectEvents(session.id);
-          }
+        applyAgentRuntimeState(agentState);
+        // Connect SSE whenever the wrapper is alive and reporting any kind
+        // of busyness — streaming, compacting, or a generic "running" flag.
+        // Without this, a page refresh in the middle of a manual compact
+        // leaves the UI idle (no EventSource open) and silently drops the
+        // compaction_end event that would have refreshed the chat stream.
+        const live = agentState?.state;
+        if (
+          agentState?.running === true ||
+          live?.isRunning === true ||
+          live?.isCompacting === true ||
+          live?.isStreaming === true ||
+          live?.phase === "compacting" ||
+          live?.phase === "streaming"
+        ) {
+          connectEvents(session.id);
         }
-        if (agentState?.state) {
-          if (agentState.state.contextUsage !== undefined) setContextUsage(agentState.state.contextUsage ?? null);
-          if (agentState.state.systemPrompt !== undefined) setSystemPrompt(agentState.state.systemPrompt ?? null);
-          // thinkingLevel was already migrated + applied inside loadSession
-          // (handles the legacy "auto" sentinel against the current model).
-        }
+        // thinkingLevel was already migrated + applied inside loadSession
+        // (handles the legacy "auto" sentinel against the current model).
 
         // If a specific entry was requested via search, navigate to it
         const targetEntryId = scrollToEntryIdRef.current;
@@ -1205,7 +1367,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef, userJustSentRef,
     // Actions
     handleSend, handleAbort, handleNavigate, handleModelChange,
-    handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange, setActiveLeafId, setData, setMessages,
+    handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
+    handleCompact,
+    setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning,
     // Subscriptions
     handleAgentEventRef,

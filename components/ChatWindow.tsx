@@ -326,10 +326,12 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const toast = useToast();
   const [slashResources, setSlashResources] = useState<SlashResource[]>([]);
   const [isExporting, setIsExporting] = useState(false);
-  // Manual compaction: dialog open flag + RPC-in-flight flag. Mirrors the
-  // export pattern so the two stay consistent.
+  // Manual compaction: dialog open flag. The actual lifecycle (RPC,
+  // SSE subscription, post-RPC reload, busy cleanup) is owned by
+  // useAgentSession so an idle session without an open EventSource still
+  // refreshes its chat stream after a successful compact. ChatWindow
+  // only renders the dialog and forwards the confirm.
   const [compactDialogOpen, setCompactDialogOpen] = useState(false);
-  const [isCompacting, setIsCompacting] = useState(false);
 
   // ── Auto-name scheduling for brand-new sessions ──────────────────────
   // The first assistant message of a new session lands only after pi lazily
@@ -387,6 +389,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     lastUserMsgRef, userJustSentRef,
     handleSend, handleAbort, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
+    handleCompact,
     userMessageHistory,
     activeLeafId, currentSessionId,
     inFlightToolResults,
@@ -519,52 +522,20 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     }
   }, [currentSessionId, activeLeafId, locale, isExporting, t, toast]);
 
-  // ── Manual compaction: gate on !agentRunning, send `compact` over RPC,
-  // and surface the result via toast. Mirrors pi TUI's `/compact [focus]`.
-  // Pi's kernel does the heavy lifting (abort in-progress agent run,
-  // generate the summary, append the JSONL entry, rebuild context). The
-  // handler is intentionally blocking so we can report success / failure
-  // synchronously — the SSE `compaction_end` event already triggers a
-  // session reload in useAgentSession.
+  // ── Manual compaction lifecycle lives in useAgentSession (see
+  // handleCompact). ChatWindow only opens/closes the dialog and forwards
+  // the confirm; the hook guarantees SSE connection, busy state, explicit
+  // reload on success, and busy cleanup on failure, so a compact against
+  // an idle session whose EventSource was never open still renders the
+  // compaction divider + tree card without a manual reload.
   const handleCompactConfirm = useCallback(
     async (focus: string) => {
       if (!currentSessionId) return;
-      if (agentRunning) {
-        // Defense-in-depth: the dialog button itself is disabled, but if
-        // a turn started between the open and the confirm, bail with a
-        // friendly toast instead of aborting the in-flight turn.
-        toast.show({ kind: "error", message: t("Wait for the current turn to end before compacting.") });
-        setCompactDialogOpen(false);
-        return;
-      }
-      setIsCompacting(true);
-      try {
-        const result = (await sendAgentCommand<{
-          summary?: unknown;
-          tokensBefore?: unknown;
-        }>(currentSessionId, {
-          type: "compact",
-          customInstructions: focus.length > 0 ? focus : undefined,
-        })) ?? {};
-        const tokensBefore = typeof result.tokensBefore === "number" ? result.tokensBefore : 0;
-        toast.show({
-          kind: "success",
-          message: t("Compacted {n} tokens", { n: tokensBefore.toLocaleString() }),
-        });
-        setCompactDialogOpen(false);
-      } catch (error) {
-        toast.show({
-          kind: "error",
-          message: `${t("Compact failed")}: ${
-            error instanceof Error && error.message ? error.message : t("Network error")
-          }`,
-        });
-        // Leave the dialog open so the user can retry with the same focus.
-      } finally {
-        setIsCompacting(false);
-      }
+      if (agentRunning || compactDialogOpen === false) return;
+      setCompactDialogOpen(false);
+      await handleCompact(focus);
     },
-    [currentSessionId, agentRunning, t, toast],
+    [currentSessionId, agentRunning, handleCompact, compactDialogOpen],
   );
 
   const handleCompactClick = useCallback(() => {
@@ -577,9 +548,9 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   }, [currentSessionId, agentRunning, t, toast]);
 
   const handleCompactCancel = useCallback(() => {
-    if (isCompacting) return;
+    if (agentPhase?.kind === "compacting") return;
     setCompactDialogOpen(false);
-  }, [isCompacting]);
+  }, [agentPhase]);
 
   // Running summary for the vertical toolbar badge
   const runningSummary = agentPhase?.kind === "running_tools" && agentPhase.tools.length > 0
@@ -832,13 +803,18 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const renderEntryTimestamps = replayActive ? entryTimestamps.slice(0, replayIndex) : entryTimestamps;
 
   // Map each compaction point's first-kept-message entry id → the point, so
-  // the chat list can insert a divider right before that message.
-  const dividerBefore = useMemo(() => {
+  // the chat list can insert a divider right before that message. Points
+  // with no `beforeMessageEntryId` are tail-markers (compaction landed at
+  // the end of the visible path with no new messages after it) and get
+  // rendered as a trailing divider below the message list.
+  const { dividerBefore, trailingCompactionPoints } = useMemo(() => {
     const m = new Map<string, CompactionPoint>();
+    const tail: CompactionPoint[] = [];
     for (const p of compactionPoints) {
       if (p.beforeMessageEntryId) m.set(p.beforeMessageEntryId, p);
+      else tail.push(p);
     }
-    return m;
+    return { dividerBefore: m, trailingCompactionPoints: tail };
   }, [compactionPoints]);
 
   // Per-turn duration map: keyed by the index of the LAST assistant message of
@@ -1118,7 +1094,8 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     // is purely UI; we also refuse to dispatch while `agentRunning` is
     // true, so the click handler is a no-op defense-in-depth.
     compactVisible: Boolean(session) && !agentRunning,
-    isCompacting,
+    isCompacting: agentPhase?.kind === "compacting",
+    compactDisabled: agentRunning,
   }), [
     openReplay,
     streamState.isStreaming,
@@ -1131,7 +1108,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     canAutoName,
     isAutoNaming,
     handleCompactClick,
-    isCompacting,
+    agentPhase,
   ]);
 
   useEffect(() => {
@@ -1201,6 +1178,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         onSend={handleSend}
         onAbort={handleAbort}
         isStreaming={agentRunning}
+        sessionBusy={agentRunning}
         model={displayModelValue}
         modelNames={modelNames}
         modelIcons={modelIcons}
@@ -1600,6 +1578,14 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
               <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} modelIcons={modelIcons} />
             )}
 
+            {/* Trailing compaction dividers — points whose `beforeMessageEntryId`
+                doesn't exist yet (compaction just landed at the tail). Renders
+                after the last message so a freshly compacted session shows
+                the marker immediately, before the next user prompt. */}
+            {trailingCompactionPoints.map((point) => (
+              <CompactionDivider key={`comp-tail-${point.entryId}`} point={point} />
+            ))}
+
             {agentRunning && !streamState.streamingMessage && (
               <div className="py-2">
                 <LoadingState label={phaseLabel(agentPhase, t)} />
@@ -1727,7 +1713,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
       {/* Manual compaction dialog — mirrors pi TUI's `/compact [focus]`. */}
       <CompactDialog
         open={compactDialogOpen}
-        busy={isCompacting}
+        busy={agentPhase?.kind === "compacting"}
         onCancel={handleCompactCancel}
         onConfirm={handleCompactConfirm}
       />
