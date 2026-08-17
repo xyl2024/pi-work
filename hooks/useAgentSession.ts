@@ -11,11 +11,19 @@ import { usePendingPermissionsRef } from "./usePendingPermissions";
 import { setShowFileResult, resetShowFileResults } from "./showFileResultsStore";
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
 import { AGENT_TODO_TOOL_NAME } from "@/lib/agent-todo-tool-types";
+import { notifyMutated } from "@/lib/git-status-store";
 import { setSessionUiState, setLeafChangeHandler } from "./sessionUiStore";
 import { setGrokbotConfig } from "@/lib/grokbot-store";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/thinking-level-utils";
 import { setPendingAskUserQuestions } from "./askUserQuestionsStore";
 import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
+
+// Pi's runtime tool names (from @earendil-works/pi-coding-agent). Any tool
+// that can mutate the worktree belongs here so `useAgentSession` can poke
+// the git-status store the moment one of them finishes — replacing the
+// old 3s poll loop. Mirrors how `AGENT_TODO_TOOL_NAME` flags the
+// agent_todo refresh below.
+const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
 
 // Sidebar Pi Bot: discrete reactions (waking/suspicious/happy) only
 // flash for BOT_REVERT_MS, then snap back to the daily "searching" loop.
@@ -750,6 +758,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const toolNameForEnd = toolCallNameRef.current.get(id);
         if (toolNameForEnd === AGENT_TODO_TOOL_NAME) {
           setAgentTodoRefreshKey((key) => key + 1);
+        }
+        // edit/write may have just changed the worktree — poke the git-
+        // status store so FileExplorer badges refresh without waiting for
+        // a poll (we no longer poll). `notifyMutated` is a no-op when the
+        // store isn't tracking this cwd, e.g. the explorer is collapsed or
+        // showing a different project's tree. No-op for sessions that
+        // don't yet have a cwd (brand-new session page before the user
+        // picks a project).
+        if (toolNameForEnd && WORKTREE_MUTATING_TOOL_NAMES.has(toolNameForEnd)) {
+          const gitCwd = session?.cwd ?? newSessionCwd;
+          if (gitCwd) notifyMutated(gitCwd);
         }
         if (toolNameForEnd && isShowFileToolName(toolNameForEnd) && result?.details) {
           const files = (result.details as { files?: unknown }).files;

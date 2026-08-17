@@ -27,10 +27,11 @@ const log = createLogger("git-diff");
 const GIT_TIMEOUT_MS = 10_000;
 /** TTL for the getRepoRoot cache; same 5s window as getAllowedRoots. */
 const REPO_ROOT_TTL_MS = 5_000;
-/** TTL for the full getRepoStatus response cache. Sits between the
- *  FileExplorer's 3s poll interval and the cost of `git status` on big
- *  repos — long enough to dedupe concurrent polls, short enough that
- *  status is never more than 2s stale when read from cache. */
+/** TTL for the full getRepoStatus response cache. The frontend now
+ *  refetches on edit/write tool events instead of polling, but bursts of
+ *  consecutive edits still hit the same cwd in quick succession; this
+ *  cache collapses them into one `git status` invocation per 2s window
+ *  per cwd, and keeps status fresh when reads land in the same window. */
 const REPO_STATUS_TTL_MS = 2_000;
 
 /** Cap on a single file's diff output; anything larger is truncated and

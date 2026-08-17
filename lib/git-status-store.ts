@@ -8,17 +8,24 @@
  * equality guarded patches so re-renders only fire when the visible
  * status actually changes.
  *
- * Polling lifecycle is owned by the store: callers call `startTracking(cwd)`
+ * Lifecycle is owned by the store: callers call `startTracking(cwd)`
  * when they want live updates (FileExplorer on mount / cwd change) and
  * `stopTracking()` when the consumer is no longer visible (explorer
- * collapsed). `notifyMutated(cwd)` is called from anywhere that knows
- * the worktree may have just changed (FileExplorer after a write/delete
- * via the existing `onFileMutated` hook); it triggers an immediate
- * refetch and reschedules the next tick.
+ * collapsed). `startTracking` does an initial fetch on mount so the
+ * explorer paints the current state immediately.
+ *
+ * Live updates are event-driven, not polled: `notifyMutated(cwd)` is
+ * called from anywhere that knows the worktree may have just changed —
+ * FileExplorer after a manual write/delete/rename, and `useAgentSession`
+ * after each `edit` / `write` tool execution ends. It triggers an
+ * immediate refetch. No recurring timer; the previous 3s poll loop was
+ * removed because edit/write events cover the agent-driven case and the
+ * server-side `__piRepoStatusCache` already dedupes bursts.
  *
  * The store deliberately keeps status entries across session switches:
  * switching from cwd A to cwd B and back leaves A's badges cached, so
- * FileExplorer paints them instantly rather than waiting up to 3s.
+ * FileExplorer paints them instantly rather than waiting for the next
+ * mutation event.
  */
 
 import { useSyncExternalStore } from "react";
@@ -48,14 +55,11 @@ const EMPTY: GitStatusStoreState = {
 let state: GitStatusStoreState = EMPTY;
 const listeners = new Set<() => void>();
 
-/** 3s matches the cadence we agreed on in the design grill. */
-const POLL_INTERVAL_MS = 3_000;
 /** Hard cap on a single /api/git round-trip. The server-side cache is
  *  2s, so a stale request usually resolves within a second; this cap
- *  exists to prevent a wedged server from holding the poll loop forever. */
+ *  exists to prevent a wedged server from holding the refetch forever. */
 const FETCH_TIMEOUT_MS = 10_000;
 
-let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let fetchAbort: AbortController | null = null;
 
 function emit() {
@@ -94,9 +98,10 @@ export function useGitStatusStore(): GitStatusStoreState {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
-// ── Polling lifecycle ─────────────────────────────────────────────────────
+// ── Event-driven lifecycle ──────────────────────────────────────────────────
 
-/** Begin polling `cwd`. Idempotent if cwd is already the current one. */
+/** Begin tracking `cwd`: do an initial fetch so the explorer paints the
+ *  current state immediately. Idempotent if cwd is already the current one. */
 export function startTracking(cwd: string): void {
   if (state.currentCwd === cwd) return;
 
@@ -106,25 +111,17 @@ export function startTracking(cwd: string): void {
     fetchAbort.abort();
     fetchAbort = null;
   }
-  if (pollTimer) {
-    clearTimeout(pollTimer);
-    pollTimer = null;
-  }
 
   patch({ currentCwd: cwd });
 
   // Always fetch — even when there's a cached entry — so a long pause
   // between sessions doesn't leave the user looking at stale badges.
   void fetchAndStore(cwd);
-  scheduleNextTick(cwd);
 }
 
-/** Pause polling. Cached entries are retained for instant resume. */
+/** Pause tracking. Cached entries are retained for instant resume on the
+ *  next `startTracking`. Cancels any in-flight fetch. */
 export function stopTracking(): void {
-  if (pollTimer) {
-    clearTimeout(pollTimer);
-    pollTimer = null;
-  }
   if (fetchAbort) {
     fetchAbort.abort();
     fetchAbort = null;
@@ -133,30 +130,22 @@ export function stopTracking(): void {
 }
 
 /** Tell the store the worktree may have just changed for `cwd`. Triggers
- *  an immediate refetch and reschedules the next tick to be 3s from now.
- *  No-op for non-active cwds (their consumers aren't rendering anyway). */
+ *  an immediate refetch. No-op for non-active cwds (their consumers aren't
+ *  rendering anyway). Called from:
+ *    - FileExplorer after a manual write/delete/rename (via onFileMutated),
+ *    - useAgentSession after each `edit` / `write` tool execution ends.
+ *  Bursts (multiple edits in quick succession) are collapsed by the
+ *  in-flight abort + the server-side `__piRepoStatusCache` (2s TTL). */
 export function notifyMutated(cwd: string): void {
   if (state.currentCwd !== cwd) return;
   void fetchAndStore(cwd);
-  scheduleNextTick(cwd);
-}
-
-function scheduleNextTick(cwd: string) {
-  if (pollTimer) {
-    clearTimeout(pollTimer);
-    pollTimer = null;
-  }
-  pollTimer = setTimeout(() => {
-    if (state.currentCwd !== cwd) return; // cwd changed mid-flight
-    void fetchAndStore(cwd);
-    scheduleNextTick(cwd);
-  }, POLL_INTERVAL_MS);
 }
 
 async function fetchAndStore(cwd: string): Promise<void> {
   // Cancel any in-flight fetch — only one request per cwd at a time.
-  // When notifyMutated fires within ms of a scheduled tick, this dedupes
-  // them so we never run git status back-to-back.
+  // When notifyMutated fires within ms of the previous one (e.g. the
+  // agent emits a burst of edit/write calls), this dedupes them so we
+  // never run git status back-to-back.
   if (fetchAbort) {
     fetchAbort.abort();
   }
