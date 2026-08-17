@@ -138,6 +138,9 @@ interface FetchState {
   time: SummarizeResult | null;
   model: SummarizeResult | null;
   session: SummarizeResult | null;
+  /** sessionId → human-readable name (only sessions that have a non-empty
+   *  `session_info` entry are mapped; everything else falls back to id). */
+  sessionNames: Map<string, string>;
 }
 
 export function TokensPanel() {
@@ -149,26 +152,35 @@ export function TokensPanel() {
     time: null,
     model: null,
     session: null,
+    sessionNames: new Map(),
   });
 
   const timeGroupBy: "hour" | "day" = range === "today" ? "hour" : "day";
 
   const reload = useCallback(async () => {
     try {
-      const [timeRes, modelRes, sessionRes] = await Promise.all([
+      const [timeRes, modelRes, sessionRes, sessionsRes] = await Promise.all([
         fetch(`/api/token-audit/summary?range=${range}&groupBy=${timeGroupBy}`),
         fetch(`/api/token-audit/summary?range=${range}&groupBy=model`),
         fetch(`/api/token-audit/summary?range=${range}&groupBy=session`),
+        // Large limit so the map covers every session that could appear in
+        // the Top-sessions chart. The list endpoint already caches for 5s.
+        fetch(`/api/sessions?limit=10000`),
       ]);
-      if (!timeRes.ok || !modelRes.ok || !sessionRes.ok) {
-        throw new Error(`HTTP ${timeRes.status}/${modelRes.status}/${sessionRes.status}`);
+      if (!timeRes.ok || !modelRes.ok || !sessionRes.ok || !sessionsRes.ok) {
+        throw new Error(`HTTP ${timeRes.status}/${modelRes.status}/${sessionRes.status}/${sessionsRes.status}`);
       }
-      const [time, model, session] = (await Promise.all([
+      const [time, model, session, sessionsData] = (await Promise.all([
         timeRes.json(),
         modelRes.json(),
         sessionRes.json(),
-      ])) as [SummarizeResult, SummarizeResult, SummarizeResult];
-      setState({ time, model, session });
+        sessionsRes.json(),
+      ])) as [SummarizeResult, SummarizeResult, SummarizeResult, { sessions?: Array<{ id: string; name?: string }> }];
+      const sessionNames = new Map<string, string>();
+      for (const s of sessionsData.sessions ?? []) {
+        if (s.name && s.name.trim()) sessionNames.set(s.id, s.name);
+      }
+      setState({ time, model, session, sessionNames });
     } catch (e) {
       toast.show({ kind: "error", message: `${t("Failed to load token audit")}: ${String(e)}` });
     }
@@ -223,7 +235,7 @@ export function TokensPanel() {
             <CacheHitRateChart range={range} buckets={state.time?.buckets ?? []} />
           </ChartCard>
           <ChartCard title={t("Top sessions by cost")}>
-            <TopSessionsChart buckets={state.session?.buckets.slice(0, 10) ?? []} />
+            <TopSessionsChart buckets={state.session?.buckets.slice(0, 10) ?? []} sessionNames={state.sessionNames} />
           </ChartCard>
         </div>
       </div>
@@ -657,13 +669,20 @@ function CacheHitRateChart({ range, buckets }: { range: Range; buckets: SummaryB
   return <EchartsChart option={option} height={220} ariaLabel={t("Cache hit rate")} />;
 }
 
-function TopSessionsChart({ buckets }: { buckets: SummaryBucket[] }) {
+function TopSessionsChart({ buckets, sessionNames }: { buckets: SummaryBucket[]; sessionNames: Map<string, string> }) {
   const { t } = useI18n();
   const theme = useChartTheme();
   const { formatCost } = useFormatCurrency();
   const option = useMemo<echarts.EChartsCoreOption>(() => {
     if (buckets.length === 0) return emptyBars(theme, t("No token usage recorded yet."));
     const sorted = [...buckets].sort((a, b) => b.costTotal - a.costTotal);
+    // Prefer the human-readable session name (set via /rename or auto-name);
+    // fall back to the sessionId for never-renamed sessions or when the
+    // /api/sessions fetch failed before this map was populated.
+    const displayName = (id: string): string => {
+      const n = sessionNames.get(id);
+      return n && n.trim() ? n : id;
+    };
     return {
       animation: false,
       grid: { left: 12, right: 60, top: 8, bottom: 8, containLabel: true },
@@ -679,7 +698,7 @@ function TopSessionsChart({ buckets }: { buckets: SummaryBucket[] }) {
       },
       yAxis: {
         type: "category",
-        data: sorted.map((b) => shortLabel(b.key, 18)).reverse(),
+        data: sorted.map((b) => shortLabel(displayName(b.key), 18)).reverse(),
         axisLine: { lineStyle: { color: theme.axis } },
         axisLabel: { color: theme.text, fontSize: 10, fontFamily: "var(--font-mono)" },
       },
@@ -691,7 +710,7 @@ function TopSessionsChart({ buckets }: { buckets: SummaryBucket[] }) {
         },
       ],
     };
-  }, [buckets, theme, t, formatCost]);
+  }, [buckets, theme, t, formatCost, sessionNames]);
   return <EchartsChart option={option} height={260} ariaLabel={t("Top sessions by cost")} />;
 }
 
