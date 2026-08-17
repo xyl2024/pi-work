@@ -7,26 +7,77 @@ import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Tooltip } from "./Tooltip";
 
 /**
- * Compact one-liner showing the cumulative token + cost totals for the
- * active leaf path of the current session. Rendered alongside
- * `ContextUsageBar` in the chat top bar (see `components/AppShell.tsx`).
+ * Compact stats strip for the chat top bar.
  *
- * Source of truth is `sessionStats` in `sessionUiStore`, which is filled
- * by `useAgentSession` once any assistant message has produced a usage
- * block. Until then the whole strip is hidden — empty state is no strip.
+ * Shown only once `useAgentSession` has populated `sessionStats` with at
+ * least one assistant `usage` block. Each stat is rendered as a tiny
+ * icon (10×10 stroke) + compact-rounded number; `cost` keeps its full
+ * currency-formatted text since `formatCost` already prefixes the
+ * `$`/`¥` symbol.
  *
- * - input / output are summed across all assistant messages in the leaf
- *   path (matches what every per-message hover label already shows, just
- *   aggregated).
- * - cached% is **weighted** (Σ cacheRead / Σ (input + cacheRead)) — a
- *   simple arithmetic mean would skew toward the noisy tail; see the
- *   sessionStats IIFE for the rationale.
- * - cost is omitted entirely when 0, to avoid a dangling "$0.0000" on
- *   models without pricing configured.
+ * Layout: in · out · cache% · cost, separated by `·` to keep a single
+ * inline line. All short numbers round to 2 significant figures
+ * (see `compactNumber`); the full-precision values live in the tooltip
+ * with translated labels so the cursor-on-hover crowd still gets exact
+ * counts.
  *
- * Updates on each `message_end` — not during streaming — so the strip
+ * - `cachedHitRate` is weighted across the active leaf path
+ *   (Σ cacheRead / Σ (input + cacheRead)); 0% is rendered as "0%" rather
+ *   than hidden so the strip stays a stable width when a provider
+ *   doesn't report caching.
+ * - `cost` is omitted entirely when 0 — the whole `.cost` segment hides,
+ *   so models without pricing don't leave a dangling "$0".
+ *
+ * Updates on each `message_end` (not during streaming) so the strip
  * stays visually stable while tokens are still flowing in.
  */
+function compactNumber(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) {
+    const v = n / 1_000_000;
+    return `${v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (abs >= 1_000) {
+    const v = n / 1_000;
+    return `${v >= 10 ? v.toFixed(0) : v.toFixed(1).replace(/\.0$/, "")}k`;
+  }
+  return String(n);
+}
+
+const ICON_SIZE = 10;
+const ICON_STROKE = 1.6;
+
+function ArrowDown() {
+  // downward arrow = tokens flowing IN to the context window
+  return (
+    <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <polyline points="6 13 12 19 18 13" />
+    </svg>
+  );
+}
+
+function ArrowUp() {
+  // upward arrow = tokens flowing OUT of the context window
+  return (
+    <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <line x1="12" y1="19" x2="12" y2="5" />
+      <polyline points="6 11 12 5 18 11" />
+    </svg>
+  );
+}
+
+function Refresh() {
+  // circular arrow = cached prompt reuse
+  return (
+    <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path d="M21 12a9 9 0 1 1-3.5-7.1" />
+      <polyline points="21 4 21 10 15 10" />
+    </svg>
+  );
+}
+
 export function SessionTokenTotals() {
   const { t } = useI18n();
   const stats = useSessionUiState().sessionStats;
@@ -34,22 +85,27 @@ export function SessionTokenTotals() {
 
   const formatted = useMemo(() => {
     if (!stats) return null;
-    const inFmt = stats.tokens.input.toLocaleString();
-    const outFmt = stats.tokens.output.toLocaleString();
-    // cached% is undefined until the denominator is meaningful; render
-    // "0.0% cached" for providers that never report caching.
-    const hitPct = ((stats.cachedHitRate ?? 0) * 100).toFixed(1);
-    const parts = [`${inFmt} ${t("in")}`, `${outFmt} ${t("out")}`, `${hitPct}% ${t("cache")}`];
-    if (stats.cost && stats.cost > 0) {
-      parts.push(formatCost(stats.cost));
-    }
-    return parts;
-  }, [stats, t, formatCost]);
+    const inShort = compactNumber(stats.tokens.input);
+    const outShort = compactNumber(stats.tokens.output);
+    const cachePct = ((stats.cachedHitRate ?? 0) * 100).toFixed(0);
+    return {
+      inShort, outShort, cachePct,
+      hasCost: stats.cost !== undefined && stats.cost > 0,
+      costShort: stats.cost && stats.cost > 0 ? formatCost(stats.cost) : "",
+    };
+  }, [stats, formatCost]);
 
   if (!formatted) return null;
 
-  const [inStr, outStr, cacheStr, costStr] = formatted;
-  const tooltipText = [inStr, outStr, cacheStr, costStr].filter(Boolean).join(" · ");
+  // Tooltip: full precision. Lines instead of separators so each label is
+  // right-aligned-translatable without layout shifting.
+  const tooltipText = [
+    `${t("Input tokens")}: ${stats!.tokens.input.toLocaleString()}`,
+    `${t("Output tokens")}: ${stats!.tokens.output.toLocaleString()}`,
+    `${t("Cache hit rate")}: ${((stats!.cachedHitRate ?? 0) * 100).toFixed(1)}%`,
+  ].concat(formatted.hasCost ? [`${t("Cost")}: ${formatted.costShort}`] : []).join("\n");
+
+  const sep = <span style={{ color: "var(--text-dim)", fontSize: 11 }}>·</span>;
 
   return (
     <Tooltip content={tooltipText}>
@@ -59,23 +115,32 @@ export function SessionTokenTotals() {
           flexShrink: 0,
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: 6,
           padding: "6px 10px 4px",
           fontSize: 12,
           fontVariantNumeric: "tabular-nums",
           whiteSpace: "nowrap",
-          color: "var(--text)",
+          color: "var(--text-muted)",
         }}
       >
-        <span style={{ color: "var(--text-dim)" }}>{inStr}</span>
-        <span style={{ color: "var(--text-dim)", fontSize: 11 }}>·</span>
-        <span style={{ color: "var(--text-dim)" }}>{outStr}</span>
-        <span style={{ color: "var(--text-dim)", fontSize: 11 }}>·</span>
-        <span style={{ color: "var(--text-dim)" }}>{cacheStr}</span>
-        {costStr && (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--text-muted)" }}>
+          <ArrowDown />
+          {formatted.inShort}
+        </span>
+        {sep}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--text-muted)" }}>
+          <ArrowUp />
+          {formatted.outShort}
+        </span>
+        {sep}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--text-muted)" }}>
+          <Refresh />
+          {formatted.cachePct}%
+        </span>
+        {formatted.hasCost && (
           <>
-            <span style={{ color: "var(--text-dim)", fontSize: 11 }}>·</span>
-            <span style={{ color: "var(--accent)" }}>{costStr}</span>
+            {sep}
+            <span style={{ color: "var(--accent)", fontWeight: 500 }}>{formatted.costShort}</span>
           </>
         )}
       </div>
