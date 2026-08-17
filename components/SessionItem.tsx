@@ -13,8 +13,6 @@ interface SessionItemProps {
   onClick: () => void;
   onRenamed?: () => void;
   onDeleted?: (id: string) => void;
-  isPinned?: boolean;
-  onTogglePin?: () => void;
   isFavorited?: boolean;
   onToggleFavorite?: () => void;
   /**
@@ -33,8 +31,6 @@ export function SessionItem({
   onClick,
   onRenamed,
   onDeleted,
-  isPinned = false,
-  onTogglePin,
   isFavorited = false,
   onToggleFavorite,
   hasPendingQuestion = false,
@@ -311,14 +307,6 @@ export function SessionItem({
             overflow: "hidden",
           }}
         >
-          {/* Static pinned indicator — visible without hover so users can see pinned state at a glance */}
-          {isPinned && (
-            <span aria-hidden style={{ display: "flex", alignItems: "center", flexShrink: 0 }} title={t("Pinned sessions")}>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="var(--accent)" stroke="none">
-                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2Z" />
-              </svg>
-            </span>
-          )}
           {/* Static favorited indicator — visible without hover */}
           {isFavorited && (
             <span aria-hidden style={{ display: "flex", alignItems: "center", flexShrink: 0 }} title={t("Favorites")}>
@@ -442,30 +430,22 @@ export function SessionItem({
             pointerEvents: menuVisible ? "auto" : "none",
           }}
         >
-          {onTogglePin && (
-            <MenuRow
-              index={0}
-              icon={<PinIcon filled={isPinned} />}
-              label={isPinned ? t("Unpin session") : t("Pin session")}
-              onClick={() => handleMenuItem(onTogglePin)}
-            />
-          )}
           {onToggleFavorite && (
             <MenuRow
-              index={onTogglePin ? 1 : 0}
+              index={0}
               icon={<StarIcon filled={isFavorited} />}
               label={isFavorited ? t("Unfavorite session") : t("Favorite session")}
               onClick={() => handleMenuItem(onToggleFavorite)}
             />
           )}
           <MenuRow
-            index={(onTogglePin ? 1 : 0) + (onToggleFavorite ? 1 : 0)}
+            index={onToggleFavorite ? 1 : 0}
             icon={<PencilIcon />}
             label={t("Rename")}
             onClick={() => handleMenuItem(beginRename)}
           />
           <MenuRow
-            index={(onTogglePin ? 1 : 0) + (onToggleFavorite ? 1 : 0) + 1}
+            index={(onToggleFavorite ? 1 : 0) + 1}
             icon={<TrashIcon />}
             label={t("Delete")}
             destructive
@@ -518,14 +498,6 @@ function MenuRow({
       </span>
       <span style={{ flex: 1 }}>{label}</span>
     </div>
-  );
-}
-
-function PinIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2Z" />
-    </svg>
   );
 }
 

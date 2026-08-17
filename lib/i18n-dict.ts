@@ -317,9 +317,6 @@ export const ZH_TRANSLATIONS = {
   "Save": "保存",
   "Pinned": "已固定",
   "Recent": "最近使用",
-  "Pin session": "置顶会话",
-  "Unpin session": "取消置顶",
-  "Pinned sessions": "已置顶会话",
   // Multi-cwd sidebar
   "Loading projects...": "正在加载项目...",
   "No projects yet": "暂无项目",
@@ -327,7 +324,6 @@ export const ZH_TRANSLATIONS = {
   "End of projects": "已到末尾",
   "Load more sessions": "加载更多会话",
   "Loading sessions...": "正在加载会话...",
-  "Loading pinned sessions...": "正在加载置顶会话...",
   // (Collapse / Expand keys already exist further down — used as aria-labels for the cwd fold toggle)
   "Favorite session": "收藏会话",
   "Unfavorite session": "取消收藏",

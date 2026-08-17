@@ -45,8 +45,7 @@
 | `mcp.json`                          | MCP server 列表(`{ enabled, servers[] }`)。                                                                  | `PUT /api/mcp/config`(`lib/mcp/*`)                                                       | `GET /api/mcp/config`(SettingsModal 加载)                                              | ★★★★☆     |
 | `todo-tools.json`                   | 旧版 user-side todo 工具开关:`["user_todos_list", "user_todo_description"]` 的子集。 | `PUT /api/todo-tools`                                                                     | `lib/todo-tools-config.ts` 在每个 session 启动时读                                       | ★★★☆☆     |
 | `pinned.json`                       | 在 CWD picker 里 pin 的项目目录 path 列表(`string[]`)。                                                                  | `PUT /api/pinned-cwds`                                                                     | `GET /api/pinned-cwds`(`CwdPicker`)                                                    | ★★★☆☆     |
-| `pinned-sessions.json`              | 在 SessionSidebar 里 pin 的会话 id 列表(`string[]`)。                                                                          | `PUT /api/pinned-sessions`                                                                | `GET /api/pinned-sessions`                                                             | ★★★☆☆     |
-| `favorites.json`                    | favorites 列表(`string[]`,会话 uuid)。**字段结构与 `pinned-sessions.json` 完全相同** — 是历史遗留。 | `PUT /api/favorites`                                                                       | `GET /api/favorites`                                                                    | ★★★☆☆     |
+| `favorites.json`                    | favorites 列表(`string[]`,会话 uuid)。                                                                                              | `PUT /api/favorites`                                                                       | `GET /api/favorites`                                                                    | ★★★☆☆     |
 
 > ⚠️ **同一类信息被切到两个文件**: `todo-tools.json` 控的是 user-side todo
 > 工具(`user_todos_list` / `user_todo_description`);`config.yaml` →
@@ -210,7 +209,6 @@ file_viewer:
 | **RssPanel**(`components/RssPanel.tsx`)                       | 改 `rss.db`                                                                                                            |
 | **InboxModal**(`components/InboxModal.tsx`)                   | 改 `inbox.db`                                                                                                          |
 | **CwdPicker**(`components/CwdPicker.tsx`)                     | 改 `pinned.json`                                                                                                       |
-| **SessionSidebar** 里的 Pin 按钮                              | 改 `pinned-sessions.json`                                                                                              |
 | **SessionSidebar** 里的 Favorites 按钮                         | 改 `favorites.json`                                                                                                    |
 | **McpConfig**(`components/McpConfig.tsx`) | 改 `mcp.json`                                                                                                          |
 
@@ -243,7 +241,7 @@ file_viewer:
    - `~/.pi-work/config.yaml`(自己配置)
    - `~/.pi-work/todo-tools.json`(工具开关)
    - `~/.pi-work/mcp.json`(MCP servers)
-   - `~/.pi-work/pinned.json` / `pinned-sessions.json` / `favorites.json`
+   - `~/.pi-work/pinned.json` / `favorites.json`
    - `~/.pi-work/todos.db`(用户数据)
    - `~/.pi-work/scheduler.db`(定时任务)
    - `~/.pi-work/rss.db`(订阅)
@@ -279,8 +277,7 @@ file_viewer:
 
 1. **同一类信息被切到两个文件**
    - 用户工具开关(`todo-tools.json`,2 个 user-side 工具)与 agent 工具开关(`config.yaml` → `custom_tools.enabled`,3 个 agent-side 工具)分家。`TODO_TOOL_NAMES` 数组里目前是 `["user_todos_list", "user_todo_description"]`(不是 4 个)。
-   - `pinned.json`(cwd paths) / `pinned-sessions.json`(session uuids) / `favorites.json`(session uuids)是三个并列文件,后两个字段结构**完全相同** — 明显是历史遗留。
-   - `favorites.json` 与 `pinned-sessions.json` 看起来就是同一件事的两个名字。
+   - `pinned.json`(cwd paths) / `favorites.json`(session uuids)是并列的"标记过的目录/会话"存储。
 
 2. **"配置" 与 "业务数据" 没分组**
    - `~/.pi-work/` 下面既有 `config.yaml` 这种 1KB 的纯配置,也有 `todos.db` 这种 2MB+ 的业务数据,还有 `payloads/` 这种 1GB+ 的临时日志。混在一起。

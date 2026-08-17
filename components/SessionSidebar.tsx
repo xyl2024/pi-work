@@ -159,7 +159,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const [expandedCwds, setExpandedCwds] = useState<Record<string, boolean>>({});
   const cwdHeaderRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const [pinnedSessions, setPinnedSessions] = useState<string[]>([]);
   const [sessionsOpen, setSessionsOpen] = useState(true);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
@@ -281,8 +280,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
 
   // Per-cwd session loader. Used both for the lazy first-page fetch
   // (mode: "reset") and the "Load more" button (mode: "append"). Reads
-  // `pinnedSessions`/`expandedCwds` from state; merged into the existing
-  // entry for the cwd.
+  // `expandedCwds` from state; merged into the existing entry for the cwd.
   const fetchCwdSessions = useCallback(async (
     cwd: string,
     cursor: string | null,
@@ -503,16 +501,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     if (explorerRefreshKey !== undefined) setExplorerKey((k) => k + 1);
   }, [explorerRefreshKey]);
 
-  // Fetch pinned sessions on mount (always-visible in main sidebar, not lazy-loaded)
-  useEffect(() => {
-    fetch("/api/pinned-sessions")
-      .then((r) => r.json())
-      .then((d: { sessionIds?: string[] }) => {
-        if (Array.isArray(d.sessionIds)) setPinnedSessions(d.sessionIds);
-      })
-      .catch(() => {});
-  }, []);
-
   const restoredRef = useRef(false);
 
   // Auto-restore session from URL on first load.
@@ -558,24 +546,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       })();
     }
   }, [loadingWorkspaces, initialSessionId, onSelectSession, onInitialRestoreDone]);
-
-  const toggleSessionPin = useCallback(async (sessionId: string) => {
-    const next = pinnedSessions.includes(sessionId)
-      ? pinnedSessions.filter((p) => p !== sessionId)
-      : [...pinnedSessions, sessionId];
-    setPinnedSessions(next);
-    try {
-      await fetch("/api/pinned-sessions", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionIds: next }),
-      });
-    } catch {
-      // revert on failure
-      setPinnedSessions(pinnedSessions);
-      toast.show({ kind: "error", message: t("Failed to update pin") });
-    }
-  }, [pinnedSessions, t, toast]);
 
   // Keep the active cwd at the top. Historical-session jumps can target a
   // cwd outside the currently loaded workspace page, so synthesize its row
@@ -762,7 +732,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         workspaceLoadError={workspaceLoadError}
         expandedCwds={expandedCwds}
         perCwdSessions={perCwdSessions}
-        pinnedSessions={pinnedSessions}
         favoriteIds={favoriteIds}
         selectedSessionId={selectedSessionId}
         activeSession={selectedSession}
@@ -772,7 +741,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         onSelectSession={onSelectSession}
         onLoadMoreWorkspaces={() => { void fetchWorkspaces(nextWorkspaceCursor, "append"); }}
         onLoadMoreCwdSessions={loadMoreCwdSessions}
-        onTogglePin={toggleSessionPin}
         onToggleFavorite={onToggleFavorite}
         onSessionRenamed={handleSessionRenamed}
         onSessionDeleted={handleSessionDeleted}
