@@ -63,7 +63,17 @@ export async function GET(req: Request) {
   if (!existsSync(cwd)) return NextResponse.json({ error: `Directory does not exist: ${cwd}` }, { status: 400 });
 
   try {
-    const loader = new DefaultResourceLoader({ cwd, agentDir: getAgentDir() });
+    // This endpoint only needs prompt templates. Do not execute user extensions here:
+    // an extension factory may perform arbitrary startup work (for example, a network
+    // probe) and would make this read-only request depend on unrelated services.
+    const loader = new DefaultResourceLoader({
+      cwd,
+      agentDir: getAgentDir(),
+      noExtensions: true,
+      noSkills: true,
+      noThemes: true,
+      noContextFiles: true,
+    });
     await loader.reload();
     const { prompts, diagnostics } = loader.getPrompts();
     return NextResponse.json({ prompts, diagnostics });

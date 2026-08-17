@@ -67,7 +67,17 @@ async function loadSlashCommands(cwd: string, startedAt: number): Promise<Cached
   }
 
   const loadPromise = (async (): Promise<CachedSlash> => {
-    const loader = new DefaultResourceLoader({ cwd, agentDir: getAgentDir() });
+    // This endpoint only needs prompt and skill resources. Do not execute user
+    // extensions here: an extension factory may perform arbitrary startup work
+    // (for example, a network probe) and make slash-command loading depend on
+    // unrelated services.
+    const loader = new DefaultResourceLoader({
+      cwd,
+      agentDir: getAgentDir(),
+      noExtensions: true,
+      noThemes: true,
+      noContextFiles: true,
+    });
     await loader.reload();
 
     const prompts: SlashResource[] = loader.getPrompts().prompts.map((prompt) => ({

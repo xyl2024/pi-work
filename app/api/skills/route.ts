@@ -13,7 +13,17 @@ export async function GET(req: Request) {
   if (!cwd) return NextResponse.json({ error: "cwd required" }, { status: 400 });
 
   try {
-    const loader = new DefaultResourceLoader({ cwd, agentDir: getAgentDir() });
+    // This endpoint only needs skill resources. Do not execute user extensions here:
+    // an extension factory may perform arbitrary startup work (for example, a network
+    // probe) and would make this read-only request depend on unrelated services.
+    const loader = new DefaultResourceLoader({
+      cwd,
+      agentDir: getAgentDir(),
+      noExtensions: true,
+      noPromptTemplates: true,
+      noThemes: true,
+      noContextFiles: true,
+    });
     await loader.reload();
     const { skills, diagnostics } = loader.getSkills();
     return NextResponse.json({ skills, diagnostics });
