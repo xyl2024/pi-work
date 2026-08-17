@@ -645,15 +645,17 @@ export function AppShell() {
         setRightPanelState((v) => v === "closed" ? "normal" : "closed");
         return;
       }
-      // Ctrl+K — command palette (skipped when an editor is focused)
+      // Ctrl+K — command palette. Fires regardless of focus (matches the
+      // VS Code / Slack / GitHub convention): users expect ⌘K to open the
+      // global search bar even while typing in the chat input or a rich-text
+      // editor. Ctrl+B keeps its isEditable guard so it doesn't hijack the
+      // text-editor "bold" shortcut.
       if (mod && e.key === "k") {
-        if (!isEditable) {
-          e.preventDefault();
-          if (paletteOpen) {
-            setPaletteOpen(false);
-          } else {
-            openPalette();
-          }
+        e.preventDefault();
+        if (paletteOpen) {
+          setPaletteOpen(false);
+        } else {
+          openPalette();
         }
         return;
       }
