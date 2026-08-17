@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection } from "@/lib/types";
+import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/types";
 import { normalizeToolCalls } from "@/lib/normalize";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/agent-client";
 import type { ToolCallStatsDispatch } from "./ToolCallStatsContext";
@@ -36,6 +36,7 @@ export interface SessionData {
     entryTimestamps?: (number | undefined)[];
     thinkingLevel: string;
     model: { provider: string; modelId: string } | null;
+    compactionPoints?: CompactionPoint[];
   };
 }
 
@@ -72,6 +73,7 @@ interface AgentEvent {
 export type AgentPhase =
   | { kind: "waiting_model" }
   | { kind: "running_tools"; tools: { id: string; name: string }[] }
+  | { kind: "compacting" }
   | null;
 
 export interface UseAgentSessionOptions {
@@ -150,6 +152,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // Parallel to entryIds: the entry-level persistence timestamp (ms) for each
   // message, when present. Feeds the per-turn duration display.
   const [entryTimestamps, setEntryTimestamps] = useState<(number | undefined)[]>([]);
+  // Compaction points on the visible message path (see SessionContext.compactionPoints).
+  // The chat list inserts a divider right before each point's first kept message.
+  const [compactionPoints, setCompactionPoints] = useState<CompactionPoint[]>([]);
   // In-flight partial tool results keyed by toolCallId. Populated on
   // tool_execution_start, updated on each tool_execution_update (bash's
   // 100ms-throttled streaming output), and cleared on tool_execution_end.
@@ -327,6 +332,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
       setEntryTimestamps(d.context.entryTimestamps ?? []);
+      setCompactionPoints(d.context.compactionPoints ?? []);
       setCurrentModelOverride(null);
       setError(null);
       // Helper: pick the highest thinking level the current model supports, or
@@ -372,10 +378,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         : `/api/sessions/${encodeURIComponent(sid)}/context`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[]; entryTimestamps?: (number | undefined)[] } };
+      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[]; entryTimestamps?: (number | undefined)[]; compactionPoints?: CompactionPoint[] } };
       setMessages(d.context.messages);
       setEntryIds(d.context.entryIds ?? []);
       setEntryTimestamps(d.context.entryTimestamps ?? []);
+      setCompactionPoints(d.context.compactionPoints ?? []);
     } catch (e) {
       console.error("Failed to load context:", e);
     }
@@ -799,11 +806,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         });
         break;
       }
-      // Compaction is kernel-driven now (manual trigger was removed); keep
-      // refreshing so the UI tracks the file after an auto-compaction, and
-      // surface failures that used to show next to the compact button.
+      // Compaction events — both auto (threshold/overflow) and manual.
+      // During compaction the kernel stays busy (no agent_start/agent_end
+      // fire around it), so mirror the running state here: the tree panel
+      // locks cards, the toolbar compact button stays disabled, and the
+      // chat shows the loading row. compaction_end clears it.
+      case "compaction_start":
+      case "auto_compaction_start":
+        setAgentRunning(true);
+        setAgentPhase({ kind: "compacting" });
+        break;
       case "compaction_end":
       case "auto_compaction_end":
+        setAgentRunning(false);
+        setAgentPhase(null);
         if (event.errorMessage) {
           toast.show({ kind: "error", message: event.errorMessage as string });
         } else if (!event.aborted) {
@@ -1173,7 +1189,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     // State
-    data, loading, error, activeLeafId, messages, entryIds, entryTimestamps, inFlightToolResults, streamState,
+    data, loading, error, activeLeafId, messages, entryIds, entryTimestamps, compactionPoints, inFlightToolResults, streamState,
     agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel,
     toolSelection, availableTools, toolsLoading, toolsError,
     thinkingLevel,

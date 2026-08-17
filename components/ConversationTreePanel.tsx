@@ -207,6 +207,9 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
               // The active leaf path is the ONLY indicator of the current
               // branch (cards themselves are uniform). Bump the active
               // stroke well above the inactive one so it reads at a glance.
+              // Edges touching a compaction card use a dashed stroke so
+              // users can spot the "before" / "after" split at a glance.
+              const touchesCompaction = parent.role === "compaction" || child.role === "compaction";
               const stroke = onActive ? "var(--accent)" : "var(--text-dim)";
               const strokeWidth = onActive ? 2.5 : 1;
               const strokeOpacity = onActive ? 1 : 0.55;
@@ -253,7 +256,7 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
                     stroke={stroke}
                     strokeOpacity={strokeOpacity}
                     strokeWidth={strokeWidth}
-                    strokeDasharray={flowing ? "3 9" : "4 4"}
+                    strokeDasharray={flowing ? "3 9" : touchesCompaction ? "2 6" : "4 4"}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     className={flowing ? "tree-edge-flow" : undefined}
@@ -324,8 +327,15 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
                         key={i}
                         d={d}
                         fill="none"
-                        stroke={card.role === "user" ? "rgba(99, 102, 241, 0.55)" : "var(--border)"}
-                        strokeWidth={1.1}
+                        stroke={
+                          card.role === "user"
+                            ? "rgba(99, 102, 241, 0.55)"
+                            : card.role === "compaction"
+                              ? "var(--accent)"
+                              : "var(--border)"
+                        }
+                        strokeWidth={card.role === "compaction" ? 1.4 : 1.1}
+                        strokeDasharray={card.role === "compaction" ? "4 3" : undefined}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       />

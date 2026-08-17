@@ -50,7 +50,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useInboxUnreadCount } from "@/hooks/useInboxUnreadCount";
 import { useRssUnreadCount } from "@/hooks/useRssUnreadCount";
 import { MorphToggleIcon } from "./MorphToggleIcon";
-import { MENU, PANEL_LEFT, DOWNLOAD, LOADER, SPARKLE, CLOCK } from "@/lib/icon-paths";
+import { MENU, PANEL_LEFT, DOWNLOAD, LOADER, SPARKLE, CLOCK, MINIFY } from "@/lib/icon-paths";
 import { useToast } from "./Toast";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import type { SessionInfo, SessionSearchResult } from "@/lib/types";
@@ -1240,7 +1240,7 @@ export function AppShell() {
                   />
                 </Tooltip>
               )}
-              {headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible) && (
+              {headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible || headerActions.compactVisible) && (
                 <>
                   {headerActions.replayVisible && (
                     <IconHoverButton
@@ -1283,6 +1283,22 @@ export function AppShell() {
                       onClick={headerActions.onAutoName}
                       disabled={!headerActions.canAutoName}
                       variant={headerActions.isAutoNaming ? "accent" : "default"}
+                    />
+                  )}
+                  {headerActions.compactVisible && (
+                    <IconHoverButton
+                      icon={
+                        <MorphToggleIcon
+                          from={MINIFY}
+                          to={LOADER}
+                          active={headerActions.isCompacting}
+                          size={12}
+                        />
+                      }
+                      label={headerActions.isCompacting ? t("Compacting...") : t("Compact")}
+                      onClick={headerActions.onCompact}
+                      disabled={headerActions.isCompacting}
+                      variant={headerActions.isCompacting ? "accent" : "default"}
                     />
                   )}
                 </>

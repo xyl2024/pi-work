@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AgentMessage, SessionTreeNode } from "@/lib/types";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { AgentMessage, CompactionEntry, CompactionEntryDetails, SessionTreeNode } from "@/lib/types";
 import { MessageView } from "./MessageView";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "./Toast";
@@ -17,26 +19,33 @@ interface Props {
 
 /**
  * Find the single AgentMessage that the clicked card represents. The
- * conversation-tree panel only ever emits user/assistant cards (see
- * `buildConversationTree`), so a defensive role check is enough — anything
- * else (toolResult / etc.) renders nothing and closes cleanly.
+ * conversation-tree panel emits user/assistant/compaction cards (see
+ * `buildConversationTree`), so this returns either a regular message
+ * or the summary that belongs to a compaction card.
  */
-function findMessage(
+function findEntry(
   entryId: string,
   roots: SessionTreeNode[],
-): { message: AgentMessage; timestamp: string } | null {
+): { kind: "message"; message: AgentMessage; timestamp: string } | { kind: "compaction"; entry: CompactionEntry } | null {
   const stack: SessionTreeNode[] = [...roots];
   while (stack.length > 0) {
     const node = stack.pop()!;
-    if (node.entry.id === entryId && node.entry.type === "message") {
-      return { message: node.entry.message, timestamp: node.entry.timestamp };
+    if (node.entry.id !== entryId) {
+      // Push in reverse so the leftmost child is popped first; matters
+      // only when an id happens to be reused, which shouldn't happen but
+      // keeps the walk order predictable.
+      for (let i = node.children.length - 1; i >= 0; i--) {
+        stack.push(node.children[i]);
+      }
+      continue;
     }
-    // Push in reverse so the leftmost child is popped first; matters only
-    // when an id happens to be reused, which shouldn't happen but keeps
-    // the walk order predictable.
-    for (let i = node.children.length - 1; i >= 0; i--) {
-      stack.push(node.children[i]);
+    if (node.entry.type === "message") {
+      return { kind: "message", message: node.entry.message, timestamp: node.entry.timestamp };
     }
+    if (node.entry.type === "compaction") {
+      return { kind: "compaction", entry: node.entry };
+    }
+    return null;
   }
   return null;
 }
@@ -70,7 +79,7 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
   };
 
   const data = useMemo(
-    () => findMessage(entryId, branchTree),
+    () => findEntry(entryId, branchTree),
     [entryId, branchTree],
   );
 
@@ -105,6 +114,11 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
     // tree update.
     return null;
   }
+
+  if (data.kind === "compaction") {
+    return <CompactionSummaryView entry={data.entry} onClose={onClose} />;
+  }
+
   const { message, timestamp } = data;
   if (message.role !== "user" && message.role !== "assistant") {
     return null;
@@ -294,6 +308,264 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
           }}
         >
           <MessageView message={message} entryId={entryId} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Full-screen modal for a compaction entry. Renders the kernel's summary
+ * (the `summary` string from the JSONL `compaction` entry) plus the
+ * metadata the kernel stores alongside it: tokens before, the first kept
+ * entry id, and the usage of the summarization call.
+ *
+ * Same chrome as BranchMessageViewer (backdrop click / Esc to close) but
+ * no PNG export — the summary is a raw string, not a message bubble.
+ */
+function CompactionSummaryView({
+  entry,
+  onClose,
+}: {
+  entry: CompactionEntry;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+
+  // Lock body scroll while the modal is open.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  // Esc to close (same skip-for-inputs rule as BranchMessageViewer).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      const editable = document.activeElement?.getAttribute("contenteditable");
+      if (editable === "true" || editable === "") return;
+      e.preventDefault();
+      onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  const tokenStr = entry.tokensBefore.toLocaleString();
+  const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : "";
+  // `details` on disk is `{ readFiles, modifiedFiles }` for pi-generated
+  // entries (extension-generated ones carry arbitrary payloads). Parse it
+  // defensively so the footer never crashes on a malformed/unknown shape.
+  const details =
+    entry.details && typeof entry.details === "object" && !Array.isArray(entry.details)
+      ? (entry.details as CompactionEntryDetails)
+      : undefined;
+  const readFiles = Array.isArray(details?.readFiles) ? details.readFiles : [];
+  const modifiedFiles = Array.isArray(details?.modifiedFiles) ? details.modifiedFiles : [];
+
+  return (
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 10000,
+        background: "rgba(0, 0, 0, 0.72)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "32px 16px",
+        backdropFilter: "blur(2px)",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "relative",
+          width: "min(880px, 100%)",
+          maxHeight: "calc(100vh - 64px)",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          boxShadow: "0 20px 60px rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "12px 18px",
+            borderBottom: "1px solid var(--border)",
+            background: "var(--bg-subtle)",
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12,
+              color: "var(--text-muted)",
+              fontFamily: "var(--font-mono)",
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            <span
+              style={{
+                color: "var(--accent)",
+                fontSize: 12,
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              [compaction]
+            </span>
+            <span style={{ color: "var(--text-dim)", fontSize: 11, flexShrink: 0 }}>
+              {t("Compacted from {n} tokens", { n: tokenStr })}
+            </span>
+            {ts && (
+              <span style={{ color: "var(--text-dim)", fontSize: 11, flexShrink: 0 }}>
+                · {ts}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            title={t("Close")}
+            aria-label={t("Close")}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--bg-hover)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+            style={{
+              width: 28,
+              height: 28,
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "transparent",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              fontSize: 14,
+              flexShrink: 0,
+              transition: "background 0.12s",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Scrollable body — the raw summary rendered as Markdown, then
+            metadata rows. */}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            padding: "20px 24px 28px 24px",
+            background: "var(--bg)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              pre({ children }) {
+                return <>{children}</>;
+              },
+              code({ className, children }) {
+                const raw = String(children ?? "");
+                if (className?.includes("language-") || raw.includes("\n")) {
+                  return (
+                    <pre
+                      style={{
+                        background: "var(--bg-selected)",
+                        padding: "10px 12px",
+                        borderRadius: 6,
+                        overflow: "auto",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 12,
+                        color: "var(--text)",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <code className={className}>{children}</code>
+                    </pre>
+                  );
+                }
+                return (
+                  <code
+                    style={{
+                      background: "var(--bg-selected)",
+                      padding: "1px 4px",
+                      borderRadius: 3,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "0.9em",
+                      color: "var(--accent)",
+                    }}
+                  >
+                    {children}
+                  </code>
+                );
+              },
+            }}
+          >
+            {entry.summary}
+          </ReactMarkdown>
+
+          {/* Metadata footer */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              padding: "10px 12px",
+              background: "var(--bg-subtle)",
+              borderRadius: 6,
+              fontSize: 11,
+              color: "var(--text-dim)",
+              fontFamily: "var(--font-mono)",
+              borderTop: "1px solid var(--border)",
+            }}
+          >
+            <div>
+              tokensBefore: {tokenStr}
+            </div>
+            <div>firstKeptEntryId: {entry.firstKeptEntryId}</div>
+            {entry.usage && (
+              <div>
+                summary usage: {entry.usage.input} in / {entry.usage.output} out /{" "}
+                {entry.usage.cacheRead} cacheRead / {entry.usage.cacheWrite} cacheWrite
+              </div>
+            )}
+            {(readFiles.length > 0 || modifiedFiles.length > 0) && (
+              <div>
+                {readFiles.length > 0 && <div>read: {readFiles.join(", ")}</div>}
+                {modifiedFiles.length > 0 && <div>modified: {modifiedFiles.join(", ")}</div>}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

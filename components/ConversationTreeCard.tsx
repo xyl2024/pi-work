@@ -24,6 +24,13 @@ interface Props {
  * empty card).
  */
 function previewText(card: LayoutCard): string {
+  if (card.role === "compaction") {
+    // Compact divider — show the kernel's "[compaction] compacted from
+    // N tokens" line so users can spot the divider at a glance.
+    const n = card.compaction?.tokensBefore ?? 0;
+    const formatted = n.toLocaleString();
+    return `[compaction] ${formatted} tokens`.trim();
+  }
   return card.text.replace(/\s+/g, "");
 }
 
@@ -39,11 +46,14 @@ export function ConversationTreeCard({
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const isUser = card.role === "user";
+  const isCompaction = card.role === "compaction";
   // The crisp CSS border is deliberately omitted — the sketchy double-
   // stroked border is drawn by the panel's SVG overlay (lib/rough.ts).
   const background = isUser
     ? "rgba(99, 102, 241, 0.08)"
-    : "var(--bg-panel)";
+    : isCompaction
+      ? "color-mix(in srgb, var(--accent) 10%, var(--bg-panel))"
+      : "var(--bg-panel)";
 
   const displayText = previewText(card);
 

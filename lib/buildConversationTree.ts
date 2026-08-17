@@ -1,11 +1,21 @@
-import type { AgentMessage, SessionEntry, SessionTreeNode } from "./types";
+import type { AgentMessage, CompactionEntry, CompactionUsage, SessionEntry, SessionTreeNode } from "./types";
 import {
   countAssistantBlocks,
   countImages,
   extractMessageText,
 } from "./extractCardText";
 
-export type CardRole = "user" | "assistant";
+export type CardRole = "user" | "assistant" | "compaction";
+
+/** Summary fields attached to a compaction card so the tree-panel
+ *  divider can render the "Compacted from N tokens" header without
+ *  re-parsing `card.text`. */
+export interface CompactionCardMeta {
+  tokensBefore: number;
+  firstKeptEntryId: string;
+  summary: string;
+  usage?: CompactionUsage;
+}
 
 export interface ConversationCard {
   /** SessionEntry.id — used as React key, for active-path lookup, for click → scroll. */
@@ -26,6 +36,8 @@ export interface ConversationCard {
   timestamp: string;
   /** The raw entry id (== id), surfaced for tooltip context. */
   entryId: string;
+  /** Compaction-only metadata. Undefined on user/assistant cards. */
+  compaction?: CompactionCardMeta;
 }
 
 export interface ConversationTree {
@@ -64,7 +76,15 @@ function messageFromEntry(entry: SessionEntry): AgentMessage | null {
 
 function entryRole(entry: SessionEntry): CardRole | null {
   const m = messageFromEntry(entry);
-  if (!m) return null;
+  if (!m) {
+    // Compaction entries don't carry a `message` field but still produce
+    // a card — they sit between rounds as a divider. Other entry types
+    // (toolResult / model_change / label / branch_summary / custom /
+    // custom_message / thinking_level_change / session_info) stay
+    // transparent.
+    if (entry.type === "compaction") return "compaction";
+    return null;
+  }
   if (m.role === "user") return "user";
   if (m.role === "assistant") return "assistant";
   return null;
@@ -121,6 +141,30 @@ function buildCardFromEntry(
   parentCardId: string | null,
   roundStats: { thinking: number; toolCalls: number } | null,
 ): ConversationCard {
+  if (role === "compaction") {
+    // Compaction cards never have user/assistant text/image content.
+    // Surface the summary as `text` so it round-trips through the
+    // generic renderer, and stash the structured fields on a side
+    // channel that the ConversationTreePanel can read for the divider
+    // header (tokens before, reason, etc.).
+    const ce = entry as CompactionEntry;
+    return {
+      id: entry.id,
+      role: "compaction",
+      text: ce.summary,
+      imageCount: 0,
+      roundStats: null,
+      parentCardId,
+      timestamp: entry.timestamp,
+      entryId: entry.id,
+      compaction: {
+        tokensBefore: ce.tokensBefore,
+        firstKeptEntryId: ce.firstKeptEntryId,
+        summary: ce.summary,
+        usage: ce.usage,
+      },
+    };
+  }
   const msg = messageFromEntry(entry)!;
   const text = extractMessageText(msg);
   const imageCount = countImages(msg);
@@ -176,6 +220,20 @@ export function buildConversationTree(
 
   const walk = (node: SessionTreeNode, parentCardId: string | null): void => {
     const role = entryRole(node.entry);
+    if (role === "compaction") {
+      // Compaction sits between rounds as a divider. Emit a card so the
+      // tree-panel can show "[compaction] compacted from N tokens" but
+      // don't claim any round association — the next round starts
+      // from the parent that came before this entry in the tree.
+      cards.push(
+        buildCardFromEntry(node.entry, "compaction", parentCardId, null),
+      );
+      const compactionCardId = node.entry.id;
+      for (const child of node.children) {
+        walk(child, compactionCardId);
+      }
+      return;
+    }
     if (role === "user") {
       const round = rounds.get(node.entry.id)!;
       cards.push(
@@ -229,7 +287,7 @@ export function buildConversationTree(
       const node = index.byId.get(cursor);
       if (!node) break;
       const role = entryRole(node.entry);
-      if (role === "user" || role === "assistant") {
+      if (role === "user" || role === "assistant" || role === "compaction") {
         activePathIds.add(cursor);
       }
       cursor = node.entry.parentId;

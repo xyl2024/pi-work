@@ -62,6 +62,8 @@ function computeSubtreeHeight(
   if (card.role === "user") {
     extra = kids.length > 0 ? computeSubtreeHeight(kids[0], childrenById, memo) : 0;
   } else {
+    // assistant + compaction both fan out the same way: take the tallest
+    // child's subtree, not the sum.
     let maxH = 0;
     for (const k of kids) {
       const h = computeSubtreeHeight(k, childrenById, memo);
@@ -121,7 +123,8 @@ function assignPositions(
     }
     return;
   }
-  // Assistant.
+  // Assistant + compaction both sit above their subtrees and fan out the
+  // same way when multiple children appear.
   if (kids.length <= 1) {
     // Linear continuation: same column.
     if (kids.length === 1) {

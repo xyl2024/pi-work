@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline";
 import { SessionManager, buildSessionContext as piBuildSessionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
-import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, AssistantMessage, SessionSearchResult, SessionSearchResponse, SessionMessageSearchResult, SessionMessageSearchResponse } from "./types";
+import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, AssistantMessage, SessionSearchResult, SessionSearchResponse, SessionMessageSearchResult, SessionMessageSearchResponse, CompactionEntry, CompactionPoint } from "./types";
 import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize";
 
@@ -232,12 +232,12 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
   // timestamp of the last assistant message, i.e. when its stream finished).
   let targetLeaf: SessionEntry | undefined;
   if (leafId === null) {
-    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
+    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model, compactionPoints: [] };
   }
   if (leafId) targetLeaf = byId.get(leafId);
   if (!targetLeaf) targetLeaf = entries[entries.length - 1];
   if (!targetLeaf) {
-    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model };
+    return { messages: [], entryIds: [], entryTimestamps: [], thinkingLevel: piCtx.thinkingLevel, model: piCtx.model, compactionPoints: [] };
   }
 
   // Walk path from target leaf to root
@@ -292,12 +292,49 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     return [normalizeToolCalls(msg)];
   });
 
+  // Compaction points: every `compaction` entry on the visible path that still
+  // has at least one kept message after it. `beforeMessageEntryId` is the id of
+  // the first visible message that comes after this compaction — the UI inserts
+  // a divider right before that message so the user can see where history was
+  // folded. Multiple entries appear when the session was compacted several times
+  // and the kept messages still straddle more than one boundary.
+  const visibleEntryIds = new Set(entryIds);
+  const compactionPoints: CompactionPoint[] = [];
+  for (const e of path) {
+    if (e.type !== "compaction") continue;
+    const ce = e as CompactionEntry;
+    // First visible message after this compaction entry on the path.
+    let afterId: string | undefined;
+    let afterSelf = false;
+    for (const p of path) {
+      if (p.id === ce.id) {
+        afterSelf = true;
+        continue;
+      }
+      if (!afterSelf) continue;
+      if (p.type === "message" && visibleEntryIds.has(p.id)) {
+        afterId = p.id;
+        break;
+      }
+    }
+    if (afterId) {
+      compactionPoints.push({
+        entryId: ce.id,
+        tokensBefore: ce.tokensBefore,
+        summary: ce.summary,
+        beforeMessageEntryId: afterId,
+        timestamp: ce.timestamp,
+      });
+    }
+  }
+
   return {
     messages,
     entryIds,
     entryTimestamps,
     thinkingLevel: piCtx.thinkingLevel,
     model: piCtx.model,
+    compactionPoints,
   };
 }
 

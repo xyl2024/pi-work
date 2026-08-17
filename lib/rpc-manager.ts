@@ -428,6 +428,59 @@ export class AgentSessionWrapper {
         await this.inner.abort();
         return null;
 
+      case "compact": {
+        // Manual compaction, mirroring pi TUI's `/compact [customInstructions]`.
+        // Pi's `AgentSession.compact()` first aborts any in-progress agent run,
+        // then synchronously waits for the summary call to finish and emits
+        // `compaction_start` / `compaction_end` via the same `subscribe()`
+        // channel that the SSE route forwards. The compact() promise resolves
+        // with the persisted `CompactionResult`, which we narrow to the subset
+        // the UI actually needs.
+        //
+        // Front-end should refuse to dispatch when `agentRunning` is true on a
+        // different path (UI button gated on !isStreaming); if it slips
+        // through, the upstream abort() makes the call safe but cancels the
+        // user's in-flight turn, which we treat as a caller bug.
+        //
+        // Server-side guard for multi-tab / stale-widget races: if the
+        // session is actually mid-turn, refuse instead of aborting the user's
+        // in-flight work (the kernel's compact() would abort it).
+        if (this.inner.isStreaming) {
+          throw new Error("Agent is still running — wait for the current turn to end before compacting.");
+        }
+        const customInstructions = typeof command.customInstructions === "string"
+          ? command.customInstructions.trim() || undefined
+          : undefined;
+        const result = await this.inner.compact(customInstructions);
+        log.info("manual compact completed", {
+          sessionId: this.sessionId,
+          tokensBefore: result.tokensBefore,
+          summaryLength: result.summary.length,
+        });
+        return {
+          summary: result.summary,
+          firstKeptEntryId: result.firstKeptEntryId,
+          tokensBefore: result.tokensBefore,
+          estimatedTokensAfter: result.estimatedTokensAfter,
+          usage: result.usage
+            ? {
+                input: result.usage.input,
+                output: result.usage.output,
+                cacheRead: result.usage.cacheRead,
+                cacheWrite: result.usage.cacheWrite,
+                totalTokens: result.usage.totalTokens,
+                cost: {
+                  input: result.usage.cost.input,
+                  output: result.usage.cost.output,
+                  cacheRead: result.usage.cost.cacheRead,
+                  cacheWrite: result.usage.cost.cacheWrite,
+                  total: result.usage.cost.total,
+                },
+              }
+            : undefined,
+        };
+      }
+
       case "get_state": {
         const model = this.inner.model;
         const contextUsage = this.inner.getContextUsage();

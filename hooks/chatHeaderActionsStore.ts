@@ -30,6 +30,12 @@ export interface ChatHeaderActions {
   /** Session + usable first user message + idle — false renders the button disabled. */
   canAutoName: boolean;
   isAutoNaming: boolean;
+  /** Open the manual-compact dialog. */
+  onCompact: () => void;
+  /** Session selected + agent not running — clicking opens the dialog. */
+  compactVisible: boolean;
+  /** True while the RPC `compact` call is in flight (shows the spinner glyph). */
+  isCompacting: boolean;
 }
 
 let state: ChatHeaderActions | null = null;

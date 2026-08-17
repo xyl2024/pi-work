@@ -23,6 +23,24 @@ interface NavigateTreeResult {
   aborted?: boolean;
 }
 
+/** Narrowed shape of `AgentSession.compact()``s return value — a subset of
+ *  `CompactionResult` from `@earendil-works/pi-coding-agent/dist/core/compaction/compaction.d.ts`.
+ *  Pi's full type is generic and the outer RPC layer only forwards this subset. */
+export interface CompactResult {
+  summary: string;
+  firstKeptEntryId: string;
+  tokensBefore: number;
+  estimatedTokensAfter?: number;
+  usage?: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    totalTokens: number;
+    cost: { input: number; output: number; cacheRead: number; cacheWrite: number; total: number };
+  };
+}
+
 export interface AgentSessionLike {
   readonly sessionId: string;
   readonly sessionFile: string | undefined;
@@ -45,4 +63,10 @@ export interface AgentSessionLike {
   getActiveToolNames(): string[];
   setActiveToolsByName(names: string[]): void;
   getContextUsage(): ContextUsage | undefined;
+  /** Manually trigger context compaction. Aborts any in-progress run first.
+   *  Mirrors pi TUI's `/compact [customInstructions]` — the string is appended
+   *  to the default summarization prompt as an "Additional focus" section, so
+   *  callers wanting a complete override must use the `session_before_compact`
+   *  extension hook instead. */
+  compact(customInstructions?: string): Promise<CompactResult>;
 }
