@@ -70,13 +70,6 @@ function buildCells(year: number, month: number): CalendarCell[] {
   return cells;
 }
 
-function heatmapBackground(count: number, maxCount: number): string | undefined {
-  if (count === 0 || maxCount === 0) return undefined;
-  const ratio = count / maxCount;
-  const opacity = Math.round(12 + ratio * 58);
-  return `color-mix(in srgb, var(--accent) ${opacity}%, transparent)`;
-}
-
 // Mirrored from PRIORITY_PALETTE in components/TodoPanel.tsx — kept narrow
 // here so the tooltip doesn't pull the entire TodoPanel into a separate
 // import surface (and to keep this file self-contained).
@@ -148,7 +141,6 @@ function DayTooltipContent({ todos, t }: { todos: Todo[]; t: (key: string) => st
 function DayCell({
   cell,
   todos,
-  maxCount,
   today,
   selectedDay,
   isTouchDevice,
@@ -157,7 +149,6 @@ function DayCell({
 }: {
   cell: CalendarCell;
   todos: Todo[];
-  maxCount: number;
   today: number;
   selectedDay: number | null;
   isTouchDevice: boolean;
@@ -181,7 +172,6 @@ function DayCell({
   };
 
   const content = count > 0 ? <DayTooltipContent todos={todos} t={t} /> : null;
-  const background = heatmapBackground(count, maxCount);
 
   return (
     <Tooltip
@@ -205,7 +195,7 @@ function DayCell({
           padding: "4px 2px",
           border: 0,
           borderRadius: 5,
-          background: background ?? "transparent",
+          background: "transparent",
           color: cell.isCurrentMonth ? "var(--text)" : "var(--text-dim)",
           opacity: cell.isCurrentMonth ? 1 : 0.42,
           boxShadow: todayCell ? "inset 0 0 0 1px var(--accent)" : undefined,
@@ -275,10 +265,6 @@ export function TodoMonthCalendar({
     }
     return grouped;
   }, [month, todos]);
-  const maxCount = useMemo(
-    () => Math.max(0, ...Array.from(todosByDay.values(), (dayTodos) => dayTodos.length)),
-    [todosByDay],
-  );
   const monthLabel = new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
     year: "numeric",
     month: "long",
@@ -321,7 +307,6 @@ export function TodoMonthCalendar({
             key={cell.ts}
             cell={cell}
             todos={cell.isCurrentMonth ? (todosByDay.get(dateKey(cell.ts)) ?? []) : []}
-            maxCount={maxCount}
             today={today}
             selectedDay={selectedDay}
             isTouchDevice={isTouchDevice}
