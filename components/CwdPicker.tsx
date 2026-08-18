@@ -192,6 +192,9 @@ export function CwdPicker({
                     fontFamily: "var(--font-mono)",
                   }}
                 >
+                  <span style={{ display: "flex", flexShrink: 0, color: "var(--accent)" }}>
+                    <CwdIcon size={14} />
+                  </span>
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {basenameOf(rcwd)}
                   </span>
