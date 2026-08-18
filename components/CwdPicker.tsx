@@ -6,6 +6,7 @@ import { useCwdList, initCwdList } from "@/hooks/cwdListStore";
 import { Tooltip } from "./Tooltip";
 import { AnimatedPopover } from "./AnimatedPopover";
 import { CwdIcon } from "./FileIcons";
+import { CwdFolderDialog } from "./CwdFolderDialog";
 
 /**
  * Reusable cwd picker — the previously inline picker that lived in the
@@ -13,7 +14,7 @@ import { CwdIcon } from "./FileIcons";
  *
  * UI matches the model picker in ChatInput's bottom toolbar (folder icon +
  * basename pill), while the dropdown mirrors the original sidebar menu:
- * Recent list, plus Use default / Custom path entries at the bottom.
+ * Recent list, plus Use default / Select folder entries at the bottom.
  * Dropdown opens upward by default since the parent is anchored at the
  * bottom of the chat area — pass `dropdownDirection` to flip it if needed.
  */
@@ -55,9 +56,7 @@ export function CwdPicker({
   const { cwds } = useCwdList();
 
   const [open, setOpen] = useState(false);
-  const [customPathOpen, setCustomPathOpen] = useState(false);
-  const [customPathValue, setCustomPathValue] = useState("");
-  const customPathInputRef = useRef<HTMLInputElement>(null);
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   // Single click target — both the trigger and dropdown live under it, so
   // outside-click detection just walks up the DOM for this data attribute.
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -75,8 +74,6 @@ export function CwdPicker({
       const root = rootRef.current;
       if (root && !root.contains(e.target as Node)) {
         setOpen(false);
-        setCustomPathOpen(false);
-        setCustomPathValue("");
       }
     };
     document.addEventListener("mousedown", handler);
@@ -86,14 +83,8 @@ export function CwdPicker({
   const handlePick = useCallback((picked: string) => {
     onCwdChange(picked);
     setOpen(false);
-    setCustomPathOpen(false);
-    setCustomPathValue("");
+    setFolderDialogOpen(false);
   }, [onCwdChange]);
-
-  const handleCommitCustomPath = useCallback(() => {
-    const path = customPathValue.trim();
-    if (path) handlePick(path);
-  }, [customPathValue, handlePick]);
 
   const handleDefaultCwd = useCallback(async () => {
     try {
@@ -211,18 +202,17 @@ export function CwdPicker({
           </div>
 
           {/* Footer entries */}
-          {!customPathOpen && (
-            <>
-              <button
-                onClick={(e) => { e.stopPropagation(); void handleDefaultCwd(); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 7,
-                  width: "100%", padding: "8px 10px",
-                  background: "none", border: "none",
-                  borderTop: (cwds?.length ?? 0) > 0 ? "1px solid var(--border)" : "none",
-                  color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11,
-                }}
-              >
+          <>
+            <button
+              onClick={(e) => { e.stopPropagation(); void handleDefaultCwd(); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 7,
+                width: "100%", padding: "8px 10px",
+                background: "none", border: "none",
+                borderTop: (cwds?.length ?? 0) > 0 ? "1px solid var(--border)" : "none",
+                color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11,
+              }}
+            >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                   <path d="M1 3A1 1 0 0 1 2 2H4L5 3.5H8.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 1 8V3Z" />
                 </svg>
@@ -230,11 +220,7 @@ export function CwdPicker({
               </button>
 
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCustomPathOpen(true);
-                  setTimeout(() => customPathInputRef.current?.focus(), 0);
-                }}
+                onClick={(e) => { e.stopPropagation(); setFolderDialogOpen(true); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 7,
                   width: "100%", padding: "8px 10px",
@@ -242,64 +228,22 @@ export function CwdPicker({
                   color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11,
                 }}
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" style={{ flexShrink: 0 }}>
-                  <line x1="5" y1="1" x2="5" y2="9" />
-                  <line x1="1" y1="5" x2="9" y2="5" />
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M1 3A1 1 0 0 1 2 2H4L5 3.5H8.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 1 8V3Z" />
                 </svg>
-                <span>{t("Custom path...")}</span>
+                <span>{t("Select folder...")}</span>
               </button>
-            </>
-          )}
-
-          {customPathOpen && (
-            <div style={{ padding: "6px 8px", borderTop: "1px solid var(--border)" }}>
-              <input
-                ref={customPathInputRef}
-                value={customPathValue}
-                onChange={(e) => setCustomPathValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCommitCustomPath();
-                  if (e.key === "Escape") {
-                    setCustomPathOpen(false);
-                    setCustomPathValue("");
-                  }
-                }}
-                placeholder="/path/to/project"
-                style={{
-                  width: "100%", fontSize: 11, fontFamily: "var(--font-mono)",
-                  padding: "5px 8px",
-                  border: "1px solid var(--accent)", borderRadius: 5,
-                  outline: "none", background: "var(--bg)", color: "var(--text)",
-                  boxSizing: "border-box",
-                }}
-              />
-              <div style={{ display: "flex", gap: 5, marginTop: 5 }}>
-                <button
-                  onClick={handleCommitCustomPath}
-                  style={{
-                    flex: 1, padding: "4px 0",
-                    background: "var(--accent)", border: "none", borderRadius: 5,
-                    color: "#fff", fontSize: 11, fontWeight: 600,
-                    cursor: "pointer",
-                  }}
-                >
-                  {t("Open")}
-                </button>
-                <button
-                  onClick={() => { setCustomPathOpen(false); setCustomPathValue(""); }}
-                  style={{
-                    flex: 1, padding: "4px 0",
-                    background: "var(--bg-hover)", border: "1px solid var(--border)", borderRadius: 5,
-                    color: "var(--text-muted)", fontSize: 11,
-                    cursor: "pointer",
-                  }}
-                >
-                  {t("Cancel")}
-                </button>
-              </div>
-            </div>
-          )}
+          </>
       </AnimatedPopover>
+
+      {folderDialogOpen && (
+        <CwdFolderDialog
+          open
+          startPath={cwd ?? null}
+          onClose={() => setFolderDialogOpen(false)}
+          onSelect={(dir) => { setFolderDialogOpen(false); handlePick(dir); }}
+        />
+      )}
     </div>
   );
 }
