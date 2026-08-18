@@ -526,6 +526,23 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     }
   }, [currentSessionId, activeLeafId, locale, isExporting, t, toast]);
 
+  // Scroll-to-bottom helper, hoisted before handleCompactClick so the compact
+  // path can call it. Sets userScrolledUpRef=false to re-engage sticky-bottom
+  // tracking and guards the next 500ms of scroll events as programmatic.
+  const handleToBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    userScrolledUpRef.current = false;
+    setShowToBottom(false);
+    isProgrammaticScrollRef.current = true;
+    // scrollHeight, not messagesEndRef.scrollIntoView: the latter aligns to
+    // the scrollport edges and leaves the container's bottom padding visible
+    // as a gap. Setting scrollTop directly to scrollHeight scrolls to the
+    // absolute bottom regardless of padding/layout.
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    setTimeout(() => { isProgrammaticScrollRef.current = false; }, 500);
+  }, []);
+
   // ── Manual compaction lifecycle lives in useAgentSession (see
   // handleCompact). The hook owns the SSE connection, busy state,
   // explicit post-success reload, and busy cleanup on failure — so a
@@ -533,14 +550,22 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // still renders the compaction divider + tree card without a manual
   // reload. Reachable from both the toolbar `Compact` button and the
   // `/compact` slash command (both go through handleCompactClick).
-  const handleCompactClick = useCallback(() => {
+  const handleCompactClick = useCallback(async () => {
     if (!currentSessionId) return;
     if (agentRunning) {
       toast.show({ kind: "error", message: t("Wait for the current turn to end before compacting.") });
       return;
     }
-    void handleCompact();
-  }, [currentSessionId, agentRunning, handleCompact, t, toast]);
+    // Scroll to the bottom right away so the user sees the "Compacting..."
+    // status row even if they were scrolled up reviewing older messages.
+    handleToBottom();
+    await handleCompact();
+    // handleCompact awaits loadSession, which re-renders with the trailing
+    // compaction divider appended below the last message. The first smooth
+    // scroll landed at the pre-reload scrollHeight, so re-scroll to the new
+    // bottom to bring the divider into view.
+    handleToBottom();
+  }, [currentSessionId, agentRunning, handleCompact, handleToBottom, t, toast]);
 
   // Running summary for the vertical toolbar badge
   const runningSummary = agentPhase?.kind === "running_tools" && agentPhase.tools.length > 0
@@ -612,20 +637,6 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     const nearBottom = dist < 100;
     userScrolledUpRef.current = !nearBottom;
     setShowToBottom(!nearBottom);
-  }, []);
-
-  const handleToBottom = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    userScrolledUpRef.current = false;
-    setShowToBottom(false);
-    isProgrammaticScrollRef.current = true;
-    // scrollHeight, not messagesEndRef.scrollIntoView: the latter aligns to
-    // the scrollport edges and leaves the container's bottom padding visible
-    // as a gap. Setting scrollTop directly to scrollHeight scrolls to the
-    // absolute bottom regardless of padding/layout.
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    setTimeout(() => { isProgrammaticScrollRef.current = false; }, 500);
   }, []);
 
   // ── 一键折叠 ──
@@ -1538,8 +1549,22 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
                 // flow as it streams, then get a single collapsed summary at
                 // the end. Without this, each message_end would re-mount the
                 // fold group with a new key and snap it shut on every step.
+                //
+                // Explicitly excludes the compacting phase: agentRunning flips
+                // true while compacting too, but compact doesn't add new
+                // content to this turn. Unfolding the last turn's process
+                // during compact would (a) swap the JSX tree between
+                // <ProcessDetailsGroup> and <Fragment>, which unmounts the
+                // group and resets its internal `expanded` state on the way
+                // back, and (b) grow the scrollHeight mid-compaction so the
+                // scroll-to-bottom click lands above the real bottom. Treat
+                // compact as if the session were idle for this rendering
+                // decision.
                 const isCurrentTurnInProgress =
-                  agentRunning && userIdx === lastUserIdx && lastUserIdx !== -1;
+                  agentRunning &&
+                  agentPhase?.kind !== "compacting" &&
+                  userIdx === lastUserIdx &&
+                  lastUserIdx !== -1;
 
                 const processChildren = (
                   <Fragment>
