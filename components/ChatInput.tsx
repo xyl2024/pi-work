@@ -324,6 +324,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (Array.isArray(configured) && configured.length > 0) return configured;
     return TYPEWRITER_PHRASES[locale];
   }, [settings, locale]);
+  // Master switch for the cycling animated placeholder. Read from the
+  // settings store (published from SettingsModal). Defaults to true so
+  // the very first render — before /api/settings responds — preserves
+  // the pre-toggle behavior. When false the chat input falls back to a
+  // plain static "Message..." placeholder.
+  const typewriterEffectEnabled = settings?.typewriter_effect?.enabled ?? true;
   // Content-signature key for the Typewriter: changes only when the
   // phrases list's actual content changes (not just the array reference).
   // A remount gives us a clean state reset for any reconfigure — without
@@ -957,7 +963,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             position: "relative",
           } as React.CSSProperties}
         >
-          {!value && !isFocused && (
+          {!value && !isFocused && typewriterEffectEnabled && (
             <span
               aria-hidden
               style={{

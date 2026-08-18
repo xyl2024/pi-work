@@ -108,6 +108,18 @@ export interface AppendSystemConfig {
 // (see lib/typewriter-phrases.ts for the fail-open rules).
 export type TypewriterPhrases = Record<Locale, string[]>;
 
+// ── Chat input typewriter effect master toggle ───────────────────────────
+// When `enabled` is false, the chat input drops the cycling typewriter
+// placeholder in favor of a plain static prompt (per i18n). Editable
+// from the Settings modal as an immediate-apply switch next to the
+// per-locale phrase textareas. Defaults to true to preserve the
+// pre-toggle behavior; the parser fails open to the same value so a
+// hand-edited YAML that omits the field doesn't silently disable the
+// effect.
+export interface TypewriterEffectConfig {
+  enabled: boolean;
+}
+
 // ── File preview size limits ─────────────────────────────────────────────
 // Client-safe types and per-kind ranges live in `./file-viewer-limits`
 // (imported + re-exported above) so SettingsModal can import the ranges
@@ -120,6 +132,7 @@ export interface PiWorkConfig {
   custom_tools: CustomToolsConfig;
   append_system: AppendSystemConfig;
   typewriter_phrases: TypewriterPhrases;
+  typewriter_effect: TypewriterEffectConfig;
   file_viewer: FileViewerConfig;
 }
 
@@ -158,6 +171,8 @@ const DEFAULT_CONFIG: PiWorkConfig = {
     en: [...DEFAULT_TYPEWRITER_PHRASES.en],
     zh: [...DEFAULT_TYPEWRITER_PHRASES.zh],
   },
+  // Preserve pre-toggle behavior: typewriter effect on by default.
+  typewriter_effect: { enabled: true },
   // Preserves pre-feature behavior: same hardcoded limits the route used
   // before the value became user-configurable.
   file_viewer: {
@@ -241,6 +256,16 @@ function parseCustomTools(raw: unknown): CustomToolsConfig {
 // so an old config.yaml doesn't silently turn the append off). An explicit
 // `enabled: false` is honored — the user pushed the button, we trust them.
 function parseAppendSystem(raw: unknown): AppendSystemConfig {
+  if (!raw || typeof raw !== "object") return { enabled: true };
+  const obj = raw as Record<string, unknown>;
+  return { enabled: obj.enabled !== false };
+}
+
+// Fail-open for the missing/garbled case (keeps the typewriter visible by
+// default so an old config.yaml doesn't silently strip the animation).
+// An explicit `enabled: false` is honored — the user pushed the toggle,
+// we trust them.
+function parseTypewriterEffect(raw: unknown): TypewriterEffectConfig {
   if (!raw || typeof raw !== "object") return { enabled: true };
   const obj = raw as Record<string, unknown>;
   return { enabled: obj.enabled !== false };
@@ -334,6 +359,7 @@ export function readConfig(): PiWorkConfig {
       custom_tools: parseCustomTools(cfg.custom_tools),
       append_system: parseAppendSystem(cfg.append_system),
       typewriter_phrases: parseTypewriterPhrases(cfg.typewriter_phrases),
+      typewriter_effect: parseTypewriterEffect(cfg.typewriter_effect),
       file_viewer: parseFileViewer(cfg.file_viewer),
     };
   } catch (err) {

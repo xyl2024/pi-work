@@ -421,6 +421,11 @@ export const ZH_TRANSLATIONS = {
   "Custom phrases cycled in the empty chat input. One phrase per line. Empty lines are ignored. Leave both blank to use the bundled defaults.": "在空聊天框中循环显示的文案，每行一条。空行会被忽略；两个都留空则使用内置默认文案。",
   "English phrases": "英文文案",
   "Chinese phrases": "中文文案",
+  // Settings / typewriter effect master toggle (config.yaml → typewriter_effect.enabled)
+  "Typewriter effect": "打字机效果",
+  "Show cycling animated phrases in the empty chat input. Turn off to show a static placeholder instead.": "在空白输入框中循环展示打字机动画文案。关闭后改为显示静态占位文案。",
+  "Effect on": "效果开启",
+  "Effect off": "效果关闭",
   // ask_user_questions tool UI (sticky panel)
   // "Awaiting your answer" is still used by SessionItem's sidebar dot
   // tooltip — keep it for that one.

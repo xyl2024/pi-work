@@ -60,6 +60,7 @@ const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-right-bar",     labelKey: "Right-side buttons" },
   { id: "settings-section-inbox-test",    labelKey: "Inbox Test" },
   { id: "settings-section-file-preview",  labelKey: "File preview limits" },
+  { id: "settings-section-typewriter-effect", labelKey: "Typewriter effect" },
   { id: "settings-section-typewriter",    labelKey: "Typewriter phrases" },
 ];
 
@@ -592,6 +593,37 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
     const nextConfig: PiWorkConfig = {
       ...config,
       append_system: { enabled: !config.append_system.enabled },
+    };
+    setConfig(nextConfig);
+    setOriginalConfig(nextConfig);
+    setSettings(nextConfig);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextConfig),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.show({ kind: "success", message: t("Settings saved") });
+    } catch (e) {
+      toast.show({
+        kind: "error",
+        message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),
+      });
+    }
+  }, [config, t, toast]);
+
+  // Typewriter effect master toggle — same immediate-apply pattern as
+  // handleAppendSystemEnabledToggle. Flipping the switch publishes to
+  // the settings store synchronously so the chat input renders with
+  // the new behavior on its next render (no reload, no per-session
+  // activation — the input reads the flag from the store on every
+  // placeholder render).
+  const handleTypewriterEffectToggle = useCallback(async () => {
+    if (!config) return;
+    const nextConfig: PiWorkConfig = {
+      ...config,
+      typewriter_effect: { enabled: !config.typewriter_effect.enabled },
     };
     setConfig(nextConfig);
     setOriginalConfig(nextConfig);
@@ -1442,7 +1474,47 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
             </div>
           )}
 
-          {/* ── Section 8: Typewriter phrases (chat input placeholder) ── */}
+          {/* ── Section 8: Typewriter effect master toggle ── */}
+          {/* Independent immediate-apply switch, same shape as the
+              APPEND_SYSTEM.md loader toggle in Section 3. Sits above
+              the per-locale phrase textareas so the "is the cycling
+              animation on at all?" question is answered before the user
+              dives into editing phrases. */}
+          {config && (
+            <div data-settings-section="settings-section-typewriter-effect" style={{ marginBottom: 24, marginTop: 24 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
+                {t("Typewriter effect")}
+              </h3>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
+                {t("Show cycling animated phrases in the empty chat input. Turn off to show a static placeholder instead.")}
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 13, color: "var(--text)" }}>
+                  {config.typewriter_effect.enabled ? t("Effect on") : t("Effect off")}
+                </span>
+                <button
+                  onClick={handleTypewriterEffectToggle}
+                  aria-label={t("Typewriter effect")}
+                  style={{
+                    width: 40, height: 22, borderRadius: 11,
+                    background: config.typewriter_effect.enabled ? "var(--accent)" : "var(--bg-hover)",
+                    border: "none", cursor: "pointer", position: "relative",
+                    transition: "background 0.2s",
+                  }}
+                >
+                  <span style={{
+                    position: "absolute", top: 2,
+                    left: config.typewriter_effect.enabled ? 20 : 2,
+                    width: 18, height: 18, borderRadius: 9,
+                    background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                    transition: "left 0.2s",
+                  }} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Section 9: Typewriter phrases (chat input placeholder) ── */}
           {/* One phrase per line, per locale. Same shape as the Append
               System Prompt section: independent Save button that PUTs the
               whole PiWorkConfig and immediately publishes to the settings
