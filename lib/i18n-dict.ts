@@ -141,6 +141,8 @@ export const ZH_TRANSLATIONS = {
   "Background complete": "后台已完成",
   "Unsaved draft": "有未发送内容",
   "Close draft?": "关闭草稿？",
+  "Close drafts?": "关闭多个草稿？",
+  "Some tabs have unsent text or images. They will be lost.": "部分标签页有未发送的文本或图片，关闭后将丢失。",
   "This tab has unsent text or images. They will be lost.": "此标签页有未发送的文本或图片，关闭后将丢失。",
   "Discard": "丢弃",
   "Select a project first": "请先选择项目",

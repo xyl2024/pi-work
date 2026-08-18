@@ -721,6 +721,27 @@ export function AppShell() {
     chatInputRefs.current.delete(tabId);
   }, [confirm, t]);
 
+  const handleBatchCloseSessionTabs = useCallback(async (tabId: string, mode: "left" | "right" | "others") => {
+    const current = workspaceRef.current;
+    const index = current.tabOrder.indexOf(tabId);
+    if (index === -1) return;
+    const ids = mode === "left" ? current.tabOrder.slice(0, index) : mode === "right" ? current.tabOrder.slice(index + 1) : current.tabOrder.filter((id) => id !== tabId);
+    const dirtyCount = ids.filter((id) => current.tabs[id]?.dirty).length;
+    if (dirtyCount > 0) {
+      const ok = await confirm({ title: t("Close drafts?"), description: t("Some tabs have unsent text or images. They will be lost."), confirmLabel: t("Discard"), cancelLabel: t("Cancel"), destructive: true });
+      if (!ok) return;
+    }
+    for (const id of ids) {
+      dispatchWorkspace({ type: "close", tabId: id });
+      setPendingScrollEntryIds((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      chatInputRefs.current.delete(id);
+    }
+  }, [confirm, t]);
   const registerChatInputRef = useCallback((tabId: string, ref: RefObject<ChatInputHandle | null> | null) => {
     if (ref) chatInputRefs.current.set(tabId, ref);
     else chatInputRefs.current.delete(tabId);
@@ -1676,6 +1697,7 @@ export function AppShell() {
             activeTabId={activeTabId}
             onSelectTab={handleActivateSessionTab}
             onCloseTab={(tabId) => { void handleCloseSessionTab(tabId); }}
+            onBatchClose={(tabId, mode) => { void handleBatchCloseSessionTabs(tabId, mode); }}
             onNewSession={() => handleSlashNew()}
           />
         )}

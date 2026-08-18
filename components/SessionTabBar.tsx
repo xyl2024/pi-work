@@ -8,6 +8,7 @@ import {
   type SessionTabStatus,
 } from "@/hooks/sessionWorkspaceStore";
 import { Tooltip } from "./Tooltip";
+import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 interface Props {
   tabs: SessionTab[];
@@ -15,6 +16,7 @@ interface Props {
   onSelectTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewSession?: () => void;
+  onBatchClose?: (tabId: string, mode: "left" | "right" | "others") => void;
 }
 
 function statusLabel(status: SessionTabStatus, t: ReturnType<typeof useI18n>["t"]): string {
@@ -46,8 +48,9 @@ function StatusMark({ status }: { status: SessionTabStatus }) {
   );
 }
 
-export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession }: Props) {
+export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose }: Props) {
   const { t } = useI18n();
+  const cm = useContextMenu();
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     if (el.scrollWidth <= el.clientWidth) return;
@@ -83,12 +86,23 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           <div
             key={tab.tabId}
             onClick={() => onSelectTab(tab.tabId)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              const index = tabs.findIndex((item) => item.tabId === tab.tabId);
+              const items: ContextMenuItem[] = [
+                { key: "close", label: t("Close tab"), onSelect: () => onCloseTab(tab.tabId) },
+                { key: "close-left", label: t("Close tabs to the left"), onSelect: () => onBatchClose?.(tab.tabId, "left"), disabled: index === 0 },
+                { key: "close-right", label: t("Close tabs to the right"), onSelect: () => onBatchClose?.(tab.tabId, "right"), disabled: index === tabs.length - 1 },
+                { key: "close-others", label: t("Close other tabs"), onSelect: () => onBatchClose?.(tab.tabId, "others"), disabled: tabs.length <= 1 },
+              ];
+              cm.open({ x: event.clientX, y: event.clientY, items });
+            }}
             style={{
               display: "flex",
               alignItems: "center",
               gap: 6,
               minWidth: 96,
-              maxWidth: 240,
+              maxWidth: 180,
               height: 34,
               padding: "0 6px 0 12px",
               flexShrink: 0,
