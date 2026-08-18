@@ -588,6 +588,35 @@ pre, code {
   padding: 0;
 }
 
+/* Code blocks inside markdown — chat messages, file previews and todo
+   descriptions — keep the original always-on 4px scrollbar in both
+   directions. The chat container uses data-scroll-wide which sets
+   scrollbar-width:auto, and Firefox's scrollbar-color implementation
+   cascades to descendant scrollable elements, which would otherwise
+   leave the code block's scrollbar invisible (the chat's hover-to-
+   show behavior leaks in) or its track colored wrong. Pinning the
+   values here restores the stable, plain 4px behavior expected from
+   a code block — long lines and long files stay scrollable at all
+   times without the user having to discover hover. */
+.markdown-body pre,
+.markdown-file-preview pre {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.markdown-body pre::-webkit-scrollbar,
+.markdown-file-preview pre::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.markdown-body pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+.markdown-body pre::-webkit-scrollbar-thumb,
+.markdown-file-preview pre::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
 /* syntax highlighter line numbers */
 .markdown-body span.linenumber,
 span.linenumber {
