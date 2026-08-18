@@ -290,6 +290,48 @@ body {
   background: var(--text-dim);
 }
 
+/* Wider scrollbar in the chat message list, hidden until the mouse
+   enters the chat area, then fades in / fades out smoothly.
+
+   Implementation notes:
+   - Webkit: we keep the thumb's color at its final --border and
+     animate visibility via opacity (universally smooth on the
+     -webkit-scrollbar-thumb pseudo). The background-color
+     transition is inconsistent across Chromium versions and only
+     applied to the thumb-hover stage where it does work.
+   - Firefox: scrollbar-color doesn't support opacity/transition,
+     so the swap from transparent to --border is instant. Both
+     browsers stay fully hidden at rest.
+   - The single `opacity 0.2s` transition runs in both directions,
+     so mouse-enter fades in and mouse-leave fades out with no
+     extra plumbing. */
+[data-chat-scroll] {
+  scrollbar-width: auto;
+  scrollbar-color: transparent transparent;
+}
+[data-chat-scroll]:hover {
+  scrollbar-color: var(--border) transparent;
+}
+[data-chat-scroll]::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+[data-chat-scroll]::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-chat-scroll]::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 5px;
+  opacity: 0;
+  transition: opacity 0.3s ease-out, background-color 0.25s ease-out;
+}
+[data-chat-scroll]:hover::-webkit-scrollbar-thumb {
+  opacity: 1;
+}
+[data-chat-scroll]:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
+
 :root {
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'Consolas', var(--font-noto-mono), 'JetBrains Mono', 'Fira Code', ui-monospace, 'PingFang SC', 'Microsoft YaHei', monospace;
