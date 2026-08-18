@@ -580,7 +580,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // explicit post-success reload, and busy cleanup on failure — so a
   // compact against an idle session whose EventSource was never open
   // still renders the compaction divider + tree card without a manual
-  // reload. Reachable from both the toolbar `Compact` button and the
+  // reload. Reachable from both the chat footer `Compact` button and the
   // `/compact` slash command (both go through handleCompactClick).
   const handleCompactClick = useCallback(async () => {
     if (!currentSessionId) return;
@@ -990,7 +990,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const sessionId = session?.id;
 
   // ── Auto-name: LLM-driven session name generation (moved up from ChatInput
-  // when the button relocated to the AppShell top bar). The 3s "generated
+  // when the button relocated to the AppShell footer). The 3s "generated
   // name" label flash was dropped with the move — the sidebar updates
   // immediately and a toast already confirms the rename. ──
   const [isAutoNaming, setIsAutoNaming] = useState(false);
@@ -1124,7 +1124,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     !isAutoNaming
   );
 
-  // ── Publish Replay / Export / Auto-name actions for the AppShell top bar.
+  // ── Publish Replay / Export / Auto-name actions for the AppShell footer.
   // Rebuilt only when a dependency changes; the store's content guard then
   // skips AppShell re-renders when nothing actually changed. ──
   const headerActions = useMemo(() => ({

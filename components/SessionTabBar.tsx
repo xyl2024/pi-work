@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   getSessionTabTitle,
@@ -17,6 +17,7 @@ interface Props {
   onCloseTab: (tabId: string) => void;
   onNewSession?: () => void;
   onBatchClose?: (tabId: string, mode: "left" | "right" | "others") => void;
+  leadingControl?: ReactNode;
 }
 
 function statusLabel(status: SessionTabStatus, t: ReturnType<typeof useI18n>["t"]): string {
@@ -48,7 +49,7 @@ function StatusMark({ status }: { status: SessionTabStatus }) {
   );
 }
 
-export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose }: Props) {
+export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose, leadingControl }: Props) {
   const { t } = useI18n();
   const cm = useContextMenu();
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -62,7 +63,6 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
 
   return (
     <div
-      onWheel={handleWheel}
       style={{
         display: "flex",
         alignItems: "stretch",
@@ -71,10 +71,25 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         flexShrink: 0,
         background: "var(--bg-panel)",
         borderBottom: "1px solid var(--border)",
-        overflowX: "auto",
-        overflowY: "hidden",
+        overflow: "hidden",
       }}
     >
+      {leadingControl && (
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "stretch", borderRight: "1px solid var(--border)" }}>
+          {leadingControl}
+        </div>
+      )}
+      <div
+        onWheel={handleWheel}
+        style={{
+          display: "flex",
+          alignItems: "stretch",
+          minWidth: 0,
+          flex: 1,
+          overflowX: "auto",
+          overflowY: "hidden",
+        }}
+      >
       {tabs.map((tab) => {
         const active = tab.tabId === activeTabId;
         const title = tab.kind === "draft" ? t("New session") : getSessionTabTitle(tab.session!);
@@ -206,6 +221,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           </button>
         </Tooltip>
       )}
+      </div>
     </div>
   );
 }

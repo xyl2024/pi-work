@@ -18,6 +18,7 @@ export type Tab =
   | { kind: "gitDiff"; id: string; label: string }
   | { kind: "conversationTree"; id: string; label: string }
   | { kind: "llmAudit"; id: string; label: string }
+  | { kind: "context"; id: string; label: string }
   | { kind: "terminal"; id: string; label: string };
 
 interface Props {
@@ -85,7 +86,9 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
         const displayLabel =
           tab.kind === "tokens"
             ? t("Token audit")
-            : tab.label;
+            : tab.kind === "context"
+              ? t("Context")
+              : tab.label;
         const tooltipContent =
           tab.kind === "file" ? tab.filePath : displayLabel;
         const icon =
@@ -107,6 +110,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
             <TokensTabIcon />
           ) : tab.kind === "llmAudit" ? (
             <LlmAuditTabIcon />
+          ) : tab.kind === "context" ? (
+            getFileIcon("AGENTS.md", 13)
           ) : tab.kind === "conversationTree" ? (
             <ConversationTreeTabIcon />
           ) : tab.kind === "terminal" ? (

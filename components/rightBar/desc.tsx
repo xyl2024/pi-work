@@ -21,6 +21,7 @@
 import type { ReactNode } from "react";
 import type { RightBarButtonId } from "@/lib/config";
 import { CountBadge } from "@/components/CountBadge";
+import { getFileIcon } from "@/components/FileIcons";
 import {
   TODO_TAB_ID,
   FAVORITES_TAB_ID,
@@ -33,6 +34,7 @@ import {
   GIT_DIFF_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
   LLM_AUDIT_TAB_ID,
+  CONTEXT_TAB_ID,
 } from "@/lib/types";
 import type { Tab } from "@/components/TabBar";
 import {
@@ -68,6 +70,7 @@ export type RightBarTabKind = Extract<
   | "gitDiff"
   | "conversationTree"
   | "llmAudit"
+  | "context"
 >;
 
 export interface RightBarCtx {
@@ -112,6 +115,7 @@ export interface RightBarCtx {
     toolCalls: () => void;
     conversationTree: () => void;
     llmAudit: () => void;
+    context: () => void;
   };
 }
 
@@ -317,6 +321,20 @@ const llmAuditDescriptor: RightBarDescriptor = {
     ctx.toggleRightPanelTab(LLM_AUDIT_TAB_ID, ctx.openTab.llmAudit),
 };
 
+const contextDescriptor: RightBarDescriptor = {
+  id: "context",
+  kind: "configurable",
+  labelKey: "Context",
+  isActive: (ctx) => ctx.activeTabKind === "context",
+  isDisabled: (ctx) => !ctx.selectedSessionId,
+  content: () => (
+    <span style={{ display: "inline-flex", filter: "brightness(0.56)" }}>
+      {getFileIcon("AGENTS.md", 13)}
+    </span>
+  ),
+  onClick: (ctx) => ctx.toggleRightPanelTab(CONTEXT_TAB_ID, ctx.openTab.context),
+};
+
 const toolCallsDescriptor: RightBarDescriptor = {
   id: "toolCalls",
   kind: "configurable",
@@ -375,6 +393,7 @@ export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   terminalDescriptor,
   // 'configurable' group — order here is the implicit default order used
   // when the user hasn't customized `cfg.order`.
+  contextDescriptor,
   todosDescriptor,
   canvasDescriptor,
   translateDescriptor,

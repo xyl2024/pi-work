@@ -152,6 +152,7 @@ const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = {
   toolCalls: true,
   gitDiff: true,
   conversationTree: true,
+  context: true,
 };
 
 const DEFAULT_CONFIG: PiWorkConfig = {

@@ -38,13 +38,11 @@ import { IconHoverButton } from "./IconHoverButton";
 import { PromptsConfig } from "./PromptsConfig";
 import { SettingsModal } from "./SettingsModal";
 import { McpConfig } from "./McpConfig";
-import { getFileIcon } from "./FileIcons";
 
 import { SchedulerModal } from "./Scheduler";
 import { ConversationTreePanel } from "./ConversationTreePanel";
 import type { SessionTreeNode } from "@/lib/types";
 import { CommandPalette } from "./CommandPalette";
-import { CollapsiblePanel } from "./CollapsiblePanel";
 import { InboxModal } from "./InboxModal";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
@@ -67,6 +65,7 @@ import {
   GIT_DIFF_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
   LLM_AUDIT_TAB_ID,
+  CONTEXT_TAB_ID,
   RIGHT_BAR_ID_FOR_TAB_KIND,
 } from "@/lib/types";
 import { isRightBarButtonVisible } from "@/lib/right-bar";
@@ -164,11 +163,6 @@ const AGENTS_SEGMENT_COLORS = [
   "#10b981", // emerald
   "#06b6d4", // cyan
 ];
-
-// Animation duration for the top-bar dropdown. Passed to CollapsiblePanel and
-// reused by toggleTopPanel's switch timer so the two-phase panel switch
-// (collapse → swap content → expand) lines up with the collapse animation.
-const TOP_PANEL_ANIM_MS = 180;
 
 function splitSystemPrompt(systemPrompt: string): SystemPromptSegment[] {
   const segments: SystemPromptSegment[] = [];
@@ -339,7 +333,6 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const chatInputRefs = useRef<Map<string, RefObject<ChatInputHandle | null>>>(new Map());
-  const topBarRef = useRef<HTMLDivElement>(null);
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession } = usePendingPermissions();
 
@@ -353,56 +346,6 @@ export function AppShell() {
   const agentControls = useAgentControls();
   const headerActions = useChatHeaderActions();
 
-  // ── Top-bar dropdown (system prompt / tools) ──
-  // One dropdown open at a time. `displayedTopPanel` controls which content is
-  // rendered inside it — deliberately separate from `activeTopPanel`: on close
-  // the last panel stays mounted so the collapse animation runs with real
-  // content (conditional children would unmount first and snap the height to
-  // 0, making the collapse appear instant).
-  const [activeTopPanel, setActiveTopPanel] = useState<"system" | "tools" | null>(null);
-  const [displayedTopPanel, setDisplayedTopPanel] = useState<"system" | "tools" | null>(null);
-  const [topPanelPos, setTopPanelPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  // Pending timer for a panel switch. The 0fr/1fr grid trick can't animate
-  // between two different content heights, so switching = collapse the current
-  // panel, swap the content, expand the new one — the timer fires at the end
-  // of the collapse animation (TOP_PANEL_ANIM_MS).
-  const topPanelSwitchTimer = useRef<number | null>(null);
-  useEffect(() => () => {
-    if (topPanelSwitchTimer.current !== null) window.clearTimeout(topPanelSwitchTimer.current);
-  }, []);
-
-  const closeTopPanel = useCallback(() => {
-    if (topPanelSwitchTimer.current !== null) {
-      window.clearTimeout(topPanelSwitchTimer.current);
-      topPanelSwitchTimer.current = null;
-    }
-    setActiveTopPanel(null);
-  }, []);
-
-  const toggleTopPanel = useCallback((panel: "system" | "tools") => {
-    // A pending switch must be cancelled first, or its timer would reopen the
-    // panel with a different panel after this click.
-    if (topPanelSwitchTimer.current !== null) {
-      window.clearTimeout(topPanelSwitchTimer.current);
-      topPanelSwitchTimer.current = null;
-    }
-    if (activeTopPanel === panel) {
-      // Toggle off — the content stays mounted for the collapse animation.
-      setActiveTopPanel(null);
-    } else if (activeTopPanel === null) {
-      setDisplayedTopPanel(panel);
-      setActiveTopPanel(panel);
-    } else {
-      // Switching panels: collapse the current one first, then swap + expand.
-      setActiveTopPanel(null);
-      topPanelSwitchTimer.current = window.setTimeout(() => {
-        topPanelSwitchTimer.current = null;
-        setDisplayedTopPanel(panel);
-        setActiveTopPanel(panel);
-      }, TOP_PANEL_ANIM_MS);
-    }
-  }, [activeTopPanel]);
-
   const openPalette = useCallback(() => {
     // The palette is the top-level modal — opening it closes every other
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
@@ -412,14 +355,14 @@ export function AppShell() {
     setSettingsConfigOpen(false);
     setSchedulerOpen(false);
     setInboxOpen(false);
-    closeTopPanel();
     setPaletteOpen(true);
-  }, [closeTopPanel]);
+  }, []);
+  const closeTopPanel = useCallback(() => {}, []);
 
   // Session-level UI state (branch tree, system prompt, stats, context usage)
   // is owned by each tab controller. Only the active controller projects its
-  // snapshot into this module-level bridge for the top bar/right panels.
-  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, contextUsage } = useSessionUiState();
+  // snapshot into this module-level bridge for the chat footer/right panels.
+  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, contextUsage, sessionStats } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
 
   // Tools are cached per formal session. Activating an already-open tab only
@@ -447,19 +390,7 @@ export function AppShell() {
     }
   }, [workspace.tabOrder, workspace.tabs, fetchTools]);
 
-  useEffect(() => {
-    if (!activeTopPanel || !topBarRef.current) return;
-    const update = () => {
-      const rect = topBarRef.current!.getBoundingClientRect();
-      setTopPanelPos({ top: rect.bottom, left: rect.left, width: rect.width });
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(topBarRef.current);
-    return () => ro.disconnect();
-  }, [activeTopPanel]);
-
-  // Right panel — file tabs only
+  // Right panel — file tabs and the context tab
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelState, setRightPanelState] = useState<"closed" | "normal" | "expanded">("closed");
@@ -928,6 +859,22 @@ export function AppShell() {
     setRightPanelState("normal");
   }, [t]);
 
+  // Open the Context panel — combines the session system prompt and tool list.
+  const handleOpenContextTab = useCallback(() => {
+    const alreadyActive = activeFileTabId === CONTEXT_TAB_ID && rightPanelState !== "closed";
+    if (alreadyActive) {
+      setActiveFileTabId(null);
+      setRightPanelState("closed");
+      return;
+    }
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "context")) return prev;
+      return [{ kind: "context", id: CONTEXT_TAB_ID, label: t("Context") }, ...prev];
+    });
+    setActiveFileTabId(CONTEXT_TAB_ID);
+    setRightPanelState("normal");
+  }, [activeFileTabId, rightPanelState, t]);
+
   // Open the git diff panel — same pattern as translate / rss / tokens.
   const handleOpenGitDiffTab = useCallback(() => {
     setFileTabs((prev) => {
@@ -1204,6 +1151,7 @@ export function AppShell() {
       toolCalls: handleOpenToolCallsTab,
       conversationTree: handleOpenConversationTreeTab,
       llmAudit: handleOpenLlmAuditTab,
+      context: handleOpenContextTab,
     },
   };
 
@@ -1413,52 +1361,82 @@ export function AppShell() {
           goes expanded: center grows 1->0 while the right panel grows 0->1,
           so the whiteboard takeover slides instead of snapping. */}
       <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1)" }}>
-        {/* Top bar with sidebar toggle */}
-        <div ref={topBarRef} style={{ display: "flex", alignItems: "center", flexShrink: 0, borderBottom: "1px solid var(--border)", height: 36, background: "var(--bg-panel)", overflow: "visible", zIndex: 45 }}>
-          <Tooltip content={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}>
-          <button
-            onClick={() => setSidebarOpen((v) => !v)}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, padding: 0,
-              background: "none", border: "none",
-              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            <MorphToggleIcon from={MENU} to={PANEL_LEFT} active={sidebarOpen} />
-          </button>
-          </Tooltip>
-          {showChat && (
-            <div style={{ display: "flex", alignItems: "center", height: "100%", gap: 2 }}>
-              {selectedSession && (
-                <IconHoverButton
-                  onClick={() => toggleTopPanel("system")}
-                  active={activeTopPanel === "system"}
-                  icon={
-                    <span style={{ display: "inline-flex", filter: "brightness(0.56)" }}>
-                      {getFileIcon("AGENTS.md", 13)}
-                    </span>
-                  }
-                  label={t("System Prompts")}
-                />
-              )}
-              {selectedSession && (
-                <Tooltip content={tools.length > 0 ? `${tools.filter((t) => t.active).length} / ${tools.length} ${t("Active").toLowerCase()}` : t("No tools available for this session")}>
-                  <IconHoverButton
-                    onClick={() => toggleTopPanel("tools")}
-                    active={activeTopPanel === "tools"}
-                    disabled={tools.length === 0}
-                    icon={
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                      </svg>
-                    }
-                    label={tools.length > 0 ? `${t("Tools")} ${tools.filter((t) => t.active).length}` : t("Tools")}
-                  />
-                </Tooltip>
-              )}
+        {showChat && (
+          <SessionTabBar
+            leadingControl={
+              <Tooltip content={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}>
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen((v) => !v)}
+                  aria-label={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 36,
+                    height: 34,
+                    padding: 0,
+                    background: "none",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    transition: "color 0.12s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+                >
+                  <MorphToggleIcon from={MENU} to={PANEL_LEFT} active={sidebarOpen} />
+                </button>
+              </Tooltip>
+            }
+            tabs={workspace.tabOrder.map((tabId) => workspace.tabs[tabId]).filter((tab): tab is SessionTab => Boolean(tab))}
+            activeTabId={activeTabId}
+            onSelectTab={handleActivateSessionTab}
+            onCloseTab={(tabId) => { void handleCloseSessionTab(tabId); }}
+            onBatchClose={(tabId, mode) => { void handleBatchCloseSessionTabs(tabId, mode); }}
+            onNewSession={() => handleSlashNew()}
+          />
+        )}
+
+        {/* Chat content. Every opened tab keeps its controller mounted so its
+            messages, input draft, scroll position and SSE survive activation
+            changes. Only the active controller is visible/projected. */}
+        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+          {showChat && workspace.tabOrder.map((tabId) => {
+            const tab = workspace.tabs[tabId];
+            if (!tab) return null;
+            return (
+              <WorkspaceChatTab
+                key={tab.tabId}
+                tab={tab}
+                isActive={tab.tabId === activeTabId}
+                registerChatInputRef={registerChatInputRef}
+                onAgentEnd={handleAgentEnd}
+                onSessionCreated={handleSessionCreated}
+                onFirstAssistantReady={handleFirstAssistantReady}
+                modelsRefreshKey={modelsRefreshKey}
+                scrollToEntryId={pendingScrollEntryIds[tab.tabId] ?? null}
+                onScrollComplete={() => setPendingScrollEntryIds((prev) => {
+                  if (!(tab.tabId in prev)) return prev;
+                  const next = { ...prev };
+                  delete next[tab.tabId];
+                  return next;
+                })}
+                onNewSessionRequest={handleSlashNew}
+                onCwdChange={handleCwdPicked}
+                onRenameCompleted={handleSessionRenameCompleted}
+                onSessionNameChange={handleSessionNameChange}
+                onOpenFile={handleOpenFile}
+                onDraftChange={handleDraftChange}
+                onAgentStatusChange={handleAgentStatusChange}
+              />
+            );
+          })}
+        </div>
+        {showChat && (headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible || headerActions.compactVisible) || contextUsage || sessionStats) && (
+          <div style={{ padding: "8px 16px 0" }}>
+            <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
               {headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible || headerActions.compactVisible) && (
                 <>
                   {headerActions.replayVisible && (
@@ -1522,221 +1500,13 @@ export function AppShell() {
                   )}
                 </>
               )}
+              <div style={{ flex: 1, minWidth: 12 }} />
               {contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
               <SessionTokenTotals />
             </div>
-          )}
-          {/* Top panel dropdown — shared, only one active at a time */}
-          <CollapsiblePanel
-            open={activeTopPanel !== null}
-            durationMs={TOP_PANEL_ANIM_MS}
-            style={{
-              position: "fixed",
-              top: topPanelPos?.top ?? 0,
-              left: topPanelPos?.left ?? 0,
-              width: topPanelPos?.width ?? "100%",
-              zIndex: 500,
-            }}
-          >
-              {displayedTopPanel === "system" && (
-                <div style={{
-                  background: "var(--bg-panel)",
-                  borderBottom: "1px solid var(--border)",
-                }}>
-                  {systemPrompt ? (() => {
-                    const segments = splitSystemPrompt(systemPrompt);
-                    // Assign each AGENTS.md path a stable color by first appearance
-                    const pathColor = new Map<string, string>();
-                    for (const seg of segments) {
-                      if (seg.kind === "agents" && !pathColor.has(seg.path)) {
-                        pathColor.set(seg.path, AGENTS_SEGMENT_COLORS[pathColor.size % AGENTS_SEGMENT_COLORS.length]);
-                      }
-                    }
-                    const agentsSegments = segments.filter((s): s is Extract<SystemPromptSegment, { kind: "agents" }> => s.kind === "agents");
-                    return (
-                      <>
-                        {agentsSegments.length > 0 && (
-                          <div style={{
-                            display: "flex", flexWrap: "wrap", gap: 12,
-                            padding: "8px 16px",
-                            borderBottom: "1px solid var(--border)",
-                            fontSize: 11,
-                            color: "var(--text-muted)",
-                          }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                              <span style={{
-                                width: 10, height: 10, borderRadius: 2,
-                                background: "var(--text-dim)", flexShrink: 0,
-                              }} />
-                              <span>{t("Pi base + Append")}</span>
-                            </div>
-                            {agentsSegments.map((seg) => {
-                              const color = pathColor.get(seg.path)!;
-                              return (
-                                <div key={seg.path} style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                                  <span style={{
-                                    width: 10, height: 10, borderRadius: 2,
-                                    background: color, flexShrink: 0,
-                                  }} />
-                                  <span style={{
-                                    fontFamily: "var(--font-mono)",
-                                    maxWidth: 360,
-                                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                  }} title={seg.path}>
-                                    {seg.path}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <div style={{
-                          maxHeight: "min(600px, 75vh)",
-                          overflowY: "auto",
-                          padding: "12px 16px",
-                          color: "var(--text-muted)",
-                          fontSize: 12,
-                          lineHeight: 1.6,
-                          whiteSpace: "pre-wrap",
-                          fontFamily: "var(--font-mono)",
-                        }}>
-                          {segments.map((seg, idx) => {
-                            if (seg.kind === "base") {
-                              return <span key={`base-${idx}`}>{seg.text}</span>;
-                            }
-                            const color = pathColor.get(seg.path)!;
-                            return (
-                              <span key={`agents-${idx}-${seg.path}`} style={{
-                                display: "block",
-                                borderLeft: `3px solid ${color}`,
-                                background: `${color}14`, // ~8% opacity
-                                marginTop: 8,
-                                marginBottom: 8,
-                                paddingLeft: 10,
-                                paddingTop: 4,
-                                paddingBottom: 4,
-                              }}>
-                                <div style={{
-                                  fontSize: 10,
-                                  fontFamily: "var(--font-mono)",
-                                  color: color,
-                                  marginBottom: 4,
-                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                }} title={seg.path}>
-                                  {seg.path}
-                                </div>
-                                {seg.text}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </>
-                    );
-                  })() : systemPrompt === "" ? (
-                    <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                      {t("System prompt is empty (tools are disabled)")}
-                    </div>
-                  ) : (
-                    <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                      {t("Send a message to load the system prompt.")}
-                    </div>
-                  )}
-                </div>
-              )}
-              {displayedTopPanel === "tools" && (
-                <div style={{
-                  background: "var(--bg-panel)",
-                  borderBottom: "1px solid var(--border)",
-                }}>
-                  {tools.length === 0 ? (
-                    <div style={{ padding: "10px 16px", fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>
-                      {t("Loading tools...")}
-                    </div>
-                  ) : (() => {
-                    const sorted = [...tools].sort((a, b) => a.name.localeCompare(b.name));
-                    return (
-                      <div data-scroll-wide style={{ maxHeight: "min(600px, 75vh)", overflowY: "auto" }}>
-                        {sorted.map((tool) => (
-                          <div
-                            key={tool.name}
-                            style={{
-                              display: "flex",
-                              alignItems: "flex-start",
-                              gap: 10,
-                              padding: "10px 16px",
-                              borderBottom: "1px solid var(--border)",
-                            }}
-                          >
-                            <div style={{
-                              width: 7, height: 7, borderRadius: "50%",
-                              background: tool.active ? "var(--accent)" : "var(--text-dim)",
-                              flexShrink: 0, marginTop: 4,
-                            }} />
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 500, fontFamily: "var(--font-mono)" }}>
-                                {tool.name}
-                              </div>
-                              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.5 }}>
-                                {tool.description || t("No description")}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-          </CollapsiblePanel>
-
-        </div>
-
-        {showChat && (
-          <SessionTabBar
-            tabs={workspace.tabOrder.map((tabId) => workspace.tabs[tabId]).filter((tab): tab is SessionTab => Boolean(tab))}
-            activeTabId={activeTabId}
-            onSelectTab={handleActivateSessionTab}
-            onCloseTab={(tabId) => { void handleCloseSessionTab(tabId); }}
-            onBatchClose={(tabId, mode) => { void handleBatchCloseSessionTabs(tabId, mode); }}
-            onNewSession={() => handleSlashNew()}
-          />
+          </div>
         )}
 
-        {/* Chat content. Every opened tab keeps its controller mounted so its
-            messages, input draft, scroll position and SSE survive activation
-            changes. Only the active controller is visible/projected. */}
-        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-          {showChat && workspace.tabOrder.map((tabId) => {
-            const tab = workspace.tabs[tabId];
-            if (!tab) return null;
-            return (
-              <WorkspaceChatTab
-                key={tab.tabId}
-                tab={tab}
-                isActive={tab.tabId === activeTabId}
-                registerChatInputRef={registerChatInputRef}
-                onAgentEnd={handleAgentEnd}
-                onSessionCreated={handleSessionCreated}
-                onFirstAssistantReady={handleFirstAssistantReady}
-                modelsRefreshKey={modelsRefreshKey}
-                scrollToEntryId={pendingScrollEntryIds[tab.tabId] ?? null}
-                onScrollComplete={() => setPendingScrollEntryIds((prev) => {
-                  if (!(tab.tabId in prev)) return prev;
-                  const next = { ...prev };
-                  delete next[tab.tabId];
-                  return next;
-                })}
-                onNewSessionRequest={handleSlashNew}
-                onCwdChange={handleCwdPicked}
-                onRenameCompleted={handleSessionRenameCompleted}
-                onSessionNameChange={handleSessionNameChange}
-                onOpenFile={handleOpenFile}
-                onDraftChange={handleDraftChange}
-                onAgentStatusChange={handleAgentStatusChange}
-              />
-            );
-          })}
-        </div>
       </div>
 
       {/* Right panel: file viewer — always mounted, width animated via CSS */}
@@ -1797,6 +1567,11 @@ export function AppShell() {
             <TokensPanel />
           ) : activeFileTab?.kind === "llmAudit" ? (
             <LlmAuditPanel currentSessionId={selectedSession?.id ?? null} />
+          ) : activeFileTab?.kind === "context" ? (
+            <ContextPanel
+              systemPrompt={systemPrompt}
+              tools={tools}
+            />
           ) : activeFileTab?.kind === "gitDiff" ? (
             <GitDiffPanel cwd={selectedSession?.cwd ?? newSessionCwd ?? null} />
           ) : activeFileTab?.kind === "conversationTree" ? (
@@ -1902,6 +1677,98 @@ export function AppShell() {
       t={t}
     />
     </>
+  );
+}
+
+function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; tools: ToolInfo[] }) {
+  const { t } = useI18n();
+  const segments = useMemo(() => splitSystemPrompt(systemPrompt ?? ""), [systemPrompt]);
+  const pathColor = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const seg of segments) {
+      if (seg.kind === "agents" && !map.has(seg.path)) {
+        map.set(seg.path, AGENTS_SEGMENT_COLORS[map.size % AGENTS_SEGMENT_COLORS.length]);
+      }
+    }
+    return map;
+  }, [segments]);
+  const agentsSegments = useMemo(
+    () => segments.filter((seg): seg is Extract<SystemPromptSegment, { kind: "agents" }> => seg.kind === "agents"),
+    [segments],
+  );
+  const sortedTools = useMemo(() => [...tools].sort((a, b) => a.name.localeCompare(b.name)), [tools]);
+
+  return (
+    <div style={{ height: "100%", overflowY: "auto", background: "var(--bg-panel)", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
+      <section style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+          {t("System Prompts")}
+        </div>
+        {systemPrompt ? (
+          <div>
+            {agentsSegments.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 10, fontSize: 11, color: "var(--text-muted)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--text-dim)", flexShrink: 0 }} />
+                  <span>{t("Pi base + Append")}</span>
+                </div>
+                {agentsSegments.map((seg) => {
+                  const color = pathColor.get(seg.path)!;
+                  return (
+                    <div key={seg.path} style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
+                      <span style={{ fontFamily: "var(--font-mono)", maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>
+                        {seg.path}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+              {segments.map((seg, idx) => {
+                if (seg.kind === "base") {
+                  return <span key={`base-${idx}`}>{seg.text}</span>;
+                }
+                const color = pathColor.get(seg.path)!;
+                return (
+                  <span key={`agents-${idx}-${seg.path}`} style={{ display: "block", borderLeft: `3px solid ${color}`, background: `${color}14`, marginTop: 8, marginBottom: 8, paddingLeft: 10, paddingTop: 4, paddingBottom: 4 }}>
+                    <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>
+                      {seg.path}
+                    </div>
+                    {seg.text}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontStyle: "italic" }}>{t("System prompt is empty (tools are disabled)")}</div>
+        )}
+      </section>
+      <section style={{ padding: "12px 16px" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+          {t("Tools")}
+        </div>
+        {sortedTools.length === 0 ? (
+          <div style={{ fontStyle: "italic" }}>{t("Loading tools...")}</div>
+        ) : (
+          <div>
+            {sortedTools.map((tool) => (
+              <div key={tool.name} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid color-mix(in srgb, var(--border) 55%, transparent)" }}>
+                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--text-dim)", flexShrink: 0, marginTop: 4 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 500, fontFamily: "var(--font-mono)" }}>{tool.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.5 }}>
+                    {tool.description || t("No description")}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 
