@@ -22,7 +22,8 @@ interface RateState {
   stale: boolean;
 }
 
-let state: RateState = { rate: null, fetchedAt: null, stale: false };
+const SERVER_INITIAL_RATE: RateState = { rate: null, fetchedAt: null, stale: false };
+let state: RateState = SERVER_INITIAL_RATE;
 const listeners = new Set<() => void>();
 let inflight: Promise<void> | null = null;
 
@@ -70,7 +71,7 @@ function getSnapshot(): RateState {
 function getServerSnapshot(): RateState {
   // SSR / first-client render must match the pre-fetch state to avoid a
   // hydration mismatch. The effect below kicks off the fetch after mount.
-  return { rate: null, fetchedAt: null, stale: false };
+  return SERVER_INITIAL_RATE;
 }
 
 export interface ExchangeRate {

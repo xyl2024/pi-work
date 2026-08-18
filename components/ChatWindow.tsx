@@ -33,7 +33,6 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/Toast";
 import { useConfirm } from "./ConfirmDialog";
 import { CompactionDivider } from "./CompactionDivider";
-import { sendAgentCommand } from "@/lib/agent-client";
 import { setChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
 import type { SlashResource } from "./ChatInput";
 import { ToolCallStatsProvider, useToolCallStatsEmit } from "@/hooks/ToolCallStatsContext";
@@ -44,6 +43,10 @@ import { setAgentControls } from "@/hooks/sessionUiStore";
 import { SessionSearch } from "./SessionSearch";
 
 interface Props {
+  /** Stable owner token for active-session imperative bridges. */
+  tabId?: string;
+  /** True only for the controller currently projected into the visible chat view. */
+  isActive?: boolean;
   session: SessionInfo | null;
   newSessionCwd: string | null;
   onAgentEnd?: () => void;
@@ -70,6 +73,19 @@ interface Props {
    *  "Open in tab" buttons). Optional; ChatWindow renders a working
    *  "open file" experience even without it (falls back to a no-op). */
   onOpenFile?: (filePath: string, fileName: string) => void;
+  /** Publish this tab's unsent input state for close confirmation. */
+  onDraftChange?: (draft: {
+    dirty: boolean;
+    text: string;
+    imageCount: number;
+    cursorPosition: number;
+  }) => void;
+  /** Publish passive per-tab runtime status to the workspace tab bar. */
+  onAgentStatusChange?: (status: {
+    running: boolean;
+    streaming: boolean;
+    error: string | null;
+  }) => void;
 }
 
 function phaseLabel(phase: AgentPhase, t: ReturnType<typeof useI18n>["t"]): string {
@@ -335,9 +351,14 @@ function ProcessDetailsGroup({
   );
 }
 
-function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onOpenFile }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
   const { t, locale } = useI18n();
   const toast = useToast();
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
+  const showToast = useCallback((notification: Parameters<typeof toast.show>[0]) => {
+    if (isActiveRef.current) toast.show(notification);
+  }, [toast]);
   const [slashResources, setSlashResources] = useState<SlashResource[]>([]);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -385,7 +406,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const statsEmit = useToolCallStatsEmit();
 
   const {
-    loading, error, messages, entryIds, entryTimestamps, compactionPoints, streamState,
+    loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, streamState,
     agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps,
     toolSelection, availableTools, toolsLoading, toolsError, thinkingLevel,
     retryInfo,
@@ -407,11 +428,21 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     statsEmit,
     scrollToEntryId,
     onScrollComplete,
+    isActive,
+    controllerId: tabId,
   });
 
   // Tool call stats hook — snapshot is published to the module store so the
   // right-panel tab + vertical button (in AppShell) can render it.
   const { snapshot } = useToolCallStats(messages);
+
+  useEffect(() => {
+    onAgentStatusChange?.({
+      running: agentRunning,
+      streaming: streamState.isStreaming,
+      error: error ?? runtimeError,
+    });
+  }, [agentRunning, streamState.isStreaming, error, runtimeError, onAgentStatusChange]);
 
   // First user message text — used to gate the auto-name button. The server
   // route reads the same field from the .jsonl, so this is purely a UI
@@ -449,14 +480,15 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // every render, so we register once on mount and update isStreaming
   // imperatively.
   useEffect(() => {
+    if (!isActive) return;
     setAgentControls({
       abortStreaming: handleAbort,
       isStreaming: agentRunning,
-    });
-    return () => setAgentControls(null);
+    }, tabId);
+    return () => setAgentControls(null, tabId);
     // Handlers come from useAgentSession (stable useCallback refs); only
     // re-register when the bits that drive `when()` predicates change.
-  }, [agentRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, agentRunning, tabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Session Library: derive entries + reset on session change ──
   const { entries: sessionLibraryEntries } = useSessionLibraryEntries(messages);
@@ -471,8 +503,8 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   //    layer of state. ──
   const pendingAskUserQuestions = usePendingAskUserQuestions(currentSessionId);
   useEffect(() => {
-    resetSessionLibrary();
-  }, [currentSessionId]);
+    if (isActive) resetSessionLibrary();
+  }, [isActive, currentSessionId]);
   const handleOpenFileFromLibrary = useCallback(
     (filePath: string, fileName: string) => {
       if (onOpenFile) onOpenFile(filePath, fileName);
@@ -515,16 +547,16 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-      toast.show({ kind: "success", message: t("Exported") });
+      showToast({ kind: "success", message: t("Exported") });
     } catch (error) {
-      toast.show({
+      showToast({
         kind: "error",
         message: `${t("Export failed")}: ${error instanceof Error ? error.message : String(error)}`,
       });
     } finally {
       setIsExporting(false);
     }
-  }, [currentSessionId, activeLeafId, locale, isExporting, t, toast]);
+  }, [currentSessionId, activeLeafId, locale, isExporting, showToast, t]);
 
   // Scroll-to-bottom helper, hoisted before handleCompactClick so the compact
   // path can call it. Sets userScrolledUpRef=false to re-engage sticky-bottom
@@ -553,7 +585,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   const handleCompactClick = useCallback(async () => {
     if (!currentSessionId) return;
     if (agentRunning) {
-      toast.show({ kind: "error", message: t("Wait for the current turn to end before compacting.") });
+      showToast({ kind: "error", message: t("Wait for the current turn to end before compacting.") });
       return;
     }
     // Scroll to the bottom right away so the user sees the "Compacting..."
@@ -565,7 +597,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     // scroll landed at the pre-reload scrollHeight, so re-scroll to the new
     // bottom to bring the divider into view.
     handleToBottom();
-  }, [currentSessionId, agentRunning, handleCompact, handleToBottom, t, toast]);
+  }, [currentSessionId, agentRunning, handleCompact, handleToBottom, showToast, t]);
 
   // Running summary for the vertical toolbar badge
   const runningSummary = agentPhase?.kind === "running_tools" && agentPhase.tools.length > 0
@@ -578,8 +610,9 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // AppShell's right-panel tab + vertical button can render them without
   // owning the reducer state themselves.
   useEffect(() => {
+    if (!isActive) return;
     setToolCallStatsState({ snapshot, runningSummary });
-  }, [snapshot, runningSummary]);
+  }, [isActive, snapshot, runningSummary]);
 
   // ── Scroll-to-bottom: auto-track during streaming, pause on user scroll-up ──
   const [showToBottom, setShowToBottom] = useState(false);
@@ -650,6 +683,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
 
   // ── In-session search: Ctrl+F toggle ──
   useEffect(() => {
+    if (!isActive) return;
     const handleKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "f" && session) {
         e.preventDefault();
@@ -658,7 +692,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [session]);
+  }, [isActive, session]);
 
   // ── In-session search: close on session change ──
   useEffect(() => {
@@ -937,9 +971,10 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   // body can jump to a tool-call message when the user clicks a row. Clear on
   // unmount so a stale callback can't be invoked from a different session.
   useEffect(() => {
-    setToolCallStatsScrollCallback(handleScrollToToolCall);
-    return () => setToolCallStatsScrollCallback(null);
-  }, [handleScrollToToolCall]);
+    if (!isActive) return;
+    setToolCallStatsScrollCallback(handleScrollToToolCall, tabId);
+    return () => setToolCallStatsScrollCallback(null, tabId);
+  }, [isActive, handleScrollToToolCall, tabId]);
 
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
   const isStreamingThinking = streamState.isStreaming && hasStreamingThinking(streamState.streamingMessage);
@@ -1015,7 +1050,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
       }
       const name = suggestBody.name.trim();
       if (!name) {
-        toast.show({ kind: "error", message: t("Auto-naming returned an empty name") });
+        showToast({ kind: "error", message: t("Auto-naming returned an empty name") });
         return;
       }
 
@@ -1042,10 +1077,10 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
       onSessionNameChange?.(name);
       try { await onRenameCompleted?.(); } catch { /* sidebar refresh is best-effort */ }
       if (mode === "manual") {
-        toast.show({ kind: "success", message: `${t("Renamed")} ${name}` });
+        showToast({ kind: "success", message: `${t("Renamed")} ${name}` });
       }
     } catch (error) {
-      toast.show({
+      showToast({
         kind: "error",
         message: `${t("Auto-naming failed")}: ${
           error instanceof Error && error.message ? error.message : t("Network error")
@@ -1061,7 +1096,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
     firstUserMessageText,
     currentSessionName,
     confirm,
-    toast,
+    showToast,
     onSessionNameChange,
     onRenameCompleted,
     t,
@@ -1126,9 +1161,10 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
   ]);
 
   useEffect(() => {
-    setChatHeaderActions(headerActions);
-    return () => setChatHeaderActions(null);
-  }, [headerActions]);
+    if (!isActive) return;
+    setChatHeaderActions(headerActions, tabId);
+    return () => setChatHeaderActions(null, tabId);
+  }, [isActive, headerActions, tabId]);
 
   const slashResourceKey = sessionId ?? (newSessionCwd ? `new:${newSessionCwd}` : "none");
 
@@ -1217,6 +1253,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
         }}
         sessionId={currentSessionId}
         userMessageHistory={userMessageHistory}
+        onDraftChange={onDraftChange}
         cwd={cwd ?? null}
         onCwdChange={onCwdChange ?? (() => {})}
       />
@@ -1753,11 +1790,13 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
       {/* Session Library modal — portal'd into document.body so it sits
           above all chat UI. Reads UI state from sessionLibraryStore and
           entry data from the live messages array. */}
-      <SessionLibraryModal
-        messages={messages}
-        cwd={session?.cwd}
-        onOpenFile={handleOpenFileFromLibrary}
-      />
+      {isActive && (
+        <SessionLibraryModal
+          messages={messages}
+          cwd={session?.cwd}
+          onOpenFile={handleOpenFileFromLibrary}
+        />
+      )}
       </>
       )}
     </div>

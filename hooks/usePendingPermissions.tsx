@@ -16,12 +16,15 @@ export type Decision = "allow_once" | "allow_similar" | "deny";
 interface PermissionContextValue {
   addRequest: (req: PendingPermissionRequest) => void;
   resolveRequest: (toolCallId: string, decision: Decision) => Promise<void>;
+  /** Only requests owned by this active session are surfaced as dialogs. */
+  setActiveSessionId: (sessionId: string | null) => void;
 }
 
 const PermissionContext = createContext<PermissionContextValue | null>(null);
 
 export function PermissionProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<PendingPermissionRequest[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   // Mirror in a ref so async POSTs always see the latest queue when removing
   // by toolCallId, even if React state hasn't yet committed.
   const queueRef = useRef<PendingPermissionRequest[]>([]);
@@ -49,10 +52,15 @@ export function PermissionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const head = queue[0] ?? null;
+  // Background controllers keep their pending requests queued, but never
+  // interrupt the currently visible session. Switching back to the owning tab
+  // reveals its oldest request without requiring an SSE reconnect.
+  const head = activeSessionId
+    ? queue.find((request) => request.sessionId === activeSessionId) ?? null
+    : null;
 
   return (
-    <PermissionContext.Provider value={{ addRequest, resolveRequest }}>
+    <PermissionContext.Provider value={{ addRequest, resolveRequest, setActiveSessionId }}>
       {children}
       {head && (
         <PermissionDialog

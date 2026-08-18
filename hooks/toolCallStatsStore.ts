@@ -62,6 +62,8 @@ export function setToolCallStatsState(patch: Partial<ToolCallStatsView>) {
 
 export function resetToolCallStatsView() {
   state = INITIAL;
+  scrollCallbackRef = null;
+  scrollCallbackOwner = null;
   emit();
 }
 
@@ -90,9 +92,15 @@ export function useToolCallStatsView(): ToolCallStatsView {
 // stash the latest callback in a module ref and expose a stable wrapper.
 
 let scrollCallbackRef: ((toolCallId: string) => void) | null = null;
+let scrollCallbackOwner: string | null = null;
 
-export function setToolCallStatsScrollCallback(fn: ((toolCallId: string) => void) | null) {
+export function setToolCallStatsScrollCallback(
+  fn: ((toolCallId: string) => void) | null,
+  ownerId?: string,
+) {
+  if (fn === null && ownerId && scrollCallbackOwner !== ownerId) return;
   scrollCallbackRef = fn;
+  scrollCallbackOwner = fn === null ? null : ownerId ?? null;
 }
 
 export function useToolCallStatsScroll(): (toolCallId: string) => void {

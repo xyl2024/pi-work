@@ -23,6 +23,7 @@ interface Props {
   onInitialRestoreDone?: () => void;
   refreshKey?: number;
   onSessionDeleted?: (sessionId: string) => void;
+  onSessionRenamed?: (sessionId: string, name: string) => void;
   onNewSession?: (cwd?: string) => void;
   // cwd of the active chat context (selected session or in-flight new
   // session). The sidebar no longer renders an editable picker — this is
@@ -140,7 +141,7 @@ const WORKSPACE_PAGE_SIZE = 5;
 const SESSION_PAGE_SIZE_GROUPED = 3;
 const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenMcp, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenMcp, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const [labOpen, setLabOpen] = useState(false);
@@ -590,10 +591,26 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
 
   // Refresh both the workspace metadata (lastUsed may shift) and the
   // current cwd's session page (name may change) after a rename.
-  const handleSessionRenamed = useCallback(() => {
+  const handleSessionRenamed = useCallback((sessionId: string, name: string) => {
+    setPerCwdSessions((prev) => {
+      let changed = false;
+      const next: Record<string, CwdSessionsState> = {};
+      for (const [cwd, state] of Object.entries(prev)) {
+        let rowChanged = false;
+        const sessions = state.sessions.map((session) => {
+          if (session.id !== sessionId || session.name === name) return session;
+          changed = true;
+          rowChanged = true;
+          return { ...session, name };
+        });
+        next[cwd] = rowChanged ? { ...state, sessions } : state;
+      }
+      return changed ? next : prev;
+    });
+    onSessionRenamed?.(sessionId, name);
     void fetchWorkspaces(null, "reset");
     if (selectedCwdProp) void fetchCwdSessions(selectedCwdProp, null, "reset");
-  }, [fetchWorkspaces, fetchCwdSessions, selectedCwdProp]);
+  }, [onSessionRenamed, fetchWorkspaces, fetchCwdSessions, selectedCwdProp]);
 
   const handleSessionDeleted = useCallback((sessionId: string) => {
     onSessionDeleted?.(sessionId);

@@ -93,6 +93,13 @@ interface Props {
    * and devices. Used by the input history navigation in handleKeyDown.
    */
   userMessageHistory?: string[];
+  /** Publish the tab-local unsent draft state to the session workspace. */
+  onDraftChange?: (draft: {
+    dirty: boolean;
+    text: string;
+    imageCount: number;
+    cursorPosition: number;
+  }) => void;
 }
 
 export interface ChatInputHandle {
@@ -310,6 +317,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onCwdChange,
   sessionId,
   userMessageHistory,
+  onDraftChange,
 }: Props, ref) {
   const { t, locale } = useI18n();
   // Pick the active locale's typewriter phrases from the settings store.
@@ -361,6 +369,26 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
   const [thinkingHovered, setThinkingHovered] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
+  const attachedImagesRef = useRef<AttachedImage[]>([]);
+  attachedImagesRef.current = attachedImages;
+
+  // Keep the draft owned by this input/controller. The workspace only needs a
+  // small dirty snapshot for close confirmation; the actual text and images
+  // remain here so switching tabs never round-trips them through the server.
+  useEffect(() => {
+    onDraftChange?.({
+      dirty: Boolean(value.trim() || attachedImages.length || selectedSlashResource),
+      text: value,
+      imageCount: attachedImages.length,
+      cursorPosition,
+    });
+  }, [value, attachedImages.length, selectedSlashResource, cursorPosition, onDraftChange]);
+
+  // Revoke object URLs when this tab/controller is finally closed. A ref is
+  // required so changing the attachment list does not revoke URLs still in use.
+  useEffect(() => () => {
+    for (const image of attachedImagesRef.current) URL.revokeObjectURL(image.previewUrl);
+  }, []);
 
   // Input history index: `historyIndex` is null when the user is NOT
   // browsing history (regular draft editing). `draftBeforeHistory` is the

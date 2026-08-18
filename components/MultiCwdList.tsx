@@ -47,7 +47,7 @@ interface MultiCwdListProps {
   onLoadMoreWorkspaces: () => void;
   onLoadMoreCwdSessions: (cwd: string) => void;
   onToggleFavorite?: (sessionId: string) => void;
-  onSessionRenamed: () => void;
+  onSessionRenamed: (sessionId: string, name: string) => void;
   onSessionDeleted: (sessionId: string) => void;
   /** Called with the workspace cwd when the per-cwd "+" button is clicked.
    *  Wraps the parent-side new-session handler so the caller can decide
@@ -148,7 +148,7 @@ export function MultiCwdList({
             onSelectSession={onSelectSession}
             onLoadMoreSessions={() => onLoadMoreCwdSessions(ws.cwd)}
             onToggleFavorite={onToggleFavorite}
-            onSessionRenamed={() => onSessionRenamed()}
+            onSessionRenamed={onSessionRenamed}
             onSessionDeleted={onSessionDeleted}
             onNewSession={onNewSession}
           />
@@ -200,7 +200,7 @@ interface CwdGroupProps {
   onSelectSession: (session: SessionInfo) => void;
   onLoadMoreSessions: () => void;
   onToggleFavorite?: (sessionId: string) => void;
-  onSessionRenamed: () => void;
+  onSessionRenamed: (sessionId: string, name: string) => void;
   onSessionDeleted: (sessionId: string) => void;
   onNewSession?: (cwd: string) => void;
 }

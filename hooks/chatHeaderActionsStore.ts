@@ -41,11 +41,17 @@ export interface ChatHeaderActions {
 }
 
 let state: ChatHeaderActions | null = null;
+let ownerId: string | null = null;
 const listeners = new Set<() => void>();
 
-export function setChatHeaderActions(next: ChatHeaderActions | null) {
-  if (isContentEqual(next, state)) return;
+export function setChatHeaderActions(next: ChatHeaderActions | null, nextOwnerId?: string) {
+  // An old controller's cleanup must not clear the active controller's
+  // header actions after a tab switch.
+  if (next === null && nextOwnerId && ownerId !== nextOwnerId) return;
+  const nextOwner = next === null ? null : nextOwnerId ?? null;
+  if (isContentEqual(next, state) && ownerId === nextOwner) return;
   state = next;
+  ownerId = nextOwner;
   for (const l of listeners) l();
 }
 

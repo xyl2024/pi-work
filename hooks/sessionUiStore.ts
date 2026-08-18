@@ -15,9 +15,9 @@ import { isContentEqual } from "@/lib/shallowEqual";
  * loops. That pattern was repeated 5 times (~150 lines) and broke whenever
  * ChatWindow remounted (the cleanup-on-unmount effects wiped the top bar).
  *
- * The store is module-scoped: useAgentSession writes; AppShell reads via
- * `useSessionUiState()`. State survives ChatWindow remounts, eliminating the
- * top-bar flash on session switches. There is exactly one source of truth.
+ * The store is module-scoped: the active session controller projects its
+ * snapshot; AppShell reads via `useSessionUiState()`. Background controllers
+ * are deliberately ignored so they cannot overwrite the visible top bar.
  *
  * Functions don't live in the snapshot (they would force infinite re-renders).
  * The branch-leaf-change handler is held in a ref instead, exposed via
@@ -128,9 +128,13 @@ export function useSessionUiState(): SessionUiState {
   return useSyncExternalStore(subscribeSessionUi, getSessionUiSnapshot, getSessionUiServerSnapshot);
 }
 
-/** Reset all session UI state. Call on session / cwd / new-session transitions. */
+/** Reset the active projection (used only for full workspace teardown). */
 export function resetSessionUi() {
   state = INITIAL;
+  leafChangeHandlerRef = null;
+  leafChangeOwner = null;
+  agentControlsRef = null;
+  agentControlsOwner = null;
   emit();
 }
 
@@ -143,8 +147,17 @@ export function resetSessionUi() {
 
 let leafChangeHandlerRef: ((leafId: string | null) => void) | null = null;
 
-export function setLeafChangeHandler(fn: ((leafId: string | null) => void) | null) {
+let leafChangeOwner: string | null = null;
+
+export function setLeafChangeHandler(
+  fn: ((leafId: string | null) => void) | null,
+  ownerId?: string,
+) {
+  // A stale cleanup from an old active controller must not clear the handler
+  // that a newly-active controller just registered.
+  if (fn === null && ownerId && leafChangeOwner !== ownerId) return;
   leafChangeHandlerRef = fn;
+  leafChangeOwner = fn === null ? null : ownerId ?? null;
 }
 
 export function useSessionLeafChange(): (leafId: string | null) => void {
@@ -156,17 +169,22 @@ export function useSessionLeafChange(): (leafId: string | null) => void {
 // ── Agent controls (palette bridge) ─────────────────────────────────────
 // Imperative handlers owned by useAgentSession inside ChatWindow, exposed
 // here so AppShell can wire them into the command palette. ChatWindow
-// registers the controls on mount and clears them on unmount. The store
-// notifies subscribers when the reference changes (mount / unmount), but
+// registers controls while active and clears them only while it still owns
+// the bridge. The store notifies subscribers when the reference changes, but
 // individual functions inside `controls` are stable across re-renders —
 // they are recreated by useCallback in useAgentSession only when their
 // own deps change, which the palette doesn't need to track.
 
 let agentControlsRef: AgentControls | null = null;
+let agentControlsOwner: string | null = null;
 const agentControlsListeners = new Set<() => void>();
 
-export function setAgentControls(c: AgentControls | null) {
+export function setAgentControls(c: AgentControls | null, ownerId?: string) {
+  // Ignore cleanup from a background/previous controller when another tab has
+  // already claimed the active command-palette bridge.
+  if (c === null && ownerId && agentControlsOwner !== ownerId) return;
   agentControlsRef = c;
+  agentControlsOwner = c === null ? null : ownerId ?? null;
   for (const l of agentControlsListeners) l();
 }
 

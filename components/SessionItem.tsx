@@ -11,7 +11,7 @@ interface SessionItemProps {
   session: SessionInfo;
   isSelected: boolean;
   onClick: () => void;
-  onRenamed?: () => void;
+  onRenamed?: (sessionId: string, name: string) => void;
   onDeleted?: (id: string) => void;
   isFavorited?: boolean;
   onToggleFavorite?: () => void;
@@ -149,7 +149,7 @@ export function SessionItem({
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      onRenamed?.();
+      onRenamed?.(session.id, name);
       toast.show({ kind: "success", message: t("Session renamed") });
     } catch (e) {
       toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to rename session") });
