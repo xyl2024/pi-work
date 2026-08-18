@@ -643,7 +643,7 @@ export function TodoPanel() {
           />
         ))}
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", boxShadow: "0 -6px 14px var(--bg-subtle)" }}>
+      <div style={{ flex: 1.2, minHeight: 0, overflowY: "auto", boxShadow: "0 -6px 14px var(--bg-subtle)" }}>
         <TodoMonthCalendar
           todos={calendarTodos}
           month={calendarMonth}
