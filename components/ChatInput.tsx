@@ -6,11 +6,15 @@ import { useSettings } from "@/hooks/settingsStore";
 import { SmartImage } from "./SmartImage";
 import { Tooltip } from "./Tooltip";
 import { IconHoverButton } from "./IconHoverButton";
+import { ContextUsageBar } from "./ContextUsageBar";
+import { SessionTokenTotals } from "./SessionTokenTotals";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "./ProviderIcon";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { CwdPicker } from "./CwdPicker";
 import { AnimatedPopover } from "./AnimatedPopover";
 import { DEFAULT_TYPEWRITER_PHRASES } from "@/lib/typewriter-phrases";
+import { useChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
+import { useSessionUiState } from "@/hooks/sessionUiStore";
 import type { ToolInfo, ToolSelection } from "@/lib/types";
 
 export interface AttachedImage {
@@ -320,6 +324,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onDraftChange,
 }: Props, ref) {
   const { t, locale } = useI18n();
+  const headerActions = useChatHeaderActions();
+  const { contextUsage, sessionStats } = useSessionUiState();
   // Pick the active locale's typewriter phrases from the settings store.
   // Falls back to the bundled defaults whenever the store hasn't loaded
   // yet (initial mount) or the user-supplied list is empty for this
@@ -359,6 +365,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Custom row's expand/collapse state. Sticky within the popover's open
   // session — collapsing on every outside click would be annoying since the
   // user frequently toggles a checkbox, clicks outside to close the
@@ -856,12 +865,61 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (thinkingDropdownRef.current && !thinkingDropdownRef.current.contains(e.target as Node)) {
         setThinkingDropdownOpen(false);
       }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const cancelMoreMenuClose = useCallback(() => {
+    if (moreMenuCloseTimerRef.current) {
+      clearTimeout(moreMenuCloseTimerRef.current);
+      moreMenuCloseTimerRef.current = null;
+    }
+  }, []);
 
+  const scheduleMoreMenuClose = useCallback(() => {
+    cancelMoreMenuClose();
+    moreMenuCloseTimerRef.current = setTimeout(() => {
+      moreMenuCloseTimerRef.current = null;
+      setMoreMenuOpen(false);
+    }, 120);
+  }, [cancelMoreMenuClose]);
+
+  useEffect(() => () => {
+    cancelMoreMenuClose();
+  }, [cancelMoreMenuClose]);
+
+  const moreActionItems = useMemo(() => {
+    if (!headerActions) return [];
+    return [
+      headerActions.replayVisible ? { key: "replay", label: t("Replay"), onClick: headerActions.onOpenReplay } : null,
+      headerActions.exportVisible ? {
+        key: "export",
+        label: headerActions.isExporting ? t("Exporting...") : t("Export session"),
+        onClick: headerActions.onExport,
+        disabled: headerActions.isExporting,
+      } : null,
+      headerActions.autoNameVisible ? {
+        key: "auto-name",
+        label: headerActions.isAutoNaming ? t("Naming...") : t("Auto-name session"),
+        onClick: headerActions.onAutoName,
+        disabled: headerActions.isAutoNaming || !headerActions.canAutoName,
+      } : null,
+      headerActions.compactVisible ? {
+        key: "compact",
+        label: headerActions.isCompacting ? t("Compacting...") : t("Compact"),
+        onClick: headerActions.onCompact,
+        disabled: headerActions.isCompacting || headerActions.compactDisabled,
+      } : null,
+    ].filter((item): item is { key: string; label: string; onClick: () => void; disabled?: boolean } => Boolean(item));
+  }, [headerActions, t]);
+
+  useEffect(() => {
+    if (moreActionItems.length === 0) setMoreMenuOpen(false);
+  }, [moreActionItems.length]);
 
   return (
     <div
@@ -1197,7 +1255,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         )}
 
-        {/* Bottom bar: left | center (context) | right */}
+        {/* Bottom bar: left | stats | right */}
         <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
 
           {/* LEFT: attach + model selector */}
@@ -1322,7 +1380,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {/* spacer */}
           <div style={{ flex: 1 }} />
 
-          {/* RIGHT: thinking + tools preset | Stop (streaming) */}
+          {(contextUsage || sessionStats) && (
+            <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 4 }}>
+              {contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
+              <SessionTokenTotals />
+            </div>
+          )}
+
+          {/* RIGHT: thinking + tools preset | More | Stop (streaming) */}
           <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2, marginLeft: "auto" }}>
             {/* Streaming: show the chosen thinking level as a read-only
                 badge instead of the icon button (the level can't be changed
@@ -1491,6 +1556,115 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     });
                   }}
                 />
+              </div>
+            )}
+            {moreActionItems.length > 0 && (
+              <div
+                ref={moreMenuRef}
+                style={{ position: "relative", display: "flex", alignItems: "center" }}
+                onMouseEnter={() => {
+                  cancelMoreMenuClose();
+                  setMoreMenuOpen(true);
+                }}
+                onMouseLeave={scheduleMoreMenuClose}
+              >
+                <Tooltip content={t("More actions")}>
+                  <button
+                    type="button"
+                    aria-label={t("More actions")}
+                    aria-haspopup="menu"
+                    aria-expanded={moreMenuOpen}
+                    onClick={() => setMoreMenuOpen((v) => !v)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 32,
+                      height: 32,
+                      padding: 0,
+                      flexShrink: 0,
+                      border: "none",
+                      borderRadius: 9999,
+                      background: moreMenuOpen ? "var(--bg-hover)" : "none",
+                      color: "var(--text-muted)",
+                      cursor: "pointer",
+                      transition: "background 0.12s, color 0.12s",
+                    }}
+                    onMouseEnter={(e) => {
+                      cancelMoreMenuClose();
+                      e.currentTarget.style.background = "var(--bg-hover)";
+                      e.currentTarget.style.color = "var(--text)";
+                    }}
+                    onMouseLeave={(e) => {
+                      scheduleMoreMenuClose();
+                      e.currentTarget.style.background = moreMenuOpen ? "var(--bg-hover)" : "none";
+                      e.currentTarget.style.color = "var(--text-muted)";
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="5" r="1.5" />
+                      <circle cx="12" cy="12" r="1.5" />
+                      <circle cx="12" cy="19" r="1.5" />
+                    </svg>
+                  </button>
+                </Tooltip>
+                <AnimatedPopover
+                  open={moreMenuOpen}
+                  role="menu"
+                  onMouseEnter={cancelMoreMenuClose}
+                  onMouseLeave={scheduleMoreMenuClose}
+                  style={{
+                    position: "absolute",
+                    bottom: "calc(100% + 6px)",
+                    right: 0,
+                    zIndex: 120,
+                    background: "var(--bg-panel)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+                    minWidth: 180,
+                  }}
+                >
+                  {moreActionItems.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        cancelMoreMenuClose();
+                        setMoreMenuOpen(false);
+                        item.onClick();
+                      }}
+                      disabled={item.disabled}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        width: "100%",
+                        padding: "8px 12px",
+                        border: "none",
+                        background: "none",
+                        color: item.disabled ? "var(--text-dim)" : "var(--text-muted)",
+                        cursor: item.disabled ? "not-allowed" : "pointer",
+                        fontSize: 12,
+                        textAlign: "left",
+                        whiteSpace: "nowrap",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (item.disabled) return;
+                        cancelMoreMenuClose();
+                        e.currentTarget.style.background = "var(--bg-hover)";
+                        e.currentTarget.style.color = "var(--text)";
+                      }}
+                      onMouseLeave={(e) => {
+                        scheduleMoreMenuClose();
+                        if (item.disabled) return;
+                        e.currentTarget.style.background = "none";
+                        e.currentTarget.style.color = "var(--text-muted)";
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </AnimatedPopover>
               </div>
             )}
 

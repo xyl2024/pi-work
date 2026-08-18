@@ -5,8 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionUiState, useSessionLeafChange } from "@/hooks/sessionUiStore";
 import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
 import { SessionSidebar } from "./SessionSidebar";
-import { ContextUsageBar } from "./ContextUsageBar";
-import { SessionTokenTotals } from "./SessionTokenTotals";
 import { ChatWindow } from "./ChatWindow";
 import { SessionTabBar } from "./SessionTabBar";
 import { FileViewer } from "./FileViewer";
@@ -34,7 +32,6 @@ import { useToolCallStatsView, useToolCallStatsScroll } from "@/hooks/toolCallSt
 import { ModelsConfig } from "./ModelsConfig";
 import { SkillsConfig } from "./SkillsConfig";
 import { Tooltip } from "./Tooltip";
-import { IconHoverButton } from "./IconHoverButton";
 import { PromptsConfig } from "./PromptsConfig";
 import { SettingsModal } from "./SettingsModal";
 import { McpConfig } from "./McpConfig";
@@ -49,7 +46,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useInboxUnreadCount } from "@/hooks/useInboxUnreadCount";
 import { useRssUnreadCount } from "@/hooks/useRssUnreadCount";
 import { MorphToggleIcon } from "./MorphToggleIcon";
-import { MENU, PANEL_LEFT, DOWNLOAD, LOADER, SPARKLE, CLOCK, MINIFY } from "@/lib/icon-paths";
+import { MENU, PANEL_LEFT } from "@/lib/icon-paths";
 import { useToast } from "./Toast";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import type { SessionInfo, SessionSearchResult } from "@/lib/types";
@@ -74,7 +71,6 @@ import type { ChatInputHandle } from "./ChatInput";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { buildCommands, type Command, type CommandContext } from "@/lib/commands";
 import { useAgentControls } from "@/hooks/sessionUiStore";
-import { useChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
 import { RightBarColumn } from "./rightBar/RightBarColumn";
 import type { RightBarCtx } from "./rightBar/desc";
 import { useGitStatusStore } from "@/lib/git-status-store";
@@ -344,7 +340,6 @@ export function AppShell() {
   // ChatWindow registers these on mount via the sessionUiStore (null when
   // no session is mounted).
   const agentControls = useAgentControls();
-  const headerActions = useChatHeaderActions();
 
   const openPalette = useCallback(() => {
     // The palette is the top-level modal — opening it closes every other
@@ -362,7 +357,7 @@ export function AppShell() {
   // Session-level UI state (branch tree, system prompt, stats, context usage)
   // is owned by each tab controller. Only the active controller projects its
   // snapshot into this module-level bridge for the chat footer/right panels.
-  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, contextUsage, sessionStats } = useSessionUiState();
+  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
 
   // Tools are cached per formal session. Activating an already-open tab only
@@ -1434,79 +1429,6 @@ export function AppShell() {
             );
           })}
         </div>
-        {showChat && (headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible || headerActions.compactVisible) || contextUsage || sessionStats) && (
-          <div style={{ padding: "8px 16px 0" }}>
-            <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-              {headerActions && (headerActions.replayVisible || headerActions.exportVisible || headerActions.autoNameVisible || headerActions.compactVisible) && (
-                <>
-                  {headerActions.replayVisible && (
-                    <IconHoverButton
-                      icon={
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" />
-                        </svg>
-                      }
-                      label={t("Replay")}
-                      onClick={headerActions.onOpenReplay}
-                    />
-                  )}
-                  {headerActions.exportVisible && (
-                    <IconHoverButton
-                      icon={
-                        <MorphToggleIcon
-                          from={DOWNLOAD}
-                          to={LOADER}
-                          active={headerActions.isExporting}
-                          size={12}
-                        />
-                      }
-                      label={headerActions.isExporting ? t("Exporting...") : t("Export session")}
-                      onClick={headerActions.onExport}
-                      disabled={headerActions.isExporting}
-                      variant={headerActions.isExporting ? "accent" : "default"}
-                    />
-                  )}
-                  {headerActions.autoNameVisible && (
-                    <IconHoverButton
-                      icon={
-                        <MorphToggleIcon
-                          from={SPARKLE}
-                          to={CLOCK}
-                          active={headerActions.isAutoNaming}
-                          size={12}
-                        />
-                      }
-                      label={headerActions.isAutoNaming ? t("Naming...") : t("Auto-name session")}
-                      onClick={headerActions.onAutoName}
-                      disabled={!headerActions.canAutoName}
-                      variant={headerActions.isAutoNaming ? "accent" : "default"}
-                    />
-                  )}
-                  {headerActions.compactVisible && (
-                    <IconHoverButton
-                      icon={
-                        <MorphToggleIcon
-                          from={MINIFY}
-                          to={LOADER}
-                          active={headerActions.isCompacting}
-                          size={12}
-                        />
-                      }
-                      label={headerActions.isCompacting ? t("Compacting...") : t("Compact")}
-                      onClick={headerActions.onCompact}
-                      disabled={headerActions.isCompacting || headerActions.compactDisabled}
-                      variant={headerActions.isCompacting ? "accent" : "default"}
-                    />
-                  )}
-                </>
-              )}
-              <div style={{ flex: 1, minWidth: 12 }} />
-              {contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
-              <SessionTokenTotals />
-            </div>
-          </div>
-        )}
-
       </div>
 
       {/* Right panel: file viewer — always mounted, width animated via CSS */}

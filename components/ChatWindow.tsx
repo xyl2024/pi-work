@@ -1685,9 +1685,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           </div>
         </div>
 
-        {/* Bottom-right action stack — all launchers + actions stay mounted
-            at all times so the affordance is stable. Disabled + dimmed when
-            the action doesn't apply. Hard-coded bilingual labels for the
+        {/* Bottom-right action stack — all launchers stay mounted at all
+            times so the affordance is stable. Disabled + dimmed when the
+            action doesn't apply. Hard-coded bilingual labels for the
             "回到底部" button per product decision (no i18n key).
 
             `right` is computed against the parent (`flex-1 overflow-hidden`

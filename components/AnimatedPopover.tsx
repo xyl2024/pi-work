@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CSSProperties, ReactNode, Ref } from "react";
+import type { CSSProperties, MouseEventHandler, ReactNode, Ref } from "react";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 
 /**
@@ -15,13 +15,15 @@ import { useCollapseHeight } from "@/hooks/useCollapseHeight";
  * animation-owned properties (height, opacity, overflow, pointerEvents,
  * transition) are applied by this component and cannot be overridden.
  */
-export function AnimatedPopover({ open, style, maxHeight, role, panelRef, children }: {
+export function AnimatedPopover({ open, style, maxHeight, role, panelRef, onMouseEnter, onMouseLeave, children }: {
   open: boolean;
   style?: CSSProperties;
   /** Optional cap for the animated height (e.g. space above the trigger). */
   maxHeight?: number;
   role?: string;
   panelRef?: Ref<HTMLDivElement>;
+  onMouseEnter?: MouseEventHandler<HTMLDivElement>;
+  onMouseLeave?: MouseEventHandler<HTMLDivElement>;
   children: ReactNode;
 }) {
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
@@ -47,6 +49,8 @@ export function AnimatedPopover({ open, style, maxHeight, role, panelRef, childr
       ref={panelRef}
       role={role}
       aria-hidden={!open}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       style={{
         ...style,
         height: open ? targetHeight : 0,
