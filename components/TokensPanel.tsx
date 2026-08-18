@@ -199,7 +199,7 @@ export function TokensPanel() {
         range={range}
         onChangeRange={setRange}
       />
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
         <KpiStrip totals={totals} />
 
         <div

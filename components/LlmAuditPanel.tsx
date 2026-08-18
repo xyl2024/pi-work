@@ -154,7 +154,7 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg)" }}>
       <Toolbar filter={filter} onChangeFilter={setFilter} onRefresh={() => load()} />
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+      <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Pagination — at the top so the page controls stay adjacent to the
             controls (Toolbar) and the user can jump pages without scrolling. */}
         {total > PAGE_LIMIT && (
@@ -493,7 +493,7 @@ function CallList({
             </button>
 
             {isOpen && (
-              <div style={{ borderTop: "1px solid var(--border)", padding: "12px", display: "flex", flexDirection: "column", gap: 10, maxHeight: "60vh", overflowY: "auto" }}>
+              <div data-scroll-wide style={{ borderTop: "1px solid var(--border)", padding: "12px", display: "flex", flexDirection: "column", gap: 10, maxHeight: "60vh", overflowY: "auto" }}>
                 {detailLoading ? (
                   <div style={{ color: "var(--text-muted)", fontSize: 12 }}>{t("Loading")}…</div>
                 ) : detail ? (
@@ -625,6 +625,7 @@ function Section({ title, body, mono }: { title: string; body: string; mono?: bo
         </Tooltip>
       </div>
       <pre
+        data-scroll-inset
         style={{
           margin: 0,
           padding: "8px 10px",

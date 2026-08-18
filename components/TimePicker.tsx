@@ -648,6 +648,7 @@ function ColumnWheel({
           visually "deeper" than the highlighted middle row. */}
       <div
         ref={innerRef}
+        data-scroll-inset
         onScroll={handleScroll}
         style={{
           position: "relative",

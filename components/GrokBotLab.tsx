@@ -303,6 +303,7 @@ export function GrokBotLab({ onClose }: Props) {
 
           {/* Config column */}
           <div
+            data-scroll-wide
             style={{
               flex: 1,
               minWidth: 0,

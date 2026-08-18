@@ -226,7 +226,7 @@ export function TaskDetail({
       </div>
 
       {/* Tab body */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
+      <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
         {tab === "overview" && <TaskOverviewTab task={task} runs={runs} />}
         {tab === "runs" && (
           <TaskRunsTab

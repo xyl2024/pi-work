@@ -173,7 +173,7 @@ export function CwdPicker({
           fontSize: 12,
         }}
       >
-          <div style={{ maxHeight: 320, overflowY: "auto" }}>
+          <div data-scroll-inset style={{ maxHeight: 320, overflowY: "auto" }}>
             {/* Recent list */}
             {recentCwds.map((rcwd) => (
               <Tooltip key={`recent-${rcwd}`} content={rcwd}>

@@ -619,7 +619,7 @@ export function TodoPanel() {
         onRefresh={refresh}
         refreshing={loading}
       />
-      <div style={{ flex: 2, minHeight: 0, overflowY: "auto", padding: "4px 6px" }}>
+      <div data-scroll-wide style={{ flex: 2, minHeight: 0, overflowY: "auto", padding: "4px 6px" }}>
         {loading && todos.length === 0 && (
           <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
             {t("Loading...")}
@@ -643,7 +643,7 @@ export function TodoPanel() {
           />
         ))}
       </div>
-      <div style={{ flex: 1.2, minHeight: 0, overflowY: "auto", boxShadow: "0 -6px 14px var(--bg-subtle)" }}>
+      <div data-scroll-wide style={{ flex: 1.2, minHeight: 0, overflowY: "auto", boxShadow: "0 -6px 14px var(--bg-subtle)" }}>
         <TodoMonthCalendar
           todos={calendarTodos}
           month={calendarMonth}
@@ -1099,6 +1099,7 @@ function TagPickerPopover({
     <div
       ref={ref}
       role="listbox"
+      data-scroll-inset
       style={{
         position: "absolute",
         top: "calc(100% + 4px)",
@@ -2240,7 +2241,7 @@ function TagManagerPopover({
           {t("No tags")}
         </div>
       )}
-      <div role="group" style={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 240, overflowY: "auto" }}>
+      <div role="group" data-scroll-inset style={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 240, overflowY: "auto" }}>
         {tagSuggestions.map((tag) => {
           const count = tagCounts[tag.name.toLowerCase()] ?? 0;
           const isEditing = editing === tag.name;
@@ -2814,6 +2815,7 @@ function EditTagsModal({
           {dropdownOpen && (
             <div
               role="listbox"
+              data-scroll-inset
               style={{
                 position: "absolute",
                 top: "calc(100% + 4px)",

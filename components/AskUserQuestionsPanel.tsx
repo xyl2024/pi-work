@@ -761,6 +761,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           role="tabpanel"
           id={`ask-tabpanel-${safeTab}`}
           aria-labelledby={`ask-tab-${safeTab}`}
+          data-scroll-wide
           style={{
             flex: 1,
             minHeight: 0,

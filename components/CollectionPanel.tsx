@@ -103,7 +103,7 @@ export function CollectionPanel({ favoriteIds, onSelectSession, onToggleFavorite
       </div>
 
       {/* List */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "4px 6px" }}>
+      <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "4px 6px" }}>
         {loading && rows.length === 0 && (
           <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
             {t("Loading...")}

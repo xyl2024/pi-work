@@ -90,7 +90,7 @@ export function MultiCwdList({
   const pendingQuestionSessionIds = new Set(pendingQuestions.map((p) => p.sessionId));
 
   return (
-    <div data-hover-scrollbar style={{ flex: 1, overflowY: "auto", padding: "4px 8px 8px", minHeight: 80, display: "flex", flexDirection: "column", gap: 8 }}>
+    <div data-scroll-side style={{ flex: 1, overflowY: "auto", padding: "4px 8px 8px", minHeight: 80, display: "flex", flexDirection: "column", gap: 8 }}>
       {loadingWorkspaces && workspaces.length === 0 && (
         <div style={{ padding: "16px 8px 6px", color: "var(--text-muted)", fontSize: 12 }}>
           {t("Loading projects...")}

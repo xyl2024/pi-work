@@ -121,7 +121,7 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
       </div>
       {mounted && (
         <div style={{ flex: isFixedHeight ? "0 0 auto" : "1 1 0", minHeight: 0, overflow: "hidden" }}>
-          <div data-hover-scrollbar style={{ height: isFixedHeight ? "auto" : "100%", overflowY: "auto", overflowX: "hidden" }}>
+          <div data-scroll-side style={{ height: isFixedHeight ? "auto" : "100%", overflowY: "auto", overflowX: "hidden" }}>
             {children}
           </div>
         </div>

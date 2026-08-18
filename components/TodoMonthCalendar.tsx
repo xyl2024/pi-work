@@ -81,7 +81,7 @@ const CALENDAR_PRIORITY_DOT: Record<NonNullable<Todo["priority"]>, { bg: string;
 
 function DayTooltipContent({ todos, t }: { todos: Todo[]; t: (key: string) => string }): ReactNode {
   return (
-    <div style={{ maxHeight: "min(60vh, 240px)", overflowY: "auto", minWidth: 160 }}>
+    <div data-scroll-inset style={{ maxHeight: "min(60vh, 240px)", overflowY: "auto", minWidth: 160 }}>
       <div style={{ fontWeight: 600, marginBottom: 4 }}>
         {t("{n} todos").replace("{n}", String(todos.length))}
       </div>

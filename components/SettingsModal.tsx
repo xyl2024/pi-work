@@ -837,6 +837,7 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
         {/* Body */}
         <div
           ref={bodyRef}
+          data-scroll-wide
           style={{
             flex: 1,
             overflowY: "auto",

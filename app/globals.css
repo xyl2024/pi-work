@@ -250,8 +250,10 @@ body {
   background: var(--text-dim);
 }
 
-/* Hide vertical scrollbar on the chat input textarea while keeping it
-   scrollable via wheel / touch / arrow keys. */
+/* Completely hide the scrollbar while keeping the element scrollable
+   via wheel / touch / arrow keys. Independent semantic from the
+   [data-scroll-*] presets — used where the design wants zero visual
+   scrollbar (e.g. the ChatInput textarea). */
 [data-hide-v-scrollbar] {
   scrollbar-width: none;
 }
@@ -260,75 +262,111 @@ body {
   height: 0;
 }
 
-/* Scrollbars in the left sidebar (session list + file explorer) stay
-   hidden until the mouse enters the scroll area, then appear on hover.
-   The thumb's resting color is the panel background — it must stay
-   opaque: Chromium stops applying :hover style switches to a thumb that
-   is fully transparent at rest (it treats the thumb as absent), so a
-   transparent rest state would never appear on hover. */
-[data-hover-scrollbar] {
+/* ──────────────────────────────────────────────────────────────────────
+   Scrollbar role presets — pick one with `data-scroll-<role>` on the
+   scrollable element. Three roles cover the visual hierarchy:
+
+     wide  10px  Primary scroll area: main chat pane, large modal bodies,
+                main panel lists. Hidden at rest; fades in / out (0.3s)
+                when the mouse enters / leaves. The thumb's resting
+                color must stay opaque (the side preset's caveat below
+                applies here too); visibility is animated via opacity
+                because background-color transitions on
+                -webkit-scrollbar-thumb are inconsistent across
+                Chromium versions. Firefox degrades to a hard swap
+                because scrollbar-color can't be opacity-transitioned.
+
+     side   4px  Auxiliary scroll: sidebar session / file lists and
+                similar long-lived secondary navigation. Hidden at rest,
+                hard show on hover, no fade.
+
+     inset  6px  Small embedded list: popover-style overflow regions
+                with maxHeight ≤ ~320px where the scroll needs to be
+                easy to grab but the region is secondary in the visual
+                hierarchy. Hidden at rest, hard show on hover, no fade.
+
+   All three (side, inset, wide at rest) honor the same Chromium
+   caveat: the thumb's resting background must stay opaque. A fully
+   transparent thumb is treated as absent and the :hover state never
+   applies — so we tint it with --bg-panel, which is visually identical
+   to the surrounding background in every theme (each theme's --bg vs
+   --bg-panel differ by only a few color stops).
+   ────────────────────────────────────────────────────────────────────── */
+
+[data-scroll-side] {
   scrollbar-width: thin;
   scrollbar-color: var(--bg-panel) transparent;
 }
-[data-hover-scrollbar]:hover {
+[data-scroll-side]:hover {
   scrollbar-color: var(--border) transparent;
 }
-[data-hover-scrollbar]::-webkit-scrollbar {
+[data-scroll-side]::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
-[data-hover-scrollbar]::-webkit-scrollbar-track {
+[data-scroll-side]::-webkit-scrollbar-track {
   background: transparent;
 }
-[data-hover-scrollbar]::-webkit-scrollbar-thumb {
+[data-scroll-side]::-webkit-scrollbar-thumb {
   background: var(--bg-panel);
+  border-radius: 2px;
 }
-[data-hover-scrollbar]:hover::-webkit-scrollbar-thumb {
+[data-scroll-side]:hover::-webkit-scrollbar-thumb {
   background: var(--border);
 }
-[data-hover-scrollbar]:hover::-webkit-scrollbar-thumb:hover {
+[data-scroll-side]:hover::-webkit-scrollbar-thumb:hover {
   background: var(--text-dim);
 }
 
-/* Wider scrollbar in the chat message list, hidden until the mouse
-   enters the chat area, then fades in / fades out smoothly.
+[data-scroll-inset] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-panel) transparent;
+}
+[data-scroll-inset]:hover {
+  scrollbar-color: var(--border) transparent;
+}
+[data-scroll-inset]::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+[data-scroll-inset]::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-scroll-inset]::-webkit-scrollbar-thumb {
+  background: var(--bg-panel);
+  border-radius: 3px;
+}
+[data-scroll-inset]:hover::-webkit-scrollbar-thumb {
+  background: var(--border);
+}
+[data-scroll-inset]:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dim);
+}
 
-   Implementation notes:
-   - Webkit: we keep the thumb's color at its final --border and
-     animate visibility via opacity (universally smooth on the
-     -webkit-scrollbar-thumb pseudo). The background-color
-     transition is inconsistent across Chromium versions and only
-     applied to the thumb-hover stage where it does work.
-   - Firefox: scrollbar-color doesn't support opacity/transition,
-     so the swap from transparent to --border is instant. Both
-     browsers stay fully hidden at rest.
-   - The single `opacity 0.2s` transition runs in both directions,
-     so mouse-enter fades in and mouse-leave fades out with no
-     extra plumbing. */
-[data-chat-scroll] {
+[data-scroll-wide] {
   scrollbar-width: auto;
   scrollbar-color: transparent transparent;
 }
-[data-chat-scroll]:hover {
+[data-scroll-wide]:hover {
   scrollbar-color: var(--border) transparent;
 }
-[data-chat-scroll]::-webkit-scrollbar {
+[data-scroll-wide]::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-[data-chat-scroll]::-webkit-scrollbar-track {
+[data-scroll-wide]::-webkit-scrollbar-track {
   background: transparent;
 }
-[data-chat-scroll]::-webkit-scrollbar-thumb {
+[data-scroll-wide]::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 5px;
   opacity: 0;
   transition: opacity 0.3s ease-out, background-color 0.25s ease-out;
 }
-[data-chat-scroll]:hover::-webkit-scrollbar-thumb {
+[data-scroll-wide]:hover::-webkit-scrollbar-thumb {
   opacity: 1;
 }
-[data-chat-scroll]:hover::-webkit-scrollbar-thumb:hover {
+[data-scroll-wide]:hover::-webkit-scrollbar-thumb:hover {
   background: var(--text-dim);
 }
 

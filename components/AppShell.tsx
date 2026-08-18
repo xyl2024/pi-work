@@ -1436,7 +1436,7 @@ export function AppShell() {
                   ) : (() => {
                     const sorted = [...tools].sort((a, b) => a.name.localeCompare(b.name));
                     return (
-                      <div style={{ maxHeight: "min(600px, 75vh)", overflowY: "auto" }}>
+                      <div data-scroll-wide style={{ maxHeight: "min(600px, 75vh)", overflowY: "auto" }}>
                         {sorted.map((tool) => (
                           <div
                             key={tool.name}

@@ -484,7 +484,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
           </nav>
 
           {/* Form scroll */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
             {section === "basics" && (
               <BasicConfigSection form={form} update={update} meta={meta} errors={{ name: nameError, prompt: promptError, cwd: cwdError, model: modelError, thinking: thinkingError }} />
             )}

@@ -234,7 +234,7 @@ export function InboxModal({ open, onClose }: Props) {
           </div>
         )}
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "12px 18px" }}>
+        <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "12px 18px" }}>
           {loading && messages.length === 0 && (
             <div
               style={{

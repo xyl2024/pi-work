@@ -343,6 +343,7 @@ export function WeChatSettingsSection() {
               </div>
               {workspaceMenuOpen && (
                 <div
+                  data-scroll-inset
                   style={{
                     position: "absolute", top: "100%", left: 0, right: 0, zIndex: 10, marginTop: 4,
                     background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6,
@@ -454,7 +455,7 @@ export function WeChatSettingsSection() {
                 {t("No contacts yet. Ask a friend to scan the QR above and send you a message — they'll appear here.")}
               </p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 160, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)" }}>
+              <div data-scroll-inset style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 160, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)" }}>
                 {contacts.map((c) => (
                   <div
                     key={c.userId}

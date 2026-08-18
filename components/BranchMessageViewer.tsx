@@ -299,6 +299,7 @@ export function BranchMessageViewer({ entryId, branchTree, onClose }: Props) {
             this region and re-render it as a standalone card. */}
         <div
           ref={bodyRef}
+          data-scroll-wide
           style={{
             flex: 1,
             minHeight: 0,
@@ -477,6 +478,7 @@ function CompactionSummaryView({
         {/* Scrollable body — the raw summary rendered as Markdown, then
             metadata rows. */}
         <div
+          data-scroll-wide
           style={{
             flex: 1,
             minHeight: 0,

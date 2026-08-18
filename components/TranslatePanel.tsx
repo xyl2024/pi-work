@@ -701,6 +701,7 @@ export function TranslatePanel() {
         </div>
         <div
           ref={outputRef}
+          data-scroll-wide
           style={{
             flex: 1, minHeight: 0, overflowY: "auto",
             padding: "10px 12px",

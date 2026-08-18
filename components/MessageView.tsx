@@ -1277,6 +1277,7 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
           {expanded && (
             <>
               <pre
+                data-scroll-inset
                 style={{
                   margin: 0,
                   padding: "8px 10px",
@@ -1330,6 +1331,7 @@ function PairedResult({ text, isEmpty, isError }: {
       }}
     >
       <pre
+        data-scroll-inset
         style={{
           margin: 0,
           padding: "8px 10px",

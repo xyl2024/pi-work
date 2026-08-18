@@ -358,7 +358,7 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
               transition: "max-height 180ms cubic-bezier(0.32, 0.72, 0, 1)",
             }}
           >
-            <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+            <div data-scroll-wide style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
               {sortedTasks.map((task, idx) => (
                 <TaskRow
                   key={task.id}

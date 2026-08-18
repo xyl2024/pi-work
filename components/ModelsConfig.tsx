@@ -1060,7 +1060,7 @@ function RuntimeModelCatalog() {
         </button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 16 }}>
+      <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 16 }}>
         {loading ? (
           <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("Loading catalog...")}</div>
         ) : error ? (
@@ -1188,7 +1188,7 @@ function ModelCatalogPicker({
           {!loading && !error && <div style={{ marginTop: 5, color: "var(--text-dim)", fontSize: 10 }}>{t("{n} matching models", { n: visibleModels.length })}</div>}
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
+        <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
           {loading ? (
             <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("Loading catalog...")}</div>
           ) : error ? (
@@ -1507,7 +1507,7 @@ function AddProviderPicker({
         </div>
 
         {/* Card grid */}
-        <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+        <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 14 }}>
           {totalCount === 0 ? (
             <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>{t("No providers match")}</div>
           ) : (
@@ -1836,7 +1836,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
           {/* Left: tree */}
           <div style={{ width: 210, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)" }}>
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {/* Active OAuth subscriptions */}
               {activeOAuth.map((p) => {
                 const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
@@ -1951,7 +1951,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Right: detail */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {loading ? null : detailContent ?? (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
                 {t("Select a provider or model")}

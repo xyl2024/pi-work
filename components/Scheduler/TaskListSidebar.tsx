@@ -222,7 +222,7 @@ export function TaskListSidebar({
       )}
 
       {/* List */}
-      <div ref={listRef} style={{ flex: 1, overflowY: "auto", borderTop: "1px solid var(--border)" }}>
+      <div ref={listRef} data-scroll-side style={{ flex: 1, overflowY: "auto", borderTop: "1px solid var(--border)" }}>
         {loading && tasks.length === 0 && (
           <EmptyHint text={t("Loading...")} />
         )}

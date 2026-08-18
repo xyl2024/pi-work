@@ -697,7 +697,7 @@ function AddSkillPanel({
 
       {/* ── Results list ── */}
       {results.length > 0 ? (
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div data-scroll-wide style={{ flex: 1, overflowY: "auto" }}>
           {results.map((r) => {
             const isInstalled = installedPkgs.has(r.package);
             const isInstalling = installing === r.package;
@@ -943,7 +943,7 @@ export function SkillsConfig({
               background: "var(--bg-panel)",
             }}
           >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div
                   style={{
@@ -1120,7 +1120,7 @@ export function SkillsConfig({
           </div>
 
           {/* Right: detail or add panel */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {addMode ? (
               <AddSkillPanel
                 cwd={cwd}

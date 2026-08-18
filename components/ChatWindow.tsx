@@ -1353,7 +1353,7 @@ function ChatWindowContent({ session, newSessionCwd, onAgentEnd, onSessionCreate
       )}
       <CollapseNonceProvider value={collapseNonce}>
       <div className="relative flex flex-1 overflow-hidden">
-        <div ref={scrollContainerRef} data-chat-scroll onScroll={handleScroll} onWheel={handleWheel} onTouchMove={handleTouchMove} className="relative flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-20">
+        <div ref={scrollContainerRef} data-scroll-wide onScroll={handleScroll} onWheel={handleWheel} onTouchMove={handleTouchMove} className="relative flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-20">
           <div className="mx-auto max-w-[820px]">
 
             {(() => {

@@ -597,7 +597,7 @@ export function PromptsConfig({
               background: "var(--bg-panel)",
             }}
           >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("Loading...")}</div>
               ) : error ? (
@@ -718,7 +718,7 @@ export function PromptsConfig({
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {mode !== "view" ? (
               <PromptEditorPanel
                 key={mode === "edit" ? `edit:${editing?.filePath ?? ""}` : "create"}
