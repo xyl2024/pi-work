@@ -275,6 +275,7 @@ export const ZH_TRANSLATIONS = {
   "Appearance": "外观",
   "Theme": "主题",
   "Estimated tokens while streaming": "预估 token 数（流式接收中）",
+  "Model call failed": "模型调用失败",
   "Add Skill": "添加技能",
   "Search": "搜索",
   "Searching...": "正在搜索...",

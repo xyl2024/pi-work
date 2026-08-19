@@ -1,1582 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useToast } from "./Toast";
 import { Tooltip } from "./Tooltip";
-import { ProviderIcon, ProviderGearIcon, hasProviderIcon, PROVIDER_ICON_IDS } from "./ProviderIcon";
-import { copyText } from "./CodeBlock";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface OAuthProvider {
-  id: string;
-  name: string;
-  usesCallbackServer: boolean;
-  loggedIn: boolean;
-}
-
-interface ApiKeyProvider {
-  id: string;
-  displayName: string;
-  configured: boolean;
-  source?: string;
-  modelCount: number;
-}
-
-type OAuthLoginState =
-  | { phase: "idle" }
-  | { phase: "connecting" }
-  | { phase: "auth"; url: string; instructions: string | null; token: string }
-  | { phase: "device_code"; userCode: string; verificationUri: string; intervalSeconds: number | null; expiresInSeconds: number | null }
-  | { phase: "prompt"; message: string; placeholder: string | null; token: string }
-  | { phase: "select"; message: string; options: { id: string; label: string }[]; token: string }
-  | { phase: "progress"; message: string }
-  | { phase: "success" }
-  | { phase: "error"; message: string };
-
-interface ModelEntry {
-  id: string;
-  name?: string;
-  api?: string;
-  reasoning?: boolean;
-  thinkingLevelMap?: Record<string, string | null>;
-  input?: string[];
-  contextWindow?: number;
-  maxTokens?: number;
-  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; tiers?: unknown[] };
-  compat?: Record<string, unknown>;
-  /** Provider id whose icon this model should display (chosen in the UI). */
-  icon?: string;
-}
-
-interface ProviderEntry {
-  baseUrl?: string;
-  api?: string;
-  apiKey?: string;
-  headers?: Record<string, string>;
-  compat?: Record<string, unknown>;
-  models?: ModelEntry[];
-  modelOverrides?: Record<string, unknown>;
-  /** Provider id whose icon this provider's models should display by default (chosen in the UI). */
-  icon?: string;
-}
-
-interface ModelsJson {
-  providers?: Record<string, ProviderEntry>;
-}
-
-type Selection =
-  | { type: "provider"; name: string }
-  | { type: "model"; providerName: string; index: number }
-  | { type: "oauth"; providerId: string }
-  | { type: "apikey"; providerId: string };
-
-const API_OPTIONS = ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"] as const;
-
-// ── Form field helpers ────────────────────────────────────────────────────────
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-const inputStyle = {
-  padding: "6px 9px",
-  background: "var(--bg-panel)",
-  border: "1px solid var(--border)",
-  borderRadius: 5,
-  color: "var(--text)",
-  fontSize: 12,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box" as const,
-};
-
-function TextInput({ value, onChange, placeholder, mono }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean }) {
-  return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-    style={{ ...inputStyle, fontFamily: mono ? "var(--font-mono)" : "inherit" }} />;
-}
-
-function SecretTextInput({
-  value,
-  onChange,
-  placeholder,
-  mono,
-  onKeyDown,
-  autoComplete = "off",
-  spellCheck = false,
-  style,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  mono?: boolean;
-  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
-  autoComplete?: string;
-  spellCheck?: boolean;
-  style?: React.CSSProperties;
-}) {
-  const [visible, setVisible] = useState(false);
-  const { t } = useI18n();
-
-  useEffect(() => {
-    if (!value) setVisible(false);
-  }, [value]);
-
-  return (
-    <div style={{ position: "relative", width: "100%", ...style }}>
-      <input
-        type={visible ? "text" : "password"}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-        placeholder={placeholder}
-        style={{ ...inputStyle, paddingRight: 34, fontFamily: mono ? "var(--font-mono)" : "inherit" }}
-        autoComplete={autoComplete}
-        spellCheck={spellCheck}
-      />
-      <Tooltip content={visible ? t("Hide API key") : t("Show API key")}>
-      <button
-        type="button"
-        onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? t("Hide API key") : t("Show API key")}
-        style={{
-          position: "absolute",
-          right: 5,
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: 24,
-          height: 24,
-          padding: 0,
-          border: "none",
-          background: "transparent",
-          color: "var(--text-dim)",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        {visible ? (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.89 1 12a18.45 18.45 0 0 1 5.06-6.94" />
-            <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.11 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-            <path d="M14.12 14.12A3 3 0 0 1 9.88 9.88" />
-            <path d="M1 1l22 22" />
-          </svg>
-        ) : (
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12Z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-        )}
-      </button>
-      </Tooltip>
-    </div>
-  );
-}
-
-function NumInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />;
-}
-
-function Select({ value, onChange, options, required }: { value: string; onChange: (v: string) => void; options: readonly string[]; required?: boolean }) {
-  const { t } = useI18n();
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
-      style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)" }}>
-      {!required && <option value="">— {t("inherit")} / {t("none")} —</option>}
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
-    </select>
-  );
-}
-
-function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)}
-        style={{ width: 13, height: 13, accentColor: "var(--accent)", cursor: "pointer" }} />
-      {label}
-    </label>
-  );
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>{children}</div>;
-}
-
-// ── Icon picker (shared by provider + model forms) ────────────────────────────
-
-function IconField({ value, onChange }: { value: string | undefined; onChange: (v: string | undefined) => void }) {
-  const { t } = useI18n();
-  return (
-    <Field label={t("Icon")}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 5, background: "var(--bg-hover)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          {value && hasProviderIcon(value)
-            ? <ProviderIcon id={value} size={16} />
-            : <ProviderGearIcon size={14} />}
-        </div>
-        <select
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          style={{ ...inputStyle, flex: 1 }}
-        >
-          <option value="">— {t("none")} / {t("inherit")} —</option>
-          {PROVIDER_ICON_IDS.map((id) => (
-            <option key={id} value={id}>{id}</option>
-          ))}
-        </select>
-      </div>
-      <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-        {t("Icon source hint")}
-      </span>
-    </Field>
-  );
-}
-
-// ── Provider detail ───────────────────────────────────────────────────────────
-
-function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
-  name: string; provider: ProviderEntry;
-  onChange: (p: ProviderEntry) => void; onRename: (n: string) => void; onDelete: () => void;
-}) {
-  const { t } = useI18n();
-  const [editingName, setEditingName] = useState(name);
-  useEffect(() => setEditingName(name), [name]);
-  const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) => onChange({ ...provider, [k]: v });
-
-  useEffect(() => {
-    if (!provider.api) onChange({ ...provider, api: "openai-completions" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provider.api]);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>{t("Provider")}</SectionTitle>
-        <button onClick={onDelete}
-          style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11 }}>
-          {t("Delete")}
-        </button>
-      </div>
-
-      <Field label="Provider name">
-        <TextInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
-        {editingName !== name && editingName.trim() && (
-          <button onClick={() => onRename(editingName.trim())}
-            style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}>
-            {t("Rename")}
-          </button>
-        )}
-      </Field>
-
-      <IconField value={provider.icon} onChange={(v) => set("icon", v)} />
-
-      <Field label="Base URL">
-        <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
-          placeholder="https://api.example.com/v1" mono />
-      </Field>
-
-      <Field label="API Key">
-        <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
-          placeholder="ENV_VAR_NAME, !shell-command, or literal key" mono />
-        <span style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-          Prefix with <code style={{ fontFamily: "var(--font-mono)" }}>!</code> to run a shell command, or use an env var name
-        </span>
-      </Field>
-
-      <Field label="API">
-        <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
-      </Field>
-    </div>
-  );
-}
-
-// ── ThinkingLevelMap editor ───────────────────────────────────────────────────
-
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-type ThinkingLevel = typeof THINKING_LEVELS[number];
-
-const LEVEL_COLORS: Record<ThinkingLevel, string> = {
-  off:     "var(--text-dim)",
-  minimal: "#6b7280",
-  low:     "#60a5fa",
-  medium:  "#a78bfa",
-  high:    "#f472b6",
-  xhigh:   "#fb923c",
-  max:     "#b91c1c",
-};
-
-function getDisplayedThinkingLevels(model: RuntimeModelInfo): string[] {
-  if (!model.reasoning) return [];
-  return THINKING_LEVELS.filter((level) => {
-    const mapped = model.thinkingLevelMap?.[level];
-    if (mapped === null) return false;
-    if (level === "xhigh" || level === "max") return mapped !== undefined;
-    return true;
-  });
-}
-
-function ThinkingLevelMapEditor({
-  value,
-  onChange,
-}: {
-  value: Record<string, string | null> | undefined;
-  onChange: (v: Record<string, string | null> | undefined) => void;
-}) {
-  const map = value ?? {};
-
-  const setLevel = (level: ThinkingLevel, entry: string | null | "omit") => {
-    const next = { ...map };
-    if (entry === "omit") {
-      delete next[level];
-    } else {
-      next[level] = entry;
-    }
-    onChange(Object.keys(next).length ? next : undefined);
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      {THINKING_LEVELS.map((level) => {
-        const raw = map[level];
-        const state: "omit" | "null" | "string" =
-          !(level in map) ? "omit" : raw === null ? "null" : "string";
-        const strVal = typeof raw === "string" ? raw : "";
-        const color = LEVEL_COLORS[level];
-
-        const btnBase: React.CSSProperties = {
-          padding: "4px 10px",
-          fontSize: 10,
-          border: "none",
-          cursor: "pointer",
-          fontWeight: 400,
-          transition: "background 0.1s, color 0.1s",
-          whiteSpace: "nowrap",
-          background: "var(--bg-panel)",
-          color: "var(--text-dim)",
-        };
-        const btnActive: React.CSSProperties = {
-          background: "var(--accent)",
-          color: "#fff",
-          fontWeight: 600,
-        };
-        const btnActiveDisabled: React.CSSProperties = {
-          background: "#ef4444",
-          color: "#fff",
-          fontWeight: 600,
-        };
-
-        return (
-          <div
-            key={level}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "5px 4px",
-              borderRadius: 6,
-              background: "transparent",
-              border: "1px solid transparent",
-            }}
-          >
-            {/* Level badge */}
-            <div style={{ display: "flex", alignItems: "center", gap: 5, width: 68, flexShrink: 0 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, opacity: state === "null" ? 0.3 : 1 }} />
-              <span style={{
-                fontSize: 11,
-                fontFamily: "var(--font-mono)",
-                color: state === "null" ? "var(--text-dim)" : "var(--text-muted)",
-                textDecoration: state === "null" ? "line-through" : "none",
-              }}>
-                {level}
-              </span>
-            </div>
-
-            {/* Default + Disabled buttons */}
-            <div style={{ display: "flex", borderRadius: 5, border: "1px solid var(--border)", overflow: "hidden", flexShrink: 0 }}>
-              <button
-                onClick={() => setLevel(level, "omit")}
-                style={{ ...btnBase, ...(state === "omit" ? btnActive : {}) }}
-              >
-                Default
-              </button>
-              <button
-                onClick={() => setLevel(level, null)}
-                style={{ ...btnBase, borderLeft: "1px solid var(--border)", ...(state === "null" ? btnActiveDisabled : {}) }}
-              >
-                Disabled
-              </button>
-            </div>
-
-            {/* Custom button + input fused */}
-            <div style={{ display: "flex", borderRadius: 5, border: `1px solid ${state === "string" ? "var(--accent)" : "var(--border)"}`, overflow: "hidden", transition: "border-color 0.1s" }}>
-              <button
-                onClick={() => setLevel(level, strVal || level)}
-                style={{ ...btnBase, ...(state === "string" ? btnActive : {}), borderRight: "1px solid var(--border)", flexShrink: 0 }}
-              >
-                Custom
-              </button>
-              <input
-                value={strVal}
-                onChange={(e) => setLevel(level, e.target.value)}
-                onFocus={() => { if (state !== "string") setLevel(level, strVal || level); }}
-                placeholder={level}
-                maxLength={10}
-                style={{
-                  width: "12ch",
-                  background: state === "string" ? "var(--bg)" : "var(--bg-panel)",
-                  border: "none",
-                  outline: "none",
-                  color: state === "string" ? "var(--text)" : "var(--text-dim)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  padding: "4px 7px",
-                  transition: "background 0.1s, color 0.1s",
-                }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Model detail ──────────────────────────────────────────────────────────────
-
-const DEEPSEEK_COMPAT = {
-  thinkingFormat: "deepseek",
-  requiresReasoningContentOnAssistantMessages: true,
-} as const;
-
-function hasDeepseekCompat(model: ModelEntry): boolean {
-  return model.compat?.thinkingFormat === "deepseek";
-}
-
-function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEntry {
-  if (enabled) {
-    return { ...model, compat: { ...(model.compat ?? {}), ...DEEPSEEK_COMPAT } };
-  }
-  if (!model.compat) return model;
-  const rest = { ...model.compat };
-  delete rest.thinkingFormat;
-  delete rest.requiresReasoningContentOnAssistantMessages;
-  return { ...model, compat: Object.keys(rest).length ? rest : undefined };
-}
-
-function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; onChange: (m: ModelEntry) => void; onDelete: () => void }) {
-  const { t } = useI18n();
-  const toast = useToast();
-  const [fillPickerOpen, setFillPickerOpen] = useState(false);
-  const [rawEditMode, setRawEditMode] = useState(false);
-  const [rawDraft, setRawDraft] = useState("");
-  const [rawError, setRawError] = useState<string | null>(null);
-  const rawJson = useMemo(() => JSON.stringify(model, null, 2), [model]);
-  const enterRawEditMode = () => {
-    setRawDraft(rawJson);
-    setRawError(null);
-    setRawEditMode(true);
-  };
-  const applyRawDraft = () => {
-    try {
-      const parsed = JSON.parse(rawDraft) as ModelEntry;
-      // Coerce icon back to undefined when the user typed an empty string,
-      // matching the form-field behavior of IconField / TextInput.
-      const cleaned: ModelEntry = { ...parsed, id: parsed.id ?? "" };
-      if (cleaned.icon === "" || cleaned.icon === null) delete (cleaned as { icon?: string }).icon;
-      onChange(cleaned);
-      setRawEditMode(false);
-      setRawError(null);
-      toast.show({ kind: "success", message: t("Raw metadata applied") });
-    } catch (e) {
-      const message = e instanceof Error && e.message ? e.message : t("Invalid JSON");
-      setRawError(message);
-    }
-  };
-  const copyRawJson = async () => {
-    try {
-      await copyText(rawJson);
-      toast.show({ kind: "success", message: t("Copied") });
-    } catch (e) {
-      toast.show({ kind: "error", message: e instanceof Error ? e.message : t("Network error") });
-    }
-  };
-  const set = <K extends keyof ModelEntry>(k: K, v: ModelEntry[K]) => onChange({ ...model, [k]: v });
-  const fillFromCatalog = (source: RuntimeModelInfo) => {
-    onChange({
-      ...model,
-      id: source.id,
-      name: source.name,
-      api: source.api,
-      reasoning: source.reasoning,
-      thinkingLevelMap: source.thinkingLevelMap ? { ...source.thinkingLevelMap } : undefined,
-      input: [...source.input],
-      contextWindow: source.contextWindow,
-      maxTokens: source.maxTokens,
-      cost: {
-        input: source.cost.input,
-        output: source.cost.output,
-        cacheRead: source.cost.cacheRead,
-        cacheWrite: source.cost.cacheWrite,
-        tiers: source.cost.tiers ? [...source.cost.tiers] : undefined,
-      },
-      compat: source.compat ? { ...source.compat } : undefined,
-    });
-    setFillPickerOpen(false);
-  };
-  const costVal = (k: keyof NonNullable<ModelEntry["cost"]>) => model.cost?.[k] !== undefined ? String(model.cost[k]) : "";
-  const setCost = (k: keyof NonNullable<ModelEntry["cost"]>, v: string) => {
-    const n = parseFloat(v);
-    onChange({ ...model, cost: { ...(model.cost ?? {}), [k]: isNaN(n) ? undefined : n } });
-  };
-
-  return (
-    <>
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <SectionTitle>{t("Model")}</SectionTitle>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            onClick={() => setFillPickerOpen(true)}
-            style={{ padding: "3px 8px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11 }}
-          >
-            {t("Fill from model catalog")}
-          </button>
-          <button onClick={onDelete}
-            style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11 }}>
-            {t("Delete")}
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label={t("ID *")}><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder={t("model-id")} mono /></Field>
-        <Field label={t("Name")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("Display name")} /></Field>
-      </div>
-
-      <IconField value={model.icon} onChange={(v) => set("icon", v)} />
-
-      <Field label={t("API override")}>
-        <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
-      </Field>
-
-      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-        <Check label="Reasoning / thinking" checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
-        <Check label="Image input" checked={model.input?.includes("image") ?? false}
-          onChange={(v) => set("input", v ? ["text", "image"] : undefined)} />
-      </div>
-
-      {model.reasoning && (
-        <>
-          <Check
-            label="DeepSeek thinking compat"
-            checked={hasDeepseekCompat(model)}
-            onChange={(v) => onChange(setDeepseekCompat(model, v))}
-          />
-          <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <SectionTitle>{t("Thinking level map")}</SectionTitle>
-              {model.thinkingLevelMap && (
-                <button
-                  onClick={() => set("thinkingLevelMap", undefined)}
-                  style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-dim)", cursor: "pointer" }}
-                >
-                  clear all
-                </button>
-              )}
-            </div>
-            <ThinkingLevelMapEditor
-              value={model.thinkingLevelMap}
-              onChange={(v) => set("thinkingLevelMap", v)}
-            />
-          </div>
-        </>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label="Context window (tokens)">
-          <NumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""}
-            onChange={(v) => set("contextWindow", v ? parseInt(v) : undefined)} placeholder="128000" />
-        </Field>
-        <Field label="Max output tokens">
-          <NumInput value={model.maxTokens !== undefined ? String(model.maxTokens) : ""}
-            onChange={(v) => set("maxTokens", v ? parseInt(v) : undefined)} placeholder="16384" />
-        </Field>
-      </div>
-
-      <div>
-        <SectionTitle>{t("Cost (per million tokens)")}</SectionTitle>
-        <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
-          {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
-            <Field key={k} label={k}>
-              <NumInput value={costVal(k)} onChange={(v) => setCost(k, v)} placeholder="0" />
-            </Field>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-          <SectionTitle>{t("Raw metadata")}</SectionTitle>
-          <div style={{ display: "flex", gap: 6 }}>
-            {!rawEditMode && (
-              <>
-                <Tooltip content={t("Copy raw JSON")}>
-                  <button
-                    type="button"
-                    onClick={copyRawJson}
-                    aria-label={t("Copy raw JSON")}
-                    style={{ padding: "3px 7px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="9" width="13" height="13" rx="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                    {t("Copy")}
-                  </button>
-                </Tooltip>
-                <button
-                  type="button"
-                  onClick={enterRawEditMode}
-                  style={{ padding: "3px 7px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
-                >
-                  {t("Edit as JSON")}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {rawEditMode ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <textarea
-              value={rawDraft}
-              onChange={(e) => { setRawDraft(e.target.value); setRawError(null); }}
-              spellCheck={false}
-              style={{ ...inputStyle, minHeight: 220, maxHeight: 420, fontFamily: "var(--font-mono)", fontSize: 11, lineHeight: 1.45, resize: "vertical", whiteSpace: "pre" }}
-            />
-            {rawError && (
-              <div style={{ fontSize: 11, color: "#f87171", padding: "5px 8px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 4 }}>
-                {t("Invalid JSON: {error}", { error: rawError })}
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => { setRawEditMode(false); setRawError(null); }}
-                style={{ padding: "4px 12px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
-              >
-                {t("Cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={applyRawDraft}
-                style={{ padding: "4px 12px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}
-              >
-                {t("Apply raw JSON")}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <details>
-            <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 11 }}>{t("Raw metadata")}</summary>
-            <pre style={{ margin: "6px 0 0", padding: 8, maxHeight: 280, overflow: "auto", borderRadius: 4, background: "var(--bg)", color: "var(--text-muted)", fontSize: 11, lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {rawJson}
-            </pre>
-          </details>
-        )}
-        <div style={{ marginTop: 6, fontSize: 10, color: "var(--text-dim)", lineHeight: 1.5 }}>
-          {t("Raw metadata hint")}
-        </div>
-      </div>
-    </div>
-    {fillPickerOpen && <ModelCatalogPicker onSelect={fillFromCatalog} onClose={() => setFillPickerOpen(false)} />}
-    </>
-  );
-}
-
-// ── OAuth detail ──────────────────────────────────────────────────────────────
-
-function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefresh: () => void }) {
-  const { t } = useI18n();
-  const toast = useToast();
-  const [loginState, setLoginState] = useState<OAuthLoginState>({ phase: "idle" });
-  const [inputValue, setInputValue] = useState("");
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (loginState.phase === "auth" || loginState.phase === "prompt") {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [loginState.phase]);
-
-  // Reset state when provider changes
-  useEffect(() => {
-    setLoginState({ phase: "idle" });
-    setInputValue("");
-    eventSourceRef.current?.close();
-    eventSourceRef.current = null;
-  }, [provider.id]);
-
-  useEffect(() => {
-    return () => { eventSourceRef.current?.close(); };
-  }, []);
-
-  const handleLogin = useCallback(() => {
-    eventSourceRef.current?.close();
-    setLoginState({ phase: "connecting" });
-    setInputValue("");
-
-    const es = new EventSource(`/api/auth/login/${encodeURIComponent(provider.id)}`);
-    eventSourceRef.current = es;
-
-    es.onmessage = (e) => {
-      const data = JSON.parse(e.data) as {
-        type: string; url?: string; instructions?: string | null;
-        token?: string; message?: string; placeholder?: string | null;
-        userCode?: string; verificationUri?: string; intervalSeconds?: number | null; expiresInSeconds?: number | null;
-        options?: { id: string; label: string }[];
-      };
-      if (data.type === "auth") {
-        setLoginState({ phase: "auth", url: data.url!, instructions: data.instructions ?? null, token: data.token! });
-        window.open(data.url!, "_blank", "noopener,noreferrer");
-      } else if (data.type === "device_code") {
-        setLoginState({
-          phase: "device_code",
-          userCode: data.userCode!,
-          verificationUri: data.verificationUri!,
-          intervalSeconds: data.intervalSeconds ?? null,
-          expiresInSeconds: data.expiresInSeconds ?? null,
-        });
-        window.open(data.verificationUri!, "_blank", "noopener,noreferrer");
-      } else if (data.type === "prompt_request") {
-        setLoginState({ phase: "prompt", message: data.message!, placeholder: data.placeholder ?? null, token: data.token! });
-      } else if (data.type === "select_request") {
-        setLoginState({ phase: "select", message: data.message!, options: data.options ?? [], token: data.token! });
-      } else if (data.type === "progress") {
-        setLoginState({ phase: "progress", message: data.message! });
-      } else if (data.type === "success") {
-        es.close();
-        setLoginState({ phase: "success" });
-        onRefresh();
-        toast.show({ kind: "success", message: t("Connected") });
-      } else if (data.type === "error") {
-        es.close();
-        setLoginState({ phase: "error", message: data.message! });
-      } else if (data.type === "cancelled") {
-        es.close();
-        setLoginState({ phase: "idle" });
-      }
-    };
-    es.onerror = () => {
-      es.close();
-      setLoginState((prev) => prev.phase === "success" ? prev : { phase: "error", message: "Connection lost" });
-    };
-  }, [provider.id, onRefresh, t, toast]);
-
-  const handleLogout = useCallback(async () => {
-    await fetch(`/api/auth/logout/${encodeURIComponent(provider.id)}`, { method: "POST" });
-    setLoginState({ phase: "idle" });
-    onRefresh();
-  }, [provider.id, onRefresh]);
-
-  const submitCode = useCallback(async (token: string, code: string) => {
-    if (!code.trim()) return;
-    setLoginState({ phase: "progress", message: "Verifying…" });
-    try {
-      const res = await fetch(`/api/auth/login/${encodeURIComponent(provider.id)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, code: code.trim() }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
-        setLoginState({ phase: "error", message: d.error ?? `Server error ${res.status}` });
-        return;
-      }
-      setInputValue("");
-      // Success path: SSE stream will emit "success" and update state
-    } catch (e) {
-      setLoginState({ phase: "error", message: e instanceof Error ? e.message : "Network error" });
-    }
-  }, [provider.id]);
-
-  const submitSelection = useCallback(async (token: string, value: string) => {
-    setLoginState({ phase: "progress", message: "Continuing…" });
-    try {
-      const res = await fetch(`/api/auth/login/${encodeURIComponent(provider.id)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, code: value }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
-        setLoginState({ phase: "error", message: d.error ?? `Server error ${res.status}` });
-      }
-    } catch (e) {
-      setLoginState({ phase: "error", message: e instanceof Error ? e.message : "Network error" });
-    }
-  }, [provider.id]);
-
-  const isWorking = loginState.phase === "connecting" || loginState.phase === "progress" ||
-    loginState.phase === "auth" || loginState.phase === "device_code" ||
-    loginState.phase === "prompt" || loginState.phase === "select";
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>{t("Subscription")}</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.loggedIn ? "#4ade80" : "var(--text-dim)" }}>
-            {provider.loggedIn ? "connected" : "not connected"}
-          </span>
-        </div>
-      </div>
-
-      {/* Status */}
-      <div style={{ minHeight: 48 }}>
-        {loginState.phase === "idle" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-            {provider.loggedIn ? "Already connected. You can re-login or disconnect." : `Connect your ${provider.name} account.`}
-          </p>
-        )}
-        {loginState.phase === "connecting" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("Opening browser...")}</p>
-        )}
-        {loginState.phase === "select" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              {loginState.message}
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {loginState.options.map((option) => (
-                <button
-                  key={option.id}
-                  onClick={() => submitSelection(loginState.token, option.id)}
-                  style={{ padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", cursor: "pointer", fontSize: 12, textAlign: "left" }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {(loginState.phase === "auth" || loginState.phase === "prompt") && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              {loginState.phase === "auth"
-                ? "Complete sign-in in the browser, then copy the redirect URL from the address bar and paste it below."
-                : loginState.message}
-            </p>
-            {loginState.phase === "auth" && (
-              <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-                If the browser window did not open,{" "}
-                <a href={loginState.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
-                  click here to open the login page
-                </a>
-                .
-              </p>
-            )}
-            <div style={{ display: "flex", gap: 6 }}>
-              <input
-                ref={inputRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") submitCode(loginState.token, inputValue); }}
-                placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? "Enter value…")}
-                style={{ flex: 1, padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 12, outline: "none", fontFamily: "var(--font-mono)", boxSizing: "border-box" }}
-              />
-              <button
-                onClick={() => submitCode(loginState.token, inputValue)}
-                disabled={!inputValue.trim()}
-                style={{ padding: "6px 12px", background: inputValue.trim() ? "var(--accent)" : "var(--bg-panel)", border: "none", borderRadius: 5, color: inputValue.trim() ? "#fff" : "var(--text-dim)", cursor: inputValue.trim() ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
-              >
-                Submit
-              </button>
-            </div>
-          </div>
-        )}
-        {loginState.phase === "device_code" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              Open the verification page and enter this code:
-            </p>
-            <div style={{ padding: "8px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
-              {loginState.userCode}
-            </div>
-            <p style={{ margin: 0, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
-              <a href={loginState.verificationUri} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
-                {loginState.verificationUri}
-              </a>
-              {loginState.expiresInSeconds ? ` Expires in ${Math.ceil(loginState.expiresInSeconds / 60)} minutes.` : ""}
-            </p>
-          </div>
-        )}
-        {loginState.phase === "progress" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{loginState.message}</p>
-        )}
-        {loginState.phase === "success" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#4ade80" }}>{t("Connected successfully.")}</p>
-        )}
-        {loginState.phase === "error" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{loginState.message}</p>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div style={{ display: "flex", gap: 8 }}>
-        {isWorking ? (
-          <button
-            onClick={() => { eventSourceRef.current?.close(); setLoginState({ phase: "idle" }); }}
-            style={{ padding: "5px 12px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}
-          >
-            {t("Cancel")}
-          </button>
-        ) : (
-          <>
-            <button
-              onClick={handleLogin}
-              style={{ padding: "5px 14px", background: "var(--accent)", border: "none", borderRadius: 5, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
-            >
-              {provider.loggedIn ? "Re-login" : "Login"}
-            </button>
-            {provider.loggedIn && (
-              <button
-                onClick={handleLogout}
-                style={{ padding: "5px 12px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, color: "#ef4444", cursor: "pointer", fontSize: 12 }}
-              >
-                {t("Disconnect")}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── API Key detail ────────────────────────────────────────────────────────────
-
-interface RuntimeModelInfo {
-  id: string;
-  name: string;
-  provider: string;
-  api: string;
-  baseUrl: string;
-  reasoning: boolean;
-  thinkingLevelMap?: Record<string, string | null>;
-  input: string[];
-  cost: { input: number; output: number; cacheRead: number; cacheWrite: number; tiers?: unknown[] };
-  contextWindow: number;
-  maxTokens: number;
-  headers?: Record<string, string>;
-  compat?: Record<string, unknown>;
-}
-
-interface RuntimeCatalogProvider {
-  id: string;
-  name: string;
-  baseUrl?: string;
-  headers?: Record<string, string | null>;
-  dynamic: boolean;
-  auth: { configured: boolean; source?: string; label?: string };
-  models: RuntimeModelInfo[];
-}
-
-interface RuntimeCatalog {
-  providers: RuntimeCatalogProvider[];
-  modelCount: number;
-}
-
-function RuntimeModelCatalog() {
-  const { t } = useI18n();
-  const toast = useToast();
-  const [catalog, setCatalog] = useState<RuntimeCatalog>({ providers: [], modelCount: 0 });
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadCatalog = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/models${isRefresh ? "?refresh=true" : ""}`, { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json() as { catalog?: RuntimeCatalog };
-      setCatalog(data.catalog ?? { providers: [], modelCount: 0 });
-      if (isRefresh) toast.show({ kind: "success", message: t("Catalog refreshed") });
-    } catch (e) {
-      const message = e instanceof Error && e.message ? e.message : t("Failed to load model catalog");
-      setError(message);
-      if (isRefresh) toast.show({ kind: "error", message });
-    } finally {
-      if (isRefresh) setRefreshing(false);
-      else setLoading(false);
-    }
-  }, [t, toast]);
-
-  useEffect(() => { void loadCatalog(); }, [loadCatalog]);
-
-  const query = search.trim().toLowerCase();
-  const visibleProviders = useMemo(() => catalog.providers.map((provider) => {
-    if (!query) return provider;
-    const providerMatches = `${provider.id} ${provider.name} ${JSON.stringify(provider)}`.toLowerCase().includes(query);
-    const models = providerMatches ? provider.models : provider.models.filter((model) => JSON.stringify(model).toLowerCase().includes(query));
-    return models.length > 0 || providerMatches ? { ...provider, models } : null;
-  }).filter((provider): provider is RuntimeCatalogProvider => provider !== null), [catalog.providers, query]);
-
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            {t("{n} providers", { n: catalog.providers.length })} · {t("{n} models", { n: catalog.modelCount })}
-          </div>
-        </div>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t("Search providers and models...")}
-          style={{ ...inputStyle, width: 230, flexShrink: 1 }}
-        />
-        <button
-          onClick={() => { void loadCatalog(true); }}
-          disabled={loading || refreshing}
-          style={{ padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: loading || refreshing ? "default" : "pointer", fontSize: 11, flexShrink: 0 }}
-        >
-          {refreshing ? t("Refreshing...") : t("Refresh catalog")}
-        </button>
-      </div>
-
-      <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 16 }}>
-        {loading ? (
-          <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("Loading catalog...")}</div>
-        ) : error ? (
-          <div style={{ padding: 20, color: "#f87171", fontSize: 12, textAlign: "center" }}>{error}</div>
-        ) : visibleProviders.length === 0 ? (
-          <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
-            {query ? t("No matching providers or models") : t("No catalog data")}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {visibleProviders.map((provider) => (
-              <details key={provider.id} style={{ border: "1px solid var(--border)", borderRadius: 7, background: "var(--bg-panel)" }}>
-                <summary style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "9px 11px", color: "var(--text)", fontSize: 12 }}>
-                  <ProviderIcon id={provider.id} size={17} fallback={<ProviderGearIcon size={14} />} />
-                  <strong>{provider.name}</strong>
-                  <code style={{ color: "var(--text-dim)", fontSize: 10 }}>{provider.id}</code>
-                  <span style={{ marginLeft: "auto", color: "var(--text-muted)", fontSize: 10 }}>
-                    {t("{n} models", { n: provider.models.length })}
-                  </span>
-                  <span style={{ color: provider.auth.configured ? "#4ade80" : "var(--text-dim)", fontSize: 10 }}>
-                    {provider.auth.configured ? t("Configured") : t("Not configured")}
-                  </span>
-                </summary>
-                <div style={{ padding: "0 11px 11px", display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", fontSize: 10, color: "var(--text-muted)" }}>
-                    <span>{provider.dynamic ? t("Dynamic catalog") : t("Static catalog")}</span>
-                    {provider.baseUrl && <code style={{ wordBreak: "break-all" }}>{provider.baseUrl}</code>}
-                    {provider.auth.source && <span>{provider.auth.source}</span>}
-                  </div>
-                  <details>
-                    <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 10 }}>{t("Provider metadata")}</summary>
-                    <pre style={{ margin: "6px 0 0", padding: 8, maxHeight: 220, overflow: "auto", borderRadius: 4, background: "var(--bg)", color: "var(--text-muted)", fontSize: 10, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                      {JSON.stringify({ ...provider, models: undefined }, null, 2)}
-                    </pre>
-                  </details>
-                  {provider.models.length === 0 ? (
-                    <div style={{ color: "var(--text-dim)", fontSize: 11 }}>{t("No models")}</div>
-                  ) : provider.models.map((model) => (
-                    <details key={`${model.provider}:${model.id}`} style={{ border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg)" }}>
-                      <summary style={{ cursor: "pointer", padding: "7px 9px", color: "var(--text)", fontSize: 11 }}>
-                        <strong>{model.name}</strong>
-                        <code style={{ marginLeft: 7, color: "var(--text-dim)", fontSize: 10 }}>{model.id}</code>
-                      </summary>
-                      <pre style={{ margin: 0, padding: "0 9px 9px", maxHeight: 420, overflow: "auto", color: "var(--text-muted)", fontSize: 10, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                        {JSON.stringify(model, null, 2)}
-                      </pre>
-                    </details>
-                  ))}
-                </div>
-              </details>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ModelCatalogPicker({
-  onSelect,
-  onClose,
-}: {
-  onSelect: (model: RuntimeModelInfo) => void;
-  onClose: () => void;
-}) {
-  const { t } = useI18n();
-  const toast = useToast();
-  const [models, setModels] = useState<Array<{ model: RuntimeModelInfo; providerName: string }>>([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 30);
-    let cancelled = false;
-    fetch("/api/models", { cache: "no-store" })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
-      .then((data: { catalog?: RuntimeCatalog }) => {
-        if (cancelled) return;
-        setModels((data.catalog?.providers ?? []).flatMap((provider) =>
-          provider.models.map((model) => ({ model, providerName: provider.name })),
-        ));
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        const message = e instanceof Error && e.message ? e.message : t("Failed to load model catalog");
-        setError(message);
-        toast.show({ kind: "error", message });
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [t, toast]);
-
-  const query = search.trim().toLowerCase();
-  const visibleModels = useMemo(() => models.filter(({ model, providerName }) => {
-    if (!query) return true;
-    return `${providerName} ${model.provider} ${JSON.stringify(model)}`.toLowerCase().includes(query);
-  }), [models, query]);
-  const displayedModels = visibleModels.slice(0, 200);
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 1300, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{ width: 760, maxWidth: "calc(100vw - 32px)", height: "min(76vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <div>
-            <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 700 }}>{t("Fill from model catalog")}</div>
-            <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11 }}>{t("Only model fields are filled; provider settings stay unchanged.")}</div>
-          </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
-        </div>
-
-        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <input
-            ref={inputRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-            placeholder={t("Search all providers and models...")}
-            style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
-          />
-          {!loading && !error && <div style={{ marginTop: 5, color: "var(--text-dim)", fontSize: 10 }}>{t("{n} matching models", { n: visibleModels.length })}</div>}
-        </div>
-
-        <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
-          {loading ? (
-            <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("Loading catalog...")}</div>
-          ) : error ? (
-            <div style={{ padding: 20, color: "#f87171", fontSize: 12, textAlign: "center" }}>{error}</div>
-          ) : displayedModels.length === 0 ? (
-            <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("No matching providers or models")}</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {displayedModels.map(({ model, providerName }) => (
-                <button
-                  key={`${model.provider}:${model.id}`}
-                  onClick={() => onSelect(model)}
-                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 10px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", cursor: "pointer", textAlign: "left" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
-                >
-                  <ProviderIcon id={model.provider} size={20} fallback={<ProviderGearIcon size={16} />} />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600 }}>{model.name}</span>
-                    <span style={{ display: "block", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{model.provider} / {model.id}</span>
-                  </span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 10, flexShrink: 0 }}>{providerName}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RuntimeModelList({ providerId, configured }: { providerId: string; configured: boolean }) {
-  const { t } = useI18n();
-  const [models, setModels] = useState<RuntimeModelInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetch("/api/models")
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((data: { modelList?: RuntimeModelInfo[] }) => {
-        if (!cancelled) setModels((data.modelList ?? []).filter((model) => model.provider === providerId));
-      })
-      .catch(() => { if (!cancelled) setModels([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [providerId, configured]);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-      <SectionTitle>{t("Available models")}</SectionTitle>
-      {loading ? (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("Loading models...")}</div>
-      ) : models.length === 0 ? (
-        <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No available models")}</div>
-      ) : models.map((model) => (
-        <details key={model.id} style={{ border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)" }}>
-          <summary style={{ cursor: "pointer", padding: "8px 10px", color: "var(--text)", fontSize: 12 }}>
-            <span style={{ fontWeight: 600 }}>{model.name}</span>
-            <span style={{ marginLeft: 8, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11 }}>{model.id}</span>
-          </summary>
-          <div style={{ padding: "0 10px 10px", display: "flex", flexDirection: "column", gap: 7 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, fontSize: 11 }}>
-              <span style={{ color: "var(--text-muted)" }}>{t("API")}: <b style={{ color: "var(--text)" }}>{model.api}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Context window")}: <b style={{ color: "var(--text)" }}>{model.contextWindow.toLocaleString()}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Max output")}: <b style={{ color: "var(--text)" }}>{model.maxTokens.toLocaleString()}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Input")}: <b style={{ color: "var(--text)" }}>{model.input.join(", ")}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Reasoning")}: <b style={{ color: "var(--text)" }}>{model.reasoning ? t("Supported") : t("Not supported")}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Thinking levels")}: <b style={{ color: "var(--text)" }}>{getDisplayedThinkingLevels(model).join(", ") || t("Provider default")}</b></span>
-            </div>
-            <div>
-              <SectionTitle>{t("Cost (per million tokens)")}</SectionTitle>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 6, fontSize: 10 }}>
-                {(["input", "output", "cacheRead", "cacheWrite"] as const).map((key) => (
-                  <div key={key} style={{ padding: "6px 7px", borderRadius: 4, background: "var(--bg)", color: "var(--text-muted)" }}>
-                    <div>{key}</div>
-                    <b style={{ display: "block", marginTop: 3, color: "var(--text)" }}>{model.cost?.[key] ?? "—"}</b>
-                  </div>
-                ))}
-              </div>
-              {model.cost?.tiers && model.cost.tiers.length > 0 && (
-                <div style={{ marginTop: 7, fontSize: 10, color: "var(--text-muted)" }}>
-                  <div style={{ marginBottom: 4 }}>{t("Cost tiers")}</div>
-                  <pre style={{ margin: 0, padding: 7, maxHeight: 120, overflow: "auto", borderRadius: 4, background: "var(--bg)", color: "var(--text-muted)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {JSON.stringify(model.cost.tiers, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, fontSize: 11 }}>
-              <span style={{ color: "var(--text-muted)", wordBreak: "break-all" }}>{t("Base URL")}: <b style={{ color: "var(--text)" }}>{model.baseUrl || "—"}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Headers")}: <b style={{ color: "var(--text)" }}>{Object.keys(model.headers ?? {}).length || 0}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Compatibility")}: <b style={{ color: "var(--text)" }}>{Object.keys(model.compat ?? {}).length || 0}</b></span>
-            </div>
-            <details>
-              <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 10 }}>{t("Raw metadata")}</summary>
-              <pre style={{ margin: "6px 0 0", padding: 8, maxHeight: 220, overflow: "auto", borderRadius: 4, background: "var(--bg)", color: "var(--text-muted)", fontSize: 10, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {JSON.stringify({ headers: model.headers, compat: model.compat, thinkingLevelMap: model.thinkingLevelMap }, null, 2)}
-              </pre>
-            </details>
-          </div>
-        </details>
-      ))}
-    </div>
-  );
-}
-
-function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRefresh: () => void }) {
-  const { t } = useI18n();
-  const toast = useToast();
-  const [apiKey, setApiKey] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [removing, setRemoving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [savedOk, setSavedOk] = useState(false);
-
-  // Reset state when provider changes
-  useEffect(() => {
-    setApiKey("");
-    setError(null);
-    setSavedOk(false);
-  }, [provider.id]);
-
-  const handleSave = useCallback(async () => {
-    if (!apiKey.trim()) return;
-    setSaving(true);
-    setError(null);
-    setSavedOk(false);
-    try {
-      const res = await fetch(`/api/auth/api-key/${encodeURIComponent(provider.id)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: apiKey.trim() }),
-      });
-      const d = await res.json() as { success?: boolean; error?: string };
-      if (!res.ok || d.error) {
-        setError(d.error ?? `HTTP ${res.status}`);
-        toast.show({ kind: "error", message: d.error ?? `HTTP ${res.status}` });
-      } else {
-        setApiKey("");
-        setSavedOk(true);
-        setTimeout(() => setSavedOk(false), 2000);
-        onRefresh();
-        toast.show({ kind: "success", message: t("API key saved") });
-      }
-    } catch (e) {
-      setError(String(e));
-      toast.show({ kind: "error", message: String(e) });
-    } finally {
-      setSaving(false);
-    }
-  }, [apiKey, provider.id, onRefresh, t, toast]);
-
-  const handleRemove = useCallback(async () => {
-    setRemoving(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/auth/api-key/${encodeURIComponent(provider.id)}`, { method: "DELETE" });
-      const d = await res.json() as { success?: boolean; error?: string };
-      if (!res.ok || d.error) {
-        setError(d.error ?? `HTTP ${res.status}`);
-        toast.show({ kind: "error", message: d.error ?? `HTTP ${res.status}` });
-      } else {
-        onRefresh();
-        toast.show({ kind: "success", message: t("API key removed") });
-      }
-    } catch (e) {
-      setError(String(e));
-      toast.show({ kind: "error", message: String(e) });
-    } finally {
-      setRemoving(false);
-    }
-  }, [provider.id, onRefresh, t, toast]);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <SectionTitle>{t("API Key")}</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.configured ? "#4ade80" : "var(--text-dim)" }}>
-            {provider.configured ? t("configured") : t("not configured")}
-          </span>
-        </div>
-      </div>
-
-      <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-        {provider.configured
-          ? t("API key stored message")
-          : `${t("Enter your")} ${provider.displayName} API key ${t("to enable")} ${provider.modelCount} ${t("models")}.`}
-      </p>
-
-      <Field label="API Key">
-        <div style={{ display: "flex", gap: 6 }}>
-          <SecretTextInput
-            value={apiKey}
-            onChange={setApiKey}
-            onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
-            placeholder={provider.configured ? t("Enter new key to replace...") : "sk-..."}
-            style={{ flex: 1 }}
-            autoComplete="off"
-            spellCheck={false}
-            mono
-          />
-          <button
-            onClick={handleSave}
-            disabled={saving || !apiKey.trim() || savedOk}
-            style={{
-              padding: "6px 12px",
-              background: savedOk ? "#16a34a" : apiKey.trim() ? "var(--accent)" : "var(--bg-panel)",
-              border: "none", borderRadius: 5,
-              color: (apiKey.trim() || savedOk) ? "#fff" : "var(--text-dim)",
-              cursor: (saving || !apiKey.trim() || savedOk) ? "not-allowed" : "pointer",
-              fontSize: 12, fontWeight: 600, flexShrink: 0,
-              display: "flex", alignItems: "center", gap: 5,
-            }}
-          >
-            {savedOk && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-            {savedOk ? t("Saved") : saving ? t("Saving...") : t("Save")}
-          </button>
-        </div>
-      </Field>
-
-      {error && <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{error}</p>}
-
-      <RuntimeModelList providerId={provider.id} configured={provider.configured} />
-
-      {provider.configured && (
-        <button
-          onClick={handleRemove}
-          disabled={removing}
-          style={{
-            alignSelf: "flex-start", padding: "5px 12px",
-            background: "none", border: "1px solid rgba(239,68,68,0.3)",
-            borderRadius: 5, color: "#ef4444",
-            cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
-          }}
-        >
-          {removing ? t("Removing...") : t("Disconnect")}
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Add provider picker ───────────────────────────────────────────────────────
-
-interface AddProviderPickerProps {
-  oauthProviders: OAuthProvider[];
-  apiKeyProviders: ApiKeyProvider[];
-  onSelectOAuth: (id: string) => void;
-  onSelectApiKey: (id: string) => void;
-  onAddCustom: () => void;
-  onClose: () => void;
-}
-
-function AddProviderPicker({
-  oauthProviders, apiKeyProviders,
-  onSelectOAuth, onSelectApiKey, onAddCustom, onClose,
-}: AddProviderPickerProps) {
-  const { t } = useI18n();
-  const [search, setSearch] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 30); }, []);
-
-  const q = search.trim().toLowerCase();
-
-  const availableOAuth = oauthProviders.filter((p) => !p.loggedIn && (!q || p.name.toLowerCase().includes(q)));
-  const availableApiKey = apiKeyProviders.filter((p) => !p.configured && (!q || p.displayName.toLowerCase().includes(q) || p.id.toLowerCase().includes(q)));
-  const showCustom = !q || "custom".includes(q) || "openai-compatible".includes(q) || "anthropic-compatible".includes(q);
-
-  const totalCount = availableOAuth.length + availableApiKey.length + (showCustom ? 1 : 0);
-
-  const cardStyle: React.CSSProperties = {
-    display: "flex", flexDirection: "row", alignItems: "center", gap: 8,
-    padding: "10px 12px",
-    background: "var(--bg-panel)",
-    border: "1px solid var(--border)",
-    borderRadius: 7,
-    boxSizing: "border-box",
-    cursor: "pointer",
-    minWidth: 0,
-    textAlign: "left",
-    transition: "border-color 0.12s, background 0.12s",
-    width: "100%",
-  };
-
-
-
-  return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
-        {/* Search */}
-        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            ref={inputRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-            placeholder={t("Search providers...")}
-            style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
-          />
-        </div>
-
-        {/* Card grid */}
-        <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-          {totalCount === 0 ? (
-            <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>{t("No providers match")}</div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: 8 }}>
-              {showCustom && (
-                <div style={{ gridColumn: "1 / -1", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("Custom")}</div>
-              )}
-              {showCustom && (
-                <button
-                  onClick={() => { onAddCustom(); onClose(); }}
-                  style={cardStyle}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("OpenAI / Anthropic compatible")}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("Custom endpoint format")}</div>
-                  </div>
-                  <span style={{ width: 26, height: 26, borderRadius: 5, background: "var(--bg-hover)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)" }}>
-                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                  </span>
-                </button>
-              )}
-
-              {availableOAuth.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", paddingTop: showCustom ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("Subscriptions")}</div>
-              )}
-              {availableOAuth.map((p) => (
-                <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
-                  style={cardStyle}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>OAuth</div>
-                  </div>
-                  <ProviderIcon id={p.id} size={28} />
-                </button>
-              ))}
-
-              {availableApiKey.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("API Key")}</div>
-              )}
-              {availableApiKey.map((p) => (
-                <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
-                  style={cardStyle}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount} models</div>
-                  </div>
-                  <ProviderIcon id={p.id} size={28} />
-                </button>
-              ))}
-
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
+import { ProviderIcon, ProviderGearIcon, hasProviderIcon } from "./ProviderIcon";
+import { ProviderDetail } from "./models-config/ProviderDetail";
+import { ModelDetail } from "./models-config/ModelDetail";
+import { OAuthDetail } from "./models-config/OAuthDetail";
+import { RuntimeModelCatalog, ApiKeyDetail, AddProviderPicker } from "./models-config/runtime";
+import type { ApiKeyProvider, ModelsJson, OAuthProvider, Selection, ModelEntry, ProviderEntry } from "./models-config/types";
 
 export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
@@ -1636,14 +70,14 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     setSelection({ type: "provider", name: finalName });
   }, [config.providers]);
 
-  const updateProvider = useCallback((name: string, p: ProviderEntry) => {
-    setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [name]: p } }));
+  const updateProvider = useCallback((name: string, provider: ProviderEntry) => {
+    setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [name]: provider } }));
   }, []);
 
   const renameProvider = useCallback((oldName: string, newName: string) => {
     setConfig((prev) => {
       const entries = Object.entries(prev.providers ?? {});
-      const idx = entries.findIndex(([k]) => k === oldName);
+      const idx = entries.findIndex(([key]) => key === oldName);
       if (idx === -1) return prev;
       entries[idx] = [newName, entries[idx][1]];
       return { ...prev, providers: Object.fromEntries(entries) };
@@ -1660,12 +94,9 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     setConfig((prev) => {
       const providers = { ...(prev.providers ?? {}) };
       delete providers[name];
-      return { ...prev, providers };
-    });
-    setConfig((prev) => {
-      const remaining = Object.keys(prev.providers ?? {});
-      setSelection(remaining.length > 0 ? { type: "provider", name: remaining[0] } : null);
-      return prev;
+      const next = { ...prev, providers };
+      setSelection(Object.keys(providers).length > 0 ? { type: "provider", name: Object.keys(providers)[0] } : null);
+      return next;
     });
   }, []);
 
@@ -1676,17 +107,17 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
     });
     setConfig((prev) => {
-      const idx = (prev.providers?.[providerName]?.models?.length ?? 1) - 1;
-      setSelection({ type: "model", providerName, index: idx });
+      const index = (prev.providers?.[providerName]?.models?.length ?? 1) - 1;
+      setSelection({ type: "model", providerName, index });
       return prev;
     });
   }, []);
 
-  const updateModel = useCallback((providerName: string, index: number, m: ModelEntry) => {
+  const updateModel = useCallback((providerName: string, index: number, model: ModelEntry) => {
     setConfig((prev) => {
       const provider = prev.providers?.[providerName] ?? {};
       const models = [...(provider.models ?? [])];
-      models[index] = m;
+      models[index] = model;
       return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
     });
   }, []);
@@ -1711,10 +142,10 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
       });
-      const d = await res.json() as { success?: boolean; error?: string };
-      if (!res.ok || d.error) {
-        setSaveError(d.error ?? `HTTP ${res.status}`);
-        toast.show({ kind: "error", message: d.error ?? `HTTP ${res.status}` });
+      const body = await res.json() as { success?: boolean; error?: string };
+      if (!res.ok || body.error) {
+        setSaveError(body.error ?? `HTTP ${res.status}`);
+        toast.show({ kind: "error", message: body.error ?? `HTTP ${res.status}` });
       } else {
         setSavedOk(true);
         setTimeout(() => setSavedOk(false), 2000);
@@ -1729,8 +160,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   }, [config, t, toast]);
 
   const providers = Object.entries(config.providers ?? {});
-  const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
-  const activeApiKey = apiKeyProviders.filter((p) => p.configured);
+  const activeOAuth = oauthProviders.filter((provider) => provider.loggedIn);
+  const activeApiKey = apiKeyProviders.filter((provider) => provider.configured);
 
   const modelCatalogSourceTooltip = (
     <div style={{ maxWidth: 260, display: "flex", flexDirection: "column", gap: 7, fontSize: 11, lineHeight: 1.45, overflowWrap: "anywhere" }}>
@@ -1748,18 +179,17 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     </div>
   );
 
-  // Resolve current detail
   const detailContent = (() => {
     if (!selection) return null;
     if (selection.type === "oauth") {
-      const p = oauthProviders.find((p) => p.id === selection.providerId);
-      if (!p) return null;
-      return <OAuthDetail key={p.id} provider={p} onRefresh={loadOAuthProviders} />;
+      const provider = oauthProviders.find((item) => item.id === selection.providerId);
+      if (!provider) return null;
+      return <OAuthDetail key={provider.id} provider={provider} onRefresh={loadOAuthProviders} />;
     }
     if (selection.type === "apikey") {
-      const p = apiKeyProviders.find((p) => p.id === selection.providerId);
-      if (!p) return null;
-      return <ApiKeyDetail key={p.id} provider={p} onRefresh={loadApiKeyProviders} />;
+      const provider = apiKeyProviders.find((item) => item.id === selection.providerId);
+      if (!provider) return null;
+      return <ApiKeyDetail key={provider.id} provider={provider} onRefresh={loadApiKeyProviders} />;
     }
     if (selection.type === "provider") {
       const provider = config.providers?.[selection.name];
@@ -1769,8 +199,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           key={selection.name}
           name={selection.name}
           provider={provider}
-          onChange={(p) => updateProvider(selection.name, p)}
-          onRename={(n) => renameProvider(selection.name, n)}
+          onChange={(next) => updateProvider(selection.name, next)}
+          onRename={(nextName) => renameProvider(selection.name, nextName)}
           onDelete={() => deleteProvider(selection.name)}
         />
       );
@@ -1782,7 +212,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       <ModelDetail
         key={`${selection.providerName}-${selection.index}`}
         model={model}
-        onChange={(m) => updateModel(selection.providerName, selection.index, m)}
+        onChange={(next) => updateModel(selection.providerName, selection.index, next)}
         onDelete={() => removeModel(selection.providerName, selection.index)}
       />
     );
@@ -1790,216 +220,210 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-    <div style={backdropStyle}
-      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <div style={{ ...panelStyle, width: 860, height: "78vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
-
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            {catalogOpen && (
-              <button
-                onClick={() => setCatalogOpen(false)}
-                style={{ padding: "3px 7px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, flexShrink: 0 }}
-              >
-                ← {t("Back to configuration")}
-              </button>
-            )}
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{catalogOpen ? t("All model data") : t("Models")}</span>
-            {!catalogOpen && <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>~/.pi/agent/models.json</code>}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <Tooltip content={modelCatalogSourceTooltip} side="bottom" align="end" delayDuration={300} interactive>
-              <button
-                type="button"
-                aria-label={t("About model catalog sources")}
-                style={{ width: 22, height: 22, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--text-dim)", borderRadius: "50%", background: "transparent", color: "var(--text-muted)", cursor: "help", fontSize: 13, fontWeight: 700, lineHeight: 1 }}
-              >
-                ?
-              </button>
-            </Tooltip>
-            {!catalogOpen && (
-              <button
-                onClick={() => setCatalogOpen(true)}
-                style={{ padding: "5px 9px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
-              >
-                {t("View all model data")}
-              </button>
-            )}
-            <button onClick={requestClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
-          </div>
-        </div>
-
-        {catalogOpen ? <RuntimeModelCatalog /> : (
-        /* Body */
-        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-
-          {/* Left: tree */}
-          <div style={{ width: 210, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)" }}>
-            <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
-              {/* Active OAuth subscriptions */}
-              {activeOAuth.map((p) => {
-                const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => setSelection({ type: "oauth", providerId: p.id })}
-                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
-                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
-                  >
-                    <ProviderIcon id={p.id} size={16} />
-                    <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                  </div>
-                );
-              })}
-
-              {/* Active API key providers */}
-              {activeApiKey.map((p) => {
-                const isSelected = selection?.type === "apikey" && selection.providerId === p.id;
-                return (
-                  <div
-                    key={p.id}
-                    onClick={() => setSelection({ type: "apikey", providerId: p.id })}
-                    style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
-                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
-                  >
-                    <ProviderIcon id={p.id} size={16} />
-                    <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</span>
-                  </div>
-                );
-              })}
-
-              {/* Divider before custom providers, only when there are active managed providers */}
-              {(activeOAuth.length > 0 || activeApiKey.length > 0) && providers.length > 0 && (
-                <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
+      <div
+        style={backdropStyle}
+        onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
+      >
+        <div style={{ ...panelStyle, width: 860, height: "78vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+              {catalogOpen && (
+                <button
+                  onClick={() => setCatalogOpen(false)}
+                  style={{ padding: "3px 7px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, flexShrink: 0 }}
+                >
+                  ← {t("Back to configuration")}
+                </button>
               )}
-
-              {/* Custom providers */}
-              {loading ? (
-                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("Loading...")}</div>
-              ) : providers.map(([pName, pData]) => {
-                const isProviderSelected = selection?.type === "provider" && selection.name === pName;
-                const models = pData.models ?? [];
-                const providerIcon = pData.icon && hasProviderIcon(pData.icon) ? pData.icon : "";
-                return (
-                  <div key={pName} style={{ marginBottom: 2 }}>
-                    {/* Provider row */}
-                    <div
-                      onClick={() => setSelection({ type: "provider", name: pName })}
-                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderRadius: 5, cursor: "pointer", background: isProviderSelected ? "var(--bg-selected)" : "none" }}
-                      onMouseEnter={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                      onMouseLeave={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "none"; }}
-                    >
-                      <ProviderIcon id={providerIcon} size={13} fallback={<ProviderGearIcon size={11} />} />
-                      <span style={{ fontSize: 12, fontWeight: isProviderSelected ? 600 : 400, color: "var(--text)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {pName}
-                      </span>
-                    </div>
-
-                    {/* Model rows */}
-                    {models.map((m, i) => {
-                      const isModelSelected = selection?.type === "model" && selection.providerName === pName && selection.index === i;
-                      const modelIcon = (m.icon && hasProviderIcon(m.icon)) ? m.icon : providerIcon;
-                      return (
-                        <div
-                          key={i}
-                          onClick={() => setSelection({ type: "model", providerName: pName, index: i })}
-                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 26px", borderRadius: 5, cursor: "pointer", background: isModelSelected ? "var(--bg-selected)" : "none" }}
-                          onMouseEnter={(e) => { if (!isModelSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isModelSelected) e.currentTarget.style.background = "none"; }}
-                        >
-                          <ProviderIcon id={modelIcon} size={11} fallback={<ProviderGearIcon size={10} />} />
-                          <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: m.id ? "var(--text-muted)" : "var(--text-dim)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {m.id || t("new model")}
-                          </span>
-                          {m.reasoning && (
-                            <span style={{ fontSize: 9, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {/* Add model button */}
-                    <div
-                      onClick={(e) => { e.stopPropagation(); addModel(pName); }}
-                      style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px 4px 26px", borderRadius: 5, cursor: "pointer", color: "var(--text-dim)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
-                    >
-                      <span style={{ fontSize: 11 }}>+ {t("Model")}</span>
-                    </div>
-                  </div>
-                );
-              })}
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{catalogOpen ? t("All model data") : t("Models")}</span>
+              {!catalogOpen && <code style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>~/.pi/agent/models.json</code>}
             </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+              <Tooltip content={modelCatalogSourceTooltip} side="bottom" align="end" delayDuration={300} interactive>
+                <button
+                  type="button"
+                  aria-label={t("About model catalog sources")}
+                  style={{ width: 22, height: 22, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid var(--text-dim)", borderRadius: "50%", background: "transparent", color: "var(--text-muted)", cursor: "help", fontSize: 13, fontWeight: 700, lineHeight: 1 }}
+                >
+                  ?
+                </button>
+              </Tooltip>
+              {!catalogOpen && (
+                <button
+                  onClick={() => setCatalogOpen(true)}
+                  style={{ padding: "5px 9px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
+                >
+                  {t("View all model data")}
+                </button>
+              )}
+              <button onClick={requestClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+            </div>
+          </div>
 
-            {/* Add provider */}
-            <div style={{ borderTop: "1px solid var(--border)", padding: "8px 6px" }}>
-              <button onClick={() => setPickerOpen(true)} style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                width: "100%", padding: "6px 0", background: "none", border: "1px dashed var(--border)", borderRadius: 5,
-                color: "var(--text-muted)", cursor: "pointer", fontSize: 12,
-              }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+          {catalogOpen ? <RuntimeModelCatalog /> : (
+            <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+              <div style={{ width: 210, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)" }}>
+                <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+                  {activeOAuth.map((provider) => {
+                    const isSelected = selection?.type === "oauth" && selection.providerId === provider.id;
+                    return (
+                      <div
+                        key={provider.id}
+                        onClick={() => setSelection({ type: "oauth", providerId: provider.id })}
+                        style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
+                        onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
+                      >
+                        <ProviderIcon id={provider.id} size={16} />
+                        <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{provider.name}</span>
+                      </div>
+                    );
+                  })}
+
+                  {activeApiKey.map((provider) => {
+                    const isSelected = selection?.type === "apikey" && selection.providerId === provider.id;
+                    return (
+                      <div
+                        key={provider.id}
+                        onClick={() => setSelection({ type: "apikey", providerId: provider.id })}
+                        style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
+                        onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
+                      >
+                        <ProviderIcon id={provider.id} size={16} />
+                        <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{provider.displayName}</span>
+                      </div>
+                    );
+                  })}
+
+                  {(activeOAuth.length > 0 || activeApiKey.length > 0) && providers.length > 0 && (
+                    <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
+                  )}
+
+                  {loading ? (
+                    <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("Loading...")}</div>
+                  ) : providers.map(([providerName, providerData]) => {
+                    const isProviderSelected = selection?.type === "provider" && selection.name === providerName;
+                    const models = providerData.models ?? [];
+                    const providerIcon = providerData.icon && hasProviderIcon(providerData.icon) ? providerData.icon : "";
+                    return (
+                      <div key={providerName} style={{ marginBottom: 2 }}>
+                        <div
+                          onClick={() => setSelection({ type: "provider", name: providerName })}
+                          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderRadius: 5, cursor: "pointer", background: isProviderSelected ? "var(--bg-selected)" : "none" }}
+                          onMouseEnter={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                          onMouseLeave={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "none"; }}
+                        >
+                          <ProviderIcon id={providerIcon} size={13} fallback={<ProviderGearIcon size={11} />} />
+                          <span style={{ fontSize: 12, fontWeight: isProviderSelected ? 600 : 400, color: "var(--text)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {providerName}
+                          </span>
+                        </div>
+
+                        {models.map((model, index) => {
+                          const isModelSelected = selection?.type === "model" && selection.providerName === providerName && selection.index === index;
+                          const modelIcon = (model.icon && hasProviderIcon(model.icon)) ? model.icon : providerIcon;
+                          return (
+                            <div
+                              key={index}
+                              onClick={() => setSelection({ type: "model", providerName, index })}
+                              style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 26px", borderRadius: 5, cursor: "pointer", background: isModelSelected ? "var(--bg-selected)" : "none" }}
+                              onMouseEnter={(e) => { if (!isModelSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
+                              onMouseLeave={(e) => { if (!isModelSelected) e.currentTarget.style.background = "none"; }}
+                            >
+                              <ProviderIcon id={modelIcon} size={11} fallback={<ProviderGearIcon size={10} />} />
+                              <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: model.id ? "var(--text-muted)" : "var(--text-dim)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {model.id || t("new model")}
+                              </span>
+                              {model.reasoning && (
+                                <span style={{ fontSize: 9, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        <div
+                          onClick={(e) => { e.stopPropagation(); addModel(providerName); }}
+                          style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px 4px 26px", borderRadius: 5, cursor: "pointer", color: "var(--text-dim)" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
+                        >
+                          <span style={{ fontSize: 11 }}>+ {t("Model")}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--border)", padding: "8px 6px" }}>
+                  <button
+                    onClick={() => setPickerOpen(true)}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                      width: "100%", padding: "6px 0", background: "none", border: "1px dashed var(--border)", borderRadius: 5,
+                      color: "var(--text-muted)", cursor: "pointer", fontSize: 12,
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                  >
+                    + {t("Add provider")}
+                  </button>
+                </div>
+              </div>
+
+              <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+                {loading ? null : detailContent ?? (
+                  <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
+                    {t("Select a provider or model")}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!catalogOpen && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+              {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
+              <button onClick={requestClose} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
+                {t("Cancel")}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving || savedOk}
+                style={{
+                  position: "relative",
+                  padding: "6px 16px",
+                  minWidth: 92,
+                  background: savedOk ? "#16a34a" : saving ? "var(--bg-panel)" : "var(--accent)",
+                  border: "none", borderRadius: 6,
+                  color: savedOk ? "#fff" : saving ? "var(--text-muted)" : "#fff",
+                  cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  transition: "background-color 0.2s ease, color 0.2s ease",
+                  animation: savedOk ? "saved-pop 0.45s ease" : undefined,
+                }}
               >
-                + {t("Add provider")}
+                {savedOk && (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s ease forwards", flexShrink: 0 }}>
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+                <span>{savedOk ? t("Saved") : saving ? t("Saving...") : t("Save")}</span>
               </button>
             </div>
-          </div>
-
-          {/* Right: detail */}
-          <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-            {loading ? null : detailContent ?? (
-              <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
-                {t("Select a provider or model")}
-              </div>
-            )}
-          </div>
+          )}
         </div>
-        )}
-
-        {/* Footer */}
-        {!catalogOpen && <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-          {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
-          <button onClick={requestClose} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
-            {t("Cancel")}
-          </button>
-          <button onClick={handleSave} disabled={saving || savedOk} style={{
-            position: "relative",
-            padding: "6px 16px",
-            minWidth: 92,
-            background: savedOk ? "#16a34a" : saving ? "var(--bg-panel)" : "var(--accent)",
-            border: "none", borderRadius: 6,
-            color: savedOk ? "#fff" : saving ? "var(--text-muted)" : "#fff",
-            cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            transition: "background-color 0.2s ease, color 0.2s ease",
-            animation: savedOk ? "saved-pop 0.45s ease" : undefined,
-          }}>
-            {savedOk && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s ease forwards", flexShrink: 0 }}>
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-            <span>{savedOk ? t("Saved") : saving ? t("Saving...") : t("Save")}</span>
-          </button>
-        </div>}
       </div>
-    </div>
-    {pickerOpen && (
-      <AddProviderPicker
-        oauthProviders={oauthProviders}
-        apiKeyProviders={apiKeyProviders}
-        onSelectOAuth={(id) => setSelection({ type: "oauth", providerId: id })}
-        onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
-        onAddCustom={addCustomProvider}
-        onClose={() => setPickerOpen(false)}
-      />
-    )}
+      {pickerOpen && (
+        <AddProviderPicker
+          oauthProviders={oauthProviders}
+          apiKeyProviders={apiKeyProviders}
+          onSelectOAuth={(id) => setSelection({ type: "oauth", providerId: id })}
+          onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
+          onAddCustom={addCustomProvider}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </>
   );
 }

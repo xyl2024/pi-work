@@ -10,12 +10,9 @@ import type {
   ReadFileInfo,
   CompactionPoint,
 } from "@/lib/types";
-import {
-  countToolCallsByName,
-  splitFinalAssistantBlocks,
-} from "@/lib/message-display";
-import { getFileName, joinFilePath } from "@/lib/file-paths";
-import { MessageView, CollapseNonceProvider, useCollapseNonce } from "./MessageView";
+import { countToolCallsByName } from "@/lib/message-display";
+import { getFileName } from "@/lib/file-paths";
+import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { SessionLibraryModal } from "./session-library/SessionLibraryModal";
 import { SessionLibraryOpenButton } from "./SessionLibraryOpenButton";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
@@ -27,7 +24,7 @@ import { AgentTodoPanel } from "./AgentTodoPanel";
 import { AskUserQuestionsPanel } from "./AskUserQuestionsPanel";
 import { ReplayBar } from "./ReplayBar";
 import LoadingState from "./LoadingState";
-import { useAgentSession, type AgentPhase } from "@/hooks/useAgentSession";
+import { useAgentSession } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/Toast";
@@ -37,10 +34,12 @@ import { setChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
 import type { SlashResource } from "./ChatInput";
 import { ToolCallStatsProvider, useToolCallStatsEmit } from "@/hooks/ToolCallStatsContext";
 import { useToolCallStats } from "@/hooks/useToolCallStats";
-import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { setToolCallStatsScrollCallback, setToolCallStatsState } from "@/hooks/toolCallStatsStore";
 import { setAgentControls } from "@/hooks/sessionUiStore";
 import { SessionSearch } from "./SessionSearch";
+import { phaseLabel, phaseLoaderVariant, hasStreamingThinking, resolveReadPath, isGroupAnchor, findFinalAssistantIndex, hasDisplayableProcessMessage } from "./chat-window/utils";
+import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
+import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 
 interface Props {
   /** Stable owner token for active-session imperative bridges. */
@@ -86,269 +85,6 @@ interface Props {
     streaming: boolean;
     error: string | null;
   }) => void;
-}
-
-function phaseLabel(phase: AgentPhase, t: ReturnType<typeof useI18n>["t"]): string {
-  if (phase?.kind === "running_tools") {
-    const names = phase.tools.map((t) => t.name);
-    if (names.length === 0) return t("Running tool...");
-    if (names.length === 1) return `${t("Running")} ${names[0]}...`;
-    if (names.length <= 3) return `${t("Running")} ${names.join(", ")}...`;
-    return `${t("Running")} ${names.slice(0, 2).join(", ")} (+${names.length - 2})...`;
-  }
-  if (phase?.kind === "waiting_model") return t("Waiting for model...");
-  if (phase?.kind === "compacting") return t("Compacting context...");
-  return t("Thinking...");
-}
-
-function phaseLoaderVariant(phase: AgentPhase) {
-  if (phase?.kind === "waiting_model") return "domino" as const;
-  if (phase?.kind === "running_tools") return "rotor" as const;
-  if (phase?.kind === "compacting") return "fold" as const;
-  return "spark" as const;
-}
-
-function hasStreamingThinking(message: Partial<AgentMessage> | null): boolean {
-  if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return false;
-  const currentBlock = message.content[message.content.length - 1];
-  return currentBlock?.type === "thinking" &&
-    typeof currentBlock.thinking === "string" &&
-    currentBlock.thinking.trim().length > 0;
-}
-
-/** Resolve a `read` tool's raw path against the session cwd. Mirrors the
- *  resolver used by the Session Library grid: absolute paths and Windows
- *  drive/UNC paths pass through; anything else is joined onto cwd. pi itself
- *  strips a leading "@" from tool paths, so we mirror that too. Returns null
- *  when a relative path can't be resolved (no cwd known). */
-function resolveReadPath(raw: string, cwd?: string | null): string | null {
-  const p = raw.startsWith("@") ? raw.slice(1) : raw;
-  if (p.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith("\\\\")) return p;
-  if (!cwd) return null;
-  return joinFilePath(cwd, p);
-}
-
-// Starter prompt chips shown on the brand-new (empty) session screen.
-// Clicking one fills the chat input via ChatInputHandle.insertText.
-// Keys are i18n dictionary keys (English source = key).
-const NEW_SESSION_PRESETS = [
-  {
-    key: "explore",
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>,
-    titleKey: "Explore this codebase",
-    descKey: "Understand the project structure and how it fits together",
-    promptKey: "Walk me through this codebase: overall architecture, key modules, entry points, and how they fit together.",
-  },
-  {
-    key: "review",
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.35-4.35" /><path d="M8.5 11l2 2 3.5-3.5" /></svg>,
-    titleKey: "Review my code",
-    descKey: "Find bugs, smells, and improvements",
-    promptKey: "Review the code for bugs, code smells, and improvements. Point out concrete issues with file paths and line numbers.",
-  },
-  {
-    key: "debug",
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="6" /><path d="M12 7V4" /><path d="M8.5 5.5 7 4" /><path d="M15.5 5.5 17 4" /><path d="M9 13h.01" /><path d="M15 13h.01" /></svg>,
-    titleKey: "Help me debug",
-    descKey: "Reproduce, isolate, and fix a bug",
-    promptKey: "Help me debug this issue: reproduce it, find the root cause, and fix it.",
-  },
-  {
-    key: "tests",
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 2v6.5L4.5 18.5a2 2 0 0 0 1.8 2.9h11.4a2 2 0 0 0 1.8-2.9L14 8.5V2" /><path d="M8.5 2h7" /><path d="M7 16h10" /></svg>,
-    titleKey: "Write tests",
-    descKey: "Add unit tests for a module",
-    promptKey: "Write unit tests for this module, covering the main paths and edge cases.",
-  },
-  {
-    key: "optimize",
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>,
-    titleKey: "Optimize performance",
-    descKey: "Profile and speed up slow code",
-    promptKey: "Profile this code, find the performance bottlenecks, and suggest concrete optimizations.",
-  },
-  {
-    key: "docs",
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>,
-    titleKey: "Document this project",
-    descKey: "Generate a structured wiki from the source",
-    promptKey: "Generate structured project documentation (a wiki) from the source code.",
-  },
-] as const;
-
-// ── Per-turn process folding ──
-//
-// A "turn" runs from one anchor (user message) up to the next anchor. The
-// non-final assistant messages in a turn — thinking, tool calls, intermediate
-// text — are wrapped in a ProcessDetailsGroup so users can collapse them and
-// focus on the final answer.
-//
-// While the agent is still running on the current turn (agentRunning is true
-// and the anchor is the last user message), the process is rendered inline
-// instead. Folding only kicks in once the whole turn finishes, so users see
-// the full think → tool-call → intermediate text flow as it streams and then
-// get a single collapsed summary at the end. Active streaming content for
-// the in-progress message still lives in streamState.streamingMessage and is
-// rendered separately below.
-
-function isGroupAnchor(msg: AgentMessage): boolean {
-  return msg.role === "user";
-}
-
-function hasFinalAssistantAnswer(msg: AgentMessage): boolean {
-  if (msg.role !== "assistant") return false;
-  return splitFinalAssistantBlocks(msg).answerBlocks.some(
-    (b) => b.type === "image" || (b.type === "text" && b.text.trim().length > 0),
-  );
-}
-
-/** Find the final assistant message in [userIdx+1, endIdx). Prefers messages
- *  with a non-empty trailing answer; falls back to the last assistant message.
- *  Returns -1 when no assistant message exists in the range. */
-function findFinalAssistantIndex(
-  messages: AgentMessage[],
-  userIdx: number,
-  endIdx: number,
-): number {
-  for (let i = endIdx - 1; i > userIdx; i--) {
-    if (hasFinalAssistantAnswer(messages[i])) return i;
-  }
-  for (let i = endIdx - 1; i > userIdx; i--) {
-    if (messages[i]?.role === "assistant") return i;
-  }
-  return -1;
-}
-
-/** A message contributes to the process group if it has thinking/tool content
- *  worth collapsing. Empty assistant messages and pure-text replies stay out. */
-function hasDisplayableProcessMessage(msg: AgentMessage): boolean {
-  if (msg.role !== "assistant") return false;
-  const blocks = msg.content ?? [];
-  return blocks.some((b) => b.type === "thinking" || b.type === "toolCall");
-}
-
-/** How many tool names the process summary lists before falling back to "+N". */
-const MAX_TOOL_BREAKDOWN = 3;
-
-function ProcessDetailsGroup({
-  messageCount,
-  toolCallCounts,
-  children,
-}: {
-  messageCount: number;
-  toolCallCounts: Record<string, number>;
-  children: React.ReactNode;
-}) {
-  const { t, locale } = useI18n();
-  const [expanded, setExpanded] = useState(false);
-  // "全部折叠" — fold this group on every nonce bump. ProcessDetailsGroup
-  // has no userExpandedRef; the user can re-expand immediately via the
-  // header button if they want a different state.
-  const collapseNonce = useCollapseNonce();
-  useEffect(() => {
-    if (collapseNonce > 0) setExpanded(false);
-  }, [collapseNonce]);
-  // Height animation for expand/collapse — same pattern as the thinking block:
-  // container height follows the rendered content via ResizeObserver.
-  const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
-
-  const toolCallCount = Object.values(toolCallCounts).reduce((s, n) => s + n, 0);
-  const summary = t("{n} messages").replace("{n}", String(messageCount));
-  const withCalls =
-    toolCallCount > 0
-      ? ` · ${t(toolCallCount === 1 ? "{n} tool call" : "{n} tool calls").replace("{n}", String(toolCallCount))}`
-      : "";
-  // Per-tool breakdown: top tool names by call count (e.g. "· 3× bash、2× read").
-  // Only the top few fit in the single-line summary; when more tools were
-  // used, hovering the summary shows the full breakdown via Tooltip.
-  const toolEntries = Object.entries(toolCallCounts).sort((a, b) => b[1] - a[1]);
-  const toolSummary = (() => {
-    if (toolEntries.length === 0) return null;
-    const sep = locale === "zh" ? "、" : ", ";
-    const shown = toolEntries
-      .slice(0, MAX_TOOL_BREAKDOWN)
-      .map(([name, n]) => t("{n}× {tool}").replace("{n}", String(n)).replace("{tool}", name))
-      .join(sep);
-    const rest = toolEntries.length - Math.min(toolEntries.length, MAX_TOOL_BREAKDOWN);
-    return ` · ${shown}${rest > 0 ? " …" : ""}`;
-  })();
-  const toolFullList =
-    toolEntries.length > MAX_TOOL_BREAKDOWN
-      ? toolEntries
-          .map(([name, n]) => t("{n}× {tool}").replace("{n}", String(n)).replace("{tool}", name))
-          .join(locale === "zh" ? "、" : ", ")
-      : null;
-
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
-        className="process-summary"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          width: "auto",
-          minHeight: 24,
-          padding: "2px 0",
-          border: "none",
-          background: "transparent",
-          cursor: "pointer",
-          fontSize: 12,
-          textAlign: "left",
-        }}
-      >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{
-            flexShrink: 0,
-            transform: expanded ? "rotate(90deg)" : "none",
-            transition: "transform 0.15s",
-          }}
-        >
-          <polyline points="4 2.5 7.5 6 4 9.5" />
-        </svg>
-        <span
-          style={{
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {summary}
-          {withCalls}
-          {toolSummary && (toolFullList ? (
-            <Tooltip content={toolFullList}>
-              <span>{toolSummary}</span>
-            </Tooltip>
-          ) : (
-            toolSummary
-          ))}
-        </span>
-      </button>
-      <div
-        style={{
-          height: contentHeight ?? "auto",
-          overflow: "hidden",
-          transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
-        }}
-      >
-        <div ref={contentRef} style={{ overflow: "hidden" }}>
-          {expanded && <div style={{ marginTop: 8 }}>{children}</div>}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
@@ -573,7 +309,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     // absolute bottom regardless of padding/layout.
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     setTimeout(() => { isProgrammaticScrollRef.current = false; }, 500);
-  }, []);
+  }, [scrollContainerRef]);
 
   // ── Manual compaction lifecycle lives in useAgentSession (see
   // handleCompact). The hook owns the SSE connection, busy state,
@@ -670,7 +406,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     const nearBottom = dist < 100;
     userScrolledUpRef.current = !nearBottom;
     setShowToBottom(!nearBottom);
-  }, []);
+  }, [scrollContainerRef]);
 
   // ── 一键折叠 ──
   // Bumped on every click. Subscribed by ThinkingBlock / ToolCallBlock /
@@ -764,7 +500,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     // Flash highlight off after 2s
     const timer = setTimeout(() => setHighlightEntryId(null), 2000);
     return () => clearTimeout(timer);
-  }, [pendingJumpEntryId, entryIds, messages]);
+  }, [pendingJumpEntryId, entryIds, messages, scrollContainerRef]);
 
   // ── Auto-scroll to bottom during streaming ──
   const prevStreamingRef = useRef(false);
@@ -804,7 +540,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         setTimeout(() => { isProgrammaticScrollRef.current = false; }, 150);
       }
     }
-  }, [streamState.streamingMessage, streamState.isStreaming]);
+  }, [streamState.streamingMessage, streamState.isStreaming, scrollContainerRef, userJustSentRef]);
 
   // ── Auto-scroll to the truncation point as replay advances ──
   useEffect(() => {
@@ -1344,32 +1080,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               </span>
             </div>
 
-            <div className="grid w-full max-w-[820px] grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {NEW_SESSION_PRESETS.map((preset) => (
-                <button
-                  key={preset.key}
-                  type="button"
-                  onClick={() => chatInputRef?.current?.insertText(t(preset.promptKey))}
-                  style={{
-                    display: "flex", alignItems: "flex-start", gap: 10,
-                    padding: "12px 14px",
-                    background: "var(--bg-subtle)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 12,
-                    cursor: "pointer", textAlign: "left",
-                    transition: "border-color 0.15s, background 0.15s",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-subtle)"; }}
-                >
-                  <span style={{ color: "var(--accent)", flexShrink: 0, marginTop: 2, display: "flex" }}>{preset.icon}</span>
-                  <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>{t(preset.titleKey)}</span>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.45 }}>{t(preset.descKey)}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
+            <NewSessionPresets onPickPrompt={(prompt) => chatInputRef?.current?.insertText(prompt)} />
           </div>
           <div className="relative">{chatInputElement}</div>
         </>
