@@ -23,7 +23,7 @@
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { defineTool } from "@earendil-works/pi-coding-agent";
-import { getTodoById } from "./todo-store";
+import { getTodoById } from "./store";
 import {
   TODO_TOOL_NAMES,
   buildDescriptionEchoText,
@@ -33,7 +33,7 @@ import {
   type ListDetails,
   type NotFoundDetails,
   type TodoToolName,
-} from "./todo-tools-payloads";
+} from "./tools-payloads";
 
 export { TODO_TOOL_NAMES };
 export type { TodoToolName };
@@ -92,13 +92,13 @@ const DescriptionParams = Type.Object(
 
 // Re-export payload types so consumers can `import { ListDetails } from
 // "@/lib/todo-tools"` without learning about the inner split.
-export type { ListDetails, DescriptionDetails, NotFoundDetails } from "./todo-tools-payloads";
+export type { ListDetails, DescriptionDetails, NotFoundDetails } from "./tools-payloads";
 export {
   buildDescriptionPayload,
   buildDescriptionEchoText,
   buildListPayload,
   todoToListItem,
-} from "./todo-tools-payloads";
+} from "./tools-payloads";
 
 // ---------------------------------------------------------------------------
 // Tool result wrappers (SDK-shaped)

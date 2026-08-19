@@ -10,7 +10,7 @@
  *   - <ColorPickerPopover />: a small wrapper that adds the popover chrome
  *     (positioning, click-outside, Escape) used by the toolbar button.
  *
- * Mirrors the existing TagColorPicker in components/TodoPanel.tsx:1881-1988
+ * Mirrors the existing TagColorPicker in components/todo/TagColorPicker.tsx
  * but is editor-scoped — every interactive element calls preventDefault on
  * mousedown so the editor retains its selection while the user clicks a
  * swatch. The 8 presets are shared via lib/todo-color-presets.ts so tag
@@ -24,7 +24,7 @@ import type { Editor } from "@tiptap/react";
 // / `unsetColor` their types. Without this import, TS doesn't see the
 // augmentation and ChainedCommands rejects the calls below.
 import "@tiptap/extension-color";
-import { TAG_COLOR_PRESETS } from "@/lib/todo-color-presets";
+import { TAG_COLOR_PRESETS } from "@/lib/user-todo/color-presets";
 import { useI18n } from "@/hooks/useI18n";
 
 // ---------------------------------------------------------------------------

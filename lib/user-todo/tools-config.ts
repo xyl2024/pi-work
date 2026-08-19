@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
-import { TODO_TOOL_NAMES, type TodoToolName } from "./todo-tools";
+import { TODO_TOOL_NAMES, type TodoToolName } from "./tools";
 
 const CONFIG_DIR = join(homedir(), ".pi-work");
 const CONFIG_PATH = join(CONFIG_DIR, "todo-tools.json");

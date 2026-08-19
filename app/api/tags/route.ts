@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { join } from "path";
 import { homedir } from "os";
 import { createLogger, elapsedMs } from "@/lib/logger";
-import { renameTag, deleteTag, TodoValidationError } from "@/lib/todo-store";
+import { renameTag, deleteTag, TodoValidationError } from "@/lib/user-todo/store";
 
 const log = createLogger("api/tags");
 const TODOS_FILE = join(homedir(), ".pi-work", "todos.json");

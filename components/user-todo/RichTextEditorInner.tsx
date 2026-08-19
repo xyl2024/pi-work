@@ -16,10 +16,10 @@ import { Color } from "@tiptap/extension-color";
 import { BubbleMenu } from "@tiptap/react/menus";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/Toast";
-import { uploadTodoImages, extractImageFiles, extractClipboardImageFiles } from "@/lib/todo-image-upload";
-import type { ImageUploader } from "@/components/RichTextEditor";
+import { uploadTodoImages, extractImageFiles, extractClipboardImageFiles } from "@/lib/user-todo/image-upload";
+import type { ImageUploader } from "./RichTextEditor";
 import { buildDescriptionSanitizeConfig } from "@/lib/description-sanitize";
-import { TextColorPicker, applyEditorColor } from "@/components/TextColorPicker";
+import { TextColorPicker, applyEditorColor } from "./TextColorPicker";
 
 interface Props {
   defaultValue: string;

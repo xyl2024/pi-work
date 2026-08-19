@@ -4,7 +4,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
 import { createLogger, elapsedMs } from "@/lib/logger";
-import { TODO_IMAGE_MIME_TO_EXT } from "@/lib/todo-images-utils";
+import { TODO_IMAGE_MIME_TO_EXT } from "@/lib/user-todo/images-utils";
 
 const log = createLogger("api/todo-images");
 const TODO_IMAGES_DIR = join(homedir(), ".pi-work", "todo_images");

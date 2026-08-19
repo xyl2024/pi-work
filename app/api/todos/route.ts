@@ -11,7 +11,7 @@ import {
   TodoNotFoundError,
   type Priority,
   type Tag,
-} from "@/lib/todo-store";
+} from "@/lib/user-todo/store";
 
 const log = createLogger("api/todos");
 const TODOS_FILE = join(homedir(), ".pi-work", "todos.json");

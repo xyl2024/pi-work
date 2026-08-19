@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { TODO_TOOL_NAMES, type TodoToolName } from "@/lib/todo-tools";
-import { readEnabledTodoTools, writeEnabledTodoTools } from "@/lib/todo-tools-config";
+import { TODO_TOOL_NAMES, type TodoToolName } from "@/lib/user-todo/tools";
+import { readEnabledTodoTools, writeEnabledTodoTools } from "@/lib/user-todo/tools-config";
 import { createLogger, elapsedMs } from "@/lib/logger";
 
 const log = createLogger("api/todo-tools");

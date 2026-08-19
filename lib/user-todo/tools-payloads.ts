@@ -12,10 +12,10 @@ import {
   listTodos,
   type Tag,
   type Todo,
-} from "./todo-store";
-import { extractTodoImageFilenames } from "./todo-images-utils";
-import { mimeForTodoImageFilename } from "./todo-images-utils";
-import { todoImageUrl } from "./todo-tools-url";
+} from "./store";
+import { extractTodoImageFilenames } from "./images-utils";
+import { mimeForTodoImageFilename } from "./images-utils";
+import { todoImageUrl } from "./tools-url";
 
 const DEFAULT_LIST_LIMIT = 50;
 const MAX_LIST_LIMIT = 200;

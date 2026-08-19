@@ -9,7 +9,7 @@ import { ChatWindow } from "./ChatWindow";
 import { SessionTabBar } from "./SessionTabBar";
 import { FileViewer } from "./FileViewer";
 import { TabBar, type Tab } from "./TabBar";
-import { TodoPanel } from "./TodoPanel";
+import { TodoPanel } from "./user-todo/TodoPanel";
 
 // Right panel content re-renders only when its inputs change. TodoPanel has
 // no props, so memoizing it keeps AppShell's per-state-change re-renders

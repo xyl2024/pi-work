@@ -70,7 +70,7 @@ function buildCells(year: number, month: number): CalendarCell[] {
   return cells;
 }
 
-// Mirrored from PRIORITY_PALETTE in components/TodoPanel.tsx — kept narrow
+// Mirrored from PRIORITY_PALETTE in components/todo/palette.ts — kept narrow
 // here so the tooltip doesn't pull the entire TodoPanel into a separate
 // import surface (and to keep this file self-contained).
 const CALENDAR_PRIORITY_DOT: Record<NonNullable<Todo["priority"]>, { bg: string; glyph: string }> = {

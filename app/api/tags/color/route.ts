@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { join } from "path";
 import { homedir } from "os";
 import { createLogger, elapsedMs } from "@/lib/logger";
-import { setTagColor, TodoValidationError } from "@/lib/todo-store";
+import { setTagColor, TodoValidationError } from "@/lib/user-todo/store";
 
 const log = createLogger("api/tags-color");
 const TODOS_FILE = join(homedir(), ".pi-work", "todos.json");

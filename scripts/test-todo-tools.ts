@@ -29,19 +29,19 @@ import {
   buildDescriptionEchoText,
   buildDescriptionPayload,
   buildListPayload,
-} from "@/lib/todo-tools-payloads";
-import { createTodo, getTodoById, listTodos, updateTodo, type Todo } from "@/lib/todo-store";
+} from "@/lib/user-todo/tools-payloads";
+import { createTodo, getTodoById, listTodos, updateTodo, type Todo } from "@/lib/user-todo/store";
 import { getDb } from "@/lib/db";
 import {
   __resetTodoImageBaseUrlForTests,
   getTodoImageBaseUrl,
   todoImageUrl,
-} from "@/lib/todo-tools-url";
+} from "@/lib/user-todo/tools-url";
 import {
   TODO_IMAGE_FILENAME_RE,
   extractTodoImageFilenames,
   mimeForTodoImageFilename,
-} from "@/lib/todo-images-utils";
+} from "@/lib/user-todo/images-utils";
 
 function log(label: string, value: unknown) {
   console.log(`\n=== ${label} ===`);

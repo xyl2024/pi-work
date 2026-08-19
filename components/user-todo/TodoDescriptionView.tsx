@@ -4,12 +4,12 @@ import { useMemo, type CSSProperties, type JSX, type ReactNode } from "react";
 import DOMPurify from "isomorphic-dompurify";
 import parse, { domToReact, type DOMNode, type Element, type HTMLReactParserOptions } from "html-react-parser";
 import { useI18n } from "@/hooks/useI18n";
-import { MarkdownImage } from "./ImageLightbox";
-import { MermaidBlock } from "./MermaidBlock";
-import { EchartsBlock } from "./EchartsBlock";
-import { SvgBlock } from "./SvgBlock";
-import { CodeBlock } from "./CodeBlock";
-import { highlightDeep } from "./HighlightText";
+import { MarkdownImage } from "@/components/ImageLightbox";
+import { MermaidBlock } from "@/components/MermaidBlock";
+import { EchartsBlock } from "@/components/EchartsBlock";
+import { SvgBlock } from "@/components/SvgBlock";
+import { CodeBlock } from "@/components/CodeBlock";
+import { highlightDeep } from "@/components/HighlightText";
 import { buildDescriptionSanitizeConfig } from "@/lib/description-sanitize";
 
 interface Props {
