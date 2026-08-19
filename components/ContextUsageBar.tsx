@@ -29,8 +29,8 @@ interface Props {
  *
  * The track is a faint gray circle; the foreground arc fills up clockwise
  * from 12 o'clock to `percent`% of the circumference, recolored past
- * 70% (yellow) and 90% (red) to mirror the old 10-cell strip's danger
- * thresholds.
+ * 30% (yellow) and 70% (red) so the danger signal fires well before the
+ * context window is actually full.
  *
  * Sizing notes: the ring is rendered at a fixed 14px on screen, so the
  * stroke is bumped to 2.2 inside the viewBox to stay visible after the
@@ -51,9 +51,9 @@ export function ContextUsageBar({ contextUsage, sessionStats }: Props) {
   const ring = useMemo(() => {
     if (!contextUsage?.contextWindow || contextUsage.percent === null) return null;
     const pct = Math.max(0, Math.min(100, contextUsage.percent));
-    // Pick the same danger thresholds as the old bar; using solid colors keeps
-    // the ring readable at 14px (a gradient at that size renders as mud).
-    const color = pct > 90 ? "#ef4444" : pct > 70 ? "rgba(234,179,8,0.95)" : "var(--accent)";
+    // Pick the danger thresholds; using solid colors keeps the ring readable
+    // at 14px (a gradient at that size renders as mud).
+    const color = pct > 70 ? "#ef4444" : pct > 30 ? "rgba(234,179,8,0.95)" : "var(--accent)";
     // Circle geometry: r=7, stroke sits centered on r, viewBox 0 0 16 16 with
     // 1.5px padding so the 2.2px stroke doesn't clip the box. Circumference
     // 2*PI*7 ≈ 43.98; we shorten the stroke-dasharray to percent% of it.
