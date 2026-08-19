@@ -17,6 +17,8 @@ interface Props {
   onCloseTab: (tabId: string) => void;
   onNewSession?: () => void;
   onBatchClose?: (tabId: string, mode: "left" | "right" | "others") => void;
+  /** Force-remount the chat controller for this tab. No-op for draft tabs. */
+  onReload?: (tabId: string) => void;
   leadingControl?: ReactNode;
 }
 
@@ -49,7 +51,7 @@ function StatusMark({ status }: { status: SessionTabStatus }) {
   );
 }
 
-export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose, leadingControl }: Props) {
+export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose, onReload, leadingControl }: Props) {
   const { t } = useI18n();
   const cm = useContextMenu();
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -105,7 +107,8 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               event.preventDefault();
               const index = tabs.findIndex((item) => item.tabId === tab.tabId);
               const items: ContextMenuItem[] = [
-                { key: "close", label: t("Close tab"), onSelect: () => onCloseTab(tab.tabId) },
+                { key: "reload", label: t("Refresh"), onSelect: () => onReload?.(tab.tabId), disabled: tab.kind === "draft" || !onReload },
+                { key: "close", label: t("Close tab"), onSelect: () => onCloseTab(tab.tabId), separatorBefore: true },
                 { key: "close-left", label: t("Close tabs to the left"), onSelect: () => onBatchClose?.(tab.tabId, "left"), disabled: index === 0 },
                 { key: "close-right", label: t("Close tabs to the right"), onSelect: () => onBatchClose?.(tab.tabId, "right"), disabled: index === tabs.length - 1 },
                 { key: "close-others", label: t("Close other tabs"), onSelect: () => onBatchClose?.(tab.tabId, "others"), disabled: tabs.length <= 1 },

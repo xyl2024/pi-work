@@ -673,6 +673,19 @@ export function AppShell() {
     else chatInputRefs.current.delete(tabId);
   }, []);
 
+  // Per-tab reload counters. Each tab keeps its controller mounted across
+  // activation changes so SSE + scroll survive tab switches; bumping a tab's
+  // counter folds into WorkspaceChatTab's `key`, which forces React to unmount
+  // and remount that controller — clearing all in-memory state and reloading
+  // the session from disk via `useAgentSession`'s mount effect.
+  const [reloadCounters, setReloadCounters] = useState<Record<string, number>>({});
+  const handleReloadSessionTab = useCallback((tabId: string) => {
+    const tab = workspaceRef.current.tabs[tabId];
+    if (!tab || tab.kind !== "session") return;
+    setReloadCounters((prev) => ({ ...prev, [tabId]: (prev[tabId] ?? 0) + 1 }));
+    toast.show({ kind: "info", message: t("Refreshed") });
+  }, [t, toast]);
+
   // Only the active tab is written to the URL. `replace` keeps tab switching
   // out of browser back/forward history, while a refresh still restores the
   // one session named by the URL.
@@ -1390,6 +1403,7 @@ export function AppShell() {
             onSelectTab={handleActivateSessionTab}
             onCloseTab={(tabId) => { void handleCloseSessionTab(tabId); }}
             onBatchClose={(tabId, mode) => { void handleBatchCloseSessionTabs(tabId, mode); }}
+            onReload={handleReloadSessionTab}
             onNewSession={() => handleSlashNew()}
           />
         )}
@@ -1403,7 +1417,7 @@ export function AppShell() {
             if (!tab) return null;
             return (
               <WorkspaceChatTab
-                key={tab.tabId}
+                key={`${tab.tabId}:${reloadCounters[tab.tabId] ?? 0}`}
                 tab={tab}
                 isActive={tab.tabId === activeTabId}
                 registerChatInputRef={registerChatInputRef}
