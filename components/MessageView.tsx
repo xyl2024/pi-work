@@ -1003,7 +1003,7 @@ function TextBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }
         <TextLoader
           className="markdown-stream-tail"
           text={block.text}
-          variant="redact"
+          variant="skeleton"
           color="var(--text)"
         />
       )}
