@@ -132,6 +132,13 @@ export interface RightBarDescriptor {
    *  lives in the user-ordered row; kept on the type for legacy slots
    *  registered through this module. */
   slot?: "top" | "bottom";
+  /** True when the button reads from active-session-bound state (system
+   *  prompt / tools, per-session tool-call stats, branch tree, cwd's git
+   *  status, per-session LLM audit). Such buttons become empty/disabled
+   *  on the new-session page, so the configurable row groups them by
+   *  `cfg.session_bound_alignment` so the user can decide whether they
+   *  sit at the top, bottom, or interleave with the global buttons. */
+  sessionBound?: true;
   /** Translation key consumed by `t()`. */
   labelKey: string;
   /** Optional top-right corner badge (RSS unread count etc.). */
@@ -264,6 +271,9 @@ const rssDescriptor: RightBarDescriptor = {
 const gitDiffDescriptor: RightBarDescriptor = {
   id: "gitDiff",
   kind: "configurable",
+  // Cwd-derived (one repo per active session) — treated as session-bound
+  // for column layout so it pins with the other "live state" buttons.
+  sessionBound: true,
   labelKey: "Open git diff",
   isActive: (ctx) => ctx.activeTabKind === "gitDiff",
   // Disabled when there's no cwd at all (no selected session, no
@@ -314,6 +324,7 @@ const tokensDescriptor: RightBarDescriptor = {
 const llmAuditDescriptor: RightBarDescriptor = {
   id: "llmAudit",
   kind: "configurable",
+  sessionBound: true,
   labelKey: "Open LLM API audit",
   isActive: (ctx) => ctx.activeTabKind === "llmAudit",
   content: () => LlmAuditIcon(),
@@ -324,6 +335,7 @@ const llmAuditDescriptor: RightBarDescriptor = {
 const contextDescriptor: RightBarDescriptor = {
   id: "context",
   kind: "configurable",
+  sessionBound: true,
   labelKey: "Context",
   isActive: (ctx) => ctx.activeTabKind === "context",
   isDisabled: (ctx) => !ctx.selectedSessionId,
@@ -338,6 +350,7 @@ const contextDescriptor: RightBarDescriptor = {
 const toolCallsDescriptor: RightBarDescriptor = {
   id: "toolCalls",
   kind: "configurable",
+  sessionBound: true,
   labelKey: "Tool Calls",
   isActive: (ctx) => ctx.activeTabKind === "toolCalls",
   content: (ctx) => {
@@ -375,6 +388,7 @@ const toolCallsDescriptor: RightBarDescriptor = {
 const conversationTreeDescriptor: RightBarDescriptor = {
   id: "conversationTree",
   kind: "configurable",
+  sessionBound: true,
   labelKey: "Open conversation tree",
   isActive: (ctx) => ctx.activeTabKind === "conversationTree",
   isDisabled: (ctx) => !ctx.selectedSessionId && !ctx.selectedCwd,
@@ -418,6 +432,13 @@ export const RIGHT_BAR_BUTTON_IDS: readonly RightBarButtonId[] =
   RIGHT_BAR_DESCRIPTORS.filter((d) => d.kind === "configurable").map(
     (d) => d.id as RightBarButtonId,
   );
+
+/** True when a configurable descriptor reads from active-session-bound
+ *  state. Used by RightBarColumn to split the configurable row into the
+ *  two groups consumed by `cfg.session_bound_alignment`. */
+export function isSessionBoundDescriptor(desc: RightBarDescriptor): boolean {
+  return desc.sessionBound === true;
+}
 
 /** Map a descriptor id back to its descriptor (O(1)). */
 export const RIGHT_BAR_DESCRIPTOR_BY_ID: ReadonlyMap<

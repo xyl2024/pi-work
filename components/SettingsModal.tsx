@@ -9,6 +9,7 @@ import { SmartImage } from "./SmartImage";
 import { WeChatSettingsSection } from "./WeChatSettingsSection";
 import { InboxTestSection } from "./InboxTestSection";
 import type { PiWorkConfig, RightBarButtonId, RightSideBarConfig, AgentCustomToolName } from "@/lib/config";
+import { resolveSessionBoundAlignment, type SessionBoundAlignment } from "@/lib/right-bar";
 import { FILE_VIEWER_LIMITS, FILE_VIEWER_KINDS, type FileViewerKind, type FileViewerMaxSizeMb } from "@/lib/file-viewer-limits";
 import {
   DEFAULT_AGENT_RETRY,
@@ -685,6 +686,44 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
     if (!config) return;
     const nextRightSideBar: RightSideBarConfig = { ...config.right_side_bar };
     delete nextRightSideBar.order;
+    const nextConfig: PiWorkConfig = { ...config, right_side_bar: nextRightSideBar };
+    setConfig(nextConfig);
+    setOriginalConfig(nextConfig);
+    setSettings(nextConfig);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nextConfig),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.show({ kind: "success", message: t("Settings saved") });
+    } catch (e) {
+      toast.show({
+        kind: "error",
+        message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),
+      });
+    }
+  }, [config, t, toast]);
+
+  // Read the current alignment from config; falls back to "bottom" when
+  // the field is missing (matches the on-disk default + parser fallback).
+  const currentAlignment: SessionBoundAlignment =
+    resolveSessionBoundAlignment(config?.right_side_bar.session_bound_alignment);
+
+  // Persist a new alignment. Same immediate-apply pattern as the
+  // visibility / order handlers: update local config, push to the global
+  // store, PUT to /api/settings. Keeping isDirty=false means closing the
+  // modal with a pending layout change never prompts "discard changes?".
+  const handleRightBarAlignmentChange = useCallback(async (
+    next: SessionBoundAlignment,
+  ) => {
+    if (!config) return;
+    if (resolveSessionBoundAlignment(config.right_side_bar.session_bound_alignment) === next) return;
+    const nextRightSideBar: RightSideBarConfig = {
+      ...config.right_side_bar,
+      session_bound_alignment: next,
+    };
     const nextConfig: PiWorkConfig = { ...config, right_side_bar: nextRightSideBar };
     setConfig(nextConfig);
     setOriginalConfig(nextConfig);
@@ -1707,6 +1746,50 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
                     );
                   })}
                 </ol>
+              </div>
+
+              {/* Session-bound button vertical alignment — new axis on
+                  top of the existing `order` field. Three radio options;
+                  the UI is intentionally a single row so the user can
+                  compare them side-by-side without scrolling. Within each
+                  group the user's `order` still applies (filtered to the
+                  group). Defaults to "bottom" on disk; the resolver in
+                  RightBarColumn mirrors this fallback so the column is
+                  never misaligned before the settings fetch resolves. */}
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: 0 }}>
+                    {t("Session-bound button alignment")}
+                  </h4>
+                </div>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
+                  {t("Where session-bound buttons sit in the right-side bar. Session-bound buttons (Context, Tool Calls, Conversation Tree, Git Diff, LLM API audit) read from the active session and become empty on the new-session page.")}
+                </p>
+                <div role="radiogroup" aria-label={t("Session-bound button alignment")} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {([
+                    { value: "top" as const,    labelKey: "Align session-bound buttons to the top" },
+                    { value: "bottom" as const, labelKey: "Align session-bound buttons to the bottom (default)" },
+                    { value: "inline" as const, labelKey: "Inline with button order (legacy)" },
+                  ]).map((opt) => {
+                    const checked = currentAlignment === opt.value;
+                    return (
+                      <label
+                        key={opt.value}
+                        style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--text)" }}
+                      >
+                        <input
+                          type="radio"
+                          name="right-bar-session-bound-alignment"
+                          value={opt.value}
+                          checked={checked}
+                          onChange={() => { void handleRightBarAlignmentChange(opt.value); }}
+                          style={{ width: 14, height: 14, accentColor: "var(--accent)", cursor: "pointer" }}
+                        />
+                        <span>{t(opt.labelKey)}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

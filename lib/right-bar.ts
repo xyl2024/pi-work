@@ -27,9 +27,20 @@ export type RightBarButtonId =
   | "context"
   | "terminal";
 
+/** Where session-bound buttons sit within the configurable row.
+ *
+ *  - "top":    session-bound buttons render first, then global ones.
+ *  - "bottom": global ones render first, then session-bound buttons (default).
+ *  - "inline": follow `order` as a single list (legacy / interleave).
+ *
+ *  Within each group the user-configured `order` is honored (filtered to
+ *  the group). Unknown values fall back to "bottom".
+ */
+export type SessionBoundAlignment = "top" | "bottom" | "inline";
+
 export interface RightSideBarConfig {
   /** Per-button show/hide flags. Missing keys default to true. */
-  [key: string]: boolean | readonly RightBarButtonId[] | undefined;
+  [key: string]: boolean | readonly RightBarButtonId[] | SessionBoundAlignment | undefined;
   /**
    * Optional user-configured display order for the configurable buttons.
    * When absent the descriptor registry's default order is used. The
@@ -37,6 +48,21 @@ export interface RightSideBarConfig {
    * stale entries on read.
    */
   order?: readonly RightBarButtonId[];
+  /**
+   * Vertical grouping for session-bound buttons (context / toolCalls /
+   * conversationTree / gitDiff / llmAudit). See SessionBoundAlignment.
+   * Missing/unknown values fall back to "bottom".
+   */
+  session_bound_alignment?: SessionBoundAlignment;
+}
+
+/** Resolve the alignment enum with the "bottom" default. Mirrors the
+ *  consumer-side parser in lib/config.ts — both sides agree on the
+ *  fallback so a Settings round-trip never flips the layout. */
+export function resolveSessionBoundAlignment(
+  raw: unknown,
+): SessionBoundAlignment {
+  return raw === "top" || raw === "inline" ? raw : "bottom";
 }
 
 /** Per-button visibility predicate. Matches the consumer-side parser used

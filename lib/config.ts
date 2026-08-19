@@ -61,8 +61,8 @@ export interface ExtensionsConfig {
 // 'use client' components should import directly from "@/lib/right-bar"
 // instead — importing through here drags in fs/js-yaml/logger.
 import type { RightBarButtonId, RightSideBarConfig } from "./right-bar";
-import { isRightBarButtonVisible } from "./right-bar";
-export { isRightBarButtonVisible };
+import { isRightBarButtonVisible, resolveSessionBoundAlignment } from "./right-bar";
+export { isRightBarButtonVisible, resolveSessionBoundAlignment };
 export type { RightBarButtonId, RightSideBarConfig };
 
 // ── Custom tools enabled by `customTools` on createAgentSession ───────────
@@ -153,6 +153,10 @@ const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = {
   gitDiff: true,
   conversationTree: true,
   context: true,
+  // Session-bound group (context / toolCalls / conversationTree / gitDiff /
+  // llmAudit) pins to the bottom by default — they're meaningful only when
+  // a session is active and become empty on the new-session page.
+  session_bound_alignment: "bottom",
 };
 
 const DEFAULT_CONFIG: PiWorkConfig = {
@@ -205,7 +209,7 @@ function parseRightSideBar(raw: unknown): RightSideBarConfig {
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
   for (const key of Object.keys(out)) {
-    if (key === "order") continue;
+    if (key === "order" || key === "session_bound_alignment") continue;
     const v = obj[key];
     if (typeof v === "boolean") out[key] = v;
     // missing or non-boolean → keep default (true)
@@ -220,6 +224,11 @@ function parseRightSideBar(raw: unknown): RightSideBarConfig {
       if (typeof item === "string") arr.push(item as RightBarButtonId);
     }
     if (arr.length > 0) out.order = arr;
+  }
+  // `session_bound_alignment` — tolerant enum. Anything other than the
+  // three documented values falls back to "bottom" (the on-disk default).
+  if (typeof obj.session_bound_alignment === "string") {
+    out.session_bound_alignment = resolveSessionBoundAlignment(obj.session_bound_alignment);
   }
   return out;
 }

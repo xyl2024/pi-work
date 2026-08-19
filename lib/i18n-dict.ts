@@ -998,6 +998,13 @@ export const ZH_TRANSLATIONS = {
   "Button order": "按钮顺序",
   "Reorder the buttons shown in the right-side bar. Up / Down buttons swap adjacent entries; the result is saved immediately.":
     "重新排列右侧按钮的显示顺序。上下按钮交换相邻条目，结果立即保存。",
+  // Settings / right-side bar — session-bound button vertical alignment
+  "Session-bound button alignment": "会话绑定按钮对齐",
+  "Where session-bound buttons sit in the right-side bar. Session-bound buttons (Context, Tool Calls, Conversation Tree, Git Diff, LLM API audit) read from the active session and become empty on the new-session page.":
+    "设置会话绑定按钮在右侧按钮列中的纵向对齐方式。会话绑定按钮（Context、Tool Calls、Conversation Tree、Git Diff、LLM API audit）依赖当前会话的数据，在新建会话页面会变成空状态。",
+  "Align session-bound buttons to the top": "会话绑定按钮顶部对齐",
+  "Align session-bound buttons to the bottom (default)": "会话绑定按钮底部对齐（默认）",
+  "Inline with button order (legacy)": "按顺序混排（保留旧行为）",
   // Git diff panel (right-panel tab)
   "Git Diff": "Git 变更",
   "Open git diff": "打开 Git 变更",
