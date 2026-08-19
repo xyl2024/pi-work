@@ -1,6 +1,6 @@
 ---
 name: commit
-description: 当用户要求"提交当前改动"、"帮我 commit 一下"、"把这次改动提交了"时使用。扫描本次任务的文件变更，按 Conventional Commits 规范生成中文提交信息、提交前拦截敏感数据、对不相关改动建议拆分，并在结尾追加 `Co-Authored-By: $PI_MODEL with Pi Work` trailer。直接提交到当前分支，不自动 push。
+description: '当用户要求"提交当前改动"、"帮我 commit 一下"、"把这次改动提交了"时使用。'
 ---
 
 # Commit Skill
