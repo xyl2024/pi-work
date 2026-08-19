@@ -3,40 +3,36 @@
 import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent, useMemo } from "react";
 import { useI18n, type Locale } from "@/hooks/useI18n";
 import { useSettings } from "@/hooks/settingsStore";
-import { SmartImage } from "./SmartImage";
 import { Tooltip } from "./Tooltip";
 import { IconHoverButton } from "./IconHoverButton";
 import { ContextUsageBar } from "./ContextUsageBar";
-import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "./ProviderIcon";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { CwdPicker } from "./CwdPicker";
-import { AnimatedPopover } from "./AnimatedPopover";
+import { AttachmentList } from "./AttachmentList";
+import { SlashCommandHint } from "./SlashCommandHint";
+import { SlashCommandMenu } from "./SlashCommandMenu";
+import { PromptPreview } from "./PromptPreview";
+import { ModelPicker } from "./ModelPicker";
+import { ToolsDropdownPanel, READ_ONLY_TOOLS } from "./ToolsDropdownPanel";
+import { ThinkingPicker, THINKING_LEVEL_COLOR, type ThinkingLevel } from "./ThinkingPicker";
+import { MoreMenu } from "./MoreMenu";
+import { Typewriter } from "./Typewriter";
 import { DEFAULT_TYPEWRITER_PHRASES } from "@/lib/typewriter-phrases";
-import { useChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
 import type { ToolInfo, ToolSelection } from "@/lib/types";
+import {
+  getSlashQuery,
+  formatSlashContent,
+  findDirectSlashResource,
+  type SlashResource,
+} from "@/lib/slash-commands";
+
+export type { SlashResource } from "@/lib/slash-commands";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
   mimeType: string;
   previewUrl: string; // object URL for display
-}
-
-interface ModelOption {
-  provider: string;
-  modelId: string;
-  name: string;
-}
-
-export interface SlashResource {
-  source: "prompt" | "skill" | "action";
-  name: string;
-  command: string;
-  description: string;
-  argumentHint?: string;
-  path: string;
-  location?: string;
-  content: string;
 }
 
 interface Props {
@@ -112,17 +108,10 @@ export interface ChatInputHandle {
   focus: () => void;
 }
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-
-// "Read only" quick preset — the canonical tool names pi's built-in
-// resource loader registers for file inspection. `setActiveToolsByName`
-// silently ignores names not present in `availableTools`, so a missing
-// tool (e.g. a stripped pi build without `grep`) just degrades the preset
-// to its intersection rather than failing outright.
-const READ_ONLY_TOOLS = ["find", "ls", "grep", "read"] as const;
 // Border color reflects the active reasoning intensity: gray = off, then a
-// cool-to-warm gradient up to red for xhigh.
-const THINKING_BORDER_COLOR: Record<typeof THINKING_LEVELS[number], string> = {
+// cool-to-warm gradient up to red for xhigh. Uses the same level union
+// as ThinkingPicker.THINKING_LEVELS so the keys stay in sync.
+const THINKING_BORDER_COLOR: Record<ThinkingLevel, string> = {
   off: "rgba(148,163,184,0.55)",   // slate-400
   minimal: "rgba(56,189,248,0.55)", // sky-400
   low: "rgba(59,130,246,0.55)",    // blue-500
@@ -130,18 +119,6 @@ const THINKING_BORDER_COLOR: Record<typeof THINKING_LEVELS[number], string> = {
   high: "rgba(249,115,22,0.55)",    // orange-500
   xhigh: "rgba(239,68,68,0.55)",    // red-500
   max: "rgba(185,28,28,0.65)",       // red-700
-};
-// Solid (opaque) palette — same hues as THINKING_BORDER_COLOR, used to
-// paint the per-level indicator inside the thinking picker so each option
-// is visually tied to the color the input border will adopt when picked.
-const THINKING_LEVEL_COLOR: Record<typeof THINKING_LEVELS[number], string> = {
-  off: "#94a3b8",   // slate-400
-  minimal: "#38bdf8", // sky-400
-  low: "#3b82f6",    // blue-500
-  medium: "#8b5cf6",  // violet-500
-  high: "#f97316",    // orange-500
-  xhigh: "#ef4444",   // red-500
-  max: "#b91c1c",      // red-700
 };
 const SLASH_PAGE_SIZE = 5;
 
@@ -174,140 +151,6 @@ const TYPEWRITER_PHRASES: Record<Locale, string[]> = {
   zh: [...DEFAULT_TYPEWRITER_PHRASES.zh],
 };
 
-function Typewriter({ phrases }: { phrases: string[] }) {
-  const [phraseIdx, setPhraseIdx] = useState(() => Math.floor(Math.random() * phrases.length));
-  const [text, setText] = useState("");
-  const [deleting, setDeleting] = useState(false);
-  const [caretOn, setCaretOn] = useState(true);
-
-  useEffect(() => {
-    const blink = setInterval(() => setCaretOn((v) => !v), 530);
-    return () => clearInterval(blink);
-  }, []);
-
-  useEffect(() => {
-    // Defensive reset when the phrases source changes underneath us:
-    // the user can reconfigure `typewriter_phrases` via SettingsModal,
-    // which mutates the parent's `phrases` reference on save. If the
-    // new list is shorter than our current `phraseIdx`, the next
-    // `current.slice(...)` would throw on an undefined entry. We reset
-    // to a fresh random idx and clear any partial text from the
-    // previous phrase.
-    if (phraseIdx >= phrases.length) {
-      setPhraseIdx(Math.floor(Math.random() * phrases.length));
-      setText("");
-      setDeleting(false);
-      return;
-    }
-    const current = phrases[phraseIdx];
-    let timeout: ReturnType<typeof setTimeout>;
-    if (!deleting && text === current) {
-      timeout = setTimeout(() => setDeleting(true), 1800);
-    } else if (deleting && text === "") {
-      setDeleting(false);
-      setPhraseIdx((i) => {
-        if (phrases.length <= 1) return i;
-        let next = Math.floor(Math.random() * phrases.length);
-        while (next === i) next = Math.floor(Math.random() * phrases.length);
-        return next;
-      });
-    } else {
-      const next = deleting ? current.slice(0, text.length - 1) : current.slice(0, text.length + 1);
-      timeout = setTimeout(() => setText(next), deleting ? 28 : 55);
-    }
-    return () => clearTimeout(timeout);
-  }, [text, deleting, phraseIdx, phrases]);
-
-  return (
-    <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>
-      {text}
-      <span style={{ opacity: caretOn ? 1 : 0, color: "var(--accent)", marginLeft: 1 }}>▍</span>
-    </span>
-  );
-}
-
-function getSlashQuery(value: string, cursor: number): { start: number; query: string } | null {
-  if (cursor === 0 || value[0] !== "/") return null;
-  const beforeCursor = value.slice(0, cursor);
-  const match = beforeCursor.match(/^\/([^\s/]*)$/);
-  if (!match) return null;
-  return {
-    start: 0,
-    query: match[1],
-  };
-}
-
-function parseCommandArgs(argsString: string): string[] {
-  const args: string[] = [];
-  let current = "";
-  let inQuote: "\"" | "'" | null = null;
-
-  for (const char of argsString) {
-    if (inQuote) {
-      if (char === inQuote) inQuote = null;
-      else current += char;
-    } else if (char === "\"" || char === "'") {
-      inQuote = char;
-    } else if (/\s/.test(char)) {
-      if (current) {
-        args.push(current);
-        current = "";
-      }
-    } else {
-      current += char;
-    }
-  }
-
-  if (current) args.push(current);
-  return args;
-}
-
-function substitutePromptArgs(content: string, args: string[]): string {
-  let result = content;
-  result = result.replace(/\$(\d+)/g, (_, num: string) => args[parseInt(num, 10) - 1] ?? "");
-  result = result.replace(/\$\{@:(\d+)(?::(\d+))?\}/g, (_, startStr: string, lengthStr?: string) => {
-    const start = Math.max(0, parseInt(startStr, 10) - 1);
-    if (lengthStr) return args.slice(start, start + parseInt(lengthStr, 10)).join(" ");
-    return args.slice(start).join(" ");
-  });
-  const allArgs = args.join(" ");
-  result = result.replace(/\$ARGUMENTS/g, allArgs);
-  result = result.replace(/\$@/g, allArgs);
-  return result;
-}
-
-function hasPromptArgPlaceholder(content: string): boolean {
-  return /\$(\d+|@|ARGUMENTS)|\$\{@:\d+(?::\d+)?\}/.test(content);
-}
-
-function formatSlashContent(item: SlashResource, argsString = "", appendUnusedArgs = false): string {
-  const content = item.content.trim();
-  if (item.source === "prompt") {
-    const expanded = substitutePromptArgs(content, parseCommandArgs(argsString));
-    const args = argsString.trim();
-    if (appendUnusedArgs && args && !hasPromptArgPlaceholder(content)) {
-      return `${expanded}\n\n${args}`;
-    }
-    return expanded;
-  }
-
-  const name = item.name.replace(/"/g, "&quot;");
-  const skillReference = `Use this skill: ${name}`;
-  const args = argsString.trim();
-  return args ? `${args}\n\n${skillReference}` : skillReference;
-}
-
-function findDirectSlashResource(message: string, resources: SlashResource[]): { item: SlashResource; args: string } | null {
-  const match = message.trim().match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
-  if (!match) return null;
-
-  const command = match[1];
-  const item = resources.find((resource) => resource.command === command);
-  if (!item) return null;
-
-  return { item, args: match[2] ?? "" };
-}
-
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onSend, onAbort, isStreaming, sessionBusy = false, model, modelNames, modelIcons, modelList, onModelChange,
   toolSelection = "all", onToolSelectionChange,
@@ -323,7 +166,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   onDraftChange,
 }: Props, ref) {
   const { t, locale } = useI18n();
-  const headerActions = useChatHeaderActions();
   const { contextUsage, sessionStats } = useSessionUiState();
   // Pick the active locale's typewriter phrases from the settings store.
   // Falls back to the bundled defaults whenever the store hasn't loaded
@@ -361,12 +203,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
   const [slashPage, setSlashPage] = useState(0);
-  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
-  const moreMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Custom row's expand/collapse state. Sticky within the popover's open
   // session — collapsing on every outside click would be annoying since the
   // user frequently toggles a checkbox, clicks outside to close the
@@ -374,8 +211,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // Off/High (those rows auto-close the popover, so this state only
   // persists across open/close cycles within "Custom").
   const [customExpanded, setCustomExpanded] = useState(false);
-  const [thinkingDropdownOpen, setThinkingDropdownOpen] = useState(false);
-  const [thinkingHovered, setThinkingHovered] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>([]);
   const attachedImagesRef = useRef<AttachedImage[]>([]);
   attachedImagesRef.current = attachedImages;
@@ -408,10 +243,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [draftBeforeHistory, setDraftBeforeHistory] = useState("");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const modelDropdownPanelRef = useRef<HTMLDivElement>(null);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
-  const thinkingDropdownRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const slashQuery = useMemo(() => getSlashQuery(value, cursorPosition), [value, cursorPosition]);
@@ -783,44 +615,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
 
 
-  // Build model options: prefer modelList (has provider info), fallback to modelNames
-  const modelOptions: ModelOption[] = (() => {
-    if (modelList && modelList.length > 0) {
-      return modelList.map((m) => ({ provider: m.provider, modelId: m.id, name: m.name }));
-    }
-    return Object.entries(modelNames ?? {}).map(([modelId, name]) => ({
-      provider: model?.provider ?? "unknown",
-      modelId,
-      name,
-    }));
-  })();
-
-  // Group options by provider, preserving insertion order
-  const modelsByProvider: { provider: string; options: ModelOption[] }[] = [];
-  for (const opt of modelOptions) {
-    const group = modelsByProvider.find((g) => g.provider === opt.provider);
-    if (group) group.options.push(opt);
-    else modelsByProvider.push({ provider: opt.provider, options: [opt] });
-  }
-
-  const currentName = model
-    ? (modelOptions.find((o) => o.modelId === model.modelId && o.provider === model.provider)?.name ?? model.modelId)
-    : modelOptions.length > 0 ? modelOptions[0].name : null;
-
-  const thinkingLevelDesc: Record<typeof THINKING_LEVELS[number], string> = {
-    off: t("Disable reasoning"),
-    minimal: t("Minimal reasoning"),
-    low: t("Low reasoning"),
-    medium: t("Medium reasoning"),
-    high: t("High reasoning"),
-    xhigh: t("Highest reasoning"),
-    max: t("Maximum reasoning"),
-  };
-
-  // Current thinking level's display label — mirrors the per-option
-  // computation inside the dropdown, so the streaming badge shows the
-  // same value the user picked (mapped level names via thinkingLevelMap).
-  const currentThinkingLevel = thinkingLevel ?? "off";
+  // Current thinking level's display label for the streaming badge —
+  // mirrors the same computation inside ThinkingPicker so the user sees
+  // the same mapped value the picker button shows.
+  const currentThinkingLevel: ThinkingLevel = thinkingLevel ?? "off";
   const currentThinkingMapped = thinkingLevelMap
     ? thinkingLevelMap[currentThinkingLevel]
     : undefined;
@@ -849,76 +647,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   // local lets TS narrow the type for the inline callbacks below.
   const handleToolSelectionChangeLocal = onToolSelectionChange ?? (() => {});
 
-  // Close dropdowns on outside click
+  // Close dropdowns on outside click. The model picker manages its own
+  // outside-click dismissal internally (see ModelPicker).
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (
-        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-        modelDropdownPanelRef.current && !modelDropdownPanelRef.current.contains(e.target as Node)
-      ) {
-        setModelDropdownOpen(false);
-      }
       if (toolDropdownRef.current && !toolDropdownRef.current.contains(e.target as Node)) {
         setToolDropdownOpen(false);
-      }
-      if (thinkingDropdownRef.current && !thinkingDropdownRef.current.contains(e.target as Node)) {
-        setThinkingDropdownOpen(false);
-      }
-      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
-        setMoreMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  const cancelMoreMenuClose = useCallback(() => {
-    if (moreMenuCloseTimerRef.current) {
-      clearTimeout(moreMenuCloseTimerRef.current);
-      moreMenuCloseTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleMoreMenuClose = useCallback(() => {
-    cancelMoreMenuClose();
-    moreMenuCloseTimerRef.current = setTimeout(() => {
-      moreMenuCloseTimerRef.current = null;
-      setMoreMenuOpen(false);
-    }, 120);
-  }, [cancelMoreMenuClose]);
-
-  useEffect(() => () => {
-    cancelMoreMenuClose();
-  }, [cancelMoreMenuClose]);
-
-  const moreActionItems = useMemo(() => {
-    if (!headerActions) return [];
-    return [
-      headerActions.replayVisible ? { key: "replay", label: t("Replay"), onClick: headerActions.onOpenReplay } : null,
-      headerActions.exportVisible ? {
-        key: "export",
-        label: headerActions.isExporting ? t("Exporting...") : t("Export session"),
-        onClick: headerActions.onExport,
-        disabled: headerActions.isExporting,
-      } : null,
-      headerActions.autoNameVisible ? {
-        key: "auto-name",
-        label: headerActions.isAutoNaming ? t("Naming...") : t("Auto-name session"),
-        onClick: headerActions.onAutoName,
-        disabled: headerActions.isAutoNaming || !headerActions.canAutoName,
-      } : null,
-      headerActions.compactVisible ? {
-        key: "compact",
-        label: headerActions.isCompacting ? t("Compacting...") : t("Compact"),
-        onClick: headerActions.onCompact,
-        disabled: headerActions.isCompacting || headerActions.compactDisabled,
-      } : null,
-    ].filter((item): item is { key: string; label: string; onClick: () => void; disabled?: boolean } => Boolean(item));
-  }, [headerActions, t]);
-
-  useEffect(() => {
-    if (moreActionItems.length === 0) setMoreMenuOpen(false);
-  }, [moreActionItems.length]);
 
   return (
     <div
@@ -958,78 +697,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         )}
         {/* Image previews */}
-        {attachedImages.length > 0 && (
-          <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-            {attachedImages.map((img, i) => (
-              <div key={i} style={{ position: "relative", flexShrink: 0 }}>
-                <SmartImage
-                  src={img.previewUrl}
-                  alt=""
-                  loaderSize={24}
-                  style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6, border: "1px solid var(--border)", display: "block" }}
-                />
-                <button
-                  onClick={() => removeImage(i)}
-                  style={{
-                    position: "absolute", top: -4, right: -4,
-                    width: 16, height: 16, borderRadius: "50%",
-                    background: "var(--bg-panel)", border: "1px solid var(--border)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    cursor: "pointer", padding: 0, color: "var(--text-muted)",
-                  }}
-                >
-                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        <AttachmentList images={attachedImages} onRemove={removeImage} />
 
-        {selectedPromptResource && selectedPromptPreview !== null && (
-          <div style={{
-            height: 156,
-            marginBottom: 8,
-            background: "var(--bg-panel)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-          }}>
-            <div style={{
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 10px",
-              borderBottom: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
-              color: "var(--text-muted)",
-              fontSize: 12,
-            }}>
-              <span style={{ color: "var(--accent)", fontWeight: 700, textTransform: "uppercase", fontSize: 10 }}>
-                prompt
-              </span>
-              <span style={{ fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                /{selectedPromptResource.command}
-              </span>
-            </div>
-            <pre style={{
-              margin: 0,
-              padding: "9px 10px",
-              flex: 1,
-              overflowY: "auto",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              color: "var(--text)",
-              fontSize: 12,
-              lineHeight: 1.5,
-              fontFamily: "var(--font-mono)",
-            }}>
-              {selectedPromptPreview}
-            </pre>
-          </div>
+        {selectedPromptResource && (
+          <PromptPreview resource={selectedPromptResource} preview={selectedPromptPreview} />
         )}
 
         {/* Main input — stays visible while the agent is streaming (abort button handles cancel) */}
@@ -1150,38 +821,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         {(selectedSlashResource || (slashMenuOpen && slashQuery)) && (
           <div style={{ position: "relative" }}>
             {selectedSlashResource && (
-              <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  maxWidth: "100%", padding: "4px 8px",
-                  background: "var(--bg-panel)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)", fontSize: 12,
-                }}>
-                  <span style={{
-                    color: selectedSlashResource.source === "skill" ? "#059669" : "var(--accent)",
-                    fontWeight: 700, textTransform: "uppercase", fontSize: 10,
-                  }}>
-                    {selectedSlashResource.source}
-                  </span>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    /{selectedSlashResource.command}
-                  </span>
-                  <Tooltip content={t("Remove")}>
-                  <button
-                    onClick={() => setSelectedSlashResource(null)}
-                    style={{
-                      width: 16, height: 16, border: "none", background: "none",
-                      color: "var(--text-dim)", cursor: "pointer", padding: 0,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}
-                  >
-                    <svg width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                      <line x1="1.5" y1="1.5" x2="7.5" y2="7.5" /><line x1="7.5" y1="1.5" x2="1.5" y2="7.5" />
-                    </svg>
-                  </button>
-                  </Tooltip>
-                </span>
-              </div>
+              <SlashCommandHint resource={selectedSlashResource} onRemove={() => setSelectedSlashResource(null)} />
             )}
             {slashMenuOpen && slashQuery && (
               <div style={{
@@ -1191,64 +831,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
                 overflow: "hidden",
               }}>
-                {visibleSlashResources.length > 0 ? (
-                  <>
-                    {visibleSlashResources.map((item, index) => {
-                      const active = index === slashActiveIndex;
-                      return (
-                        <button
-                          key={`${item.source}:${item.path}`}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            selectSlashResource(item);
-                          }}
-                          style={{
-                            width: "100%", display: "grid", gridTemplateColumns: "72px minmax(0, 1fr)",
-                            gap: 10, padding: "8px 10px",
-                            background: active ? "var(--bg-selected)" : "none",
-                            border: "none", borderBottom: "1px solid color-mix(in srgb, var(--border) 55%, transparent)",
-                            color: active ? "var(--text)" : "var(--text-muted)",
-                            cursor: "pointer", textAlign: "left",
-                          }}
-                        >
-                          <span style={{
-                            alignSelf: "start", justifySelf: "start",
-                            padding: "2px 6px", borderRadius: 5,
-                            background: item.source === "skill" ? "rgba(5,150,105,0.10)" : item.source === "action" ? "rgba(234,179,8,0.10)" : "rgba(37,99,235,0.10)",
-                            color: item.source === "skill" ? "#059669" : item.source === "action" ? "rgba(180,130,0,0.9)" : "var(--accent)",
-                            fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-                          }}>
-                            {item.source}
-                          </span>
-                          <span style={{ minWidth: 0 }}>
-                            <span style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
-                              <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                /{item.command}
-                              </span>
-                              {item.argumentHint && (
-                                <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-                                  {item.argumentHint}
-                                </span>
-                              )}
-                            </span>
-                            {item.description && (
-                              <span style={{ display: "block", marginTop: 2, fontSize: 11, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {item.description}
-                              </span>
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                    <div style={{ padding: "6px 10px", fontSize: 11, color: "var(--text-dim)", textAlign: "right" }}>
-                      {t("↑↓ switch, ←→ page")}
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-dim)" }}>
-                    {t("No matches")}
-                  </div>
-                )}
+                <SlashCommandMenu
+                  items={visibleSlashResources}
+                  activeIndex={slashActiveIndex}
+                  onSelect={selectSlashResource}
+                />
               </div>
             )}
           </div>
@@ -1308,60 +895,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             />
             )}
             {/* Model selector — visible always, disabled during streaming */}
-            {modelOptions.length > 0 && currentName && onModelChange && (
-                <div ref={dropdownRef} style={{ position: "relative" }}>
-                  <button
-                    onClick={(e) => {
-                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                      setModelDropdownRect({ top: rect.top, left: rect.left, width: rect.width });
-                      setModelDropdownOpen((v) => !v);
-                    }}
-                    disabled={isStreaming}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "8px 12px",
-                      height: 32,
-                      maxWidth: 220, overflow: "hidden",
-                      background: modelDropdownOpen ? "var(--bg-hover)" : "none",
-                      border: "none",
-                      borderRadius: 9,
-                      color: "var(--text-muted)",
-                      cursor: isStreaming ? "not-allowed" : "pointer",
-                      fontSize: 12,
-                      opacity: isStreaming ? 0.5 : 1,
-                      transition: "background 0.12s, color 0.12s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (isStreaming) return;
-                      e.currentTarget.style.background = "var(--bg-hover)";
-                      e.currentTarget.style.color = "var(--text)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = modelDropdownOpen ? "var(--bg-hover)" : "none";
-                      e.currentTarget.style.color = "var(--text-muted)";
-                    }}
-                  >
-                    <ProviderIcon
-                      id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons) ?? ""}
-                      size={12}
-                      fallback={<ProviderGearIcon size={11} />}
-                    />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentName}</span>
-                  </button>
-                  <ModelDropdownPanel
-                    rect={modelDropdownRect}
-                    open={modelDropdownOpen}
-                    groups={modelsByProvider}
-                    activeModel={model}
-                    modelIcons={modelIcons}
-                    panelRef={modelDropdownPanelRef}
-                    onSelect={(provider, modelId, isActive) => {
-                      setModelDropdownOpen(false);
-                      if (!isActive) onModelChange(provider, modelId);
-                    }}
-                  />
-                </div>
-            )}
+            <ModelPicker
+              model={model ?? null}
+              modelNames={modelNames}
+              modelIcons={modelIcons}
+              modelList={modelList}
+              onModelChange={onModelChange ?? (() => {})}
+              disabled={isStreaming}
+            />
 
             {/* CWD picker — always visible (new-session flow picks the project;
                 during a session it mirrors the model selector: disabled while
@@ -1413,80 +954,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </span>
             )}
             {!isStreaming && onThinkingLevelChange && (
-              <div ref={thinkingDropdownRef} style={{ position: "relative" }}>
-                <button
-                  type="button"
-                  onClick={() => setThinkingDropdownOpen((v) => !v)}
-                  onMouseEnter={() => setThinkingHovered(true)}
-                  onMouseLeave={() => setThinkingHovered(false)}
-                  aria-label={t("Thinking")}
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    height: 32, padding: "0 10px",
-                    background: thinkingDropdownOpen || thinkingHovered ? "var(--bg-hover)" : "none",
-                    border: "none", borderRadius: 9,
-                    color: THINKING_LEVEL_COLOR[currentThinkingLevel],
-                    cursor: "pointer",
-                    fontSize: 12, fontWeight: 500, whiteSpace: "nowrap",
-                    fontFamily: "var(--font-mono)",
-                    transition: "background 0.12s, color 0.12s",
-                  }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
-                    <line x1="7" y1="18" x2="12" y2="18" />
-                    <line x1="8" y1="21" x2="11" y2="21" />
-                  </svg>
-                  <span>{currentThinkingDisplay}</span>
-                </button>
-                <AnimatedPopover
-                  open={thinkingDropdownOpen}
-                  style={{
-                    position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-                    zIndex: 100, background: "var(--bg-panel)", border: "1px solid var(--border)",
-                    borderRadius: 10, boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
-                    minWidth: 180,
-                  }}
-                >
-                    {THINKING_LEVELS.filter((lvl) => {
-                      if (!availableThinkingLevels) return true;
-                      return availableThinkingLevels.includes(lvl);
-                    }).map((lvl) => {
-                      const isActive = (thinkingLevel ?? "off") === lvl;
-                      const desc = thinkingLevelDesc[lvl];
-                      const mappedVal = thinkingLevelMap ? thinkingLevelMap[lvl] : undefined;
-                      const displayLabel = (mappedVal != null && mappedVal !== lvl) ? mappedVal : lvl;
-                      const showOriginal = mappedVal != null && mappedVal !== lvl;
-                      return (
-                        <button
-                          key={lvl}
-                          onClick={() => { setThinkingDropdownOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8,
-                            width: "100%", padding: "7px 12px",
-                            background: isActive ? "var(--bg-selected)" : "none",
-                            border: "none",
-                            color: isActive ? "var(--text)" : "var(--text-muted)",
-                            cursor: "pointer", fontSize: 12, textAlign: "left",
-                            fontWeight: isActive ? 600 : 400,
-                            whiteSpace: "nowrap",
-                          }}
-                          onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                          onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-                        >
-                          {isActive
-                            ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                            : <span style={{ width: 10, flexShrink: 0 }} />}
-                          <span style={{ flex: 1, color: THINKING_LEVEL_COLOR[lvl] }}>
-                            {displayLabel}
-                            {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>}
-                          </span>
-                          <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{desc}</span>
-                        </button>
-                      );
-                    })}
-                </AnimatedPopover>
-              </div>
+              <ThinkingPicker
+                thinkingLevel={thinkingLevel}
+                onThinkingLevelChange={onThinkingLevelChange}
+                availableThinkingLevels={availableThinkingLevels}
+                thinkingLevelMap={thinkingLevelMap}
+              />
             )}
             {!isStreaming && onToolSelectionChange && (
               <div ref={toolDropdownRef} style={{ position: "relative" }}>
@@ -1559,115 +1032,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 />
               </div>
             )}
-            {moreActionItems.length > 0 && (
-              <div
-                ref={moreMenuRef}
-                style={{ position: "relative", display: "flex", alignItems: "center" }}
-                onMouseEnter={() => {
-                  cancelMoreMenuClose();
-                  setMoreMenuOpen(true);
-                }}
-                onMouseLeave={scheduleMoreMenuClose}
-              >
-                <Tooltip content={t("More actions")}>
-                  <button
-                    type="button"
-                    aria-label={t("More actions")}
-                    aria-haspopup="menu"
-                    aria-expanded={moreMenuOpen}
-                    onClick={() => setMoreMenuOpen((v) => !v)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: 32,
-                      height: 32,
-                      padding: 0,
-                      flexShrink: 0,
-                      border: "none",
-                      borderRadius: 9999,
-                      background: moreMenuOpen ? "var(--bg-hover)" : "none",
-                      color: "var(--text-muted)",
-                      cursor: "pointer",
-                      transition: "background 0.12s, color 0.12s",
-                    }}
-                    onMouseEnter={(e) => {
-                      cancelMoreMenuClose();
-                      e.currentTarget.style.background = "var(--bg-hover)";
-                      e.currentTarget.style.color = "var(--text)";
-                    }}
-                    onMouseLeave={(e) => {
-                      scheduleMoreMenuClose();
-                      e.currentTarget.style.background = moreMenuOpen ? "var(--bg-hover)" : "none";
-                      e.currentTarget.style.color = "var(--text-muted)";
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="5" r="1.5" />
-                      <circle cx="12" cy="12" r="1.5" />
-                      <circle cx="12" cy="19" r="1.5" />
-                    </svg>
-                  </button>
-                </Tooltip>
-                <AnimatedPopover
-                  open={moreMenuOpen}
-                  role="menu"
-                  onMouseEnter={cancelMoreMenuClose}
-                  onMouseLeave={scheduleMoreMenuClose}
-                  style={{
-                    position: "absolute",
-                    bottom: "calc(100% + 6px)",
-                    right: 0,
-                    zIndex: 120,
-                    background: "var(--bg-panel)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 10,
-                    boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
-                    minWidth: 180,
-                  }}
-                >
-                  {moreActionItems.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      onClick={() => {
-                        cancelMoreMenuClose();
-                        setMoreMenuOpen(false);
-                        item.onClick();
-                      }}
-                      disabled={item.disabled}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        width: "100%",
-                        padding: "8px 12px",
-                        border: "none",
-                        background: "none",
-                        color: item.disabled ? "var(--text-dim)" : "var(--text-muted)",
-                        cursor: item.disabled ? "not-allowed" : "pointer",
-                        fontSize: 12,
-                        textAlign: "left",
-                        whiteSpace: "nowrap",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (item.disabled) return;
-                        cancelMoreMenuClose();
-                        e.currentTarget.style.background = "var(--bg-hover)";
-                        e.currentTarget.style.color = "var(--text)";
-                      }}
-                      onMouseLeave={(e) => {
-                        scheduleMoreMenuClose();
-                        if (item.disabled) return;
-                        e.currentTarget.style.background = "none";
-                        e.currentTarget.style.color = "var(--text-muted)";
-                      }}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </AnimatedPopover>
-              </div>
-            )}
+            <MoreMenu />
 
             {isStreaming && (
               <button
@@ -1702,349 +1067,3 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   );
 });
 
-/** Model-list popover for the chat input: an upward-expanding list anchored
- *  to the model button, animated via AnimatedPopover and clamped to the
- *  space above the input. Stays mounted (measured while invisible) so both
- *  open and close animate; long lists become scrollable once the height
- *  transition settles. */
-function ModelDropdownPanel({ rect, open, groups, activeModel, modelIcons, panelRef, onSelect }: {
-  rect: { top: number; left: number; width: number } | null;
-  open: boolean;
-  groups: { provider: string; options: ModelOption[] }[];
-  activeModel: { provider: string; modelId: string } | null | undefined;
-  modelIcons?: Record<string, string>;
-  panelRef?: React.Ref<HTMLDivElement>;
-  onSelect: (provider: string, modelId: string, isActive: boolean) => void;
-}) {
-  // Before the first click `rect` is null: park the invisible panel
-  // off-screen (it is opacity 0 / height 0 / no pointer events when closed).
-  const viewportHeight = typeof window === "undefined" ? 0 : (window.visualViewport?.height ?? window.innerHeight);
-  const maxH = Math.max(120, Math.min((rect?.top ?? viewportHeight) - 8, viewportHeight * 0.6));
-
-  return (
-    <AnimatedPopover
-      open={open}
-      maxHeight={maxH}
-      panelRef={panelRef}
-      style={{
-        position: "fixed",
-        ...(rect
-          ? { bottom: viewportHeight - rect.top + 6, left: rect.left }
-          : { top: -9999, left: 0 }),
-        zIndex: 500,
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
-        width: "max-content",
-        minWidth: rect?.width ?? 0,
-      }}
-    >
-      {groups.map((group, gi) => (
-        <div key={group.provider}>
-          {(groups.length > 1) && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 5,
-              padding: "6px 12px 4px",
-              fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
-              textTransform: "uppercase", letterSpacing: "0.07em",
-              borderTop: gi > 0 ? "1px solid var(--border)" : "none",
-            }}>
-              <ProviderIcon id={resolveProviderIcon(group.provider, undefined, modelIcons) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
-              <span>{group.provider}</span>
-            </div>
-          )}
-          {group.options.map((opt) => {
-            const isActive = opt.modelId === activeModel?.modelId && opt.provider === activeModel?.provider;
-            return (
-              <button
-                key={`${opt.provider}:${opt.modelId}`}
-                onClick={() => onSelect(opt.provider, opt.modelId, isActive)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  width: "100%", padding: "7px 12px",
-                  background: isActive ? "var(--bg-selected)" : "none",
-                  border: "none",
-                  color: isActive ? "var(--text)" : "var(--text-muted)",
-                  cursor: "pointer", fontSize: 12, textAlign: "left",
-                  fontWeight: isActive ? 600 : 400,
-                  whiteSpace: "nowrap",
-                }}
-                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-              >
-                {isActive
-                  ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                  : <span style={{ width: 10, flexShrink: 0 }} />}
-                <ProviderIcon id={resolveProviderIcon(opt.provider, opt.modelId, modelIcons) ?? ""} size={12} fallback={<ProviderGearIcon size={11} />} />
-                {opt.name}
-              </button>
-            );
-          })}
-        </div>
-      ))}
-    </AnimatedPopover>
-  );
-}
-
-// ── Tools popover panel ─────────────────────────────────────────────────
-// 3-row layout (Off / High / Custom ▶). Custom expands into a per-tool
-// checklist with auto-apply. Off/High are 1-click presets that close the
-// popover. Tools catalog is fetched lazily on first Custom expansion.
-function ToolsDropdownPanel({
-  open,
-  toolSelection,
-  availableTools,
-  toolsLoading,
-  toolsError,
-  customExpanded,
-  panelRef,
-  onSelectPreset,
-  onToggleTool,
-  onToggleCustomExpanded,
-  onRetryEnsureTools: onRetryEnsureToolsProp,
-}: {
-  open: boolean;
-  toolSelection: ToolSelection;
-  availableTools: ToolInfo[];
-  toolsLoading: boolean;
-  toolsError: string | null;
-  customExpanded: boolean;
-  panelRef?: React.Ref<HTMLDivElement>;
-  onSelectPreset: (preset: "off" | "full" | "read_only") => void;
-  onToggleTool: (selection: ToolSelection) => void;
-  onToggleCustomExpanded: () => void;
-  onRetryEnsureTools?: () => Promise<void>;
-}) {
-  const { t } = useI18n();
-  const allNames = useMemo(() => availableTools.map((tool) => tool.name), [availableTools]);
-  const selectedSet = useMemo(() => {
-    if (toolSelection === "all") return new Set(allNames);
-    return new Set(Array.isArray(toolSelection) ? toolSelection : []);
-  }, [toolSelection, allNames]);
-  const isOff = Array.isArray(toolSelection) && toolSelection.length === 0;
-  const isAll = toolSelection === "all";
-  // "Read only" is a named quick preset — a fixed subset of file-inspection
-  // tools. Detect it here so the row can highlight without colliding with
-  // the generic Custom row (which would also match the partial-array state).
-  const isReadOnly = Array.isArray(toolSelection)
-    && toolSelection.length === READ_ONLY_TOOLS.length
-    && toolSelection.every((name) => (READ_ONLY_TOOLS as readonly string[]).includes(name));
-  // Generic Custom is "any partial selection that isn't a named preset".
-  const isCustom = !isOff && !isAll && !isReadOnly;
-
-  // Compute the next selection for one toggle click. Normalises full →
-  // "all" sentinel so a future tool addition auto-includes; leaves the
-  // empty array as `[]` (matches Off's wire shape).
-  const toggleTool = useCallback(
-    (name: string, willBeChecked: boolean) => {
-      const next = new Set(selectedSet);
-      if (willBeChecked) next.add(name);
-      else next.delete(name);
-      const newSelection: ToolSelection =
-        next.size === allNames.length && allNames.length > 0
-          ? "all"
-          : Array.from(next);
-      onToggleTool(newSelection);
-    },
-    [selectedSet, allNames, onToggleTool],
-  );
-
-  // Viewport-aware cap so the panel doesn't grow taller than the space
-  // above the input. Matches ModelDropdownPanel's approach.
-  const viewportHeight = typeof window === "undefined" ? 720 : (window.visualViewport?.height ?? window.innerHeight);
-  const maxH = Math.max(180, Math.min(viewportHeight * 0.6, 520));
-
-  const customLabel = availableTools.length > 0
-    ? t("Custom selection ({count}/{total})", { count: selectedSet.size, total: availableTools.length })
-    : t("Custom selection");
-
-  return (
-    <AnimatedPopover
-      open={open}
-      maxHeight={maxH}
-      panelRef={panelRef}
-      style={{
-        position: "absolute",
-        bottom: "calc(100% + 6px)", right: 0,
-        zIndex: 100,
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
-        width: 320,
-        maxWidth: "calc(100vw - 32px)",
-      }}
-    >
-      <PresetRow label={t("Off")} description={t("No tools, chat only")} isActive={isOff} onClick={() => onSelectPreset("off")} />
-      <PresetRow label={t("Full")} description={t("All available tools")} isActive={isAll} onClick={() => onSelectPreset("full")} />
-      <PresetRow label={t("Read only")} description={t("Find, ls, grep, read")} isActive={isReadOnly} onClick={() => onSelectPreset("read_only")} />
-      <button
-        onClick={onToggleCustomExpanded}
-        style={{
-          display: "flex", alignItems: "center", gap: 8,
-          width: "100%", padding: "7px 12px",
-          background: isCustom ? "var(--bg-selected)" : "none",
-          border: "none",
-          color: isCustom ? "var(--text)" : "var(--text-muted)",
-          cursor: "pointer", fontSize: 12, textAlign: "left",
-          fontWeight: isCustom ? 600 : 400,
-          whiteSpace: "nowrap",
-        }}
-        onMouseEnter={(e) => {
-          if (!isCustom) e.currentTarget.style.background = "var(--bg-hover)";
-        }}
-        onMouseLeave={(e) => {
-          if (!isCustom) e.currentTarget.style.background = "none";
-        }}
-      >
-        {isCustom
-          ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-          : <span style={{ width: 10, flexShrink: 0 }} />}
-        <span style={{ flex: 1 }}>{customLabel}</span>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ flexShrink: 0, transform: customExpanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
-          <polyline points="3 1 7 5 3 9" />
-        </svg>
-      </button>
-
-      {customExpanded && (
-        <div style={{ borderTop: "1px solid var(--border)", padding: "4px 0", overflow: "auto", flex: 1, minHeight: 0 }}>
-          {toolsLoading && (
-            <div style={{ padding: "10px 12px", fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 8 }}>
-              <InlineSpinner />
-              {t("Loading tools...")}
-            </div>
-          )}
-          {toolsError && !toolsLoading && (
-            <div style={{ padding: "10px 12px", fontSize: 11, color: "#ef4444", display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
-                {t("Failed to load tools")}: {toolsError}
-              </span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Re-trigger the lazy fetch. ensureAvailableTools itself
-                  // is idempotent on a non-error catalog, so a second click
-                  // after success is a harmless no-op.
-                  onRetryEnsureToolsProp?.();
-                }}
-                style={{ padding: "2px 8px", background: "transparent", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", cursor: "pointer", fontSize: 11 }}
-              >
-                {t("Retry")}
-              </button>
-            </div>
-          )}
-          {!toolsLoading && !toolsError && availableTools.length === 0 && (
-            <div style={{ padding: "10px 12px", fontSize: 11, color: "var(--text-dim)" }}>
-              {t("No tools available for this session")}
-            </div>
-          )}
-          {!toolsLoading && !toolsError && availableTools.length > 0 && (
-            <div>
-              {availableTools.map((tool) => {
-                const isChecked = selectedSet.has(tool.name);
-                return (
-                  <Tooltip key={tool.name} content={tool.description} side="left">
-                    <label
-                      style={{
-                        display: "flex", alignItems: "center", gap: 8,
-                        padding: "5px 12px",
-                        cursor: "pointer",
-                        fontSize: 12,
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                    >
-                      <span style={{
-                        width: 14, height: 14,
-                        borderRadius: 3,
-                        border: `1px solid ${isChecked ? "var(--accent)" : "var(--border)"}`,
-                        background: isChecked ? "var(--accent)" : "var(--bg)",
-                        flexShrink: 0,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        {isChecked && (
-                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="1.5 5 4 7.5 8.5 2.5" />
-                          </svg>
-                        )}
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => toggleTool(tool.name, e.target.checked)}
-                        aria-label={tool.name}
-                        style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
-                      />
-                      <span style={{ fontFamily: "var(--font-mono)", color: "var(--text)", flexShrink: 0 }}>
-                        {tool.name}
-                      </span>
-                      <span style={{
-                        fontSize: 11,
-                        color: "var(--text-dim)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        minWidth: 0,
-                        flex: 1,
-                      }}>
-                        {tool.description}
-                      </span>
-                    </label>
-                  </Tooltip>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-    </AnimatedPopover>
-  );
-}
-
-function PresetRow({ label, description, isActive, onClick }: {
-  label: string;
-  description: string;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        display: "flex", alignItems: "center", gap: 8,
-        width: "100%", padding: "7px 12px",
-        background: isActive ? "var(--bg-selected)" : "none",
-        border: "none",
-        color: isActive ? "var(--text)" : "var(--text-muted)",
-        cursor: "pointer", fontSize: 12, textAlign: "left",
-        fontWeight: isActive ? 600 : 400,
-        whiteSpace: "nowrap",
-      }}
-      onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-      onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-    >
-      {isActive
-        ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-        : <span style={{ width: 10, flexShrink: 0 }} />}
-      <span style={{ flex: 1 }}>{label}</span>
-      <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{description}</span>
-    </button>
-  );
-}
-
-function InlineSpinner() {
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        display: "inline-block",
-        width: 12, height: 12,
-        border: "1.5px solid color-mix(in srgb, var(--text-dim) 40%, transparent)",
-        borderTopColor: "var(--text-muted)",
-        borderRadius: "50%",
-        animation: "spin 0.8s linear infinite",
-      }}
-    />
-  );
-}

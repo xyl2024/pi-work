@@ -31,7 +31,7 @@ import { useToast } from "@/components/Toast";
 import { useConfirm } from "./ConfirmDialog";
 import { CompactionDivider } from "./CompactionDivider";
 import { setChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
-import type { SlashResource } from "./ChatInput";
+import type { SlashResource } from "@/lib/slash-commands";
 import { ToolCallStatsProvider, useToolCallStatsEmit } from "@/hooks/ToolCallStatsContext";
 import { useToolCallStats } from "@/hooks/useToolCallStats";
 import { setToolCallStatsScrollCallback, setToolCallStatsState } from "@/hooks/toolCallStatsStore";
