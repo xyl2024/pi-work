@@ -10,7 +10,7 @@ import { WeChatSettingsSection } from "./WeChatSettingsSection";
 import { InboxTestSection } from "./InboxTestSection";
 import type { PiWorkConfig, RightBarButtonId, RightSideBarConfig, AgentCustomToolName } from "@/lib/config";
 import { resolveSessionBoundAlignment, type SessionBoundAlignment } from "@/lib/right-bar";
-import { FILE_VIEWER_LIMITS, FILE_VIEWER_KINDS, type FileViewerKind, type FileViewerMaxSizeMb } from "@/lib/file-viewer-limits";
+import { FILE_VIEWER_LIMITS, type FileViewerKind, type FileViewerMaxSizeMb } from "@/lib/file-viewer-limits";
 import {
   DEFAULT_AGENT_RETRY,
   RETRY_LIMITS,
@@ -82,14 +82,12 @@ const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
  * value and shows a short inline error in the theme's danger color.
  */
 function FileViewerLimitRow({
-  kind,
   label,
   min,
   max,
   value,
   onCommit,
 }: {
-  kind: FileViewerKind;
   label: string;
   min: number;
   max: number;
@@ -1817,7 +1815,6 @@ export function SettingsModal({ onClose, onProfileSaved }: { onClose: () => void
                 return (
                   <FileViewerLimitRow
                     key={kind}
-                    kind={kind}
                     label={t(labelKey)}
                     min={min}
                     max={max}

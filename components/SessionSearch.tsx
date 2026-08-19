@@ -57,7 +57,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SessionMessageSearchResult[]>([]);
-  const [matchedEntryIds, setMatchedEntryIds] = useState<string[]>([]);
   const [totalMatches, setTotalMatches] = useState(0);
   const [status, setStatus] = useState<SearchStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -74,7 +73,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
     if (visible) {
       setQuery("");
       setResults([]);
-      setMatchedEntryIds([]);
       setTotalMatches(0);
       setStatus("idle");
       setErrorMessage("");
@@ -96,7 +94,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
     if (!q.trim()) {
       setStatus("idle");
       setResults([]);
-      setMatchedEntryIds([]);
       setTotalMatches(0);
       hasResultsRef.current = false;
       onResultsChange([], "");
@@ -126,7 +123,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
       if (controller.signal.aborted) return;
 
       setResults(data.results);
-      setMatchedEntryIds(data.matchedEntryIds);
       setTotalMatches(data.totalMatches);
       setSelectedIndex(0);
       setStatus(data.totalMatches === 0 ? "no_results" : "results");
@@ -194,7 +190,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
     if (!query && hasResultsRef.current) {
       hasResultsRef.current = false;
       setResults([]);
-      setMatchedEntryIds([]);
       setTotalMatches(0);
       setStatus("idle");
       onResultsChange([], "");

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
-import { join, relative, basename, extname } from "path";
+import { join, relative, extname } from "path";
 
 export const dynamic = "force-dynamic";
 

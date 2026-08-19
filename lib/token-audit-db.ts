@@ -21,7 +21,6 @@ import { createLogger } from "./logger";
 const log = createLogger("token-audit-db");
 
 declare global {
-  // eslint-disable-next-line no-var
   var __piTokenAuditDb: Database.Database | undefined;
 }
 

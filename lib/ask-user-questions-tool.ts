@@ -212,7 +212,12 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
       "A free-text \"Other\" option is always appended to every question automatically — the user can always type a custom answer. Do not add an `Other` option yourself.",
       "Do NOT call this tool from a scheduled task or any context where no user is available — it will return an error. Provide the necessary context to the model directly instead.",
     ],
-    async execute(toolCallId, params, signal, _onUpdate, _ctx) {
+    async execute(toolCallId, params, signal, _onUpdate, _ctx) { // eslint-disable-line @typescript-eslint/no-unused-vars -- intentionally unused SDK params
+      // `_onUpdate` and `_ctx` are part of the SDK execute() protocol
+      // signature but unused here (this tool blocks on user input
+      // rather than streaming partial updates, and pulls no model
+      // context from `ctx`). The leading underscore is the project's
+      // "intentionally unused" convention.
       if (!requestUserInput) {
         // No bridge — the session was started without binding
         // requestUserInput (defensive: should never happen in practice
