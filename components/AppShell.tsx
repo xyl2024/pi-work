@@ -1382,7 +1382,7 @@ export function AppShell() {
                     alignItems: "center",
                     justifyContent: "center",
                     width: 36,
-                    height: 34,
+                    height: 36,
                     padding: 0,
                     background: "none",
                     border: "none",

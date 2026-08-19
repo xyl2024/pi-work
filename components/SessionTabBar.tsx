@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useRef, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   getSessionTabTitle,
@@ -54,10 +54,22 @@ function StatusMark({ status }: { status: SessionTabStatus }) {
 export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession, onBatchClose, onReload, leadingControl }: Props) {
   const { t } = useI18n();
   const cm = useContextMenu();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
+    const el = scrollRef.current;
+    if (!el) return;
     if (el.scrollWidth <= el.clientWidth) return;
-    const next = el.scrollLeft + e.deltaX + e.deltaY;
+
+    const lineHeight = 16;
+    const page = Math.max(el.clientWidth, 200);
+    const normalize = (raw: number) => {
+      if (e.deltaMode === 1) return raw * lineHeight;
+      if (e.deltaMode === 2) return raw * page;
+      return raw;
+    };
+    const dx = normalize(e.deltaX);
+    const dy = normalize(e.deltaY);
+    const next = el.scrollLeft + dy + dx;
     if (next === el.scrollLeft) return;
     e.preventDefault();
     el.scrollLeft = next;
@@ -67,13 +79,12 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
     <div
       style={{
         display: "flex",
-        alignItems: "stretch",
+        alignItems: "center",
         minWidth: 0,
-        height: 34,
+        height: 36,
         flexShrink: 0,
         background: "var(--bg-panel)",
         borderBottom: "1px solid var(--border)",
-        overflow: "hidden",
       }}
     >
       {leadingControl && (
@@ -81,18 +92,20 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           {leadingControl}
         </div>
       )}
-      <div
-        onWheel={handleWheel}
-        style={{
-          display: "flex",
-          alignItems: "stretch",
-          minWidth: 0,
-          flex: 1,
-          overflowX: "auto",
-          overflowY: "hidden",
-        }}
-      >
-      {tabs.map((tab) => {
+      <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+        <div
+          ref={scrollRef}
+          onWheel={handleWheel}
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            background: "var(--bg-panel)",
+            overflowX: "auto",
+            flexShrink: 0,
+            height: 36,
+          }}
+        >
+        {tabs.map((tab) => {
         const active = tab.tabId === activeTabId;
         const title = tab.kind === "draft" ? t("New session") : getSessionTabTitle(tab.session!);
         const tooltip = tab.kind === "draft"
@@ -119,17 +132,20 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               display: "flex",
               alignItems: "center",
               gap: 6,
-              minWidth: 96,
-              maxWidth: 180,
-              height: 34,
-              padding: "0 6px 0 12px",
-              flexShrink: 0,
+              height: 36,
+              paddingLeft: 12,
+              paddingRight: 6,
+              background: "var(--bg-panel)",
               cursor: "pointer",
-              userSelect: "none",
+              fontSize: 12,
               color: active ? "var(--text)" : "var(--text-muted)",
-              background: active ? "var(--bg-selected)" : "transparent",
+              whiteSpace: "nowrap",
+              maxWidth: 180,
+              minWidth: 80,
+              flexShrink: 0,
+              userSelect: "none",
+              transition: "box-shadow 0.1s, color 0.1s",
               boxShadow: active ? "inset 0 -2px 0 var(--accent)" : "none",
-              transition: "background 0.12s, color 0.12s",
             }}
           >
             <StatusMark status={tab.status} />
@@ -149,7 +165,6 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
-                  fontSize: 12,
                   fontWeight: active ? 500 : 400,
                 }}
               >
@@ -168,15 +183,16 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 18,
-                  height: 18,
+                  width: 16,
+                  height: 16,
                   padding: 0,
                   flexShrink: 0,
                   border: "none",
-                  borderRadius: 4,
+                  borderRadius: 3,
                   color: "var(--text-dim)",
                   background: "transparent",
                   cursor: "pointer",
+                  transition: "background 0.1s, color 0.1s",
                 }}
                 onMouseEnter={(event) => {
                   event.currentTarget.style.color = "var(--text)";
@@ -195,9 +211,9 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             </Tooltip>
           </div>
         );
-      })}
-      {onNewSession && (
-        <Tooltip content={t("New session")}>
+        })}
+        {onNewSession && (
+          <Tooltip content={t("New session")}>
           <button
             type="button"
             aria-label={t("New session")}
@@ -207,7 +223,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               alignItems: "center",
               justifyContent: "center",
               width: 32,
-              height: 34,
+              height: 36,
               flexShrink: 0,
               padding: 0,
               border: "none",
@@ -223,7 +239,8 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             </svg>
           </button>
         </Tooltip>
-      )}
+        )}
+        </div>
       </div>
     </div>
   );
