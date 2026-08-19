@@ -1,144 +1,29 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/types";
-import { normalizeToolCalls } from "@/lib/normalize";
-import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/agent-client";
-import type { ToolCallStatsDispatch } from "./ToolCallStatsContext";
+import type { AgentMessage, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/types";
+import { sendAgentCommand } from "@/lib/agent-client";
 import { useToast } from "@/components/Toast";
 import { useI18n } from "./useI18n";
 import { usePendingPermissionsRef } from "./usePendingPermissions";
-import { setShowFileResult } from "./showFileResultsStore";
-import { isShowFileToolName } from "@/lib/show-file-tool-types";
-import { AGENT_TODO_TOOL_NAME } from "@/lib/agent-todo-tool-types";
-import { notifyMutated } from "@/lib/git-status-store";
 import { setSessionUiState, setLeafChangeHandler } from "./sessionUiStore";
-import { setGrokbotConfig } from "@/lib/grokbot-store";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/thinking-level-utils";
-import { setPendingAskUserQuestions } from "./askUserQuestionsStore";
-import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
+import { streamReducer } from "./useAgentSessionUtils";
+import { useAgentSessionEvents } from "./useAgentSessionEvents";
+import { useAgentSessionTransport } from "./useAgentSessionTransport";
+import { useAgentSessionData } from "./useAgentSessionData";
+import type {
+  AgentEvent,
+  AgentPhase,
+  AgentRuntimeState,
+  AttachedImage,
+  SessionData,
+  ThinkingLevelOption,
+  TransportRefs,
+  UseAgentSessionOptions,
+} from "./useAgentSessionTypes";
 
-// Pi's runtime tool names (from @earendil-works/pi-coding-agent). `edit`
-// and `write` are direct file mutators — flagging them by name is enough.
-// `bash` is handled separately below because the trigger condition is on
-// the args (the command string contains `git`), not on the tool name.
-const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
-
-// Sidebar Pi Bot: discrete reactions (waking/suspicious/happy) only
-// flash for BOT_REVERT_MS, then snap back to the daily "searching" loop.
-// Long enough for each state's cadence to swap expressions 2–3 times
-// (cadences range from 0.8s for waking up to 4.5s for happy), short
-// enough that the bot doesn't feel stuck on a reaction between turns.
-const BOT_BASELINE_STATE = "searching";
-const BOT_REVERT_MS = 8000;
-
-export interface SessionData {
-  sessionId: string;
-  filePath: string;
-  tree: SessionTreeNode[];
-  leafId: string | null;
-  context: {
-    messages: AgentMessage[];
-    entryIds: string[];
-    entryTimestamps?: (number | undefined)[];
-    thinkingLevel: string;
-    model: { provider: string; modelId: string } | null;
-    compactionPoints?: CompactionPoint[];
-  };
-}
-
-interface StreamingState {
-  isStreaming: boolean;
-  streamingMessage: Partial<AgentMessage> | null;
-}
-
-type StreamAction =
-  | { type: "start" }
-  | { type: "update"; message: Partial<AgentMessage> }
-  | { type: "end" }
-  | { type: "reset" };
-
-function streamReducer(state: StreamingState, action: StreamAction): StreamingState {
-  switch (action.type) {
-    case "start":
-      return { isStreaming: true, streamingMessage: null };
-    case "update":
-      return { isStreaming: true, streamingMessage: action.message };
-    case "end":
-    case "reset":
-      return { isStreaming: false, streamingMessage: null };
-    default:
-      return state;
-  }
-}
-
-interface AgentEvent {
-  type: string;
-  [key: string]: unknown;
-}
-
-interface AgentRuntimeState {
-  running: boolean;
-  state?: {
-    isStreaming?: boolean;
-    isCompacting?: boolean;
-    isRunning?: boolean;
-    phase?: "compacting" | "streaming" | null;
-    contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
-    systemPrompt?: string;
-    thinkingLevel?: string;
-  };
-}
-
-export type AgentPhase =
-  | { kind: "waiting_model" }
-  | { kind: "running_tools"; tools: { id: string; name: string }[] }
-  | { kind: "compacting" }
-  | null;
-
-export interface UseAgentSessionOptions {
-  session: SessionInfo | null;
-  newSessionCwd: string | null;
-  onAgentEnd?: () => void;
-  onSessionCreated?: (session: SessionInfo) => void;
-  /** Fired once, when the first assistant message of a brand-new session has
-   *  been persisted (pi lazily creates the .jsonl at that point). The sidebar
-   *  uses this to refresh at the earliest moment the session is listable. */
-  onFirstAssistantReady?: () => void;
-  modelsRefreshKey?: number;
-  chatInputRef?: React.RefObject<ChatInputHandle | null>;
-  setNewSessionModel?: (model: { provider: string; modelId: string } | null) => void;
-  /** Push tool lifecycle events to the stats panel */
-  statsEmit?: ToolCallStatsDispatch;
-  /** If set, navigate to this entry after the session finishes loading */
-  scrollToEntryId?: string | null;
-  /** Called after the scroll-to-entry navigation completes */
-  onScrollComplete?: () => void;
-  /** Only the active workspace controller may project cross-cutting UI state. */
-  isActive?: boolean;
-  /** Stable owner token for imperative active-session bridges. */
-  controllerId?: string;
-}
-
-export type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-
-export interface ChatInputHandle {
-  insertText: (text: string) => void;
-  insertIfEmpty: (content: string) => void;
-  addImages: (files: File[]) => void;
-}
-
-export interface AttachedImage {
-  data: string;
-  mimeType: string;
-  previewUrl: string;
-}
-
-export interface ChatInputHandle {
-  insertText: (text: string) => void;
-  insertIfEmpty: (content: string) => void;
-  addImages: (files: File[]) => void;
-}
+export type { AgentPhase, AttachedImage, ChatInputHandle, SessionData, ThinkingLevelOption, UseAgentSessionOptions } from "./useAgentSessionTypes";
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
@@ -352,260 +237,71 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return { tokens, cost, cachedHitRate };
   })();
 
-  const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
-    try {
-      if (showLoading) setLoading(true);
-      const url = includeState
-        ? `/api/sessions/${encodeURIComponent(sid)}?includeState`
-        : `/api/sessions/${encodeURIComponent(sid)}`;
-      const res = await fetch(url);
-      if (res.status === 404) {
-        if (showLoading) {
-          setData(null);
-          setActiveLeafId(null);
-          setMessages([]);
-          setError(null);
-        }
-        return null;
-      }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as SessionData & { agentState?: AgentRuntimeState };
-      setData(d);
-      // data.tree is now authoritative (fresh from disk); drop any live tree
-      // pushed during the previous streaming window so it can't go stale.
-      setLiveTree(null);
-      setActiveLeafId(d.leafId);
-      setMessages(d.context.messages);
-      setEntryIds(d.context.entryIds ?? []);
-      setEntryTimestamps(d.context.entryTimestamps ?? []);
-      setCompactionPoints(d.context.compactionPoints ?? []);
-      setCurrentModelOverride(null);
-      setError(null);
-      // Helper: pick the highest thinking level the current model supports, or
-      // fall back to the raw value if it isn't the legacy "auto" sentinel.
-      // Older sessions may persist "auto" — a frontend-only sentinel that
-      // is no longer offered — so map it to the model's highest level so
-      // the badge matches what the agent is actually using.
-      const migrateLegacyAuto = (raw: string | undefined): ThinkingLevelOption | null => {
-        if (typeof raw !== "string") return null;
-        if (raw !== "auto") return raw as ThinkingLevelOption;
-        const modelKey = d.context.model
-          ? `${d.context.model.provider}:${d.context.model.modelId}`
-          : null;
-        const available = modelKey ? modelThinkingLevels[modelKey] ?? null : null;
-        return pickHighestAvailableThinkingLevel(available);
-      };
-
-      // Apply thinking-level migration centrally: prefer the live agent
-      // state when present, else fall back to the level recorded in the
-      // session file. Older sessions may persist "auto" — map it to the
-      // model's highest supported level so the badge always matches the
-      // agent's actual setting.
-      const liveLevel = d.agentState?.state?.thinkingLevel;
-      const fileLevel = d.context.thinkingLevel && d.context.thinkingLevel !== "off"
-        ? d.context.thinkingLevel
-        : null;
-      const migrated = migrateLegacyAuto(liveLevel ?? fileLevel ?? undefined);
-      if (migrated !== null) setThinkingLevel(migrated);
-
-      return d.agentState ?? null;
-    } catch (e) {
-      setError(String(e));
-      return null;
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, [modelThinkingLevels]);
-
-  const loadContext = useCallback(async (sid: string, leafId: string | null) => {
-    try {
-      const url = leafId
-        ? `/api/sessions/${encodeURIComponent(sid)}/context?leafId=${encodeURIComponent(leafId)}`
-        : `/api/sessions/${encodeURIComponent(sid)}/context`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[]; entryTimestamps?: (number | undefined)[]; compactionPoints?: CompactionPoint[] } };
-      setMessages(d.context.messages);
-      setEntryIds(d.context.entryIds ?? []);
-      setEntryTimestamps(d.context.entryTimestamps ?? []);
-      setCompactionPoints(d.context.compactionPoints ?? []);
-    } catch (e) {
-      console.error("Failed to load context:", e);
-    }
-  }, []);
-
-  const loadContextRef = useRef(loadContext);
-  loadContextRef.current = loadContext;
+  const transportRefs: TransportRefs = {
+    eventSource: eventSourceRef,
+    eventSourceSession: eventSourceSessionRef,
+    generation: transportGenerationRef,
+    reconnectTimer: reconnectTimerRef,
+    reconnectAttempt: reconnectAttemptRef,
+    disposed: disposedRef,
+    sessionId: sessionIdRef,
+    agentRunning: agentRunningRef,
+  };
+  const loadContextRef = useRef<(sid: string, leafId: string | null) => Promise<void>>(async () => {});
   const refreshAgentRuntimeStateRef = useRef<((sid?: string) => Promise<AgentRuntimeState | null>) | null>(null);
-
-  // Lazy fetcher for the tool catalog: called by ChatInput when the user
-  // opens the tools popover for the first time. New sessions don't have an
-  // AgentSession yet (they're lazily started by POST /api/agent/new), so
-  // we can't use `get_tools` for them — fall back to the cwd-only endpoint
-  // POST /api/agent/tools which spins up an ephemeral session internally.
-  // Idempotent: if the catalog is already populated, do nothing.
-  const ensureAvailableTools = useCallback(async () => {
-    if (availableTools.length > 0 || toolsLoading) return;
-    setToolsLoading(true);
-    setToolsError(null);
-    try {
-      let catalog: ToolInfo[];
-      if (isNew) {
-        if (!newSessionCwd) {
-          throw new Error("No cwd available for new session");
-        }
-        catalog = await listToolsForCwd(newSessionCwd);
-      } else {
-        const sid = sessionIdRef.current;
-        if (!sid) throw new Error("No session id");
-        const tools = await sendAgentCommand<ToolWithActive[]>(sid, { type: "get_tools" });
-        catalog = tools.map(({ name, description }) => ({ name, description }));
-      }
-      catalog.sort((a, b) => a.name.localeCompare(b.name));
-      setAvailableTools(catalog);
-    } catch (e) {
-      console.error("Failed to ensure available tools:", e);
-      setToolsError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setToolsLoading(false);
-    }
-  }, [availableTools.length, toolsLoading, isNew, newSessionCwd]);
-
-  const closeEvents = useCallback(() => {
-    transportGenerationRef.current += 1;
-    reconnectAttemptRef.current = 0;
-    if (reconnectTimerRef.current !== null) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-    eventSourceRef.current?.close();
-    eventSourceRef.current = null;
-    eventSourceSessionRef.current = null;
-  }, []);
-
-  const connectEvents = useCallback((sid: string, compensate = false) => {
-    if (disposedRef.current) return;
-    // A live connection belongs to this controller, not to the active view.
-    // Repeated sends/compacts reuse it instead of tearing it down.
-    if (eventSourceRef.current && eventSourceSessionRef.current === sid) return;
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-      eventSourceSessionRef.current = null;
-    }
-    const generation = ++transportGenerationRef.current;
-    const es = new EventSource(`/api/agent/${encodeURIComponent(sid)}/events`);
-    eventSourceRef.current = es;
-    eventSourceSessionRef.current = sid;
-    es.onopen = () => {
-      if (eventSourceRef.current !== es || transportGenerationRef.current !== generation) return;
-      reconnectAttemptRef.current = 0;
-      if (!compensate) return;
-      void (async () => {
-        await loadContextRef.current(sid, null);
-        try { await refreshAgentRuntimeStateRef.current?.(sid); } catch { /* best effort */ }
-        if (!agentRunningRef.current && eventSourceRef.current === es) closeEvents();
-      })();
-    };
-    es.onmessage = (e) => {
-      if (eventSourceRef.current !== es || transportGenerationRef.current !== generation) return;
-      try {
-        const event = JSON.parse(e.data) as AgentEvent;
-        handleAgentEventRef.current?.(event);
-      } catch {
-        // ignore malformed events
-      }
-    };
-    es.onerror = () => {
-      if (eventSourceRef.current !== es || transportGenerationRef.current !== generation) return;
-      es.close();
-      eventSourceRef.current = null;
-      eventSourceSessionRef.current = null;
-      if (!agentRunningRef.current) return;
-      const attempt = reconnectAttemptRef.current++;
-      const delay = Math.min(1000 * 2 ** Math.min(attempt, 4), 15000);
-      reconnectTimerRef.current = setTimeout(() => {
-        reconnectTimerRef.current = null;
-        if (agentRunningRef.current && transportGenerationRef.current === generation) {
-          connectEvents(sid, true);
-        }
-      }, delay);
-    };
-  }, [closeEvents]);
-
-  const ensureEventsConnected = useCallback(async (sid: string) => {
-    connectEvents(sid);
-    const startedAt = Date.now();
-    await new Promise<void>((resolve, reject) => {
-      const check = () => {
-        if (disposedRef.current) {
-          reject(new Error(t("Failed to connect to session events")));
-          return;
-        }
-        const current = eventSourceRef.current;
-        if (current && eventSourceSessionRef.current === sid && current.readyState === EventSource.OPEN) {
-          resolve();
-          return;
-        }
-        if (Date.now() - startedAt >= 15_000) {
-          reject(new Error(t("Failed to connect to session events")));
-          return;
-        }
-        setTimeout(check, 25);
-      };
-      check();
-    });
-  }, [connectEvents, t]);
+  const {
+    loadSession,
+    loadContext: loadContextBound,
+    ensureAvailableTools: ensureAvailableToolsImpl,
+    applyAgentRuntimeState,
+    refreshAgentRuntimeState,
+  } = useAgentSessionData({
+    sessionIdRef,
+    modelThinkingLevels,
+    setData,
+    setActiveLeafId,
+    setMessages,
+    setEntryIds,
+    setEntryTimestamps,
+    setCompactionPoints,
+    setCurrentModelOverride,
+    setThinkingLevel,
+    setContextUsage,
+    setSystemPrompt,
+    setAgentPhase,
+    setAgentRunningSync,
+    setCompactingSync,
+    dispatch,
+    setLoading,
+    setError,
+    setToolsLoading,
+    setToolsError,
+    setAvailableTools,
+    onSessionLoaded: () => setLiveTree(null),
+    isNew,
+    newSessionCwd,
+    loadContextRef,
+    refreshAgentRuntimeStateRef,
+  });
+  const loadContext = loadContextBound;
+  const ensureAvailableTools = useCallback(() => {
+    return ensureAvailableToolsImpl(availableTools.length, toolsLoading);
+  }, [ensureAvailableToolsImpl, availableTools.length, toolsLoading]);
+  const { closeEvents, connectEvents, ensureEventsConnected } = useAgentSessionTransport({
+    refs: transportRefs,
+    handleAgentEventRef,
+    onConnectCompensate: async (sid: string) => {
+      await loadContextRef.current(sid, null);
+      try { await refreshAgentRuntimeStateRef.current?.(sid); } catch { /* best effort */ }
+    },
+    onConnectionClosed: () => { /* nothing else to clean up at the moment */ },
+    t,
+  });
 
   useEffect(() => {
     agentRunningRef.current = agentRunning;
   }, [agentRunning]);
 
-  const applyAgentRuntimeState = useCallback((agentState: AgentRuntimeState | null | undefined) => {
-    const state = agentState?.state;
-    if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
-    if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
-
-    const compacting = state?.isCompacting === true || state?.phase === "compacting";
-    const running = Boolean(
-      compacting ||
-      state?.isRunning === true ||
-      state?.isStreaming === true ||
-      (agentState?.running === true && !state),
-    );
-
-    if (compacting) {
-      setAgentRunningSync(true);
-      setCompactingSync(true);
-      setAgentPhase({ kind: "compacting" });
-    } else if (running) {
-      setAgentRunningSync(true);
-      setCompactingSync(false);
-      setAgentPhase({ kind: "waiting_model" });
-    } else {
-      setAgentRunningSync(false);
-      setCompactingSync(false);
-      setAgentPhase(null);
-      dispatch({ type: "end" });
-    }
-  }, [setAgentRunningSync, setCompactingSync]);
-
-  const refreshAgentRuntimeState = useCallback(async (sid = sessionIdRef.current) => {
-    if (!sid) return null;
-    const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const runtimeState = await res.json() as AgentRuntimeState;
-    applyAgentRuntimeState(runtimeState);
-    return runtimeState;
-  }, [applyAgentRuntimeState]);
-  refreshAgentRuntimeStateRef.current = refreshAgentRuntimeState;
-
-  // System prompt is runtime-only agent state (never persisted to the .jsonl),
-  // so the top bar can only show it while the RPC wrapper is alive. Pull it at
-  // every turn start (agent_start) instead of waiting for agent_end, and again
-  // right after a brand-new session is created (the SSE connect can miss the
-  // very first agent_start). GET /api/agent/[id] is a cheap get_state and
-  // returns { running: false } without a state when the wrapper is gone.
   const refreshSystemPrompt = useCallback(() => {
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -617,433 +313,44 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       .catch(() => {});
   }, []);
 
-  const handleAgentEvent = useCallback((event: AgentEvent) => {
-    // Sidebar Pi Bot helpers, scoped to this callback so the timer ref
-    // stays a stable capture without enlarging the useCallback dep list.
-    // fireDiscreteBot cancels any pending revert and schedules a fresh
-    // BOT_REVERT_MS timer to snap back to the daily "searching" loop.
-    // setBaselineBot cancels the timer and pins the bot to searching
-    // immediately (used on agent_start so a new turn never inherits a
-    // stale reaction state).
-    const fireDiscreteBot = (stateKey: string) => {
-      if (!isActive) return;
-      if (botRevertTimerRef.current !== null) {
-        clearTimeout(botRevertTimerRef.current);
-        botRevertTimerRef.current = null;
-      }
-      setGrokbotConfig({ stateKey });
-      botRevertTimerRef.current = setTimeout(() => {
-        botRevertTimerRef.current = null;
-        setGrokbotConfig({ stateKey: BOT_BASELINE_STATE });
-      }, BOT_REVERT_MS);
-    };
-    const setBaselineBot = () => {
-      if (!isActive) return;
-      if (botRevertTimerRef.current !== null) {
-        clearTimeout(botRevertTimerRef.current);
-        botRevertTimerRef.current = null;
-      }
-      setGrokbotConfig({ stateKey: BOT_BASELINE_STATE });
-    };
-
-    switch (event.type) {
-      case "agent_start":
-        setRuntimeError(null);
-        setAgentRunningSync(true);
-        setCompactingSync(false);
-        setAgentPhase({ kind: "waiting_model" });
-        dispatch({ type: "start" });
-        statsEmitRef.current?.({ type: "reset" });
-        refreshSystemPrompt();
-        // Reset per-turn Pi Bot trigger refs so each turn's happy/waking
-        // decision starts from a clean slate. Also snap the sidebar bot
-        // back to the daily "searching" loop right away so the user sees
-        // the bot actively working for the new turn.
-        lastAssistantIsBodyRef.current = false;
-        setBaselineBot();
-        break;
-      case "agent_end":
-        setAgentRunningSync(false);
-        setCompactingSync(false);
-        setAgentPhase(null);
-        setRetryInfo(null);
-        dispatch({ type: "end" });
-        // Surface the final assistant error (if any) after retries gave up
-        // — auto_retry_end already toasts the same error on the success:false
-        // path, so the ref is normally null here.
-        if (pendingAssistantErrorRef.current) {
-          setRuntimeError(pendingAssistantErrorRef.current);
-          showToast({ kind: "error", message: pendingAssistantErrorRef.current });
-          pendingAssistantErrorRef.current = null;
-        }
-        // Pi Bot trigger: stream is over. Pick happy if the last assistant
-        // message is body text; otherwise waking (default for tool-call-
-        // only turns, model errors, user aborts, etc.). Tool failures
-        // already flashed "suspicious" earlier in the turn — they do NOT
-        // suppress this final reaction, since a turn can recover from a
-        // failed tool and end with a clean body-text response. Each
-        // reaction auto-reverts to "searching" after BOT_REVERT_MS via
-        // the timer set in fireDiscreteBot.
-        fireDiscreteBot(lastAssistantIsBodyRef.current ? "happy" : "waking");
-        const endedSessionId = sessionIdRef.current;
-        if (endedSessionId) {
-          void (async () => {
-            await loadSession(endedSessionId);
-            try { await refreshAgentRuntimeStateRef.current?.(endedSessionId); } catch { /* best effort */ }
-            // A new prompt may have started while the final sync was in flight.
-            // Only tear down the idle transport if this controller is still idle.
-            if (!agentRunningRef.current) closeEvents();
-          })();
-        } else {
-          closeEvents();
-        }
-        onAgentEnd?.();
-        break;
-      case "message_start":
-      case "message_update": {
-        const msg = event.message as Partial<AgentMessage> | undefined;
-        // User messages are added optimistically by handleSend.
-        // Skip SSE events for user messages to avoid double-display during streaming.
-        if (msg && msg.role !== "user") {
-          dispatch({ type: "update", message: normalizeToolCalls(msg as AgentMessage) });
-        }
-        setAgentPhase(null);
-        break;
-      }
-      case "message_end": {
-        const completed = event.message as AgentMessage | undefined;
-        // User messages are added optimistically by handleSend.
-        // Skip appending from SSE to avoid duplication.
-        if (completed && completed.role !== "user") {
-          const normalized = normalizeToolCalls(completed);
-          setMessages((prev) => prev.some((message) => sameCompletedMessage(message, normalized))
-            ? prev
-            : [...prev, normalized]);
-        }
-        // First assistant message of a brand-new session → pi has lazily
-        // persisted the .jsonl by now, so the sidebar can finally list it.
-        if (completed?.role === "assistant" && pendingNewSessionFirstAssistantRef.current) {
-          pendingNewSessionFirstAssistantRef.current = false;
-          onFirstAssistantReady?.();
-        }
-        dispatch({ type: "reset" });
-        setAgentPhase({ kind: "waiting_model" });
-        // Capture assistant errors for the upcoming agent_end toast. During
-        // retries the SDK emits a fresh message_end per attempt; only the
-        // last one wins, which is what we want for the final toast.
-        if (completed?.role === "assistant" && completed.stopReason === "error") {
-          pendingAssistantErrorRef.current = completed.errorMessage ?? "Model call failed";
-        }
-        // Pi Bot trigger: remember whether the most recent assistant
-        // message is "body" (text, no toolUse). agent_end uses this to
-        // pick happy vs waking. Track on every assistant message_end so
-        // the last one wins, mirroring how pendingAssistantErrorRef
-        // captures the last failure across retries.
-        if (completed?.role === "assistant") {
-          lastAssistantIsBodyRef.current = isBodyMessage(completed);
-        }
-        // Refresh context usage after each assistant message so the progress
-        // bar tracks every model API call, not just turn end.
-        if (completed?.role === "assistant" && sessionIdRef.current) {
-          fetch(`/api/agent/${encodeURIComponent(sessionIdRef.current)}`)
-            .then((r) => r.json())
-            .then((d: { state?: { contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null } }) => {
-              if (d.state?.contextUsage !== undefined) setContextUsage(d.state.contextUsage ?? null);
-            })
-            .catch(() => {});
-        }
-        break;
-      }
-      // Server-pushed live conversation tree (after every message_end, and
-      // once on SSE connect). Keeps the conversation-tree panel rendering
-      // new cards as soon as pi persists each message — no wait for the
-      // whole turn (agent_end) to finish.
-      case "session_tree_update": {
-        const tree = event.tree;
-        const leafId = event.leafId;
-        if (Array.isArray(tree)) setLiveTree(tree as SessionTreeNode[]);
-        if (typeof leafId === "string") setActiveLeafId(leafId);
-        break;
-      }
-      case "tool_execution_start": {
-        const id = event.toolCallId as string;
-        const name = event.toolName as string;
-        const args = event.args;
-        toolCallNameRef.current.set(id, name);
-        toolCallArgsRef.current.set(id, args);
-        statsEmitRef.current?.({
-          type: "tool_start",
-          toolCallId: id,
-          toolName: name,
-          timestamp: Date.now(),
-          args: args && typeof args === "object" && !Array.isArray(args)
-            ? (args as Record<string, unknown>)
-            : undefined,
-        });
-        // Seed an empty in-flight placeholder so the UI can render streaming
-        // output (tool_execution_update events) even before the first chunk
-        // arrives. Cleared on tool_execution_end.
-        setInFlightToolResults((prev) => {
-          if (prev.has(id)) return prev;
-          const next = new Map(prev);
-          next.set(id, {
-            role: "toolResult",
-            toolCallId: id,
-            toolName: name,
-            content: [],
-            timestamp: Date.now(),
-          });
-          return next;
-        });
-        setAgentPhase((prev) => {
-          const tools = prev?.kind === "running_tools" ? [...prev.tools] : [];
-          if (!tools.some((t) => t.id === id)) tools.push({ id, name });
-          return { kind: "running_tools", tools };
-        });
-        break;
-      }
-      case "tool_execution_update": {
-        // Pi throttles tool onUpdate calls to 100ms (10Hz); partialResult.content
-        // is the accumulated snapshot, not a delta, so we just replace the
-        // in-flight entry's content. Empty updates (e.g. the initial empty
-        // onUpdate from bash right after spawn) are a no-op.
-        const id = event.toolCallId as string;
-        const partial = event.partialResult as
-          | { content?: Array<{ type?: string; text?: string }>; details?: unknown }
-          | undefined;
-        if (!id || !partial || !Array.isArray(partial.content)) break;
-        const content: TextContent[] = [];
-        for (const b of partial.content) {
-          if (b && b.type === "text" && typeof b.text === "string") {
-            content.push({ type: "text", text: b.text });
-          }
-        }
-        if (content.length === 0) break;
-        setInFlightToolResults((prev) => {
-          const existing = prev.get(id);
-          if (!existing) return prev; // no start event yet — drop
-          const next = new Map(prev);
-          next.set(id, { ...existing, content });
-          return next;
-        });
-        break;
-      }
-      case "tool_execution_end": {
-        const id = event.toolCallId as string;
-        const isError = event.isError === true;
-        // Pi Bot trigger: a failing tool flips the sidebar bot to
-        // "suspicious" for BOT_REVERT_MS, then snaps back to "searching".
-        // Independent of the final happy/waking reaction at agent_end, so
-        // a turn that recovers from a tool failure still gets to celebrate.
-        if (isError) {
-          fireDiscreteBot("suspicious");
-        }
-        const result = event.result as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
-        // Capture show_file results into the Session Library cache so the
-        // modal can render success / failure states correctly. The runtime
-        // cache is module-scoped so it survives ChatWindow re-renders and
-        // remains available while this tab's library is open.
-        const toolNameForEnd = toolCallNameRef.current.get(id);
-        if (toolNameForEnd === AGENT_TODO_TOOL_NAME) {
-          setAgentTodoRefreshKey((key) => key + 1);
-        }
-        // edit/write may have just changed the worktree — poke the git-
-        // status store so FileExplorer badges refresh without waiting for
-        // a poll (we no longer poll). `notifyMutated` is a no-op when the
-        // store isn't tracking this cwd, e.g. the explorer is collapsed or
-        // showing a different project's tree. No-op for sessions that
-        // don't yet have a cwd (brand-new session page before the user
-        // picks a project).
-        if (toolNameForEnd && WORKTREE_MUTATING_TOOL_NAMES.has(toolNameForEnd)) {
-          const gitCwd = session?.cwd ?? newSessionCwd;
-          if (gitCwd) notifyMutated(gitCwd);
-        }
-        // bash can also mutate the worktree when the command runs a git
-        // subcommand. The end event doesn't carry args, so we read them
-        // from the scratchpad we populated on _start. Read-only commands
-        // (git status, git log) match too, but the server-side 2s cache +
-        // abort controller makes the wasted fetch negligible.
-        if (toolNameForEnd === "bash") {
-          const gitCwd = session?.cwd ?? newSessionCwd;
-          if (gitCwd && bashCommandTouchesGit(toolCallArgsRef.current.get(id))) {
-            notifyMutated(gitCwd);
-          }
-        }
-        toolCallArgsRef.current.delete(id);
-        if (toolNameForEnd && isShowFileToolName(toolNameForEnd) && result?.details) {
-          const files = (result.details as { files?: unknown }).files;
-          if (Array.isArray(files)) {
-            setShowFileResult(
-              id,
-              files as Parameters<typeof setShowFileResult>[1],
-            );
-          }
-        }
-        let resultText: string | undefined;
-        if (result && Array.isArray(result.content)) {
-          const firstText = result.content.find((c) => c?.type === "text" && typeof c.text === "string");
-          if (firstText && typeof firstText.text === "string") {
-            resultText = firstText.text.length > 1024
-              ? firstText.text.slice(0, 1024) + "…"
-              : firstText.text;
-          }
-        }
-        statsEmitRef.current?.({
-          type: "tool_end",
-          toolCallId: id,
-          isError,
-          timestamp: Date.now(),
-          resultText,
-          resultDetails: result?.details,
-        });
-        // Drop the in-flight placeholder. The final toolResult message will
-        // arrive via the subsequent message_start + message_end events and
-        // render from the settled `messages` array.
-        setInFlightToolResults((prev) => {
-          if (!prev.has(id)) return prev;
-          const next = new Map(prev);
-          next.delete(id);
-          return next;
-        });
-        toolCallNameRef.current.delete(id);
-        setAgentPhase((prev) => {
-          if (prev?.kind !== "running_tools") return prev;
-          const tools = prev.tools.filter((t) => t.id !== id);
-          if (tools.length === 0) return { kind: "waiting_model" };
-          return { kind: "running_tools", tools };
-        });
-        break;
-      }
-      case "auto_retry_start":
-        setRetryInfo({ attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
-        break;
-      case "prompt_failed": {
-        // Emitted by rpc-manager when the inner prompt() rejects (missing
-        // API key, unregistered model, etc.) before agent_start fires.
-        // Reset local running state so the UI isn't stuck mid-turn.
-        setAgentRunningSync(false);
-        setCompactingSync(false);
-        setAgentPhase(null);
-        setRetryInfo(null);
-        dispatch({ type: "end" });
-        const msg = event.error as string | undefined;
-        setRuntimeError(msg || t("Failed to send message"));
-        showToast({ kind: "error", message: msg || t("Failed to send message") });
-        closeEvents();
-        break;
-      }
-      case "auto_retry_end":
-        setRetryInfo(null);
-        // Exhausted retries (or non-retryable failure during a retry chain):
-        // the SDK has already finalised the failure here, so toast the
-        // finalError and clear the pending-error ref so agent_end doesn't
-        // double-toast.
-        if (event.success === false) {
-          const finalError = event.finalError as string | undefined;
-          if (finalError) {
-            setRuntimeError(finalError);
-            showToast({ kind: "error", message: finalError });
-            pendingAssistantErrorRef.current = null;
-          }
-        }
-        break;
-      case "permission_request": {
-        const sid = sessionIdRef.current;
-        if (!sid) break;
-        permissionsRef.current?.addRequest({
-          toolCallId: event.toolCallId as string,
-          ruleName: event.ruleName as string,
-          command: event.command as string,
-          sessionId: sid,
-        });
-        break;
-      }
-      // ask_user_questions: agent wants to block on user input. Push the
-      // questions into the module-scoped store; the sticky panel and
-      // sidebar dot read from there.
-      case "ask_user_questions_request": {
-        const sid = sessionIdRef.current;
-        if (!sid) break;
-        const questions = event.questions;
-        const toolCallId = event.toolCallId;
-        if (typeof toolCallId !== "string" || !Array.isArray(questions)) break;
-        // Defensive: drop the event if the payload is malformed rather than
-        // handing garbage to the panel — the tool's server-side wrapper
-        // already validated, but a buggy SDK could still send odd shapes.
-        const validQuestions: AskUserQuestion[] = [];
-        for (const q of questions) {
-          if (
-            q &&
-            typeof q.question === "string" &&
-            typeof q.header === "string" &&
-            typeof q.multiSelect === "boolean" &&
-            typeof q.required === "boolean" &&
-            Array.isArray(q.options)
-          ) {
-            validQuestions.push(q as AskUserQuestion);
-          }
-        }
-        if (validQuestions.length === 0) break;
-        setPendingAskUserQuestions(sid, {
-          toolCallId,
-          questions: validQuestions,
-          ts: typeof event.ts === "number" ? event.ts : Date.now(),
-        });
-        break;
-      }
-      // Compaction events — both auto (threshold/overflow) and manual.
-      // During compaction the kernel stays busy (no agent_start/agent_end
-      // fire around it), so mirror the running state here: the tree panel
-      // locks cards, the toolbar compact button stays disabled, and the
-      // chat shows the loading row. compaction_end clears it.
-      case "compaction_start":
-      case "auto_compaction_start":
-        setAgentRunningSync(true);
-        setCompactingSync(true);
-        setAgentPhase({ kind: "compacting" });
-        break;
-      case "compaction_end":
-      case "auto_compaction_end": {
-        const willRetry = event.willRetry === true;
-        setCompactingSync(false);
-        if (willRetry) {
-          setAgentRunningSync(true);
-          setAgentPhase({ kind: "waiting_model" });
-        } else {
-          setAgentRunningSync(false);
-          setAgentPhase(null);
-          dispatch({ type: "end" });
-        }
-        if (event.errorMessage && !compactInFlightRef.current) {
-          showToast({ kind: "error", message: event.errorMessage as string });
-        }
-        const compactSessionId = sessionIdRef.current;
-        if (!willRetry) {
-          void (async () => {
-            if (!event.aborted && compactSessionId) await loadSession(compactSessionId);
-            if (!agentRunningRef.current) closeEvents();
-          })();
-        }
-        break;
-      }
-      // Pi re-emits this whenever the agent's thinking level actually
-      // changes — including the implicit clamp that fires inside
-      // `setModel` when the new model doesn't support the previous
-      // level. Without this handler the UI would silently drift away
-      // from the agent's real setting after a model switch (or any
-      // other server-side clamp), and the next prompt would either
-      // race the clamp or carry a stale level. Treat the SDK as the
-      // source of truth and mirror whatever level it reports.
-      case "thinking_level_changed": {
-        const level = event.level;
-        if (typeof level === "string") {
-          setThinkingLevel(level as ThinkingLevelOption);
-        }
-        break;
-      }
-    }
-  }, [closeEvents, isActive, loadSession, newSessionCwd, onAgentEnd, onFirstAssistantReady, permissionsRef, refreshSystemPrompt, session?.cwd, setAgentRunningSync, setCompactingSync, showToast, t]);
-  handleAgentEventRef.current = handleAgentEvent;
+  const { handleAgentEventRef: eventHandlerRef } = useAgentSessionEvents({
+    isActive,
+    session,
+    newSessionCwd,
+    onAgentEnd,
+    onFirstAssistantReady,
+    permissionsRef,
+    statsEmitRef,
+    sessionIdRef,
+    agentRunningRef,
+    toolCallNameRef,
+    toolCallArgsRef,
+    pendingAssistantErrorRef,
+    lastAssistantIsBodyRef,
+    botRevertTimerRef,
+    pendingNewSessionFirstAssistantRef,
+    refreshSystemPrompt,
+    loadSession,
+    refreshAgentRuntimeStateRef,
+    closeEvents,
+    setRuntimeError,
+    setAgentRunningSync,
+    setCompactingSync,
+    setRetryInfo,
+    setAgentPhase,
+    dispatch,
+    setMessages,
+    setLiveTree,
+    setActiveLeafId,
+    setInFlightToolResults,
+    setAgentTodoRefreshKey,
+    setContextUsage,
+    setThinkingLevel,
+    compactInFlightRef,
+    showToast,
+    t,
+  });
+  handleAgentEventRef.current = eventHandlerRef.current;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     if (!message.trim() && !images?.length) return;
@@ -1525,69 +832,4 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // Subscriptions
     handleAgentEventRef,
   };
-}
-
-/** Completed SSE events may be replayed around a reconnect. The persisted
- * context load is authoritative, so suppress an event that is already present
- * instead of appending a second copy to the visible conversation. */
-function sameCompletedMessage(a: AgentMessage, b: AgentMessage): boolean {
-  if (a.role !== b.role) return false;
-  if (a.role === "toolResult" && b.role === "toolResult" && a.toolCallId !== b.toolCallId) return false;
-  const aTimestamp = "timestamp" in a ? a.timestamp : undefined;
-  const bTimestamp = "timestamp" in b ? b.timestamp : undefined;
-  if (aTimestamp !== undefined && bTimestamp !== undefined && aTimestamp !== bTimestamp) return false;
-  try {
-    return JSON.stringify(a) === JSON.stringify(b);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * True if an assistant message is "body text" for the Pi Bot trigger:
- * contains at least one non-empty text block and no toolUse blocks.
- * Defensive about content shape — agent messages come from SDK events
- * and could in principle be malformed.
- */
-function isBodyMessage(msg: AgentMessage): boolean {
-  if (msg.role !== "assistant") return false;
-  // Partial answer followed by a failure is not a happy ending — keep
-  // the bot from flipping to "happy" when the model errored out.
-  if ((msg as { stopReason?: unknown }).stopReason === "error") return false;
-  const content = (msg as { content?: unknown }).content;
-  if (!Array.isArray(content)) return false;
-  let hasText = false;
-  let hasToolUse = false;
-  for (const block of content) {
-    if (!block || typeof block !== "object") continue;
-    const b = block as { type?: unknown; text?: unknown };
-    if (
-      b.type === "text" &&
-      typeof b.text === "string" &&
-      b.text.trim().length > 0
-    ) {
-      hasText = true;
-    }
-    if (b.type === "toolUse") hasToolUse = true;
-  }
-  return hasText && !hasToolUse;
-}
-
-/**
- * True when a bash tool call's args.command contains the word `git`
- * somewhere (whole-word match via \b boundaries). Triggers on every
- * git invocation including read-only ones (git status, git log); the
- * server-side 2s status cache + abort controller in `git-status-store`
- * make the wasted fetch negligible, and a heuristic mutating-vs-read
- * split would miss indirect mutations (custom aliases, shell scripts
- * invoked from the command, etc.).
- *
- * Defensive about the args shape — pi events are SDK-emitted and could
- * in principle be malformed.
- */
-function bashCommandTouchesGit(args: unknown): boolean {
-  if (!args || typeof args !== "object") return false;
-  const cmd = (args as { command?: unknown }).command;
-  if (typeof cmd !== "string" || cmd.length === 0) return false;
-  return /\bgit\b/.test(cmd);
 }
