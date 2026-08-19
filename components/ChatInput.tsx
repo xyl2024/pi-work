@@ -7,7 +7,6 @@ import { SmartImage } from "./SmartImage";
 import { Tooltip } from "./Tooltip";
 import { IconHoverButton } from "./IconHoverButton";
 import { ContextUsageBar } from "./ContextUsageBar";
-import { SessionTokenTotals } from "./SessionTokenTotals";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "./ProviderIcon";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { CwdPicker } from "./CwdPicker";
@@ -1380,10 +1379,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {/* spacer */}
           <div style={{ flex: 1 }} />
 
-          {(contextUsage || sessionStats) && (
+          {contextUsage && (
             <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 4 }}>
-              {contextUsage && <ContextUsageBar contextUsage={contextUsage} />}
-              <SessionTokenTotals />
+              {/* Cumulative token stats (input / output / cache hit rate / cost)
+                  are surfaced in the context bar's hover tooltip. The previous
+                  inline strip was removed so the input row stays compact. */}
+              <ContextUsageBar contextUsage={contextUsage} sessionStats={sessionStats} />
             </div>
           )}
 

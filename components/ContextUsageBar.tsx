@@ -2,6 +2,8 @@
 
 import { useMemo } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
+import type { SessionStats } from "@/hooks/sessionUiStore";
 import { Tooltip } from "./Tooltip";
 
 export interface ContextUsage {
@@ -12,6 +14,14 @@ export interface ContextUsage {
 
 interface Props {
   contextUsage?: ContextUsage | null;
+  /**
+   * Cumulative session token stats. When provided, the tooltip on the
+   * context ring also lists input / output / cache hit rate / cost — the
+   * four values that previously lived in a separate `SessionTokenTotals`
+   * strip rendered next to the bar. Keeping the strip removed and folding
+   * the data into the hover keeps the input bar visually quiet.
+   */
+  sessionStats?: SessionStats;
 }
 
 /**
@@ -28,10 +38,15 @@ interface Props {
  * sits to the right of the ring at 12px tabular-nums so the whole
  * indicator fits in ~75px instead of the previous 10-cell strip's ~90px.
  *
- * Tooltip stays unchanged: full precision percent + window tokens.
+ * Tooltip: full precision percent + window tokens, plus — when
+ * `sessionStats` is available — the cumulative input / output / cache-hit
+ * rate / cost on separate lines. The cumulative totals are only shown
+ * once `useAgentSession` has populated `sessionStats` with at least one
+ * assistant `usage` block.
  */
-export function ContextUsageBar({ contextUsage }: Props) {
+export function ContextUsageBar({ contextUsage, sessionStats }: Props) {
   const { t } = useI18n();
+  const { formatCost } = useFormatCurrency();
 
   const ring = useMemo(() => {
     if (!contextUsage?.contextWindow || contextUsage.percent === null) return null;
@@ -54,12 +69,29 @@ export function ContextUsageBar({ contextUsage }: Props) {
 
   if (!ring) return null;
 
-  const tooltipText = `${t("Context")}: ${ring.pct.toFixed(1)}% of ${contextUsage!.contextWindow.toLocaleString()} tokens`;
+  const contextLine = `${t("Context")}: ${ring.pct.toFixed(1)}% of ${contextUsage!.contextWindow.toLocaleString()} tokens`;
+
+  // Cumulative stats are appended below the context line, only when
+  // `useAgentSession` has reported at least one assistant `usage` block.
+  // Mirrors `SessionTokenTotals`'s old tooltip layout (one line per stat,
+  // cost omitted when 0) so existing muscle memory still works.
+  const statsLines = sessionStats
+    ? [
+        `${t("Input tokens")}: ${sessionStats.tokens.input.toLocaleString()}`,
+        `${t("Output tokens")}: ${sessionStats.tokens.output.toLocaleString()}`,
+        `${t("Cache hit rate")}: ${((sessionStats.cachedHitRate ?? 0) * 100).toFixed(1)}%`,
+        ...(sessionStats.cost !== undefined && sessionStats.cost > 0
+          ? [`${t("Cost")}: ${formatCost(sessionStats.cost)}`]
+          : []),
+      ]
+    : [];
+
+  const tooltipText = [contextLine, ...statsLines].join("\n");
 
   return (
     <Tooltip content={tooltipText}>
       <div
-        aria-label={`${t("Context")}: ${ring.pct.toFixed(0)}%`}
+        aria-label={tooltipText}
         style={{
           flexShrink: 0,
           display: "flex", alignItems: "center", gap: 6,
