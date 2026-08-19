@@ -1325,6 +1325,26 @@ export const ZH_TRANSLATIONS = {
   "Image (file kind)": "图片",
   "Text (file kind)": "文本",
   "PDF (file kind)": "PDF",
+  // ── Agent retry settings (~/.pi/agent/settings.json → retry.*) ──
+  // Note: a generic "Retry" key already exists at line ~1032 for the
+  // HTTP debug panel button. We use "Agent retry" for this section to
+  // avoid the object-literal duplicate-key error while keeping the
+  // existing button label untouched.
+  "Agent retry": "异常重试",
+  "Enable retry": "启用重试",
+  "Auto-retry on transient LLM errors (overloaded, rate limit, 5xx, stream breaks). Takes effect on new sessions only.":
+    "对临时性 LLM 错误（过载、限流、5xx、流中断）自动重试。只对新会话生效。",
+  "Max retries": "最大重试次数",
+  "Base delay (ms)": "退避基数（毫秒）",
+  "Provider retry settings (advanced)": "Provider 层重试（高级）",
+  "HTTP request timeout (ms)": "HTTP 请求超时（毫秒）",
+  "Provider retries": "Provider 层重试次数",
+  "Max server-requested delay (ms)": "Provider 请求延迟上限（毫秒）",
+  "Reset to defaults": "恢复默认",
+  "Reset retry config": "重试配置已重置为 SDK 默认值",
+  "Backoff sequence preview": "退避序列预览",
+  "{seconds}s, {seconds2}s, {seconds3}s… (exponential, max {max} retries)": "{seconds}s, {seconds2}s, {seconds3}s…（指数退避，最多 {max} 次）",
+  "Applies to new sessions only — active sessions keep their current settings.": "只对新会话生效——当前会话仍使用原有设置。",
   // ── MCP (Model Context Protocol) — v1 standalone client + test bench ──
   "Open MCP servers": "打开 MCP 服务",
   "MCP Servers": "MCP 服务",
