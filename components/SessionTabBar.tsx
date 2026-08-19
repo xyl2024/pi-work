@@ -9,6 +9,7 @@ import {
 } from "@/hooks/sessionWorkspaceStore";
 import { Tooltip } from "./Tooltip";
 import { useContextMenu, type ContextMenuItem } from "./ContextMenu";
+import { InlineLoader } from "generative-loaders";
 
 interface Props {
   tabs: SessionTab[];
@@ -31,21 +32,25 @@ function statusLabel(status: SessionTabStatus, t: ReturnType<typeof useI18n>["t"
 
 function StatusMark({ status }: { status: SessionTabStatus }) {
   if (status === "idle") return null;
+  if (status === "running") {
+    return (
+      <span
+        aria-hidden
+        style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+      >
+        <InlineLoader variant="aperture" size={14} color="var(--accent)" />
+      </span>
+    );
+  }
   return (
     <span
       aria-hidden
       style={{
-        width: status === "completed" ? 6 : 7,
-        height: status === "completed" ? 6 : 7,
+        width: 6,
+        height: 6,
         borderRadius: "50%",
         flexShrink: 0,
-        background: status === "running"
-          ? "var(--accent)"
-          : status === "error"
-            ? "#ef4444"
-            : "#22c55e",
-        boxShadow: status === "running" ? "0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent)" : undefined,
-        animation: status === "running" ? "scheduler-running-pulse 1.6s ease-in-out infinite" : undefined,
+        background: status === "error" ? "#ef4444" : "#22c55e",
       }}
     />
   );
