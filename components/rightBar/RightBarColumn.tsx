@@ -6,8 +6,8 @@
 // now a one-line append to RIGHT_BAR_DESCRIPTORS in `./desc`.
 //
 // Layout (top → bottom):
-//   1. 'fixed' descriptors with slot='top' (currently just the panel
-//      show/hide toggle — always visible).
+//   1. 'fixed' descriptors with slot='top' (panel show/hide plus the
+//      conditional expand/collapse toggle).
 //   2. The configurable row, split by `cfg.session_bound_alignment`:
 //        - "top":    session-bound group first, then global group
 //                    (both groups render in document order — no spacer).
@@ -103,9 +103,10 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
     return { alignment: a, sessionBound: sb, global: g };
   }, [orderedDescriptors, cfg?.session_bound_alignment]);
 
-  // Fixed descriptors partitioned by their slot. Only 'top' (panel
-  // show/hide) and inline/'undefined' (expand/collapse, conditional)
-  // remain — terminal moved to the configurable row.
+  // Fixed descriptors partitioned by their slot. The top group contains
+  // panel show/hide plus the conditional expand/collapse toggle; any
+  // future fixed descriptor without a slot remains inline. Terminal moved
+  // to the configurable row.
   const topFixed = RIGHT_BAR_DESCRIPTORS.filter(
     (d) => d.kind === "fixed" && d.slot === "top",
   );
@@ -129,7 +130,7 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
         borderLeft: "1px solid var(--border)",
       }}
     >
-      {/* Top: always-visible fixed buttons (panel show/hide today). */}
+      {/* Top: fixed panel controls (show/hide plus conditional expand). */}
       {topFixed.map((d) => renderDescriptor(d, ctx, cfg, `top-${d.id}`))}
 
       {/* Configurable row, laid out per session_bound_alignment.
@@ -159,8 +160,8 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
         </Fragment>
       )}
 
-      {/* Inline fixed (expand/collapse), conditional — rendered after
-          the user-ordered list so it sits just below it. */}
+      {/* Any future unslotted fixed descriptors render after the
+          configurable groups. */}
       {inlineFixed.map((d) =>
         d.isVisible && !d.isVisible(ctx) ? null : renderDescriptor(d, ctx, cfg, `fixed-${d.id}`),
       )}

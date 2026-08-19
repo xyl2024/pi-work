@@ -123,7 +123,7 @@ export interface RightBarDescriptor {
   /** Identifier; required for 'configurable' descriptors (persisted in
    *  right_side_bar.buttons and order). 'fixed' descriptors use one of
    *  two reserved ids: 'panelToggle' (top, always visible) or 'expand'
-   *  (inline, conditional). */
+   *  (top, conditional). */
   id: RightBarButtonId | "panelToggle" | "expand";
   kind: "fixed" | "configurable";
   /** Visual slot — 'top' renders above the configurable row. Undefined =
@@ -175,10 +175,11 @@ const panelToggleDescriptor: RightBarDescriptor = {
   // Wrap so we can swap the tooltip when active.
 };
 
-// Fixed: expand/collapse button (inline, conditional).
+// Fixed: expand/collapse button (top group, conditional).
 const expandDescriptor: RightBarDescriptor = {
   id: "expand",
   kind: "fixed",
+  slot: "top",
   labelKey: "", // resolved at render
   // Only render when the panel is open AND has tabs.
   isVisible: (ctx) => ctx.rightPanelState !== "closed" && ctx.hasOpenTabs,
@@ -456,8 +457,8 @@ export function resolveButtonLabel(
     case "expand":
       return ctx.t(
         ctx.rightPanelState === "expanded"
-          ? "Collapse file panel"
-          : "Expand file panel",
+          ? "Collapse panel"
+          : "Expand panel",
       );
     case "terminal":
       return ctx.t(ctx.terminalOpen ? "Hide terminal" : "Open terminal");
