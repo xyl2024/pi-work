@@ -21,7 +21,6 @@
 import type { ReactNode } from "react";
 import type { RightBarButtonId } from "@/lib/config";
 import { CountBadge } from "@/components/CountBadge";
-import { getFileIcon } from "@/components/FileIcons";
 import {
   TODO_TAB_ID,
   FAVORITES_TAB_ID,
@@ -42,6 +41,7 @@ import {
   ExpandLeftIcon,
   ExpandRightIcon,
   TodoCheckIcon,
+  ContextDocumentIcon,
   PencilIcon,
   TranslateIcon,
   JsonBracesIcon,
@@ -338,12 +338,7 @@ const contextDescriptor: RightBarDescriptor = {
   sessionBound: true,
   labelKey: "Context",
   isActive: (ctx) => ctx.activeTabKind === "context",
-  isDisabled: (ctx) => !ctx.selectedSessionId,
-  content: () => (
-    <span style={{ display: "inline-flex", filter: "brightness(0.56)" }}>
-      {getFileIcon("AGENTS.md", 13)}
-    </span>
-  ),
+  content: () => ContextDocumentIcon(),
   onClick: (ctx) => ctx.toggleRightPanelTab(CONTEXT_TAB_ID, ctx.openTab.context),
 };
 

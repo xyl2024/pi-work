@@ -46,6 +46,16 @@ export const TodoCheckIcon = (): ReactElement => (
   </svg>
 );
 
+// Document icon for the Context panel: represents the assembled system prompt
+// without borrowing a coloured file-type icon from the file explorer.
+export const ContextDocumentIcon = (): ReactElement => (
+  <svg {...PROPS_16} strokeWidth={1.8}>
+    <path d="M6 3h7l5 5v13H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+    <path d="M13 3v5h5" />
+    <path d="M8 12h8M8 16h8" />
+  </svg>
+);
+
 export const PencilIcon = (): ReactElement => (
   <svg {...PROPS_16} strokeWidth={1.8}>
     <path d="M18.37 2.63a1.75 1.75 0 0 1 2.48 2.48L9 16.96l-4.5 1.04 1.04-4.5Z" />
