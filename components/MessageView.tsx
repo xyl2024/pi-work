@@ -22,7 +22,6 @@ import { useShowFileResults } from "@/hooks/showFileResultsStore";
 import { openSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "./ProviderIcon";
 import { ReadFileChips } from "./ReadFileChips";
-import { TextLoader } from "generative-loaders";
 
 /**
  * Bumped from ChatWindow every time the user clicks "全部折叠". Subscribed
@@ -980,33 +979,44 @@ function useMarkdownComponents(
 function TextBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }: { block: TextContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean; onImageClick?: (src: string) => void }) {
   const text = highlightTextAsHtml(block.text, keywords, isSearchMatch);
   const components = useMarkdownComponents(isStreaming, onImageClick);
+  // Streaming reveal: the settled prefix (text as of the last update) keeps
+  // rendering as live markdown, while the newest slice animates in as plain
+  // words resolving out of blur (.streaming-word) with a blinking caret.
+  // Skipped for search matches — highlightTextAsHtml injects <mark> HTML
+  // that must never be sliced mid-tag. prevLenRef is updated in an effect
+  // (not during render) so the reveal survives StrictMode double-renders.
   const streamReveal = isStreaming && !isSearchMatch;
-  const previousTextRef = useRef("");
-  const previousStreamingRef = useRef(false);
-  const isNewStream = !!isStreaming && !previousStreamingRef.current;
-  const previousText = isNewStream ? "" : previousTextRef.current;
-  const settledLength = streamReveal && block.text.startsWith(previousText) ? previousText.length : 0;
-  const settledText = streamReveal ? text.slice(0, settledLength) : text;
-  const hasStreamText = streamReveal && block.text.length > 0;
-
+  const prevLenRef = useRef(0);
   useEffect(() => {
-    previousTextRef.current = block.text;
-    previousStreamingRef.current = !!isStreaming;
-  }, [block.text, isStreaming]);
+    prevLenRef.current = block.text.length;
+  }, [block.text]);
+  const settled = streamReveal ? prevLenRef.current : block.text.length;
+  const delta = streamReveal ? block.text.slice(settled) : "";
+  const tailTokens = delta.split(/(\s+)/).filter((t) => t.length > 0);
 
   return (
     <div className={`markdown-body${streamReveal ? " markdown-body--streaming" : ""}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {settledText}
+        {streamReveal ? text.slice(0, settled) : text}
       </ReactMarkdown>
-      {hasStreamText && (
-        <TextLoader
-          className="markdown-stream-tail"
-          text={block.text}
-          variant="skeleton"
-          color="var(--text)"
-        />
+      {streamReveal && tailTokens.length > 0 && (
+        <span>
+          {tailTokens.map((tok, i) =>
+            /^\s+$/.test(tok) ? (
+              <span key={`${settled}-${i}`}>{tok}</span>
+            ) : (
+              <span
+                key={`${settled}-${i}`}
+                className="streaming-word"
+                style={{ animationDelay: `${Math.min(i * 25, 250)}ms` }}
+              >
+                {tok}
+              </span>
+            ),
+          )}
+        </span>
       )}
+      {streamReveal && <span className="streaming-cursor" aria-hidden />}
     </div>
   );
 }
