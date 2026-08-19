@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listAllSessions } from "@/lib/session-reader";
+import { listAllSessions, searchSessionsPaged } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
 import { createLogger, elapsedMs } from "@/lib/logger";
 import type { SessionInfo } from "@/lib/types";
@@ -48,9 +48,16 @@ function recentCwds(sessions: SessionInfo[], topN: number): string[] {
  *               workspace refresh, etc.). When present, `cursor` may follow.
  *   - `cursor`  base64url-encoded `{modified, id}` from the previous page's
  *               last row. The next page starts strictly AFTER this point.
+ *   - `q`       case-insensitive substring filter. Matches against the
+ *               session name (`session_info` entry) AND against user /
+ *               assistant message content. When present, the response
+ *               includes `matchCount` / `snippet` / `matchLocation` per
+ *               row and a `total` count for pagination. The existing
+ *               /api/sessions/search endpoint (Cmd+K) stays untouched.
  *
  * Response shape (always): { sessions, recentCwds, nextCursor? }
  * `nextCursor` is included only when `limit` was supplied; null means "no more".
+ * When `q` is set, `total` is appended so the modal can render a count.
  */
 export async function GET(request: Request) {
   const startedAt = Date.now();
@@ -58,16 +65,62 @@ export async function GET(request: Request) {
   const cwd = url.searchParams.get("cwd") || undefined;
   const limitRaw = url.searchParams.get("limit");
   const cursorRaw = url.searchParams.get("cursor");
+  const q = url.searchParams.get("q")?.trim() || "";
   const limit = limitRaw ? Math.max(1, parseInt(limitRaw, 10) || 0) : 0;
   const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
 
-  log.debug("list sessions requested", { cwd, limit: limit || undefined, hasCursor: !!cursor });
+  log.debug("list sessions requested", {
+    cwd,
+    limit: limit || undefined,
+    hasCursor: !!cursor,
+    q: q ? `${q.length}ch` : undefined,
+  });
+
   try {
     // Always scan the full set under the hood (cache hit within 5s) so the
     // recentCwds sidecar is accurate regardless of the cwd filter the caller
     // asked for. Cheap relative to the actual disk scan.
     const all = await listAllSessions();
     const recent = recentCwds(all, 5);
+
+    // Search branch: paged search runs only when the caller passed both
+    // `q` and `limit`. Without `limit` we fall back to the unpaged list
+    // (caller didn't ask for pagination — don't pay the search cost).
+    if (q && limit > 0) {
+      if (!cwd) {
+        log.warn("sessions search requires cwd", { durationMs: elapsedMs(startedAt) });
+        return NextResponse.json(
+          { error: "cwd is required when q is set" },
+          { status: 400 },
+        );
+      }
+      const cursorId = cursor?.id ?? null;
+      const search = await searchSessionsPaged(cwd, q, limit, cursorId);
+      const enriched = search.results.map((s) => ({
+        ...s,
+        running: getRpcSession(s.id)?.isRunning() ?? false,
+      }));
+      log.info("sessions search completed", {
+        cwd,
+        returned: enriched.length,
+        total: search.total,
+        qLen: q.length,
+        hasNextCursor: search.nextCursor !== null,
+        durationMs: elapsedMs(startedAt),
+      });
+      // Wrap the search's raw id cursor in the same base64url envelope
+      // the unpaged branch uses, so the cursor stays opaque / format-stable
+      // between pages.
+      const nextCursor = search.nextCursor
+        ? encodeCursor({ modified: "", id: search.nextCursor })
+        : null;
+      return NextResponse.json({
+        sessions: enriched,
+        recentCwds: recent,
+        nextCursor,
+        total: search.total,
+      });
+    }
 
     // Filter the workspace subset the caller asked for, then enrich with running.
     const filtered = cwd ? all.filter((s) => s.cwd === cwd) : all;

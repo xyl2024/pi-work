@@ -53,6 +53,9 @@ interface MultiCwdListProps {
    *  Wraps the parent-side new-session handler so the caller can decide
    *  which cwd wins regardless of the picker's active selection. */
   onNewSession?: (cwd: string) => void;
+  /** Open the paged-search modal for the given cwd. Triggered by the
+   *  "..." menu item ("View more sessions") on the cwd group header. */
+  onOpenCwdSessions: (cwd: string) => void;
 }
 
 /**
@@ -80,6 +83,7 @@ export function MultiCwdList({
   onSessionRenamed,
   onSessionDeleted,
   onNewSession,
+  onOpenCwdSessions,
 }: MultiCwdListProps) {
   const { t } = useI18n();
 
@@ -147,6 +151,7 @@ export function MultiCwdList({
             onToggleExpand={() => onToggleExpand(ws.cwd)}
             onSelectSession={onSelectSession}
             onLoadMoreSessions={() => onLoadMoreCwdSessions(ws.cwd)}
+            onOpenCwdSessions={() => onOpenCwdSessions(ws.cwd)}
             onToggleFavorite={onToggleFavorite}
             onSessionRenamed={onSessionRenamed}
             onSessionDeleted={onSessionDeleted}
@@ -199,6 +204,9 @@ interface CwdGroupProps {
   onToggleExpand: () => void;
   onSelectSession: (session: SessionInfo) => void;
   onLoadMoreSessions: () => void;
+  /** Open the paged-search modal for this cwd. Wired to the "..."
+   *  menu item on the group header ("View more sessions"). */
+  onOpenCwdSessions: () => void;
   onToggleFavorite?: (sessionId: string) => void;
   onSessionRenamed: (sessionId: string, name: string) => void;
   onSessionDeleted: (sessionId: string) => void;
@@ -216,6 +224,7 @@ function CwdGroup({
   onToggleExpand,
   onSelectSession,
   onLoadMoreSessions,
+  onOpenCwdSessions,
   onToggleFavorite,
   onSessionRenamed,
   onSessionDeleted,
@@ -599,11 +608,10 @@ function CwdGroup({
               <CwdMenuRow
                 index={0}
                 icon={<LoadMoreIcon />}
-                label={group.loadingMore ? t("Loading more...") : t("Load more sessions")}
-                disabled={group.loadingMore}
+                label={t("View more sessions")}
                 onClick={() => {
                   setLoadMenuOpen(false);
-                  onLoadMoreSessions();
+                  onOpenCwdSessions();
                 }}
               />
             )}

@@ -271,11 +271,33 @@ export interface SessionSearchResult {
   snippet: string; // \u0000-delimited keyword markers for frontend highlighting
   /** entry.id of the first matching message — used to jump to that message on open */
   firstMatchEntryId?: string;
+  /** Where the first matching occurrence was found — drives the snippet
+   *  label in the sidebar's "View more sessions" modal (name vs content). */
+  matchLocation: "name" | "content";
 }
 
 export interface SessionSearchResponse {
   results: SessionSearchResult[];
   hasMore: boolean;
+}
+
+/**
+ * Per-session enriched row used by the sidebar "View more sessions" modal.
+ * Reuses `SessionInfo` (so callers can switch to the session via the same
+ * `onSelectSession(SessionInfo)` contract the rest of the sidebar uses)
+ * and layers on the same matchCount/snippet/matchLocation fields that
+ * `SessionSearchResult` already exposes to /api/sessions/search.
+ */
+export interface SessionSearchPagedResult extends SessionInfo {
+  matchCount: number;
+  snippet: string;
+  matchLocation: "name" | "content";
+}
+
+export interface SessionSearchPagedResponse {
+  results: SessionSearchPagedResult[];
+  nextCursor: string | null;
+  total: number;
 }
 
 /** A single message-level match within a session file */

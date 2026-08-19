@@ -351,7 +351,12 @@ export const ZH_TRANSLATIONS = {
   "Load more projects": "加载更多项目",
   "End of projects": "已到末尾",
   "Load more sessions": "加载更多会话",
+  "View more sessions": "查看更多会话",
+  "Search by name or content...": "按会话名或会话内容搜索…",
   "Loading sessions...": "正在加载会话...",
+  "Showing": "当前展示",
+  "Matches": "匹配项",
+  "{n} matches": "{n} 处匹配",
   // (Collapse / Expand keys already exist further down — used as aria-labels for the cwd fold toggle)
   "Favorite session": "收藏会话",
   "Unfavorite session": "取消收藏",

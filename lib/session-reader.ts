@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as readline from "readline";
 import { SessionManager, buildSessionContext as piBuildSessionContext, getAgentDir, sessionEntryToContextMessages } from "@earendil-works/pi-coding-agent";
-import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, AgentMessage, SessionSearchResult, SessionSearchResponse, SessionMessageSearchResult, SessionMessageSearchResponse, CompactionEntry, CompactionPoint } from "./types";
+import type { SessionEntry, SessionInfo, SessionContext, SessionTreeNode, AgentMessage, SessionSearchResult, SessionSearchResponse, SessionSearchPagedResult, SessionSearchPagedResponse, SessionMessageSearchResult, SessionMessageSearchResponse, CompactionEntry, CompactionPoint } from "./types";
 import type { SessionEntry as PiSessionEntry, SessionInfo as PiSessionInfo } from "@earendil-works/pi-coding-agent";
 import { normalizeToolCalls } from "./normalize";
 
@@ -372,6 +372,7 @@ async function searchFile(filePath: string, lowerQuery: string): Promise<Session
     let snippet = "";
     let foundSnippet = false;
     let firstMatchEntryId: string | undefined;
+    let matchLocation: "name" | "content" = "content";
 
     rl.on("line", (line) => {
       try {
@@ -390,6 +391,7 @@ async function searchFile(filePath: string, lowerQuery: string): Promise<Session
             if (!foundSnippet) {
               snippet = buildSnippet(name, lowerQuery);
               foundSnippet = true;
+              matchLocation = "name";
             }
           }
         }
@@ -405,6 +407,7 @@ async function searchFile(filePath: string, lowerQuery: string): Promise<Session
                 snippet = buildSnippet(content, lowerQuery);
                 foundSnippet = true;
                 firstMatchEntryId = entry.id as string | undefined;
+                matchLocation = "content";
               }
             }
           }
@@ -428,6 +431,7 @@ async function searchFile(filePath: string, lowerQuery: string): Promise<Session
         matchCount,
         snippet,
         firstMatchEntryId,
+        matchLocation,
       });
     });
 
@@ -463,6 +467,97 @@ export async function searchSessions(cwd: string, query: string): Promise<Sessio
     results: results.slice(0, MAX_RESULTS),
     hasMore,
   };
+}
+
+/**
+ * Paged session search used by the sidebar's "View more sessions" modal.
+ *
+ * Scans every JSONL file in the cwd's workspace dir, builds the same
+ * matches as `searchSessions`, then applies the `limit`/`cursor` boundary
+ * the caller asked for. Returns the full SessionInfo for each match so
+ * the modal can dispatch straight to `onSelectSession` without an extra
+ * `/api/sessions/[id]/info` round-trip per row.
+ *
+ * Cost: the same as `searchSessions` (one streamed read per file). The
+ * caller is responsible for gating this on user action (the modal is
+ * opened on demand, not on every sidebar render).
+ */
+export async function searchSessionsPaged(
+  cwd: string,
+  query: string,
+  limit: number,
+  cursor: string | null,
+): Promise<SessionSearchPagedResponse> {
+  const sessionsDir = getSessionsDir();
+  const slug = workspaceSlug(cwd);
+  const workspaceDir = path.join(sessionsDir, slug);
+
+  if (!fs.existsSync(workspaceDir)) {
+    return { results: [], nextCursor: null, total: 0 };
+  }
+
+  const files = fs.readdirSync(workspaceDir).filter((f) => f.endsWith(".jsonl"));
+  const lowerQuery = query.toLowerCase();
+
+  // Pass 1: walk every file once, collect matches the same way the Cmd+K
+  // search does. We only need match metadata on this side; SessionInfo
+  // fields come from the cached listAllSessions() call below.
+  const matchMeta: SessionSearchResult[] = [];
+  for (const file of files) {
+    const filePath = path.join(workspaceDir, file);
+    const result = await searchFile(filePath, lowerQuery);
+    if (result) matchMeta.push(result);
+  }
+
+  // Most recently active first — same precedence as the sidebar's
+  // normal paginated list.
+  matchMeta.sort((a, b) => b.modified.localeCompare(a.modified));
+
+  const total = matchMeta.length;
+
+  // Cursor: id of the previous page's last row. Skip past it so the
+  // same row never appears twice. If the cursor id is no longer in the
+  // result set (deleted between pages), fall back to the start.
+  let startIdx = 0;
+  if (cursor) {
+    const idx = matchMeta.findIndex((r) => r.id === cursor);
+    if (idx >= 0) startIdx = idx + 1;
+  }
+
+  const page = matchMeta.slice(startIdx, startIdx + limit);
+  const hasMore = startIdx + limit < total;
+  const nextCursor =
+    hasMore && page.length > 0 ? page[page.length - 1].id : null;
+
+  // Pass 2: enrich with full SessionInfo. listAllSessions is cached
+  // (5s TTL) so a modal that fires search + paginate in quick succession
+  // only re-reads the disk once. Missing files (delete between pass 1 and
+  // pass 2) fall back to the match metadata alone.
+  const allSessions = await listAllSessions(cwd);
+  const byId = new Map(allSessions.map((s) => [s.id, s]));
+
+  const results: SessionSearchPagedResult[] = page.map((m) => {
+    const info = byId.get(m.id);
+    if (info) {
+      return { ...info, matchCount: m.matchCount, snippet: m.snippet, matchLocation: m.matchLocation };
+    }
+    return {
+      path: "",
+      id: m.id,
+      cwd: m.cwd,
+      name: m.name,
+      created: m.modified,
+      modified: m.modified,
+      messageCount: 0,
+      firstMessage: "",
+      running: false,
+      matchCount: m.matchCount,
+      snippet: m.snippet,
+      matchLocation: m.matchLocation,
+    };
+  });
+
+  return { results, nextCursor, total };
 }
 
 // ============================================================================

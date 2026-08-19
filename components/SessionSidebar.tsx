@@ -11,6 +11,7 @@ import { Tooltip } from "./Tooltip";
 import { MorphToggleIcon } from "./MorphToggleIcon";
 import { REFRESH, CHECK, CHEVRONS_UP } from "@/lib/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
+import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "./SidebarSection";
 import { GrokBotStage } from "./GrokBotStage";
 import { GrokBotLab } from "./GrokBotLab";
@@ -145,6 +146,10 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const { t } = useI18n();
   const toast = useToast();
   const [labOpen, setLabOpen] = useState(false);
+  // Cwd whose paged-search modal is currently open. Null when no modal
+  // is showing. The "View more sessions" affordance on each cwd group
+  // header sets this; the modal closes by setting it back to null.
+  const [cwdSessionsModalCwd, setCwdSessionsModalCwd] = useState<string | null>(null);
 
   // Multi-cwd view: workspaces list (top-level, cwd-keyed) + per-cwd
   // session loaders (lazy, paged 3 at a time).
@@ -589,6 +594,10 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     void fetchCwdSessions(cwd, state.cursor, "append");
   }, [perCwdSessions, fetchCwdSessions]);
 
+  const openCwdSessions = useCallback((cwd: string) => {
+    setCwdSessionsModalCwd(cwd);
+  }, []);
+
   // Refresh both the workspace metadata (lastUsed may shift) and the
   // current cwd's session page (name may change) after a rename.
   const handleSessionRenamed = useCallback((sessionId: string, name: string) => {
@@ -758,6 +767,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         onSelectSession={onSelectSession}
         onLoadMoreWorkspaces={() => { void fetchWorkspaces(nextWorkspaceCursor, "append"); }}
         onLoadMoreCwdSessions={loadMoreCwdSessions}
+        onOpenCwdSessions={openCwdSessions}
         onToggleFavorite={onToggleFavorite}
         onSessionRenamed={handleSessionRenamed}
         onSessionDeleted={handleSessionDeleted}
@@ -849,6 +859,14 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       )}
 
       {labOpen && <GrokBotLab onClose={() => setLabOpen(false)} />}
+
+      {cwdSessionsModalCwd && (
+        <CwdSessionsModal
+          cwd={cwdSessionsModalCwd}
+          onClose={() => setCwdSessionsModalCwd(null)}
+          onSelectSession={onSelectSession}
+        />
+      )}
     </div>
   );
 }
