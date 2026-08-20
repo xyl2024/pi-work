@@ -21,8 +21,8 @@ import {
   EMPTY_STATE,
   type AgentTaskState,
   type AgentTodoLogEntry,
-} from "./agent-todo-tool-types";
-import { createLogger } from "./logger";
+} from "./types";
+import { createLogger } from "../logger";
 
 const log = createLogger("agent-todo-store");
 

@@ -15,10 +15,10 @@
  */
 
 import { Cron } from "croner";
-import { getSchedulerDb } from "@/lib/scheduler-db";
-import { recordRunStart, type ScheduledTask } from "@/lib/scheduler-store";
+import { getSchedulerDb } from "./db";
+import { recordRunStart, type ScheduledTask } from "./store";
 import { runTask } from "./runner";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "../logger";
 
 const log = createLogger("scheduler/loop");
 

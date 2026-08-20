@@ -1,11 +1,11 @@
 /**
  * SQLite-backed CRUD + XML parsing + upsert for the RSS panel.
  *
- * Mirror of `lib/scheduler-store.ts`: validation, custom error classes,
+ * Mirror of `lib/scheduler/store.ts`: validation, custom error classes,
  * row-to-type mappers, and `db.transaction(() => { ... })()` blocks for
  * mutating ops that touch more than one table.
  *
- * All reads go through the singleton DB handle in `lib/rss-db.ts`. No
+ * All reads go through the singleton DB handle in `lib/rss/db.ts`. No
  * in-memory cache; freshness is the React layer's job (see `hooks/useRss.ts`).
  *
  * Parsing notes:
@@ -16,7 +16,7 @@
  *     stable hash of `link || title` so the same article always upserts to
  *     the same row even when the feed omits an explicit GUID.
  *   - HTML content is stored as-is. Sanitization happens at render time in
- *     `lib/rss-sanitize.ts` so we never double-sanitize (e.g. if the feed
+ *     `lib/rss/sanitize.ts` so we never double-sanitize (e.g. if the feed
  *     already encodes special chars) and the raw HTML is reusable elsewhere.
  *   - HTML entities (`&amp;`, `&#x...`, `&nbsp;`) are decoded via the
  *     `entities` package before storage.
@@ -25,7 +25,7 @@
 import { XMLParser } from "fast-xml-parser";
 import { decode as decodeEntities } from "entities";
 import { createHash } from "crypto";
-import { getRssDb } from "@/lib/rss-db";
+import { getRssDb } from "./db";
 import { proxyFetch } from "@/lib/http-proxy";
 import {
   type CreateFeedInput,
@@ -42,8 +42,8 @@ import {
   generateRssId,
   validateFeedTitle,
   validateFeedUrl,
-} from "@/lib/rss-schema";
-import { createLogger } from "@/lib/logger";
+} from "./schema";
+import { createLogger } from "../logger";
 
 const log = createLogger("rss-store");
 

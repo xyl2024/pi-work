@@ -14,11 +14,11 @@ import {
   deleteFeed,
   fetchAndRefreshFeed,
   updateFeed,
-} from "@/lib/rss-store";
+} from "@/lib/rss/store";
 import {
   RssNotFoundError,
   RssValidationError,
-} from "@/lib/rss-schema";
+} from "@/lib/rss/schema";
 
 const log = createLogger("api/rss/feeds/[id]");
 

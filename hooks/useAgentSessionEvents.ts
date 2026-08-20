@@ -3,7 +3,7 @@ import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResul
 import { normalizeToolCalls } from "@/lib/normalize";
 import type { ToolCallStatsDispatch } from "./ToolCallStatsContext";
 import { isShowFileToolName } from "@/lib/show-file-tool-types";
-import { AGENT_TODO_TOOL_NAME } from "@/lib/agent-todo-tool-types";
+import { AGENT_TODO_TOOL_NAME } from "@/lib/agent-todo-tool/types";
 import { notifyMutated } from "@/lib/git-status-store";
 import { setGrokbotConfig } from "@/lib/grokbot-store";
 import { setShowFileResult } from "./showFileResultsStore";

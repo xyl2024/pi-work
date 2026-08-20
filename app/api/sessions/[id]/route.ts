@@ -12,7 +12,7 @@ import {
   fallbackSessionLeafId,
 } from "@/lib/session-reader";
 import { getRpcSession } from "@/lib/rpc-manager";
-import { deleteAgentTodoFile } from "@/lib/agent-todo-store";
+import { deleteAgentTodoFile } from "@/lib/agent-todo-tool/store";
 import { createLogger, elapsedMs } from "@/lib/logger";
 
 const log = createLogger("api/sessions/[id]");

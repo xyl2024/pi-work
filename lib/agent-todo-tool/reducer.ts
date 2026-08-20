@@ -16,7 +16,7 @@ import {
   type AgentTask,
   type AgentTaskState,
   type AgentTodoAction,
-} from "../agent-todo-tool-types";
+} from "./types";
 
 export type AgentTodoOp =
   | { kind: "create"; task: AgentTask; state: AgentTaskState }

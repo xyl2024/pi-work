@@ -4,10 +4,10 @@ import { useMemo, useState, type ReactElement } from "react";
 import parseHtml, { domToReact, type DOMNode, type Element, type HTMLReactParserOptions } from "html-react-parser";
 import { iconBtnStyle, emptyStyle } from "./styles";
 import { relativeTime } from "./relativeTime";
-import { sanitizeRssHtml } from "@/lib/rss-sanitize";
+import { sanitizeRssHtml } from "@/lib/rss/sanitize";
 import { ImageLightbox, extractImagesFromHtml, type ImageItem } from "@/components/ImageLightbox";
 import { SmartImage } from "@/components/SmartImage";
-import type { RssArticle, RssFeed } from "@/lib/rss-schema";
+import type { RssArticle, RssFeed } from "@/lib/rss/schema";
 
 interface ReaderViewProps {
   feed: RssFeed;

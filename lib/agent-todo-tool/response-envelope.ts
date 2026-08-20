@@ -4,7 +4,7 @@
  * (storage, JSONL audit) and the reducer pure.
  */
 
-import type { AgentTask, AgentTodoDetails } from "../agent-todo-tool-types";
+import type { AgentTask, AgentTodoDetails } from "./types";
 import type { AgentTodoOp } from "./reducer";
 
 export interface AgentTodoToolResult {

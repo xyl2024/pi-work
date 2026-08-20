@@ -17,7 +17,7 @@ import {
   updateTask,
   type CreateTaskInput,
   type UpdateTaskInput,
-} from "@/lib/scheduler-store";
+} from "@/lib/scheduler/store";
 import { reschedule } from "@/lib/scheduler/loop";
 
 const log = createLogger("api/scheduled-tasks");

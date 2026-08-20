@@ -7,12 +7,12 @@
  */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/logger";
-import { markArticleRead } from "@/lib/rss-store";
+import { markArticleRead } from "@/lib/rss/store";
 import {
   RssNotFoundError,
   RssValidationError,
   validateReadFlag,
-} from "@/lib/rss-schema";
+} from "@/lib/rss/schema";
 
 const log = createLogger("api/rss/articles/[id]");
 

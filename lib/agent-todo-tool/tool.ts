@@ -11,7 +11,7 @@
  *
  * IMPORTANT: This file imports `@earendil-works/pi-coding-agent`, which
  * transitively pulls in server-only Node modules. Client code that needs
- * the tool name or types must import from `./agent-todo-tool-types` instead.
+ * the tool name or types must import from `./types` instead.
  */
 
 import { Type, type Static } from "typebox";
@@ -22,17 +22,17 @@ import {
   type AgentTodoDetails,
   type AgentTaskState,
   type AgentTodoLogEntry,
-} from "./agent-todo-tool-types";
-import { applyAgentTaskMutation, type ReducerParams } from "./agent-todo-tool/reducer";
-import { buildToolResult } from "./agent-todo-tool/response-envelope";
+} from "./types";
+import { applyAgentTaskMutation, type ReducerParams } from "./reducer";
+import { buildToolResult } from "./response-envelope";
 import {
   appendAgentTodoEntry,
   readAgentTodoState,
-} from "./agent-todo-store";
-import { createLogger } from "./logger";
+} from "./store";
+import { createLogger } from "../logger";
 
 export { AGENT_TODO_TOOL_NAME };
-export type { AgentTodoAction, AgentTask, AgentTaskState, AgentTodoDetails, AgentTodoLogEntry } from "./agent-todo-tool-types";
+export type { AgentTodoAction, AgentTask, AgentTaskState, AgentTodoDetails, AgentTodoLogEntry } from "./types";
 const log = createLogger("agent-todo-tool");
 
 // OpenAI-compatible providers require function.parameters to have a root

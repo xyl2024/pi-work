@@ -8,8 +8,8 @@
 
 import { ensureLoop } from "./loop";
 import { getRpcSession } from "@/lib/rpc-manager";
-import { listRunningRuns, recordRunEnd } from "@/lib/scheduler-store";
-import { createLogger } from "@/lib/logger";
+import { listRunningRuns, recordRunEnd } from "./store";
+import { createLogger } from "../logger";
 
 const log = createLogger("scheduler/startup");
 

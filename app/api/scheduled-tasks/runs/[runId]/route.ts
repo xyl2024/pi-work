@@ -3,7 +3,7 @@
  */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/logger";
-import { getRun } from "@/lib/scheduler-store";
+import { getRun } from "@/lib/scheduler/store";
 
 const log = createLogger("api/scheduled-tasks/run");
 

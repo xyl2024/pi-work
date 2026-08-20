@@ -12,8 +12,8 @@
 
 import { Cron } from "croner";
 import { existsSync } from "fs";
-import { getSchedulerDb } from "./scheduler-db";
-import { createLogger } from "./logger";
+import { getSchedulerDb } from "./db";
+import { createLogger } from "../logger";
 
 const log = createLogger("scheduler-store");
 

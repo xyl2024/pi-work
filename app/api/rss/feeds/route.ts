@@ -11,12 +11,12 @@ import {
   createFeed,
   fetchAndRefreshFeed,
   listFeeds,
-} from "@/lib/rss-store";
+} from "@/lib/rss/store";
 import {
   RssValidationError,
   validateFeedTitle,
   validateFeedUrl,
-} from "@/lib/rss-schema";
+} from "@/lib/rss/schema";
 
 const log = createLogger("api/rss/feeds");
 

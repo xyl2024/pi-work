@@ -54,7 +54,7 @@
  */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AgentTask } from "@/lib/agent-todo-tool-types";
+import type { AgentTask } from "@/lib/agent-todo-tool/types";
 import { useAgentTodo } from "@/hooks/useAgentTodo";
 import { useI18n } from "@/hooks/useI18n";
 import { InlineLoader } from "generative-loaders";

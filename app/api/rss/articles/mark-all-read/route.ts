@@ -6,11 +6,11 @@
  */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/logger";
-import { markAllArticlesRead } from "@/lib/rss-store";
+import { markAllArticlesRead } from "@/lib/rss/store";
 import {
   RssNotFoundError,
   RssValidationError,
-} from "@/lib/rss-schema";
+} from "@/lib/rss/schema";
 
 const log = createLogger("api/rss/articles/mark-all-read");
 

@@ -28,8 +28,8 @@ import {
   fetchAndRefreshFeed,
   pickStaleFeedIds,
   RSS_DEFAULT_INTERVAL_MS,
-} from "@/lib/rss-store";
-import { createLogger } from "@/lib/logger";
+} from "./store";
+import { createLogger } from "../logger";
 
 const log = createLogger("rss/loop");
 

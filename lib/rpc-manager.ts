@@ -12,7 +12,7 @@ import type { LlmAuditSource } from "./llm-audit-types";
 import { buildTodoTools } from "./user-todo/tools";
 import { readEnabledTodoTools } from "./user-todo/tools-config";
 import { buildShowFileTool } from "./show-file-tool";
-import { buildAgentTodoTool } from "./agent-todo-tool";
+import { buildAgentTodoTool } from "./agent-todo-tool/tool";
 import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-questions-tool";
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "./ask-user-questions-tool-types";
 import { readEnabledCustomTools } from "./custom-tools-config";

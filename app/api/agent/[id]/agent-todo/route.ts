@@ -3,7 +3,7 @@ import { resolveSessionPath } from "@/lib/session-reader";
 import {
   readAgentTodoHistory,
   readAgentTodoState,
-} from "@/lib/agent-todo-store";
+} from "@/lib/agent-todo-tool/store";
 import { createLogger, elapsedMs } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";

@@ -25,7 +25,7 @@ import type {
   FetchResult,
   RssArticle,
   RssFeed,
-} from "@/lib/rss-schema";
+} from "@/lib/rss/schema";
 import { setRssView, useRssViewState, type RssViewKey } from "@/hooks/rssStore";
 
 export type RssView = RssViewKey;

@@ -15,7 +15,7 @@ import Database from "better-sqlite3";
 import { dirname, join } from "path";
 import { mkdirSync } from "fs";
 import { homedir } from "os";
-import { createLogger } from "./logger";
+import { createLogger } from "../logger";
 
 const log = createLogger("scheduler-db");
 

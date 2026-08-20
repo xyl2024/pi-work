@@ -17,9 +17,9 @@
 import { existsSync } from "fs";
 import { startRpcSession } from "@/lib/rpc-manager";
 import type { AgentEvent } from "@/lib/rpc-manager";
-import { recordRunEnd, type ScheduledTask } from "@/lib/scheduler-store";
+import { recordRunEnd, type ScheduledTask } from "./store";
 import { pushMessage } from "@/lib/inbox-store";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "../logger";
 
 const log = createLogger("scheduler/runner");
 

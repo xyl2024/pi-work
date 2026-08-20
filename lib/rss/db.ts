@@ -3,7 +3,7 @@
  *
  * Independent of the todos / scheduler DBs so each feature can
  * be backed up / restored on its own schedule. Same singleton-via-globalThis
- * pattern as `lib/scheduler-db.ts` so Next.js dev-mode HMR doesn't open
+ * pattern as `lib/scheduler/db.ts` so Next.js dev-mode HMR doesn't open
  * a fresh handle on every reload.
  *
  * File location: `~/.pi-work/rss.db` by default, override with `PI_WORK_RSS_DB`
@@ -23,7 +23,7 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { homedir } from "os";
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "../logger";
 
 const log = createLogger("rss-db");
 

@@ -3,7 +3,7 @@
 import type { ReactElement } from "react";
 import { iconBtnStyle, emptyStyle } from "./styles";
 import { relativeTime } from "./relativeTime";
-import type { RssFeed } from "@/lib/rss-schema";
+import type { RssFeed } from "@/lib/rss/schema";
 
 interface FeedsViewProps {
   feeds: RssFeed[];

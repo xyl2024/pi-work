@@ -12,7 +12,7 @@
  */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/logger";
-import { fetchAndRefreshFeed } from "@/lib/rss-store";
+import { fetchAndRefreshFeed } from "@/lib/rss/store";
 import { proxyFetch } from "@/lib/http-proxy";
 import {
   RSS_DEFAULT_SIZE_LIMIT_BYTES,
@@ -20,7 +20,7 @@ import {
   RssNotFoundError,
   RssValidationError,
   validateFeedUrl,
-} from "@/lib/rss-schema";
+} from "@/lib/rss/schema";
 
 const log = createLogger("api/rss/fetch");
 

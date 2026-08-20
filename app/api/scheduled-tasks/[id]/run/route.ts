@@ -7,7 +7,7 @@
  */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/logger";
-import { getTask, recordRunStart, SchedulerNotFoundError } from "@/lib/scheduler-store";
+import { getTask, recordRunStart, SchedulerNotFoundError } from "@/lib/scheduler/store";
 import { runTask } from "@/lib/scheduler/runner";
 
 const log = createLogger("api/scheduled-tasks/run");
