@@ -34,7 +34,6 @@ import { SkillsConfig } from "./SkillsConfig";
 import { Tooltip } from "./Tooltip";
 import { PromptsConfig } from "./PromptsConfig";
 import { SettingsModal } from "./SettingsModal";
-import { McpConfig } from "./McpConfig";
 
 import { SchedulerModal } from "./Scheduler";
 import { ConversationTreePanel } from "./ConversationTreePanel";
@@ -321,7 +320,6 @@ export function AppShell() {
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [promptsConfigOpen, setPromptsConfigOpen] = useState(false);
-  const [mcpConfigOpen, setMcpConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -1267,7 +1265,6 @@ export function AppShell() {
     openSkills: () => setSkillsConfigOpen(true),
     openPrompts: () => setPromptsConfigOpen(true),
     openScheduler: () => setSchedulerOpen(true),
-    openMcp: () => setMcpConfigOpen(true),
     openTodosTab: handleOpenTodoTab,
     openFavoritesTab: handleOpenFavoritesTab,
     openCanvasTab: handleOpenCanvasTab,
@@ -1319,7 +1316,6 @@ export function AppShell() {
       onOpenSkills={() => setSkillsConfigOpen(true)}
       onOpenPrompts={() => setPromptsConfigOpen(true)}
       onOpenScheduler={() => setSchedulerOpen(true)}
-      onOpenMcp={() => setMcpConfigOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onOpenInbox={() => setInboxOpen(true)}
       inboxUnread={inboxUnread}
@@ -1589,7 +1585,6 @@ export function AppShell() {
     {promptsConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
       <PromptsConfig cwd={(selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setPromptsConfigOpen(false)} />
     )}
-    {mcpConfigOpen && <McpConfig onClose={() => setMcpConfigOpen(false)} />}
     {settingsConfigOpen && <SettingsModal onClose={() => setSettingsConfigOpen(false)} onProfileSaved={() => setProfileRefreshKey((k) => k + 1)} />}
     {schedulerOpen && (
       <SchedulerModal

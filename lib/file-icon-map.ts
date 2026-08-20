@@ -1505,7 +1505,6 @@ export const fileIconByName: Record<string, string> = {
   "manifest.bak": "manifest_bak",
   "manifest.skip": "manifest_skip",
   "maven.config": "maven",
-  "mcp.json": "mcp",
   "meson.build": "meson",
   "microfrontends.json": "turbo",
   "microfrontends.jsonc": "turbo",

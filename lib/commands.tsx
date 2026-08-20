@@ -56,22 +56,6 @@ const SparkleIcon = () => I(<><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" /></>
 const BookIcon = () => I(<><path d="M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5" /><path d="M8 7h8" /><path d="M8 11h6" /></>);
 
 const ClockIcon = () => I(<><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></>);
-// Filled-style MCP handshake icon — viewBox 1024×1024 (the source asset's
-// natural coords), `fill="currentColor"` so it follows the menu's text
-// colour. Bypasses the I() helper because that one is stroke-line styled.
-const McpIcon = () => (
-  <svg
-    width={16}
-    height={16}
-    viewBox="0 0 1024 1024"
-    fill="currentColor"
-    style={{ flexShrink: 0 }}
-    aria-hidden="true"
-  >
-    <path d="M330.965333 529.685333a85.333333 85.333333 0 0 0 120.682667 120.682667L723.2 378.837333l60.330667 60.330667L512 710.698667A170.666667 170.666667 0 0 1 270.634667 469.333333L542.165333 197.824l60.330667 60.330667-271.530667 271.530666z" />
-    <path d="M693.034667 107.306667a170.24 170.24 0 0 1 49.6 131.392 170.666667 170.666667 0 0 1 131.392 290.986666L542.165333 861.546667l89.6 89.6-60.330666 60.373333-149.952-149.973333L813.696 469.333333a85.333333 85.333333 0 0 0-120.682667-120.661333L421.482667 620.16l-60.330667-60.330667 271.530667-271.530666A85.333333 85.333333 0 0 0 512 167.616L119.808 559.829333l-60.352-60.330666L451.669333 107.285333a170.666667 170.666667 0 0 1 241.365334 0z" />
-  </svg>
-);
 const LangIcon = () => I(<><path d="M5 8h14" /><path d="M8 5h7" /><path d="M11 12c0 4-3 7-6 7" /><path d="M11 12c0 4 3 7 6 7" /><path d="M9 19l3-7 3 7" /></>);
 const TokensIcon = () => I(<><circle cx="12" cy="12" r="9" /><line x1="8.5" y1="16" x2="9.5" y2="13" /><line x1="12" y1="16" x2="13" y2="11" /><line x1="15.5" y1="16" x2="16.5" y2="9" /><line x1="7" y1="17" x2="17" y2="17" /></>);
 const GitDiffIcon = () => I(<><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="6" r="3" /><path d="M6 9v6" /><path d="M18 9a9 9 0 0 1-9 9" /></>);
@@ -135,7 +119,6 @@ export interface CommandContext {
   openSkills: () => void;
   openPrompts: () => void;
   openScheduler: () => void;
-  openMcp: () => void;
 
   // Right-panel tabs
   openTodosTab: () => void;
@@ -348,15 +331,6 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     keywords: ["scheduler", "cron", "schedule", "timer", "tasks", "定时", "任务", "定时任务"],
     icon: <ClockIcon />,
     run: () => ctx.openScheduler(),
-  });
-  cmds.push({
-    id: "modal.mcp",
-    title: t("Open MCP servers"),
-    group: "Modal",
-    keywords: ["mcp", "model context protocol", "servers", "外部工具", "MCP"],
-    icon: <McpIcon />,
-    when: () => true,
-    run: () => ctx.openMcp(),
   });
 
   // ── Language (2) ──

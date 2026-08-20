@@ -13,7 +13,7 @@
 | 目录                                            | 角色                                                                                  |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | `~/.pi-work/`                                    | **Pi Work 自己的数据**。配置 + 业务数据 + 运行时缓存,全部混在一起。            |
-| `~/.pi/agent/`                                   | **Pi agent 核心数据**。会话、模型、auth、skills、Slash 命令、部分 MCP 缓存。 |
+| `~/.pi/agent/`                                   | **Pi agent 核心数据**。会话、模型、auth、skills、Slash 命令。                  |
 | `~/.pi-work/workspace/`                          | Pi Work 用来启动 agent 的工作目录(每个 session 一个文件树)。             |
 | `~/.pi-work/payloads/`                           | HTTP 请求 / 响应 payload 缓冲(调试用)。                                          |
 | `~/.pi-work/workspace/pi-cwd-default`            | 新会话默认 cwd 目录(`POST /api/default-cwd` 自动创建)。                       |
@@ -42,7 +42,6 @@
 | 文件                                | 存什么                                                                                                                            | 谁写                                                                                       | 谁读                                                                                     | 备份优先级 |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ---------- |
 | **`config.yaml`**                   | 主配置,YAML。下方的 7 个字段全在这里。                                                                                | `PUT /api/settings`                                                                        | `lib/config.ts` (`readConfig()` 在每次 server 启动 + 每次 RPC start 时调用)         | ★★★★★     |
-| `mcp.json`                          | MCP server 列表(`{ enabled, servers[] }`)。                                                                  | `PUT /api/mcp/config`(`lib/mcp/*`)                                                       | `GET /api/mcp/config`(SettingsModal 加载)                                              | ★★★★☆     |
 | `todo-tools.json`                   | 旧版 user-side todo 工具开关:`["user_todos_list", "user_todo_description"]` 的子集。 | `PUT /api/todo-tools`                                                                     | `lib/todo-tools-config.ts` 在每个 session 启动时读                                       | ★★★☆☆     |
 | `pinned.json`                       | 在 CWD picker 里 pin 的项目目录 path 列表(`string[]`)。                                                                  | `PUT /api/pinned-cwds`                                                                     | `GET /api/pinned-cwds`(`CwdPicker`)                                                    | ★★★☆☆     |
 | `favorites.json`                    | favorites 列表(`string[]`,会话 uuid)。                                                                                              | `PUT /api/favorites`                                                                       | `GET /api/favorites`                                                                    | ★★★☆☆     |
@@ -205,7 +204,6 @@ file_viewer:
 | **InboxModal**(`components/InboxModal.tsx`)                   | 改 `inbox.db`                                                                                                          |
 | **CwdPicker**(`components/CwdPicker.tsx`)                     | 改 `pinned.json`                                                                                                       |
 | **SessionSidebar** 里的 Favorites 按钮                         | 改 `favorites.json`                                                                                                    |
-| **McpConfig**(`components/McpConfig.tsx`) | 改 `mcp.json`                                                                                                          |
 
 > **没有统一入口** — 这是当前最显著的 UX 问题。如果要做"统一配置中心",可以
 > 改的方向是把 SettingsModal 升级成一个"Settings Hub",把上面 9 个 modal
@@ -235,7 +233,6 @@ file_viewer:
 1. **必须备份**(丢失后无恢复手段 / 手动重写代价以天计)
    - `~/.pi-work/config.yaml`(自己配置)
    - `~/.pi-work/todo-tools.json`(工具开关)
-   - `~/.pi-work/mcp.json`(MCP servers)
    - `~/.pi-work/pinned.json` / `favorites.json`
    - `~/.pi-work/todos.db`(用户数据)
    - `~/.pi-work/scheduler.db`(定时任务)

@@ -53,7 +53,6 @@
     "@earendil-works/pi-coding-agent": "0.84.2",
     "@excalidraw/excalidraw": "^0.18.0",
     "@lobehub/icons": "^5.6.0",
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tiptap/extension-bubble-menu": "^3.27.1",
     "@tiptap/extension-code-block-lowlight": "^3.27.1",
