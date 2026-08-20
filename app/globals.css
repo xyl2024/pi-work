@@ -833,6 +833,23 @@ span.linenumber {
   pointer-events: none;
 }
 
+/* Label fade-in on the ThinkingPicker cycle button. Re-runs every
+   time the label `<span>` is keyed to a new level (handled in
+   components/chat/ThinkingPicker.tsx). 120 ms matches the colour
+   `transition: color` on the button itself so both finishes land in
+   the same beat. Suppressed under prefers-reduced-motion. */
+@keyframes thinking-picker-label-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+.thinking-picker-label {
+  display: inline-block;
+  animation: thinking-picker-label-in 120ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-picker-label { animation: none; }
+}
+
 /* Pulsing beat for the current-day cell in TodoMonthCalendar */
 @keyframes pi-today-cell-beat {
   0%, 100% { transform: scale(1); box-shadow: inset 0 0 0 1px var(--accent); }

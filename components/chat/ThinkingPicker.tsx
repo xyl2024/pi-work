@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { AnimatedPopover } from "../ui/AnimatedPopover";
 
 /** All thinking-intensity levels, in display order. The literal union
  *  here is also the source of the `ThinkingLevel` type aliases used by
@@ -26,12 +25,24 @@ export const THINKING_LEVEL_COLOR: Record<ThinkingLevel, string> = {
   max: "#b91c1c",      // red-700
 };
 
+/** Minimum gap between two wheel-driven cycles. Wheel events fire in
+ *  bursts (one scroll tick can dispatch a dozen events); without a
+ *  throttle a single flick would catapult the user from `off` to
+ *  `max`. 150 ms is enough to see the colour/label transition between
+ *  steps without feeling sluggish on a deliberate scroll. */
+const WHEEL_THROTTLE_MS = 150;
+
 /**
- * Thinking-level button + upward-anchored dropdown. Owns its own
- * open/hover state and the outside-click dismissal. The picker is
- * hidden entirely while the agent is streaming (the parent renders a
- * read-only badge instead) — the spec is that the level can't be
- * changed mid-turn.
+ * Thinking-level cycling button. Click or scroll-wheel cycles through
+ * the levels the current model actually supports, looping seamlessly.
+ * Replaces the previous click-to-open popover design — that surface
+ *  was redundant with the colour gradient the input border already
+ *  wears, and required two interactions for what is fundamentally a
+ *  one-knob setting.
+ *
+ * The picker is hidden entirely while the agent is streaming (the
+ * parent renders a read-only badge instead) — the spec is that the
+ * level can't be changed mid-turn.
  */
 export function ThinkingPicker({
   thinkingLevel,
@@ -45,9 +56,6 @@ export function ThinkingPicker({
   thinkingLevelMap?: Record<string, string | null> | null;
 }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const currentLevel: ThinkingLevel = thinkingLevel ?? "off";
   const mappedVal = thinkingLevelMap ? thinkingLevelMap[currentLevel] : undefined;
@@ -55,100 +63,84 @@ export function ThinkingPicker({
     ? mappedVal
     : currentLevel;
 
-  // Only attach the listener while the popover is open.
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  // Levels the current model actually supports — the cycle is confined
+  // to these so the button's visible label never disagrees with the
+  // level the backend ends up on after `pickClosestAvailableThinkingLevel`
+  // (lib/shared/thinking-level-utils.ts).
+  const availableLevels = useMemo<readonly ThinkingLevel[]>(
+    () => THINKING_LEVELS.filter((lvl) =>
+      availableThinkingLevels ? availableThinkingLevels.includes(lvl) : true
+    ),
+    [availableThinkingLevels],
+  );
 
-  const levelDesc: Record<ThinkingLevel, string> = useMemo(() => ({
-    off: t("Disable reasoning"),
-    minimal: t("Minimal reasoning"),
-    low: t("Low reasoning"),
-    medium: t("Medium reasoning"),
-    high: t("High reasoning"),
-    xhigh: t("Highest reasoning"),
-    max: t("Maximum reasoning"),
-  }), [t]);
+  const cycleTo = (direction: 1 | -1) => {
+    if (availableLevels.length === 0) return;
+    const idx = availableLevels.indexOf(currentLevel);
+    // `idx === -1` covers the transient state right after the user
+    // switched to a model that doesn't support the previous pick —
+    // fall through to the first available level so the button still
+    // reflects something real.
+    const nextIdx = ((idx + direction) % availableLevels.length + availableLevels.length) % availableLevels.length;
+    const nextLevel = availableLevels[nextIdx];
+    if (nextLevel !== currentLevel) onThinkingLevelChange(nextLevel);
+  };
+
+  // Wheel throttle — see WHEEL_THROTTLE_MS for the rationale. We
+  // `stopPropagation` so the wheel tick doesn't bubble up to a parent
+  // scroll container (e.g. the message list); we deliberately do NOT
+  // `preventDefault` because nothing in the toolbar actually scrolls.
+  const wheelLockRef = useRef(false);
+  const handleWheel = (e: React.WheelEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (wheelLockRef.current) return;
+    const direction: 1 | -1 = e.deltaY > 0 ? 1 : -1;
+    cycleTo(direction);
+    wheelLockRef.current = true;
+    window.setTimeout(() => { wheelLockRef.current = false; }, WHEEL_THROTTLE_MS);
+  };
+
+  // Bump `animKey` whenever the displayed label actually changes so the
+  // label span remounts and its fade-in animation re-runs. Keeping
+  // the effect purely prop-driven means there is no internal
+  // "optimistic" state to reconcile if the parent rejects the cycle.
+  const [animKey, setAnimKey] = useState(0);
+  const lastDisplayRef = useRef(currentDisplay);
+  useEffect(() => {
+    if (lastDisplayRef.current !== currentDisplay) {
+      lastDisplayRef.current = currentDisplay;
+      setAnimKey((k) => k + 1);
+    }
+  }, [currentDisplay]);
 
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        aria-label={t("Thinking")}
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          height: 32, padding: "0 10px",
-          background: open || hovered ? "var(--bg-hover)" : "none",
-          border: "none", borderRadius: 9,
-          color: THINKING_LEVEL_COLOR[currentLevel],
-          cursor: "pointer",
-          fontSize: 12, fontWeight: 500, whiteSpace: "nowrap",
-          fontFamily: "var(--font-mono)",
-          transition: "background 0.12s, color 0.12s",
-        }}
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
-          <line x1="7" y1="18" x2="12" y2="18" />
-          <line x1="8" y1="21" x2="11" y2="21" />
-        </svg>
-        <span>{currentDisplay}</span>
-      </button>
-      <AnimatedPopover
-        open={open}
-        style={{
-          position: "absolute", bottom: "calc(100% + 6px)", right: 0,
-          zIndex: 100, background: "var(--bg-panel)", border: "1px solid var(--border)",
-          borderRadius: 10, boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
-          minWidth: 180,
-        }}
-      >
-        {THINKING_LEVELS.filter((lvl) => {
-          if (!availableThinkingLevels) return true;
-          return availableThinkingLevels.includes(lvl);
-        }).map((lvl) => {
-          const isActive = currentLevel === lvl;
-          const mapped = thinkingLevelMap ? thinkingLevelMap[lvl] : undefined;
-          const displayLabel = (mapped != null && mapped !== lvl) ? mapped : lvl;
-          const showOriginal = mapped != null && mapped !== lvl;
-          return (
-            <button
-              key={lvl}
-              onClick={() => { setOpen(false); if (!isActive) onThinkingLevelChange(lvl); }}
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                width: "100%", padding: "7px 12px",
-                background: isActive ? "var(--bg-selected)" : "none",
-                border: "none",
-                color: isActive ? "var(--text)" : "var(--text-muted)",
-                cursor: "pointer", fontSize: 12, textAlign: "left",
-                fontWeight: isActive ? 600 : 400,
-                whiteSpace: "nowrap",
-              }}
-              onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg-hover)"; }}
-              onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "none"; }}
-            >
-              {isActive
-                ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
-                : <span style={{ width: 10, flexShrink: 0 }} />}
-              <span style={{ flex: 1, color: THINKING_LEVEL_COLOR[lvl] }}>
-                {displayLabel}
-                {showOriginal && <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", marginLeft: 5 }}>({lvl})</span>}
-              </span>
-              <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{levelDesc[lvl]}</span>
-            </button>
-          );
-        })}
-      </AnimatedPopover>
-    </div>
+    <button
+      type="button"
+      onClick={() => cycleTo(1)}
+      onWheel={handleWheel}
+      aria-label={t("Thinking level: {level}. Click or scroll to cycle.", { level: currentDisplay })}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        height: 32, padding: "0 10px",
+        background: "none",
+        border: "none", borderRadius: 9,
+        color: THINKING_LEVEL_COLOR[currentLevel],
+        cursor: "pointer",
+        fontSize: 12, fontWeight: 500, whiteSpace: "nowrap",
+        fontFamily: "var(--font-mono)",
+        transition: "background 0.12s, color 0.12s",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
+        <line x1="7" y1="18" x2="12" y2="18" />
+        <line x1="8" y1="21" x2="11" y2="21" />
+      </svg>
+      <span key={animKey} className="thinking-picker-label">
+        {currentDisplay}
+      </span>
+    </button>
   );
 }

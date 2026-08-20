@@ -147,6 +147,7 @@ export const chat = {
   "Start new branch": "开启新分支",
   "Start a new session branch from this message": "从当前消息开启新的会话分支",
   "Thinking": "思考",
+  "Thinking level: {level}. Click or scroll to cycle.": "思考档位：{level}。点击或滚轮切换。",
   "thoughts": "条思考",
   "{n} tool call": "{n} 次工具调用",
   "{n} tool calls": "{n} 次工具调用",
