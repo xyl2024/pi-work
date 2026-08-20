@@ -633,7 +633,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       <div
         style={{
           padding: "12px 10px 10px",
-          borderBottom: "1px solid var(--border)",
           flexShrink: 0,
         }}
       >

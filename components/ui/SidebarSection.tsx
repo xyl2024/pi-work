@@ -68,7 +68,6 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
   return (
     <div
       style={{
-        borderTop: "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
         flexGrow: open ? grow : 0,
