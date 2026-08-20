@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { getFileIcon } from "../files/FileIcons";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
+import { SlidingTabIndicator } from "./SlidingTabIndicator";
 
 export type Tab =
   | { kind: "file"; id: string; label: string; filePath: string }
@@ -33,6 +34,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
   const { t } = useI18n();
   const [hoveredClose, setHoveredClose] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const indicatorContainerRef = useRef<HTMLDivElement>(null);
 
   // Convert vertical wheel (deltaY) into horizontal scroll, matching the
   // VSCode tab-bar behavior. We also fold deltaX in so that macOS trackpad
@@ -67,135 +69,158 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
 
   return (
     <div
-      ref={scrollRef}
-      onWheel={handleWheel}
+      ref={indicatorContainerRef}
       style={{
+        position: "relative",
+        overflow: "hidden",
         display: "flex",
         alignItems: "flex-end",
         background: "var(--bg-panel)",
-        overflowX: "auto",
         flexShrink: 0,
         height: 36,
       }}
     >
-      {tabs.map((tab) => {
-        const isActive = tab.id === activeTabId;
-        // Derive the displayed label at render time for the tokens tab so
-        // locale switches update the open tab's name. Other tabs keep the
-        // label captured at open time (existing behavior).
-        const displayLabel =
-          tab.kind === "tokens"
-            ? t("Token audit")
-            : tab.kind === "context"
-              ? t("Context")
-              : tab.label;
-        const tooltipContent =
-          tab.kind === "file" ? tab.filePath : displayLabel;
-        const icon =
-          tab.kind === "todo" ? (
-            <TodoTabIcon />
-          ) : tab.kind === "favorites" ? (
-            <FavoritesTabIcon />
-          ) : tab.kind === "translate" ? (
-            <TranslateTabIcon />
-          ) : tab.kind === "toolCalls" ? (
-            <ToolCallsTabIcon />
-          ) : tab.kind === "json" ? (
-            <JsonTabIcon />
-          ) : tab.kind === "canvas" ? (
-            <CanvasTabIcon />
-          ) : tab.kind === "rss" ? (
-            <RssTabIcon />
-          ) : tab.kind === "tokens" ? (
-            <TokensTabIcon />
-          ) : tab.kind === "llmAudit" ? (
-            <LlmAuditTabIcon />
-          ) : tab.kind === "context" ? (
-            getFileIcon("AGENTS.md", 13)
-          ) : tab.kind === "conversationTree" ? (
-            <ConversationTreeTabIcon />
-          ) : tab.kind === "terminal" ? (
-            <TerminalTabIcon />
-          ) : (
-            getFileIcon(tab.label, 13)
-          );
-        return (
-          <div
-            key={tab.id}
-            onClick={() => onSelectTab(tab.id)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              onContextMenu?.(tab.id, e.clientX, e.clientY);
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              height: 36,
-              paddingLeft: 12,
-              paddingRight: 6,
-              background: "var(--bg-panel)",
-              cursor: "pointer",
-              fontSize: 12,
-              color: isActive ? "var(--text)" : "var(--text-muted)",
-              whiteSpace: "nowrap",
-              maxWidth: 180,
-              minWidth: 80,
-              flexShrink: 0,
-              userSelect: "none",
-              transition: "box-shadow 0.1s, color 0.1s",
-              boxShadow: isActive ? "inset 0 -2px 0 var(--accent)" : "none",
-            }}
-          >
-            <span
+      <SlidingTabIndicator
+        containerRef={indicatorContainerRef}
+        scrollRef={scrollRef}
+        activeId={activeTabId}
+        getTabEl={(id) =>
+          document.querySelector(
+            `[data-tab-id="${CSS.escape(id)}"]`,
+          )
+        }
+      />
+      <div
+        ref={scrollRef}
+        onWheel={handleWheel}
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          overflowX: "auto",
+          flex: 1,
+          minWidth: 0,
+          height: 36,
+        }}
+      >
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTabId;
+          // Derive the displayed label at render time for the tokens tab so
+          // locale switches update the open tab's name. Other tabs keep the
+          // label captured at open time (existing behavior).
+          const displayLabel =
+            tab.kind === "tokens"
+              ? t("Token audit")
+              : tab.kind === "context"
+                ? t("Context")
+                : tab.label;
+          const tooltipContent =
+            tab.kind === "file" ? tab.filePath : displayLabel;
+          const icon =
+            tab.kind === "todo" ? (
+              <TodoTabIcon />
+            ) : tab.kind === "favorites" ? (
+              <FavoritesTabIcon />
+            ) : tab.kind === "translate" ? (
+              <TranslateTabIcon />
+            ) : tab.kind === "toolCalls" ? (
+              <ToolCallsTabIcon />
+            ) : tab.kind === "json" ? (
+              <JsonTabIcon />
+            ) : tab.kind === "canvas" ? (
+              <CanvasTabIcon />
+            ) : tab.kind === "rss" ? (
+              <RssTabIcon />
+            ) : tab.kind === "tokens" ? (
+              <TokensTabIcon />
+            ) : tab.kind === "llmAudit" ? (
+              <LlmAuditTabIcon />
+            ) : tab.kind === "context" ? (
+              getFileIcon("AGENTS.md", 13)
+            ) : tab.kind === "conversationTree" ? (
+              <ConversationTreeTabIcon />
+            ) : tab.kind === "terminal" ? (
+              <TerminalTabIcon />
+            ) : (
+              getFileIcon(tab.label, 13)
+            );
+          return (
+            <div
+              key={tab.id}
+              data-tab-id={tab.id}
+              onClick={() => onSelectTab(tab.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onContextMenu?.(tab.id, e.clientX, e.clientY);
+              }}
               style={{
-                flexShrink: 0,
-                opacity: isActive ? 1 : 0.7,
                 display: "flex",
                 alignItems: "center",
-              }}
-            >
-              {icon}
-            </span>
-            <Tooltip content={tooltipContent}>
-            <span
-              style={{
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                flex: 1,
-                fontWeight: isActive ? 500 : 400,
-              }}
-            >
-              {displayLabel}
-            </span>
-            </Tooltip>
-            <Tooltip content={t("Close")}>
-            <button
-              onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
-              onMouseEnter={() => setHoveredClose(tab.id)}
-              onMouseLeave={() => setHoveredClose(null)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 16, height: 16,
-                background: hoveredClose === tab.id ? "var(--bg-hover)" : "transparent",
-                border: "none",
-                borderRadius: 3,
-                color: hoveredClose === tab.id ? "var(--text)" : "var(--text-dim)",
+                gap: 6,
+                height: 36,
+                paddingLeft: 12,
+                paddingRight: 6,
+                background: "var(--bg-panel)",
                 cursor: "pointer",
-                padding: 0,
+                fontSize: 12,
+                color: isActive ? "var(--text)" : "var(--text-muted)",
+                whiteSpace: "nowrap",
+                maxWidth: 180,
+                minWidth: 80,
                 flexShrink: 0,
-                transition: "background 0.1s, color 0.1s",
+                userSelect: "none",
+                transition: "color 0.1s",
               }}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <line x1="2" y1="2" x2="8" y2="8" />
-                <line x1="8" y1="2" x2="2" y2="8" />
-              </svg>
-            </button>
-            </Tooltip>
-          </div>
-        );
-      })}
+              <span
+                style={{
+                  flexShrink: 0,
+                  opacity: isActive ? 1 : 0.7,
+                  display: "flex",
+                  alignItems: "center",
+                }}
+              >
+                {icon}
+              </span>
+              <Tooltip content={tooltipContent}>
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  flex: 1,
+                  fontWeight: isActive ? 500 : 400,
+                }}
+              >
+                {displayLabel}
+              </span>
+              </Tooltip>
+              <Tooltip content={t("Close")}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
+                onMouseEnter={() => setHoveredClose(tab.id)}
+                onMouseLeave={() => setHoveredClose(null)}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 16, height: 16,
+                  background: hoveredClose === tab.id ? "var(--bg-hover)" : "transparent",
+                  border: "none",
+                  borderRadius: 3,
+                  color: hoveredClose === tab.id ? "var(--text)" : "var(--text-dim)",
+                  cursor: "pointer",
+                  padding: 0,
+                  flexShrink: 0,
+                  transition: "background 0.1s, color 0.1s",
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <line x1="2" y1="2" x2="8" y2="8" />
+                  <line x1="8" y1="2" x2="2" y2="8" />
+                </svg>
+              </button>
+              </Tooltip>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

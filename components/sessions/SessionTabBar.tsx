@@ -9,6 +9,7 @@ import {
 } from "@/hooks/sessionWorkspaceStore";
 import { Tooltip } from "../ui/Tooltip";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
+import { SlidingTabIndicator } from "../ui/SlidingTabIndicator";
 import { InlineLoader } from "generative-loaders";
 
 interface Props {
@@ -60,6 +61,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
   const { t } = useI18n();
   const cm = useContextMenu();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const indicatorContainerRef = useRef<HTMLDivElement>(null);
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     const el = scrollRef.current;
     if (!el) return;
@@ -97,7 +99,20 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           {leadingControl}
         </div>
       )}
-      <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+      <div
+        ref={indicatorContainerRef}
+        style={{ flex: 1, minWidth: 0, overflow: "hidden", position: "relative" }}
+      >
+        <SlidingTabIndicator
+          containerRef={indicatorContainerRef}
+          scrollRef={scrollRef}
+          activeId={activeTabId}
+          getTabEl={(id) =>
+            document.querySelector(
+              `[data-session-tab-id="${CSS.escape(id)}"]`,
+            )
+          }
+        />
         <div
           ref={scrollRef}
           onWheel={handleWheel}
@@ -120,6 +135,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         return (
           <div
             key={tab.tabId}
+            data-session-tab-id={tab.tabId}
             onClick={() => onSelectTab(tab.tabId)}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -149,8 +165,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               minWidth: 80,
               flexShrink: 0,
               userSelect: "none",
-              transition: "box-shadow 0.1s, color 0.1s",
-              boxShadow: active ? "inset 0 -2px 0 var(--accent)" : "none",
+              transition: "color 0.1s",
             }}
           >
             <StatusMark status={tab.status} />
