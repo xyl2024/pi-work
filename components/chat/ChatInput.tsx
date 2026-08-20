@@ -18,6 +18,7 @@ import { useToolsDropdown } from "./chat-input/hooks/useToolsDropdown";
 import { useSlashMenu } from "./chat-input/hooks/useSlashMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { THINKING_BORDER_COLOR } from "./chat-input/constants";
+import { THINKING_LEVEL_ORDER, type ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 
 export type { SlashResource } from "@/lib/shared/slash-commands";
 export type { AttachedImage } from "./chat-input/types";
@@ -252,10 +253,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
   }, []);
 
-  // ── Enter + built-in /new /compact ─────────────────────────────────────
+  // ── Ctrl/Cmd+Enter sends; bare /new / /compact rides the same gate so the
+  //    shortcut is consistent across "send a message" and "fire a built-in
+  //    slash action". Plain Enter / Shift+Enter fall through to the browser
+  //    default (newline), which is what users want when typing multi-line
+  //    drafts or in the middle of an IME composition session. ─────────────
   const handleEnterAndBuiltin = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return false;
+      if (!(e.ctrlKey || e.metaKey)) return false;
       // Bare built-in slash actions (no trailing args) trigger the action
       // directly, bypassing the prompt-template expansion that prompt/skill
       // commands go through in selectSlashResource.
@@ -290,6 +296,36 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     [selectedSlashResource, setSelectedSlashResource],
   );
 
+  // ── Tab / Shift+Tab cycles the thinking level. Hijacked so the textarea
+  //    doesn't lose focus mid-conversation; the direction matches the
+  //    browser convention (Tab = forward) and mirrors ThinkingPicker's
+  //    wheel handler so both affordances agree on the next level. Falls
+  //    through to the browser default when the current model advertises
+  //    no thinking levels at all (idx === -1 + empty list) so the user can
+  //    still tab out of the input in that narrow window. ────────────────
+  const handleThinkingTabKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+      if (e.key !== "Tab" || e.nativeEvent.isComposing) return false;
+      if (!onThinkingLevelChange) return false;
+      // Restrict the cycle to levels the active model actually supports —
+      // same rule as ThinkingPicker.availableLevels.
+      const available = availableThinkingLevels ?? null;
+      const list: readonly ThinkingLevelOption[] = THINKING_LEVEL_ORDER.filter(
+        (lvl) => (available ? available.includes(lvl) : true),
+      );
+      if (list.length === 0) return false;
+      const direction: 1 | -1 = e.shiftKey ? -1 : 1;
+      const current = (thinkingLevel ?? "off") as ThinkingLevelOption;
+      const idx = list.indexOf(current);
+      const nextIdx = ((idx + direction) % list.length + list.length) % list.length;
+      const nextLevel = list[nextIdx];
+      e.preventDefault();
+      if (nextLevel !== current) onThinkingLevelChange(nextLevel);
+      return true;
+    },
+    [thinkingLevel, onThinkingLevelChange, availableThinkingLevels],
+  );
+
   // ── Escape closes the slash menu ──────────────────────────────────────
   const handleSlashEscape = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
@@ -307,12 +343,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (handleShiftBackspaceClear(e)) return;
+      if (handleThinkingTabKeyDown(e)) return;
       if (handleSlashKeyDown(e)) return;
       if (handleSlashEscape(e)) return;
       if (handleHistoryKeyDown(e)) return;
       handleEnterAndBuiltin(e);
     },
-    [handleShiftBackspaceClear, handleSlashKeyDown, handleSlashEscape, handleHistoryKeyDown, handleEnterAndBuiltin],
+    [handleShiftBackspaceClear, handleThinkingTabKeyDown, handleSlashKeyDown, handleSlashEscape, handleHistoryKeyDown, handleEnterAndBuiltin],
   );
 
   // ── Imperative handle for ChatWindow's chatInputRef ───────────────────
