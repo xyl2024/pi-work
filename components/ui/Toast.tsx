@@ -1,6 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { playUiSoundEvent, setUiSoundsConfig, unlockUiSounds } from "@/lib/client/ui-sounds";
+import { useEnsureSettings } from "@/hooks/settingsStore";
 
 type ToastKind = "success" | "error" | "info";
 
@@ -37,6 +39,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Push the current ui_sounds config into the sound dispatcher. Module-
+  // scoped state means a second consumer (e.g. RSS / Inbox hooks) sees the
+  // same snapshot the user just toggled in Settings.
+  const settings = useEnsureSettings();
+  useEffect(() => {
+    setUiSoundsConfig(settings?.ui_sounds ?? null);
+  }, [settings?.ui_sounds]);
+
+  // Browsers only allow an AudioContext to resume after a user gesture. Unlock
+  // once, then later toasts (including async agent results) can be audible.
+  useEffect(() => {
+    const unlock = () => {
+      unlockUiSounds();
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
   const lastShownRef = useRef<Map<string, number>>(new Map());
 
   const removeItem = useCallback((id: string) => {
@@ -75,6 +101,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const last = lastShownRef.current.get(key) ?? 0;
     if (now - last < DEDUPE_WINDOW_MS) return;
     lastShownRef.current.set(key, now);
+
+    // Map toast kinds onto the user's per-event choice. Settings can silence
+    // any of them; "info" is in the settings too because some users do want a
+    // ping on every successful fetch.
+    playUiSoundEvent(
+      kind === "success"
+        ? "toast_success"
+        : kind === "error"
+          ? "toast_error"
+          : "toast_info",
+    );
 
     const id = nextId();
     const item: ToastItem = { id, kind, message, durationMs };

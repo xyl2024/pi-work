@@ -4,6 +4,7 @@ import {
   FILE_VIEWER_LIMITS,
   FILE_VIEWER_KINDS,
 } from "@/lib/shared/file-viewer-limits";
+import { UI_SOUND_EVENT_IDS } from "@/lib/shared/config-types";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
@@ -61,6 +62,45 @@ function validateFileViewer(
   );
 }
 
+function validateUiSounds(
+  raw: unknown,
+): { ok: true } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true };
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, error: "ui_sounds must be an object" };
+  }
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.enabled !== "undefined" && typeof obj.enabled !== "boolean") {
+    return { ok: false, error: "ui_sounds.enabled must be a boolean" };
+  }
+  if (typeof obj.masterVolume !== "undefined") {
+    if (
+      typeof obj.masterVolume !== "number" ||
+      !Number.isFinite(obj.masterVolume) ||
+      obj.masterVolume < 0 ||
+      obj.masterVolume > 1
+    ) {
+      return { ok: false, error: "ui_sounds.masterVolume must be a number in [0, 1]" };
+    }
+  }
+  const events = obj.events;
+  if (events === undefined || events === null) return { ok: true };
+  if (!events || typeof events !== "object") {
+    return { ok: false, error: "ui_sounds.events must be an object" };
+  }
+  const eventObj = events as Record<string, unknown>;
+  for (const key of Object.keys(eventObj)) {
+    if (!(UI_SOUND_EVENT_IDS as readonly string[]).includes(key)) {
+      return { ok: false, error: `ui_sounds.events has unknown event "${key}"` };
+    }
+    const value = eventObj[key];
+    if (value !== null && typeof value !== "string") {
+      return { ok: false, error: `ui_sounds.events.${key} must be a string or null` };
+    }
+  }
+  return { ok: true };
+}
+
 export async function GET() {
   const startedAt = Date.now();
   try {
@@ -90,15 +130,27 @@ export async function PUT(req: Request) {
       );
     }
 
+    const uiSoundsCheck = validateUiSounds(body.ui_sounds);
+    if (!uiSoundsCheck.ok) {
+      log.warn("settings rejected: invalid ui_sounds", {
+        error: uiSoundsCheck.error,
+        durationMs: elapsedMs(startedAt),
+      });
+      return NextResponse.json(
+        { error: uiSoundsCheck.error },
+        { status: 400 },
+      );
+    }
+
     // If the body omitted file_viewer (or any other field) entirely,
     // merge it back from disk so we never write a partial PiWorkConfig
     // — the parser's fail-open behavior is the only thing keeping
     // missing fields from being misread, and we don't want to rely on
     // it during a write that explicitly validates.
     const onDisk = readConfig();
-    const next: PiWorkConfig = body.file_viewer
+    const next: PiWorkConfig = body.file_viewer || body.ui_sounds
       ? body
-      : { ...onDisk, ...body, file_viewer: onDisk.file_viewer };
+      : { ...onDisk, ...body, file_viewer: onDisk.file_viewer, ui_sounds: onDisk.ui_sounds };
 
     writeConfig(next);
     log.info("settings written", { durationMs: elapsedMs(startedAt) });

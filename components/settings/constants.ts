@@ -42,4 +42,5 @@ export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-typewriter-effect", labelKey: "Typewriter effect" },
   { id: "settings-section-typewriter",    labelKey: "Typewriter phrases" },
   { id: "settings-section-retry",         labelKey: "Agent retry" },
+  { id: "settings-section-ui-sounds",     labelKey: "UI Sounds" },
 ];

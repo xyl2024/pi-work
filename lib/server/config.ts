@@ -5,6 +5,7 @@ import { load, dump } from "js-yaml";
 import { createLogger } from "./logger";
 import {
   AGENT_CUSTOM_TOOL_NAMES,
+  UI_SOUND_EVENT_IDS,
   type AgentCustomToolName,
   type AppendSystemConfig,
   type CustomToolsConfig,
@@ -12,7 +13,10 @@ import {
   type DangerousPatternsConfig,
   type PiWorkConfig,
   type TypewriterEffectConfig,
+  type UiSoundEventId,
+  type UiSoundsConfig,
 } from "../shared/config-types";
+import { DEFAULT_UI_SOUND_EVENTS } from "../shared/ui-sounds-defaults";
 import {
   DEFAULT_TYPEWRITER_PHRASES,
   parseTypewriterPhrases,
@@ -87,6 +91,11 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   // before the value became user-configurable.
   file_viewer: {
     max_size_mb: { ...FILE_VIEWER_DEFAULT_MAX_SIZE_MB },
+  },
+  ui_sounds: {
+    enabled: true,
+    masterVolume: 0.45,
+    events: { ...DEFAULT_UI_SOUND_EVENTS },
   },
 };
 
@@ -222,6 +231,38 @@ function parseFileViewer(raw: unknown): FileViewerConfig {
   return { max_size_mb: parseFileViewerMaxSizeMb((raw as Record<string, unknown>).max_size_mb) };
 }
 
+// Fail-open for missing/garbled subtrees so an old config.yaml keeps the
+// default sound mappings. `enabled: false` and `masterVolume: 0` are honored
+// because the user pushed the toggle; unknown event ids and unknown sound ids
+// are silently dropped (a stale UI selection should never break the file route).
+function parseUiSounds(raw: unknown): UiSoundsConfig {
+  const defaults = DEFAULT_CONFIG.ui_sounds;
+  if (!raw || typeof raw !== "object") return { ...defaults, events: { ...defaults.events } };
+  const obj = raw as Record<string, unknown>;
+
+  const masterRaw = obj.masterVolume;
+  let masterVolume = defaults.masterVolume;
+  if (typeof masterRaw === "number" && Number.isFinite(masterRaw)) {
+    masterVolume = Math.max(0, Math.min(1, masterRaw));
+  }
+
+  const events: Partial<Record<UiSoundEventId, string>> = {};
+  const rawEvents = obj.events;
+  if (rawEvents && typeof rawEvents === "object") {
+    for (const id of UI_SOUND_EVENT_IDS) {
+      const value = (rawEvents as Record<string, unknown>)[id];
+      if (value === null) continue;
+      if (typeof value === "string" && value.length > 0) events[id] = value;
+    }
+  }
+
+  return {
+    enabled: obj.enabled !== false,
+    masterVolume,
+    events: { ...defaults.events, ...events },
+  };
+}
+
 const CONFIG_DIR = join(homedir(), ".pi-work");
 const CONFIG_PATH = join(CONFIG_DIR, "config.yaml");
 
@@ -265,6 +306,7 @@ export function readConfig(): PiWorkConfig {
       typewriter_phrases: parseTypewriterPhrases(cfg.typewriter_phrases),
       typewriter_effect: parseTypewriterEffect(cfg.typewriter_effect),
       file_viewer: parseFileViewer(cfg.file_viewer),
+      ui_sounds: parseUiSounds(cfg.ui_sounds),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });

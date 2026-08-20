@@ -18,6 +18,7 @@ import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { TypewriterEffectSection } from "./sections/TypewriterEffectSection";
 import { TypewriterSection } from "./sections/TypewriterSection";
 import { RetrySection } from "./sections/RetrySection";
+import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 
 /**
  * Settings modal shell. Holds the global `config` state machine and the
@@ -292,6 +293,9 @@ export function SettingsModal({
 
             {/* 10: Agent retry */}
             <RetrySection />
+
+            {/* 11: UI Sounds */}
+            <SoundSettingsSection config={config} apply={apply} />
           </div>
         </div>
       </div>

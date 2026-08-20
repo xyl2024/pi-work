@@ -5,6 +5,7 @@ import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
 import { AGENT_TODO_TOOL_NAME } from "@/lib/shared/agent-todo-tool/types";
 import { notifyMutated } from "@/lib/client/git-status-store";
+import { playUiSoundEvent } from "@/lib/client/ui-sounds";
 import { setGrokbotConfig } from "@/lib/client/grokbot-store";
 import { setShowFileResult } from "../showFileResultsStore";
 import { setPendingAskUserQuestions } from "../askUserQuestionsStore";
@@ -142,10 +143,16 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
+        const hadAssistantError = pendingAssistantErrorRef.current !== null;
         if (pendingAssistantErrorRef.current) {
           setRuntimeError(pendingAssistantErrorRef.current);
           showToast({ kind: "error", message: pendingAssistantErrorRef.current });
           pendingAssistantErrorRef.current = null;
+        }
+        if (hadAssistantError) {
+          if (isActive) playUiSoundEvent("agent_failure");
+        } else if (isActive && lastAssistantIsBodyRef.current) {
+          playUiSoundEvent("agent_success");
         }
         fireDiscreteBot(lastAssistantIsBodyRef.current ? "happy" : "waking");
         if (sessionIdRef.current) {
@@ -305,6 +312,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
             setRuntimeError(finalError);
             showToast({ kind: "error", message: finalError });
             pendingAssistantErrorRef.current = null;
+            if (isActive) playUiSoundEvent("agent_failure");
           }
         }
         break;

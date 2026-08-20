@@ -46,4 +46,34 @@ export interface PiWorkConfig {
   typewriter_phrases: TypewriterPhrases;
   typewriter_effect: TypewriterEffectConfig;
   file_viewer: FileViewerConfig;
+  ui_sounds: UiSoundsConfig;
+}
+
+/**
+ * Event keys the user can attach an UI sound to. The same set is enforced
+ * server-side (lib/server/config.ts) and rendered in the SoundSettingsSection.
+ */
+export const UI_SOUND_EVENT_IDS = [
+  "toast_success",
+  "toast_error",
+  "toast_info",
+  "agent_success",
+  "agent_failure",
+  "inbox_new",
+  "rss_new",
+] as const;
+
+export type UiSoundEventId = (typeof UI_SOUND_EVENT_IDS)[number];
+
+export type SoundId = string;
+
+/**
+ * Per-event UI sound mappings. An empty / unknown id means "do not play".
+ * `masterVolume` scales every event before it reaches the AudioContext master
+ * gain. `enabled` is a global kill-switch that overrides every event choice.
+ */
+export interface UiSoundsConfig {
+  enabled: boolean;
+  masterVolume: number;
+  events: Partial<Record<UiSoundEventId, string>>;
 }

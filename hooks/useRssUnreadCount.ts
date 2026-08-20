@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { playUiSoundEvent } from "@/lib/client/ui-sounds";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -15,6 +16,10 @@ const POLL_INTERVAL_MS = 60_000;
  * - The interval is deliberately longer than the inbox's 30s — the feeds
  *   list endpoint has no size concern, but a 60s cadence comfortably
  *   outpaces the 30-minute background fetch loop while staying cheap.
+ *
+ * Fires `playUiSoundEvent("rss_new")` when the unread count rises between
+ * two consecutive polls and the document is hidden. The browser's own
+ * minimum-gap deduplicates back-to-back triggers.
  */
 export function useRssUnreadCount() {
   const [unread, setUnread] = useState(0);
@@ -28,7 +33,12 @@ export function useRssUnreadCount() {
         (sum, f) => sum + (typeof f.unreadCount === "number" ? f.unreadCount : 0),
         0,
       );
-      setUnread(total);
+      setUnread((prev) => {
+        if (total > prev && typeof document !== "undefined" && document.hidden) {
+          playUiSoundEvent("rss_new");
+        }
+        return total;
+      });
     } catch {
       // ignore — next tick will retry
     }
