@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { handleFilesGet } from "./handler";
+import { handleFilesGet } from "@/lib/server/files";
 
 // GET /api/files — the zero-segment form of /api/files/[...path].
 // Next's catch-all route requires at least one path segment, so this
