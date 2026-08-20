@@ -221,16 +221,18 @@ Browser                Next.js Server              AgentSession (in-process)
   │◀── data: {...} ─────────│                               │
 ```
 
-**Session browsing** (read-only): reads `.jsonl` files directly via `lib/session-reader.ts` — no AgentSession created.
-**Sending a message**: `startRpcSession()` in `lib/rpc-manager.ts` creates an AgentSession in-process.
+**Session browsing** (read-only): reads `.jsonl` files directly via `lib/server/session-reader.ts` — no AgentSession created.
+**Sending a message**: `startRpcSession()` in `lib/server/rpc-manager.ts` creates an AgentSession in-process.
 
 ### Process startup
 
 `instrumentation.ts` runs once per server boot. It lazily imports the WeChat
-monitor bootstrap, the scheduler loop bootstrap, and the RSS poll-loop
-bootstrap, so a logged-in WeChat account, any enabled cron tasks, and any
-configured RSS feeds start being serviced as soon as the server is up — no
-need to load any page first.
+monitor bootstrap (`@/lib/server/wechat/startup`), the scheduler loop
+bootstrap (`@/lib/server/scheduler/startup`), the RSS poll-loop bootstrap
+(`@/lib/server/rss/startup`), and the terminal WebSocket server bootstrap
+(`@/lib/server/terminal/startup`), so a logged-in WeChat account, any
+enabled cron tasks, any configured RSS feeds, and the terminal panel are
+serviced as soon as the server is up — no need to load any page first.
 
 ### Right-panel architecture
 
@@ -246,16 +248,16 @@ remounts (no top-bar flash on session switches).
 
 ### Custom command palette
 
-`lib/commands.tsx` defines a typed command registry (each command has an SVG
+`lib/client/commands.tsx` defines a typed command registry (each command has an SVG
 icon, keybinding, predicate, and run function). `CommandPalette` (⌘K,
-Raycast-style) is wired into `AppShell` and reads + dispatches agent
-controls registered by the active `ChatWindow` via `setAgentControls()`. New
+Raycast-style, in `components/app-shell/`) reads + dispatches agent controls
+registered by the active `ChatWindow` via `setAgentControls()`. New
 agent-facing actions belong here rather than as ad-hoc top-bar buttons.
 
 ### Scheduler
 
-Cron-based task runner in `lib/scheduler/`. The loop (self-rescheduling
-`setTimeout`, no `setInterval` drift) is started by `lib/scheduler/startup.ts`
+Cron-based task runner in `lib/server/scheduler/`. The loop (self-rescheduling
+`setTimeout`, no `setInterval` drift) is started by `lib/server/scheduler/startup.ts`
 from `instrumentation.ts`. Every CRUD on `/api/scheduled-tasks` calls
 `reschedule()` so the loop picks up changes immediately. Each run cold-starts
 a fresh pi session (the scheduler never shares a wrapper with a user's open
@@ -273,211 +275,381 @@ latest list when removing by `toolCallId`.
 
 ### Custom agent tools
 
-`lib/rpc-manager.ts` registers these as `customTools` on `createAgentSession`:
+`lib/server/rpc-manager.ts` registers these as `customTools` on `createAgentSession`:
 
-- `user_todos_list` / `user_todo_description` — read-only todo queries against `~/.pi-work/todos.db` (`lib/todo-tools.ts`, gated by `~/.pi-work/todo-tools.json`). The first returns a lightweight summary filterable by `status` / `tags` / `create_time_window` / `due_time_window`; the second fetches full description + image URLs by id. Set `PI_WORK_PUBLIC_BASE_URL` to control the image origin in the second tool's output.
-- `show_media` — inline-render one or more **multimedia** files (image / video / audio) below the tool call in chat (`lib/show-file-tool.ts` + `lib/show-file-tool-types.ts`). Path validation reuses `lib/file-access.ts` (same allowed roots as `/api/files`). The tool rejects PDF / Markdown / HTML / plain text / binary paths — use the right-hand FileViewer for those. The legacy alias `show_file` is still recognised by the derive layer (Session Library) and config (`~/.pi-work/config.yaml`) for backward compatibility.
-- `agent_todo` — single-tool action-dispatched (`create | update | list | delete | clear`); persisted per-session to `~/.pi-work/agent-todo/<sessionId>.jsonl` as append-only snapshots (`lib/agent-todo-store.ts`). Full design in `docs/agent-todo/`.
+- `user_todos_list` / `user_todo_description` — read-only todo queries against `~/.pi-work/todos.db` (`lib/server/user-todo/tools.ts`, gated by `~/.pi-work/todo-tools.json`). The first returns a lightweight summary filterable by `status` / `tags` / `create_time_window` / `due_time_window`; the second fetches full description + image URLs by id. Set `PI_WORK_PUBLIC_BASE_URL` to control the image origin in the second tool's output.
+- `show_media` — inline-render one or more **multimedia** files (image / video / audio) below the tool call in chat (`lib/server/show-file-tool.ts` + `lib/shared/show-file-tool-types.ts`). Path validation reuses `lib/server/file-access.ts` (same allowed roots as `/api/files`). The tool rejects PDF / Markdown / HTML / plain text / binary paths — use the right-hand FileViewer for those. The legacy alias `show_file` is still recognised by the derive layer (Session Library) and config (`~/.pi-work/config.yaml`) for backward compatibility.
+- `agent_todo` — single-tool action-dispatched (`create | update | list | delete | clear`); persisted per-session to `~/.pi-work/agent-todo/<sessionId>.jsonl` as append-only snapshots (`lib/server/agent-todo-tool/store.ts`); pure reducer/types/response-envelope live in `lib/shared/agent-todo-tool/`. Full design in `docs/agent-todo/`.
 
-Server-only files (`*-tool.ts`, `*-store.ts` under `lib/`) import `@earendil-works/pi-coding-agent`, which transitively pulls in `child_process` and other Node modules. **Client code must import types/constants from the matching `-types.ts` file instead** — see the `IMPORTANT` comment at the top of each tool file.
+Server-only modules under `lib/server/` import `@earendil-works/pi-coding-agent`, which transitively pulls in `child_process` and other Node modules. **Client code must import types/constants from `lib/shared/` instead** — see the `IMPORTANT` comment at the top of each tool file. The full layering rule is documented in the "Import boundaries" section below.
+
+---
+
+## Import boundaries (`lib/` three-layer rule)
+
+The `lib/` tree is split into three layers with a one-way dependency
+direction. Each layer has one job; the direction is enforced by review
+(no ESLint rule yet, but the rule is non-negotiable):
+
+```
+lib/client/  ──depends on──▶  lib/shared/
+                                  ▲
+lib/server/  ──depends on──▶  lib/shared/
+```
+
+- **`lib/shared/`** — types, pure functions, and any data that must be
+  importable from both sides (`types.ts`, `normalize.ts`, `description-sanitize.ts`,
+  `i18n-dict/`, `right-bar.ts`, `agent-todo-tool/{reducer,types,response-envelope}.ts`,
+  `config-types.ts`, …). **No `node:*` imports, no `@earendil-works/pi-*`,
+  no `fs`/`better-sqlite3`/`js-yaml`/`simple-git`/etc.** Adding a server-only
+  dependency here pulls the SDK into every client bundle and is the kind of
+  mistake this layer exists to prevent.
+- **`lib/client/`** — runtime UI helpers and browser-only state
+  (`agent-client.ts`, `commands.tsx`, `shallowEqual.ts`, `git-status-store.ts`,
+  `grokbot-store.ts`, `canvas-files-store.ts`, `file-icon-map.ts`,
+  `user-todo/image-upload.ts`, …). Allowed to import `react`, browser APIs,
+  and anything in `lib/shared/`. **Never import from `lib/server/`** — that
+  would put Node-only modules on the client.
+- **`lib/server/`** — everything that touches the filesystem, the SQLite
+  databases, or the pi SDK (`rpc-manager.ts`, `session-reader.ts`,
+  `config.ts`, `db.ts`, `file-access.ts`, `show-file-tool.ts`,
+  `user-todo/tools.ts`, `scheduler/`, `rss/`, `wechat/`, `terminal/`, …).
+  Allowed to import from `lib/shared/` and `lib/client/` only when the value
+  is pure and side-effect-free (rare — usually prefer `lib/shared/`).
+
+Conventions for cross-layer exposure:
+- A `lib/server/foo.ts` that needs to be used from a `"use client"` file
+  must split its public surface into `lib/shared/foo-types.ts` (or co-locate
+  as `lib/server/foo-types.ts` and re-export through `lib/shared/`).
+- `import type { Foo } from "@/lib/shared/..."` is always safe from the
+  client side; **plain `import` from `lib/server/`** is never safe even if
+  TypeScript erases it at runtime, because Next.js still walks the module
+  graph to decide client vs server boundaries.
+- The `next.config.ts` `serverExternalPackages` list covers
+  `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `better-sqlite3`,
+  `node-pty`, `ws`. Any new server-only dependency must be added there.
+
+`hooks/` is allowed to import from any of the three layers (hooks run on
+the client). `components/` is allowed to import from `lib/shared/` and
+`lib/client/`; any `lib/server/` import from a component is a bug.
 
 ---
 
 ## File Map
 
+The `app/` URL topology is unchanged (Next.js requires `route.ts` at a fixed path) — only the body of each handler references the new `lib/server/` and `lib/shared/` paths. `components/`, `lib/`, and `hooks/` follow the layered layout described above.
+
 ```
 app/api/
-  sessions/route.ts                 GET  list all sessions (optional ?cwd=)
-  sessions/[id]/route.ts            GET/PATCH/DELETE — GET supports ?includeState
-  sessions/[id]/context/route.ts    GET ?leafId= — context for a specific leaf
-  sessions/[id]/search/route.ts     GET in-session keyword search
-  sessions/search/route.ts          GET cross-session keyword search
-  agent/new/route.ts                POST { cwd, type, message, toolNames?, provider?, modelId?, thinkingLevel? }
-  agent/[id]/route.ts               GET { running, state } | POST any command
-  agent/[id]/events/route.ts        GET SSE stream
-  agent/[id]/agent-todo/route.ts    GET current task state + historyCount for one session
-  files/[...path]/route.ts          GET/PUT/POST/DELETE/PATCH — list/read/watch + write/create/rename/delete
-  models/route.ts                   GET { models, modelList, defaultModel, thinkingLevels, thinkingLevelMaps }
-  models-config/route.ts            GET/PUT — read/write ~/.pi/agent/models.json
-  auth/{providers,all-providers,login/[provider],logout/[provider],api-key/[provider]}
-                                    provider auth flows (OAuth login + API-key set/clear)
-  create-space/route.ts             POST { dir_name } — mkdir ~/.pi-work/workspace/<dir>
-  default-cwd/route.ts              POST — ensure ~/.pi-work/workspace/pi-cwd-default exists
-  home/route.ts                     GET { home } — homedir for the UI
-  pinned-cwds/route.ts              GET/PUT pinned project list (~/.pi-work/pinned.json)
-  pinned-sessions/route.ts          GET/PUT pinned session list
-  prompts/route.ts                  GET/POST slash-command prompt templates
-  slash-commands/route.ts           GET aggregated slash commands for a cwd
-  skills/{route,detail,install,search}
-                                    list, inspect, install (npm/git), and search marketplace skills
-  settings/route.ts                 GET/PUT — read/write ~/.pi-work/config.yaml
-  todos/route.ts                    GET/POST/PATCH/DELETE todos
-  todos/[id]/export/route.ts        GET export todo as zip (markdown + images)
-  todo-images/route.ts              POST upload image to ~/.pi-work/todo_images/
-  todo-images/[filename]/route.ts   GET/DELETE one todo image
-  todo-tools/route.ts               GET/PUT enabled-todo-tool config
-  tags/route.ts                     PATCH rename / DELETE remove a tag globally
-  tags/color/route.ts               PATCH set or clear a tag's color
-  scheduled-tasks/route.ts          GET/POST/PATCH/DELETE scheduled cron tasks
-  scheduled-tasks/[id]/run/route.ts POST run a task now (ad-hoc)
-  scheduled-tasks/[id]/runs/route.ts GET last N runs for one task
-  scheduled-tasks/runs/[runId]/route.ts GET one run detail
-  favorites/route.ts                GET/PUT pinned session list (~/.pi-work/favorites.json)
-  translate/route.ts                POST { text, provider, modelId, target } — in-memory LLM call, no disk
-  weixin/{login,login/verify-code,logout,status,contacts,test-send,inbound,workspace}
-                                    WeChat login, contacts, send/receive, push-to-workspace
-  notes/{route,notes-tags/{route,color/route}}.ts + note-images/{route,[filename]/route}.ts
-                                    notes CRUD, tag rename/color, image upload/serve
-  rss/{feeds/{route,[id]/route,[id]/articles/route},articles/{[id]/route,mark-all-read/route},fetch/route}.ts
-                                    RSS feed CRUD + article list/fetch + bulk read state
+  agent/{new,[id],[id]/events,[id]/agent-todo,tools}/route.ts
+                                  new session + RPC + SSE + agent_todo read + tool catalog
+  agent-settings/retry/route.ts   retry policy for rate-limited agent calls
+  append-system/route.ts          GET/PUT ~/.pi/agent/APPEND_SYSTEM.md
+  auth/{providers,all-providers,login/[provider],logout/[provider],api-key/[provider]}/route.ts
+                                  OAuth + API-key provider flows
+  create-space/route.ts           POST mkdir ~/.pi-work/workspace/<dir>
+  default-cwd/route.ts            POST ensure ~/.pi-work/workspace/pi-cwd-default
+  exchange-rate/route.ts          currency conversion helper for TokensPanel
+  favorites/route.ts              GET/PUT ~/.pi-work/favorites.json
+  files/{route,handler.ts,[...path]/route}.ts
+                                  list/read/watch + write/create/rename/delete (handler.ts holds shared logic)
+  git/{route,diff/route}.ts       git status, diff, log for the sidebar badge
+  home/route.ts                   GET { home } homedir
+  inbox/{messages,messages/[id],test}/route.ts
+                                  inbox CRUD + test endpoint
+  llm-audit/{calls,calls/[id],models,sessions,totals}/route.ts
+                                  LLM call audit log queries
+  models/{route,models-config/route}.ts
+                                  list models + edit ~/.pi/agent/models.json
+  pinned-cwds/route.ts            pinned project list
+  profile/{route,avatar/route}.ts user profile + avatar
+  prompts/route.ts                slash-command prompt templates
+  rss/{feeds,feeds/[id],feeds/[id]/articles,articles/[id],articles/mark-all-read,fetch}/route.ts
+                                  RSS feed + article CRUD
+  scheduled-tasks/{route,[id]/run,[id]/runs,runs/[runId]}/route.ts
+                                  cron tasks + run history
+  sessions/{route,search,[id],[id]/context,[id]/search,[id]/auto-name,[id]/export,[id]/info,running}/route.ts
+                                  session JSONL browsing, search, leaf context
+  settings/route.ts               GET/PUT ~/.pi-work/config.yaml
+  skills/{route,detail,install,search}/route.ts
+                                  skill install + marketplace search
+  slash-commands/route.ts         aggregated slash commands for a cwd
+  tags/{route,color/route}.ts     rename/remove + color
+  terminal/route.ts               terminal panel proxy
+  todo-images/{route,[filename]/route}.ts
+                                  upload + serve todo images
+  todo-tools/route.ts             enabled-todo-tool config
+  todos/{route,[id]/export/route}.ts
+                                  user-todo CRUD + zip export
+  token-audit/{calls,data,summary}/route.ts
+                                  token consumption audit
+  translate/route.ts              in-memory LLM call, no disk
+  weixin/{login,login/verify-code,logout,status,contacts,test-send,inbound,workspace}/route.ts
+                                  WeChat login + send + inbound push
+  workspaces/route.ts             workspace listing
 
-lib/
-  rpc-manager.ts            AgentSessionWrapper + registry + startRpcSession; customTools registration
-  session-reader.ts         parse .jsonl; buildSessionContext, buildTree, path cache
-  agent-client.ts           sendAgentCommand() — single fetch helper used by hooks
-  types.ts                  shared frontend types (AgentMessage, SessionEntry, etc.)
-  pi-types.ts               narrowed shapes for the pi SDK objects we touch
-  normalize.ts              normalizeToolCalls() — field name mismatch between file format and our types
-  config.ts                 read/write ~/.pi-work/config.yaml (system_prompt_replacements, dangerous_patterns)
-  db.ts                     SQLite handle for ~/.pi-work/todos.db (+ one-shot JSON→DB migration)
-  todo-store.ts             CRUD + validation on top of db.ts
-  todo-tools.ts             pi customTools that expose the todo store to the agent
-  todo-tools-config.ts      read enabled-tool flags from ~/.pi-work/todo-tools.json
-  todo-images-utils.ts      helpers for ~/.pi-work/todo_images/
-  todo-image-upload.ts      server-side image upload helper
-  todo-color-presets.ts     shared palette for tag chips + Tiptap text color
-  description-sanitize.ts   single DOMPurify config shared by every code path that touches todo descriptions
-  json-array-store.ts       read/write a JSON file containing a string array
-  file-paths.ts             path normalization + /api/files URL encoding
-  file-name.ts              validateFileName() for create/rename routes
-  file-access.ts            shared allowed-roots logic for /api/files + show_media tool (cached 5s)
-  logger.ts                 structured logger used by every route + lib file
-  npx.ts                    helpers to run `npm` / `npx` from the server (skill install)
-  shallowEqual.ts           content-equality guard used by every useSyncExternalStore store
-  dangerous-patterns.ts     compile + cache regex rules from config.dangerous_patterns
-  commands.tsx              command-palette registry: typed commands + AgentControls bridge
-  agent-todo-tool.ts        server-side: pi customTool wrapping lib/agent-todo-tool/{reducer,invariants,response-envelope}
-  agent-todo-tool-types.ts  client-safe types/constants (no pi SDK import)
-  agent-todo-tool/          reducer.ts (pure) + invariants.ts + response-envelope.ts
-  agent-todo-store.ts       per-session JSONL persistence (~/.pi-work/agent-todo/<sid>.jsonl)
-  useAgentTodo is the client read-side hook
-  show-file-tool.ts         server-side: pi customTool for inline file rendering
-  show-file-tool-types.ts   client-safe types/constants
-  canvas-files-store.ts     IndexedDB storage for Excalidraw image dataURLs (with orphan GC)
-  translate.ts              shared translate prompts + language list (server + client)
-  json-parser.ts            tolerant JSON parser for the JSON panel
-  http-proxy.ts             proxyFetch core: server-side fetch with size + timeout guards
-  scheduler-db.ts           SQLite handle for ~/.pi-work/scheduler.db
-  scheduler-store.ts        CRUD + validation for scheduled tasks + runs
-  scheduler/                loop.ts (self-rescheduling setTimeout) + runner.ts (per-task FIFO chain)
-                            + startup.ts (instrumentation bootstrap)
-  wechat/                   WeChat client + workspace push utilities + inbound monitor + state
-  fonts/                    vendored LXGW WenKai webfonts (woff2, subsetted) + OFL + README
-  notes-{db,store} + rss-{db,schema,sanitize,store}.ts
-                                    DB handles + validation + CRUD for the two side features
-  note-image-upload.ts + rss/{loop,startup}.ts  one-shot image upload + self-rescheduling RSS poll loop
+lib/client/                       browser-only state + UI helpers
+  agent-client.ts                 sendAgentCommand() — single fetch helper used by hooks
+  canvas-files-store.ts           IndexedDB storage for Excalidraw image dataURLs (with orphan GC)
+  commands.tsx                    command-palette registry + AgentControls bridge
+  export-message-card.ts          export a chat turn as a shareable card
+  file-icon-map.ts                name → icon-id map for FileIcons (auto-generated)
+  git-status-store.ts             module-scoped store of git status per cwd
+  grokbot-store.ts                module-scoped GrokBot conversation state
+  grokbot-data.ts                 seed phrases + persona data for GrokBot
+  icon-paths.ts                   maps icon-id → /file-icons/*.svg URL
+  rough.ts                        sketchy canvas renderer adapter
+  shallowEqual.ts                 content-equality guard used by every useSyncExternalStore store
+  user-todo/image-upload.ts       browser-side image upload + compression
+
+lib/shared/                       pure types + browser/server shared
+  agent-settings-types.ts         client-safe type for ~/.pi/agent/settings.json
+  agent-todo-tool/                reducer.ts (pure) + types.ts + response-envelope.ts (no SDK)
+  ask-user-questions-tool-types.ts tool name constant + schema
+  buildConversationTree.ts        turn tree builder (pure)
+  completion-note.ts              completion summary helpers
+  config-types.ts                 PiWorkConfig + custom-tool / right-bar / typewriter types
+  conversationTreeLayout.ts       layout math for ConversationTreeCard
+  description-sanitize.ts         single DOMPurify config for todo descriptions
+  extractCardText.ts              extract shareable text from a chat turn
+  file-name.ts                    validateFileName() for create/rename routes
+  file-paths.ts                   path normalization + /api/files URL encoding
+  file-viewer-limits.ts           allowed file viewers + size caps (mirror of config)
+  git-diff-types.ts               parsed git diff types
+  git-line-marks.ts               map a diff hunk → line marks
+  i18n-dict/                      en/zh dictionary split by feature
+    index.ts + common.ts          barrel + shared phrases
+    {chat,settings,rss,scheduler,sessions,todos,files,models,permissions,profile,
+     prompts,media,renderers,right-panels,wechat,grokbot,inbox,terminal,
+     commands,starter-prompts,ask-user-questions}.ts
+  inbox-schema.ts                 inbox row schema (shared by store + UI)
+  json-parser.ts                  tolerant JSON parser for the JSON panel
+  llm-audit-types.ts              LLM audit row types
+  message-display.ts              pick display variant for an AgentMessage
+  normalize.ts                    normalizeToolCalls() — field name mismatch bridge
+  right-bar.ts                    RightBarButtonId + RightSideBarConfig + visibility predicate
+  rss/{schema,sanitize}.ts        RSS row types + HTML sanitization
+  session-library-derive.ts       derive SessionLibraryEntry from session files
+  show-file-tool-types.ts         tool name constant + supported media types
+  slash-commands.ts               parse "/foo" out of an input string
+  thinking-level-utils.ts         pickClosestAvailableThinkingLevel / pickHighestAvailable…
+  token-audit-types.ts            token audit row types
+  translate.ts                    translate prompts + language list (server + client)
+  types.ts                        shared frontend types (AgentMessage, SessionEntry, etc.)
+  typewriter-phrases.ts          typewriter effect phrases
+  user-todo/{color-presets,images-utils}.ts
+                                  todo palette + image helpers
+  wechat/types.ts                 WeChat row types
+
+lib/server/                       fs / SQLite / pi SDK
+  agent-settings.ts               read/write ~/.pi/agent/settings.json
+  agent-todo-tool/{store,tool}.ts per-session JSONL persistence + pi customTool orchestrator
+  ask-user-questions-tool.ts      pi customTool for the agent's ask_user_questions flow
+  config.ts                       read/write ~/.pi-work/config.yaml
+  custom-tools-config.ts          read enabled custom-tool flags from config
+  dangerous-patterns.ts           compile + cache regex rules from config.dangerous_patterns
+  db.ts                           SQLite handle for ~/.pi-work/todos.db (+ JSON→DB migration)
+  file-access.ts                  shared allowed-roots logic for /api/files + show_media tool
+  git-diff.ts                     git diff parser (uses simple-git)
+  hour-series.ts                  bucketing for usage charts
+  http-proxy.ts                   proxyFetch core: server-side fetch with size + timeout guards
+  inbox-{db,store}.ts             inbox SQLite handle + CRUD
+  json-array-store.ts             read/write a JSON file containing a string array
+  llm-audit.ts + llm-audit-db.ts  LLM call audit recording + queries
+  llm-direct.ts                   one-shot LLM call (translate, exchange rate)
+  logger.ts                       structured logger used by every route + lib file
+  npx.ts                          helpers to run `npm` / `npx` from the server (skill install)
+  pi-types.ts                     narrowed shapes for the pi SDK objects we touch
+  profile-store.ts                ~/.pi-work/profile.json + avatar upload
+  rpc-manager.ts                  AgentSessionWrapper + startRpcSession + customTools registration
+  rss/{db,loop,startup,store}.ts  RSS feeds SQLite + self-rescheduling poll loop + bootstrap
+  scheduler/{db,loop,runner,startup,store}.ts
+                                  cron tasks + self-rescheduling loop + bootstrap
+  session-export/pi-html.ts       export a session to standalone HTML
+  session-reader.ts               parse .jsonl; buildSessionContext, buildTree, path cache
+  show-file-tool.ts               pi customTool for inline file rendering
+  terminal/{server,startup}.ts    node-pty WebSocket server + bootstrap
+  token-audit-db.ts + token-audit-store.ts
+                                  token consumption audit
+  user-todo/{db,store,tools,tools-config,tools-payloads,tools-url}.ts
+                                  todo SQLite + CRUD + pi customTools
+  wechat/{api,inbound,index,monitor,monitor-lock,qr,sessions-log,startup,state}.ts
+                                  WeChat client + inbound monitor + state + bootstrap
 
 components/
-  AppShell.tsx              layout + URL state + tab management + right-panel stack
-  SessionSidebar.tsx        session tree + FileExplorer + favorites
-  ChatWindow.tsx            message list + minimap + sticky-scroll wiring
-  ChatInput.tsx             input bar + model/thinking/tools/compact controls + new-session button
-  MessageView.tsx           renders one message (user/assistant/toolCall/toolResult/show_media)
-  BranchNavigator.tsx       in-session branch switcher
-  ChatMinimap.tsx           scroll minimap alongside the message list
-  ToolsDropdownPanel        4-row popover (Off / Full / Read only / Custom ▶) + per-tool checklist for ChatInput's wrench trigger (inlined as a sibling component inside `components/ChatInput.tsx`)
-  ModelsConfig.tsx          modal for editing ~/.pi/agent/models.json
-  SkillsConfig.tsx          modal for installing / browsing / toggling skills
-  PromptsConfig.tsx         modal for managing slash-command prompts
-  SettingsModal.tsx         modal for ~/.pi-work/config.yaml (replacements, dangerous patterns)
-  ProviderIcon.tsx          @lobehub/icons wrapper (one Mono or Color per provider, used in chat header + models modal)
-  FileExplorer.tsx          file tree inside sidebar
-  FileSearchBar.tsx         VS Code-style inline search bar (FileViewer)
-  FileViewer.tsx            file content in a tab (text, image, audio, pdf)
-  ShowFileRenderer.tsx      renders a multimedia file inline (image / video / audio); legacy PDF/MD/text branches kept for the right-hand file viewer
-  TabBar.tsx                tab bar (Chat + open file tabs + Todo)
-  TodoPanel.tsx             user-side todo list panel (~/.pi-work/todos.db)
-  TodoDescriptionView.tsx   sanitized read-only HTML render for a todo description
-  RichTextEditor.tsx + RichTextEditorInner.tsx
-                            Tiptap-based rich text editor (used in TodoPanel)
-  TextColorPicker.tsx       editor-scoped Tiptap text color popover
-  AgentTodoPanel.tsx        bottom-right circular launcher + click-to-expand popover showing the agent's live task plan for the active session
-  HighlightText.tsx         search-term <mark> wrapper (single + recursive)
-  ToolCallStatsPanel.tsx    right-panel tab body (reads toolCallStatsStore)
-  JsonPanel.tsx             right-panel tab: textarea + tree view, persistent localStorage
-  JsonTreeView.tsx + JsonHighlight.tsx
-                            tree rendering + header-less JSON syntax highlighter
-  TranslatePanel.tsx        right-panel tab: target-language picker + LLM call
-  SchedulerModal.tsx        modal opened from the avatar menu: cron-task CRUD + run history (single-stack list/runs/form views)
-  DatePicker.tsx            small calendar popover (deadlines + scheduler "next run" preview)
-  CanvasPanel.tsx + CanvasPanelInner.tsx
-                            Excalidraw whiteboard (dynamic import, IndexedDB-backed)
-  MermaidBlock.tsx          renders ```mermaid via beautiful-mermaid (dynamic import of elkjs)
-  SvgBlock.tsx              sanitized inline <svg> renderer for assistant output
-  CodeBlock.tsx             shared syntax-highlighted code block (Prism, copy, line numbers)
-  PermissionDialog.tsx      portal'd permission prompt (Esc/Enter/backdrop-click defaults)
-  SessionSearch.tsx         in-session and cross-session keyword search UI
-  AudioPlayer.tsx           audio file viewer (vinyl-disc aesthetic, 0.5x–2x speed)
-  CommandPalette.tsx        ⌘K Raycast-style palette (reads commands + session results)
-  CollapsiblePanel.tsx      CSS-grid-based height-animating wrapper
-  SidebarSection.tsx        collapsible left-sidebar section (flex-grow height animation)
-  ContextMenu.tsx           reusable right-click menu
-  ConfirmDialog.tsx         reusable confirm dialog
-  Toast.tsx                 toast notifications
-  Tooltip.tsx               Radix-backed tooltip wrapper
-  ImageLightbox.tsx         image preview overlay
-  FileIcons.tsx             file-type icon set
-  WeChatSettingsSection.tsx
-                            WeChat login + send-to-workspace settings
-  ReplayBar.tsx            replay controls above ChatWindow (rewind/step through earlier turns)
-  NotesPanel.tsx           right-panel tab for markdown notes + tags
-  RssPanel.tsx             right-panel tab for RSS feeds / articles / read state
+  app-shell/
+    AppShell.tsx                  layout + URL state + tab mgmt + right-panel stack
+    CommandPalette.tsx            ⌘K Raycast-style palette (reads commands + session results)
+  chat/
+    ChatWindow.tsx + ChatInput.tsx + MessageView.tsx
+                                  chat canvas: message list, input bar, per-message renderer
+    AskUserQuestionsPanel.tsx + ask-user-questions-panel/
+                                  modal + question card when the agent asks the user
+    AttachmentList.tsx + PromptPreview.tsx + ReadFileChips.tsx
+                                  file/image chips, prompt preview, read-tool result chips
+    CompactionDivider.tsx + ContextUsageBar.tsx
+                                  visual markers for compacted segments + token-usage bar
+    ModelPicker.tsx + ThinkingPicker.tsx + MoreMenu.tsx
+                                  model/thinking popovers + overflow menu
+    PermissionDialog.tsx          portal'd permission prompt (Esc/Enter/backdrop-click defaults)
+    ReplayBar.tsx                 replay controls (rewind/step through earlier turns)
+    SlashCommandHint.tsx + SlashCommandMenu.tsx
+                                  "/foo" autocomplete
+    ToolsDropdownPanel.tsx        4-row tools popover (Off / Full / Read only / Custom ▶)
+    chat-input/                   BottomToolbar + constants + types + hooks/{useImageAttachments,
+                                  useInputHistory,useSlashMenu,useToolsDropdown,useTypewriterPhrases}
+    chat-window/                  NewSessionPresets + ProcessDetailsGroup + utils
+    message-view/                 AssistantMessageView + UserMessageView + blocks + context + utils
+  files/
+    FileViewer.tsx                thin entry (re-exports files/file-viewer/FileViewer)
+    file-viewer/                  Audio/Image/Pdf/Text/Video/Diff viewers + VirtualizedCodeLines + utils
+    FileExplorer.tsx + FileSearchBar.tsx + FileGitBadge.tsx + FileIcons.tsx
+                                  sidebar file tree + search + git status badge + icon set
+    AudioPlayer.tsx               audio file viewer (vinyl-disc aesthetic, 0.5x–2x speed)
+    CodeBlock.tsx                 shared syntax-highlighted code block (Prism, copy, line numbers)
+    ImageLightbox.tsx             image preview overlay
+    MermaidBlock.tsx + SvgBlock.tsx + EchartsBlock.tsx + EchartsChart.tsx
+                                  shared media renderers reused by MessageView
+  grokbot/
+    GrokBot.tsx + GrokBotLab.tsx + GrokBotStage.tsx
+                                  GrokBot persona playground (lab canvas + chat stage)
+  inbox/
+    InboxBell.tsx + InboxMessageRow.tsx + InboxModal.tsx
+                                  cross-module inbox UI
+  panels/
+    CanvasPanel.tsx + CanvasPanelInner.tsx
+                                  Excalidraw whiteboard (dynamic import, IndexedDB-backed)
+    GitDiffPanel.tsx              right-panel tab: git diff viewer
+    JsonPanel.tsx + JsonTreeView.tsx
+                                  right-panel tab: JSON editor + tree view
+    LlmAuditPanel.tsx             right-panel tab: LLM call audit log
+    TerminalPanel.tsx             right-panel tab: node-pty terminal (WS client)
+    TokensPanel.tsx               right-panel tab: token-usage chart
+    ToolCallStatsPanel.tsx        right-panel tab: per-turn tool-call stats
+    TranslatePanel.tsx            right-panel tab: target-language picker + LLM call
+    right-bar/                    RightBarButton + RightBarColumn + desc + icons
+  rss/
+    RssPanel.tsx                  thin entry (re-exports rss/*)
+    ArticlesView.tsx + FeedsView.tsx + ReaderView.tsx + RssHeaderBar.tsx
+                                  right-panel RSS feeds/articles/read-state UI
+    relativeTime.ts + styles.ts   helpers + styled-components-style sheet
+  scheduler/
+    SchedulerModal.tsx + index.ts thin entry + modal opened from the avatar menu
+    CronBuilder.tsx + CronHumanizer.tsx
+                                  cron expression builder + humanizer
+    TaskConfigTab/TaskListSidebar/TaskOverviewTab/TaskPromptTab/TaskRunsTab/
+    TaskDetail/TaskFormModal      per-tab bodies
+    icons.tsx + NumberStepper.tsx + StatusBadge.tsx + styles.ts + types.ts + useNow.ts + utils.ts
+                                  shared bits
+  sessions/
+    SessionSidebar.tsx + SessionItem.tsx
+                                  session tree (left sidebar)
+    CwdPicker.tsx + CwdFolderDialog.tsx + CwdSessionsModal.tsx + MultiCwdList.tsx
+                                  working-directory picker + per-cwd sessions
+    BranchMessageViewer.tsx       in-session branch view
+    CollectionPanel.tsx + SessionLibraryOpenButton.tsx + session-library/
+                                  favorites + session-library modal + grid/preview
+    ConversationTreeCard.tsx + ConversationTreePanel.tsx
+                                  in-session turn tree visualization
+    SessionSearch.tsx + SessionTabBar.tsx
+                                  keyword search + tab strip
+  settings/
+    SettingsModal.tsx + rows.tsx + constants.ts + use-immediate-apply.ts
+                                  modal + body + form helpers
+    ModelsConfig.tsx + models-config/
+                                  models.json editor + subviews (ModelDetail, OAuthDetail,
+                                  ProviderDetail, ThinkingLevelMapEditor, form-fields, runtime, …)
+    SkillsConfig.tsx + skills-config/
+                                  skill install + subviews (AddSkillPanel, SkillDetail, SubFileRow, …)
+    PromptsConfig.tsx + InboxTestSection.tsx + WeChatSettingsSection.tsx + ProfileBlock.tsx
+                                  prompts / inbox test / WeChat / profile blocks
+    sections/                     Appearance/AppendSystem/CustomTools/FilePreview/
+                                  Profile/Retry/RightBar/Typewriter[Effect]
+  todos/
+    AgentTodoPanel.tsx            bottom-right circular launcher + popover for agent_todo
+    user-todo/                    user-side todo list (TodoPanel + index.ts + FilterBar,
+                                  FilterPopover, PriorityChip, PriorityPopover, RichTextEditor[Inner],
+                                  SearchPopover, Tag[Color|Manager|Picker]Popover, TextColorPicker,
+                                  TodoDescriptionView, TodoItem, TodoMonthCalendar,
+                                  AgentToolsPopover, CreateTodoInput, DeadlineControl,
+                                  EditTagsModal, palette, types, utils)
+  ui/
+    AnimatedPopover.tsx + CollapsiblePanel.tsx + ConfirmDialog.tsx + ContextMenu.tsx
+    CountBadge.tsx + DatePicker.tsx + HighlightText.tsx + IconHoverButton.tsx
+    LoadingState.tsx + MorphToggleIcon.tsx + ProviderIcon.tsx + SidebarSection.tsx
+    SmartImage.tsx + TabBar.tsx + TimePicker.tsx + Toast.tsx + Tooltip.tsx + Typewriter.tsx
+                                  generic primitives — used everywhere
 
 hooks/
-  useAgentSession.ts        everything chat-window-related: load, stream,
-                            navigate, set model/tools/thinking, compact
-  useAgentTodo.ts           polls /api/agent/[id]/agent-todo every 1.5s for the active session
-  useI18n.tsx               en/zh dictionary + locale toggle (t() / useI18n())
-  useTheme.ts               CSS theme preset toggle
-  useTodos.tsx              todos provider + hook for TodoPanel
-  usePendingPermissions.tsx provider for the in-session permission queue + PermissionDialog host
-  sessionUiStore.ts         module-scoped useSyncExternalStore: branch leaf + agent controls
-  toolCallStatsStore.ts     module-scoped useSyncExternalStore: per-turn stats view
+  useAgentSession/                everything chat-window-related: load, stream,
+                                  navigate, set model/tools/thinking, compact
+    index.ts                      re-export only the public API; consumers import from "@/hooks/useAgentSession"
+    hook.ts                       the React hook entry
+    events.ts + data.ts + transport.ts + types.ts + utils.ts
+                                  internal sub-files (not re-exported)
+  useAgentTodo.ts                 polls /api/agent/[id]/agent-todo every 1.5s for the active session
+  useI18n.tsx                     en/zh dictionary facade + locale toggle
+  useTheme.ts                     CSS theme preset toggle
+  useTodos.tsx                    todos provider + hook for user-todo panel
+  usePendingPermissions.tsx       provider for the in-session permission queue + PermissionDialog host
+  useDragDrop.ts                  drag-and-drop file/image upload
+  useModalAnimation.ts            popover enter/exit transitions
+  usePopoverPosition.ts           popover viewport-clamp positioning
+  useCollapseHeight.ts            height-animating wrapper helper
+  useIconMorph.ts                 morphing icon transitions
+  useExchangeRate.ts + useFormatCurrency.ts
+                                  currency fetch + formatting
+  useRss.ts + useRssUnreadCount.ts + rssStore.ts
+                                  RSS feeds/articles polling + unread count
+  useInbox.ts + useInboxUnreadCount.ts
+                                  inbox polling + unread count
+  useNotes.tsx                    notes provider + tag list + image upload
+  useSessionLibraryEntries.ts     derived entries for the SessionLibrary modal
   useToolCallStats.ts + ToolCallStatsContext.tsx
-                            per-turn tool-call statistics reducer + provider
-  useDragDrop.ts            drag-and-drop file/image upload
-  useAudio.ts               tone for agent-end notifications
-  useNotes.tsx              notes provider + tag list + image upload
-  useRss.ts                 RSS feeds/articles polling + mark-read actions
+                                  per-turn tool-call statistics reducer + provider
+  sessionUiStore.ts + toolCallStatsStore.ts
+                                  module-scoped useSyncExternalStore stores
+  sessionWorkspaceStore.ts + sessionLibraryStore.ts + chatHeaderActionsStore.ts
+                                  per-session module-scoped stores
+  askUserQuestionsStore.ts + showFileResultsStore.ts + cwdListStore.ts + settingsStore.ts
+                                  per-feature module-scoped stores
 
 electron-shell/
-  main.js                   Electron entry: window + tray + global shortcut + single-instance
-  titlebar.html             macOS-style traffic-light titlebar + iframe allow="clipboard-read; clipboard-write"
-  titlebar.js               IPC bridge: traffic-light buttons + F12/Ctrl+Shift+I DevTools toggle
-  titlebar.css              titlebar styling
-  preload.js                contextBridge preload
-  pi.png                    tray + window icon
-  start-pi-agent.vbs        Windows launcher helper
+  main.js                         Electron entry: window + tray + global shortcut + single-instance
+  titlebar.html                   macOS-style traffic-light titlebar + iframe allow="clipboard-read; clipboard-write"
+  titlebar.js                     IPC bridge: traffic-light buttons + F12/Ctrl+Shift+I DevTools toggle
+  titlebar.css                    titlebar styling
+  preload.js                      contextBridge preload
+  pi.png                          tray + window icon
+  start-pi-agent.vbs              Windows launcher helper
 
 scripts/
-  todos-restore.ts                   roll back todos.db → todos.json
-  deploy-systemd-user.sh             deploy to ~/.local/share/pi-work-fork + install user systemd unit
-  copy-excalidraw-fonts.mjs          one-time Excalidraw font copy (postinstall-ish)
+  todos-restore.ts                roll back todos.db → todos.json
+  deploy-systemd-user.sh          deploy to ~/.local/share/pi-work-fork + install user systemd unit
+  copy-excalidraw-fonts.mjs       one-time Excalidraw font copy (postinstall-ish)
+  test-agent-settings.ts + test-inbox-test-endpoint.ts + test-todo-tools.ts + test-token-audit-store.ts
+                                  manual smoke tests (run via `npx tsx scripts/<file>`)
 
 docs/
-  agent-todo/                        design + implementation plan for the agent_todo tool
-  subagent-design.md                 exploration doc for pi subagent support (not yet implemented)
-  beautiful-mermaid-examples.md      diagram examples that render in beautiful-mermaid
-  SKILL_find_skills.md               notes on the marketplace skill discovery flow
-  openclaw-weixin-integration.md     reference for the WeChat (openclaw) integration
-  wechat-integration.html             interactive docs for the WeChat flow
+  agent-todo/                     design + implementation plan for the agent_todo tool
+  beautiful-mermaid-examples.md   diagram examples that render in beautiful-mermaid
+  configuration-files.md          reverse-engineered map of every ~/.pi-work + ~/.pi/agent file
+  echarts-block.md                design + swap rules for the EchartsBlock renderer
+  inbox.md                        design for the cross-module inbox
+  llm-audit.md                    design for the LLM call audit log
+  multi-session-tabs-design.md    exploration doc for multi-tab sessions
+  openclaw-weixin-integration.md  reference for the WeChat (openclaw) integration
+  pi-sdk-upgrade-report.md        notes from the pi-coding-agent SDK upgrade
+  SKILL_find_skills.md            notes on the marketplace skill discovery flow
+  subagent-design.md              exploration doc for pi subagent support (not yet implemented)
+  wechat-integration.html         interactive docs for the WeChat flow
 ```
 
 ---
 
 ## Key Design Decisions & Traps
 
-### AgentSession lifecycle (`lib/rpc-manager.ts`)
+### AgentSession lifecycle (`lib/server/rpc-manager.ts`)
 - One `AgentSessionWrapper` per session id, keyed in `globalThis.__piSessions`
 - `globalThis` survives Next.js hot-reload; plain module-level Map does not
 - Idle timeout: 10 minutes. Concurrent `startRpcSession()` calls share a single start Promise (`globalThis.__piStartLocks`)
@@ -490,12 +662,12 @@ Branches live inside a single `.jsonl` file. The `Edit from here` button on any 
 `parentSession` in the header is **display metadata only** — has zero effect on chat content. Safe to `writeFileSync` the entire file (pi does this itself during migrations). Used when cascade-reparenting children on delete.
 
 ### ToolCall field normalization
-Pi stores toolCall blocks as `{type:"toolCall", id, name, arguments}` but `ToolCallContent` uses `{toolCallId, toolName, input}`. `normalizeToolCalls()` in `lib/normalize.ts` handles this — called when loading messages from session files (`session-reader.ts`) and when processing streaming events in `useAgentSession`.
+Pi stores toolCall blocks as `{type:"toolCall", id, name, arguments}` but `ToolCallContent` uses `{toolCallId, toolName, input}`. `normalizeToolCalls()` in `lib/shared/normalize.ts` handles this — called when loading messages from session files (`lib/server/session-reader.ts`) and when processing streaming events in `useAgentSession`.
 
 ### New session tool selection
-Tool names are passed at session creation (`POST /api/agent/new` → `toolNames: string[] | "all"`). The selection state in `useAgentSession` is `ToolSelection` (defined in `lib/types.ts`): `[]` ≡ Off (no tools, system prompt cleared — see `lib/rpc-manager.ts:831` which is the only way to truly blank it since `buildSystemPrompt` always emits non-empty), `"all"` ≡ Full (every tool pi registers at runtime — a sentinel so future tool additions auto-include), the canonical read-only subset `["find", "ls", "grep", "read"]` ≡ Read only (a named quick preset — `READ_ONLY_TOOLS` constant in `ChatInput.tsx`; `setActiveToolsByName` silently ignores missing names, so a stripped pi build just degrades to its intersection), any other partial `string[]` ≡ Custom (per-tool subset). The ChatInput tools popover (4-row layout) lets the user pick any of these; the wire shape matches the frontend state, so no mapping layer exists. For brand-new sessions that haven't sent their first message yet, the tool catalog is fetched via `POST /api/agent/tools` (spins up an ephemeral session internally).
+Tool names are passed at session creation (`POST /api/agent/new` → `toolNames: string[] | "all"`). The selection state in `useAgentSession` is `ToolSelection` (defined in `lib/shared/types.ts`): `[]` ≡ Off (no tools, system prompt cleared — see `lib/server/rpc-manager.ts:831` which is the only way to truly blank it since `buildSystemPrompt` always emits non-empty), `"all"` ≡ Full (every tool pi registers at runtime — a sentinel so future tool additions auto-include), the canonical read-only subset `["find", "ls", "grep", "read"]` ≡ Read only (a named quick preset — `READ_ONLY_TOOLS` constant in `components/chat/chat-input/constants.ts`; `setActiveToolsByName` silently ignores missing names, so a stripped pi build just degrades to its intersection), any other partial `string[]` ≡ Custom (per-tool subset). The ChatInput tools popover (4-row layout) lets the user pick any of these; the wire shape matches the frontend state, so no mapping layer exists. For brand-new sessions that haven't sent their first message yet, the tool catalog is fetched via `POST /api/agent/tools` (spins up an ephemeral session internally).
 
-**Tools button only renders on the new-session page.** Existing sessions cannot change tools mid-flight — the button is hidden (gated on `isNew` in `ChatWindow`). Existing-session tools are whatever the backend has from when the session was last configured (typically the `toolNames` from `POST /api/agent/new` at creation time, possibly mutated by prior `set_tools` calls in this session's lifetime).
+**Tools button only renders on the new-session page.** Existing sessions cannot change tools mid-flight — the button is hidden (gated on `isNew` in `components/chat/ChatWindow.tsx`). Existing-session tools are whatever the backend has from when the session was last configured (typically the `toolNames` from `POST /api/agent/new` at creation time, possibly mutated by prior `set_tools` calls in this session's lifetime).
 
 ### Model defaults for new sessions
 `GET /api/models` returns `defaultModel` read from `~/.pi/agent/settings.json`, plus per-model `thinkingLevels` and `thinkingLevelMaps`. `useAgentSession` pre-selects `defaultModel` on mount for new sessions.
@@ -507,10 +679,10 @@ On `useAgentSession` mount, `GET /api/sessions/[id]?includeState` is called. If 
 Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `auto_compaction_start` / `auto_compaction_end`. `handleAgentEvent` accepts both sets to keep `isCompacting` in sync. Manual compact is a blocking POST — the button stays disabled until the response returns.
 
 ### Module-scoped stores
-`sessionUiStore` and `toolCallStatsStore` follow the same pattern: one typed state object, `useSyncExternalStore` subscription, content-equality guarded patcher (`lib/shallowEqual.ts`). `sessionUiStore` exposes both a state snapshot and a separate `useAgentControls()` hook — imperative controls are bridged via the hook, not the snapshot, so identity-based re-render loops are avoided. When adding a new cross-cutting UI state, follow this pattern — it survives `ChatWindow` remounts and eliminates prop-drilling.
+`sessionUiStore` and `toolCallStatsStore` follow the same pattern: one typed state object, `useSyncExternalStore` subscription, content-equality guarded patcher (`lib/client/shallowEqual.ts`). `sessionUiStore` exposes both a state snapshot and a separate `useAgentControls()` hook — imperative controls are bridged via the hook, not the snapshot, so identity-based re-render loops are avoided. When adding a new cross-cutting UI state, follow this pattern — it survives `ChatWindow` remounts and eliminates prop-drilling.
 
 ### Description sanitization is centralized
-`lib/description-sanitize.ts` is the single source of truth for the DOMPurify config used by every code path that touches a todo description: storage normalization, editor save/mount, read-only view render, legacy markdown migration, and zip export (which uses `allowStyle: false`). Adding a new tag/attribute to descriptions requires touching this one file. The `style` widening is gated by an idempotent `uponSanitizeAttribute` hook that rewrites every style value to only `color: #rrggbb` — opening `style` without that hook would be a CSS-injection vector.
+`lib/shared/description-sanitize.ts` is the single source of truth for the DOMPurify config used by every code path that touches a todo description: storage normalization, editor save/mount, read-only view render, legacy markdown migration, and zip export (which uses `allowStyle: false`). Adding a new tag/attribute to descriptions requires touching this one file. The `style` widening is gated by an idempotent `uponSanitizeAttribute` hook that rewrites every style value to only `color: #rrggbb` — opening `style` without that hook would be a CSS-injection vector.
 
 ### Permission defaults are safe
 `PermissionDialog` (Esc → deny, Enter → allow once, backdrop-click → deny) deliberately biases toward deny because "allow similar for this session" is a mouse-only action — keyboard users can never accidentally over-grant.
@@ -569,7 +741,7 @@ The LXGW WenKai font (CJK) was previously vendored but has been removed; CJK cha
 **All user-visible strings in new components must go through i18n — never hardcode display text.**
 
 When adding or modifying frontend components:
-- Extract every user-facing string (labels, placeholders, tooltips, aria-labels, status messages, error text) into the i18n dictionary at `hooks/useI18n.tsx`.
+- Extract every user-facing string (labels, placeholders, tooltips, aria-labels, status messages, error text) into the i18n dictionary under `lib/shared/i18n-dict/` (group by feature: `chat.ts`, `settings.ts`, `rss.ts`, …). The public API exposed via `t('key')` from `useI18n()` (`hooks/useI18n.tsx`) is unchanged.
 - Use the project's existing i18n mechanism (`t('key')` from `useI18n()`) — don't invent a new pattern.
 - Keys are the English source string itself; add the Chinese translation in the `ZH_TRANSLATIONS` map. Look at nearby keys before creating new ones.
 
@@ -577,7 +749,7 @@ When adding or modifying frontend components:
 
 ## Toast Notifications for New Frontend Interactions
 
-**Any new user-initiated frontend action that can fail or completes silently needs a toast — see `components/Toast.tsx` for the global system.**
+**Any new user-initiated frontend action that can fail or completes silently needs a toast — see `components/ui/Toast.tsx` for the global system.**
 
 When adding or modifying frontend interactions, decide whether a toast is needed:
 
@@ -585,18 +757,18 @@ When adding or modifying frontend interactions, decide whether a toast is needed
 - **Skip a toast** for: actions whose feedback is purely local UI state (toggles, expand/collapse, theme switch, sound on/off) and for forms where the error must stay inline next to the field (rename conflicts, validation messages, modal-internal footer text).
 
 Conventions:
-- Call `useToast()` from `./Toast` (or `@/components/Toast`) and invoke `toast.show({ kind, message })` — don't invent a parallel notification mechanism.
+- Call `useToast()` from `@/components/ui/Toast` and invoke `toast.show({ kind, message })` — don't invent a parallel notification mechanism.
 - Prefer the server-provided error string and fall back to a generic i18n key: `e instanceof Error && e.message ? e.message : t("Network error")`.
 - Past-tense keys cover most successes (`t("Saved")`, `t("Renamed")`, `t("Copied")`, `t("Deleted")`); add new keys to `hooks/useI18n.tsx` only when none fits. The "Common-operation toasts" comment in `useI18n.tsx` is the canonical place to add them.
 - Modal-internal feedback (the "Saved" button label, red footer text) should stay in addition to the toast — the toast is the cross-area confirmation that survives outside the modal.
 - The 1-second dedupe in `Toast.tsx` handles repeated onerror events; don't add your own.
-- `useConfirm()` from `./ConfirmDialog` is the matching modal for destructive confirms ("Delete this collection?", "Cancel this HTTP request?") — pair with a toast on success.
+- `useConfirm()` from `@/components/ui/ConfirmDialog` is the matching modal for destructive confirms ("Delete this collection?", "Cancel this HTTP request?") — pair with a toast on success.
 
 ---
 
 ## Tooltips for New Frontend Interactions
 
-**Hover hints must use the project's unified `Tooltip` component (`components/Tooltip.tsx`, Radix-backed) — never the native `title` attribute.**
+**Hover hints must use the project's unified `Tooltip` component (`components/ui/Tooltip.tsx`, Radix-backed) — never the native `title` attribute.**
 
 When adding a hover explanation (e.g. a truncated filename showing its full path):
 - Wrap the trigger element with `<Tooltip content={...}>` — it renders via portal, follows the app's theme variables, and styles consistently with the rest of the UI.
@@ -611,10 +783,11 @@ When Pi Work is loaded inside the `electron-shell` `<iframe>`, every
 `navigator.clipboard.writeText()` call requires the iframe to declare
 `allow="clipboard-read; clipboard-write"` (set in `electron-shell/titlebar.html`).
 Without it, Chromium's Permissions-Policy silently blocks the call. The web
-app has a `document.execCommand("copy")` fallback in `components/CodeBlock.tsx`'s
-`copyText()` helper (also reached by `MermaidBlock.tsx`, `SvgBlock.tsx`,
-`FileExplorer.tsx`) — but the iframe attribute is the canonical fix and the
-fallback should not be relied on.
+app has a `document.execCommand("copy")` fallback in `components/files/CodeBlock.tsx`'s
+`copyText()` helper (also reached by `components/files/MermaidBlock.tsx`,
+`components/files/SvgBlock.tsx`, `components/files/FileExplorer.tsx`) — but
+the iframe attribute is the canonical fix and the fallback should not be
+relied on.
 
 ---
 
