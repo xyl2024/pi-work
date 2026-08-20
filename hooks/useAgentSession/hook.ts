@@ -502,12 +502,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     if (isNew) {
       setNewSessionModel({ provider, modelId });
-      if (levelChanged) {
-        showToast({
-          kind: "info",
-          message: t("Thinking level adjusted to {level} for the new model", { level: nextLevel }),
-        });
-      }
       return;
     }
     const sid = sessionIdRef.current;
@@ -522,10 +516,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // asynchronously, and a prompt arriving in the gap would still
         // see the stale level. Doing it here closes that window.
         await sendAgentCommand(sid, { type: "set_thinking_level", level: nextLevel });
-        showToast({
-          kind: "info",
-          message: t("Thinking level adjusted to {level} for the new model", { level: nextLevel }),
-        });
       }
     } catch (e) {
       console.error("Failed to set model:", e);
