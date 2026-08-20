@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { AgentEvent, EventHandlerRef, TransportRefs } from "./useAgentSessionTypes";
+import type { AgentEvent, EventHandlerRef, TransportRefs } from "./types";
 
 type Translator = (key: string, params?: Record<string, string | number>) => string;
 

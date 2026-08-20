@@ -4,14 +4,14 @@ import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "r
 import type { AgentMessage, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/types";
 import { sendAgentCommand } from "@/lib/agent-client";
 import { useToast } from "@/components/Toast";
-import { useI18n } from "./useI18n";
-import { usePendingPermissionsRef } from "./usePendingPermissions";
-import { setSessionUiState, setLeafChangeHandler } from "./sessionUiStore";
+import { useI18n } from "../useI18n";
+import { usePendingPermissionsRef } from "../usePendingPermissions";
+import { setSessionUiState, setLeafChangeHandler } from "../sessionUiStore";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/thinking-level-utils";
-import { streamReducer } from "./useAgentSessionUtils";
-import { useAgentSessionEvents } from "./useAgentSessionEvents";
-import { useAgentSessionTransport } from "./useAgentSessionTransport";
-import { useAgentSessionData } from "./useAgentSessionData";
+import { streamReducer } from "./utils";
+import { useAgentSessionEvents } from "./events";
+import { useAgentSessionTransport } from "./transport";
+import { useAgentSessionData } from "./data";
 import type {
   AgentEvent,
   AgentPhase,
@@ -21,9 +21,9 @@ import type {
   ThinkingLevelOption,
   TransportRefs,
   UseAgentSessionOptions,
-} from "./useAgentSessionTypes";
+} from "./types";
 
-export type { AgentPhase, AttachedImage, ChatInputHandle, SessionData, ThinkingLevelOption, UseAgentSessionOptions } from "./useAgentSessionTypes";
+
 
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {

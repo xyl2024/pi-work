@@ -1,5 +1,5 @@
 import type { AgentMessage, AssistantMessage } from "@/lib/types";
-import type { StreamAction, StreamingState } from "./useAgentSessionTypes";
+import type { StreamAction, StreamingState } from "./types";
 
 export function streamReducer(state: StreamingState, action: StreamAction): StreamingState {
   switch (action.type) {

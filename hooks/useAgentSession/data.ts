@@ -12,7 +12,7 @@ import type {
   StateSetter,
   StreamAction,
   ThinkingLevelOption,
-} from "./useAgentSessionTypes";
+} from "./types";
 
 type UseAgentSessionDataOptions = {
   sessionIdRef: SessionIdRef;
