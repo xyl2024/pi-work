@@ -54,43 +54,23 @@
  *     "Other" is selected but its text is empty (for a required question).
  *   - The panel itself never steals focus from the chat input — the user
  *     can still type in ChatInput while a question is pending.
+ *
+ * Component split:
+ *   - `useAskUserQuestionsForm` lives next to this file and owns all
+ *     form state + auto-submit/auto-advance bookkeeping. This file holds
+ *     only the rendered chrome.
+ *   - `QuestionCard` renders a single question; it's a pure presentation
+ *     component driven by callbacks.
+ *   - The CSS @keyframes + `.askq-icon-btn` class are defined once in
+ *     `constants.ts` (the main panel's `<style>` block reads the literal).
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import {
-  clearPendingAskUserQuestions,
-  getPendingAskUserQuestions,
-  useAskUserQuestionsSubmit,
-  usePendingAskUserQuestions,
-  type PendingAskUserQuestions,
-} from "@/hooks/askUserQuestionsStore";
 import { Tooltip } from "./Tooltip";
-import {
-  ASK_USER_QUESTIONS_OTHER_LABEL,
-  hasUnansweredRequired,
-  isOtherOptionLabel,
-  isQuestionAnswered,
-  type AskUserQuestion,
-  type AskUserQuestionAnswer,
-} from "@/lib/ask-user-questions-tool-types";
-
-/** Fixed pixel height of the sticky panel — chosen to fit one question
- *  card with options + a small footer without dominating the chat. The
- *  tab bar at the top and the Submit/Cancel row at the bottom sit inside
- *  this height; only the question card scrolls. */
-const PANEL_HEIGHT_PX = 280;
-
-/** Delay before auto-advancing to the next question after a single-select
- *  pick — long enough to register the choice, short enough to feel snappy. */
-const AUTO_ADVANCE_MS = 450;
-
-/** Slightly longer window before auto-submitting on the last question so a
- *  stray click doesn't fire the tool before the user can notice. */
-const AUTO_SUBMIT_MS = 700;
-
-/** How long the "Answers sent" confirmation stays before the panel closes. */
-const SENT_VIEW_MS = 1400;
+import { isQuestionAnswered } from "@/lib/ask-user-questions-tool-types";
+import { useAskUserQuestionsForm } from "./ask-user-questions-panel/useAskUserQuestionsForm";
+import { QuestionCard } from "./ask-user-questions-panel/QuestionCard";
+import { ASK_PANEL_STYLES, PANEL_HEIGHT_PX } from "./ask-user-questions-panel/constants";
 
 interface Props {
   sessionId: string | null;
@@ -102,325 +82,31 @@ interface Props {
 
 export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
   const { t } = useI18n();
-  const pending = usePendingAskUserQuestions(sessionId);
-  const submit = useAskUserQuestionsSubmit();
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const form = useAskUserQuestionsForm({ sessionId, onAppear });
 
-  // Local form state mirrors the questions in `pending`. Indexed by
-  // questionIndex so multi-question panels update independently.
-  const [answers, setAnswers] = useState<AskUserQuestionAnswer[]>([]);
-  const [otherTexts, setOtherTexts] = useState<Record<number, string>>({});
-  // Which tab is currently visible. Always within [0, count). Reset to 0
-  // every time a new request arrives (see the effect below).
-  const [activeTab, setActiveTab] = useState(0);
-  /** True while the "Answers sent ✓" confirmation is showing. The store
-   *  entry stays put during this window (the panel schedules the clear),
-   *  so the confirmation survives the round-trip to the server. */
-  const [sent, setSent] = useState(false);
-  /** Collapsed to a slim bar. The request stays pending — the agent keeps
-   *  waiting, the user can expand and answer later (or Cancel). */
-  const [minimized, setMinimized] = useState(false);
+  if (!form.pending) return null;
 
-  // ── Refs ──────────────────────────────────────────────────────────────
-  // pendingRef / answersRef / otherTextsRef: the auto-advance, auto-submit
-  // and sent-close timers fire after state has committed, so they read the
-  // latest values through these refs instead of stale closures.
-  const pendingRef = useRef<PendingAskUserQuestions | null>(null);
-  const answersRef = useRef<AskUserQuestionAnswer[]>([]);
-  const otherTextsRef = useRef<Record<number, string>>({});
-  const submittingRef = useRef(false);
-  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** The request we successfully submitted, remembered until its store
-   *  entry is gone — used to drop a stale entry if the panel moves on
-   *  (session switch / new request / unmount) before the sent-timer fired. */
-  const submittedRef = useRef<{ sessionId: string; toolCallId: string } | null>(null);
-  const tabScrollRef = useRef<HTMLDivElement | null>(null);
-
-  pendingRef.current = pending;
-  useEffect(() => {
-    answersRef.current = answers;
-  }, [answers]);
-  useEffect(() => {
-    otherTextsRef.current = otherTexts;
-  }, [otherTexts]);
-  useEffect(() => {
-    submittingRef.current = submitting;
-  }, [submitting]);
-
-  // Derived counts — computed here (before the hooks that depend on them)
-  // because the scroll-reset effect below uses safeTab, and it must be
-  // declared before any early return.
-  const count = pending?.questions.length ?? 0;
-  const safeTab = Math.min(Math.max(activeTab, 0), Math.max(count - 1, 0));
-
-  /** Drop the store entry for a request we already submitted when the panel
-   *  moves on before its sent-timer fired. Guarded by toolCallId so a newer
-   *  request for the same session is never touched. */
-  const clearStaleSubmitted = useCallback(() => {
-    const sub = submittedRef.current;
-    if (!sub) return;
-    const cur = getPendingAskUserQuestions(sub.sessionId);
-    if (cur && cur.toolCallId === sub.toolCallId) {
-      clearPendingAskUserQuestions(sub.sessionId);
-    }
-    submittedRef.current = null;
-  }, []);
-
-  // Reset form state when the pending question changes (new request) or
-  // disappears (resolved). Cancels any in-flight timers so a stale
-  // auto-advance / auto-submit / sent-close can't fire on the new state.
-  useEffect(() => {
-    if (advanceTimerRef.current) {
-      clearTimeout(advanceTimerRef.current);
-      advanceTimerRef.current = null;
-    }
-    if (sentTimerRef.current) {
-      clearTimeout(sentTimerRef.current);
-      sentTimerRef.current = null;
-    }
-    clearStaleSubmitted();
-    if (!pending) {
-      setAnswers([]);
-      setOtherTexts({});
-      setActiveTab(0);
-      setSubmitError(null);
-      setMinimized(false);
-      setSent(false);
-      return;
-    }
-    setAnswers(
-      pending.questions.map((_, i) => ({
-        questionIndex: i,
-        selectedLabels: [],
-        otherText: null,
-      })),
-    );
-    setOtherTexts({});
-    setActiveTab(0);
-    setSubmitError(null);
-    setMinimized(false);
-    setSent(false);
-  }, [pending, clearStaleSubmitted]);
-
-  // When a new `ask_user_questions` request appears (pending transitions to
-  // non-null), tell ChatWindow to force-scroll the chat to the bottom so the
-  // newly surfaced panel sits against the latest messages. Store reference is
-  // stable for a given request (server re-emits no-op on reconnect), so this
-  // only fires once per request.
-  useEffect(() => {
-    if (pending) onAppear?.();
-  }, [pending, onAppear]);
-
-  // Unmount: cancel timers and drop a submitted-but-not-yet-cleared entry.
-  useEffect(() => {
-    return () => {
-      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-      if (sentTimerRef.current) clearTimeout(sentTimerRef.current);
-      clearStaleSubmitted();
-    };
-  }, [clearStaleSubmitted]);
-
-  /** Build the wire answers for the whole batch from the committed form
-   *  state (baking typed "Other" text in so the server skips re-parsing). */
-  const buildFinalAnswers = useCallback(
-    (questions: readonly AskUserQuestion[]): AskUserQuestionAnswer[] =>
-      questions.map((q, i) => {
-        const a = answersRef.current[i] ?? {
-          questionIndex: i,
-          selectedLabels: [],
-          otherText: null,
-        };
-        const hasOther = a.selectedLabels.some(isOtherOptionLabel);
-        return {
-          questionIndex: i,
-          // UI text wins over the mirrored copy in answers (they can drift
-          // after an exclusive Other switch, see updateSelection).
-          selectedLabels: a.selectedLabels,
-          otherText: hasOther
-            ? (otherTextsRef.current[i] ?? a.otherText ?? "").trim()
-            : null,
-        };
-      }),
-    [],
-  );
-
-  /** Shared submit path (manual Submit button + auto-submit). Shows the
-   *  "Answers sent" confirmation on success, then clears the store entry
-   *  a beat later so the panel closes. */
-  const doSubmit = useCallback(
-    async (finalAnswers: AskUserQuestionAnswer[]) => {
-      const p = pendingRef.current;
-      if (!p || !sessionId) return;
-      setSubmitting(true);
-      setSubmitError(null);
-      try {
-        await submit(sessionId, p.toolCallId, { answers: finalAnswers });
-        submittedRef.current = { sessionId, toolCallId: p.toolCallId };
-        setSent(true);
-        sentTimerRef.current = setTimeout(() => {
-          sentTimerRef.current = null;
-          clearPendingAskUserQuestions(sessionId);
-        }, SENT_VIEW_MS);
-      } catch (e) {
-        setSent(false);
-        setSubmitError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [sessionId, submit],
-  );
-
-  /** Auto-submit after the last question's single-select pick. Fires only
-   *  when every required question has a real answer — otherwise the user
-   *  must finish manually. */
-  const maybeAutoSubmit = useCallback(() => {
-    if (submittingRef.current) return;
-    const p = pendingRef.current;
-    if (!p) return;
-    const finalAnswers = buildFinalAnswers(p.questions);
-    if (hasUnansweredRequired(p.questions, finalAnswers)) return;
-    void doSubmit(finalAnswers);
-  }, [buildFinalAnswers, doSubmit]);
-
-  const updateSelection = useCallback(
-    (qIdx: number, label: string, checked: boolean, multi: boolean) => {
-      setAnswers((prev) => {
-        const next = prev.slice();
-        const current = next[qIdx] ?? {
-          questionIndex: qIdx,
-          selectedLabels: [],
-          otherText: null,
-        };
-        const isOther = isOtherOptionLabel(label);
-        let labels: string[];
-        if (checked && isOther) {
-          // 「其他」即独占：无论单选/多选，选中时清空所有预设选项，只留它。
-          labels = [label];
-        } else if (checked) {
-          // 互斥：选中预设选项时剔除已选的「其他」，释放自由输入。
-          const rest = current.selectedLabels.filter((l) => !isOtherOptionLabel(l));
-          labels = multi
-            ? rest.includes(label)
-              ? rest
-              : [...rest, label]
-            : [label];
-        } else {
-          labels = multi
-            ? current.selectedLabels.filter((l) => l !== label)
-            : [];
-        }
-        const hasOther = labels.some(isOtherOptionLabel);
-        next[qIdx] = {
-          questionIndex: qIdx,
-          selectedLabels: labels,
-          // Restore the previously typed free-text when re-selecting
-          // "Other" after an exclusive switch cleared it — the UI text
-          // (otherTexts) is the authoritative copy, answers mirrors it.
-          otherText: hasOther
-            ? (otherTextsRef.current[qIdx] ?? current.otherText ?? "")
-            : null,
-        };
-        return next;
-      });
-
-      // Reference-card behavior: a single-select pick auto-advances to the
-      // next question; on the last question it auto-submits. "Other" never
-      // auto-advances — the user still has to type its text.
-      if (!multi && checked && !isOtherOptionLabel(label)) {
-        if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-        const total = pendingRef.current?.questions.length ?? 1;
-        const isLast = qIdx === total - 1;
-        advanceTimerRef.current = setTimeout(() => {
-          advanceTimerRef.current = null;
-          if (isLast) {
-            maybeAutoSubmit();
-          } else {
-            setActiveTab((cur) => Math.min(total - 1, cur + 1));
-          }
-        }, isLast ? AUTO_SUBMIT_MS : AUTO_ADVANCE_MS);
-      }
-    },
-    [maybeAutoSubmit],
-  );
-
-  const updateOtherText = useCallback((qIdx: number, text: string) => {
-    setOtherTexts((prev) => ({ ...prev, [qIdx]: text }));
-    setAnswers((prev) => {
-      const next = prev.slice();
-      const cur = next[qIdx];
-      if (!cur) return prev;
-      if (!cur.selectedLabels.some(isOtherOptionLabel)) return prev;
-      next[qIdx] = { ...cur, otherText: text };
-      return next;
-    });
-  }, []);
-
-  const canSubmit = useMemo(() => {
-    if (!pending) return false;
-    if (submitting || sent) return false;
-    return !hasUnansweredRequired(pending.questions, answers);
-  }, [pending, answers, submitting, sent]);
-
-  const handleSubmit = useCallback(async () => {
-    const p = pendingRef.current;
-    if (!p || !canSubmit) return;
-    void doSubmit(buildFinalAnswers(p.questions));
-  }, [canSubmit, doSubmit, buildFinalAnswers]);
-
-  const handleCancel = useCallback(async () => {
-    const p = pendingRef.current;
-    if (!p || submitting) return;
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      await submit(sessionId!, p.toolCallId, { cancelled: true });
-      // No confirmation state for cancel — the panel just closes. A
-      // network-level failure keeps the entry so the user can retry.
-      clearPendingAskUserQuestions(p.sessionId);
-    } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [sessionId, submit, submitting]);
-
-  // Keyboard nav: ←/→ on the tab bar moves between tabs. Only intercepts
-  // when focus is on the tab bar itself — focusing into a question's
-  // option or the Other text input leaves arrow keys alone so the user
-  // can move the caret as usual.
-  const handleTabListKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      const total = pending?.questions.length ?? 0;
-      if (total <= 1) return;
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        setActiveTab((i) => (i - 1 + total) % total);
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        setActiveTab((i) => (i + 1) % total);
-      } else if (e.key === "Home") {
-        e.preventDefault();
-        setActiveTab(0);
-      } else if (e.key === "End") {
-        e.preventDefault();
-        setActiveTab(total - 1);
-      }
-    },
-    [pending],
-  );
-
-  // Reset the question card's scroll when switching tabs (and when a new
-  // request replaces the current one mid-scroll).
-  useEffect(() => {
-    tabScrollRef.current?.scrollTo({ top: 0 });
-  }, [safeTab, pending]);
-
-  // Hooks above this line must be unconditional. The early returns are
-  // placed after all hooks so rules-of-hooks is satisfied.
-  if (!pending) return null;
+  const {
+    pending,
+    safeTab,
+    count,
+    question,
+    answers,
+    otherTexts,
+    submitting,
+    submitError,
+    sent,
+    minimized,
+    setMinimized,
+    setActiveTab,
+    canSubmit,
+    handleSubmit,
+    handleCancel,
+    handleTabListKeyDown,
+    updateSelection,
+    updateOtherText,
+    tabScrollRef,
+  } = form;
 
   // aria-label for the panel: kept short — the tab list has its own
   // descriptive label, so the region just needs a name for screen readers.
@@ -564,36 +250,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           overflow: "hidden",
         }}
       >
-      <style>{`
-        @keyframes ask-panel-in {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes askq-fade-up {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .ask-panel-in { animation: ask-panel-in 180ms ease-out; }
-        .askq-fade-up { animation: askq-fade-up 220ms ease-out; }
-        .askq-fade-up-delayed { animation: askq-fade-up 350ms ease-out 120ms both; }
-        .askq-sent-pop { animation: saved-pop 0.45s ease; }
-        .askq-sent-check { animation: saved-check-draw 0.35s ease forwards; }
-        .askq-icon-btn {
-          display: inline-flex; align-items: center; justify-content: center;
-          width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
-          background: transparent; border: none; cursor: pointer;
-          color: var(--text-dim); transition: color 0.1s, background-color 0.1s;
-        }
-        .askq-icon-btn:hover { background: var(--bg-hover); color: var(--text); }
-        .askq-icon-btn:disabled { opacity: 0.35; cursor: default; }
-        .askq-icon-btn:disabled:hover { background: transparent; color: var(--text-dim); }
-        @media (prefers-reduced-motion: reduce) {
-          .ask-panel-in, .askq-fade-up, .askq-fade-up-delayed,
-          .askq-sent-pop, .askq-sent-check {
-            animation: none !important;
-          }
-        }
-      `}</style>
+      <style>{ASK_PANEL_STYLES}</style>
 
       {/* ── Tab bar (hidden when there's only one question) ── */}
       {!sent && count > 1 && (
@@ -772,24 +429,20 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           {/* key={safeTab} remounts on every tab switch so the fade-up
               animation replays and the card starts at its top. */}
           <div key={safeTab} className="askq-fade-up">
-            {(() => {
-              const q = pending.questions[safeTab];
-              if (!q) return null;
-              return (
-                <QuestionCard
-                  question={q}
-                  answer={answers[safeTab]}
-                  otherText={otherTexts[safeTab] ?? ""}
-                  onToggle={(label, checked) =>
-                    updateSelection(safeTab, label, checked, q.multiSelect)
-                  }
-                  onOtherTextChange={(text) => updateOtherText(safeTab, text)}
-                  // Single-question panel has no tab bar, so the collapse
-                  // button lives in the card header row instead.
-                  action={count === 1 ? collapseButton : undefined}
-                />
-              );
-            })()}
+            {question && (
+              <QuestionCard
+                question={question}
+                answer={answers[safeTab]}
+                otherText={otherTexts[safeTab] ?? ""}
+                onToggle={(label, checked) =>
+                  updateSelection(safeTab, label, checked, question.multiSelect)
+                }
+                onOtherTextChange={(text) => updateOtherText(safeTab, text)}
+                // Single-question panel has no tab bar, so the collapse
+                // button lives in the card header row instead.
+                action={count === 1 ? collapseButton : undefined}
+              />
+            )}
           </div>
         </div>
       )}
@@ -888,172 +541,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           </div>
         </>
       )}
-      </div>
-    </div>
-  );
-}
-
-interface QuestionCardProps {
-  question: AskUserQuestion;
-  answer: AskUserQuestionAnswer | undefined;
-  otherText: string;
-  onToggle: (label: string, checked: boolean) => void;
-  onOtherTextChange: (text: string) => void;
-  /** Extra element rendered at the top-right of the card header row
-   *  (used for the collapse button on single-question panels). */
-  action?: ReactNode;
-}
-
-function QuestionCard({
-  question,
-  answer,
-  otherText,
-  onToggle,
-  onOtherTextChange,
-  action,
-}: QuestionCardProps) {
-  const { t } = useI18n();
-  const selectedSet = useMemo(
-    () => new Set(answer?.selectedLabels ?? []),
-    [answer?.selectedLabels],
-  );
-  const otherSelected = selectedSet.has(ASK_USER_QUESTIONS_OTHER_LABEL);
-
-  return (
-    <div
-      style={{
-        padding: "4px 0 10px 0",
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
-    >
-      {/* Question text (plus the optional header action, e.g. collapse).
-          The header chip is already shown on the tab above, so it's not
-          repeated here. */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-        <div
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 13,
-            color: "var(--text)",
-            lineHeight: 1.5,
-          }}
-        >
-          {question.question}
-        </div>
-        {action}
-      </div>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-        }}
-      >
-        {/* Always append a fixed free-text option at the end, regardless of
-            what options the agent authored (even if it also included an
-            "Other" label). It renders the localized word but keeps the
-            English semantic label so isOtherOptionLabel still matches. */}
-        {[
-          ...question.options,
-          { label: ASK_USER_QUESTIONS_OTHER_LABEL, description: "" },
-        ].map((opt, i) => {
-          const checked = selectedSet.has(opt.label);
-          const isOther = isOtherOptionLabel(opt.label);
-          const inputId = `ask-opt-${question.header}-${i}`.replace(/\s+/g, "-");
-          return (
-            <div key={inputId} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <label
-                htmlFor={inputId}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 8,
-                  padding: "6px 8px",
-                  borderRadius: 5,
-                  cursor: "pointer",
-                  background: checked
-                    ? "color-mix(in srgb, var(--accent) 10%, transparent)"
-                    : "transparent",
-                  border: checked
-                    ? "1px solid color-mix(in srgb, var(--accent) 45%, transparent)"
-                    : "1px solid transparent",
-                  transition: "background 0.1s, border-color 0.1s",
-                }}
-              >
-                <input
-                  id={inputId}
-                  type={question.multiSelect ? "checkbox" : "radio"}
-                  name={`ask-q-${question.header}`}
-                  checked={checked}
-                  onChange={(e) => onToggle(opt.label, e.target.checked)}
-                  style={{
-                    marginTop: 2,
-                    accentColor: "var(--accent)",
-                    cursor: "pointer",
-                  }}
-                />
-                <span
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 2,
-                    minWidth: 0,
-                  }}
-                >
-                  <span style={{ fontSize: 13, color: "var(--text)", fontWeight: 500 }}>
-                    {isOther ? t("Other") : opt.label}
-                  </span>
-                  {opt.description && (
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: "var(--text-muted)",
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      {opt.description}
-                    </span>
-                  )}
-                </span>
-              </label>
-              {/* Free-text input appears when Other is selected. In single-
-                  select mode it replaces the radio behavior visually; in
-                  multi-select it sits alongside the checked checkbox. */}
-              {isOther && otherSelected && (
-                <input
-                  type="text"
-                  value={otherText}
-                  onChange={(e) => onOtherTextChange(e.target.value)}
-                  placeholder={t("Type your own answer…")}
-                  // Don't autofocus — would steal focus from the chat input
-                  // and break the "user can still type in ChatInput"
-                  // decision. Click to focus instead.
-                  style={{
-                    marginLeft: 26,
-                    marginTop: 2,
-                    padding: "5px 8px",
-                    fontSize: 12,
-                    fontFamily: "inherit",
-                    background: "var(--bg)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 4,
-                    color: "var(--text)",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = "var(--accent)";
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "var(--border)";
-                  }}
-                />
-              )}
-            </div>
-          );
-        })}
       </div>
     </div>
   );
