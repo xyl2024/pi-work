@@ -53,6 +53,45 @@ export function pickHighestAvailableThinkingLevel(
 }
 
 /**
+ * Pick a middle-of-the-road thinking level the given model supports.
+ * Used as the default for brand-new sessions: pick the model's
+ * strongest non-extreme option so the user starts somewhere sensible
+ * rather than at either ceiling.
+ *
+ * Algorithm:
+ * 1. Project `available` onto the canonical THINKING_LEVEL_ORDER
+ *    (weakest → strongest), preserving that order. Some models expose
+ *    levels in arbitrary order; the canonical order is what makes
+ *    "middle" meaningful.
+ * 2. Pick `Math.floor((len - 1) / 2)`. With an odd length that lands
+ *    exactly on the central index; with an even length it lands on
+ *    the lower-of-the-two middle indices (i.e. biases toward the
+ *    weaker side, never toward max).
+ *
+ * Examples:
+ *   [off, low, medium, high]  → low       (4 items, floor((4-1)/2)=1)
+ *   [off, medium, high]       → medium    (3 items, floor((3-1)/2)=1)
+ *   [off, high]               → off       (2 items, floor((2-1)/2)=0)
+ *   [off]                     → off
+ *
+ * Falls back to "off" when no reasoning-capable levels are advertised —
+ * same safe default as pickHighestAvailableThinkingLevel for
+ * non-reasoning models.
+ */
+export function pickMiddleAvailableThinkingLevel(
+  available: readonly string[] | null | undefined,
+): ThinkingLevelOption {
+  const list = available ?? [];
+  const supported: ThinkingLevelOption[] = [];
+  for (const level of THINKING_LEVEL_ORDER) {
+    if (list.includes(level)) supported.push(level);
+  }
+  if (supported.length === 0) return "off";
+  const idx = Math.floor((supported.length - 1) / 2);
+  return supported[idx];
+}
+
+/**
  * Pick the closest available thinking level for the requested value.
  * Mirrors pi-ai's `clampThinkingLevel` semantics: if the requested
  * level isn't supported by the model, walk forward in
