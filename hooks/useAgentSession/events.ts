@@ -149,9 +149,17 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           showToast({ kind: "error", message: pendingAssistantErrorRef.current });
           pendingAssistantErrorRef.current = null;
         }
+        // Fire the completion/failure sound regardless of which workspace
+        // tab the user is currently looking at. Toasts stay gated by
+        // `isActive` (so a background tab's error doesn't overlay the
+        // foreground content), but the sound is a pure notification — if
+        // the user has switched away to another session tab, they still
+        // need to know the background agent finished. Without this, an
+        // `agent_end` arriving while a non-active tab is focused would be
+        // silent.
         if (hadAssistantError) {
-          if (isActive) playUiSoundEvent("agent_failure");
-        } else if (isActive && lastAssistantIsBodyRef.current) {
+          playUiSoundEvent("agent_failure");
+        } else if (lastAssistantIsBodyRef.current) {
           playUiSoundEvent("agent_success");
         }
         fireDiscreteBot(lastAssistantIsBodyRef.current ? "happy" : "waking");
@@ -312,7 +320,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
             setRuntimeError(finalError);
             showToast({ kind: "error", message: finalError });
             pendingAssistantErrorRef.current = null;
-            if (isActive) playUiSoundEvent("agent_failure");
+            playUiSoundEvent("agent_failure");
           }
         }
         break;
