@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { listAllSessions, searchSessionsPaged } from "@/lib/server/session-reader";
+import {
+  listAllSessionsHeaderOnly,
+  searchSessionsPaged,
+} from "@/lib/server/session-reader";
 import { getRpcSession } from "@/lib/server/rpc-manager";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import type { SessionInfo } from "@/lib/shared/types";
@@ -79,8 +82,11 @@ export async function GET(request: Request) {
   try {
     // Always scan the full set under the hood (cache hit within 5s) so the
     // recentCwds sidecar is accurate regardless of the cwd filter the caller
-    // asked for. Cheap relative to the actual disk scan.
-    const all = await listAllSessions();
+    // asked for. The header-only reader only opens each .jsonl up to 16KB
+    // (vs. full EOF scan via SessionManager.listAll) — much cheaper on hosts
+    // with many large sessions. See listAllSessionsHeaderOnly for the
+    // field-precision trade-offs vs. the full scan.
+    const all = await listAllSessionsHeaderOnly();
     const recent = recentCwds(all, 5);
 
     // Search branch: paged search runs only when the caller passed both

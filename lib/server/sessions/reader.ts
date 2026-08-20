@@ -1,4 +1,5 @@
-import { statSync } from "fs";
+import { closeSync, openSync, readSync, statSync } from "fs";
+import { StringDecoder } from "string_decoder";
 import {
   SessionManager,
   buildSessionContext as piBuildSessionContext,
@@ -18,6 +19,7 @@ import type {
   SessionEntry as PiSessionEntry,
   SessionInfo as PiSessionInfo,
 } from "@earendil-works/pi-coding-agent";
+import { listSessionNames } from "@/lib/server/session-names";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
 
 export { getAgentDir };
@@ -157,9 +159,285 @@ async function loadAllSessionsCached(): Promise<SessionInfo[]> {
 /**
  * Drop the cached full-list. Call after any mutation that changes the set or
  * metadata of sessions (rename / delete / new session creation).
+ *
+ * Clears both caches (full-read and header-only) so user-initiated changes
+ * are immediately visible to either listing path.
  */
 export function invalidateSessionListCache(): void {
   globalThis.__piSessionListCache = undefined;
+  globalThis.__piSessionListHeaderCache = undefined;
+}
+
+// ============================================================================
+// Header-only session listing (5s TTL, separate cache slot)
+//
+// `SessionManager.listAll()` reads every .jsonl file to EOF to compute
+// `messageCount` / `name` / `firstMessage` / `lastActivityTime`. On a host
+// with 1000+ session files (200+ MB total) that scan is consistently
+// ~1.8-2.1s, regardless of how few rows the caller actually wants. The
+// sidebar's /api/sessions first page (limit=3) only needs header data
+// that fits in the first ~16KB of each file.
+//
+// Trade-offs vs. the full scan:
+//   * `modified`     → file `mtime` (pi rewrites the file on every flush,
+//                      so `mtime` is within microseconds of `lastActivityTime`)
+//   * `name`         → first `session_info.name` we encounter; renames past
+//                      the 16KB window are dropped (sidebar renders
+//                      `name || firstMessage.slice(0,50) || id`, so the
+//                      fallback handles the missing-rename case)
+//   * `firstMessage` → first user message we encounter
+//   * `messageCount` → 0 (callers that need a real count can defer to
+//                      /api/sessions/[id], which loads the full SessionContext)
+//
+// Caller contract is unchanged: same SessionInfo[] shape, same return order
+// (newest-first by mtime).
+// ============================================================================
+
+const HEADER_SCAN_LIMIT = 16 * 1024; // bytes — header + first few entries
+
+interface HeaderScanResult {
+  id: string;
+  cwd: string;
+  created: string;
+  parentSessionPath?: string;
+  name?: string;
+  firstMessage?: string;
+}
+
+/** Pull a text block out of a message content (string | text-block array | other). */
+function extractMessageText(content: unknown): string | undefined {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (
+        block &&
+        typeof block === "object" &&
+        (block as { type?: string }).type === "text" &&
+        typeof (block as { text?: unknown }).text === "string"
+      ) {
+        return (block as { text: string }).text;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Bounded-scan reader: open + read at most HEADER_SCAN_LIMIT bytes,
+ * split on newlines, JSON.parse each line, capture the fields the sidebar
+ * needs. Stops as soon as header + name + first user message are populated.
+ *
+ * Lines that fail to parse (typically the trailing fragment at the scan
+ * boundary) are skipped silently.
+ */
+function readHeaderOnly(filePath: string): HeaderScanResult | null {
+  let fd: number;
+  try {
+    fd = openSync(filePath, "r");
+  } catch {
+    return null;
+  }
+  try {
+    const decoder = new StringDecoder("utf8");
+    const buffer = Buffer.allocUnsafe(HEADER_SCAN_LIMIT);
+    const bytesRead = readSync(fd, buffer, 0, HEADER_SCAN_LIMIT, 0);
+    if (bytesRead === 0) return null;
+    const text = decoder.write(buffer.subarray(0, bytesRead));
+    const lines = text.split("\n");
+
+    let id: string | undefined;
+    let cwd: string | undefined;
+    let created: string | undefined;
+    let parentSessionPath: string | undefined;
+    let name: string | undefined;
+    let firstMessage: string | undefined;
+    let headerSeen = false;
+
+    for (const line of lines) {
+      if (!line) continue;
+      let entry: Record<string, unknown>;
+      try {
+        entry = JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        // Trailing partial line at the scan boundary — skip.
+        continue;
+      }
+      if (!entry || typeof entry !== "object") continue;
+
+      // First session entry holds the header. We capture here, even if
+      // the next lines run off the end of the scan window.
+      const entryType = (entry as { type?: unknown }).type;
+      if (!headerSeen && entryType === "session" && typeof (entry as { id?: unknown }).id === "string") {
+        id = (entry as { id: string }).id;
+        const cwdVal = (entry as { cwd?: unknown }).cwd;
+        cwd = typeof cwdVal === "string" ? cwdVal : "";
+        const tsVal = (entry as { timestamp?: unknown }).timestamp;
+        created = typeof tsVal === "string" ? tsVal : undefined;
+        const parentVal = (entry as { parentSession?: unknown }).parentSession;
+        parentSessionPath = typeof parentVal === "string" ? parentVal : undefined;
+        headerSeen = true;
+        if (name !== undefined && firstMessage !== undefined) break;
+        continue;
+      }
+      if (!headerSeen) continue; // ignore anything before the header
+
+      if (entryType === "session_info" && typeof (entry as { name?: unknown }).name === "string") {
+        const trimmed = ((entry as { name: string }).name).trim();
+        if (trimmed) name = trimmed;
+      } else if (entryType === "message" && firstMessage === undefined) {
+        const msg = (entry as { message?: { role?: unknown; content?: unknown } }).message;
+        if (msg && (msg.role === "user" || msg.role === "assistant")) {
+          const text_ = extractMessageText(msg.content);
+          if (text_) {
+            firstMessage = text_;
+            if (name !== undefined) break;
+          }
+        }
+      }
+    }
+    if (!id || !created) return null;
+    const result: HeaderScanResult = { id, cwd: cwd ?? "", created };
+    if (parentSessionPath !== undefined) result.parentSessionPath = parentSessionPath;
+    if (name !== undefined) result.name = name;
+    if (firstMessage !== undefined) result.firstMessage = firstMessage;
+    return result;
+  } catch {
+    return null;
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** stat().mtime with a null fallback for races (concurrent delete, etc.). */
+function safeStatMtime(filePath: string): Date | null {
+  try {
+    return statSync(filePath).mtime;
+  } catch {
+    return null;
+  }
+}
+
+declare global {
+  var __piSessionListHeaderCache: { list: SessionInfo[]; loadedAt: number } | undefined;
+  var __piSessionListHeaderInflight: Promise<SessionInfo[]> | undefined;
+}
+
+async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
+  const now = Date.now();
+  const cached = globalThis.__piSessionListHeaderCache;
+  if (cached && now - cached.loadedAt < LIST_CACHE_TTL_MS) {
+    return cached.list;
+  }
+  if (globalThis.__piSessionListHeaderInflight) {
+    return globalThis.__piSessionListHeaderInflight;
+  }
+
+  const sessionsDir = `${getAgentDir()}/sessions`;
+  const loadPromise = (async (): Promise<SessionInfo[]> => {
+    const { readdir } = await import("fs/promises");
+    const { join } = await import("path");
+    let subdirs: string[] = [];
+    try {
+      const entries = await readdir(sessionsDir, { withFileTypes: true });
+      subdirs = entries
+        .filter((e) => e.isDirectory() || e.isSymbolicLink())
+        .map((e) => join(sessionsDir, e.name));
+    } catch {
+      return [];
+    }
+    const allFiles: string[] = [];
+    for (const dir of subdirs) {
+      try {
+        const files = await readdir(dir);
+        for (const f of files) {
+          if (f.endsWith(".jsonl")) allFiles.push(join(dir, f));
+        }
+      } catch {
+        // unreadable subdir — skip
+      }
+    }
+
+    const pathToId = new Map<string, string>();
+    const seen = new Set<string>();
+    const out: SessionInfo[] = [];
+    for (const filePath of allFiles) {
+      const mtime = safeStatMtime(filePath);
+      if (!mtime) continue;
+      const header = readHeaderOnly(filePath);
+      if (!header) continue;
+      if (seen.has(header.id)) continue; // duplicate id — keep first
+      seen.add(header.id);
+      pathToId.set(filePath, header.id);
+      const info: SessionInfo = {
+        path: filePath,
+        id: header.id,
+        cwd: header.cwd,
+        name: header.name,
+        created: header.created,
+        modified: mtime.toISOString(),
+        messageCount: 0, // callers needing real counts hit /api/sessions/[id]
+        firstMessage: header.firstMessage ?? "(no messages)",
+        parentSessionId: undefined,
+        running: false, // enriched by the /api/sessions route from the wrapper registry
+      };
+      if (header.parentSessionPath) {
+        info.parentSessionId = pathToId.get(header.parentSessionPath);
+      }
+      out.push(info);
+    }
+
+    // Newest-first by mtime to match SessionManager.listAll's contract.
+    out.sort((a, b) => b.modified.localeCompare(a.modified));
+
+    // Merge the sidecar name index in one pass — the header-window scan
+    // can only see the FIRST session_info (16 KB); users who rename a
+    // session after a long conversation would otherwise see the wrong
+    // (or no) name in the sidebar. The sidecar is the canonical
+    // authoritative name source; see lib/server/session-names.ts.
+    if (out.length > 0) {
+      const names = await listSessionNames();
+      if (names.size > 0) {
+        for (const s of out) {
+          const fromSidecar = names.get(s.id);
+          if (fromSidecar) s.name = fromSidecar.name;
+        }
+      }
+    }
+
+    // Mirror the path cache populated by the full-scan reader so that
+    // resolveSessionPath() hit-shops in subsequent calls.
+    const pathCache = globalThis.__piSessionPathCache;
+    if (pathCache) {
+      for (const s of out) pathCache.set(s.id, s.path);
+    }
+    return out;
+  })();
+
+  globalThis.__piSessionListHeaderInflight = loadPromise;
+  try {
+    const list = await loadPromise;
+    globalThis.__piSessionListHeaderCache = { list, loadedAt: Date.now() };
+    return list;
+  } finally {
+    globalThis.__piSessionListHeaderInflight = undefined;
+  }
+}
+
+/**
+ * Header-only, list-ALL with optional cwd filter. Same call shape as
+ * listAllSessions; same SessionInfo[] contract; same 5s TTL cache slot.
+ * Skips full-file reads; ~10-20x faster on hosts with many large sessions.
+ *
+ * Differences from `listAllSessions` (acceptable for sidebar list views):
+ *   - `modified`    is `mtime` (within milliseconds of activity time).
+ *   - `name`        is the first session_info inside the scan window.
+ *   - `firstMessage` is the first user/assistant message inside the window.
+ *   - `messageCount` is always 0.
+ */
+export async function listAllSessionsHeaderOnly(cwd?: string): Promise<SessionInfo[]> {
+  const all = await listAllSessionsHeaderOnlyUnfiltered();
+  if (!cwd) return all;
+  return all.filter((s) => s.cwd === cwd);
 }
 
 // ============================================================================

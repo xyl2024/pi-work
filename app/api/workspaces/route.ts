@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listAllSessions } from "@/lib/server/session-reader";
+import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { listRunningRpcSessions } from "@/lib/server/rpc-manager";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import type { WorkspacesResponse, Workspace } from "@/lib/shared/types";
@@ -52,9 +52,12 @@ export async function GET(request: Request) {
 
   log.debug("list workspaces requested", { limit, hasCursor: !!cursor });
   try {
-    // Single full scan under the 5s TTL covers both workspaces and the
-    // existing /api/sessions route — they share loadAllSessionsCached.
-    const all = await listAllSessions();
+    // Single 5s-TTL scan shared with /api/sessions (same cache slot via
+    // listAllSessionsHeaderOnly). Reads at most 16KB of each .jsonl file
+    // instead of streaming to EOF — same SessionInfo[] shape, same sort
+    // guarantees. See the header at reader.ts:listAllSessionsHeaderOnly
+    // for the field-precision trade-offs vs. the full scan.
+    const all = await listAllSessionsHeaderOnly();
 
     // Group by cwd, picking the most-recently-modified session as the
     // aggregate "lastUsed" + tooltip source. Empty cwd strings are skipped
@@ -69,13 +72,18 @@ export async function GET(request: Request) {
     }
 
     // Build a set of session ids that are currently running, partitioned
-    // by cwd for the per-workspace runningCount.
+    // by cwd for the per-workspace runningCount. The id→cwd index keeps
+    // lookup O(1) per running session — a previous `all.find((s) => s.id
+    // === id)` ran O(M) per running, making the loop O(n_running ×
+    // n_sessions) which is fine at 10×1600 but quadratic in principle.
+    const cwdBySessionId = new Map<string, string>();
+    for (const s of all) if (s.cwd) cwdBySessionId.set(s.id, s.cwd);
     const runningByCwd = new Map<string, number>();
     for (const { id, running } of listRunningRpcSessions()) {
       if (!running) continue;
-      const session = all.find((s) => s.id === id);
-      if (!session?.cwd) continue;
-      runningByCwd.set(session.cwd, (runningByCwd.get(session.cwd) ?? 0) + 1);
+      const cwd = cwdBySessionId.get(id);
+      if (!cwd) continue;
+      runningByCwd.set(cwd, (runningByCwd.get(cwd) ?? 0) + 1);
     }
 
     // Tally per-cwd session counts. One pass over `all` is enough.

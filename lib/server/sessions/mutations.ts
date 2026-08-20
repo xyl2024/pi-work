@@ -9,10 +9,17 @@ import { join } from "path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { deleteAgentTodoFile } from "@/lib/server/agent-todo-tool/store";
 import {
+  deleteSessionName,
+  writeSessionName,
+} from "@/lib/server/session-names";
+import {
   invalidateSessionListCache,
   invalidateSessionPathCache,
   resolveSessionPath,
 } from "./reader";
+import { createLogger } from "@/lib/server/logger";
+
+const log = createLogger("sessions/mutations");
 
 export interface RenameSessionResult {
   filePath: string;
@@ -87,6 +94,20 @@ export async function renameSession(
   }
 
   invalidateSessionListCache();
+  // Mirror the name into the sidecar index so listAllSessionsHeaderOnly
+  // (and any future API bypass of the full scan) can recover the latest
+  // name without re-reading the JSONL. Failure here must not surface as a
+  // rename error: the JSONL has already been updated above, and the
+  // sidebar's header-only reader will fall back to firstMessage for the
+  // session until the next rename / setSessionName repopulates the sidecar.
+  try {
+    writeSessionName(sessionId, cleanName);
+  } catch (err) {
+    log.warn("failed to mirror session name to sidecar", {
+      sessionId,
+      error: String(err),
+    });
+  }
   return { filePath };
 }
 
@@ -139,6 +160,7 @@ export async function deleteSession(
   unlinkSync(filePath);
   invalidateSessionPathCache(sessionId);
   invalidateSessionListCache();
+  deleteSessionName(sessionId);
   deleteAgentTodoFile(sessionId);
 
   return { filePath, reparentedChildren };

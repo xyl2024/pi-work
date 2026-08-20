@@ -32,8 +32,8 @@ export async function getAllowedRoots(): Promise<Set<string>> {
   const cached = globalThis.__piAllowedRootsCache;
   if (cached && cached.expiresAt > now) return cached.roots;
 
-  const { listAllSessions } = await import("./session-reader");
-  const sessions = await listAllSessions();
+  const { listAllSessionsHeaderOnly } = await import("./session-reader");
+  const sessions = await listAllSessionsHeaderOnly();
   const roots = new Set<string>();
   for (const s of sessions) {
     if (s.cwd) roots.add(s.cwd);

@@ -12,6 +12,7 @@ import type { LlmAuditSource } from "../shared/llm-audit-types";
 import { buildTodoTools } from "./user-todo/tools";
 import { readEnabledTodoTools } from "./user-todo/tools-config";
 import { buildShowFileTool } from "./show-file-tool";
+import { writeSessionName, deleteSessionName } from "./session-names";
 import { buildAgentTodoTool } from "./agent-todo-tool/tool";
 import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-questions-tool";
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
@@ -139,6 +140,26 @@ export class AgentSessionWrapper {
       // for the whole turn to finish (agent_end → full session reload).
       if (event.type === "message_end") {
         this.emitTreeUpdate();
+      }
+      // Mirror the latest session display name into the sidecar index
+      // (see lib/server/session-names.ts). The mutation path that
+      // rewrites the JSONL in place ALSO writes the sidecar (it doesn't
+      // emit session_info_changed), so this is the second-safety-net
+      // path for renames that came in via the live SDK RPC.
+      if (event.type === "session_info_changed") {
+        const name = (event as { name?: unknown }).name;
+        if (typeof name === "string" && name.trim()) {
+          try {
+            writeSessionName(this.sessionId, name);
+          } catch (err) {
+            log.warn("failed to mirror session name to sidecar", {
+              sessionId: this.sessionId,
+              error: String(err),
+            });
+          }
+        } else if (name === "" || name === undefined || name === null) {
+          deleteSessionName(this.sessionId);
+        }
       }
       for (const l of this.listeners) l(event);
     });

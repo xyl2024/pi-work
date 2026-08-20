@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listAllSessions } from "@/lib/server/session-reader";
+import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { getRpcSession } from "@/lib/server/rpc-manager";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
@@ -12,8 +12,11 @@ const log = createLogger("api/sessions/[id]/info");
  * when an `initialSessionId` from the URL is not in any loaded page (rare —
  * most URLs point to a recent session that's already on page 1).
  *
- * Hits the same 5s-TTL list cache, so a flow of these lookups within the
- * window shares one scan.
+ * Hits the same 5s-TTL header-only list cache as /api/sessions and
+ * /api/workspaces, so a flow of these lookups within the window shares one
+ * scan. `messageCount` will be 0 here; the unique caller (SessionSidebar
+ * initial-restore merge) doesn't render this field — see
+ * reader.ts:listAllSessionsHeaderOnly for the full precision trade-off list.
  */
 export async function GET(
   _req: Request,
@@ -22,7 +25,7 @@ export async function GET(
   const { id } = await params;
   const startedAt = Date.now();
   try {
-    const all = await listAllSessions();
+    const all = await listAllSessionsHeaderOnly();
     const info = all.find((s) => s.id === id);
     if (!info) {
       log.warn("session info not found", { id, durationMs: elapsedMs(startedAt) });
@@ -31,7 +34,7 @@ export async function GET(
     log.debug("session info served", {
       id,
       cwd: info.cwd,
-      cacheHit: !!(globalThis as { __piSessionListCache?: unknown }).__piSessionListCache,
+      cacheHit: !!(globalThis as { __piSessionListHeaderCache?: unknown }).__piSessionListHeaderCache,
       durationMs: elapsedMs(startedAt),
     });
     return NextResponse.json({

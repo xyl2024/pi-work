@@ -205,7 +205,6 @@ function FavoriteRow({
             </span>
           </Tooltip>
           <span style={{ flexShrink: 0 }}>{formatRelativeTime(session.modified, t)}</span>
-          <span style={{ flexShrink: 0 }}>{session.messageCount} {t("msgs")}</span>
         </div>
       </div>
       {hovered && (
