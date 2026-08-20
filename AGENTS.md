@@ -584,7 +584,7 @@ components/
                                   EditTagsModal, palette, types, utils)
   ui/
     AnimatedPopover.tsx + CollapsiblePanel.tsx + ConfirmDialog.tsx + ContextMenu.tsx
-    CountBadge.tsx + DatePicker.tsx + HighlightText.tsx + IconHoverButton.tsx
+    CountBadge.tsx + DatePicker.tsx + HighlightText.tsx
     LoadingState.tsx + MorphToggleIcon.tsx + ProviderIcon.tsx + SidebarSection.tsx
     SmartImage.tsx + TabBar.tsx + TimePicker.tsx + Toast.tsx + Tooltip.tsx + Typewriter.tsx
                                   generic primitives — used everywhere

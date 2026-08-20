@@ -2,7 +2,6 @@
 
 import type { RefObject } from "react";
 import { Tooltip } from "../../ui/Tooltip";
-import { IconHoverButton } from "../../ui/IconHoverButton";
 import { ContextUsageBar } from "../ContextUsageBar";
 import { CwdPicker } from "../../sessions/CwdPicker";
 import { ModelPicker } from "../ModelPicker";
@@ -166,19 +165,37 @@ export function BottomToolbar(props: BottomToolbarProps) {
           </button>
         </Tooltip>
         {!isStreaming && (
-          <IconHoverButton
-            onClick={() => fileInputRef.current?.click()}
-            icon={
+          <Tooltip content={t("Upload image")}>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label={t("Upload image")}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 32, height: 32, padding: 0, flexShrink: 0,
+                background: "none",
+                border: "none",
+                borderRadius: 9,
+                color: hasAttachedImages ? "var(--accent)" : "var(--text-muted)",
+                cursor: "pointer",
+                transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "var(--bg-hover)";
+                e.currentTarget.style.color = hasAttachedImages ? "var(--accent-hover)" : "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "none";
+                e.currentTarget.style.color = hasAttachedImages ? "var(--accent)" : "var(--text-muted)";
+              }}
+            >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                 <circle cx="8.5" cy="8.5" r="1.5" />
                 <polyline points="21 15 16 10 5 21" />
               </svg>
-            }
-            label={t("Upload image")}
-            ariaLabel={t("Upload image")}
-            variant={hasAttachedImages ? "accent" : "default"}
-          />
+            </button>
+          </Tooltip>
         )}
         {/* Model selector — visible always, disabled during streaming */}
         <ModelPicker
