@@ -517,51 +517,6 @@ pre, code {
   }
 }
 
-/* Streaming text — words resolve out of blur (assistant output).
-   The settled prefix keeps rendering as live markdown; the in-flight tail
-   animates word-by-word via .streaming-word, with a blinking caret at the
-   end. .markdown-body--streaming pulls the last paragraph inline so the
-   tail continues the current line instead of wrapping to a new one (inline
-   boxes ignore vertical margins, so the paragraph gap collapses too).
-   Reduced motion turns it into plain static text. */
-.markdown-body--streaming p:last-of-type {
-  display: inline;
-}
-.streaming-word {
-  display: inline;
-  will-change: filter, opacity;
-  animation: stream-in 420ms cubic-bezier(0.22, 0.61, 0.25, 1) both;
-}
-@keyframes stream-in {
-  from {
-    opacity: 0;
-    filter: blur(4px);
-  }
-  to {
-    opacity: 1;
-    filter: blur(0);
-  }
-}
-.streaming-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
-  vertical-align: text-bottom;
-  border-radius: 1px;
-  background: var(--text);
-  animation: blink 1s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .streaming-word {
-    animation: none;
-  }
-  .streaming-cursor {
-    animation: none;
-    opacity: 0.4;
-  }
-}
-
 /* Conversation-tree active branch — flowing dashes while the agent works.
    Applied to the connector paths on the active path via .tree-edge-flow;
    the dash pattern (stroke-dasharray) is set inline, so this class only
@@ -689,11 +644,6 @@ span.linenumber {
 @keyframes drop-ripple {
   0%   { transform: scale(0); opacity: 0.6; }
   100% { transform: scale(1); opacity: 0; }
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
 }
 
 /* Pulsing dot for in-progress runs / running-task indicators.

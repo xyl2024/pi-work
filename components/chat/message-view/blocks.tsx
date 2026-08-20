@@ -31,34 +31,12 @@ export function BlockView({ block, toolResults, isStreaming, isLast, keywords, i
 function TextBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }: { block: TextContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean; onImageClick?: (src: string) => void }) {
   const text = highlightTextAsHtml(block.text, keywords, isSearchMatch);
   const components = useMarkdownComponents(isStreaming, onImageClick);
-  const streamReveal = isStreaming && !isSearchMatch;
-  const prevLenRef = useRef(0);
-  useEffect(() => {
-    prevLenRef.current = block.text.length;
-  }, [block.text]);
-  const settled = streamReveal ? prevLenRef.current : block.text.length;
-  const delta = streamReveal ? block.text.slice(settled) : "";
-  const tailTokens = delta.split(/(\s+)/).filter((token) => token.length > 0);
 
   return (
-    <div className={`markdown-body${streamReveal ? " markdown-body--streaming" : ""}`}>
+    <div className="markdown-body">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {streamReveal ? text.slice(0, settled) : text}
+        {text}
       </ReactMarkdown>
-      {streamReveal && tailTokens.length > 0 && (
-        <span>
-          {tailTokens.map((token, index) =>
-            /^\s+$/.test(token) ? (
-              <span key={`${settled}-${index}`}>{token}</span>
-            ) : (
-              <span key={`${settled}-${index}`} className="streaming-word" style={{ animationDelay: `${Math.min(index * 25, 250)}ms` }}>
-                {token}
-              </span>
-            ),
-          )}
-        </span>
-      )}
-      {streamReveal && <span className="streaming-cursor" aria-hidden />}
     </div>
   );
 }
