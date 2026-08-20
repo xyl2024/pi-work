@@ -118,8 +118,7 @@ export function AppendSystemSection({
           : t("Disabled — new sessions will NOT load this file. Edit and save above to keep the content for when you re-enable it.")}
       </p>
       {/* APPEND_SYSTEM.md loader toggle — immediate-apply. Independent
-          from the Save button above (which only writes file content).
-          Mirrors the styling of the Clawd on Desk switch in Section 4. */}
+          from the Save button above (which only writes file content). */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <span style={{ fontSize: 13, color: "var(--text)" }}>
           {config.append_system.enabled ? t("Loading on") : t("Loading off")}

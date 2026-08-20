@@ -4,7 +4,6 @@ import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import type { ToolSelection } from "./types";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
-import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { recordCall } from "./token-audit-store";
@@ -757,8 +756,6 @@ export async function startRpcSession(
     // tools are passed to createAgentSession below — already-running
     // sessions keep their original set even if the user toggles a switch.
     const enabledCustom = readEnabledCustomTools();
-    // Build path list for vendored built-in extensions. Read once per session start.
-    const additionalExtensionPaths: string[] = [];
     // APPEND_SYSTEM.md loader toggle (see PiWorkConfig.append_system): when the
     // user has disabled it, we hand DefaultResourceLoader an explicit empty
     // array so the `??` on `appendSystemPromptSource` short-circuits and
@@ -767,17 +764,6 @@ export async function startRpcSession(
     let appendSystemPromptLoaderOption: string[] | undefined;
     try {
       const cfg = readConfig();
-      if (cfg.extensions.clawd_on_desk.enabled) {
-        // DefaultResourceLoader passes additionalExtensionPaths directly to
-        // jiti.import without doing directory→index.ts resolution, so we must
-        // hand it the file path, not the directory.
-        const clawdEntry = path.join(process.cwd(), "extensions", "clawd-on-desk", "index.ts");
-        if (existsSync(clawdEntry)) {
-          additionalExtensionPaths.push(clawdEntry);
-        } else {
-          log.warn("clawd-on-desk enabled but vendored entry missing", { path: clawdEntry });
-        }
-      }
       if (!cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }
@@ -787,7 +773,6 @@ export async function startRpcSession(
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
-      additionalExtensionPaths,
       // Pass `[]` (not `undefined`) when the toggle is off — the loader's
       // `??` on appendSystemPromptSource treats an explicit empty array as
       // "user-supplied, nothing to append" and skips file discovery.

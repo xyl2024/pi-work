@@ -450,10 +450,6 @@ hooks/
   useNotes.tsx              notes provider + tag list + image upload
   useRss.ts                 RSS feeds/articles polling + mark-read actions
 
-extensions/
-  clawd-on-desk/            vendored pi extension: shouldReport() forced to () => true
-                            (see `pi-work-never-binds-extension-ui` memory)
-
 electron-shell/
   main.js                   Electron entry: window + tray + global shortcut + single-instance
   titlebar.html             macOS-style traffic-light titlebar + iframe allow="clipboard-read; clipboard-write"
@@ -518,9 +514,6 @@ Newer pi emits `compaction_start` / `compaction_end`; older versions emitted `au
 
 ### Permission defaults are safe
 `PermissionDialog` (Esc → deny, Enter → allow once, backdrop-click → deny) deliberately biases toward deny because "allow similar for this session" is a mouse-only action — keyboard users can never accidentally over-grant.
-
-### pi extensions never see a UI
-`startRpcSession` does not call `bindExtensions`, so `ctx.hasUI` is `false` in every pi-work session. Extensions that gate on `hasUI` (e.g. `extensions/clawd-on-desk/`) need their vendored `index.ts` to override `shouldReport` to `() => true` — see the `pi-work-never-binds-extension-ui` memory for the full pattern.
 
 ### Translate panel does not touch disk
 `/api/translate` builds a custom `ResourceLoader` that returns empty arrays for everything plus `SessionManager.inMemory()` + `SettingsManager.inMemory()` + `noTools: "all"`. This guarantees the request never reads `~/.pi/agent/settings.json`, never fires any extension hook, and never writes a `.jsonl` file — see the comment at the top of `app/api/translate/route.ts`.

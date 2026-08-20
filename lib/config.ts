@@ -41,14 +41,6 @@ export interface DangerousPatternsConfig {
   timeout_ms: number;
 }
 
-export interface BuiltinExtensionConfig {
-  enabled: boolean;
-}
-
-export interface ExtensionsConfig {
-  clawd_on_desk: BuiltinExtensionConfig;
-}
-
 // ── Right-side button bar visibility ──────────────────────────────────────
 // Types and helpers live in `lib/right-bar.ts` (client-safe). They're
 // re-exported from here so server-side callers can continue to import
@@ -127,7 +119,6 @@ export interface TypewriterEffectConfig {
 // just the `PiWorkConfig` integration point.
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
-  extensions: ExtensionsConfig;
   right_side_bar: RightSideBarConfig;
   custom_tools: CustomToolsConfig;
   append_system: AppendSystemConfig;
@@ -161,9 +152,6 @@ const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = {
 
 const DEFAULT_CONFIG: PiWorkConfig = {
   dangerous_patterns: DEFAULT_DANGEROUS_PATTERNS,
-  extensions: {
-    clawd_on_desk: { enabled: false },
-  },
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
   custom_tools: {
     enabled: [...AGENT_CUSTOM_TOOL_NAMES],
@@ -352,19 +340,8 @@ export function readConfig(): PiWorkConfig {
 
     const cfg = parsed as Record<string, unknown>;
 
-    const extObj = (cfg.extensions && typeof cfg.extensions === "object")
-      ? cfg.extensions as Record<string, unknown>
-      : {};
-    const codObj = (extObj.clawd_on_desk && typeof extObj.clawd_on_desk === "object")
-      ? extObj.clawd_on_desk as Record<string, unknown>
-      : {};
-    const clawdOnDeskEnabled = typeof codObj.enabled === "boolean" ? codObj.enabled : false;
-
     return {
       dangerous_patterns: parseDangerousPatterns(cfg.dangerous_patterns),
-      extensions: {
-        clawd_on_desk: { enabled: clawdOnDeskEnabled },
-      },
       right_side_bar: parseRightSideBar(cfg.right_side_bar),
       custom_tools: parseCustomTools(cfg.custom_tools),
       append_system: parseAppendSystem(cfg.append_system),

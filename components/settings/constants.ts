@@ -35,7 +35,6 @@ export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-appearance",    labelKey: "Appearance" },
   { id: "settings-section-wechat",        labelKey: "WeChat Connection" },
   { id: "settings-section-append-system", labelKey: "Append System Prompt" },
-  { id: "settings-section-clawd",         labelKey: "Clawd on Desk" },
   { id: "settings-section-custom-tools",  labelKey: "Custom Tools" },
   { id: "settings-section-right-bar",     labelKey: "Right-side buttons" },
   { id: "settings-section-inbox-test",    labelKey: "Inbox Test" },

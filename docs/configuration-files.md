@@ -65,11 +65,6 @@ dangerous_patterns:
     - { name: "...", pattern: "..." }
   timeout_ms: 300000       # ms,默认 5 分钟
 
-# 扩展
-extensions:
-  clawd_on_desk:
-    enabled: false         # (其他 plugin 开关未实现)
-
 # 右侧 10 个 tab 按钮的显隐
 right_side_bar:
   todos: true

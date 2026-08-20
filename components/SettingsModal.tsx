@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
-import { useToast } from "./Toast";
 import { WeChatSettingsSection } from "./WeChatSettingsSection";
 import { InboxTestSection } from "./InboxTestSection";
 import { setSettings } from "@/hooks/settingsStore";
@@ -13,7 +12,6 @@ import { useImmediateApply } from "./settings/use-immediate-apply";
 import { AppearanceSection } from "./settings/sections/AppearanceSection";
 import { ProfileSection } from "./settings/sections/ProfileSection";
 import { AppendSystemSection } from "./settings/sections/AppendSystemSection";
-import { ClawdOnDeskSection } from "./settings/sections/ClawdOnDeskSection";
 import { CustomToolsSection } from "./settings/sections/CustomToolsSection";
 import { RightBarSection } from "./settings/sections/RightBarSection";
 import { FilePreviewSection } from "./settings/sections/FilePreviewSection";
@@ -32,18 +30,14 @@ import { RetrySection } from "./settings/sections/RetrySection";
  *   2  WeChat Connection   (<WeChatSettingsSection />)
  *   3  Append System Prompt(textarea save + immediate-apply toggle;
  *                          onDirtyChange → modal)
- *   4  Clawd on Desk       (immediate-apply toggle, but the section
- *                          still uses the modal-wide Save button —
- *                          legacy quirk, slated for removal with the
- *                          clawd plugin)
- *   5  Custom Tools        (immediate-apply)
- *   6  Right-side buttons  (immediate-apply; visibility / order /
+ *   4  Custom Tools        (immediate-apply)
+ *   5  Right-side buttons  (immediate-apply; visibility / order /
  *                          alignment)
- *   7  Inbox Test          (<InboxTestSection />)
- *   8  File preview limits (immediate-apply per kind)
- *   9  Typewriter effect   (immediate-apply toggle)
- *   10 Typewriter phrases  (own save flow; onDirtyChange → modal)
- *   11 Agent retry         (independent state machine; lives in
+ *   6  Inbox Test          (<InboxTestSection />)
+ *   7  File preview limits (immediate-apply per kind)
+ *   8  Typewriter effect   (immediate-apply toggle)
+ *   9  Typewriter phrases  (own save flow; onDirtyChange → modal)
+ *   10 Agent retry         (independent state machine; lives in
  *                          ~/.pi/agent/settings.json, not config.yaml)
  */
 export function SettingsModal({
@@ -54,17 +48,8 @@ export function SettingsModal({
   onProfileSaved?: () => void;
 }) {
   const { t } = useI18n();
-  const toast = useToast();
   const [config, setConfig] = useState<PiWorkConfig | null>(null);
-  const [originalConfig, setOriginalConfig] = useState<PiWorkConfig | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // ── Modal-wide "general Save" ───────────────────────────────────────
-  // Only used by the Clawd section (legacy quirk — all other immediate-
-  // apply sections skip Save and PUT on toggle). Goes away when the
-  // clawd plugin is removed in a follow-up.
-  const [saving, setSaving] = useState(false);
-  const [savedOk, setSavedOk] = useState(false);
 
   // ── Unsaved-changes tracking from child sections ───────────────────
   // The two textarea-backed sections (AppendSystem + Typewriter) own
@@ -81,39 +66,13 @@ export function SettingsModal({
       .then((r) => r.json())
       .then((d: PiWorkConfig) => {
         setConfig(d);
-        setOriginalConfig(d);
         setSettings(d);
       })
       .catch(() => { /* error shown in body via fallback rendering */ })
       .finally(() => setLoading(false));
   }, []);
 
-  const apply = useImmediateApply({ config, setConfig, setOriginalConfig });
-
-  // Dirty check — compare current config against the snapshot from initial load.
-  const isDirty =
-    !!config && !!originalConfig && JSON.stringify(config) !== JSON.stringify(originalConfig);
-
-  const handleSave = useCallback(async () => {
-    if (!config) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setOriginalConfig(config);
-      setSavedOk(true);
-      setTimeout(() => setSavedOk(false), 1500);
-      toast.show({ kind: "success", message: t("Settings saved") });
-    } catch (e) {
-      toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to save settings") });
-    } finally {
-      setSaving(false);
-    }
-  }, [config, t, toast]);
+  const apply = useImmediateApply({ config, setConfig });
 
   // ── Sidebar nav: active section + scroll-spy ───────────────────────
   // Default to the first nav item so the sidebar shows a highlighted
@@ -125,10 +84,9 @@ export function SettingsModal({
 
   // Depend on `config` so the observer is set up the first time the
   // body div actually mounts (the loading screen renders before it).
-  // When `config` later changes (e.g. after a Save), the cleanup
-  // disconnect + re-observe cost is negligible — there are ~10
-  // targets and the body div's identity is stable across saves, so
-  // the observer's `root` reference stays valid.
+  // The cleanup disconnect + re-observe cost is negligible — there
+  // are ~10 targets and the body div's identity is stable across
+  // re-renders, so the observer's `root` reference stays valid.
   useEffect(() => {
     const root = bodyRef.current;
     if (!root) return;
@@ -176,11 +134,11 @@ export function SettingsModal({
   // `window.confirm` prompt, `true` to close without prompting, or
   // `false` to abort.
   const shouldConfirm = useCallback(() => {
-    if (isDirty || typewriterDirty || appendSystemDirty) {
+    if (typewriterDirty || appendSystemDirty) {
       return t("Discard unsaved changes?");
     }
     return true;
-  }, [isDirty, typewriterDirty, appendSystemDirty, t]);
+  }, [typewriterDirty, appendSystemDirty, t]);
   const { requestClose, backdropStyle, panelStyle } = useModalAnimation({
     isOpen: true,
     onClose,
@@ -308,41 +266,31 @@ export function SettingsModal({
               onDirtyChange={setAppendSystemDirty}
             />
 
-            {/* 4: Clawd on Desk — uses modal-wide Save */}
-            <ClawdOnDeskSection
-              config={config}
-              setConfig={setConfig}
-              canSave={isDirty}
-              saving={saving}
-              savedOk={savedOk}
-              onSave={() => void handleSave()}
-            />
-
-            {/* 5: Custom Tools */}
+            {/* 4: Custom Tools */}
             <CustomToolsSection config={config} apply={apply} />
 
-            {/* 6: Right-side buttons */}
+            {/* 5: Right-side buttons */}
             <RightBarSection config={config} apply={apply} />
 
-            {/* 7: Inbox Test */}
+            {/* 6: Inbox Test */}
             <div data-settings-section="settings-section-inbox-test">
               <InboxTestSection />
             </div>
 
-            {/* 8: File preview limits */}
+            {/* 7: File preview limits */}
             <FilePreviewSection config={config} apply={apply} />
 
-            {/* 9: Typewriter effect */}
+            {/* 8: Typewriter effect */}
             <TypewriterEffectSection config={config} apply={apply} />
 
-            {/* 10: Typewriter phrases */}
+            {/* 9: Typewriter phrases */}
             <TypewriterSection
               config={config}
               apply={apply}
               onDirtyChange={setTypewriterDirty}
             />
 
-            {/* 11: Agent retry */}
+            {/* 10: Agent retry */}
             <RetrySection />
           </div>
         </div>

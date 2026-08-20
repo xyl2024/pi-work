@@ -12,13 +12,9 @@ import type { PiWorkConfig } from "@/lib/config";
  * effect, APPEND_SYSTEM.md loader, etc.). Each section owns a small
  * piece of `PiWorkConfig`; when the user toggles something we
  *
- *   1. optimistically setConfig + setOriginalConfig (keeps
- *      `isDirty === false` so closing the modal does not prompt
- *      "discard changes?")
- *   2. publish the new config to the global settings store so
- *      AppShell / chat input pick it up on the next render
- *   3. PUT the whole PiWorkConfig to /api/settings
- *   4. on failure, roll back to the previous config and toast an error
+ *   1. optimistically setConfig (publishes to AppShell immediately)
+ *   2. PUT the whole PiWorkConfig to /api/settings
+ *   3. on failure, roll back to the previous config and toast an error
  *
  * The previous config is tracked in a ref synced via useEffect — a
  * stale closure would otherwise rollback against a value that's no
@@ -28,11 +24,9 @@ import type { PiWorkConfig } from "@/lib/config";
 export function useImmediateApply({
   config,
   setConfig,
-  setOriginalConfig,
 }: {
   config: PiWorkConfig | null;
   setConfig: (next: PiWorkConfig | null) => void;
-  setOriginalConfig: (next: PiWorkConfig | null) => void;
 }) {
   const configRef = useRef<PiWorkConfig | null>(config);
   useEffect(() => { configRef.current = config; }, [config]);
@@ -46,7 +40,6 @@ export function useImmediateApply({
       if (!prev) return false;
       const next = computeNext(prev);
       setConfig(next);
-      setOriginalConfig(next);
       setSettings(next);
       try {
         const res = await fetch("/api/settings", {
@@ -64,7 +57,6 @@ export function useImmediateApply({
         // Roll back the optimistic local update so the row reflects
         // the actual on-disk value (not the rejected write).
         setConfig(prev);
-        setOriginalConfig(prev);
         setSettings(prev);
         toast.show({
           kind: "error",
@@ -73,6 +65,6 @@ export function useImmediateApply({
         return false;
       }
     },
-    [setConfig, setOriginalConfig, toast, t],
+    [setConfig, toast, t],
   );
 }
