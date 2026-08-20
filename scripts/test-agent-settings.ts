@@ -45,7 +45,7 @@ import {
   readAgentRetry,
   resetAgentRetry,
   writeAgentRetry,
-} from "@/lib/agent-settings";
+} from "@/lib/server/agent-settings";
 
 let pass = 0;
 let fail = 0;

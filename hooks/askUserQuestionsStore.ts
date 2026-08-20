@@ -34,8 +34,8 @@ import type {
   AskUserQuestionAnswer,
   AskUserQuestionsCancel,
   AskUserQuestionsDecision,
-} from "@/lib/ask-user-questions-tool-types";
-import { isContentEqual } from "@/lib/shallowEqual";
+} from "@/lib/shared/ask-user-questions-tool-types";
+import { isContentEqual } from "@/lib/client/shallowEqual";
 
 export interface PendingAskUserQuestions {
   /** Owning session id — required for sidebar dot lookups (the Map is

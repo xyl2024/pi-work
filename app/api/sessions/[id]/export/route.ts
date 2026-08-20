@@ -13,9 +13,9 @@
 import { NextResponse } from "next/server";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 
-import { resolveSessionPath } from "@/lib/session-reader";
-import { exportSessionHtmlViaPi } from "@/lib/session-export/pi-html";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { resolveSessionPath } from "@/lib/server/session-reader";
+import { exportSessionHtmlViaPi } from "@/lib/server/session-export/pi-html";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]/export");
 

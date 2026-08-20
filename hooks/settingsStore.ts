@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import type { PiWorkConfig } from "@/lib/config";
-import { isContentEqual } from "@/lib/shallowEqual";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
+import { isContentEqual } from "@/lib/client/shallowEqual";
 
 /**
  * Settings store — client-side mirror of ~/.pi-work/config.yaml.

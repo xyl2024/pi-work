@@ -5,12 +5,12 @@
  * Returns the number of articles updated.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { markAllArticlesRead } from "@/lib/rss/store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { markAllArticlesRead } from "@/lib/server/rss/store";
 import {
   RssNotFoundError,
   RssValidationError,
-} from "@/lib/rss/schema";
+} from "@/lib/shared/rss/schema";
 
 const log = createLogger("api/rss/articles/mark-all-read");
 

@@ -1,14 +1,14 @@
 import { useCallback, useRef, type Dispatch } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage } from "@/lib/types";
-import { normalizeToolCalls } from "@/lib/normalize";
+import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage } from "@/lib/shared/types";
+import { normalizeToolCalls } from "@/lib/shared/normalize";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
-import { isShowFileToolName } from "@/lib/show-file-tool-types";
-import { AGENT_TODO_TOOL_NAME } from "@/lib/agent-todo-tool/types";
-import { notifyMutated } from "@/lib/git-status-store";
-import { setGrokbotConfig } from "@/lib/grokbot-store";
+import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
+import { AGENT_TODO_TOOL_NAME } from "@/lib/shared/agent-todo-tool/types";
+import { notifyMutated } from "@/lib/client/git-status-store";
+import { setGrokbotConfig } from "@/lib/client/grokbot-store";
 import { setShowFileResult } from "../showFileResultsStore";
 import { setPendingAskUserQuestions } from "../askUserQuestionsStore";
-import type { AskUserQuestion } from "@/lib/ask-user-questions-tool-types";
+import type { AskUserQuestion } from "@/lib/shared/ask-user-questions-tool-types";
 import { bashCommandTouchesGit, isBodyMessage, sameCompletedMessage } from "./utils";
 import type { AgentEvent, AgentPhase, AgentRuntimeState, StateSetter, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
 

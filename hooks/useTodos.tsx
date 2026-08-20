@@ -3,9 +3,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { marked } from "marked";
 import DOMPurify from "isomorphic-dompurify";
-import { useToast } from "@/components/Toast";
+import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "./useI18n";
-import { buildDescriptionSanitizeConfig } from "@/lib/description-sanitize";
+import { buildDescriptionSanitizeConfig } from "@/lib/shared/description-sanitize";
 
 export interface Tag {
   name: string;

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { validateFileName } from "@/lib/file-name";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { validateFileName } from "@/lib/shared/file-name";
 import {
   filePathFromSegments,
   getAllowedRoots,
   invalidateAllowedRootsCache,
   isPathAllowed,
-} from "@/lib/file-access";
+} from "@/lib/server/file-access";
 import { handleFilesGet, IGNORED_NAMES, IGNORED_SUFFIXES, jsonError, jsonOk } from "../handler";
 
 const log = createLogger("api/files");

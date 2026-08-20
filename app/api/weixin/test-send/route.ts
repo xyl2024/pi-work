@@ -8,8 +8,8 @@
  *   the recipient's @im.wechat user id manually.
  */
 import { NextResponse } from "next/server";
-import { state, api } from "@/lib/wechat";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { state, api } from "@/lib/server/wechat";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 

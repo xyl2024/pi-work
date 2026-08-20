@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { listAllSessions } from "@/lib/session-reader";
-import { getRpcSession } from "@/lib/rpc-manager";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { listAllSessions } from "@/lib/server/session-reader";
+import { getRpcSession } from "@/lib/server/rpc-manager";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]/info");
 

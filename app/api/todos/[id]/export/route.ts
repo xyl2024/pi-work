@@ -4,10 +4,10 @@ import { join, resolve } from "path";
 import { homedir } from "os";
 import JSZip from "jszip";
 import DOMPurify from "isomorphic-dompurify";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { getTodoById } from "@/lib/user-todo/store";
-import { extractTodoImageFilenames } from "@/lib/user-todo/images-utils";
-import { buildDescriptionSanitizeConfig } from "@/lib/description-sanitize";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { getTodoById } from "@/lib/server/user-todo/store";
+import { extractTodoImageFilenames } from "@/lib/shared/user-todo/images-utils";
+import { buildDescriptionSanitizeConfig } from "@/lib/shared/description-sanitize";
 
 const log = createLogger("api/todos/[id]/export");
 const TODO_IMAGES_DIR = join(homedir(), ".pi-work", "todo_images");

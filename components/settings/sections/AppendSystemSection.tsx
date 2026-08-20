@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { useToast } from "@/components/Toast";
-import type { PiWorkConfig } from "@/lib/config";
+import { useToast } from "@/components/ui/Toast";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
  * Section 3: Append System Prompt (~/.pi/agent/APPEND_SYSTEM.md).

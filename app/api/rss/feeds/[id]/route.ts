@@ -9,16 +9,16 @@
  * DELETE cascades to all rss_articles for this feed (ON DELETE CASCADE).
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 import {
   deleteFeed,
   fetchAndRefreshFeed,
   updateFeed,
-} from "@/lib/rss/store";
+} from "@/lib/server/rss/store";
 import {
   RssNotFoundError,
   RssValidationError,
-} from "@/lib/rss/schema";
+} from "@/lib/shared/rss/schema";
 
 const log = createLogger("api/rss/feeds/[id]");
 

@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useSyncExternalStore } from "react";
-import { isContentEqual } from "@/lib/shallowEqual";
+import { isContentEqual } from "@/lib/client/shallowEqual";
 
 // Keep the view shape in sync with `hooks/useRss.ts`. Duplicated here to avoid
 // a circular import (useRss imports from rssStore, not the other way around).

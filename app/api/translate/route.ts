@@ -1,13 +1,13 @@
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { createDirectLlmSession, resolveDirectModel } from "@/lib/llm-direct";
-import { runWithLlmAuditContext } from "@/lib/llm-audit";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { createDirectLlmSession, resolveDirectModel } from "@/lib/server/llm-direct";
+import { runWithLlmAuditContext } from "@/lib/server/llm-audit";
 import {
   DEFAULT_TARGET_LANGUAGE,
   MAX_TRANSLATE_PROMPT_CHARS,
   TRANSLATE_PROMPTS,
   isLanguageCode,
   type LanguageCode,
-} from "@/lib/translate";
+} from "@/lib/shared/translate";
 
 export const dynamic = "force-dynamic";
 

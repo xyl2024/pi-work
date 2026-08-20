@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { deleteByIds } from "@/lib/inbox-store";
+import { deleteByIds } from "@/lib/server/inbox-store";
 
 export const dynamic = "force-dynamic";
 

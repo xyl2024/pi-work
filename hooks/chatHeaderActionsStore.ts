@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { isContentEqual } from "@/lib/shallowEqual";
+import { isContentEqual } from "@/lib/client/shallowEqual";
 
 /**
  * Session-scoped header actions: the Replay / Export / Auto-name buttons

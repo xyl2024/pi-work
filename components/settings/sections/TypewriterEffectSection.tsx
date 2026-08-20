@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import type { PiWorkConfig } from "@/lib/config";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
  * Section 9: Typewriter effect master toggle.

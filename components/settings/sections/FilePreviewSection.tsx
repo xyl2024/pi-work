@@ -2,15 +2,15 @@
 
 import { useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { useToast } from "@/components/Toast";
+import { useToast } from "@/components/ui/Toast";
 import { FileViewerLimitRow } from "../rows";
 import { FILE_VIEWER_UI } from "../constants";
 import {
   FILE_VIEWER_LIMITS,
   type FileViewerKind,
   type FileViewerMaxSizeMb,
-} from "@/lib/file-viewer-limits";
-import type { PiWorkConfig } from "@/lib/config";
+} from "@/lib/shared/file-viewer-limits";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
  * Section 8: File preview limits.

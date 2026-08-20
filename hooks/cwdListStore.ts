@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { WorkspacesResponse } from "@/lib/types";
+import type { WorkspacesResponse } from "@/lib/shared/types";
 
 /**
  * App-wide recent-cwd list, following the same module-scoped

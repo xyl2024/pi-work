@@ -1,4 +1,4 @@
-import { createLogger } from "@/lib/logger";
+import { createLogger } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 

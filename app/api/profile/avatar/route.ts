@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { avatarExists, getAvatarPath, removeAvatar, writeAvatar } from "@/lib/profile-store";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { avatarExists, getAvatarPath, removeAvatar, writeAvatar } from "@/lib/server/profile-store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { readFileSync } from "fs";
 
 const log = createLogger("api/profile/avatar");

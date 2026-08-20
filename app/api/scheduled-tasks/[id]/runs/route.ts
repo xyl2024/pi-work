@@ -2,8 +2,8 @@
  * GET /api/scheduled-tasks/[id]/runs — recent run history for a task.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { getTask, listRuns, SchedulerNotFoundError } from "@/lib/scheduler/store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { getTask, listRuns, SchedulerNotFoundError } from "@/lib/server/scheduler/store";
 
 const log = createLogger("api/scheduled-tasks/runs");
 

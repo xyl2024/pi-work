@@ -11,7 +11,7 @@
  *   Clears the in-memory contact list. Does NOT stop the monitor.
  */
 import { NextResponse } from "next/server";
-import { state, monitor } from "@/lib/wechat";
+import { state, monitor } from "@/lib/server/wechat";
 
 export const dynamic = "force-dynamic";
 

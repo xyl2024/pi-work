@@ -13,13 +13,13 @@
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { bootstrap: wechatBootstrap } = await import("@/lib/wechat/startup");
+    const { bootstrap: wechatBootstrap } = await import("@/lib/server/wechat/startup");
     wechatBootstrap();
-    const { bootstrap: schedulerBootstrap } = await import("@/lib/scheduler/startup");
+    const { bootstrap: schedulerBootstrap } = await import("@/lib/server/scheduler/startup");
     schedulerBootstrap();
-    const { bootstrap: rssBootstrap } = await import("@/lib/rss/startup");
+    const { bootstrap: rssBootstrap } = await import("@/lib/server/rss/startup");
     rssBootstrap();
-    const { bootstrap: terminalBootstrap } = await import("@/lib/terminal/startup");
+    const { bootstrap: terminalBootstrap } = await import("@/lib/server/terminal/startup");
     terminalBootstrap();
   }
 }

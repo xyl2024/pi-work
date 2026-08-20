@@ -5,7 +5,7 @@ import {
   deleteOlderThan,
   listMessages,
   listSources,
-} from "@/lib/inbox-store";
+} from "@/lib/server/inbox-store";
 
 export const dynamic = "force-dynamic";
 

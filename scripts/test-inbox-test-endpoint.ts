@@ -6,7 +6,7 @@
  * via the store to confirm it landed. Cleans up after itself.
  */
 import { POST } from "../app/api/inbox/test/route";
-import { deleteByIds, listMessages } from "../lib/inbox-store";
+import { deleteByIds, listMessages } from "../lib/server/inbox-store";
 
 async function callPost(body: unknown) {
   return POST(

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { join } from "path";
 import { homedir } from "os";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { readStringArray, writeStringArray } from "@/lib/json-array-store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { readStringArray, writeStringArray } from "@/lib/server/json-array-store";
 
 const log = createLogger("api/pinned-cwds");
 const PINNED_FILE = join(homedir(), ".pi-work", "pinned.json");

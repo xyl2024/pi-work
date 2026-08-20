@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
+import { readConfig, writeConfig } from "@/lib/server/config";
 import {
-  readConfig,
-  writeConfig,
-  type PiWorkConfig,
   FILE_VIEWER_LIMITS,
   FILE_VIEWER_KINDS,
-} from "@/lib/config";
-import { createLogger, elapsedMs } from "@/lib/logger";
+} from "@/lib/shared/file-viewer-limits";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 

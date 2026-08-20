@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { resolveSessionPath } from "@/lib/session-reader";
-import { startRpcSession, getRpcSession } from "@/lib/rpc-manager";
+import { resolveSessionPath } from "@/lib/server/session-reader";
+import { startRpcSession, getRpcSession } from "@/lib/server/rpc-manager";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/agent/[id]");
 

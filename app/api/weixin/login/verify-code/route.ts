@@ -6,8 +6,8 @@
  *   by GET /api/weixin/login will pass it to get_qrcode_status.
  */
 import { NextResponse } from "next/server";
-import { state } from "@/lib/wechat";
-import { createLogger } from "@/lib/logger";
+import { state } from "@/lib/server/wechat";
+import { createLogger } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 

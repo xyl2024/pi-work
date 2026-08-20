@@ -6,9 +6,9 @@
  * refresh the task's runs list.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { getTask, recordRunStart, SchedulerNotFoundError } from "@/lib/scheduler/store";
-import { runTask } from "@/lib/scheduler/runner";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { getTask, recordRunStart, SchedulerNotFoundError } from "@/lib/server/scheduler/store";
+import { runTask } from "@/lib/server/scheduler/runner";
 
 const log = createLogger("api/scheduled-tasks/run");
 

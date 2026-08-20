@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
-import type { SessionTreeNode } from "@/lib/types";
-import type { AgentControls } from "@/lib/commands";
-import { isContentEqual } from "@/lib/shallowEqual";
+import type { SessionTreeNode } from "@/lib/shared/types";
+import type { AgentControls } from "@/lib/client/commands";
+import { isContentEqual } from "@/lib/client/shallowEqual";
 
 /**
  * Session-level UI state that is owned by useAgentSession (in ChatWindow) but

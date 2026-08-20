@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
-import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode } from "@/lib/types";
+import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode } from "@/lib/shared/types";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 
 export interface SessionData {

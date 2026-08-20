@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { refreshAuditModelRuntime } from "@/lib/llm-audit";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { refreshAuditModelRuntime } from "@/lib/server/llm-audit";
 
 export const dynamic = "force-dynamic";
 

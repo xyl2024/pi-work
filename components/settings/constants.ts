@@ -1,7 +1,7 @@
 // Display data shared by SettingsModal.tsx and its sections. Split out so
 // each section file only imports the bits it actually needs.
-import type { AgentCustomToolName } from "@/lib/config";
-import type { FileViewerKind } from "@/lib/file-viewer-limits";
+import type { AgentCustomToolName } from "@/lib/shared/config-types";
+import type { FileViewerKind } from "@/lib/shared/file-viewer-limits";
 
 // Display order for the "Custom Tools" section checkboxes. Tools are
 // registered on `createAgentSession` (see lib/rpc-manager.ts) and the

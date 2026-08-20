@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { searchSessions } from "@/lib/session-reader";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { searchSessions } from "@/lib/server/session-reader";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/search");
 

@@ -8,8 +8,8 @@
  * expand-on-demand (avoids shipping everything twice over the wire).
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { listProviderCalls } from "@/lib/llm-audit-db";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { listProviderCalls } from "@/lib/server/llm-audit-db";
 
 const log = createLogger("api/llm-audit-calls");
 

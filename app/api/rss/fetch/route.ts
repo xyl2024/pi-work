@@ -11,16 +11,16 @@
  *     work; the current UI only calls the feedId path).
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { fetchAndRefreshFeed } from "@/lib/rss/store";
-import { proxyFetch } from "@/lib/http-proxy";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { fetchAndRefreshFeed } from "@/lib/server/rss/store";
+import { proxyFetch } from "@/lib/server/http-proxy";
 import {
   RSS_DEFAULT_SIZE_LIMIT_BYTES,
   RSS_FETCH_TIMEOUT_MS,
   RssNotFoundError,
   RssValidationError,
   validateFeedUrl,
-} from "@/lib/rss/schema";
+} from "@/lib/shared/rss/schema";
 
 const log = createLogger("api/rss/fetch");
 

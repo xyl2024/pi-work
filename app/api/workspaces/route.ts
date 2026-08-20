@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { listAllSessions } from "@/lib/session-reader";
-import { listRunningRpcSessions } from "@/lib/rpc-manager";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import type { WorkspacesResponse, Workspace } from "@/lib/types";
+import { listAllSessions } from "@/lib/server/session-reader";
+import { listRunningRpcSessions } from "@/lib/server/rpc-manager";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import type { WorkspacesResponse, Workspace } from "@/lib/shared/types";
 
 export const dynamic = "force-dynamic";
 

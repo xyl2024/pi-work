@@ -3,8 +3,8 @@ import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { TODO_IMAGE_MIME_TO_EXT } from "@/lib/user-todo/images-utils";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { TODO_IMAGE_MIME_TO_EXT } from "@/lib/shared/user-todo/images-utils";
 
 const log = createLogger("api/todo-images");
 const TODO_IMAGES_DIR = join(homedir(), ".pi-work", "todo_images");

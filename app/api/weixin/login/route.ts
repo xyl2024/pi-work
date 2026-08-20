@@ -13,9 +13,9 @@
  *   Internally calls get_qrcode_status on each request.
  */
 import { NextResponse } from "next/server";
-import { state, api, qr } from "@/lib/wechat";
-import type { LoginSession } from "@/lib/wechat";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { state, api, qr } from "@/lib/server/wechat";
+import type { LoginSession } from "@/lib/server/wechat";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 

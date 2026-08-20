@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { readProfile, writeProfile } from "@/lib/profile-store";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { readProfile, writeProfile } from "@/lib/server/profile-store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/profile");
 

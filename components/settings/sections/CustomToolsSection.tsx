@@ -2,7 +2,7 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { CUSTOM_TOOLS_UI } from "../constants";
-import type { PiWorkConfig } from "@/lib/config";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
  * Section 5: Custom Tools (agent_todo, show_media, ask_user_questions).

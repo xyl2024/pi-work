@@ -1,4 +1,4 @@
-import type { SessionInfo } from "@/lib/types";
+import type { SessionInfo } from "@/lib/shared/types";
 
 /** A session tab is either a persisted session or the single client-only draft. */
 export type SessionTabKind = "session" | "draft";

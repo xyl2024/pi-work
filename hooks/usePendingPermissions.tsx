@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { PermissionDialog } from "@/components/PermissionDialog";
+import { PermissionDialog } from "@/components/chat/PermissionDialog";
 
 export interface PendingPermissionRequest {
   toolCallId: string;

@@ -9,10 +9,10 @@ import {
   type SessionLibraryEntry,
   type SessionLibraryCounts,
   type SessionLibraryTile,
-} from "@/lib/session-library-derive";
+} from "@/lib/shared/session-library-derive";
 import { useSessionLibraryUi } from "./sessionLibraryStore";
 import { useShowFileResults } from "./showFileResultsStore";
-import type { AgentMessage } from "@/lib/types";
+import type { AgentMessage } from "@/lib/shared/types";
 
 /**
  * Derive the Session Library entry list for the active session and apply

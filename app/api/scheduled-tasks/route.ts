@@ -7,7 +7,7 @@
  * we mirror that for symmetry).
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 import {
   createTask,
   deleteTask,
@@ -17,8 +17,8 @@ import {
   updateTask,
   type CreateTaskInput,
   type UpdateTaskInput,
-} from "@/lib/scheduler/store";
-import { reschedule } from "@/lib/scheduler/loop";
+} from "@/lib/server/scheduler/store";
+import { reschedule } from "@/lib/server/scheduler/loop";
 
 const log = createLogger("api/scheduled-tasks");
 

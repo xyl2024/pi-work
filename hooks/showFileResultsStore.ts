@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import type { ShowFileEntry } from "@/lib/show-file-tool-types";
+import type { ShowFileEntry } from "@/lib/shared/show-file-tool-types";
 
 /**
  * Runtime-only cache of `show_file` tool results.

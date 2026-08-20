@@ -10,10 +10,10 @@ import {
   listAllSessions,
   stripSessionInfoNodes,
   fallbackSessionLeafId,
-} from "@/lib/session-reader";
-import { getRpcSession } from "@/lib/rpc-manager";
-import { deleteAgentTodoFile } from "@/lib/agent-todo-tool/store";
-import { createLogger, elapsedMs } from "@/lib/logger";
+} from "@/lib/server/session-reader";
+import { getRpcSession } from "@/lib/server/rpc-manager";
+import { deleteAgentTodoFile } from "@/lib/server/agent-todo-tool/store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]");
 

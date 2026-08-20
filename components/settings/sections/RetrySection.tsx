@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { useToast } from "@/components/Toast";
+import { useToast } from "@/components/ui/Toast";
 import { RetryNumberRow } from "../rows";
 import {
   DEFAULT_AGENT_RETRY,
   RETRY_LIMITS,
   formatBackoffPreview,
   type AgentRetryConfig,
-} from "@/lib/agent-settings-types";
+} from "@/lib/shared/agent-settings-types";
 
 /**
  * Section 11: Agent retry (~/.pi/agent/settings.json).

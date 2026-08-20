@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useReducer, useEffect, useRef } from "react";
-import type { AgentMessage, ToolCallContent, ToolResultMessage, AssistantMessage } from "@/lib/types";
+import type { AgentMessage, ToolCallContent, ToolResultMessage, AssistantMessage } from "@/lib/shared/types";
 import { useToolCallStatsRegister } from "./ToolCallStatsContext";
 import type { ToolCallStatsEvent } from "./ToolCallStatsContext";
 

@@ -2,8 +2,8 @@
  * GET /api/llm-audit/totals — KPI numbers for the audit panel header.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { auditTotals } from "@/lib/llm-audit-db";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { auditTotals } from "@/lib/server/llm-audit-db";
 
 const log = createLogger("api/llm-audit-totals");
 

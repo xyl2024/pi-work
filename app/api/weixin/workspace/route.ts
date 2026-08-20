@@ -20,7 +20,7 @@
  *   A 400 is returned if no account is configured.
  */
 import { NextResponse } from "next/server";
-import { state } from "@/lib/wechat";
+import { state } from "@/lib/server/wechat";
 
 export const dynamic = "force-dynamic";
 

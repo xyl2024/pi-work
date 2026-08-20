@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/types";
-import { sendAgentCommand } from "@/lib/agent-client";
-import { useToast } from "@/components/Toast";
+import type { AgentMessage, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
+import { sendAgentCommand } from "@/lib/client/agent-client";
+import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
 import { setSessionUiState, setLeafChangeHandler } from "../sessionUiStore";
-import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/thinking-level-utils";
+import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import { streamReducer } from "./utils";
 import { useAgentSessionEvents } from "./events";
 import { useAgentSessionTransport } from "./transport";
@@ -218,7 +218,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     let cost = 0;
     for (const msg of messages) {
       if (msg.role !== "assistant") continue;
-      const u = (msg as import("@/lib/types").AssistantMessage).usage;
+      const u = (msg as import("@/lib/shared/types").AssistantMessage).usage;
       if (!u) continue;
       tokens.input += u.input ?? 0;
       tokens.output += u.output ?? 0;

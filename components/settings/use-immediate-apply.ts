@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { useToast } from "@/components/Toast";
+import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "@/hooks/useI18n";
 import { setSettings } from "@/hooks/settingsStore";
-import type { PiWorkConfig } from "@/lib/config";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
  * Shared "immediate-apply" handler for the settings modal sections

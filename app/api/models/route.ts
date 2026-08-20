@@ -1,6 +1,6 @@
 import { ModelRuntime, SettingsManager, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 

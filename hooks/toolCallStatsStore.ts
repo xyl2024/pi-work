@@ -2,7 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import type { ToolCallStatsSnapshot } from "./useToolCallStats";
-import { isContentEqual } from "@/lib/shallowEqual";
+import { isContentEqual } from "@/lib/client/shallowEqual";
 
 /**
  * Module store mirroring `sessionUiStore`: ChatWindow owns the underlying

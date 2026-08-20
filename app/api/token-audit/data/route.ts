@@ -5,8 +5,8 @@
  * always returns 200 with `{ ok: true, deleted }` on success.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { clearAllData } from "@/lib/token-audit-store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { clearAllData } from "@/lib/server/token-audit-store";
 
 const log = createLogger("api/token-audit-data");
 

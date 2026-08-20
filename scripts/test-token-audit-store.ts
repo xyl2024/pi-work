@@ -21,7 +21,7 @@ import {
   type Range,
   type Source,
   type TokenCallInsert,
-} from "@/lib/token-audit-store";
+} from "@/lib/server/token-audit-store";
 
 function log(label: string, value: unknown) {
   console.log(`\n=== ${label} ===`);

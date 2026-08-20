@@ -2,8 +2,8 @@
  * GET /api/scheduled-tasks/runs/[runId] — fetch a single run record.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { getRun } from "@/lib/scheduler/store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { getRun } from "@/lib/server/scheduler/store";
 
 const log = createLogger("api/scheduled-tasks/run");
 

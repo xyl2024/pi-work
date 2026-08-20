@@ -1,7 +1,7 @@
-import { resolveSessionPath } from "@/lib/session-reader";
-import { getRpcSession, startRpcSession } from "@/lib/rpc-manager";
+import { resolveSessionPath } from "@/lib/server/session-reader";
+import { getRpcSession, startRpcSession } from "@/lib/server/rpc-manager";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 

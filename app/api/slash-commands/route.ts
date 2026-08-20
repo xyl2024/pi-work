@@ -2,8 +2,8 @@ import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { NextResponse } from "next/server";
 import { DefaultResourceLoader, getAgentDir, SessionManager } from "@earendil-works/pi-coding-agent";
-import { resolveSessionPath } from "@/lib/session-reader";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { resolveSessionPath } from "@/lib/server/session-reader";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/slash-commands");
 

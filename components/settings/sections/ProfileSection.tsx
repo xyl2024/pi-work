@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, type ChangeEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { useToast } from "@/components/Toast";
-import { SmartImage } from "@/components/SmartImage";
+import { useToast } from "@/components/ui/Toast";
+import { SmartImage } from "@/components/ui/SmartImage";
 
 /**
  * Section 0: Profile (avatar + display name). Owns its own loading /

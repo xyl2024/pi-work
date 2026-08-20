@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { pushMessage } from "@/lib/inbox-store";
-import { InboxValidationError } from "@/lib/inbox-schema";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { pushMessage } from "@/lib/server/inbox-store";
+import { InboxValidationError } from "@/lib/shared/inbox-schema";
 
 export const dynamic = "force-dynamic";
 

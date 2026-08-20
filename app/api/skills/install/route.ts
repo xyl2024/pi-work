@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { runNpx } from "@/lib/npx";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { runNpx } from "@/lib/server/npx";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 

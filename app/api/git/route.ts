@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { getRepoStatus } from "@/lib/git-diff";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { getRepoStatus } from "@/lib/server/git-diff";
 
 export const dynamic = "force-dynamic";
 

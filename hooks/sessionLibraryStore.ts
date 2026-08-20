@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
-import { isContentEqual } from "@/lib/shallowEqual";
+import { isContentEqual } from "@/lib/client/shallowEqual";
 
 /**
  * Session Media Library UI state (会话媒体库).

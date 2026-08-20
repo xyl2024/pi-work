@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { existsSync } from "fs";
-import { startRpcSession } from "@/lib/rpc-manager";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { startRpcSession } from "@/lib/server/rpc-manager";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/agent/new");
 

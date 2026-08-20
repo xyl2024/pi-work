@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { mkdirSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/default-cwd");
 

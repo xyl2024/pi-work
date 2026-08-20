@@ -2,9 +2,14 @@
 
 import { useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { RIGHT_BAR_BUTTON_IDS, RIGHT_BAR_DESCRIPTOR_BY_ID } from "@/components/rightBar/desc";
-import { resolveSessionBoundAlignment, type SessionBoundAlignment } from "@/lib/right-bar";
-import type { PiWorkConfig, RightBarButtonId, RightSideBarConfig } from "@/lib/config";
+import { RIGHT_BAR_BUTTON_IDS, RIGHT_BAR_DESCRIPTOR_BY_ID } from "@/components/panels/right-bar/desc";
+import {
+  resolveSessionBoundAlignment,
+  type RightBarButtonId,
+  type RightSideBarConfig,
+  type SessionBoundAlignment,
+} from "@/lib/shared/right-bar";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
  * Section 6: Right-side buttons.

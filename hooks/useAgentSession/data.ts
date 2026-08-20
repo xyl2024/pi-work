@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/agent-client";
-import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/types";
-import { pickHighestAvailableThinkingLevel } from "@/lib/thinking-level-utils";
+import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
+import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/shared/types";
+import { pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import type {
   AgentPhase,
   AgentRuntimeState,

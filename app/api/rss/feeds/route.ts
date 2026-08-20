@@ -6,17 +6,17 @@
  * immediately instead of waiting for the next 30-minute loop tick.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 import {
   createFeed,
   fetchAndRefreshFeed,
   listFeeds,
-} from "@/lib/rss/store";
+} from "@/lib/server/rss/store";
 import {
   RssValidationError,
   validateFeedTitle,
   validateFeedUrl,
-} from "@/lib/rss/schema";
+} from "@/lib/shared/rss/schema";
 
 const log = createLogger("api/rss/feeds");
 

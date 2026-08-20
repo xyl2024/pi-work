@@ -6,8 +6,8 @@
  *   that the bot is going offline.
  */
 import { NextResponse } from "next/server";
-import { state, api, monitor } from "@/lib/wechat";
-import { createLogger } from "@/lib/logger";
+import { state, api, monitor } from "@/lib/server/wechat";
+import { createLogger } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 

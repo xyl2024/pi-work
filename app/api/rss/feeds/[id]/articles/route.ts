@@ -7,9 +7,9 @@
  *   - offset (default 0)
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { listArticles } from "@/lib/rss/store";
-import { MAX_ARTICLES_PER_FEED } from "@/lib/rss/schema";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { listArticles } from "@/lib/server/rss/store";
+import { MAX_ARTICLES_PER_FEED } from "@/lib/shared/rss/schema";
 
 const log = createLogger("api/rss/feeds/[id]/articles");
 

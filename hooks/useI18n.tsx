@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { type Locale, ZH_TRANSLATIONS } from "@/lib/i18n-dict";
+import { type Locale, ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 export type { Locale };
 
 interface I18nContextValue {

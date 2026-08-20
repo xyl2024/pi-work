@@ -9,7 +9,7 @@
  *   and future external triggers.
  */
 import { NextResponse } from "next/server";
-import { handleInbound } from "@/lib/wechat/inbound";
+import { handleInbound } from "@/lib/server/wechat/inbound";
 
 export const dynamic = "force-dynamic";
 

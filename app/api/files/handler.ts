@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { filePathFromSegments } from "@/lib/file-access";
-import { readConfig } from "@/lib/config";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { filePathFromSegments } from "@/lib/server/file-access";
+import { readConfig } from "@/lib/server/config";
 
 /**
  * Shared GET handler + helpers for the files API.

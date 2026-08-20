@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { readFileSync } from "fs";
-import { directPrompt } from "@/lib/llm-direct";
-import { resolveSessionPath } from "@/lib/session-reader";
-import { runWithLlmAuditContext } from "@/lib/llm-audit";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { directPrompt } from "@/lib/server/llm-direct";
+import { resolveSessionPath } from "@/lib/server/session-reader";
+import { runWithLlmAuditContext } from "@/lib/server/llm-audit";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]/auto-name");
 

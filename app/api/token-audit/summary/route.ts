@@ -6,8 +6,8 @@
  * `lib/token-audit-store.summarize`.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { summarize, type GroupBy, type Range } from "@/lib/token-audit-store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { summarize, type GroupBy, type Range } from "@/lib/server/token-audit-store";
 
 const log = createLogger("api/token-audit-summary");
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { join } from "path";
 import { homedir } from "os";
-import { createLogger, elapsedMs } from "@/lib/logger";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 import {
   listTodos,
   createTodo,
@@ -11,7 +11,7 @@ import {
   TodoNotFoundError,
   type Priority,
   type Tag,
-} from "@/lib/user-todo/store";
+} from "@/lib/server/user-todo/store";
 
 const log = createLogger("api/todos");
 const TODOS_FILE = join(homedir(), ".pi-work", "todos.json");

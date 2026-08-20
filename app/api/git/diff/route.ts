@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import path from "path";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { getFileDiff, getRepoRoot } from "@/lib/git-diff";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { getFileDiff, getRepoRoot } from "@/lib/server/git-diff";
 
 export const dynamic = "force-dynamic";
 

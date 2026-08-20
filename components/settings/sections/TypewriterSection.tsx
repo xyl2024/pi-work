@@ -5,9 +5,9 @@ import { useI18n } from "@/hooks/useI18n";
 import {
   DEFAULT_TYPEWRITER_PHRASES,
   parseTypewriterPhraseList,
-} from "@/lib/typewriter-phrases";
-import type { Locale } from "@/lib/i18n-dict";
-import type { PiWorkConfig } from "@/lib/config";
+} from "@/lib/shared/typewriter-phrases";
+import type { Locale } from "@/lib/shared/i18n-dict";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
  * Section 10: Typewriter phrases (chat input placeholder).

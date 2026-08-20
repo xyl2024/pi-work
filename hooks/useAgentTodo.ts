@@ -16,7 +16,7 @@ import {
   countTasks,
   type AgentTask,
   type AgentTaskCounts,
-} from "@/lib/agent-todo-tool/types";
+} from "@/lib/shared/agent-todo-tool/types";
 
 export interface UseAgentTodoResult {
   /** Current tasks from the active session. */

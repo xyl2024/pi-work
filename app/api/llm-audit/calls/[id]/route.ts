@@ -3,8 +3,8 @@
  * the complete request body and (for errors) the complete response body.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { getProviderCall } from "@/lib/llm-audit-db";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { getProviderCall } from "@/lib/server/llm-audit-db";
 
 const log = createLogger("api/llm-audit-call");
 

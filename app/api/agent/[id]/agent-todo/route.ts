@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { resolveSessionPath } from "@/lib/session-reader";
+import { resolveSessionPath } from "@/lib/server/session-reader";
 import {
   readAgentTodoHistory,
   readAgentTodoState,
-} from "@/lib/agent-todo-tool/store";
-import { createLogger, elapsedMs } from "@/lib/logger";
+} from "@/lib/server/agent-todo-tool/store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
 

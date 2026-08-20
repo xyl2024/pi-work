@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getTerminalInfo, startTerminalServer } from "@/lib/terminal/server";
+import { getTerminalInfo, startTerminalServer } from "@/lib/server/terminal/server";
 
 /**
  * Returns the terminal server's WS port + auth token. The token is what

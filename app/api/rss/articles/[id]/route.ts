@@ -6,13 +6,13 @@
  * Marking read/unread also recomputes the parent feed's `unread_count`.
  */
 import { NextResponse } from "next/server";
-import { createLogger, elapsedMs } from "@/lib/logger";
-import { markArticleRead } from "@/lib/rss/store";
+import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { markArticleRead } from "@/lib/server/rss/store";
 import {
   RssNotFoundError,
   RssValidationError,
   validateReadFlag,
-} from "@/lib/rss/schema";
+} from "@/lib/shared/rss/schema";
 
 const log = createLogger("api/rss/articles/[id]");
 
