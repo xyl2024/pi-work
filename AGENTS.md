@@ -221,8 +221,10 @@ Browser                Next.js Server              AgentSession (in-process)
   │◀── data: {...} ─────────│                               │
 ```
 
-**Session browsing** (read-only): reads `.jsonl` files directly via `lib/server/session-reader.ts` — no AgentSession created.
+**Session browsing** (read-only): reads `.jsonl` files directly via `lib/server/sessions/reader.ts` — no AgentSession created. `lib/server/session-reader.ts` is a compatibility facade for existing imports.
 **Sending a message**: `startRpcSession()` in `lib/server/rpc-manager.ts` creates an AgentSession in-process.
+
+**Thin filesystem routes**: `app/api/files/*` delegates to `lib/server/files/`, while `app/api/sessions/[id]/route.ts` delegates disk reads and JSONL mutations to `lib/server/sessions/`. Keep filesystem business logic out of route files.
 
 ### Process startup
 
@@ -305,15 +307,16 @@ lib/server/  ──depends on──▶  lib/shared/
   dependency here pulls the SDK into every client bundle and is the kind of
   mistake this layer exists to prevent.
 - **`lib/client/`** — runtime UI helpers and browser-only state
-  (`agent-client.ts`, `commands.tsx`, `shallowEqual.ts`, `git-status-store.ts`,
-  `grokbot-store.ts`, `canvas-files-store.ts`, `file-icon-map.ts`,
-  `user-todo/image-upload.ts`, …). Allowed to import `react`, browser APIs,
+  (`agent-client.ts`, `commands.tsx`, `clipboard.ts`, `shallowEqual.ts`,
+  `git-status-store.ts`, `grokbot-store.ts`, `canvas-files-store.ts`,
+  `file-icon-map.ts`, `user-todo/image-upload.ts`, …). Allowed to import `react`, browser APIs,
   and anything in `lib/shared/`. **Never import from `lib/server/`** — that
   would put Node-only modules on the client.
 - **`lib/server/`** — everything that touches the filesystem, the SQLite
-  databases, or the pi SDK (`rpc-manager.ts`, `session-reader.ts`,
-  `config.ts`, `db.ts`, `file-access.ts`, `show-file-tool.ts`,
-  `user-todo/tools.ts`, `scheduler/`, `rss/`, `wechat/`, `terminal/`, …).
+  databases, or the pi SDK (`rpc-manager.ts`, `files/`, `sessions/`,
+  `session-reader.ts` compatibility facade, `config.ts`, `db.ts`,
+  `file-access.ts`, `show-file-tool.ts`, `user-todo/tools.ts`, `scheduler/`,
+  `rss/`, `wechat/`, `terminal/`, …).
   Allowed to import from `lib/shared/` and `lib/client/` only when the value
   is pure and side-effect-free (rare — usually prefer `lib/shared/`).
 
@@ -351,8 +354,8 @@ app/api/
   default-cwd/route.ts            POST ensure ~/.pi-work/workspace/pi-cwd-default
   exchange-rate/route.ts          currency conversion helper for TokensPanel
   favorites/route.ts              GET/PUT ~/.pi-work/favorites.json
-  files/{route,handler.ts,[...path]/route}.ts
-                                  list/read/watch + write/create/rename/delete (handler.ts holds shared logic)
+  files/{route,[...path]/route}.ts
+                                  thin root/catch-all adapters for the files service
   git/{route,diff/route}.ts       git status, diff, log for the sidebar badge
   home/route.ts                   GET { home } homedir
   inbox/{messages,messages/[id],test}/route.ts
@@ -369,7 +372,7 @@ app/api/
   scheduled-tasks/{route,[id]/run,[id]/runs,runs/[runId]}/route.ts
                                   cron tasks + run history
   sessions/{route,search,[id],[id]/context,[id]/search,[id]/auto-name,[id]/export,[id]/info,running}/route.ts
-                                  session JSONL browsing, search, leaf context
+                                  thin [id] adapter + session browsing, search, leaf context
   settings/route.ts               GET/PUT ~/.pi-work/config.yaml
   skills/{route,detail,install,search}/route.ts
                                   skill install + marketplace search
@@ -392,6 +395,7 @@ lib/client/                       browser-only state + UI helpers
   agent-client.ts                 sendAgentCommand() — single fetch helper used by hooks
   canvas-files-store.ts           IndexedDB storage for Excalidraw image dataURLs (with orphan GC)
   commands.tsx                    command-palette registry + AgentControls bridge
+  clipboard.ts                    Clipboard API + execCommand fallback for browser copy actions
   export-message-card.ts          export a chat turn as a shareable card
   file-icon-map.ts                name → icon-id map for FileIcons (auto-generated)
   git-status-store.ts             module-scoped store of git status per cwd
@@ -450,6 +454,8 @@ lib/server/                       fs / SQLite / pi SDK
   dangerous-patterns.ts           compile + cache regex rules from config.dangerous_patterns
   db.ts                           SQLite handle for ~/.pi-work/todos.db (+ JSON→DB migration)
   file-access.ts                  shared allowed-roots logic for /api/files + show_media tool
+  files/{handler,mutations,index}.ts
+                                  list/read/watch/stream + create/write/delete/rename services
   git-diff.ts                     git diff parser (uses simple-git)
   hour-series.ts                  bucketing for usage charts
   http-proxy.ts                   proxyFetch core: server-side fetch with size + timeout guards
@@ -466,7 +472,9 @@ lib/server/                       fs / SQLite / pi SDK
   scheduler/{db,loop,runner,startup,store}.ts
                                   cron tasks + self-rescheduling loop + bootstrap
   session-export/pi-html.ts       export a session to standalone HTML
-  session-reader.ts               parse .jsonl; buildSessionContext, buildTree, path cache
+  sessions/{reader,search,mutations,index}.ts
+                                  session read/cache/context + search + rename/delete services
+  session-reader.ts               compatibility facade re-exporting lib/server/sessions/
   show-file-tool.ts               pi customTool for inline file rendering
   terminal/{server,startup}.ts    node-pty WebSocket server + bootstrap
   token-audit-db.ts + token-audit-store.ts
@@ -506,10 +514,11 @@ components/
     FileExplorer.tsx + FileSearchBar.tsx + FileGitBadge.tsx + FileIcons.tsx
                                   sidebar file tree + search + git status badge + icon set
     AudioPlayer.tsx               audio file viewer (vinyl-disc aesthetic, 0.5x–2x speed)
-    CodeBlock.tsx                 shared syntax-highlighted code block (Prism, copy, line numbers)
-    ImageLightbox.tsx             image preview overlay
+  renderers/
+    CodeBlock.tsx                 shared syntax-highlighted code block (Prism + copy)
+    ImageLightbox.tsx             cross-feature image preview overlay
     MermaidBlock.tsx + SvgBlock.tsx + EchartsBlock.tsx + EchartsChart.tsx
-                                  shared media renderers reused by MessageView
+                                  shared Chat/FileViewer/Todo/RSS/panel renderers
   grokbot/
     GrokBot.tsx + GrokBotLab.tsx + GrokBotStage.tsx
                                   GrokBot persona playground (lab canvas + chat stage)
@@ -658,11 +667,11 @@ docs/
 ### In-session branching only
 Branches live inside a single `.jsonl` file. The `Edit from here` button on any user message calls `navigate_tree` against the current session; the resulting entries share a `parentId` and the BranchNavigator lets the user switch between them. Switching between leaves calls `/api/sessions/[id]/context?leafId=`.
 
-### Session files can be fully rewritten
-`parentSession` in the header is **display metadata only** — has zero effect on chat content. Safe to `writeFileSync` the entire file (pi does this itself during migrations). Used when cascade-reparenting children on delete.
+### Session JSONL rewrites must be atomic
+`parentSession` in the header is **display metadata only** — it has zero effect on chat content. Rename and cascade re-parent logic lives in `lib/server/sessions/mutations.ts`. When replacing an existing session file, write a same-directory temporary file and `renameSync` it over the target; never truncate the target directly with `writeFileSync`.
 
 ### ToolCall field normalization
-Pi stores toolCall blocks as `{type:"toolCall", id, name, arguments}` but `ToolCallContent` uses `{toolCallId, toolName, input}`. `normalizeToolCalls()` in `lib/shared/normalize.ts` handles this — called when loading messages from session files (`lib/server/session-reader.ts`) and when processing streaming events in `useAgentSession`.
+Pi stores toolCall blocks as `{type:"toolCall", id, name, arguments}` but `ToolCallContent` uses `{toolCallId, toolName, input}`. `normalizeToolCalls()` in `lib/shared/normalize.ts` handles this — called when loading messages from session files (`lib/server/sessions/reader.ts`) and when processing streaming events in `useAgentSession`.
 
 ### New session tool selection
 Tool names are passed at session creation (`POST /api/agent/new` → `toolNames: string[] | "all"`). The selection state in `useAgentSession` is `ToolSelection` (defined in `lib/shared/types.ts`): `[]` ≡ Off (no tools, system prompt cleared — see `lib/server/rpc-manager.ts:831` which is the only way to truly blank it since `buildSystemPrompt` always emits non-empty), `"all"` ≡ Full (every tool pi registers at runtime — a sentinel so future tool additions auto-include), the canonical read-only subset `["find", "ls", "grep", "read"]` ≡ Read only (a named quick preset — `READ_ONLY_TOOLS` constant in `components/chat/chat-input/constants.ts`; `setActiveToolsByName` silently ignores missing names, so a stripped pi build just degrades to its intersection), any other partial `string[]` ≡ Custom (per-tool subset). The ChatInput tools popover (4-row layout) lets the user pick any of these; the wire shape matches the frontend state, so no mapping layer exists. For brand-new sessions that haven't sent their first message yet, the tool catalog is fetched via `POST /api/agent/tools` (spins up an ephemeral session internally).
@@ -782,12 +791,11 @@ When adding a hover explanation (e.g. a truncated filename showing its full path
 When Pi Work is loaded inside the `electron-shell` `<iframe>`, every
 `navigator.clipboard.writeText()` call requires the iframe to declare
 `allow="clipboard-read; clipboard-write"` (set in `electron-shell/titlebar.html`).
-Without it, Chromium's Permissions-Policy silently blocks the call. The web
-app has a `document.execCommand("copy")` fallback in `components/files/CodeBlock.tsx`'s
-`copyText()` helper (also reached by `components/files/MermaidBlock.tsx`,
-`components/files/SvgBlock.tsx`, `components/files/FileExplorer.tsx`) — but
-the iframe attribute is the canonical fix and the fallback should not be
-relied on.
+Without it, Chromium's Permissions-Policy silently blocks the call. The shared
+`copyText()` helper in `lib/client/clipboard.ts` tries the Clipboard API first,
+then falls back to `document.execCommand("copy")`; shared renderers and other
+cross-feature copy actions import it directly. The iframe attribute remains the
+canonical fix and the fallback should not be relied on.
 
 ---
 
