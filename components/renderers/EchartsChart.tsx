@@ -19,7 +19,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
-import { readThemeBg } from "@/components/files/EchartsBlock";
+import { readThemeBg } from "@/components/renderers/EchartsBlock";
 
 // Dynamic import keeps echarts (~MB) out of the initial bundle. The promise is
 // memoized at module scope so successive charts reuse the same load — this is

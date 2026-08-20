@@ -4,11 +4,11 @@ import { useMemo, type CSSProperties, type JSX, type ReactNode } from "react";
 import DOMPurify from "isomorphic-dompurify";
 import parse, { domToReact, type DOMNode, type Element, type HTMLReactParserOptions } from "html-react-parser";
 import { useI18n } from "@/hooks/useI18n";
-import { MarkdownImage } from "@/components/files/ImageLightbox";
-import { MermaidBlock } from "@/components/files/MermaidBlock";
-import { EchartsBlock } from "@/components/files/EchartsBlock";
-import { SvgBlock } from "@/components/files/SvgBlock";
-import { CodeBlock } from "@/components/files/CodeBlock";
+import { MarkdownImage } from "@/components/renderers/ImageLightbox";
+import { MermaidBlock } from "@/components/renderers/MermaidBlock";
+import { EchartsBlock } from "@/components/renderers/EchartsBlock";
+import { SvgBlock } from "@/components/renderers/SvgBlock";
+import { CodeBlock } from "@/components/renderers/CodeBlock";
 import { highlightDeep } from "@/components/ui/HighlightText";
 import { buildDescriptionSanitizeConfig } from "@/lib/shared/description-sanitize";
 

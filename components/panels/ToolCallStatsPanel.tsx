@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
-import { EchartsChart } from "@/components/files/EchartsChart";
+import { EchartsChart } from "@/components/renderers/EchartsChart";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { ToolCallStatsSnapshot, BashRecord, PerToolStat } from "@/hooks/useToolCallStats";
 

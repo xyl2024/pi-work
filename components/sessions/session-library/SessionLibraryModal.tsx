@@ -38,7 +38,7 @@ import {
 } from "@/hooks/sessionLibraryStore";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
 import { useToast } from "@/components/ui/Toast";
-import { copyText } from "@/components/files/CodeBlock";
+import { copyText } from "@/lib/client/clipboard";
 import { MorphToggleIcon } from "@/components/ui/MorphToggleIcon";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { joinFilePath } from "@/lib/shared/file-paths";

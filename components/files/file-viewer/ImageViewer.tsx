@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { encodeFilePathForApi, getFileName } from "@/lib/shared/file-paths";
-import { ImageLightbox } from "../ImageLightbox";
+import { ImageLightbox } from "@/components/renderers/ImageLightbox";
 import { SmartImage } from "../../ui/SmartImage";
 import { useToast } from "../../ui/Toast";
 import { Tooltip } from "../../ui/Tooltip";

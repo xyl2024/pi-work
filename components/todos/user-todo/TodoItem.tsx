@@ -5,7 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { extractImagesFromHtml, ImageLightbox } from "@/components/files/ImageLightbox";
+import { extractImagesFromHtml, ImageLightbox } from "@/components/renderers/ImageLightbox";
 import { highlightMatch } from "@/components/ui/HighlightText";
 import { tagContrastText } from "@/lib/shared/user-todo/color-presets";
 import { MorphToggleIcon } from "@/components/ui/MorphToggleIcon";

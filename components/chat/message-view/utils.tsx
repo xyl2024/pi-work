@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { Tooltip } from "../../ui/Tooltip";
-import { MermaidBlock } from "../../files/MermaidBlock";
-import { EchartsBlock } from "../../files/EchartsBlock";
-import { SvgBlock } from "../../files/SvgBlock";
-import { CodeBlock } from "../../files/CodeBlock";
-import { MarkdownImage } from "../../files/ImageLightbox";
+import { MermaidBlock } from "@/components/renderers/MermaidBlock";
+import { EchartsBlock } from "@/components/renderers/EchartsBlock";
+import { SvgBlock } from "@/components/renderers/SvgBlock";
+import { CodeBlock } from "@/components/renderers/CodeBlock";
+import { MarkdownImage } from "@/components/renderers/ImageLightbox";
 
 export function formatTime(ts?: number): string | null {
   if (!ts) return null;

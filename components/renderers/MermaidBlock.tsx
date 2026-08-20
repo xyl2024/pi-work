@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type * as BeautifulMermaid from "beautiful-mermaid";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
+import { copyText } from "@/lib/client/clipboard";
 
 // Dynamic import keeps elkjs (~MB) out of the initial bundle — only fetched
 // the first time a mermaid block actually renders. The module promise is
@@ -110,7 +111,7 @@ export function MermaidBlock({ code, isStreaming }: Props) {
   }, [code, lib, options]);
 
   const onCopy = useCallback(() => {
-    void copyToClipboard(code).then(() => {
+    void copyText(code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -128,7 +129,7 @@ export function MermaidBlock({ code, isStreaming }: Props) {
         useAscii: true,
         colorMode: "none",
       });
-      void copyToClipboard(ascii).then(() => {
+      void copyText(ascii).then(() => {
         setAsciiCopied(true);
         setTimeout(() => setAsciiCopied(false), 1500);
       });
@@ -518,26 +519,4 @@ function FullscreenOverlay({
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{children}</div>
     </div>
   );
-}
-
-// Best-effort clipboard write with a textarea fallback for non-secure
-// contexts. Mirrors the inline helper used by MessageView's CodeBlock;
-// kept local because it has only one consumer.
-function copyToClipboard(text: string): Promise<void> {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    return navigator.clipboard.writeText(text);
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    ta.remove();
-    return Promise.resolve();
-  } catch {
-    return Promise.reject(new Error("clipboard unavailable"));
-  }
 }

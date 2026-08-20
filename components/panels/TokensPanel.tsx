@@ -15,7 +15,7 @@ import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
 import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useToast } from "../ui/Toast";
-import { EchartsChart } from "../files/EchartsChart";
+import { EchartsChart } from "@/components/renderers/EchartsChart";
 import { useTheme } from "@/hooks/useTheme";
 import type {
   Range,

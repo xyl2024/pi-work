@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DOMPurify from "isomorphic-dompurify";
 import { useI18n } from "@/hooks/useI18n";
+import { copyText } from "@/lib/client/clipboard";
 
 interface Props {
   code: string;
@@ -59,7 +60,7 @@ export function SvgBlock({ code, isStreaming }: Props) {
   }, [code]);
 
   const onCopy = useCallback(() => {
-    void copyToClipboard(code).then(() => {
+    void copyText(code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -395,26 +396,4 @@ function FullscreenOverlay({
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{children}</div>
     </div>
   );
-}
-
-// Best-effort clipboard write with a textarea fallback for non-secure
-// contexts. Mirrors the inline helper used by MermaidBlock; kept local
-// because SvgBlock is its only consumer.
-function copyToClipboard(text: string): Promise<void> {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    return navigator.clipboard.writeText(text);
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    ta.remove();
-    return Promise.resolve();
-  } catch {
-    return Promise.reject(new Error("clipboard unavailable"));
-  }
 }

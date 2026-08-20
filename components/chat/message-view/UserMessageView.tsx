@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { Tooltip } from "../../ui/Tooltip";
-import { copyText } from "../../files/CodeBlock";
+import { copyText } from "@/lib/client/clipboard";
 import { SmartImage } from "../../ui/SmartImage";
-import { ImageLightbox, type ImageItem } from "../../files/ImageLightbox";
+import { ImageLightbox, type ImageItem } from "@/components/renderers/ImageLightbox";
 import { highlightKeywords, formatTime } from "./utils";
 import type { ImageContent, UserMessage } from "@/lib/shared/types";
 

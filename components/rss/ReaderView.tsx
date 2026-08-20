@@ -5,7 +5,7 @@ import parseHtml, { domToReact, type DOMNode, type Element, type HTMLReactParser
 import { iconBtnStyle, emptyStyle } from "./styles";
 import { relativeTime } from "./relativeTime";
 import { sanitizeRssHtml } from "@/lib/shared/rss/sanitize";
-import { ImageLightbox, extractImagesFromHtml, type ImageItem } from "@/components/files/ImageLightbox";
+import { ImageLightbox, extractImagesFromHtml, type ImageItem } from "@/components/renderers/ImageLightbox";
 import { SmartImage } from "@/components/ui/SmartImage";
 import type { RssArticle, RssFeed } from "@/lib/shared/rss/schema";
 

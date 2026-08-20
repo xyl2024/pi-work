@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../../ui/Toast";
 import { Tooltip } from "../../ui/Tooltip";
-import { copyText } from "../../files/CodeBlock";
+import { copyText } from "@/lib/client/clipboard";
 import { API_OPTIONS } from "./constants";
 import type { ModelEntry, RuntimeModelInfo } from "./types";
 import { Field, TextInput, NumInput, Check, SectionTitle, IconField, Select } from "./form-fields";
