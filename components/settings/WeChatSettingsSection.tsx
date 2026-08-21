@@ -523,7 +523,7 @@ export function WeChatSettingsSection() {
                     onChange={(e) => setCode(e.target.value)}
                     placeholder={t("Pairing code")}
                     autoFocus
-                    style={{ width: 120, height: 28, padding: "4px 8px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", fontSize: 13, fontFamily: "var(--font-mono)", outline: "none" }}
+                    style={{ width: 120, height: 28, padding: "4px 8px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", fontSize: 13, fontFamily: "var(--font-mono)" }}
                   />
                   <button
                     onClick={submitCode}

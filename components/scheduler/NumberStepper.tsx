@@ -175,7 +175,6 @@ export function NumberStepper({
           color: "var(--text)",
           background: "transparent",
           border: "none",
-          outline: "none",
         }}
       />
       <button

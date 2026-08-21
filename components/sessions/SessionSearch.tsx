@@ -243,7 +243,6 @@ export function SessionSearch({ sessionId, onJumpTo, onResultsChange, onClose, v
             flex: 1,
             background: "none",
             border: "none",
-            outline: "none",
             color: "var(--text, #e0e0e0)",
             fontSize: 13,
             fontFamily: "inherit",

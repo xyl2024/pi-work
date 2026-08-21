@@ -247,7 +247,6 @@ export function DatePicker({
         padding: size === "regular" ? "6px 9px" : "1px 4px",
         border: "1px solid var(--border)",
         borderRadius: size === "regular" ? 6 : 3,
-        outline: "none",
         background: "var(--bg)",
         color: value != null ? "var(--text)" : "var(--text-dim)",
         fontFamily: "inherit",

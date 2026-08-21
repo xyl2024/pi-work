@@ -78,7 +78,6 @@ export function SearchPopover({
           fontSize: 11,
           background: "transparent",
           border: "none",
-          outline: "none",
           color: "var(--text)",
           fontFamily: "inherit",
         }}

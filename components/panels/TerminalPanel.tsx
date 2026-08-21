@@ -512,7 +512,6 @@ export function TerminalPanel({ defaultCwd, open, location, onMove, maximized, o
                     height: 18,
                     fontSize: 12,
                     fontFamily: "var(--font-sans)",
-                    outline: "none",
                   }}
                 />
               ) : (

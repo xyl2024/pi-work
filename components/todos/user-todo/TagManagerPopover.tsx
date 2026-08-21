@@ -165,7 +165,6 @@ export function TagManagerPopover({
                     borderRadius: 3,
                     color: "var(--text)",
                     fontFamily: "inherit",
-                    outline: "none",
                   }}
                 />
                 <button

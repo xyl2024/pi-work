@@ -287,7 +287,6 @@ export function SessionItem({
             padding: "4px 8px",
             border: "1px solid var(--accent)",
             borderRadius: 5,
-            outline: "none",
             background: "var(--bg)",
             color: "var(--text)",
             height: 28,

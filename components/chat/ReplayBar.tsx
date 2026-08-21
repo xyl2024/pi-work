@@ -135,7 +135,6 @@ export function ReplayBar({
         background: "var(--bg-panel)",
         borderBottom: "1px solid var(--border)",
         fontFamily: "var(--font-mono)",
-        outline: "none",
         flexShrink: 0,
       }}
     >

@@ -407,7 +407,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
               flex: 1,
               background: "transparent",
               border: "none",
-              outline: "none",
               color: "var(--text)",
               fontSize: 13,
               fontFamily: "inherit",

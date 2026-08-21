@@ -418,7 +418,6 @@ export function TodoItem({
               background: "var(--bg-selected)",
               border: "1px solid var(--accent)",
               borderRadius: 3,
-              outline: "none",
               color: "var(--text)",
               fontFamily: "inherit",
             }}

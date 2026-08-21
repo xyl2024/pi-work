@@ -136,7 +136,6 @@ export function AddSkillPanel({
               border: "1px solid var(--border)",
               borderRadius: 6,
               color: "var(--text)",
-              outline: "none",
             }}
           />
           <button

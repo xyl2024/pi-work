@@ -42,6 +42,7 @@ import { CommandPalette } from "./CommandPalette";
 import { InboxModal } from "../inbox/InboxModal";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
+import { useDisableDefaultTab } from "@/hooks/useDisableDefaultTab";
 import { useInboxUnreadCount } from "@/hooks/useInboxUnreadCount";
 import { useRssUnreadCount } from "@/hooks/useRssUnreadCount";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
@@ -271,6 +272,9 @@ export function AppShell() {
   const { t, setLocale } = useI18n();
   const theme = useTheme();
   const toast = useToast();
+  // Strip the browser default Tab focus-traversal app-wide so that Tab can
+  // be repurposed per-surface (see useDisableDefaultTab).
+  useDisableDefaultTab();
   const cm = useContextMenu();
   const { unread: inboxUnread } = useInboxUnreadCount();
   const { unread: rssUnread } = useRssUnreadCount();

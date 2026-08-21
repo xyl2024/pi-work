@@ -424,7 +424,6 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
               padding: "5px 8px",
               border: "1px solid var(--border)",
               borderRadius: 6,
-              outline: "none",
               background: "var(--bg)",
               color: "var(--text)",
               boxSizing: "border-box",

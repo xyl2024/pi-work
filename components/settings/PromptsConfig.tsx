@@ -332,7 +332,6 @@ function PromptEditorPanel({
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: nameLocked ? "var(--text-dim)" : "var(--text)",
-            outline: "none",
             fontFamily: "var(--font-mono)",
             cursor: nameLocked ? "not-allowed" : "text",
           }}
@@ -352,7 +351,6 @@ function PromptEditorPanel({
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: "var(--text)",
-            outline: "none",
           }}
         />
       </label>
@@ -370,7 +368,6 @@ function PromptEditorPanel({
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: "var(--text)",
-            outline: "none",
             fontFamily: "var(--font-mono)",
           }}
         />
@@ -392,7 +389,6 @@ function PromptEditorPanel({
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: "var(--text)",
-            outline: "none",
             fontFamily: "var(--font-mono)",
           }}
         />

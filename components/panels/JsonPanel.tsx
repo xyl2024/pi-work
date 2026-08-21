@@ -472,7 +472,6 @@ const contentAreaStyle: React.CSSProperties = {
   background: "var(--bg)",
   color: "var(--text)",
   border: "none",
-  outline: "none",
   resize: "none",
   padding: "10px 14px",
   fontFamily: "var(--font-mono)",
@@ -524,7 +523,6 @@ const searchInputStyle: React.CSSProperties = {
   padding: "4px 8px",
   fontSize: 12,
   fontFamily: "var(--font-mono)",
-  outline: "none",
 };
 
 const matchCounterStyle: React.CSSProperties = {

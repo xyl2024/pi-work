@@ -254,7 +254,6 @@ export function TimePicker({
         padding: size === "regular" ? "6px 9px" : "1px 4px",
         border: "1px solid var(--border)",
         borderRadius: size === "regular" ? 6 : 3,
-        outline: "none",
         background: "var(--bg)",
         color: value != null ? "var(--text)" : "var(--text-dim)",
         fontFamily: "inherit",
@@ -622,7 +621,6 @@ function ColumnWheel({
         height: COLUMN_HEIGHT,
         position: "relative",
         borderRadius: 8,
-        outline: "none",
         // Lift the wheel background a hair above the popover panel so the
         // column still has a perceptible edge, but not enough to read as a
         // distinct "card" — keeps the picker visually flat.

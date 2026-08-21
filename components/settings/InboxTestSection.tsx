@@ -258,7 +258,6 @@ function inputStyle(invalid: boolean): React.CSSProperties {
     borderRadius: 6,
     color: "var(--text)",
     fontSize: 13,
-    outline: "none",
     boxSizing: "border-box",
   };
 }

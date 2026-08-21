@@ -145,7 +145,6 @@ export function TypewriterSection({
               background: "var(--bg-panel)", border: "1px solid var(--border)",
               borderRadius: 6, color: "var(--text)", fontSize: 12,
               fontFamily: "var(--font-mono)", lineHeight: 1.55,
-              outline: "none",
             }}
           />
         </div>

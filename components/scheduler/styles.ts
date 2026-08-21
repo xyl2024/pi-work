@@ -16,7 +16,6 @@ export const inputStyle: CSSProperties = {
   padding: "6px 9px",
   border: "1px solid var(--scheduler-input-border, var(--border))",
   borderRadius: 6,
-  outline: "none",
   background: "var(--bg)",
   color: "var(--text)",
   boxSizing: "border-box",

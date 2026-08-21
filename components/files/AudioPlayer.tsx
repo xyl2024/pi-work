@@ -216,7 +216,6 @@ export function AudioPlayer({ src, title, subtitle, cover = DEFAULT_COVER, varia
         borderRadius: 8,
         minWidth: MIN_WIDTH_FOR_SCRUBBER,
         fontFamily: "var(--font-mono)",
-        outline: "none",
       }}
     >
       <audio ref={audioRef} src={src} preload="metadata" />

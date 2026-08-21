@@ -390,7 +390,6 @@ function TreeNode({
                 borderRadius: 3,
                 background: "var(--bg)",
                 color: "var(--text)",
-                outline: "none",
                 width: "100%",
               }}
             />

@@ -87,7 +87,6 @@ export function FileViewerLimitRow({
             borderRadius: 6,
             color: "var(--text)",
             fontSize: 13,
-            outline: "none",
           }}
         />
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>MB</span>
@@ -203,7 +202,6 @@ export function RetryNumberRow({
             borderRadius: 6,
             color: "var(--text)",
             fontSize: 13,
-            outline: "none",
           }}
         />
         {unitSuffix && (

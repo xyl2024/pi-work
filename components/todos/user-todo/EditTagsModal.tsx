@@ -268,7 +268,6 @@ export function EditTagsModal({
               background: "var(--bg)",
               border: "1px solid var(--border)",
               borderRadius: 4,
-              outline: "none",
               color: "var(--text)",
               fontFamily: "inherit",
               boxSizing: "border-box",

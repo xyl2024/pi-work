@@ -504,7 +504,7 @@ export function AddProviderPicker({
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
             placeholder={t("Search providers...")}
-            style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
+            style={{ flex: 1, background: "none", border: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
           />
         </div>
 

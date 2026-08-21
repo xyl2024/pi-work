@@ -157,7 +157,6 @@ export function QuestionCard({
                     border: "1px solid var(--border)",
                     borderRadius: 4,
                     color: "var(--text)",
-                    outline: "none",
                   }}
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = "var(--accent)";

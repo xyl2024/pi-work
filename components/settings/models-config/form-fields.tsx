@@ -12,7 +12,6 @@ export const inputStyle: React.CSSProperties = {
   borderRadius: 5,
   color: "var(--text)",
   fontSize: 12,
-  outline: "none",
   width: "100%",
   boxSizing: "border-box",
 };

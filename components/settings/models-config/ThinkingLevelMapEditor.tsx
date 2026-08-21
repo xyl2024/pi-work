@@ -109,7 +109,6 @@ export function ThinkingLevelMapEditor({
                   width: "12ch",
                   background: state === "string" ? "var(--bg)" : "var(--bg-panel)",
                   border: "none",
-                  outline: "none",
                   color: state === "string" ? "var(--text)" : "var(--text-dim)",
                   fontFamily: "var(--font-mono)",
                   fontSize: 11,

@@ -527,7 +527,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               flex: 1,
               background: "none",
               border: "none",
-              outline: "none",
               resize: "none",
               color: "var(--text)",
               fontSize: 14,

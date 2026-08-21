@@ -151,7 +151,6 @@ export function TaskListSidebar({
             fontSize: 11,
             border: "1px solid var(--scheduler-input-border, var(--border))",
             borderRadius: 6,
-            outline: "none",
             background: "var(--bg)",
             color: "var(--text)",
             fontFamily: "inherit",

@@ -657,7 +657,6 @@ export function TranslatePanel() {
             fontFamily: "var(--font-mono)",
             fontSize: 12,
             lineHeight: 1.5,
-            outline: "none",
             boxSizing: "border-box",
           }}
           onFocus={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; }}

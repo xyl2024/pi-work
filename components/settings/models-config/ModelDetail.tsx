@@ -180,7 +180,6 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
                   borderRadius: 5,
                   color: "var(--text)",
                   fontSize: 12,
-                  outline: "none",
                   width: "100%",
                   boxSizing: "border-box",
                 } as React.CSSProperties), minHeight: 220, maxHeight: 420, fontFamily: "var(--font-mono)", fontSize: 11, lineHeight: 1.45, resize: "vertical", whiteSpace: "pre" }}

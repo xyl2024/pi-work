@@ -209,6 +209,24 @@
   box-sizing: border-box;
 }
 
+/* Hard global: strip the UA default focus outline on every focusable
+   element. Affects buttons, links, inputs, textareas, [tabIndex]
+   containers, .markdown-body anchors, etc.
+
+   Note: this only removes the OUTLINE channel. A few focus indicators
+   use `box-shadow` (`.show-file-carousel:focus-visible`,
+   `.timepicker-wheel:focus-visible`) or a border-color swap
+   (`.scheduler-text-input:focus`) — those are explicit product choices
+   and intentionally remain so the focused element still has some
+   visual cue.
+
+   Accessibility: WCAG 2.4.7 (Focus Visible) is no longer satisfied —
+   keyboard-only users lose the standard focus indicator. */
+*:focus,
+*:focus-visible {
+  outline: none !important;
+}
+
 /* Text selection — keep the original text color (no invert) and use a
    soft light-blue background that stays visible on both light and dark themes. */
 ::selection {
