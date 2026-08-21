@@ -50,4 +50,20 @@ export const fileViewer = {
   "Share this message card": "分享此消息卡片",
   "Message card exported": "消息卡片已导出",
   "Failed to export image": "导出图片失败",
+
+  // MonacoViewer (replaces the old text viewer / DiffView / VirtualizedCodeLines)
+  "Edit file": "编辑文件",
+  "Read-only": "只读",
+  "Editing": "编辑中",
+  "Saving...": "保存中…",
+  "Unsaved changes": "有未保存修改",
+  "Loading editor...": "编辑器加载中…",
+  "Editor failed to load": "编辑器加载失败",
+  "This file is large, editing performance may degrade": "文件较大，编辑性能可能下降",
+  "Don't warn again for this session": "本次会话不再提示",
+  "File opened read-only because it is very large": "文件过大，已强制以只读模式打开（禁用语法高亮）",
+  "Cannot load HEAD version": "无法加载 HEAD 版本",
+  "Diff vs HEAD": "对比 HEAD",
+  "Close diff view": "关闭差异视图",
+  "Load editor": "重新加载编辑器",
 } as const;

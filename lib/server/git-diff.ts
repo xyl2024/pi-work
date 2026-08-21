@@ -344,3 +344,51 @@ function capDiff(diff: string): string {
   if (diff.length <= MAX_DIFF_CHARS) return diff;
   return diff.slice(0, MAX_DIFF_CHARS);
 }
+
+/**
+ * Raw file content at a git ref (e.g. "HEAD", "HEAD~1", a commit SHA,
+ * a branch name). Used by Monaco's DiffEditor, which loads both sides
+ * as in-memory models — `git diff` alone isn't enough, we need the
+ * full original text.
+ *
+ * Returns `null` (not a thrown error) when the ref isn't reachable,
+ * the file isn't tracked at that ref, or git itself is broken. The
+ * /api/git/file-content route mirrors that by returning 200 with
+ * `{ content: null, exists: false }` so the client can distinguish
+ * "HEAD has no version of this file" (new / untracked / deleted at HEAD)
+ * from a transport-level failure.
+ *
+ * Capped at 10 MiB to mirror the right-side viewer's write limit
+ * (lib/server/files/mutations.ts FILE_PUT_MAX_BYTES); anything larger
+ * returns `truncated: true` and the partial content so the caller can
+ * still show a meaningful diff instead of an opaque failure.
+ */
+export const FILE_AT_REF_MAX_BYTES = 10 * 1024 * 1024;
+
+export async function getFileAtRef(
+  repoRoot: string,
+  ref: string,
+  filePath: string,
+): Promise<{ content: string | null; exists: boolean; truncated: boolean }> {
+  // `git show <ref>:<path>` is the canonical way; we never fall back to
+  // `git cat-file --textconv` because Pi Work doesn't have a configured
+  // textconv pipeline, and binary files don't have a textual HEAD anyway.
+  const res = await runGit(repoRoot, ["show", `${ref}:${filePath}`]);
+
+  if (!res) {
+    // runGit returns null for both "git missing" and "git exit non-zero";
+    // `git show HEAD:deleted-file` exits 128 with "path not in the
+    // index". We can't distinguish without inspecting stderr, but the
+    // practical outcome for the client is identical: "no HEAD version".
+    return { content: null, exists: false, truncated: false };
+  }
+
+  if (res.stdout.length > FILE_AT_REF_MAX_BYTES) {
+    return {
+      content: res.stdout.slice(0, FILE_AT_REF_MAX_BYTES),
+      exists: true,
+      truncated: true,
+    };
+  }
+  return { content: res.stdout, exists: true, truncated: false };
+}

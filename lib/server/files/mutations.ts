@@ -13,6 +13,13 @@ import { IGNORED_NAMES, IGNORED_SUFFIXES, jsonError, jsonOk } from "./handler";
 
 const log = createLogger("api/files");
 
+/** Max size (in bytes) we accept from PUT. Mirrors the soft "5MB
+ *  warning / 50MB degrade" UX in the right-side viewer (see
+ *  components/files/file-viewer/MonacoViewer.tsx) — anything larger
+ *  should be written via the agent's Write tool, not the inline
+ *  editor. 10 MiB. */
+export const FILE_PUT_MAX_BYTES = 10 * 1024 * 1024;
+
 export async function handleFilePut(request: NextRequest, segments: string[]) {
   const startedAt = Date.now();
   try {
@@ -49,14 +56,48 @@ export async function handleFilePut(request: NextRequest, segments: string[]) {
       return NextResponse.json({ error: "Missing or invalid 'content' field" }, { status: 400 });
     }
 
+    // Size limit. `Buffer.byteLength` measures UTF-8 bytes (the way the
+    // file will be written), not the JS string length — emoji and CJK
+    // characters cost more than code units.
+    const byteLength = Buffer.byteLength(body.content, "utf-8");
+    if (byteLength > FILE_PUT_MAX_BYTES) {
+      log.warn("file write rejected", {
+        path: filePath,
+        reason: "too large",
+        bytes: byteLength,
+        limitBytes: FILE_PUT_MAX_BYTES,
+        durationMs: elapsedMs(startedAt),
+      });
+      return NextResponse.json(
+        {
+          error: `File too large: ${(byteLength / 1024 / 1024).toFixed(1)} MB exceeds the ${FILE_PUT_MAX_BYTES / 1024 / 1024} MB write limit`,
+          code: "FILE_TOO_LARGE",
+          sizeBytes: byteLength,
+          limitBytes: FILE_PUT_MAX_BYTES,
+        },
+        { status: 413 },
+      );
+    }
+
     fs.writeFileSync(filePath, body.content, "utf-8");
+
+    // Read mtime from a fresh stat so the client can refresh its
+    // status-bar display without an extra GET round-trip.
+    let mtime: string | null = null;
+    try {
+      const after = fs.statSync(filePath);
+      mtime = after.mtime.toISOString();
+    } catch {
+      // File vanished between write and stat — odd but not fatal for the
+      // caller; they'll see the size and know the write itself succeeded.
+    }
 
     log.info("file written", {
       path: filePath,
-      size: body.content.length,
+      size: byteLength,
       durationMs: elapsedMs(startedAt),
     });
-    return NextResponse.json({ ok: true, size: body.content.length });
+    return NextResponse.json({ ok: true, size: byteLength, mtime });
   } catch (error) {
     log.error("file write failed", { error, durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ error: String(error) }, { status: 500 });

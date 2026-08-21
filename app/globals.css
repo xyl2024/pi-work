@@ -1456,3 +1456,45 @@ li.todo-task-item[data-checked="true"] > div {
   box-shadow: inset 0 0 0 1.5px var(--accent);
   transition: box-shadow 0.12s;
 }
+
+/* ---------------------------------------------------------------------
+ * Monaco editor (right-side file viewer) decorations.
+ *
+ * Git gutter marks — `editor.deltaDecorations` applies one of these
+ * classes per added/modified line. Whole-line border-left keeps the
+ * visual close to the old Prism renderer without fighting Monaco's
+ * own selection / current-line styles.
+ * ------------------------------------------------------------------- */
+.pi-git-line-added {
+  border-left: 3px solid #4ade80 !important;
+}
+.pi-git-line-modified {
+  border-left: 3px solid #60a5fa !important;
+}
+
+/* Glyph-margin pill for deleted blocks. Monaco paints a 14x14 cell for
+ * glyphMarginClassName; we use flex to center the "−N" text. */
+.pi-git-deleted-marker {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 100% !important;
+  height: 18px !important;
+  margin-top: 2px !important;
+  background: #3d2020 !important;
+  color: #f87171 !important;
+  border: 1px solid rgba(248, 113, 113, 0.4) !important;
+  border-radius: 4px !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  font-family: var(--font-mono) !important;
+}
+.pi-git-deleted-marker:hover {
+  background: #5c2828 !important;
+}
+
+/* Spinner used by the SaveButton "saving" state. */
+@keyframes pi-spin {
+  to { transform: rotate(360deg); }
+}
