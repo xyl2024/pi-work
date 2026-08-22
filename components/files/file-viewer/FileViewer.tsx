@@ -18,7 +18,7 @@ import {
 // including .md and .html — falls through to MonacoViewer, which renders
 // raw source with full syntax highlighting. Markdown / HTML preview panes
 // were intentionally dropped in the Monaco refactor (see design notes).
-export function FileViewer({ filePath, cwd }: FileViewerProps) {
+export function FileViewer({ filePath, cwd, rightPanelState }: FileViewerProps) {
   if (isImagePath(filePath)) {
     return <ImageViewer filePath={filePath} />;
   }
@@ -31,5 +31,5 @@ export function FileViewer({ filePath, cwd }: FileViewerProps) {
   if (isPdfPath(filePath)) {
     return <PdfViewer filePath={filePath} />;
   }
-  return <MonacoViewer filePath={filePath} cwd={cwd} />;
+  return <MonacoViewer filePath={filePath} cwd={cwd} rightPanelState={rightPanelState} />;
 }

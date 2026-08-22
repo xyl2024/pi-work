@@ -61,7 +61,11 @@ interface DiffContent {
 type ViewMode = "source" | "diff";
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-export function MonacoViewer({ filePath, cwd }: FileViewerProps) {
+export function MonacoViewer({
+	filePath,
+	cwd,
+	rightPanelState = "normal",
+}: FileViewerProps) {
 	const { isDark } = useTheme();
 	const { t } = useI18n();
 	const fileName = getFileName(filePath);
@@ -97,6 +101,10 @@ export function MonacoViewer({ filePath, cwd }: FileViewerProps) {
 	// ── Large-file state ──────────────────────────────────────────────────
 	const [largeWarned, setLargeWarned] = useState(false);
 	const [degraded, setDegraded] = useState(false);
+
+	// Minimap only shows when the right panel is expanded (user clicked
+	// "展开面板"). Large files (>50 MiB) still force it off regardless.
+	const minimapEnabled = rightPanelState === "expanded" && !degraded;
 
 	// ── Refs ──────────────────────────────────────────────────────────────
 	const containerRef = useRef<HTMLDivElement | null>(null);
@@ -262,7 +270,7 @@ useEffect(() => {
 		const editor = monaco.editor.create(container, {
 			theme: isDark ? "vs-dark" : "vs",
 			readOnly: !editMode || degraded,
-			minimap: { enabled: !degraded, scale: 1 },
+			minimap: { enabled: minimapEnabled, scale: 1 },
 			wordWrap: wrapLines ? "on" : "off",
 			fontSize: 13,
 			fontFamily: "var(--font-mono)",
@@ -319,6 +327,7 @@ useEffect(() => {
 	isDark,
 	wrapLines,
 	degraded,
+	minimapEnabled,
 ]);
 
 // ── Update editor options in-place when they change ────────────────
@@ -330,10 +339,10 @@ useEffect(() => {
 	sourceEditorRef.current.updateOptions({
 		theme: isDark ? "vs-dark" : "vs",
 		readOnly: !editMode || degraded,
-		minimap: { enabled: !degraded, scale: 1 },
+		minimap: { enabled: minimapEnabled, scale: 1 },
 		wordWrap: wrapLines ? "on" : "off",
 	});
-}, [editMode, isDark, wrapLines, degraded]);
+}, [editMode, isDark, wrapLines, degraded, minimapEnabled]);
 
 	// ── Tear down on unmount ─────────────────────────────────────────────
 	useEffect(() => {
