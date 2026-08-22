@@ -195,6 +195,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     userMessageHistory,
     value,
     navigateTo: fillFromHistory,
+    textareaRef,
   });
 
   // Keep the draft owned by this input/controller. The workspace only needs a

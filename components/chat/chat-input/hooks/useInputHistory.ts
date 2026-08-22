@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, RefObject } from "react";
 
 export interface UseInputHistoryOptions {
   /** Active session id. Used to reset the history index on session switch. */
@@ -17,6 +17,12 @@ export interface UseInputHistoryOptions {
    *  height), `setValue`, `setCursorPosition`, and `clearImages` — all of
    *  which live above this hook. */
   navigateTo: (text: string) => void;
+  /** Ref to the textarea so we can read its live `selectionStart` /
+   *  `selectionEnd` at keydown time. Needed by the multi-line caret-edge
+   *  guard below — the parent state (`cursorPosition`) can lag a click
+   *  that lands on a collapsed selection at position 0, while the ref
+   *  always reflects what the browser actually sees. */
+  textareaRef: RefObject<HTMLTextAreaElement | null>;
 }
 
 export interface UseInputHistoryResult {
@@ -52,6 +58,7 @@ export function useInputHistory({
   userMessageHistory,
   value,
   navigateTo,
+  textareaRef,
 }: UseInputHistoryOptions): UseInputHistoryResult {
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [draftBeforeHistory, setDraftBeforeHistory] = useState("");
@@ -76,7 +83,30 @@ export function useInputHistory({
       const history = userMessageHistory ?? [];
       if (e.nativeEvent.isComposing || history.length === 0) return false;
 
+      // Read the live caret / selection from the textarea so the
+      // multi-line edge guard below sees exactly what the browser sees
+      // at keydown time. Falls back to (0, 0) when the ref isn't ready,
+      // which still satisfies `cursorAtTop` for an empty buffer.
+      const ta = textareaRef.current;
+      const selectionStart = ta?.selectionStart ?? 0;
+      const selectionEnd = ta?.selectionEnd ?? 0;
+      // Treat any non-collapsed selection as "not at the edge" — the
+      // user is more likely extending the selection than navigating
+      // history. This also covers shift-click ranges that happen to
+      // start at 0 / end at length.
+      const collapsed = selectionStart === selectionEnd;
+      const isMultiLine = value.includes("\n");
+      const cursorAtTop = collapsed && selectionStart === 0;
+      const cursorAtBottom = collapsed && selectionStart === value.length;
+
       if (e.key === "ArrowUp") {
+        // Multi-line drafts are easy to accidentally yank with ArrowUp
+        // when the caret sits in the middle of the buffer. Require the
+        // caret to be parked on the very first character (no selection)
+        // before we enter history mode; single-line drafts keep the
+        // original "ArrowUp anywhere recalls" behavior so muscle memory
+        // from one-liner prompts still works.
+        if (isMultiLine && !cursorAtTop) return false;
         e.preventDefault();
         if (historyIndex === null) {
           const buffer = value;
@@ -100,6 +130,11 @@ export function useInputHistory({
 
       if (e.key === "ArrowDown") {
         if (historyIndex === null) return false; // not browsing history → caret moves
+        // Symmetric guard for multi-line recalled entries: the caret has
+        // to be parked at the very end (no selection) before we step
+        // forward through history. Otherwise let the browser move the
+        // caret down by one visual line — matches the ArrowUp rule.
+        if (isMultiLine && !cursorAtBottom) return false;
         e.preventDefault();
         const next = historyIndex - 1;
         if (next < 0) {
@@ -117,7 +152,7 @@ export function useInputHistory({
 
       return false;
     },
-    [historyIndex, draftBeforeHistory, userMessageHistory, value, navigateTo],
+    [historyIndex, draftBeforeHistory, userMessageHistory, value, navigateTo, textareaRef],
   );
 
   return {
