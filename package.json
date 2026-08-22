@@ -91,6 +91,7 @@
     "marked": "^18.0.5",
     "monaco-editor": "^0.52.2",
     "morphicons": "^1.7.0",
+    "motion": "12.42.2",
     "next": "16.2.1",
     "node-pty": "^1.1.0",
     "qrcode": "^1.5.4",

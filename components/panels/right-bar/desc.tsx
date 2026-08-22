@@ -39,21 +39,23 @@ import type { Tab } from "@/components/ui/TabBar";
 import {
   PanelToggleIcon,
   ExpandLeftIcon,
+  RssIcon,
+  LlmAuditIcon,
+  StarIconWithFill,
+} from "./icons";
+import {
   ExpandRightIcon,
-  TodoCheckIcon,
   ContextDocumentIcon,
   PencilIcon,
   TranslateIcon,
   JsonBracesIcon,
-  RssIcon,
   GitDiffIcon,
   ConversationTreeIcon,
-  StarIconWithFill,
   TokensIcon,
   WrenchIcon,
   TerminalIcon,
-  LlmAuditIcon,
-} from "./icons";
+  CalendarCheckIcon,
+} from "@/components/ui/animated-icons";
 
 // Tab kinds the right column toggles. Kept narrow so an accidental
 // Tab.kind value surfaces as a type error in the descriptor registry.
@@ -185,7 +187,9 @@ const expandDescriptor: RightBarDescriptor = {
   isVisible: (ctx) => ctx.rightPanelState !== "closed" && ctx.hasOpenTabs,
   isActive: (ctx) => ctx.rightPanelState === "expanded",
   content: (ctx) =>
-    (ctx.rightPanelState === "expanded" ? ExpandLeftIcon() : ExpandRightIcon()),
+    (ctx.rightPanelState === "expanded"
+      ? ExpandLeftIcon()
+      : <ExpandRightIcon size={16} />),
   onClick: (ctx) =>
     ctx.setRightPanelState(
       ctx.rightPanelState === "expanded" ? "normal" : "expanded",
@@ -201,7 +205,7 @@ const terminalDescriptor: RightBarDescriptor = {
   kind: "configurable",
   labelKey: "Terminal", // used by Settings checkbox label
   isActive: (ctx) => ctx.terminalOpen,
-  content: () => TerminalIcon(),
+  content: () => <TerminalIcon size={16} />,
   onClick: (ctx) => ctx.toggleTerminal(),
 };
 
@@ -214,7 +218,10 @@ const todosDescriptor: RightBarDescriptor = {
   kind: "configurable",
   labelKey: "Open todos",
   isActive: (ctx) => ctx.activeTabKind === "todo",
-  content: () => TodoCheckIcon(),
+  // Animated calendar-check: the stroked check draws itself in on hover
+  // (self-contained mode). TodoCheckIcon stays exported in icons.tsx for
+  // reuse elsewhere.
+  content: () => <CalendarCheckIcon size={16} />,
   onClick: (ctx) => ctx.toggleRightPanelTab(TODO_TAB_ID, ctx.openTab.todo),
 };
 
@@ -223,7 +230,7 @@ const canvasDescriptor: RightBarDescriptor = {
   kind: "configurable",
   labelKey: "Open canvas",
   isActive: (ctx) => ctx.activeTabKind === "canvas",
-  content: () => PencilIcon(),
+  content: () => <PencilIcon size={16} />,
   // Canvas widens the panel to "expanded" when activated so the whiteboard
   // gets the full right column. Re-clicking when already expanded falls
   // back to "normal"; matching the previous handleToggleCanvasTab logic.
@@ -245,7 +252,7 @@ const translateDescriptor: RightBarDescriptor = {
   kind: "configurable",
   labelKey: "Open translate",
   isActive: (ctx) => ctx.activeTabKind === "translate",
-  content: () => TranslateIcon(),
+  content: () => <TranslateIcon size={16} />,
   onClick: (ctx) =>
     ctx.toggleRightPanelTab(TRANSLATE_TAB_ID, ctx.openTab.translate),
 };
@@ -255,7 +262,7 @@ const jsonDescriptor: RightBarDescriptor = {
   kind: "configurable",
   labelKey: "JSON",
   isActive: (ctx) => ctx.activeTabKind === "json",
-  content: () => JsonBracesIcon(),
+  content: () => <JsonBracesIcon size={16} />,
   onClick: (ctx) => ctx.toggleRightPanelTab(JSON_TAB_ID, ctx.openTab.json),
 };
 
@@ -281,7 +288,7 @@ const gitDiffDescriptor: RightBarDescriptor = {
   // in-flight new-session cwd) — matches the original inline guard.
   isDisabled: (ctx) => !ctx.selectedCwd,
   badge: (ctx) => <CountBadge count={ctx.gitChangedCount} />,
-  content: () => GitDiffIcon(),
+  content: () => <GitDiffIcon size={16} />,
   onClick: (ctx) =>
     ctx.toggleRightPanelTab(GIT_DIFF_TAB_ID, ctx.openTab.gitDiff),
 };
@@ -304,7 +311,7 @@ const tokensDescriptor: RightBarDescriptor = {
   kind: "configurable",
   labelKey: "Open token audit",
   isActive: (ctx) => ctx.activeTabKind === "tokens",
-  content: () => TokensIcon(),
+  content: () => <TokensIcon size={16} />,
   // Mirrors canvasDescriptor: open the tab and widen the panel to
   // "expanded" so the token-audit dashboard gets the full right column
   // (chat flex shrinks to 0). Re-clicking when already expanded falls
@@ -339,7 +346,7 @@ const contextDescriptor: RightBarDescriptor = {
   sessionBound: true,
   labelKey: "Context",
   isActive: (ctx) => ctx.activeTabKind === "context",
-  content: () => ContextDocumentIcon(),
+  content: () => <ContextDocumentIcon size={16} />,
   onClick: (ctx) => ctx.toggleRightPanelTab(CONTEXT_TAB_ID, ctx.openTab.context),
 };
 
@@ -359,7 +366,7 @@ const toolCallsDescriptor: RightBarDescriptor = {
           : null;
     return (
       <>
-        <WrenchIcon />
+        <WrenchIcon size={16} />
         {badgeColor !== null && (
           <span
             style={{
@@ -388,7 +395,7 @@ const conversationTreeDescriptor: RightBarDescriptor = {
   labelKey: "Open conversation tree",
   isActive: (ctx) => ctx.activeTabKind === "conversationTree",
   isDisabled: (ctx) => !ctx.selectedSessionId && !ctx.selectedCwd,
-  content: () => ConversationTreeIcon(),
+  content: () => <ConversationTreeIcon size={16} />,
   onClick: (ctx) =>
     ctx.toggleRightPanelTab(
       CONVERSATION_TREE_TAB_ID,
