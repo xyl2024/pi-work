@@ -92,12 +92,12 @@ export function useMarkdownComponents(
         return (
           <code
             style={{
-              background: "var(--bg-selected)",
+              background: "var(--bg-subtle)",
               padding: "1px 4px",
               borderRadius: 3,
               fontFamily: "var(--font-mono)",
               fontSize: "0.9em",
-              color: "var(--accent)",
+              color: "var(--accent-hover)",
             }}
             {...props}
           >

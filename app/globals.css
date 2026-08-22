@@ -581,7 +581,7 @@ pre, code {
 .markdown-file-preview code {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  background: var(--bg-panel);
+  background: var(--bg-subtle);
   padding: 1px 5px;
   border-radius: 3px;
 }
@@ -1185,7 +1185,7 @@ li.todo-task-item[data-checked="true"] > div {
   font-family: var(--font-mono);
   font-size: 0.9em;
   padding: 1px 4px;
-  background: var(--bg-panel);
+  background: var(--bg-subtle);
   border-radius: 3px;
 }
 .rss-reader-body pre code {
