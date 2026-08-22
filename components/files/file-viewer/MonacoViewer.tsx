@@ -16,10 +16,6 @@
 //     10 MiB cap (server), 5 MiB warn / 50 MiB degrade thresholds
 //     mirror it client-side. No confirmation dialog — see
 //     lib/server/files/mutations.ts for the server-side check.
-//   • Git gutter marks (added / modified lines) use
-//     `editor.deltaDecorations`; deleted blocks render as inline
-//     widgets (collapsed markers, click to expand) — same pattern as
-//     the old Prism version, just driven by Monaco's API.
 //   • Last-writer-wins: no watch, no conflict resolution. Switching
 //     files / closing the panel silently discards dirty edits (the
 //     tab title shows ● while dirty so users know).
@@ -36,7 +32,6 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { useMonacoLoader } from "@/hooks/useMonacoLoader";
 import { encodeFilePathForApi, getFileName } from "@/lib/shared/file-paths";
-import { parseFileDiff } from "@/lib/shared/git-line-marks";
 import { getFileLanguage } from "@/lib/shared/monaco-language-map";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { formatSize, type FileViewerProps } from "./utils";
@@ -93,10 +88,6 @@ export function MonacoViewer({ filePath, cwd }: FileViewerProps) {
 
 	// ── Git state ─────────────────────────────────────────────────────────
 	const [gitHasChanges, setGitHasChanges] = useState(false);
-	const [gitMarks, setGitMarks] = useState<Map<number, "added" | "modified"> | null>(null);
-	const [deletedBlocks, setDeletedBlocks] = useState<
-		Array<{ beforeLine: number; lines: string[] }>
-	>([]);
 
 	// ── Diff view state ───────────────────────────────────────────────────
 	const [diffContent, setDiffContent] = useState<DiffContent | null>(null);
@@ -113,7 +104,6 @@ export function MonacoViewer({ filePath, cwd }: FileViewerProps) {
 	const diffEditorRef = useRef<Monaco.editor.IStandaloneDiffEditor | null>(null);
 	const modelRef = useRef<Monaco.editor.ITextModel | null>(null);
 	const originalModelRef = useRef<Monaco.editor.ITextModel | null>(null);
-	const decorationIdsRef = useRef<string[]>([]);
 	const baselineRef = useRef<string | null>(null);
 	const recentlySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -131,7 +121,6 @@ export function MonacoViewer({ filePath, cwd }: FileViewerProps) {
 		modelRef.current = null;
 		originalModelRef.current?.dispose();
 		originalModelRef.current = null;
-		decorationIdsRef.current = [];
 		if (recentlySavedTimerRef.current) {
 			clearTimeout(recentlySavedTimerRef.current);
 			recentlySavedTimerRef.current = null;
@@ -149,8 +138,6 @@ export function MonacoViewer({ filePath, cwd }: FileViewerProps) {
 		setSaveState("idle");
 		setSaveErrorMsg(null);
 		setGitHasChanges(false);
-		setGitMarks(null);
-		setDeletedBlocks([]);
 
 		setDiffContent(null);
 		setDiffError(null);
@@ -191,31 +178,20 @@ export function MonacoViewer({ filePath, cwd }: FileViewerProps) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [filePath, reloadKey]);
 
-	// ── Fetch git status + diff metadata ─────────────────────────────────
+	// ── Detect git changes vs HEAD (gates the Diff button) ───────────────
 	useEffect(() => {
 		if (!cwd || !content) return;
 		const url = `/api/git/diff?cwd=${encodeURIComponent(cwd)}&file=${encodeURIComponent(filePath)}&base=head`;
 		fetch(url)
 			.then((r) => (r.ok ? r.json() : null))
 			.then((d: { diff: string | null; truncated: boolean } | null) => {
-				if (!d || d.truncated || !d.diff) {
-					setGitHasChanges(false);
-					setGitMarks(null);
-					setDeletedBlocks([]);
-					return;
-				}
-				const parsed = parseFileDiff(d.diff);
-				const hasAny =
-					parsed.lineMarks.size > 0 || parsed.deletedBlocks.length > 0;
-				setGitHasChanges(hasAny);
-				setGitMarks(parsed.lineMarks);
-				setDeletedBlocks(parsed.deletedBlocks);
+				// Diff button only shows when the file differs from HEAD
+				// and the diff is small enough to fetch in full.
+				setGitHasChanges(!!d && !d.truncated && !!d.diff);
 			})
 			.catch(() => {
 				// Silent — Diff button just stays hidden.
 				setGitHasChanges(false);
-				setGitMarks(null);
-				setDeletedBlocks([]);
 			});
 	}, [cwd, filePath, content]);
 
@@ -266,7 +242,6 @@ useEffect(() => {
 	modelRef.current = null;
 	if (originalModelRef.current) originalModelRef.current.dispose();
 	originalModelRef.current = null;
-	decorationIdsRef.current = [];
 
 	// Wait for the file fetch to land before creating a model.
 	if (content === null) return;
@@ -301,7 +276,6 @@ useEffect(() => {
 		});
 		sourceEditorRef.current = editor;
 		editor.setModel(modelRef.current);
-		applyDecorations(editor, monaco);
 		bindEditorEvents(editor);
 	} else {
 		const originalUri = monaco.Uri.parse(
@@ -330,8 +304,8 @@ useEffect(() => {
 		});
 		diffEditorRef.current = diffEditor;
 	}
-	// applyDecorations / bindEditorEvents are defined later in the
-	// component body as plain functions; listing them in deps would
+	// bindEditorEvents is defined later in the
+	// component body as a plain function; listing it in deps would
 	// re-run this effect on every render without changing inputs.
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [
@@ -361,15 +335,6 @@ useEffect(() => {
 	});
 }, [editMode, isDark, wrapLines, degraded]);
 
-	// ── Refresh decorations whenever the git data updates ─────────────
-	// The editor-creation effect calls applyDecorations once; this one
-	// re-applies them when git marks arrive async after file load.
-	useEffect(() => {
-		if (!monaco || !sourceEditorRef.current) return;
-		applyDecorations(sourceEditorRef.current, monaco);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [monaco, gitMarks, deletedBlocks]);
-
 	// ── Tear down on unmount ─────────────────────────────────────────────
 	useEffect(() => {
 		return () => {
@@ -382,65 +347,6 @@ useEffect(() => {
 			}
 		};
 	}, []);
-
-	// ── Apply / refresh git decorations ──────────────────────────────────
-	function applyDecorations(editor: Monaco.editor.IStandaloneCodeEditor, monacoNs: typeof import("monaco-editor")) {
-		const newDecorations: Monaco.editor.IModelDeltaDecoration[] = [];
-
-		// Per-line marks (added / modified). Whole-line border-left via
-		// the CSS rules in app/globals.css; overview-ruler bars give
-		// the user the scroll-bar hint even when scrolled away.
-		if (gitMarks) {
-			for (const [lineNo, type] of gitMarks) {
-				const isAdded = type === "added";
-				newDecorations.push({
-					range: new monacoNs.Range(lineNo, 1, lineNo, 1),
-					options: {
-						isWholeLine: true,
-						className: isAdded
-							? "pi-git-line-added"
-							: "pi-git-line-modified",
-						overviewRuler: {
-							color: isAdded ? "#4ade80" : "#60a5fa",
-							position: monacoNs.editor.OverviewRulerLane.Full,
-						},
-					},
-				});
-			}
-		}
-
-		// Deleted-block pills in the glyph margin. Monaco positions
-		// each glyph margin decoration at the line in its range, so
-		// the "−N" pills line up with where the missing lines belonged
-		// without us having to measure the editor ourselves. The full
-		// deleted text surfaces in the hover message.
-		for (const block of deletedBlocks) {
-			newDecorations.push({
-				range: new monacoNs.Range(
-					block.beforeLine,
-					1,
-					block.beforeLine,
-					1,
-				),
-				options: {
-					glyphMarginClassName: "pi-git-deleted-marker",
-					glyphMarginHoverMessage: {
-						value:
-							block.lines.length === 0
-								? "(empty)"
-								: block.lines
-										.map((l) => `- ${l}`)
-										.join("\n"),
-					},
-				},
-			});
-		}
-
-		decorationIdsRef.current = editor.deltaDecorations(
-			decorationIdsRef.current,
-			newDecorations,
-		);
-	}
 
 	// ── Wire Monaco editor events (keybindings, dirty tracking) ──────────
 	function bindEditorEvents(editor: Monaco.editor.IStandaloneCodeEditor) {
@@ -817,11 +723,5 @@ function SaveButton({
 		<button onClick={onClick} style={{ ...baseStyle, background: "var(--bg-selected)", color: "var(--text)" }}>
 			{t("Save")} (Ctrl+S)
 		</button>
-	);
-}
-
-// Deleted blocks now render via Monaco glyph-margin decorations
-// (see `applyDecorations` above) and surface their content in the
-// hover message. We deliberately don't try to position a click-popup
-// ourselves — Monaco's positioning API for that is awkward, and the
-// hover message already shows the full deleted text.
+		);
+	}
