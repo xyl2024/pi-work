@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import path from "path";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { getFileDiff, getRepoRoot } from "@/lib/server/git-diff";
+import { getFileDiffAtCommit } from "@/lib/server/git-log";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,10 @@ const log = createLogger("api/git/diff");
 // GET /api/git/diff?cwd=<path>&file=<rel-or-abs-path>&staged=<0|1>&base=head
 // Returns the unified diff for one file. `base=head` diffs the worktree
 // against HEAD (staged + unstaged combined) instead of the index.
+// `commit=<sha>` switches to that commit's own file change: parents are
+// resolved server-side (root commits diff against the empty tree) via
+// getFileDiffAtCommit — `staged`/`base` are ignored in this mode. Used by
+// the GitPanel's Log view when a file inside a commit is selected.
 //
 // `cwd` is supplied by the client (always a session cwd that was already
 // validated at session creation) so we deliberately skip ensurePathAllowed
@@ -30,6 +35,7 @@ export async function GET(req: Request) {
   }
   const staged = stagedParam === "1";
   const baseHead = searchParams.get("base") === "head";
+  const commit = searchParams.get("commit");
 
   const repoRoot = await getRepoRoot(cwd);
   if (!repoRoot) {
@@ -39,9 +45,11 @@ export async function GET(req: Request) {
   // Accept absolute paths (FileViewer) and repo-root-relative paths (panel).
   const relFile = path.isAbsolute(file) ? path.relative(repoRoot, file) : file;
 
-  const { diff, truncated } = await getFileDiff(repoRoot, relFile, staged, baseHead);
+  const { diff, truncated } = commit
+    ? await getFileDiffAtCommit(repoRoot, commit, relFile)
+    : await getFileDiff(repoRoot, relFile, staged, baseHead);
   log.info("get git diff completed", {
-    cwd, file: relFile, staged, repoRoot,
+    cwd, file: relFile, staged, repoRoot, commit: commit ?? null,
     bytes: diff?.length ?? 0,
     truncated,
     durationMs: elapsedMs(startedAt),

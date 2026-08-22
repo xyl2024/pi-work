@@ -1,5 +1,5 @@
 // Client-safe types for the git diff panel. No server-only imports here —
-// this file is shared between the API routes (server) and GitDiffPanel
+// this file is shared between the API routes (server) and GitPanel
 // (client), mirroring the pattern in show-file-tool-types.ts.
 
 /** Per-file change status — git's own `--name-status` letters, plus

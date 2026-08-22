@@ -46,8 +46,10 @@ interface GitResult {
 }
 
 /** Run `git <args>` in cwd. Returns null when git itself is missing or the
- *  command failed (exit code != 0). Throws on timeout. */
-async function runGit(cwd: string, args: string[]): Promise<GitResult | null> {
+ *  command failed (exit code != 0). Throws on timeout. Exported so
+ *  git-log.ts (branch list / log pages / commit details) shares the same
+ *  execFile-without-shell boundary. */
+export async function runGit(cwd: string, args: string[]): Promise<GitResult | null> {
   try {
     const { stdout } = await execFileAsync("git", args, {
       cwd,
@@ -173,7 +175,7 @@ function countUntrackedLines(repoRoot: string, filePath: string): { add: number;
  *  remainder have their `path` rewritten to be relative to cwd (so the
  *  FileExplorer — which keys by cwd-rooted paths — can match without
  *  doing path math itself). `cwdRelToRepo` is the prefix we stripped, in
- *  case any consumer needs it (the GitDiffPanel ignores it; the
+ *  case any consumer needs it (the GitPanel ignores it; the
  *  git-status-store uses it as a no-op signal). */
 export async function getRepoStatus(cwd: string): Promise<GitStatusResponse> {
   const now = Date.now();
@@ -297,7 +299,18 @@ export async function getFileDiff(
   filePath: string,
   staged: boolean,
   baseHead = false,
+  range?: { from: string; to: string },
 ): Promise<{ diff: string | null; truncated: boolean }> {
+  // Commit-range mode: diff two refs (typically `<sha>^ <sha>` for a
+  // commit's own file change; the caller resolves the parent and falls
+  // back to the empty tree for root commits). Both sides are refs, so the
+  // worktree-only isTracked/dev-null branches below never apply.
+  if (range) {
+    const res = await runGit(repoRoot, ["diff", range.from, range.to, "--", filePath]);
+    if (!res || !res.stdout) return { diff: null, truncated: false };
+    return { diff: capDiff(res.stdout), truncated: res.stdout.length > MAX_DIFF_CHARS };
+  }
+
   const args = ["diff"];
   if (staged) {
     args.push("--cached");

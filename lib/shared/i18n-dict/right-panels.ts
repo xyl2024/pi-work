@@ -24,6 +24,19 @@ export const rightPanels = {
   "Open a session first": "请先打开一个会话",
   "{n} files changed": "共 {n} 个文件变更",
 
+  // Git log (commit history view)
+  "Diff": "变更",
+  "Log": "历史",
+  "Branch": "分支",
+  "Select a commit to view its details": "选择一个提交查看详情",
+  "No commits on this branch": "该分支暂无提交",
+  "Merge commit": "合并提交",
+  "Per-file stats are unavailable for merge commits": "合并提交不提供逐文件统计",
+  "Files changed": "变更文件",
+  "No file changes in this commit": "该提交没有文件变更",
+  "Reached the limit": "已达加载上限",
+  "Commit not found": "未找到提交",
+
   // HTTP debug panel
   "HTTP": "HTTP",
   "Resend": "重新发送",

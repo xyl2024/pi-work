@@ -27,7 +27,7 @@ import { RssPanel } from "../rss/RssPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
-import { GitDiffPanel } from "../panels/GitDiffPanel";
+import { GitPanel } from "../panels/GitPanel";
 import { useToolCallStatsView, useToolCallStatsScroll } from "@/hooks/toolCallStatsStore";
 import { ModelsConfig } from "../settings/ModelsConfig";
 import { SkillsConfig } from "../settings/SkillsConfig";
@@ -931,6 +931,13 @@ export function AppShell() {
     openTab();
   }, [activeFileTabId, rightPanelState]);
 
+  // GitPanel widens the right panel ("expanded", same state Canvas uses)
+  // when the user switches it into Log view, so the commit history gets
+  // the full column. Stable callback: the GitPanel effect keys on it.
+  const handleExpandGitPanel = useCallback(() => {
+    setRightPanelState("expanded");
+  }, []);
+
   const handleCloseFileTab = useCallback((tabId: string) => {
     setFileTabs((prev) => {
       const next = prev.filter((t) => t.id !== tabId);
@@ -1509,7 +1516,10 @@ export function AppShell() {
               tools={tools}
             />
           ) : activeFileTab?.kind === "gitDiff" ? (
-            <GitDiffPanel cwd={selectedSession?.cwd ?? newSessionCwd ?? null} />
+            <GitPanel
+              cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+              onExpandPanel={handleExpandGitPanel}
+            />
           ) : activeFileTab?.kind === "conversationTree" ? (
             <ConversationTreePanel
               isStreaming={isStreaming}

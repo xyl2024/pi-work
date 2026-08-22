@@ -35,7 +35,7 @@
   --tool-bg: #fefefe;
   --bg-subtle: rgba(0,0,0,0.03);
 
-  /* Git status (FileExplorer badges + GitDiffPanel) */
+  /* Git status (FileExplorer badges + GitPanel) */
   --git-status-added: #16a34a;
   --git-status-modified: #d97706;
   --git-status-deleted: #ef4444;
