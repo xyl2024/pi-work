@@ -2,7 +2,6 @@ import { getFileName } from "@/lib/shared/file-paths";
 
 export interface FileViewerProps {
 	filePath: string;
-	/** Only used to locate the git repo for gutter marks. */
 	cwd?: string;
 	/** Right-side panel state. MonacoViewer uses `"expanded"` as the gate
 	 *  for showing its minimap ("展开面板" toggle = expanded = show minimap).

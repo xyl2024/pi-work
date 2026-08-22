@@ -109,9 +109,6 @@ export function registerPiWorkDarkTheme(monaco: typeof Monaco): void {
 			{ token: "invalid", foreground: "ff7b72", fontStyle: "underline" },
 			{ token: "invalid.deprecated", foreground: "ff7b72", fontStyle: "underline" },
 
-			// ── diff headers (used by Monaco DiffEditor) ───────────
-			{ token: "meta.diff.header", foreground: "7aa2f7", fontStyle: "bold" },
-			{ token: "meta.diff", foreground: "bcbcbc" },
 		],
 		colors: {
 			// ── editor chrome ──────────────────────────────────────
@@ -184,21 +181,6 @@ export function registerPiWorkDarkTheme(monaco: typeof Monaco): void {
 			"peekViewTitleDescription.foreground": "#9a9894",
 			"peekViewTitleLabel.foreground": "#bcbcbc",
 			"peekView.border": "#3a3a3a",
-
-			// ── diff editor ────────────────────────────────────────
-			"diffEditor.background": "#24242a",
-			"diffEditor.insertedTextBackground": "#1e3a2a", //   --success @ ~15%
-			"diffEditor.removedTextBackground": "#3a1e1e", //   --error   @ ~15%
-			"diffEditor.insertedTextBorder": "#3f8559",
-			"diffEditor.removedTextBorder": "#7e2222",
-			"diffEditor.insertedLineBackground": "#1e3a2a",
-			"diffEditor.removedLineBackground": "#3a1e1e",
-			"diffEditorGutter.insertedLineBackground": "#1e3a2a",
-			"diffEditorGutter.removedLineBackground": "#3a1e1e",
-			"diffEditor.diagonalFill": "#3a3a3a",
-			"diffEditor.unchangedRegionBackground": "#24242a",
-			"diffEditor.unchangedRegionForeground": "#bcbcbc",
-			"diffEditor.unchangedCodeBackground": "#24242a",
 
 			// ── bracket pair colorization ──────────────────────────
 			"editorBracketMatch.background": "#3e4a6a",

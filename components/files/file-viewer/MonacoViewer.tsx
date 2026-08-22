@@ -2,16 +2,12 @@
 
 // Right-side text file viewer built on Monaco.
 //
-// Previously this panel was split across TextViewer (Prism + react-markdown),
-// DiffView (self-implemented Myers diff), VirtualizedCodeLines (large-file
-// windowing) and FileSearchBar (custom inline search). All four are gone
-// in favour of Monaco's editor + diff editor + built-in Ctrl-F find.
+// The viewer uses Monaco for syntax highlighting, editing, and built-in
+// Ctrl-F search.
 //
 // Behaviour summary (see the design notes for full context):
 //   • Read-only by default; "Edit" toggle enables editing. State is
 //     per-component (not persisted across page reloads).
-//   • Source / Diff vs HEAD toggle. Diff uses Monaco's DiffEditor and
-//     fetches `git show HEAD:<path>` via /api/git/file-content.
 //   • Save = PUT /api/files/<path>?type=write with JSON { content }.
 //     10 MiB cap (server), 5 MiB warn / 50 MiB degrade thresholds
 //     mirror it client-side. No confirmation dialog — see
@@ -51,20 +47,10 @@ interface FileContent {
 	mtime?: string | null;
 }
 
-interface DiffContent {
-	original: string | null;
-	exists: boolean;
-	truncated: boolean;
-	repoRoot: string | null;
-	ref: string;
-}
-
-type ViewMode = "source" | "diff";
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 export function MonacoViewer({
 	filePath,
-	cwd,
 	rightPanelState = "normal",
 }: FileViewerProps) {
 	const { isDark } = useTheme();
@@ -84,20 +70,11 @@ export function MonacoViewer({
 
 	// ── View state ────────────────────────────────────────────────────────
 	const [editMode, setEditMode] = useState(false);
-	const [viewMode, setViewMode] = useState<ViewMode>("source");
 	const [wrapLines, setWrapLines] = useState(false);
 	const [dirty, setDirty] = useState(false);
 	const [saveState, setSaveState] = useState<SaveState>("idle");
 	const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null);
 	const [lineCount, setLineCount] = useState<number>(0);
-
-	// ── Git state ─────────────────────────────────────────────────────────
-	const [gitHasChanges, setGitHasChanges] = useState(false);
-
-	// ── Diff view state ───────────────────────────────────────────────────
-	const [diffContent, setDiffContent] = useState<DiffContent | null>(null);
-	const [diffLoading, setDiffLoading] = useState(false);
-	const [diffError, setDiffError] = useState<string | null>(null);
 
 	// ── Large-file state ──────────────────────────────────────────────────
 	const [largeWarned, setLargeWarned] = useState(false);
@@ -110,9 +87,7 @@ export function MonacoViewer({
 	// ── Refs ──────────────────────────────────────────────────────────────
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const sourceEditorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
-	const diffEditorRef = useRef<Monaco.editor.IStandaloneDiffEditor | null>(null);
 	const modelRef = useRef<Monaco.editor.ITextModel | null>(null);
-	const originalModelRef = useRef<Monaco.editor.ITextModel | null>(null);
 	const baselineRef = useRef<string | null>(null);
 	const recentlySavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -124,12 +99,8 @@ export function MonacoViewer({
 		// old file's model.
 		sourceEditorRef.current?.dispose();
 		sourceEditorRef.current = null;
-		diffEditorRef.current?.dispose();
-		diffEditorRef.current = null;
 		modelRef.current?.dispose();
 		modelRef.current = null;
-		originalModelRef.current?.dispose();
-		originalModelRef.current = null;
 		if (recentlySavedTimerRef.current) {
 			clearTimeout(recentlySavedTimerRef.current);
 			recentlySavedTimerRef.current = null;
@@ -141,16 +112,10 @@ export function MonacoViewer({
 		setSize(0);
 		setLineCount(0);
 		setEditMode(false);
-		setViewMode("source");
 		setWrapLines(false);
 		setDirty(false);
 		setSaveState("idle");
 		setSaveErrorMsg(null);
-		setGitHasChanges(false);
-
-		setDiffContent(null);
-		setDiffError(null);
-		setDiffLoading(false);
 		setLargeWarned(false);
 		setDegraded(false);
 		setReloadKey((k) => k + 1);
@@ -187,76 +152,21 @@ export function MonacoViewer({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [filePath, reloadKey]);
 
-	// ── Detect git changes vs HEAD (gates the Diff button) ───────────────
-	useEffect(() => {
-		if (!cwd || !content) return;
-		const url = `/api/git/diff?cwd=${encodeURIComponent(cwd)}&file=${encodeURIComponent(filePath)}&base=head`;
-		fetch(url)
-			.then((r) => (r.ok ? r.json() : null))
-			.then((d: { diff: string | null; truncated: boolean } | null) => {
-				// Diff button only shows when the file differs from HEAD
-				// and the diff is small enough to fetch in full.
-				setGitHasChanges(!!d && !d.truncated && !!d.diff);
-			})
-			.catch(() => {
-				// Silent — Diff button just stays hidden.
-				setGitHasChanges(false);
-			});
-	}, [cwd, filePath, content]);
-
-	// ── Fetch HEAD content when entering diff view ───────────────────────
-	useEffect(() => {
-		if (viewMode !== "diff" || !cwd) return;
-		if (diffContent !== null) return; // already loaded this path
-		setDiffLoading(true);
-		setDiffError(null);
-		const url = `/api/git/file-content?cwd=${encodeURIComponent(cwd)}&file=${encodeURIComponent(filePath)}&ref=HEAD`;
-		fetch(url)
-			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-			.then((d: { content: string | null; exists: boolean; truncated: boolean; repoRoot: string | null; ref: string }) => {
-				setDiffContent({
-					original: d.content,
-					exists: d.exists,
-					truncated: d.truncated,
-					repoRoot: d.repoRoot,
-					ref: d.ref,
-				});
-				setDiffLoading(false);
-			})
-			.catch((e: unknown) => {
-				setDiffError(e instanceof Error ? e.message : String(e));
-				setDiffLoading(false);
-			});
-	}, [viewMode, cwd, filePath, diffContent]);
-
 	// ── Editor instance lifecycle ────────────────────────────────────────
-// We keep ONE working model across mode switches so unsaved edits
-// survive source↔diff toggling. Switching modes tears down the
-// editor (Monaco's editor.dispose() does NOT dispose the model)
-// and the new editor takes ownership via setModel().
-//
-// IMPORTANT: model creation and editor creation are intentionally
-// fused into a single effect. Splitting them would leave the editor
-// effect with no React signal that the model is ready (refs don't
-// trigger re-renders), so opening a second file would render blank.
-useEffect(() => {
+	// Model creation and editor creation are intentionally fused into a single
+	// effect. Refs don't trigger re-renders, so keeping them together prevents
+	// a second file from briefly rendering a blank editor.
+	useEffect(() => {
 	if (!monaco || !containerRef.current) return;
 
 	// Tear down everything from the previous file/mode first.
 	sourceEditorRef.current?.dispose();
 	sourceEditorRef.current = null;
-	diffEditorRef.current?.dispose();
-	diffEditorRef.current = null;
 	if (modelRef.current) modelRef.current.dispose();
 	modelRef.current = null;
-	if (originalModelRef.current) originalModelRef.current.dispose();
-	originalModelRef.current = null;
 
 	// Wait for the file fetch to land before creating a model.
 	if (content === null) return;
-
-	const wantsDiff = viewMode === "diff";
-	if (wantsDiff && !diffContent) return;
 
 	const lang = langInfo.id === "text" ? "plaintext" : langInfo.id;
 	const uri = monaco.Uri.parse(
@@ -267,8 +177,7 @@ useEffect(() => {
 	setDirty(false);
 
 	const container = containerRef.current;
-	if (!wantsDiff) {
-		const editor = monaco.editor.create(container, {
+	const editor = monaco.editor.create(container, {
 			theme: isDark ? PI_WORK_DARK_THEME_NAME : "vs",
 			readOnly: !editMode || degraded,
 			minimap: { enabled: minimapEnabled, scale: 1 },
@@ -282,37 +191,10 @@ useEffect(() => {
 			tabSize: 4,
 			// Avoid context menus interfering with our own shortcuts
 			contextmenu: false,
-		});
-		sourceEditorRef.current = editor;
-		editor.setModel(modelRef.current);
-		bindEditorEvents(editor);
-	} else {
-		const originalUri = monaco.Uri.parse(
-			`file-head://${encodeURIComponent(filePath)}`,
-		);
-		originalModelRef.current = monaco.editor.createModel(
-			diffContent?.original ?? "",
-			lang,
-			originalUri,
-		);
-		const diffEditor = monaco.editor.createDiffEditor(container, {
-			theme: isDark ? PI_WORK_DARK_THEME_NAME : "vs",
-			readOnly: true,
-			renderSideBySide: true,
-			minimap: { enabled: false },
-			fontSize: 13,
-			fontFamily: "var(--font-mono)",
-			lineNumbers: "on",
-			automaticLayout: true,
-			originalEditable: false,
-			ignoreTrimWhitespace: false,
-		});
-		diffEditor.setModel({
-			original: originalModelRef.current,
-			modified: modelRef.current,
-		});
-		diffEditorRef.current = diffEditor;
-	}
+	});
+	sourceEditorRef.current = editor;
+	editor.setModel(modelRef.current);
+	bindEditorEvents(editor);
 	// bindEditorEvents is defined later in the
 	// component body as a plain function; listing it in deps would
 	// re-run this effect on every render without changing inputs.
@@ -322,8 +204,6 @@ useEffect(() => {
 	filePath,
 	langInfo.id,
 	content,
-	viewMode,
-	diffContent,
 	editMode,
 	isDark,
 	wrapLines,
@@ -349,9 +229,7 @@ useEffect(() => {
 	useEffect(() => {
 		return () => {
 			sourceEditorRef.current?.dispose();
-			diffEditorRef.current?.dispose();
 			modelRef.current?.dispose();
-			originalModelRef.current?.dispose();
 			if (recentlySavedTimerRef.current) {
 				clearTimeout(recentlySavedTimerRef.current);
 			}
@@ -538,31 +416,6 @@ useEffect(() => {
 					</Tooltip>
 				)}
 
-				{/* Source / Diff toggle — only when file is modified relative to HEAD */}
-				{gitHasChanges && (
-					<div
-						style={{
-							display: "flex",
-							borderRadius: 5,
-							overflow: "hidden",
-							border: "1px solid var(--border)",
-						}}
-					>
-						<button
-							onClick={() => setViewMode("source")}
-							style={toggleBtnStyle(viewMode === "source")}
-						>
-							{t("Source")}
-						</button>
-						<button
-							onClick={() => setViewMode("diff")}
-							style={toggleBtnStyle(viewMode === "diff")}
-						>
-							{t("Diff vs HEAD")}
-						</button>
-					</div>
-				)}
-
 				{/* Edit toggle */}
 				{!degraded && (
 					<Tooltip content={`${t("Edit file")} (Ctrl+E)`}>
@@ -603,49 +456,10 @@ useEffect(() => {
 				)}
 			</div>
 
-			{/* Diff error banner (overlay) */}
-			{viewMode === "diff" && (diffError || diffLoading) && (
-				<div
-					style={{
-						padding: "12px 16px",
-						background: "#3d2020",
-						color: "#f87171",
-						fontSize: 12,
-						borderBottom: "1px solid var(--border)",
-						display: "flex",
-						alignItems: "center",
-						gap: 12,
-					}}
-				>
-					<span>
-						{diffLoading
-							? t("Loading editor...")
-							: `${t("Cannot load HEAD version")}: ${diffError}`}
-					</span>
-					{diffError && (
-						<button
-							onClick={() => {
-								setDiffContent(null);
-								setDiffError(null);
-							}}
-							style={toggleBtnStyle(false)}
-						>
-							{t("Retry")}
-						</button>
-					)}
-					<button
-						onClick={() => setViewMode("source")}
-						style={toggleBtnStyle(false)}
-					>
-						{t("Close diff view")}
-					</button>
-				</div>
-			)}
-
 			{/* Editor container — Monaco mounts here */}
 			<div
 				ref={containerRef}
-				key={`${filePath}-${viewMode}`}
+				key={filePath}
 				style={{
 					flex: 1,
 					overflow: "hidden",
