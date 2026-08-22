@@ -13,7 +13,7 @@ import { buildTodoTools } from "./user-todo/tools";
 import { readEnabledTodoTools } from "./user-todo/tools-config";
 import { buildShowFileTool } from "./show-file-tool";
 import { writeSessionName, deleteSessionName } from "./session-names";
-import { buildAgentTodoTool } from "./agent-todo-tool/tool";
+import { buildAgentTodoTool, AGENT_TODO_SYSTEM_PROMPT_BLOCK } from "./agent-todo-tool/tool";
 import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-questions-tool";
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
 import { readEnabledCustomTools } from "./custom-tools-config";
@@ -801,6 +801,15 @@ export async function startRpcSession(
       ...(appendSystemPromptLoaderOption !== undefined
         ? { appendSystemPrompt: appendSystemPromptLoaderOption }
         : {}),
+      // Builtin hardcoded append blocks contributed by enabled custom tools.
+      // These flow through the same channel as user APPEND_SYSTEM.md entries
+      // (joined with "\n\n" and appended at the very end of the system
+      // prompt), but live in code instead of a configurable file. Gated here
+      // once per session so a mid-session toggle doesn't change the prompt.
+      appendSystemPromptOverride: (baseAppend) =>
+        enabledCustom.has("agent_todo")
+          ? [...baseAppend, AGENT_TODO_SYSTEM_PROMPT_BLOCK]
+          : baseAppend,
       extensionFactories: [
         (pi) => {
           pi.on("tool_call", async (event) => {

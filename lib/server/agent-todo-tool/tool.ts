@@ -33,6 +33,27 @@ import { createLogger } from "../logger";
 
 export { AGENT_TODO_TOOL_NAME };
 export type { AgentTodoAction, AgentTask, AgentTaskState, AgentTodoDetails, AgentTodoLogEntry } from "../../shared/agent-todo-tool/types";
+
+/**
+ * Hardcoded, whole-block system-prompt contribution for `agent_todo`.
+ * Appended at the very end of the system prompt — the same channel
+ * `DefaultResourceLoader` uses for `APPEND_SYSTEM.md`, but this block is
+ * built into the codebase (no user-configurable file). It is emitted
+ * (verbatim, multi-line) only when the tool is enabled. It intentionally
+ * carries structure (headings / lists) that a flat `promptGuidelines`
+ * array can't express cleanly, so the guidance lives here instead of in
+ * `promptGuidelines`.
+ */
+export const AGENT_TODO_SYSTEM_PROMPT_BLOCK = `\
+## Tool agent_todo guidelines
+- Use agent_todo for complex work with 5+ steps or when the user gives a long task list. Skip trivial or conversational requests.
+- Figure out what you really need to do before creating tasks list. Sometimes you need to research or explore the codebase first.
+- Mark tasks in_progress before starting them and completed only when they are actually done.
+- Use create with a subject and optional description; use update with an id and only changed fields; use list to view all tasks; use delete to remove one task; use clear when the current plan is no longer relevant.
+- There are 3 statuses for agent_todo tasks: \`pending\`, \`in_progress\`, and \`completed\`. Keep subjects short and imperative, and keep descriptions concise and focused on the work.
+- Before finishing your work, use agent_todo list to see task status, and remember to mark them completed.
+`;
+
 const log = createLogger("agent-todo-tool");
 
 // OpenAI-compatible providers require function.parameters to have a root
@@ -105,12 +126,6 @@ export const agentTodoTool = defineTool<typeof AgentTodoParams, AgentTodoDetails
   parameters: AgentTodoParams,
   executionMode: "sequential",
   promptSnippet: "Track a small task list for multi-step work.",
-  promptGuidelines: [
-    "Use agent_todo for complex work with 5+ steps or when the user gives a task list. Skip trivial or conversational requests.",
-    "Create tasks before starting multi-step work. Mark tasks in_progress before starting them and completed only when they are actually done.",
-    "Use create with a subject and optional description; use update with an id and only changed fields; use list to view all tasks; use delete to remove one task; use clear when the current plan is no longer relevant.",
-    "Statuses are pending, in_progress, and completed. Keep subjects short and imperative, and keep descriptions concise and focused on the work.",
-  ],
   async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
     const action = params.action;
     const sessionId = ctx.sessionManager?.getSessionId?.();

@@ -23,6 +23,12 @@ function fmtTask(t: AgentTask): string {
   return `[${t.status}] #${t.id} ${t.subject}`;
 }
 
+/** Same as fmtTask but includes the task description when present (used by `list`). */
+function fmtTaskWithDescription(t: AgentTask): string {
+  const base = fmtTask(t);
+  return t.description ? `${base}\n    ${t.description}` : base;
+}
+
 export function buildToolResult(op: AgentTodoOp): AgentTodoToolResult {
   if (op.kind === "error") {
     return {
@@ -60,7 +66,7 @@ export function buildToolResult(op: AgentTodoOp): AgentTodoToolResult {
       };
     }
     const header = `${op.tasks.length} task(s):`;
-    const body = op.tasks.map(fmtTask).join("\n");
+    const body = op.tasks.map(fmtTaskWithDescription).join("\n");
     return {
       content: [{ type: "text" as const, text: `${header}\n${body}` }],
       details: makeDetails(op.state.tasks),
