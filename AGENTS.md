@@ -13,12 +13,34 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 
 ## 目录与架构
 
-- `app/page.tsx`：应用入口；`app/api/**/route.ts`：Next.js API 适配层。API 路由应保持在 `app/api`，业务逻辑放到 `lib/server`。
-- `components/`：React UI，按 `app-shell`、`chat`、`sessions`、`files`、`settings`、`panels`、`todos`、`rss`、`scheduler` 等功能划分。
-- `hooks/`：客户端 hooks、会话控制和模块级状态；`hooks/useAgentSession/` 对外从入口文件导出，内部文件不是稳定 API。
-- `lib/client/`：浏览器端工具和状态；`lib/shared/`：客户端/服务端共用的类型、协议和纯函数；`lib/server/`：文件系统、SQLite、pi SDK、RPC、后台循环和第三方集成。
-- `scripts/`：迁移、恢复、部署和手工 smoke test；`agent-skills/`：项目维护的 Agent skill；`bin/`：CLI 启动入口；`public/`：静态资源。
+**根目录**
+
+- `app/`：Next.js App Router 入口。`app/page.tsx` 是应用入口；`app/api/**/route.ts` 是 API 适配层。API 路由应保持在 `app/api`，业务逻辑放到 `lib/server`。
+- `components/`：React UI（见下）。`hooks/`：客户端 hooks 与模块级状态。`lib/`：业务逻辑与类型（见下）。
+- `scripts/`：迁移、恢复、部署和手工 smoke test；`agent-skills/`：项目维护的 Agent skill；`bin/`：CLI 启动入口（`pi-work.js`）；`public/`：静态资源。
 - `instrumentation.ts`：Node.js 服务启动时引导微信监控、Scheduler、RSS 刷新循环和终端 WebSocket 服务；改动这些后台服务的启动/停止逻辑时要特别检查幂等性、退出清理和开发模式热重载。
+- 顶层配置：`next.config.ts`、`tailwind.config.ts`、`postcss.config.mjs`、`tsconfig.json`、`eslint.config.mjs`、`.npmrc`（`production=false`，见“常用命令与验证”）、`Dockerfile` + `docker-compose.yml`、`electron-shell/`（可选 Electron 外壳，非核心 Web 应用）。
+
+**`app/api/`** 按功能拆分的路由目录：`agent`、`agent-settings`、`append-system`、`auth`、`create-space`、`default-cwd`、`exchange-rate`、`favorites`、`files`、`git`、`home`、`inbox`、`llm-audit`、`models`、`models-config`、`pinned-cwds`、`profile`、`prompts`、`rss`、`scheduled-tasks`、`sessions`、`settings`、`skills`、`slash-commands`、`tags`、`terminal`、`todo-images`、`todo-tools`、`todos`、`token-audit`、`translate`、`weixin`、`workspaces`。
+
+**`components/`** 按功能划分：
+
+- `app-shell/`：外层壳（`AppShell.tsx`、`CommandPalette.tsx`）。
+- `chat/`：会话聊天（`ChatWindow`、`ChatInput`、`MessageView`、`ModelPicker`、`ThinkingPicker`、`PermissionDialog`、`AskUserQuestionsPanel` 等）。
+- `sessions/`：会话侧栏与相关面板（`SessionSidebar`、分支树 `ConversationTreePanel`、收藏 `CollectionPanel`、多 cwd 列表等）。
+- `panels/`：右侧面板（Canvas、Git、Json、LlmAudit、Tokens、ToolCallStats、Translate、Terminal），其中 `panels/right-bar/` 是右侧按钮列（`desc.tsx` 描述符注册 + `icons.tsx` 静态图标）。
+- `settings/`：设置（`SettingsModal`、`ProfileBlock`、`ModelsConfig`、`PromptsConfig`、`SkillsConfig` 等）。
+- `inbox/`：消息中心（`InboxBell`、`InboxModal` 等）。`grokbot/`、`rss/`、`scheduler/`、`todos/`：对应功能 UI。`files/`：工作区文件浏览/编辑（含 diff、图片、音频、PDF、SVG、Mermaid、ECharts 等查看器）。
+- `ui/`：公共 UI 原语（`Tooltip`、`TabBar`、`CountBadge`、`MorphToggleIcon`、`Typewriter`、`SmartImage` 等）；`ui/animated-icons/`：公共 motion 动画图标（一个图标一文件，`shared.ts` 提供 `useIconHover`/`ICON_WRAP`）。
+- `renderers/`：各类文件渲染器。
+
+**`hooks/`**：客户端 hooks、会话控制和模块级状态；`hooks/useAgentSession/` 对外从入口文件导出，内部文件不是稳定 API。常见如 `useAgentTodo`、`useInbox*`、`useRss*`、`useTheme`、`useI18n` 及各 `*Store`（store 与 hooks 分离，store 常放 `hooks/`）。
+
+**`lib/`** 三层：
+
+- `lib/client/`：浏览器端工具和状态（`agent-client`、`commands`、`file-icon-map`、`ui-sounds`、`icon-paths`、`git-status-store` 等）。
+- `lib/shared/`：客户端/服务端共用的类型、协议和纯函数（`types`、`config-types`、`right-bar`、`translate`、`i18n-dict`、`buildConversationTree` 等）。
+- `lib/server/`：文件系统、SQLite、pi SDK、RPC、后台循环和第三方集成，含 `rpc-manager.ts`（进程内 `AgentSessionWrapper`）、`sessions/`、`terminal/`、`files/`、`wechat/`、`scheduler/`、`rss/`、各 `*-db`/`*-store`（inbox、llm-audit、token-audit、profile、user-todo）等。
 
 ### 关键服务关系
 
@@ -55,6 +77,8 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 - 除非用户允许，否则永远不要直接或间接损坏 `~/.pi` 或 `~/.pi-work` 的用户数据，这是红线。
 
 ## 常用命令与验证
+
+仓库根 `.npmrc` 设 `production=false`：即使 shell 带 `NODE_ENV=production`，`npm install` 也会安装 devDependencies（否则缺 typescript/tailwindcss/eslint 等会导致 `next build` 因 `@/` 路径别名未注册而失败）。
 
 ```bash
 npm install
