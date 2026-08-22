@@ -31,6 +31,7 @@ import type * as Monaco from "monaco-editor";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { useMonacoLoader } from "@/hooks/useMonacoLoader";
+import { PI_WORK_DARK_THEME_NAME } from "@/lib/client/monaco-theme";
 import { encodeFilePathForApi, getFileName } from "@/lib/shared/file-paths";
 import { getFileLanguage } from "@/lib/shared/monaco-language-map";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -268,7 +269,7 @@ useEffect(() => {
 	const container = containerRef.current;
 	if (!wantsDiff) {
 		const editor = monaco.editor.create(container, {
-			theme: isDark ? "vs-dark" : "vs",
+			theme: isDark ? PI_WORK_DARK_THEME_NAME : "vs",
 			readOnly: !editMode || degraded,
 			minimap: { enabled: minimapEnabled, scale: 1 },
 			wordWrap: wrapLines ? "on" : "off",
@@ -295,7 +296,7 @@ useEffect(() => {
 			originalUri,
 		);
 		const diffEditor = monaco.editor.createDiffEditor(container, {
-			theme: isDark ? "vs-dark" : "vs",
+			theme: isDark ? PI_WORK_DARK_THEME_NAME : "vs",
 			readOnly: true,
 			renderSideBySide: true,
 			minimap: { enabled: false },
@@ -337,7 +338,7 @@ useEffect(() => {
 useEffect(() => {
 	if (!sourceEditorRef.current) return;
 	sourceEditorRef.current.updateOptions({
-		theme: isDark ? "vs-dark" : "vs",
+		theme: isDark ? PI_WORK_DARK_THEME_NAME : "vs",
 		readOnly: !editMode || degraded,
 		minimap: { enabled: minimapEnabled, scale: 1 },
 		wordWrap: wrapLines ? "on" : "off",

@@ -17,6 +17,7 @@
 // retry button — see the design notes for the right-side viewer.
 
 import { useEffect, useState } from "react";
+import { registerPiWorkDarkTheme } from "@/lib/client/monaco-theme";
 
 type Monaco = typeof import("monaco-editor");
 
@@ -150,7 +151,13 @@ function loadMonaco(): Promise<Monaco> {
 	if (pendingLoad) return pendingLoad;
 	configureMonacoEnvironment();
 	patchWheelListenersForMonaco();
-	pendingLoad = import("monaco-editor");
+	pendingLoad = import("monaco-editor").then((m) => {
+		// Register the Pi Work-tuned dark theme before any editor is
+		// constructed — MonacoViewer references `pi-work-dark` by name
+		// in its create-options, so the theme must exist by then.
+		registerPiWorkDarkTheme(m);
+		return m;
+	});
 	return pendingLoad;
 }
 
