@@ -22,6 +22,7 @@ import { RetrySection } from "./sections/RetrySection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 import { TodoAgentToolsSection } from "./sections/TodoAgentToolsSection";
 import { TodoTagsSection } from "./sections/TodoTagsSection";
+import { ToastTestSection } from "./sections/ToastTestSection";
 
 /**
  * Settings modal shell. Holds the global `config` state machine and the
@@ -38,14 +39,15 @@ import { TodoTagsSection } from "./sections/TodoTagsSection";
  *   5  Right-side buttons  (immediate-apply; visibility / order /
  *                          alignment)
  *   6  Inbox Test          (<InboxTestSection />)
- *   7  File preview limits (immediate-apply per kind)
- *   8  Typewriter effect   (immediate-apply toggle)
- *   9  Typewriter phrases  (own save flow; onDirtyChange → modal)
- *   10 Agent retry         (independent state machine; lives in
+ *   7  Toast Test          (<ToastTestSection />, client-side preview)
+ *   8  File preview limits (immediate-apply per kind)
+ *   9  Typewriter effect   (immediate-apply toggle)
+ *   10 Typewriter phrases  (own save flow; onDirtyChange → modal)
+ *   11 Agent retry         (independent state machine; lives in
  *                          ~/.pi/agent/settings.json, not config.yaml)
- *   11 UI Sounds           (immediate-apply master volume + per-event recipes)
- *   12 Todo agent tools    (immediate-apply; ~/.pi-work/todo-tools.json)
- *   13 Manage tags         (uses useTodos(); rename / delete / recolor)
+ *   12 UI Sounds           (immediate-apply master volume + per-event recipes)
+ *   13 Todo agent tools    (immediate-apply; ~/.pi-work/todo-tools.json)
+ *   14 Manage tags         (uses useTodos(); rename / delete / recolor)
  */
 export function SettingsModal({
   onClose,
@@ -284,29 +286,36 @@ export function SettingsModal({
               <InboxTestSection />
             </SettingsSection>
 
-            {/* 7: File preview limits */}
+            {/* 7: Toast Test — sits next to Inbox Test so the user can
+                compare the two notification-style previews. Also purely
+                client-side; no /api/toast/test endpoint needed. */}
+            <SettingsSection id="toast-test" topGap>
+              <ToastTestSection />
+            </SettingsSection>
+
+            {/* 8: File preview limits */}
             <FilePreviewSection config={config} apply={apply} />
 
-            {/* 8: Typewriter effect */}
+            {/* 9: Typewriter effect */}
             <TypewriterEffectSection config={config} apply={apply} />
 
-            {/* 9: Typewriter phrases */}
+            {/* 10: Typewriter phrases */}
             <TypewriterSection
               config={config}
               apply={apply}
               onDirtyChange={setTypewriterDirty}
             />
 
-            {/* 10: Agent retry */}
+            {/* 11: Agent retry */}
             <RetrySection />
 
-            {/* 11: UI Sounds */}
+            {/* 12: UI Sounds */}
             <SoundSettingsSection config={config} apply={apply} />
 
-            {/* 12: Todo agent tools */}
+            {/* 13: Todo agent tools */}
             <TodoAgentToolsSection />
 
-            {/* 13: Manage tags */}
+            {/* 14: Manage tags */}
             <TodoTagsSection />
           </div>
         </div>

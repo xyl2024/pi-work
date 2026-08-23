@@ -83,9 +83,15 @@ export interface UseAgentSessionOptions {
 }
 
 export type ToastNotification = {
-  kind?: "success" | "error" | "info";
+  kind?: "success" | "error" | "info" | "warning";
   message: string;
   durationMs?: number;
+  description?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+  icon?: boolean;
 };
 
 export type StateSetter<T> = Dispatch<SetStateAction<T>>;

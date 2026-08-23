@@ -33,6 +33,7 @@ import { sessions } from "./sessions";
 import { settings } from "./settings";
 import { starterPrompts } from "./starter-prompts";
 import { terminal } from "./terminal";
+import { toast } from "./toast";
 import { todos } from "./todos";
 import { wechat } from "./wechat";
 
@@ -58,6 +59,7 @@ export const ZH_TRANSLATIONS = {
   ...settings,
   ...starterPrompts,
   ...terminal,
+  ...toast,
   ...todos,
   ...wechat,
   ...askUserQuestions,

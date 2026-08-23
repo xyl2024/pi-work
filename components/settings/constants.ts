@@ -38,6 +38,7 @@ export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-custom-tools",  labelKey: "Custom Tools" },
   { id: "settings-section-right-bar",     labelKey: "Right-side buttons" },
   { id: "settings-section-inbox-test",    labelKey: "Inbox Test" },
+  { id: "settings-section-toast-test",    labelKey: "Toast Test" },
   { id: "settings-section-file-preview",  labelKey: "File preview limits" },
   { id: "settings-section-typewriter-effect", labelKey: "Typewriter effect" },
   { id: "settings-section-typewriter",    labelKey: "Typewriter phrases" },
