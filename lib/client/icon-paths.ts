@@ -112,3 +112,38 @@ export const THUMBS_UP =
  *    <path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/> */
 export const HEART =
   "M 2 9.5 A 5.5 5.5 0 0 1 11.591 5.824 A 0.56 0.56 0 0 0 12.409 5.824 A 5.49 5.49 0 0 1 22 9.5 C 22 11.79 20.5 13.5 19 15 L 13.508 20.313 A 2 2 0 0 1 10.508 20.332 L 5 15 C 3.5 13.5 2 11.8 2 9.5";
+
+/** Sun icon (theme toggle: light mode). 9 subpaths — center circle (r=4 at 12,12,
+ *  rendered as two semicircular arcs) plus 8 ray segments (cardinal + diagonals).
+ *  Source (lucide `sun`):
+ *    <circle cx="12" cy="12" r="4"/>
+ *    <line x1="12" y1="2" x2="12" y2="5"/>
+ *    <line x1="12" y1="19" x2="12" y2="22"/>
+ *    <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/>
+ *    <line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/>
+ *    <line x1="2" y1="12" x2="5" y2="12"/>
+ *    <line x1="19" y1="12" x2="22" y2="12"/>
+ *    <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/>
+ *    <line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
+ *  The many-subpath shape morphs cleanly to MOON (1 subpath) via morphicons'
+ *  per-subpath Procrustes + subpath duplication — the rays collapse into the
+ *  crescent's silhouette in flight. */
+export const SUN =
+  "M 8 12 A 4 4 0 1 0 16 12 A 4 4 0 1 0 8 12 Z " +
+  "M 12 2 V 5 " +
+  "M 12 19 V 22 " +
+  "M 4.22 4.22 L 6.34 6.34 " +
+  "M 17.66 17.66 L 19.78 19.78 " +
+  "M 2 12 H 5 " +
+  "M 19 12 H 22 " +
+  "M 4.22 19.78 L 6.34 17.66 " +
+  "M 17.66 6.34 L 19.78 4.22";
+
+/** Moon icon (theme toggle: dark mode). Single closed subpath — the standard
+ *  lucide crescent carved from a 9-radius disk and a 7-radius disk. Source
+ *  (lucide `moon`):
+ *    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+ *  Companion to SUN for the sidebar theme toggle; the morph between the two
+ *  reads as "the sun setting into a moon". */
+export const MOON =
+  "M 21 12.79 A 9 9 0 1 1 11.21 3 A 7 7 0 0 0 21 12.79 Z";
