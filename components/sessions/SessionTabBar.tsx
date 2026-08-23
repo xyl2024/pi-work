@@ -122,6 +122,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         <div
           ref={scrollRef}
           onWheel={handleWheel}
+          data-hide-v-scrollbar
           style={{
             display: "flex",
             alignItems: "flex-end",

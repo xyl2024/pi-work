@@ -93,6 +93,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
       <div
         ref={scrollRef}
         onWheel={handleWheel}
+        data-hide-v-scrollbar
         style={{
           display: "flex",
           alignItems: "flex-end",
