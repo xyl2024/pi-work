@@ -99,8 +99,6 @@ const RIGHT_PANEL_RATIO = 0.32;
 
 // Bottom terminal panel geometry.
 const TERMINAL_HEIGHT_KEY = "pi-terminal-panel-height";
-const TERMINAL_LOCATION_KEY = "pi-terminal-panel-location";
-const TERMINAL_TAB_ID = "terminal:global";
 const MIN_TERMINAL_HEIGHT = 80;
 
 // True while settings haven't been fetched (or the fetch failed).
@@ -1027,56 +1025,12 @@ export function AppShell() {
   // selected, so the welcome/input view can render without a placeholder.
   const showChat = initialSessionRestored && workspace.tabOrder.length > 0;
 
-  const [rightPanelRect, setRightPanelRect] = useState<{ left: number; width: number } | null>(null);
-  const rightPanelRef = useRef<HTMLDivElement>(null);
-
   const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
   const activeRightPanelKind = rightPanelState === "closed" ? null : activeFileTab?.kind ?? null;
 
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalLocation, setTerminalLocation] = useState<"bottom" | "right">(() => {
-    if (typeof window === "undefined") return "bottom";
-    try {
-      return localStorage.getItem(TERMINAL_LOCATION_KEY) === "right" ? "right" : "bottom";
-    } catch {
-      return "bottom";
-    }
-  });
   const [terminalMaximized, setTerminalMaximized] = useState(false);
 
-  // The right-panel rect is only consumed by the right-docked terminal
-  // overlay. When the terminal is at the bottom, skip the observer entirely —
-  // the resize callback would otherwise fire a full AppShell re-render on
-  // every animation frame while the panel width animates (the main reason
-  // collapse/expand used to feel janky). When it is needed, rAF-coalesce the
-  // callback and skip no-op updates.
-  useEffect(() => {
-    if (terminalLocation !== "right") return;
-    const panel = rightPanelRef.current;
-    if (!panel) return;
-    let raf = 0;
-    const update = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        const rect = panel.getBoundingClientRect();
-        setRightPanelRect((prev) =>
-          prev && Math.abs(prev.left - rect.left) < 0.5 && Math.abs(prev.width - rect.width) < 0.5
-            ? prev
-            : { left: rect.left, width: rect.width }
-        );
-      });
-    };
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(panel);
-    window.addEventListener("resize", update);
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-      observer.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, [terminalLocation]);
   const [terminalHeight, setTerminalHeight] = useState<number>(() => {
     if (typeof window === "undefined") return 200;
     try {
@@ -1102,28 +1056,9 @@ export function AppShell() {
     if (!terminalOpen) setTerminalMaximized(false);
   }, [terminalOpen]);
 
-  const openTerminalOnRight = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "terminal")) return prev;
-      return [...prev, { kind: "terminal", id: TERMINAL_TAB_ID, label: t("Terminal") }];
-    });
-    setActiveFileTabId(TERMINAL_TAB_ID);
-    setRightPanelState("normal");
-    setTerminalOpen(true);
-  }, [t]);
-
   const toggleTerminal = useCallback(() => {
-    if (terminalLocation === "right") {
-      if (terminalOpen && activeFileTabId === TERMINAL_TAB_ID && rightPanelState !== "closed") {
-        setTerminalOpen(false);
-        handleCloseFileTab(TERMINAL_TAB_ID);
-      } else {
-        openTerminalOnRight();
-      }
-      return;
-    }
     setTerminalOpen((v) => !v);
-  }, [terminalLocation, terminalOpen, activeFileTabId, rightPanelState, handleCloseFileTab, openTerminalOnRight]);
+  }, []);
 
   // ── Right-bar button column context ──
   // Built late because it depends on toggleTerminal, which is declared
@@ -1178,32 +1113,6 @@ export function AppShell() {
     },
   };
 
-  const moveTerminal = useCallback(() => {
-    if (terminalLocation === "bottom") {
-      setTerminalLocation("right");
-      setTerminalMaximized(false);
-      openTerminalOnRight();
-    } else {
-      setTerminalLocation("bottom");
-      handleCloseFileTab(TERMINAL_TAB_ID);
-      setTerminalOpen(true);
-    }
-  }, [terminalLocation, handleCloseFileTab, openTerminalOnRight]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(TERMINAL_LOCATION_KEY, terminalLocation);
-    } catch {
-      // ignore
-    }
-  }, [terminalLocation]);
-
-  useEffect(() => {
-    if (terminalLocation === "right" && !fileTabs.some((tab) => tab.kind === "terminal")) {
-      setTerminalOpen(false);
-    }
-  }, [terminalLocation, fileTabs]);
-
   const toggleTerminalMaximize = useCallback(() => setTerminalMaximized((v) => !v), []);
 
   // Ctrl+` toggles the terminal panel (VS Code muscle memory).
@@ -1211,16 +1120,12 @@ export function AppShell() {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key === "`") {
         e.preventDefault();
-        if (terminalLocation === "right") {
-          openTerminalOnRight();
-        } else {
-          setTerminalOpen((v) => !v);
-        }
+        setTerminalOpen((v) => !v);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [terminalLocation, openTerminalOnRight]);
+  }, []);
 
   // Drag the bottom panel's top edge to resize (clamped to min/max).
   const startTerminalDrag = useCallback(
@@ -1257,14 +1162,14 @@ export function AppShell() {
   // When the user hides a button whose panel is currently active, the right
   // panel would otherwise sit open with no toggle in the bar. Auto-close the
   // panel — the tab itself stays in the tab strip so re-enabling the button
-  // and clicking it again reopens the same view. "file" and "terminal"
-  // kinds have no configurable button behind them so the lookup returns
-  // undefined and the panel stays open.
+  // and clicking it again reopens the same view. "file" kind has no
+  // configurable button behind it so the lookup returns undefined and the
+  // panel stays open.
   useEffect(() => {
     if (rightPanelState === "closed") return;
     if (activeRightPanelKind === null) return;
     const id = RIGHT_BAR_ID_FOR_TAB_KIND[activeRightPanelKind];
-    if (id === undefined) return; // "file" / "terminal" kind — no configurable button
+    if (id === undefined) return; // "file" kind — no configurable button
     if (isRightBarButtonVisible(rightSideBarConfig, id)) return;
     setRightPanelState("closed");
   }, [rightPanelState, activeRightPanelKind, rightSideBarConfig]);
@@ -1460,7 +1365,6 @@ export function AppShell() {
 
       {/* Right panel: file viewer — always mounted, width animated via CSS */}
       <div
-        ref={rightPanelRef}
         className={`right-panel-container right-panel-${rightPanelState}`}
         style={{
           display: "flex",
@@ -1479,10 +1383,8 @@ export function AppShell() {
               activeTabId={activeFileTabId ?? ""}
               onSelectTab={(tabId) => {
                 setActiveFileTabId(tabId);
-                if (tabId === TERMINAL_TAB_ID) setRightPanelState("normal");
               }}
               onCloseTab={(tabId) => {
-                if (tabId === TERMINAL_TAB_ID) setTerminalOpen(false);
                 handleCloseFileTab(tabId);
               }}
               onContextMenu={handleTabContextMenu}
@@ -1536,7 +1438,7 @@ export function AppShell() {
               agentRunning={agentRunning}
               onCardClick={(card) => handleConversationTreeCardClick(card.id)}
             />
-          ) : activeFileTab?.kind === "terminal" ? null : (
+          ) : (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
               {t("No file open")}
             </div>
@@ -1554,49 +1456,36 @@ export function AppShell() {
         squeezing the layout above. Always mounted so terminals survive
         collapse; the wrapper animates its height.
 
-        Three visual modes handled here:
-        - "bottom + normal" → floating card, sits 12px off the screen edges
-          with a 1px border + 12px radius to match the 3 main panels
-        - "bottom + maximized" → full-viewport takeover, no margin/radius
-        - "right" → overlays the right panel area, inherits the panel's
-          own rounded design — no extra border/radius needed here */}
+        Two visual modes handled here:
+        - normal → floating card, sits 12px off the screen edges with a 1px
+          border + 12px radius to match the 3 main panels
+        - maximized → full-viewport takeover, no margin/radius */}
     <div
       style={{
         position: "fixed",
-        left: terminalLocation === "right"
-          ? rightPanelRect?.left
-          : (terminalMaximized ? 0 : "var(--panel-padding)"),
-        right: terminalLocation === "right"
-          ? undefined
-          : (terminalMaximized ? 0 : 60),
-        top: terminalLocation === "right" ? 36 : undefined,
-        bottom: terminalLocation === "right"
-          ? undefined
-          : (terminalMaximized ? 0 : "var(--panel-padding)"),
-        width: terminalLocation === "right" ? rightPanelRect?.width : undefined,
+        left: terminalMaximized ? 0 : "var(--panel-padding)",
+        right: terminalMaximized ? 0 : 60,
+        bottom: terminalMaximized ? 0 : "var(--panel-padding)",
         display: "flex",
         flexDirection: "column",
-        height: terminalLocation === "right"
-          ? (terminalOpen && activeFileTabId === TERMINAL_TAB_ID && rightPanelState !== "closed" ? "calc(100dvh - 36px)" : 0)
-          : (terminalOpen ? (terminalMaximized ? "100dvh" : terminalHeight) : 0),
+        height: terminalOpen ? (terminalMaximized ? "100dvh" : terminalHeight) : 0,
         minHeight: 0,
         overflow: "hidden",
-        // Floating-card frame only applies in "bottom + normal" mode. The
-        // old borderTop + 8px paddingBottom were a "drawer-rises-from-the-
-        // bottom" hack; the new 12px bottom margin plus a full 1px border
-        // makes the terminal feel like a proper card instead.
-        border: terminalLocation === "bottom" && terminalOpen && !terminalMaximized
+        // Floating-card frame only applies in normal mode. The old borderTop
+        // + 8px paddingBottom were a "drawer-rises-from-the-bottom" hack;
+        // the 12px bottom margin plus a full 1px border makes the terminal
+        // feel like a proper card instead.
+        border: terminalOpen && !terminalMaximized
           ? "1px solid var(--border)"
           : "none",
-        borderRadius: terminalLocation === "bottom" && terminalOpen && !terminalMaximized
+        borderRadius: terminalOpen && !terminalMaximized
           ? "var(--panel-radius)"
           : 0,
-        borderLeft: terminalLocation === "right" ? "1px solid var(--border)" : "none",
         background: "var(--bg)",
         zIndex: 201,
       }}
     >
-      {terminalLocation === "bottom" && terminalOpen && !terminalMaximized && (
+      {terminalOpen && !terminalMaximized && (
         <div
           onMouseDown={(e) => {
             e.preventDefault();
@@ -1611,13 +1500,10 @@ export function AppShell() {
         <TerminalPanel
           defaultCwd={terminalDefaultCwd}
           open={terminalOpen}
-          location={terminalLocation}
-          onMove={moveTerminal}
           maximized={terminalMaximized}
           onToggleMaximize={toggleTerminalMaximize}
           onClosePanel={() => {
             setTerminalOpen(false);
-            if (terminalLocation === "right") handleCloseFileTab(TERMINAL_TAB_ID);
           }}
         />
       </div>

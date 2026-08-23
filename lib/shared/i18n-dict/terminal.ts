@@ -9,8 +9,6 @@ export const terminal = {
   "Restart": "重启",
   "Maximize terminal": "最大化终端",
   "Restore terminal": "还原终端",
-  "Move terminal to right": "移动终端到右侧",
-  "Move terminal to bottom": "移动终端到底部",
   "No terminals yet": "暂无终端",
   "Drag to resize": "拖动调整高度",
   "Terminal error": "终端错误",

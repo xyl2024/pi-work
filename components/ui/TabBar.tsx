@@ -19,8 +19,7 @@ export type Tab =
   | { kind: "gitDiff"; id: string; label: string }
   | { kind: "conversationTree"; id: string; label: string }
   | { kind: "llmAudit"; id: string; label: string }
-  | { kind: "context"; id: string; label: string }
-  | { kind: "terminal"; id: string; label: string };
+  | { kind: "context"; id: string; label: string };
 
 interface Props {
   tabs: Tab[];
@@ -140,8 +139,6 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               getFileIcon("AGENTS.md", 13)
             ) : tab.kind === "conversationTree" ? (
               <ConversationTreeTabIcon />
-            ) : tab.kind === "terminal" ? (
-              <TerminalTabIcon />
             ) : (
               getFileIcon(tab.label, 13)
             );
@@ -318,15 +315,6 @@ function LlmAuditTabIcon() {
       <polyline points="5 4 2 7 5 10" />
       <polyline points="9 4 12 7 9 10" />
       <line x1="8" y1="3" x2="6" y2="11" />
-    </svg>
-  );
-}
-
-function TerminalTabIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="4 17 10 11 4 5" />
-      <line x1="12" y1="19" x2="20" y2="19" />
     </svg>
   );
 }

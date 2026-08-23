@@ -374,10 +374,9 @@ export const CONTEXT_TAB_ID = "context:global";
 
 // Map a Tab.kind back to the corresponding configurable right-bar button id.
 // Used by AppShell's auto-close effect: when a panel whose button was just
-// hidden is currently active, close the panel. "file" + "terminal"
-// intentionally return undefined — those panels have no configurable
-// button behind them and must stay open even if every toggle-button is
-// hidden.
+// hidden is currently active, close the panel. "file" intentionally returns
+// undefined — file tabs have no configurable button behind them and must
+// stay open even if every toggle-button is hidden.
 //
 // Lives in lib/types.ts (not in components/rightBar/desc) to keep
 // dependencies one-way: desc.tsx imports tab id constants from here,
@@ -397,8 +396,7 @@ type TabKindForAutoClose =
   | "gitDiff"
   | "conversationTree"
   | "llmAudit"
-  | "context"
-  | "terminal";
+  | "context";
 export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<
   Record<TabKindForAutoClose, RightBarButtonId>
 > = {
