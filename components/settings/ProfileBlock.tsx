@@ -304,10 +304,17 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
             left: 10,
             right: 10,
             zIndex: 100,
-            background: "var(--bg)",
-            border: "1px solid var(--border)",
+            // Acrylic (frosted glass): semi-transparent panel tint over a
+            // backdrop blur. Matches the AgentTodoPanel popover so the two
+            // sidebar popovers feel like the same material.
+            background: "color-mix(in srgb, var(--bg-panel) 50%, transparent)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            // Deeper edge so the translucent popover reads against the
+            // sidebar. Mixing 35% black into --border works for both
+            // themes (light: ~#9d9d9d, dark: ~#252525).
+            border: "1px solid color-mix(in srgb, var(--border) 65%, #000000)",
             borderRadius: 10,
-            boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
             padding: 4,
             display: "flex",
             flexDirection: "column",
