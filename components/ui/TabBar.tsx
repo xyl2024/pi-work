@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import { getFileIcon } from "../files/FileIcons";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
@@ -31,7 +31,6 @@ interface Props {
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMenu }: Props) {
   const { t } = useI18n();
-  const [hoveredClose, setHoveredClose] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const indicatorContainerRef = useRef<HTMLDivElement>(null);
 
@@ -73,10 +72,10 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
         position: "relative",
         overflow: "hidden",
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         background: "transparent",
         flexShrink: 0,
-        height: 36,
+        height: 34,
       }}
     >
       <SlidingTabIndicator
@@ -95,12 +94,12 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
         data-hide-v-scrollbar
         style={{
           display: "flex",
-          alignItems: "flex-end",
+          alignItems: "center",
           overflowX: "auto",
           flex: 1,
           minWidth: 0,
-          height: 36,
-          gap: "4px",
+          height: 34,
+          gap: 2,
         }}
       >
         {tabs.map((tab) => {
@@ -154,22 +153,19 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
-                height: 36,
-                paddingLeft: 12,
-                paddingRight: 6,
-                background: "transparent",
+                gap: 4,
+                height: 24,
+                padding: "0 4px 0 8px",
+                background: isActive ? "var(--bg-selected)" : "transparent",
                 cursor: "pointer",
                 fontSize: 12,
                 color: isActive ? "var(--text)" : "var(--text-muted)",
                 whiteSpace: "nowrap",
-                maxWidth: 180,
-                minWidth: 80,
+                maxWidth: 200,
                 flexShrink: 0,
                 userSelect: "none",
-                transition: "color 0.1s",
-                border: "1px solid var(--border)",
-                borderRadius: "6px",
+                transition: "background 0.1s, color 0.1s",
+                borderRadius: 4,
               }}
             >
               <span
@@ -197,25 +193,21 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               <Tooltip content={t("Close")}>
               <button
                 onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
-                onMouseEnter={() => setHoveredClose(tab.id)}
-                onMouseLeave={() => setHoveredClose(null)}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
                   width: 16, height: 16,
-                  background: hoveredClose === tab.id ? "var(--bg-hover)" : "transparent",
+                  background: "transparent",
                   border: "none",
                   borderRadius: 3,
-                  color: hoveredClose === tab.id ? "var(--text)" : "var(--text-dim)",
+                  color: "var(--text-muted)",
                   cursor: "pointer",
                   padding: 0,
                   flexShrink: 0,
-                  transition: "background 0.1s, color 0.1s",
+                  fontSize: 14,
+                  lineHeight: 1,
                 }}
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <line x1="2" y1="2" x2="8" y2="8" />
-                  <line x1="8" y1="2" x2="2" y2="8" />
-                </svg>
+                ×
               </button>
               </Tooltip>
             </div>

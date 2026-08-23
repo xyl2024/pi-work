@@ -1430,7 +1430,7 @@ export function AppShell() {
         }}
       >
         {/* Right panel tab bar */}
-        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "transparent", height: 36, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 8px" }}>
+        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "transparent", height: 34, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 6px" }}>
           <div style={{ flex: 1, overflow: "hidden" }}>
             <TabBar
               tabs={fileTabs}

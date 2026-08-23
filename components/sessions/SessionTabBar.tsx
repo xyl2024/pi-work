@@ -88,7 +88,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         display: "flex",
         alignItems: "center",
         minWidth: 0,
-        height: 36,
+        height: 34,
         flexShrink: 0,
         background: "transparent",
         // Top corners match the parent panel's rounded top; bottom stays
@@ -96,8 +96,8 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         // of "floating above" it.
         borderRadius: "var(--panel-radius) var(--panel-radius) 0 0",
         overflow: "hidden",
-        padding: "0 8px",
-        gap: "4px",
+        padding: "0 6px",
+        gap: 2,
       }}
     >
       {leadingControl && (
@@ -125,12 +125,12 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           data-hide-v-scrollbar
           style={{
             display: "flex",
-            alignItems: "flex-end",
+            alignItems: "center",
             background: "transparent",
             overflowX: "auto",
             flexShrink: 0,
-            height: 36,
-            gap: "4px",
+            height: 34,
+            gap: 2,
           }}
         >
         {tabs.map((tab) => {
@@ -160,22 +160,19 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 6,
-              height: 36,
-              paddingLeft: 12,
-              paddingRight: 6,
-              background: "transparent",
+              gap: 4,
+              height: 24,
+              padding: "0 4px 0 8px",
+              background: active ? "var(--bg-selected)" : "transparent",
               cursor: "pointer",
               fontSize: 12,
               color: active ? "var(--text)" : "var(--text-muted)",
               whiteSpace: "nowrap",
-              maxWidth: 180,
-              minWidth: 80,
+              maxWidth: 200,
               flexShrink: 0,
               userSelect: "none",
-              transition: "color 0.1s",
-              border: "1px solid var(--border)",
-              borderRadius: "6px",
+              transition: "background 0.1s, color 0.1s",
+              borderRadius: 4,
             }}
           >
             <StatusMark status={tab.status} />
@@ -218,25 +215,15 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
                   padding: 0,
                   flexShrink: 0,
                   border: "none",
-                  borderRadius: 3,
-                  color: "var(--text-dim)",
                   background: "transparent",
+                  borderRadius: 3,
+                  color: "var(--text-muted)",
                   cursor: "pointer",
-                  transition: "background 0.1s, color 0.1s",
-                }}
-                onMouseEnter={(event) => {
-                  event.currentTarget.style.color = "var(--text)";
-                  event.currentTarget.style.background = "var(--bg-hover)";
-                }}
-                onMouseLeave={(event) => {
-                  event.currentTarget.style.color = "var(--text-dim)";
-                  event.currentTarget.style.background = "transparent";
+                  fontSize: 14,
+                  lineHeight: 1,
                 }}
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <line x1="2" y1="2" x2="8" y2="8" />
-                  <line x1="8" y1="2" x2="2" y2="8" />
-                </svg>
+                ×
               </button>
             </Tooltip>
           </div>
@@ -252,20 +239,20 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              width: 32,
-              height: 36,
+              width: 24,
+              height: 24,
               flexShrink: 0,
               padding: 0,
               border: "none",
               background: "transparent",
+              borderRadius: 4,
               color: "var(--text-muted)",
               cursor: "pointer",
+              fontSize: 16,
+              lineHeight: 1,
             }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
+            +
           </button>
         </Tooltip>
         )}
