@@ -91,11 +91,17 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         height: 36,
         flexShrink: 0,
         background: "var(--bg-panel)",
-        borderBottom: "1px solid var(--border)",
+        // Top corners match the parent panel's rounded top; bottom stays
+        // flat so the bar reads as "attached" to the content below instead
+        // of "floating above" it.
+        borderRadius: "var(--panel-radius) var(--panel-radius) 0 0",
+        overflow: "hidden",
+        padding: "0 8px",
+        gap: "4px",
       }}
     >
       {leadingControl && (
-        <div style={{ flexShrink: 0, display: "flex", alignItems: "stretch", borderRight: "1px solid var(--border)" }}>
+        <div style={{ flexShrink: 0, display: "flex", alignItems: "stretch" }}>
           {leadingControl}
         </div>
       )}
@@ -123,6 +129,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             overflowX: "auto",
             flexShrink: 0,
             height: 36,
+            gap: "4px",
           }}
         >
         {tabs.map((tab) => {
@@ -166,6 +173,8 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               flexShrink: 0,
               userSelect: "none",
               transition: "color 0.1s",
+              border: "1px solid var(--border)",
+              borderRadius: "6px",
             }}
           >
             <StatusMark status={tab.status} />
@@ -247,7 +256,6 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               flexShrink: 0,
               padding: 0,
               border: "none",
-              borderLeft: "1px solid var(--border)",
               background: "transparent",
               color: "var(--text-muted)",
               cursor: "pointer",

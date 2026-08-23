@@ -128,6 +128,15 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
         minHeight: 0,
         background: "var(--bg-panel)",
         borderLeft: "1px solid var(--border)",
+        // Floating-card mode (matches the 3 main panels): round the four
+        // corners and surface a 10px gap to the right panel on its left
+        // edge. `overflow: hidden` clips each 36×36 button to the
+        // rounded shape so the top + bottom buttons pick up rounded
+        // outer corners; middle buttons stay square. No transition here
+        // because this column's width never animates.
+        borderRadius: "var(--panel-radius)",
+        overflow: "hidden",
+        marginLeft: "var(--panel-gap)",
       }}
     >
       {/* Top: fixed panel controls (show/hide plus conditional expand). */}

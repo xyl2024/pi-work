@@ -1342,7 +1342,7 @@ export function AppShell() {
 
   return (
     <>
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", padding: "var(--panel-padding)", border: "1px solid var(--border)", background: "var(--bg)" }}>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       {/* Mobile overlay backdrop */}
       <div
@@ -1381,7 +1381,7 @@ export function AppShell() {
       {/* Center: chat — flex-grow animates the squeeze when the right panel
           goes expanded: center grows 1->0 while the right panel grows 0->1,
           so the whiteboard takeover slides instead of snapping. */}
-      <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1)" }}>
+      <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, borderRadius: "var(--panel-radius)", border: "1px solid var(--border)", background: "var(--bg)", transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1)" }}>
         {showChat && (
           <SessionTabBar
             leadingControl={
@@ -1472,7 +1472,7 @@ export function AppShell() {
         }}
       >
         {/* Right panel tab bar */}
-        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "var(--bg-panel)", borderBottom: "1px solid var(--border)", height: 36 }}>
+        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "var(--bg-panel)", height: 36, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 8px" }}>
           <div style={{ flex: 1, overflow: "hidden" }}>
             <TabBar
               tabs={fileTabs}

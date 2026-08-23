@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Floating-card layout geometry. Theme-independent: light + dark both use
+   the same numbers, so the panels feel carded against either `--bg`. Three
+   values stay locked together visually — bump the gap and the radius
+   should scale with it to keep corners from looking too tight / too loose. */
+:root {
+  --panel-padding: 12px;   /* screen edge → outermost panel */
+  --panel-gap: 10px;       /* gap between adjacent panels */
+  --panel-radius: 12px;    /* border-radius on every panel */
+}
+
 @theme {
   --color-bg: var(--bg);
   --color-bg-panel: var(--bg-panel);
@@ -722,6 +732,18 @@ span.linenumber {
   50%      { transform: scale(1.06); box-shadow: inset 0 0 0 2px var(--accent); }
 }
 
+/* ── Floating-card mode ─────────────────────────────────────────────────
+   Every panel that flanks the chat column gets the same look:
+   rounded corners (so corners show as cards against the wrapper bg) and
+   clipping (so child content cannot bleed past the radius on either
+   breakpoint). Position + gap + transitions stay in the per-breakpoint
+   media queries below — only the look itself is shared. */
+.sidebar-container,
+.right-panel-container {
+  border-radius: var(--panel-radius);
+  overflow: hidden;
+}
+
 /* Desktop sidebar: width driven by inline style (drag-resize) */
 @media (min-width: 641px) {
   .sidebar-overlay-backdrop {
@@ -729,13 +751,18 @@ span.linenumber {
   }
   .sidebar-container {
     position: relative;
-    overflow: hidden;
-    transition: width 0.2s ease, min-width 0.2s ease;
+    /* Floating-card mode: surface a 10px gap to the center column.
+       `margin-right` joins the width transition so when the sidebar
+       collapses the gap collapses with it — no phantom stripe of `--bg`
+       left behind next to the chat. */
+    margin-right: var(--panel-gap);
+    transition: width 0.2s ease, min-width 0.2s ease, margin-right 0.2s ease;
   }
   .sidebar-container.sidebar-closed {
     width: 0;
     min-width: 0;
     border-right: none !important;
+    margin-right: 0 !important;
   }
 }
 
@@ -743,18 +770,22 @@ span.linenumber {
 /* Right panel: width driven by inline style when in `normal` state */
 @media (min-width: 641px) {
   .right-panel-container {
-    overflow: hidden;
+    /* Floating-card mode: 10px gap to the center column. `margin-left`
+       joins the same cubic-bezier transition so closing the panel
+       collapses the gap in lockstep — no orphan `--bg` strip. */
+    margin-left: var(--panel-gap);
     /* ease-out-quart style curve: fast start so the click feels responsive,
        soft landing. flex-grow animates the normal<->expanded transition
        (expanded keeps flex-basis auto + the inline 32% width, so width stays
        interpolatable while flex-grow spreads the remaining space). */
-    transition: width 0.18s cubic-bezier(0.32, 0.72, 0, 1), min-width 0.18s cubic-bezier(0.32, 0.72, 0, 1), flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+    transition: width 0.18s cubic-bezier(0.32, 0.72, 0, 1), min-width 0.18s cubic-bezier(0.32, 0.72, 0, 1), flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), margin-left 0.18s cubic-bezier(0.32, 0.72, 0, 1);
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-closed {
     width: 0;
     min-width: 0;
     border-left: none !important;
+    margin-left: 0 !important;
   }
   .right-panel-container.right-panel-expanded {
     flex: 1 1 auto;

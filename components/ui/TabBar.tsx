@@ -100,6 +100,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
           flex: 1,
           minWidth: 0,
           height: 36,
+          gap: "4px",
         }}
       >
         {tabs.map((tab) => {
@@ -169,6 +170,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
                 flexShrink: 0,
                 userSelect: "none",
                 transition: "color 0.1s",
+                border: "1px solid var(--border)",
+                borderRadius: "6px",
               }}
             >
               <span
