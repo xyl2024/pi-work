@@ -27,10 +27,13 @@
  * stacking context and we can lock body scroll while it's open.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
 import {
   useSessionLibraryUi,
   useSessionLibraryActions,
@@ -71,31 +74,18 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
   // ── Esc behavior: media-preview → grid → close ──
   // Routes the close step through `requestClose` so the leaving animation
   // plays before the store flips `isOpen` to false.
-  useEffect(() => {
-    if (!ui.isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (ui.viewMode === "media-preview") {
-        backToSessionLibraryGrid();
-      } else {
-        requestClose();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [ui.isOpen, ui.viewMode, requestClose]);
+  useEscapeKey(ui.isOpen, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (ui.viewMode === "media-preview") {
+      backToSessionLibraryGrid();
+    } else {
+      requestClose();
+    }
+  });
 
   // ── Body scroll lock ──
-  useEffect(() => {
-    if (!ui.isOpen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [ui.isOpen]);
+  useBodyScrollLock(ui.isOpen);
 
   // ── Session switch safety: AppShell calls resetSessionLibrary on
   // session change. Here we just defensively close if messages become null.
@@ -124,18 +114,12 @@ export function SessionLibraryModal({ messages, cwd, onOpenFile }: Props) {
   }, [ui.viewMode, ui.mediaPreviewTileKey, tiles, cwd]);
 
   const toast = useToast();
-  const [copied, setCopied] = useState(false);
-  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-  }, []);
+  const [copied, flashCopied] = useTransientFlag();
   const handleCopyPath = async () => {
     if (!previewPath) return;
     try {
       await copyText(previewPath);
-      setCopied(true);
-      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = setTimeout(() => setCopied(false), 1500);
+      flashCopied();
       toast.show({ kind: "success", message: t("Path copied") });
     } catch {
       toast.show({ kind: "error", message: t("Failed to copy path") });

@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
+import { SettingsSection } from "../SettingsSection";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
@@ -36,7 +38,7 @@ export function AppendSystemSection({
   const [originalAppendSystem, setOriginalAppendSystem] = useState<string>("");
   const [appendSystemLoading, setAppendSystemLoading] = useState(true);
   const [appendSystemSaving, setAppendSystemSaving] = useState(false);
-  const [appendSystemSavedOk, setAppendSystemSavedOk] = useState(false);
+  const [appendSystemSavedOk, flashAppendSystemSavedOk] = useTransientFlag();
 
   // Load ~/.pi/agent/APPEND_SYSTEM.md (independent from main config save flow)
   useEffect(() => {
@@ -75,18 +77,17 @@ export function AppendSystemSection({
       }
       setOriginalAppendSystem(appendSystem.content);
       setAppendSystem((prev) => (prev ? { ...prev, exists: true } : prev));
-      setAppendSystemSavedOk(true);
-      setTimeout(() => setAppendSystemSavedOk(false), 1500);
+      flashAppendSystemSavedOk();
       toast.show({ kind: "success", message: t("Append system prompt saved") });
     } catch (e) {
       toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to save append system prompt") });
     } finally {
       setAppendSystemSaving(false);
     }
-  }, [appendSystem, t, toast]);
+  }, [appendSystem, t, toast, flashAppendSystemSavedOk]);
 
   return (
-    <div data-settings-section="settings-section-append-system" style={{ marginBottom: 24 }}>
+    <SettingsSection id="append-system">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Append System Prompt")}</h3>
         <button
@@ -170,6 +171,6 @@ export function AppendSystemSection({
           fontFamily: "var(--font-mono)", lineHeight: 1.55,
         }}
       />
-    </div>
+    </SettingsSection>
   );
 }

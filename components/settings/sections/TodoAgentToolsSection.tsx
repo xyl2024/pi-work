@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { SettingsSection } from "../SettingsSection";
 import { TOOL_KEYS } from "@/components/todos/user-todo/utils";
 
 /**
@@ -71,7 +72,7 @@ export function TodoAgentToolsSection() {
   }, [enabled]);
 
   return (
-    <div data-settings-section="settings-section-todo-agent-tools" style={{ marginBottom: 24, marginTop: 24 }}>
+    <SettingsSection id="todo-agent-tools" topGap>
       <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
         {t("Todo agent tools")}
       </h3>
@@ -108,6 +109,6 @@ export function TodoAgentToolsSection() {
       <p style={{ fontSize: 11, color: "var(--text-dim)", margin: "10px 0 0 0", lineHeight: 1.5 }}>
         {t("Applies to new sessions")}
       </p>
-    </div>
+    </SettingsSection>
   );
 }

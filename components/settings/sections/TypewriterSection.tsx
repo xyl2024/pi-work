@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
+import { SettingsSection } from "../SettingsSection";
 import {
   DEFAULT_TYPEWRITER_PHRASES,
   parseTypewriterPhraseList,
@@ -38,7 +40,7 @@ export function TypewriterSection({
     en: "", zh: "",
   });
   const [typewriterSaving, setTypewriterSaving] = useState(false);
-  const [typewriterSavedOk, setTypewriterSavedOk] = useState(false);
+  const [typewriterSavedOk, flashTypewriterSavedOk] = useTransientFlag();
 
   // Seed the draft from the loaded config once it's available. Using a
   // ref so we don't reset the user's edits if `config` later changes
@@ -90,16 +92,15 @@ export function TypewriterSection({
         };
         setTypewriterDraft(reseeded);
         setOriginalTypewriterDraft(reseeded);
-        setTypewriterSavedOk(true);
-        setTimeout(() => setTypewriterSavedOk(false), 1500);
+        flashTypewriterSavedOk();
       }
     } finally {
       setTypewriterSaving(false);
     }
-  }, [typewriterDraft, apply]);
+  }, [typewriterDraft, apply, flashTypewriterSavedOk]);
 
   return (
-    <div data-settings-section="settings-section-typewriter" style={{ marginBottom: 24, marginTop: 24 }}>
+    <SettingsSection id="typewriter" topGap>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>
           {t("Typewriter phrases")}
@@ -149,6 +150,6 @@ export function TypewriterSection({
           />
         </div>
       ))}
-    </div>
+    </SettingsSection>
   );
 }

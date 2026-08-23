@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import DOMPurify from "isomorphic-dompurify";
 import { useI18n } from "@/hooks/useI18n";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { copyText } from "@/lib/client/clipboard";
+import { FullscreenOverlay } from "@/components/ui/FullscreenOverlay";
 
 interface Props {
   code: string;
@@ -41,7 +43,7 @@ const SVG_TAG_RE = /<svg[\s>]/i;
  */
 export function SvgBlock({ code, isStreaming }: Props) {
   const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTransientFlag();
   const [viewMode, setViewMode] = useState<"rendered" | "source">("rendered");
   const [expanded, setExpanded] = useState(false);
 
@@ -61,10 +63,9 @@ export function SvgBlock({ code, isStreaming }: Props) {
 
   const onCopy = useCallback(() => {
     void copyText(code).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      flashCopied();
     });
-  }, [code]);
+  }, [code, flashCopied]);
 
   const onDownload = useCallback(() => {
     if (!svg) return;
@@ -165,7 +166,10 @@ export function SvgBlock({ code, isStreaming }: Props) {
         </div>
       )}
       {expanded && (
-        <FullscreenOverlay onClose={() => setExpanded(false)}>
+        <FullscreenOverlay
+          onClose={() => setExpanded(false)}
+          header={<span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>svg</span>}
+        >
           {showRendered ? (
             <div
               style={{
@@ -317,83 +321,5 @@ function HeaderButton({
     >
       {children}
     </button>
-  );
-}
-
-// Viewport-sized overlay for fullscreen SVG inspection. Mirrors the
-// pattern in MermaidBlock; kept inlined here so the feature surface is
-// self-contained and avoids cross-component coupling.
-function FullscreenOverlay({
-  onClose,
-  children,
-}: {
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const { t } = useI18n();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0, 0, 0, 0.92)",
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "8px 16px",
-          background: "rgba(0, 0, 0, 0.5)",
-          color: "rgba(255,255,255,0.9)",
-          fontSize: 12,
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>svg</span>
-        <button
-          onClick={onClose}
-          title={t("Close")}
-          style={{
-            marginLeft: "auto",
-            padding: "4px 10px",
-            fontSize: 12,
-            cursor: "pointer",
-            background: "rgba(255,255,255,0.08)",
-            color: "rgba(255,255,255,0.9)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: 5,
-            fontFamily: "var(--font-mono)",
-            lineHeight: 1.2,
-          }}
-        >
-          ✕
-        </button>
-      </div>
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{children}</div>
-    </div>
   );
 }

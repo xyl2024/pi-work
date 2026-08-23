@@ -6,6 +6,7 @@ import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
@@ -26,7 +27,7 @@ interface Props {
 export function CodeBlock({ code, lang }: Props) {
   const { isDark } = useTheme();
   const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTransientFlag();
   const [hovered, setHovered] = useState(false);
 
   // Floating overlay is fully invisible: no background / border / shadow —
@@ -39,8 +40,7 @@ export function CodeBlock({ code, lang }: Props) {
   const copy = () => {
     copyText(code)
       .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        flashCopied();
       })
       .catch(() => {
         // Silent — UI just doesn't flip to "Copied". Surface a console hint

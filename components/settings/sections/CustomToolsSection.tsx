@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
+import { SettingsSection } from "../SettingsSection";
 import { CUSTOM_TOOLS_UI } from "../constants";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
@@ -20,7 +21,7 @@ export function CustomToolsSection({
   const { t } = useI18n();
 
   return (
-    <div data-settings-section="settings-section-custom-tools" style={{ marginBottom: 24, marginTop: 24 }}>
+    <SettingsSection id="custom-tools" topGap>
       <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
         {t("Custom Tools")}
       </h3>
@@ -54,6 +55,6 @@ export function CustomToolsSection({
           );
         })}
       </div>
-    </div>
+    </SettingsSection>
   );
 }

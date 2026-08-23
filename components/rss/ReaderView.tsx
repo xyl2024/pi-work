@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, type ReactElement } from "react";
+import { useMemo, type ReactElement } from "react";
 import parseHtml, { domToReact, type DOMNode, type Element, type HTMLReactParserOptions } from "html-react-parser";
 import { iconBtnStyle, emptyStyle } from "./styles";
 import { relativeTime } from "./relativeTime";
 import { sanitizeRssHtml } from "@/lib/shared/rss/sanitize";
-import { ImageLightbox, extractImagesFromHtml, type ImageItem } from "@/components/renderers/ImageLightbox";
+import { extractImagesFromHtml, type ImageItem } from "@/components/renderers/ImageLightbox";
+import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { SmartImage } from "@/components/ui/SmartImage";
 import type { RssArticle, RssFeed } from "@/lib/shared/rss/schema";
 
@@ -35,7 +36,7 @@ export function ReaderView({ feed, article, onBack, t }: ReaderViewProps): React
     () => (safeHtml ? extractImagesFromHtml(safeHtml) : []),
     [safeHtml],
   );
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const lightbox = useImageLightbox(images);
 
   const parseOptions = useMemo<HTMLReactParserOptions>(() => ({
     replace: (node: DOMNode) => {
@@ -57,8 +58,6 @@ export function ReaderView({ feed, article, onBack, t }: ReaderViewProps): React
       if (el.name !== "img") return undefined;
       const src = el.attribs?.src;
       if (!src) return undefined;
-      const idx = images.findIndex((it) => it.src === src);
-      if (idx === -1) return undefined;
       return (
         <SmartImage
           src={src}
@@ -69,12 +68,12 @@ export function ReaderView({ feed, article, onBack, t }: ReaderViewProps): React
           onClick={(e: React.MouseEvent) => {
             e.preventDefault();
             e.stopPropagation();
-            setLightboxIndex(idx);
+            lightbox.openAt(src);
           }}
         />
       );
     },
-  }), [images]);
+  }), [lightbox]);
 
   if (!article) {
     return <div style={emptyStyle}>{t("Article not found")}</div>;
@@ -130,14 +129,7 @@ export function ReaderView({ feed, article, onBack, t }: ReaderViewProps): React
       >
         {safeHtml ? parseHtml(safeHtml, parseOptions) : null}
       </div>
-      {lightboxIndex !== null && images.length > 0 && (
-        <ImageLightbox
-          images={images}
-          index={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-          onIndexChange={setLightboxIndex}
-        />
-      )}
+      {lightbox.lightbox}
     </div>
   );
 }

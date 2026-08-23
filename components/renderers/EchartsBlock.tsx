@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { copyText } from "@/lib/client/clipboard";
+import { FullscreenOverlay } from "@/components/ui/FullscreenOverlay";
 
 // Dynamic import keeps echarts (~MB) out of the initial bundle — only fetched
 // the first time an echarts block actually renders. The module promise is
@@ -93,7 +95,7 @@ export function EchartsBlock({ code, isStreaming }: Props) {
   const { preset, isDark } = useTheme();
   const [lib, setLib] = useState<typeof echarts | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTransientFlag();
   const [renderError, setRenderError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"rendered" | "source">("rendered");
   // Eval result is state, not a useMemo, because eval is async — `await`
@@ -182,10 +184,9 @@ export function EchartsBlock({ code, isStreaming }: Props) {
 
   const onCopy = useCallback(() => {
     void copyText(code).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      flashCopied();
     });
-  }, [code]);
+  }, [code, flashCopied]);
 
   // Export a PNG via an off-screen chart so download works regardless of the
   // current view mode (in "source" mode the on-screen chart is disposed).
@@ -475,80 +476,4 @@ function HeaderButton({
   );
 }
 
-// Viewport-sized overlay for chart inspection. Mirrors the pattern in
-// MermaidBlock.FullscreenOverlay; kept inlined here to keep the feature
-// surface self-contained and avoid cross-component coupling.
-function FullscreenOverlay({
-  onClose,
-  children,
-}: {
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const { t } = useI18n();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
 
-  return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0, 0, 0, 0.92)",
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <button
-        onClick={onClose}
-        title={t("Close")}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "rgba(255,255,255,0.28)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "rgba(255,255,255,0.18)";
-        }}
-        style={{
-          position: "absolute",
-          top: 12,
-          right: 12,
-          zIndex: 1,
-          width: 36,
-          height: 36,
-          padding: 0,
-          fontSize: 16,
-          lineHeight: 1,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "rgba(255,255,255,0.18)",
-          color: "rgba(255,255,255,0.95)",
-          border: "1px solid rgba(255,255,255,0.35)",
-          borderRadius: 8,
-          fontFamily: "var(--font-mono)",
-        }}
-      >
-        ✕
-      </button>
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{children}</div>
-    </div>
-  );
-}

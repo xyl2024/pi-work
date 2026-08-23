@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
+import { SettingsSection } from "../SettingsSection";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
@@ -24,7 +25,7 @@ export function TypewriterEffectSection({
   const enabled = config.typewriter_effect.enabled;
 
   return (
-    <div data-settings-section="settings-section-typewriter-effect" style={{ marginBottom: 24, marginTop: 24 }}>
+    <SettingsSection id="typewriter-effect" topGap>
       <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
         {t("Typewriter effect")}
       </h3>
@@ -59,6 +60,6 @@ export function TypewriterEffectSection({
           }} />
         </button>
       </div>
-    </div>
+    </SettingsSection>
   );
 }

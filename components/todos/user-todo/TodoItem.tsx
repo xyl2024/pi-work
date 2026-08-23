@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { useToast } from "@/components/ui/Toast";
 import { useContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { extractImagesFromHtml, ImageLightbox } from "@/components/renderers/ImageLightbox";
+import { extractImagesFromHtml } from "@/components/renderers/ImageLightbox";
 import { highlightMatch } from "@/components/ui/HighlightText";
 import { tagContrastText } from "@/lib/shared/user-todo/color-presets";
 import { MorphToggleIcon } from "@/components/ui/MorphToggleIcon";
@@ -44,7 +45,6 @@ export function TodoItem({
   const [editingCompletion, setEditingCompletion] = useState(false);
   const [detailsVisible, setDetailsVisible] = useState(!todo.done);
   const [titleDraft, setTitleDraft] = useState(todo.title);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [deadlinePickerOpen, setDeadlinePickerOpen] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [editTagsOpen, setEditTagsOpen] = useState(false);
@@ -93,6 +93,7 @@ export function TodoItem({
     () => [...gallery, ...completionGallery],
     [gallery, completionGallery],
   );
+  const lightbox = useImageLightbox(combinedGallery);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -512,10 +513,7 @@ export function TodoItem({
               <TodoDescriptionView
                 html={todo.description}
                 searchTerm={searchTerm}
-                onImageClick={(src) => {
-                  const idx = gallery.findIndex((g) => g.src === src);
-                  if (idx >= 0) setLightboxIndex(idx);
-                }}
+                onImageClick={lightbox.openAt}
               />
             ) : (
               <span style={{ color: "var(--text-dim)", fontStyle: "italic" }}>{t("Add description...")}</span>
@@ -584,24 +582,14 @@ export function TodoItem({
                 <TodoDescriptionView
                   html={todo.completionNote}
                   searchTerm={searchTerm}
-                  onImageClick={(src) => {
-                    const idx = completionGallery.findIndex((g) => g.src === src);
-                    if (idx >= 0) setLightboxIndex(idx);
-                  }}
+                  onImageClick={lightbox.openAt}
                 />
               )}
             </div>
           )}
         </div>
       )}
-      {lightboxIndex !== null && combinedGallery.length > 0 && (
-        <ImageLightbox
-          images={combinedGallery}
-          index={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-          onIndexChange={setLightboxIndex}
-        />
-      )}
+      {lightbox.lightbox}
       {editTagsOpen && (
         <EditTagsModal
           todo={todo}

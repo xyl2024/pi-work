@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { SettingsSection } from "../SettingsSection";
 import { RIGHT_BAR_BUTTON_IDS, RIGHT_BAR_DESCRIPTOR_BY_ID } from "@/components/panels/right-bar/desc";
 import {
   resolveSessionBoundAlignment,
@@ -126,7 +127,7 @@ export function RightBarSection({
   };
 
   return (
-    <div data-settings-section="settings-section-right-bar" style={{ marginBottom: 24, marginTop: 24 }}>
+    <SettingsSection id="right-bar" topGap>
       <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
         {t("Right-side buttons")}
       </h3>
@@ -289,6 +290,6 @@ export function RightBarSection({
           })}
         </div>
       </div>
-    </div>
+    </SettingsSection>
   );
 }

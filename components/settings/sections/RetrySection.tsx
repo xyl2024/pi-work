@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { RetryNumberRow } from "../rows";
+import { SettingsSection } from "../SettingsSection";
 import {
   DEFAULT_AGENT_RETRY,
   RETRY_LIMITS,
@@ -30,7 +32,7 @@ export function RetrySection() {
   const [retryConfig, setRetryConfig] = useState<AgentRetryConfig | null>(null);
   const [retryLoading, setRetryLoading] = useState(true);
   const [retryResetting, setRetryResetting] = useState(false);
-  const [retryResetOk, setRetryResetOk] = useState(false);
+  const [retryResetOk, flashRetryResetOk] = useTransientFlag();
 
   // Initial load
   useEffect(() => {
@@ -146,8 +148,7 @@ export function RetrySection() {
       // key entirely. Locally we re-fetch defaults so every row's
       // draft snaps to its placeholder.
       setRetryConfig(DEFAULT_AGENT_RETRY);
-      setRetryResetOk(true);
-      setTimeout(() => setRetryResetOk(false), 1500);
+      flashRetryResetOk();
       toast.show({ kind: "success", message: t("Reset retry config") });
     } catch (e) {
       toast.show({
@@ -157,10 +158,10 @@ export function RetrySection() {
     } finally {
       setRetryResetting(false);
     }
-  }, [t, toast]);
+  }, [t, toast, flashRetryResetOk]);
 
   return (
-    <div data-settings-section="settings-section-retry" style={{ marginBottom: 24, marginTop: 24 }}>
+    <SettingsSection id="retry" topGap>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Agent retry")}</h3>
         <button
@@ -290,6 +291,6 @@ export function RetrySection() {
           </p>
         </>
       )}
-    </div>
+    </SettingsSection>
   );
 }

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { encodeFilePathForApi, getFileName } from "@/lib/shared/file-paths";
-import { ImageLightbox } from "@/components/renderers/ImageLightbox";
 import { SmartImage } from "../../ui/SmartImage";
 import { useToast } from "../../ui/Toast";
 import { Tooltip } from "../../ui/Tooltip";
@@ -17,10 +17,13 @@ export function ImageViewer({ filePath }: { filePath: string }) {
   const [size, setSize] = useState<number | null>(null);
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
   const esRef = useRef<EventSource | null>(null);
 
   const ext = getFileName(filePath).toLowerCase().split(".").pop() ?? "";
+
+  const encoded = encodeFilePathForApi(filePath);
+  const src = `/api/files/${encoded}?type=read${bust ? `&v=${bust}` : ""}`;
+  const lightbox = useImageLightbox([{ src, alt: filePath }]);
 
   useEffect(() => {
     setBust(0);
@@ -28,7 +31,7 @@ export function ImageViewer({ filePath }: { filePath: string }) {
     setNaturalSize(null);
     setError(null);
     setWatching(false);
-    setLightboxOpen(false);
+    lightbox.close();
 
     if (esRef.current) {
       esRef.current.close();
@@ -54,10 +57,12 @@ export function ImageViewer({ filePath }: { filePath: string }) {
       es.close();
       esRef.current = null;
     };
-  }, [filePath]);
-
-  const encoded = encodeFilePathForApi(filePath);
-  const src = `/api/files/${encoded}?type=read${bust ? `&v=${bust}` : ""}`;
+    // `lightbox` itself re-creates every render (the hook returns a new
+    // memo object whenever `images` changes), so depending on it would
+    // re-run this effect on every file-watch event. `lightbox.close` is
+    // a stable `useCallback([])`, so it's the right dep to capture.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filePath, lightbox.close]);
 
   const formatSizeStr = size != null ? formatSize(size) : null;
 
@@ -118,7 +123,7 @@ export function ImageViewer({ filePath }: { filePath: string }) {
           <SmartImage
             src={src}
             alt={filePath}
-            onClick={() => setLightboxOpen(true)}
+            onClick={() => lightbox.openAt(src)}
             onLoad={(e) => {
               const img = e.currentTarget;
               setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
@@ -139,14 +144,7 @@ export function ImageViewer({ filePath }: { filePath: string }) {
           />
         )}
       </div>
-      {lightboxOpen && (
-        <ImageLightbox
-          images={[{ src, alt: filePath }]}
-          index={0}
-          onClose={() => setLightboxOpen(false)}
-          onIndexChange={() => {}}
-        />
-      )}
+      {lightbox.lightbox}
     </div>
   );
 }

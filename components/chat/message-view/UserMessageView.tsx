@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
+import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { Tooltip } from "../../ui/Tooltip";
 import { copyText } from "@/lib/client/clipboard";
 import { SmartImage } from "../../ui/SmartImage";
-import { ImageLightbox, type ImageItem } from "@/components/renderers/ImageLightbox";
+import { type ImageItem } from "@/components/renderers/ImageLightbox";
 import { highlightKeywords, formatTime } from "./utils";
 import type { ImageContent, UserMessage } from "@/lib/shared/types";
 
@@ -23,7 +25,7 @@ export function UserMessageView({ message, isFocused, onNavigate, prevAssistantE
   isSearchMatch?: boolean;
 }) {
   const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTransientFlag();
   const [hovered, setHovered] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
   const [avatarOk, setAvatarOk] = useState(true);
@@ -59,7 +61,6 @@ export function UserMessageView({ message, isFocused, onNavigate, prevAssistantE
     typeof message.content === "string"
       ? []
       : message.content.filter((block): block is ImageContent => block.type === "image");
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const imageGallery: ImageItem[] = imageBlocks.map((image) => {
     const flat = image as unknown as { data?: string; mimeType?: string };
     const src = image.source
@@ -71,6 +72,7 @@ export function UserMessageView({ message, isFocused, onNavigate, prevAssistantE
         : "";
     return { alt: "", src };
   });
+  const lightbox = useImageLightbox(imageGallery);
 
   const time = formatTime(message.timestamp);
   const canNavigate = !!prevAssistantEntryId && !!onNavigate;
@@ -78,8 +80,7 @@ export function UserMessageView({ message, isFocused, onNavigate, prevAssistantE
 
   const copyContent = () => {
     copyText(content).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      flashCopied();
     });
   };
 
@@ -173,10 +174,7 @@ export function UserMessageView({ message, isFocused, onNavigate, prevAssistantE
                   return (
                     <Tooltip key={index} content={t("Click to expand")}>
                       <span
-                        onClick={() => {
-                          const idx = imageGallery.findIndex((item) => item.src === src);
-                          if (idx >= 0) setLightboxIndex(idx);
-                        }}
+                        onClick={() => lightbox.openAt(src)}
                         style={{ display: "inline-flex", cursor: "zoom-in" }}
                       >
                         <SmartImage
@@ -352,14 +350,7 @@ export function UserMessageView({ message, isFocused, onNavigate, prevAssistantE
           {time && <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto", opacity: hovered ? 1 : 0, transition: "opacity 0.12s" }}>{time}</span>}
         </div>
       )}
-      {lightboxIndex !== null && imageGallery.length > 0 && (
-        <ImageLightbox
-          images={imageGallery}
-          index={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-          onIndexChange={setLightboxIndex}
-        />
-      )}
+      {lightbox.lightbox}
     </div>
   );
 }

@@ -26,6 +26,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import type { SessionInfo, SessionSearchPagedResult } from "@/lib/shared/types";
 
 const PAGE_SIZE = 20;
@@ -139,14 +140,10 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Body scroll lock while the modal is open.
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
+  // Body scroll lock while the modal is open. The parent uses the
+  // conditional-mount pattern (renders <CwdSessionsModal> only while
+  // open), so the hook is active for the entire lifetime.
+  useBodyScrollLock(true);
 
   // Fetch a page. `cursor` is what we send on the wire; when the user
   // changes the query or hits "Previous", `fetchPage(null, "reset")`

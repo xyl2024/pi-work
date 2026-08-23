@@ -2,6 +2,7 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
+import { SettingsSection } from "../SettingsSection";
 import { SOUND_IDS, playNamedSound } from "@/lib/client/ui-sounds";
 import { DEFAULT_UI_SOUND_EVENTS } from "@/lib/shared/ui-sounds-defaults";
 import {
@@ -91,7 +92,7 @@ export function SoundSettingsSection({
   };
 
   return (
-    <div data-settings-section="settings-section-ui-sounds" style={{ marginBottom: 24, marginTop: 24 }}>
+    <SettingsSection id="ui-sounds" topGap>
       <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
         {t("UI Sounds")}
       </h3>
@@ -231,6 +232,6 @@ export function SoundSettingsSection({
           ))}
         </div>
       </div>
-    </div>
+    </SettingsSection>
   );
 }

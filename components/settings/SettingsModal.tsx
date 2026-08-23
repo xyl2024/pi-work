@@ -8,6 +8,7 @@ import { InboxTestSection } from "./InboxTestSection";
 import { setSettings } from "@/hooks/settingsStore";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { NAV_ITEMS } from "./constants";
+import { SettingsSection } from "./SettingsSection";
 import { useImmediateApply } from "./use-immediate-apply";
 import { AppearanceSection } from "./sections/AppearanceSection";
 import { ProfileSection } from "./sections/ProfileSection";
@@ -257,13 +258,13 @@ export function SettingsModal({
             <AppearanceSection />
 
             {/* 2: WeChat Connection */}
-            <div data-settings-section="settings-section-wechat" style={{ marginBottom: 24 }}>
+            <SettingsSection id="wechat">
               <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>{t("WeChat Connection")}</h3>
               <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0", lineHeight: 1.5 }}>
                 {t("Manage WeChat connection.")}
               </p>
               <WeChatSettingsSection />
-            </div>
+            </SettingsSection>
 
             {/* 3: Append System Prompt */}
             <AppendSystemSection
@@ -279,9 +280,9 @@ export function SettingsModal({
             <RightBarSection config={config} apply={apply} />
 
             {/* 6: Inbox Test */}
-            <div data-settings-section="settings-section-inbox-test">
+            <SettingsSection id="inbox-test" bottomGap={false}>
               <InboxTestSection />
-            </div>
+            </SettingsSection>
 
             {/* 7: File preview limits */}
             <FilePreviewSection config={config} apply={apply} />

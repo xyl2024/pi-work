@@ -20,6 +20,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { encodeFilePathForApi } from "@/lib/shared/file-paths";
 import { FolderIcon } from "../files/FileIcons";
 import { Tooltip } from "../ui/Tooltip";
@@ -264,23 +266,12 @@ export function CwdFolderDialog({ open, startPath, onClose, onSelect }: CwdFolde
   }, [loadDir]);
 
   // Escape closes; body scroll is locked while the dialog is visible.
-  useEffect(() => {
-    if (!isVisible) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        requestClose();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-      document.body.style.overflow = prev;
-    };
-  }, [isVisible, requestClose]);
+  useBodyScrollLock(isVisible);
+  useEscapeKey(isVisible, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    requestClose();
+  });
 
   const goUp = useCallback(() => {
     if (!currentPath) return;

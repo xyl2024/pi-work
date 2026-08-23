@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { FileViewerLimitRow } from "../rows";
+import { SettingsSection } from "../SettingsSection";
 import { FILE_VIEWER_UI } from "../constants";
 import {
   FILE_VIEWER_LIMITS,
@@ -57,7 +58,7 @@ export function FilePreviewSection({
   );
 
   return (
-    <div data-settings-section="settings-section-file-preview" style={{ marginBottom: 24, marginTop: 24 }}>
+    <SettingsSection id="file-preview" topGap>
       <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
         {t("File preview limits")}
       </h3>
@@ -77,6 +78,6 @@ export function FilePreviewSection({
           />
         );
       })}
-    </div>
+    </SettingsSection>
   );
 }

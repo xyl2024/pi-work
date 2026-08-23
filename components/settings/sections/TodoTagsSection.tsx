@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { SettingsSection } from "../SettingsSection";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useTodos, type Tag } from "@/hooks/useTodos";
 import { aggregateTags, truncateTag } from "@/components/todos/user-todo/utils";
@@ -93,7 +94,7 @@ export function TodoTagsSection() {
   };
 
   return (
-    <div data-settings-section="settings-section-todo-tags" style={{ marginBottom: 24, marginTop: 24 }}>
+    <SettingsSection id="todo-tags" topGap>
       <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
         {t("Manage tags")}
       </h3>
@@ -148,7 +149,7 @@ export function TodoTagsSection() {
           ))}
         </div>
       )}
-    </div>
+    </SettingsSection>
   );
 }
 

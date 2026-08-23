@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef, type ChangeEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { SmartImage } from "@/components/ui/SmartImage";
+import { SettingsSection } from "../SettingsSection";
 
 /**
  * Section 0: Profile (avatar + display name). Owns its own loading /
@@ -24,7 +26,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
   const [avatarRemoved, setAvatarRemoved] = useState(false);
   const [avatarAttempt, setAvatarAttempt] = useState(0);
   const [hasAvatar, setHasAvatar] = useState(false);
-  const [profileSavedOk, setProfileSavedOk] = useState(false);
+  const [profileSavedOk, flashProfileSavedOk] = useTransientFlag();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load profile (username + avatar presence) once on mount
@@ -81,8 +83,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
         setAvatarRemoved(false);
         setHasAvatar(false);
       }
-      setProfileSavedOk(true);
-      setTimeout(() => setProfileSavedOk(false), 1500);
+      flashProfileSavedOk();
       onProfileSaved?.();
       toast.show({ kind: "success", message: t("Profile saved") });
     } catch (e) {
@@ -90,7 +91,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
     } finally {
       setProfileSaving(false);
     }
-  }, [profileUsername, avatarRemoved, onProfileSaved, t, toast]);
+  }, [profileUsername, avatarRemoved, onProfileSaved, t, toast, flashProfileSavedOk]);
 
   const handleAvatarFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -137,7 +138,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
   }, [onProfileSaved, t, toast]);
 
   return (
-    <div data-settings-section="settings-section-profile" style={{ marginBottom: 24 }}>
+    <SettingsSection id="profile">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Profile")}</h3>
         <button
@@ -260,6 +261,6 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
           borderRadius: 6, color: "var(--text)", fontSize: 13,
         }}
       />
-    </div>
+    </SettingsSection>
   );
 }

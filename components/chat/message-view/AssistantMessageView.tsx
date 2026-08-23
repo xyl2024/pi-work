@@ -1,13 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
+import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { useToast } from "../../ui/Toast";
 import { exportMessageAsPng, MESSAGE_ACTION_ROW_CLASS } from "@/lib/client/export-message-card";
 import { copyText } from "@/lib/client/clipboard";
 import { Tooltip } from "../../ui/Tooltip";
 import { MorphToggleIcon } from "../../ui/MorphToggleIcon";
-import { ImageLightbox, extractImageGallery, type ImageItem } from "@/components/renderers/ImageLightbox";
+import { extractImageGallery, type ImageItem } from "@/components/renderers/ImageLightbox";
 import { ReadFileChips } from "../ReadFileChips";
 import { COPY, CHECK, THUMBS_UP, HEART } from "@/lib/client/icon-paths";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
@@ -48,7 +50,6 @@ export function AssistantMessageView({
   const toast = useToast();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
   const blocks = useMemo(() => message.content ?? [], [message.content]);
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const gallery = useMemo<ImageItem[]>(() => {
     const out: ImageItem[] = [];
     for (const block of blocks) {
@@ -61,12 +62,9 @@ export function AssistantMessageView({
     }
     return out;
   }, [blocks]);
-  const handleImageClick = useCallback((src: string) => {
-    const idx = gallery.findIndex((item) => item.src === src);
-    if (idx >= 0) setLightboxIndex(idx);
-  }, [gallery]);
+  const lightbox = useImageLightbox(gallery);
   const [hovered, setHovered] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, flashCopied] = useTransientFlag();
   const [liked, setLiked] = useState(false);
   const [heartShown, setHeartShown] = useState(false);
   const heartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,8 +92,7 @@ export function AssistantMessageView({
   const copyContent = () => {
     copyText(copyableContent)
       .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        flashCopied();
       })
       .catch(() => {
         console.warn("clipboard write failed");
@@ -243,7 +240,7 @@ export function AssistantMessageView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blocks.map((block, index) => (
-          <BlockView key={index} block={block} toolResults={toolResults} isStreaming={isStreaming} isLast={index === blocks.length - 1} keywords={keywords} isSearchMatch={isSearchMatch} onImageClick={handleImageClick} />
+          <BlockView key={index} block={block} toolResults={toolResults} isStreaming={isStreaming} isLast={index === blocks.length - 1} keywords={keywords} isSearchMatch={isSearchMatch} onImageClick={lightbox.openAt} />
         ))}
       </div>
 
@@ -362,14 +359,7 @@ export function AssistantMessageView({
           </span>
         )}
       </div>
-      {lightboxIndex !== null && gallery.length > 0 && (
-        <ImageLightbox
-          images={gallery}
-          index={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
-          onIndexChange={setLightboxIndex}
-        />
-      )}
+      {lightbox.lightbox}
     </div>
   );
 }

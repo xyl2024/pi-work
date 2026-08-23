@@ -1,6 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
+import { SettingsSection } from "../SettingsSection";
 
 /**
  * Section 1: Appearance (language). Theme switching moved to the sidebar
@@ -12,7 +13,7 @@ export function AppearanceSection() {
   const { t, locale, setLocale } = useI18n();
 
   return (
-    <div data-settings-section="settings-section-appearance" style={{ marginBottom: 24 }}>
+    <SettingsSection id="appearance">
       <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 12px 0" }}>{t("Appearance")}</h3>
 
       {/* Language buttons */}
@@ -45,6 +46,6 @@ export function AppearanceSection() {
           {t("Chinese")}
         </button>
       </div>
-    </div>
+    </SettingsSection>
   );
 }
