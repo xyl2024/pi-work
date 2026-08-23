@@ -6,8 +6,10 @@
 // now a one-line append to RIGHT_BAR_DESCRIPTORS in `./desc`.
 //
 // Layout (top → bottom):
-//   1. 'fixed' descriptors with slot='top' (panel show/hide plus the
-//      conditional expand/collapse toggle).
+//   1. 'fixed' descriptors with slot='top' (the panel show/hide button).
+//      The expand/collapse toggle used to live here too; it now lives
+//      on the right panel's tab bar (AppShell) so it stays reachable
+//      regardless of how tall this column is.
 //   2. The configurable row, split by `cfg.session_bound_alignment`:
 //        - "top":    session-bound group first, then global group
 //                    (both groups render in document order — no spacer).
@@ -22,8 +24,6 @@
 //      in the group). Visibility per id is gated by `cfg[id] !== false`;
 //      a missing key (settings not loaded yet) is treated as visible so
 //      the column is never empty on first paint.
-//   3. The conditional 'fixed' expand/collapse button (only when the
-//      panel has tabs).
 //
 // There is no longer a margin-top:auto bottom-pinned group — terminal
 // used to be that, but moving it to 'configurable' lets the user

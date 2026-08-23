@@ -47,6 +47,8 @@ import { useInboxUnreadCount } from "@/hooks/useInboxUnreadCount";
 import { useRssUnreadCount } from "@/hooks/useRssUnreadCount";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { MENU, PANEL_LEFT } from "@/lib/client/icon-paths";
+import { ExpandLeftIcon } from "../panels/right-bar/icons";
+import { ExpandRightIcon } from "../ui/animated-icons";
 import { useToast } from "../ui/Toast";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
@@ -1430,8 +1432,44 @@ export function AppShell() {
         }}
       >
         {/* Right panel tab bar */}
-        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "transparent", height: 34, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 6px" }}>
-          <div style={{ flex: 1, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "transparent", height: 34, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 6px", gap: 2 }}>
+          {/* Expand/collapse the right panel. Mirrors the leading
+              "hide sidebar" control on the session tab bar — fixed to
+              the left edge with flexShrink: 0 so it never scrolls out
+              of view when the tabs overflow horizontally. Same behavior
+              as the right-bar column's expand button: only rendered when
+              the panel is open and has tabs, and toggles between
+              "normal" and "expanded". */}
+          {rightPanelState !== "closed" && fileTabs.length > 0 && (
+            <div style={{ flexShrink: 0, display: "flex", alignItems: "stretch" }}>
+              <Tooltip content={rightPanelState === "expanded" ? t("Collapse panel") : t("Expand panel")}>
+                <button
+                  type="button"
+                  onClick={() => setRightPanelState((v) => v === "expanded" ? "normal" : "expanded")}
+                  aria-label={rightPanelState === "expanded" ? t("Collapse panel") : t("Expand panel")}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 36,
+                    height: 36,
+                    padding: 0,
+                    background: "none",
+                    border: "none",
+                    color: rightPanelState === "expanded" ? "var(--accent)" : "var(--text-muted)",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    transition: "color 0.12s",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelState === "expanded" ? "var(--accent)" : "var(--text-muted)"; }}
+                >
+                  {rightPanelState === "expanded" ? ExpandLeftIcon() : <ExpandRightIcon size={16} />}
+                </button>
+              </Tooltip>
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
             <TabBar
               tabs={fileTabs}
               activeTabId={activeFileTabId ?? ""}

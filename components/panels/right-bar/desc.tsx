@@ -38,13 +38,11 @@ import {
 import type { Tab } from "@/components/ui/TabBar";
 import {
   PanelToggleIcon,
-  ExpandLeftIcon,
   RssIcon,
   LlmAuditIcon,
   StarIconWithFill,
 } from "./icons";
 import {
-  ExpandRightIcon,
   ContextDocumentIcon,
   PencilIcon,
   TranslateIcon,
@@ -123,10 +121,9 @@ export interface RightBarCtx {
 
 export interface RightBarDescriptor {
   /** Identifier; required for 'configurable' descriptors (persisted in
-   *  right_side_bar.buttons and order). 'fixed' descriptors use one of
-   *  two reserved ids: 'panelToggle' (top, always visible) or 'expand'
-   *  (top, conditional). */
-  id: RightBarButtonId | "panelToggle" | "expand";
+   *  right_side_bar.buttons and order). 'fixed' descriptors use the
+   *  reserved id 'panelToggle' (top, always visible). */
+  id: RightBarButtonId | "panelToggle";
   kind: "fixed" | "configurable";
   /** Visual slot — 'top' renders above the configurable row. Undefined =
    *  inline (renders among the configurable row, in user-configured
@@ -175,25 +172,6 @@ const panelToggleDescriptor: RightBarDescriptor = {
   content: () => PanelToggleIcon(),
   onClick: (ctx) => ctx.toggleRightPanel(),
   // Wrap so we can swap the tooltip when active.
-};
-
-// Fixed: expand/collapse button (top group, conditional).
-const expandDescriptor: RightBarDescriptor = {
-  id: "expand",
-  kind: "fixed",
-  slot: "top",
-  labelKey: "", // resolved at render
-  // Only render when the panel is open AND has tabs.
-  isVisible: (ctx) => ctx.rightPanelState !== "closed" && ctx.hasOpenTabs,
-  isActive: (ctx) => ctx.rightPanelState === "expanded",
-  content: (ctx) =>
-    (ctx.rightPanelState === "expanded"
-      ? ExpandLeftIcon()
-      : <ExpandRightIcon size={16} />),
-  onClick: (ctx) =>
-    ctx.setRightPanelState(
-      ctx.rightPanelState === "expanded" ? "normal" : "expanded",
-    ),
 };
 
 // Configurable: terminal toggle. Lives in the user-ordered row rather
@@ -406,7 +384,6 @@ const conversationTreeDescriptor: RightBarDescriptor = {
 export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   // 'fixed' group
   panelToggleDescriptor,
-  expandDescriptor,
   terminalDescriptor,
   // 'configurable' group — order here is the implicit default order used
   // when the user hasn't customized `cfg.order`.
@@ -460,12 +437,6 @@ export function resolveButtonLabel(
     case "panelToggle":
       return ctx.t(
         ctx.rightPanelState !== "closed" ? "Hide file panel" : "Show file panel",
-      );
-    case "expand":
-      return ctx.t(
-        ctx.rightPanelState === "expanded"
-          ? "Collapse panel"
-          : "Expand panel",
       );
     case "terminal":
       return ctx.t(ctx.terminalOpen ? "Hide terminal" : "Open terminal");
