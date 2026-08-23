@@ -50,6 +50,7 @@ import { MENU, PANEL_LEFT } from "@/lib/client/icon-paths";
 import { useToast } from "../ui/Toast";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
+import { getRelativeFilePath } from "@/lib/shared/file-paths";
 import {
   TODO_TAB_ID,
   FAVORITES_TAB_ID,
@@ -432,8 +433,13 @@ export function AppShell() {
   }, [activeTabId]);
 
   const handleAtMention = useCallback((filePath: string) => {
-    getActiveChatInput()?.insertText("`" + filePath + "`");
-  }, [getActiveChatInput]);
+    // Insert a cwd-relative path (no code-block backticks) so it reads as
+    // plain text in chat. Falls back to the absolute path when no cwd is
+    // active yet, e.g. before the user has picked a working directory.
+    const cwd = selectedSession?.cwd ?? newSessionCwd;
+    const displayPath = cwd ? getRelativeFilePath(filePath, cwd) : filePath;
+    getActiveChatInput()?.insertText(displayPath);
+  }, [getActiveChatInput, selectedSession?.cwd, newSessionCwd]);
 
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
