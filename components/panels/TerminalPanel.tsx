@@ -16,9 +16,6 @@ export interface TerminalPanelProps {
   defaultCwd: string;
   /** whether the bottom panel is visible. */
   open: boolean;
-  /** whether the panel is maximized. */
-  maximized: boolean;
-  onToggleMaximize: () => void;
   /** collapse the panel — terminals keep running (their WS stays open). */
   onClosePanel: () => void;
 }
@@ -337,7 +334,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
  * backed by its own WebSocket + pty. Inactive tabs stay mounted so their
  * processes keep running while hidden.
  */
-export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, onClosePanel }: TerminalPanelProps) {
+export function TerminalPanel({ defaultCwd, open, onClosePanel }: TerminalPanelProps) {
   const { t } = useI18n();
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -568,43 +565,6 @@ export function TerminalPanel({ defaultCwd, open, maximized, onToggleMaximize, o
         </Tooltip>
         </div>
         <div style={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 2 }}>
-        <Tooltip content={maximized ? t("Restore terminal") : t("Maximize terminal")}>
-        <button
-          onClick={onToggleMaximize}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 24,
-            height: 24,
-            padding: 0,
-            background: "transparent",
-            border: "none",
-            borderRadius: 4,
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            flexShrink: 0,
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            {maximized ? (
-              <>
-                <path d="M8 3v3a2 2 0 0 1-2 2H3" />
-                <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
-                <path d="M3 16h3a2 2 0 0 1 2 2v3" />
-                <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
-              </>
-            ) : (
-              <>
-                <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-                <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-                <path d="M3 16v3a2 2 0 0 0 2 2h3" />
-                <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-              </>
-            )}
-          </svg>
-        </button>
-        </Tooltip>
         <Tooltip content={t("Hide terminal")}>
         <button
           onClick={onClosePanel}

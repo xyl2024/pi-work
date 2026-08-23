@@ -97,9 +97,12 @@ interface ToolInfo {
 const LEFT_PANEL_RATIO = 0.18;
 const RIGHT_PANEL_RATIO = 0.32;
 
-// Bottom terminal panel geometry.
+// Bottom terminal panel geometry. The chat card keeps a minimum height so
+// dragging the terminal taller can never squeeze the chat (input box + a
+// couple of messages) out of view.
 const TERMINAL_HEIGHT_KEY = "pi-terminal-panel-height";
 const MIN_TERMINAL_HEIGHT = 80;
+const MIN_CHAT_HEIGHT = 240;
 
 // True while settings haven't been fetched (or the fetch failed).
 // Until then, all right-bar buttons render as visible — the conservative
@@ -1029,13 +1032,13 @@ export function AppShell() {
   const activeRightPanelKind = rightPanelState === "closed" ? null : activeFileTab?.kind ?? null;
 
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalMaximized, setTerminalMaximized] = useState(false);
 
   const [terminalHeight, setTerminalHeight] = useState<number>(() => {
     if (typeof window === "undefined") return 200;
     try {
       const v = Number(localStorage.getItem(TERMINAL_HEIGHT_KEY));
-      if (Number.isFinite(v) && v >= MIN_TERMINAL_HEIGHT && v <= window.innerHeight - 60) return v;
+      const maxH = Math.max(MIN_TERMINAL_HEIGHT, window.innerHeight - 60 - MIN_CHAT_HEIGHT);
+      if (Number.isFinite(v) && v >= MIN_TERMINAL_HEIGHT && v <= maxH) return v;
     } catch {
       // ignore
     }
@@ -1049,12 +1052,6 @@ export function AppShell() {
       // ignore
     }
   }, [terminalHeight]);
-
-  // Closing the panel also leaves maximized mode, so the next open restores
-  // the normal drag-sized height.
-  useEffect(() => {
-    if (!terminalOpen) setTerminalMaximized(false);
-  }, [terminalOpen]);
 
   const toggleTerminal = useCallback(() => {
     setTerminalOpen((v) => !v);
@@ -1113,8 +1110,6 @@ export function AppShell() {
     },
   };
 
-  const toggleTerminalMaximize = useCallback(() => setTerminalMaximized((v) => !v), []);
-
   // Ctrl+` toggles the terminal panel (VS Code muscle memory).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1133,7 +1128,8 @@ export function AppShell() {
       const startH = terminalHeight;
       const onMove = (ev: MouseEvent) => {
         const next = startH - (ev.clientY - startY);
-        setTerminalHeight(Math.min(Math.max(next, MIN_TERMINAL_HEIGHT), window.innerHeight - 60));
+        const maxH = Math.max(MIN_TERMINAL_HEIGHT, window.innerHeight - 60 - MIN_CHAT_HEIGHT);
+        setTerminalHeight(Math.min(Math.max(next, MIN_TERMINAL_HEIGHT), maxH));
       };
       const onUp = () => {
         window.removeEventListener("mousemove", onMove);
@@ -1283,10 +1279,17 @@ export function AppShell() {
 
       {/* Drag handle removed — sidebar width is fixed. */}
 
-      {/* Center: chat — flex-grow animates the squeeze when the right panel
-          goes expanded: center grows 1->0 while the right panel grows 0->1,
-          so the whiteboard takeover slides instead of snapping. */}
-      <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, borderRadius: "var(--panel-radius)", border: "1px solid var(--border)", background: "var(--bg)", transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1)" }}>
+      {/* Center column: chat card + terminal card stacked, both rounded
+          panels. The terminal embeds inside this column (replacing the
+          previous floating overlay), so opening it only squeezes the chat
+          card — the sidebar and right panel are untouched. flex-grow
+          still animates the squeeze when the right panel goes expanded:
+          center grows 1->0 while the right panel grows 0->1, so the
+          whiteboard takeover slides instead of snapping. */}
+      <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen ? "var(--panel-gap)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
+        {/* Chat card — keeps a minimum height so dragging the terminal taller
+            can never squash the input box out of view. */}
+        <div style={{ flex: "1 1 0%", minHeight: MIN_CHAT_HEIGHT, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--panel-radius)", border: "1px solid var(--border)", background: "var(--bg)" }}>
         {showChat && (
           <SessionTabBar
             leadingControl={
@@ -1360,6 +1363,57 @@ export function AppShell() {
               />
             );
           })}
+        </div>
+        </div>
+
+        {/* Drag handle sitting in the gap between the chat card and the
+            terminal card. Always mounted so the running pty/WS and layout
+            survive collapse, but height: 0 when closed so it neither
+            overlaps the chat card (which would push it past the parent's
+            overflow:hidden and clip its bottom border) nor occupies any
+            space. Transitions alongside the gap and terminal card. */}
+        <div
+          onMouseDown={(e) => {
+            e.preventDefault();
+            startTerminalDrag(e.clientY);
+          }}
+          title={t("Drag to resize")}
+          aria-hidden
+          style={{
+            flexShrink: 0,
+            height: terminalOpen ? 5 : 0,
+            cursor: terminalOpen ? "ns-resize" : "default",
+            pointerEvents: terminalOpen ? "auto" : "none",
+            background: "transparent",
+            transition: "height 0.2s ease",
+          }}
+        />
+
+        {/* Terminal card — always mounted so the running pty/WS survive
+            collapse. Height animates between terminalHeight (open) and 0
+            (closed) via a flex-basis transition; border/radius collapse
+            with the height so there's no orphan frame when hidden. */}
+        <div
+          style={{
+            flexShrink: 0,
+            flexBasis: terminalOpen ? terminalHeight : 0,
+            minHeight: 0,
+            overflow: "hidden",
+            border: terminalOpen ? "1px solid var(--border)" : "none",
+            borderRadius: terminalOpen ? "var(--panel-radius)" : 0,
+            background: "var(--bg)",
+            display: "flex",
+            flexDirection: "column",
+            transition: "flex-basis 0.2s ease",
+          }}
+        >
+          <TerminalPanel
+            defaultCwd={terminalDefaultCwd}
+            open={terminalOpen}
+            onClosePanel={() => {
+              setTerminalOpen(false);
+            }}
+          />
         </div>
       </div>
 
@@ -1452,62 +1506,6 @@ export function AppShell() {
       <RightBarColumn cfg={rightSideBarConfig} ctx={rightBarCtx} />
     </div>
 
-    {/* Bottom terminal panel — floats OVER the page (fixed overlay) instead of
-        squeezing the layout above. Always mounted so terminals survive
-        collapse; the wrapper animates its height.
-
-        Two visual modes handled here:
-        - normal → floating card, sits 12px off the screen edges with a 1px
-          border + 12px radius to match the 3 main panels
-        - maximized → full-viewport takeover, no margin/radius */}
-    <div
-      style={{
-        position: "fixed",
-        left: terminalMaximized ? 0 : "var(--panel-padding)",
-        right: terminalMaximized ? 0 : 60,
-        bottom: terminalMaximized ? 0 : "var(--panel-padding)",
-        display: "flex",
-        flexDirection: "column",
-        height: terminalOpen ? (terminalMaximized ? "100dvh" : terminalHeight) : 0,
-        minHeight: 0,
-        overflow: "hidden",
-        // Floating-card frame only applies in normal mode. The old borderTop
-        // + 8px paddingBottom were a "drawer-rises-from-the-bottom" hack;
-        // the 12px bottom margin plus a full 1px border makes the terminal
-        // feel like a proper card instead.
-        border: terminalOpen && !terminalMaximized
-          ? "1px solid var(--border)"
-          : "none",
-        borderRadius: terminalOpen && !terminalMaximized
-          ? "var(--panel-radius)"
-          : 0,
-        background: "var(--bg)",
-        zIndex: 201,
-      }}
-    >
-      {terminalOpen && !terminalMaximized && (
-        <div
-          onMouseDown={(e) => {
-            e.preventDefault();
-            startTerminalDrag(e.clientY);
-          }}
-          onDoubleClick={toggleTerminalMaximize}
-          title={t("Drag to resize")}
-          style={{ flexShrink: 0, height: 5, cursor: "ns-resize", background: "var(--bg-panel)" }}
-        />
-      )}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <TerminalPanel
-          defaultCwd={terminalDefaultCwd}
-          open={terminalOpen}
-          maximized={terminalMaximized}
-          onToggleMaximize={toggleTerminalMaximize}
-          onClosePanel={() => {
-            setTerminalOpen(false);
-          }}
-        />
-      </div>
-    </div>
   </div>
   {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); setModelsRefreshKey((k) => k + 1); }} />}
     {skillsConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
