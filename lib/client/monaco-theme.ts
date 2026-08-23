@@ -8,7 +8,7 @@
 // Work's presets — the editor feels grafted on instead of belonging.
 //
 // This module registers a single `pi-work-dark` theme whose chrome
-// colors are pulled straight from `theme-midnight` in app/globals.css
+// colors are pulled straight from `theme-dark` in app/globals.css
 // (`--bg`, `--bg-panel`, `--border`, `--text`, `--accent`, …) so the
 // editor visibly belongs to the surrounding UI. Syntax-highlighting
 // tokens pick from a One-Dark-leaning palette (purple / cyan / green

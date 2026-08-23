@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { ThemePreset } from "@/hooks/useTheme";
+import { PRESETS } from "@/hooks/useTheme";
 import type { Locale } from "@/hooks/useI18n";
 
 // ── AgentControls ────────────────────────────────────────────────────────
@@ -39,9 +40,6 @@ const PlusIcon = () => I(<><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y
 const StopIcon = () => I(<rect x="6" y="6" width="12" height="12" rx="1" />);
 const SunIcon = () => I(<><circle cx="12" cy="12" r="4" /><line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="4.22" y1="4.22" x2="6.34" y2="6.34" /><line x1="17.66" y1="17.66" x2="19.78" y2="19.78" /><line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" /><line x1="4.22" y1="19.78" x2="6.34" y2="17.66" /><line x1="17.66" y1="6.34" x2="19.78" y2="4.22" /></>);
 const MoonIcon = () => I(<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />);
-const TreeIcon = () => I(<><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></>);
-const MountainIcon = () => I(<><path d="M3 20l6-12 4 8 3-6 5 10" /></>);
-const FlameIcon = () => I(<path d="M12 2c2 4-2 6 0 9 2 3 5 2 5 6a5 5 0 0 1-10 0c0-3 2-4 2-7 0-3-1-5 3-8z" />);
 const SidebarIcon = () => I(<><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" /></>);
 const PanelRightIcon = () => I(<><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" /></>);
 const CheckIcon = () => I(<polyline points="20 6 9 17 4 12" />);
@@ -61,15 +59,9 @@ const TokensIcon = () => I(<><circle cx="12" cy="12" r="9" /><line x1="8.5" y1="
 const GitDiffIcon = () => I(<><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="6" r="3" /><path d="M6 9v6" /><path d="M18 9a9 9 0 0 1-9 9" /></>);
 const LlmAuditIcon = () => I(<><path d="M2 12h3l2-4 3 8 2-4h2" /><circle cx="15.5" cy="15.5" r="2.5" /><path d="M17.5 17.5 20 20" /></>);
 
-// Theme icons picked from PRESET_IS_DARK to give the swatch a hint.
+// Theme icons: light → sun, dark → moon.
 const ThemeIcon = ({ preset }: { preset: ThemePreset }) => {
-  switch (preset) {
-    case "default": return <SunIcon />;
-    case "midnight": return <MoonIcon />;
-    case "synthwave": return <FlameIcon />;
-    case "forest": return <TreeIcon />;
-    case "sepia": return <MountainIcon />;
-  }
+  return preset === "dark" ? <MoonIcon /> : <SunIcon />;
 };
 
 // ── CommandGroup ─────────────────────────────────────────────────────────
@@ -168,23 +160,16 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     run: () => ctx.agentControls?.abortStreaming(),
   });
 
-  // ── Theme (5) ──
-  const themes: ThemePreset[] = ["default", "midnight", "synthwave", "forest", "sepia"];
+  // ── Theme (2) ──
   const themeTitleKeys: Record<ThemePreset, string> = {
-    default: "Theme: Default",
-    midnight: "Theme: Midnight",
-    synthwave: "Theme: Synthwave",
-    forest: "Theme: Forest",
-    sepia: "Theme: Sepia",
+    light: "Theme: Light",
+    dark: "Theme: Dark",
   };
   const themeKeywords: Record<ThemePreset, string[]> = {
-    default: ["theme", "default", "light", "主题", "默认", "浅色"],
-    midnight: ["theme", "midnight", "dark", "主题", "夜晚", "深色"],
-    synthwave: ["theme", "synthwave", "neon", "purple", "主题", "霓虹"],
-    forest: ["theme", "forest", "green", "主题", "森林", "绿色"],
-    sepia: ["theme", "sepia", "warm", "主题", "复古", "暖色"],
+    light: ["theme", "light", "bright", "主题", "明亮", "浅色", "白天"],
+    dark: ["theme", "dark", "night", "主题", "暗色", "深色", "夜晚"],
   };
-  for (const preset of themes) {
+  for (const preset of PRESETS) {
     cmds.push({
       id: `theme.${preset}`,
       title: t(themeTitleKeys[preset]),
@@ -404,8 +389,8 @@ function fuzzyScore(haystack: string, needle: string): number {
     hi++;
   }
   if (ni < needle.length) return -1;
-  // Penalize long haystacks slightly so "Theme: Midnight" doesn't always
-  // outrank "Theme: Default" when typing "def".
+  // Penalize long haystacks slightly so a longer title doesn't always
+  // outrank a shorter one when the query is short.
   score -= Math.floor(haystack.length / 10);
   return score;
 }

@@ -68,7 +68,7 @@ export function EchartsChart({ option, height, ariaLabel }: Props) {
   // init time, so a theme switch needs dispose + re-init; doing the same on
   // option change keeps the lifecycle uniform and avoids edge cases where
   // setOption with a different series type only partially updates.
-  const bg = useMemo(() => readThemeBg(preset, isDark), [preset, isDark]);
+  const bg = useMemo(() => readThemeBg(isDark), [isDark]);
   useEffect(() => {
     setRenderError(null);
     if (!lib || !containerRef.current) return;
@@ -94,7 +94,7 @@ export function EchartsChart({ option, height, ariaLabel }: Props) {
       chart.dispose();
       chartRef.current = null;
     };
-  }, [lib, option, isDark, preset]);
+  }, [lib, option, isDark, preset, bg]);
 
   const error = loadError ?? renderError;
 

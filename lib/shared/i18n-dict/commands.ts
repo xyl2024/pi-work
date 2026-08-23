@@ -3,11 +3,8 @@
 // in components/CommandPalette.tsx, not the chat layer.
 
 export const commands = {
-  "Theme: Default": "主题：默认",
-  "Theme: Midnight": "主题：夜晚",
-  "Theme: Synthwave": "主题：霓虹",
-  "Theme: Forest": "主题：森林",
-  "Theme: Sepia": "主题：复古",
+  "Theme: Light": "主题：明亮",
+  "Theme: Dark": "主题：暗色",
   "Thinking: Auto": "推理：自动",
   "Thinking: Off": "推理：关闭",
   "Thinking: Minimal": "推理：最少",

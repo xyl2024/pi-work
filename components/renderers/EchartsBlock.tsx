@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
-import { useTheme, type ThemePreset } from "@/hooks/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 import { copyText } from "@/lib/client/clipboard";
 
 // Dynamic import keeps echarts (~MB) out of the initial bundle — only fetched
@@ -17,10 +17,10 @@ function loadLib(): Promise<typeof echarts> {
 
 // Read the current --bg CSS variable so the chart canvas can match the active
 // theme. ECharts' built-in "dark" theme paints the canvas with #100C2A, which
-// clashes with every theme here — inject our own backgroundColor at setOption
-// time instead (exported so EchartsChart can use the same source of truth).
-export function readThemeBg(preset: ThemePreset, isDark: boolean): string {
-  void preset;
+// clashes with the dark variant here — inject our own backgroundColor at
+// setOption time instead (exported so EchartsChart can use the same source of
+// truth).
+export function readThemeBg(isDark: boolean): string {
   if (typeof document === "undefined") return isDark ? "#1a1a1a" : "#ffffff";
   const v = getComputedStyle(document.documentElement)
     .getPropertyValue("--bg")
@@ -118,7 +118,7 @@ export function EchartsBlock({ code, isStreaming }: Props) {
 
   // Resolve the theme background so exported PNGs and the (opaque) chart area
   // match the surrounding UI. `preset` is read so this re-runs on theme change.
-  const bg = useMemo(() => readThemeBg(preset, isDark), [preset, isDark]);
+  const bg = useMemo(() => readThemeBg(isDark), [isDark]);
 
   // Evaluate the code into an option object whenever `code` or `lib` changes.
   // Reset to `null` first so a previous chart doesn't flash while the new
@@ -176,7 +176,7 @@ export function EchartsBlock({ code, isStreaming }: Props) {
       chart.dispose();
       chartRef.current = null;
     };
-  }, [lib, option, isDark, preset, viewMode]);
+  }, [lib, option, isDark, preset, viewMode, bg]);
 
   const error = evalError || renderError;
 
@@ -318,7 +318,7 @@ function EchartsFullscreen({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const bg = readThemeBg(preset, isDark);
+    const bg = readThemeBg(isDark);
     const chart = lib.init(el, isDark ? "dark" : undefined, { renderer: "canvas" });
     try {
       const merged: echarts.EChartsCoreOption = {

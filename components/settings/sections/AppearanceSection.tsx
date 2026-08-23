@@ -38,15 +38,9 @@ export function AppearanceSection() {
               style={{
                 width: 100, height: 60, borderRadius: 8,
                 border: preset === p ? "2px solid var(--accent)" : "2px solid var(--border)",
-                background: p === "default"
+                background: p === "light"
                   ? "linear-gradient(135deg, #fafafa 50%, #6366f1 50%)"
-                  : p === "midnight"
-                  ? "linear-gradient(135deg, #0f172a 50%, #818cf8 50%)"
-                  : p === "synthwave"
-                  ? "linear-gradient(135deg, #1e1b4b 50%, #f472b6 50%)"
-                  : p === "forest"
-                  ? "linear-gradient(135deg, #f0fdf4 50%, #16a34a 50%)"
-                  : "linear-gradient(135deg, #fdf6e3 50%, #b45309 50%)",
+                  : "linear-gradient(135deg, #0f172a 50%, #818cf8 50%)",
                 transition: "border-color 0.15s",
               }}
             />

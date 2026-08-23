@@ -3,33 +3,24 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type { Locale } from "@/hooks/useI18n";
 
-export type ThemePreset = "default" | "midnight" | "synthwave" | "forest" | "sepia";
+export type ThemePreset = "light" | "dark";
 
-export const PRESETS: ThemePreset[] = ["default", "midnight", "synthwave", "forest", "sepia"];
+export const PRESETS: ThemePreset[] = ["light", "dark"];
 
 export const PRESET_LABELS: Record<ThemePreset, Record<Locale, string>> = {
-  default: { en: "Default", zh: "默认" },
-  midnight: { en: "Midnight", zh: "暗夜" },
-  synthwave: { en: "Synthwave", zh: "赛博" },
-  forest: { en: "Forest", zh: "森林" },
-  sepia: { en: "Sepia", zh: "羊皮" },
+  light: { en: "Light", zh: "明亮" },
+  dark: { en: "Dark", zh: "暗色" },
 };
 
 /** Whether a preset uses dark background tones — used for syntax-highlighter themes. */
 export const PRESET_IS_DARK: Record<ThemePreset, boolean> = {
-  default: false,
-  midnight: true,
-  synthwave: true,
-  forest: false,
-  sepia: false,
+  light: false,
+  dark: true,
 };
 
 const PRESET_CLASS: Record<ThemePreset, string> = {
-  default: "theme-default",
-  midnight: "theme-midnight",
-  synthwave: "theme-synthwave",
-  forest: "theme-forest",
-  sepia: "theme-sepia",
+  light: "theme-light",
+  dark: "theme-dark",
 };
 
 const listeners = new Set<() => void>();
@@ -40,15 +31,15 @@ function subscribe(cb: () => void): () => void {
 }
 
 function getSnapshot(): ThemePreset {
-  if (typeof document === "undefined") return "default";
+  if (typeof document === "undefined") return "light";
   for (const preset of PRESETS) {
     if (document.documentElement.classList.contains(PRESET_CLASS[preset])) return preset;
   }
-  return "default";
+  return "light";
 }
 
 function getServerSnapshot(): ThemePreset {
-  return "default";
+  return "light";
 }
 
 type ToggleOrigin = { x: number; y: number };
@@ -99,16 +90,9 @@ export function useTheme() {
       .catch(() => { /* transition cancelled — ignore */ });
   }, []);
 
-  const cycleTheme = useCallback((origin?: ToggleOrigin) => {
-    const idx = PRESETS.indexOf(preset);
-    const next = PRESETS[(idx + 1) % PRESETS.length];
-    setPreset(next, origin);
-  }, [preset, setPreset]);
-
   return {
     preset,
     setPreset,
-    cycleTheme,
     isDark: PRESET_IS_DARK[preset],
   };
 }

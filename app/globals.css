@@ -18,8 +18,8 @@
   --font-mono-font: var(--font-mono);
 }
 
-/* ── Preset: default (light) ───────────────────────────────── */
-.theme-default {
+/* ── Preset: light ──────────────────────────────────────── */
+.theme-light {
   --bg: #ffffff;
   --bg-panel: #fcfcfc;
   --bg-hover: #f7f7f7;
@@ -54,8 +54,8 @@
   --info-bg: rgba(37, 99, 235, 0.10);
 }
 
-/* ── Preset: midnight (dark) ───────────────────────────────── */
-.theme-midnight {
+/* ── Preset: dark ───────────────────────────────────────── */
+.theme-dark {
   --bg: #24242a;
   --bg-panel: #2e2e34;
   --bg-hover: #2e2e2e;
@@ -86,108 +86,6 @@
   --error-bg: rgba(255, 123, 114, 0.14);
   --info: #7aa2f7;
   --info-bg: rgba(122, 162, 247, 0.14);
-}
-
-/* ── Preset: synthwave ─────────────────────────────────────── */
-.theme-synthwave {
-  --bg: #1a1625;
-  --bg-panel: #251e35;
-  --bg-hover: #2f2845;
-  --bg-selected: #3a3355;
-  --border: #4a4265;
-  --text: #f0e8ff;
-  --text-muted: #a895c8;
-  --text-dim: #7a6598;
-  --accent: #ff6ec7;
-  --accent-hover: #ff8fd5;
-  --user-bg: #2d1f42;
-  --assistant-bg: #1a1625;
-  --tool-bg: #251e35;
-  --bg-subtle: rgba(255,110,199,0.08);
-
-  --git-status-added: #6ee7b7;
-  --git-status-modified: #fbbf24;
-  --git-status-deleted: #ff6ec7;
-  --git-status-untracked: #67e8f9;
-  --git-status-renamed: #c4b5fd;
-  --git-status-conflict: #ff5577;
-
-  --success: #6ee7b7;
-  --success-bg: rgba(110, 231, 183, 0.14);
-  --warning: #fbbf24;
-  --warning-bg: rgba(251, 191, 36, 0.14);
-  --error: #ff6ec7;
-  --error-bg: rgba(255, 110, 199, 0.14);
-  --info: #67e8f9;
-  --info-bg: rgba(103, 232, 249, 0.14);
-}
-
-/* ── Preset: forest ────────────────────────────────────────── */
-.theme-forest {
-  --bg: #f4f1e8;
-  --bg-panel: #e8e4d9;
-  --bg-hover: #ddd8cc;
-  --bg-selected: #d1cbbd;
-  --border: #c4b89e;
-  --text: #2c2416;
-  --text-muted: #6b5c3e;
-  --text-dim: #9a8665;
-  --accent: #2e7d32;
-  --accent-hover: #1b5e20;
-  --user-bg: #e8f5e9;
-  --assistant-bg: #f4f1e8;
-  --tool-bg: #e0dbd0;
-  --bg-subtle: rgba(46,125,50,0.06);
-
-  --git-status-added: #2e7d32;
-  --git-status-modified: #c2410c;
-  --git-status-deleted: #b91c1c;
-  --git-status-untracked: #4d7c0f;
-  --git-status-renamed: #1e40af;
-  --git-status-conflict: #991b1b;
-
-  --success: #2e7d32;
-  --success-bg: rgba(46, 125, 50, 0.12);
-  --warning: #c2410c;
-  --warning-bg: rgba(194, 65, 12, 0.12);
-  --error: #b91c1c;
-  --error-bg: rgba(185, 28, 28, 0.12);
-  --info: #1e40af;
-  --info-bg: rgba(30, 64, 175, 0.12);
-}
-
-/* ── Preset: sepia ─────────────────────────────────────────── */
-.theme-sepia {
-  --bg: #f7f0e3;
-  --bg-panel: #ede0cc;
-  --bg-hover: #e3d2b6;
-  --bg-selected: #d8c5a4;
-  --border: #c9b48a;
-  --text: #3d2e1a;
-  --text-muted: #7a5c30;
-  --text-dim: #a88650;
-  --accent: #8b4513;
-  --accent-hover: #a0522d;
-  --user-bg: #fdf3dc;
-  --assistant-bg: #f7f0e3;
-  --tool-bg: #ece0ce;
-  --bg-subtle: rgba(139,69,19,0.07);
-
-  --git-status-added: #4d7c0f;
-  --git-status-modified: #b45309;
-  --git-status-deleted: #991b1b;
-  --git-status-untracked: #65764b;
-  --git-status-renamed: #1e40af;
-  --git-status-conflict: #7c2d12;
-
-  --success: #4d7c0f;
-  --success-bg: rgba(77, 124, 15, 0.12);
-  --warning: #b45309;
-  --warning-bg: rgba(180, 83, 9, 0.12);
-  --error: #991b1b;
-  --error-bg: rgba(153, 27, 27, 0.12);
-  --info: #1e40af;
-  --info-bg: rgba(30, 64, 175, 0.12);
 }
 
 /* Theme toggle: circular wipe via View Transitions API.
