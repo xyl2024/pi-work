@@ -1552,14 +1552,27 @@ export function AppShell() {
 
     {/* Bottom terminal panel — floats OVER the page (fixed overlay) instead of
         squeezing the layout above. Always mounted so terminals survive
-        collapse; the wrapper animates its height. */}
+        collapse; the wrapper animates its height.
+
+        Three visual modes handled here:
+        - "bottom + normal" → floating card, sits 12px off the screen edges
+          with a 1px border + 12px radius to match the 3 main panels
+        - "bottom + maximized" → full-viewport takeover, no margin/radius
+        - "right" → overlays the right panel area, inherits the panel's
+          own rounded design — no extra border/radius needed here */}
     <div
       style={{
         position: "fixed",
-        left: terminalLocation === "right" ? rightPanelRect?.left : 0,
-        right: terminalLocation === "right" ? undefined : 36,
+        left: terminalLocation === "right"
+          ? rightPanelRect?.left
+          : (terminalMaximized ? 0 : "var(--panel-padding)"),
+        right: terminalLocation === "right"
+          ? undefined
+          : (terminalMaximized ? 0 : 60),
         top: terminalLocation === "right" ? 36 : undefined,
-        bottom: 0,
+        bottom: terminalLocation === "right"
+          ? undefined
+          : (terminalMaximized ? 0 : "var(--panel-padding)"),
         width: terminalLocation === "right" ? rightPanelRect?.width : undefined,
         display: "flex",
         flexDirection: "column",
@@ -1568,8 +1581,16 @@ export function AppShell() {
           : (terminalOpen ? (terminalMaximized ? "100dvh" : terminalHeight) : 0),
         minHeight: 0,
         overflow: "hidden",
-        borderTop: terminalLocation === "bottom" && terminalOpen && !terminalMaximized ? "1px solid var(--border)" : "none",
-        paddingBottom: terminalLocation === "bottom" && terminalOpen && !terminalMaximized ? 8 : 0,
+        // Floating-card frame only applies in "bottom + normal" mode. The
+        // old borderTop + 8px paddingBottom were a "drawer-rises-from-the-
+        // bottom" hack; the new 12px bottom margin plus a full 1px border
+        // makes the terminal feel like a proper card instead.
+        border: terminalLocation === "bottom" && terminalOpen && !terminalMaximized
+          ? "1px solid var(--border)"
+          : "none",
+        borderRadius: terminalLocation === "bottom" && terminalOpen && !terminalMaximized
+          ? "var(--panel-radius)"
+          : 0,
         borderLeft: terminalLocation === "right" ? "1px solid var(--border)" : "none",
         background: "var(--bg)",
         zIndex: 201,
