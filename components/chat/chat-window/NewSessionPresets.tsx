@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 
 const NEW_SESSION_PRESETS = [
@@ -49,36 +50,83 @@ const NEW_SESSION_PRESETS = [
 
 export function NewSessionPresets({ onPickPrompt }: { onPickPrompt: (prompt: string) => void }) {
   const { t } = useI18n();
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   return (
     <div className="grid w-full max-w-[820px] grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {NEW_SESSION_PRESETS.map((preset) => (
-        <button
-          key={preset.key}
-          type="button"
-          onClick={() => onPickPrompt(t(preset.promptKey))}
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 10,
-            padding: "12px 14px",
-            background: "var(--bg-subtle)",
-            border: "1px solid var(--border)",
-            borderRadius: 12,
-            cursor: "pointer",
-            textAlign: "left",
-            transition: "border-color 0.15s, background 0.15s",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-subtle)"; }}
-        >
-          <span style={{ color: "var(--accent)", flexShrink: 0, marginTop: 2, display: "flex" }}>{preset.icon}</span>
-          <span style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", lineHeight: 1.3 }}>{t(preset.titleKey)}</span>
-            <span style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.45 }}>{t(preset.descKey)}</span>
-          </span>
-        </button>
-      ))}
+      {NEW_SESSION_PRESETS.map((preset) => {
+        const isHovered = hoveredKey === preset.key;
+        const isSqueezed = hoveredKey !== null && !isHovered;
+
+        return (
+          <button
+            key={preset.key}
+            type="button"
+            onClick={() => onPickPrompt(t(preset.promptKey))}
+            onMouseEnter={() => setHoveredKey(preset.key)}
+            onMouseLeave={() => setHoveredKey((cur) => (cur === preset.key ? null : cur))}
+            onFocus={() => setHoveredKey(preset.key)}
+            onBlur={() => setHoveredKey((cur) => (cur === preset.key ? null : cur))}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+              padding: "12px 14px",
+              background: isHovered ? "var(--bg-hover)" : "var(--bg-subtle)",
+              border: `1px solid ${isHovered ? "var(--accent)" : "var(--border)"}`,
+              borderRadius: 12,
+              cursor: "pointer",
+              textAlign: "left",
+              opacity: isSqueezed ? 0.55 : 1,
+              transform: isHovered ? "scale(1.06)" : isSqueezed ? "scale(0.94)" : "scale(1)",
+              transformOrigin: "center center",
+              zIndex: isHovered ? 2 : 0,
+              boxShadow: isHovered ? "0 6px 20px -8px rgba(0,0,0,0.18)" : "none",
+              transition:
+                "transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease, background 0.15s, border-color 0.15s, box-shadow 0.25s ease",
+              willChange: "transform, opacity",
+            }}
+          >
+            <span style={{ color: "var(--accent)", flexShrink: 0, marginTop: 2, display: "flex" }}>{preset.icon}</span>
+            <span
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 3,
+                minWidth: 0,
+                overflow: "hidden",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--text)",
+                  lineHeight: 1.3,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {t(preset.titleKey)}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: "var(--text-muted)",
+                  lineHeight: 1.45,
+                  display: "-webkit-box",
+                  WebkitLineClamp: isHovered ? 3 : 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
+                {t(preset.descKey)}
+              </span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
