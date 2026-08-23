@@ -4,7 +4,6 @@ import { useCallback, useRef } from "react";
 import { getFileIcon } from "../files/FileIcons";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
-import { SlidingTabIndicator } from "./SlidingTabIndicator";
 
 export type Tab =
   | { kind: "file"; id: string; label: string; filePath: string }
@@ -32,7 +31,6 @@ interface Props {
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMenu }: Props) {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const indicatorContainerRef = useRef<HTMLDivElement>(null);
 
   // Convert vertical wheel (deltaY) into horizontal scroll, matching the
   // VSCode tab-bar behavior. We also fold deltaX in so that macOS trackpad
@@ -67,41 +65,20 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
 
   return (
     <div
-      ref={indicatorContainerRef}
+      ref={scrollRef}
+      onWheel={handleWheel}
+      data-hide-v-scrollbar
       style={{
-        position: "relative",
-        overflow: "hidden",
         display: "flex",
         alignItems: "center",
+        flex: 1,
+        minWidth: 0,
         background: "transparent",
-        flexShrink: 0,
+        overflowX: "auto",
         height: 34,
+        gap: 2,
       }}
     >
-      <SlidingTabIndicator
-        containerRef={indicatorContainerRef}
-        scrollRef={scrollRef}
-        activeId={activeTabId}
-        getTabEl={(id) =>
-          document.querySelector(
-            `[data-tab-id="${CSS.escape(id)}"]`,
-          )
-        }
-      />
-      <div
-        ref={scrollRef}
-        onWheel={handleWheel}
-        data-hide-v-scrollbar
-        style={{
-          display: "flex",
-          alignItems: "center",
-          overflowX: "auto",
-          flex: 1,
-          minWidth: 0,
-          height: 34,
-          gap: 2,
-        }}
-      >
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           // Derive the displayed label at render time for the tokens tab so
@@ -213,7 +190,6 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
             </div>
           );
         })}
-      </div>
     </div>
   );
 }

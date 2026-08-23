@@ -9,7 +9,6 @@ import {
 } from "@/hooks/sessionWorkspaceStore";
 import { Tooltip } from "../ui/Tooltip";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
-import { SlidingTabIndicator } from "../ui/SlidingTabIndicator";
 import { InlineLoader } from "generative-loaders";
 
 interface Props {
@@ -61,7 +60,6 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
   const { t } = useI18n();
   const cm = useContextMenu();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const indicatorContainerRef = useRef<HTMLDivElement>(null);
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     const el = scrollRef.current;
     if (!el) return;
@@ -106,33 +104,20 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         </div>
       )}
       <div
-        ref={indicatorContainerRef}
-        style={{ flex: 1, minWidth: 0, overflow: "hidden", position: "relative" }}
+        ref={scrollRef}
+        onWheel={handleWheel}
+        data-hide-v-scrollbar
+        style={{
+          display: "flex",
+          alignItems: "center",
+          flex: 1,
+          minWidth: 0,
+          background: "transparent",
+          overflowX: "auto",
+          height: 34,
+          gap: 2,
+        }}
       >
-        <SlidingTabIndicator
-          containerRef={indicatorContainerRef}
-          scrollRef={scrollRef}
-          activeId={activeTabId}
-          getTabEl={(id) =>
-            document.querySelector(
-              `[data-session-tab-id="${CSS.escape(id)}"]`,
-            )
-          }
-        />
-        <div
-          ref={scrollRef}
-          onWheel={handleWheel}
-          data-hide-v-scrollbar
-          style={{
-            display: "flex",
-            alignItems: "center",
-            background: "transparent",
-            overflowX: "auto",
-            flexShrink: 0,
-            height: 34,
-            gap: 2,
-          }}
-        >
         {tabs.map((tab) => {
         const active = tab.tabId === activeTabId;
         const title = tab.kind === "draft" ? t("New session") : getSessionTabTitle(tab.session!);
@@ -256,7 +241,6 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           </button>
         </Tooltip>
         )}
-        </div>
       </div>
     </div>
   );
