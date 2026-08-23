@@ -761,7 +761,7 @@ span.linenumber {
   .sidebar-container.sidebar-closed {
     width: 0;
     min-width: 0;
-    border-right: none !important;
+    border: none !important;
     margin-right: 0 !important;
   }
 }
@@ -784,7 +784,7 @@ span.linenumber {
   .right-panel-container.right-panel-closed {
     width: 0;
     min-width: 0;
-    border-left: none !important;
+    border: none !important;
     margin-left: 0 !important;
   }
   .right-panel-container.right-panel-expanded {
@@ -834,7 +834,7 @@ span.linenumber {
   .right-panel-container.right-panel-closed {
     width: 0 !important;
     min-width: 0 !important;
-    border-left: none !important;
+    border: none !important;
   }
   .right-panel-container.right-panel-expanded {
     width: 100%;

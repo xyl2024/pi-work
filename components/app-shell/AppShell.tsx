@@ -1265,7 +1265,7 @@ export function AppShell() {
         className={`sidebar-container${sidebarOpen ? "" : " sidebar-closed"}`}
         style={{
           background: "var(--bg-panel)",
-          borderRight: "1px solid var(--border)",
+          border: "1px solid var(--border)",
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
@@ -1423,7 +1423,7 @@ export function AppShell() {
         style={{
           display: "flex",
           flexDirection: "column",
-          borderLeft: "1px solid var(--border)",
+          border: "1px solid var(--border)",
           background: "var(--bg)",
           width: rightPanelState === "closed" ? 0 : rightWidth,
           minWidth: rightPanelState === "closed" ? 0 : rightWidth,
