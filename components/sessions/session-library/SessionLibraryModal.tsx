@@ -348,11 +348,6 @@ function EmptyState() {
       <div style={{ fontSize: 14, color: "var(--text-muted)", maxWidth: 460 }}>
         {t("No files in this session yet.")}
       </div>
-      <div style={{ fontSize: 12, color: "var(--text-dim)", maxWidth: 460, lineHeight: 1.6 }}>
-        {t(
-          "Let the agent use the show_media tool to surface images, video, and audio — they all land here. PDFs, Markdown, HTML, and plain text previews go through the right-hand file viewer instead.",
-        )}
-      </div>
     </div>
   );
 }
