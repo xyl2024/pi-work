@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
 import { setSessionUiState, setLeafChangeHandler } from "../sessionUiStore";
-import { pickClosestAvailableThinkingLevel, pickMiddleAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
+import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import { streamReducer } from "./utils";
 import { useAgentSessionEvents } from "./events";
 import { useAgentSessionTransport } from "./transport";
@@ -488,13 +488,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // - Existing sessions: walk to the closest available level (preserve
     //   the user's pick when possible).
     // - New sessions: no session exists yet, so the "user pick" is really
-    //   the model-derived default — jump straight to the new model's
-    //   middle supported level so the displayed default always matches
-    //   the selected model and lands somewhere sensible rather than at
-    //   either ceiling.
+    //   the model-derived default — default new sessions to "off" so we
+    //   don't waste tokens on extended thinking until the user opts in.
     const newModelLevels = modelThinkingLevels[`${provider}:${modelId}`] ?? null;
     const nextLevel = isNew
-      ? pickMiddleAvailableThinkingLevel(newModelLevels)
+      ? "off"
       : pickClosestAvailableThinkingLevel(thinkingLevel, newModelLevels);
     const levelChanged = nextLevel !== thinkingLevel;
     if (levelChanged) {
@@ -759,12 +757,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ? { provider: match.provider, modelId: match.id }
             : { provider: d.modelList[0].provider, modelId: d.modelList[0].id };
           setNewSessionModel(selected);
-          // Seed the thinking level to the freshly-selected model's middle
-          // supported level (lower-of-two when even, exact center when odd).
-          // Models without reasoning capability report ["off"] only, which
-          // pickMiddleAvailableThinkingLevel returns as-is.
-          const available = d.thinkingLevels?.[`${selected.provider}:${selected.modelId}`] ?? null;
-          setThinkingLevel(pickMiddleAvailableThinkingLevel(available));
+          // Seed the thinking level to "off" for new sessions. We previously
+          // defaulted to the freshly-selected model's middle supported level,
+          // but that burned tokens on extended thinking before the user opted
+          // in, so the chat now starts with thinking disabled.
+          setThinkingLevel("off");
         }
       }
     }).catch(() => {});
