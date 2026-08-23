@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
+import { RefreshIconButton } from "../ui/RefreshIconButton";
 import type { SessionInfo } from "@/lib/shared/types";
 
 interface Props {
@@ -77,29 +78,10 @@ export function CollectionPanel({ favoriteIds, onSelectSession, onToggleFavorite
           {favoriteIds.length} {t("sessions")}
         </span>
         <div style={{ flex: 1 }} />
-        <Tooltip content={t("Refresh")}>
-          <button
-            onClick={() => void reload()}
-            disabled={loading}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 26, height: 26, padding: 0,
-              background: "none", border: "none",
-              color: loading ? "var(--text-dim)" : "var(--text-muted)",
-              cursor: loading ? "default" : "pointer",
-              borderRadius: 5,
-              flexShrink: 0,
-              transition: "color 0.12s, background 0.12s",
-            }}
-            onMouseEnter={(e) => { if (loading) return; e.currentTarget.style.color = "var(--text)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-            onMouseLeave={(e) => { if (loading) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "none"; }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-            </svg>
-          </button>
-        </Tooltip>
+        <RefreshIconButton
+          onClick={() => void reload()}
+          disabled={loading}
+        />
       </div>
 
       {/* List */}

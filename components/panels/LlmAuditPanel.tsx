@@ -18,6 +18,7 @@ import type { CSSProperties, FormEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
+import { RefreshIconButton } from "../ui/RefreshIconButton";
 import { copyText } from "@/lib/client/clipboard";
 import type { ProviderCall } from "@/lib/shared/llm-audit-types";
 
@@ -376,20 +377,7 @@ function Toolbar({
       </div>
 
       <div style={{ flex: 1 }} />
-      <button
-        onClick={onRefresh}
-        style={{
-          padding: "3px 10px",
-          fontSize: 12,
-          borderRadius: 6,
-          border: "1px solid var(--border)",
-          cursor: "pointer",
-          background: "transparent",
-          color: "var(--text-muted)",
-        }}
-      >
-        {t("Refresh")}
-      </button>
+      <RefreshIconButton onClick={onRefresh} />
     </div>
   );
 }

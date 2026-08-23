@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 import { iconBtnStyle, emptyStyle } from "./styles";
+import { RefreshIconButton } from "../ui/RefreshIconButton";
 import { relativeTime } from "./relativeTime";
 import type { RssFeed } from "@/lib/shared/rss/schema";
 
@@ -94,17 +95,16 @@ export function FeedsView({
                 ? `${t("Last fetched")}: ${relativeTime(feed.lastFetchedAt, t("Never"))}`
                 : t("Never fetched")}
             </span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void onRefresh(feed.id);
-              }}
-              style={iconBtnStyle}
-              title={t("Refresh")}
+            <span
+              onClick={(e) => e.stopPropagation()}
+              style={{ display: "inline-flex" }}
             >
-              ↻
-            </button>
+              <RefreshIconButton
+                onClick={() => { void onRefresh(feed.id); }}
+                label={t("Refresh")}
+                style={{ marginRight: 0 }}
+              />
+            </span>
             <button
               type="button"
               onClick={(e) => {

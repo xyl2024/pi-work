@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
-import { Tooltip } from "../ui/Tooltip";
+import { RefreshIconButton } from "../ui/RefreshIconButton";
 import type { GitStatusResponse } from "@/lib/shared/git-diff-types";
 import { GitDiffView } from "./GitDiffView";
 import { GitLogView } from "./GitLogView";
@@ -187,28 +187,21 @@ export function GitPanel({ cwd, onExpandPanel }: Props) {
           </button>
         ))}
 
-        <Tooltip content={t("Refresh")}>
-          <button
-            onClick={handleRefresh}
-            disabled={!cwd || busy}
-            aria-label={t("Refresh")}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 26, height: 26, padding: 0,
-              background: "var(--bg)", color: "var(--text-muted)",
-              border: "1px solid var(--border)", borderRadius: 6,
-              cursor: (!cwd || busy) ? "not-allowed" : "pointer",
-              opacity: (!cwd || busy) ? 0.5 : 1,
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: busy ? "spin 0.9s linear infinite" : undefined }}>
-              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-              <polyline points="21 3 21 9 15 9" />
-            </svg>
-          </button>
-        </Tooltip>
+        <RefreshIconButton
+          onClick={handleRefresh}
+          disabled={!cwd || busy}
+          label={t("Refresh")}
+          // Visually aligned with the bordered Diff/Log mode toggles
+          // directly to the left.
+          style={{
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            opacity: (!cwd || busy) ? 0.5 : 1,
+            cursor: (!cwd || busy) ? "not-allowed" : "pointer",
+          }}
+          iconStyle={{ animation: busy ? "spin 0.9s linear infinite" : undefined }}
+        />
       </div>
 
       {/* Body — shared states live here; ready state delegates to the view */}

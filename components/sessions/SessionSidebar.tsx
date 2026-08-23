@@ -9,7 +9,8 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
-import { REFRESH, CHECK, CHEVRONS_UP } from "@/lib/client/icon-paths";
+import { RefreshIconButton } from "../ui/RefreshIconButton";
+import { CHECK, CHEVRONS_UP } from "@/lib/client/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
 import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "../ui/SidebarSection";
@@ -176,17 +177,10 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   // pattern as the refresh button), so the fold-back is visibly acknowledged.
   const [explorerCollapseDone, setExplorerCollapseDone] = useState(false);
   const explorerCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [sessionRefreshDone, setSessionRefreshDone] = useState(false);
-  const [explorerRefreshDone, setExplorerRefreshDone] = useState(false);
-  const sessionRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const explorerRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspaceAbortRef = useRef<AbortController | null>(null);
 
   const triggerExplorerRefresh = useCallback(() => {
     setExplorerKey((k) => k + 1);
-    setExplorerRefreshDone(true);
-    if (explorerRefreshTimerRef.current) clearTimeout(explorerRefreshTimerRef.current);
-    explorerRefreshTimerRef.current = setTimeout(() => setExplorerRefreshDone(false), 2000);
     // Also poke the git status store so any new/modified file surfaces
     // its badge immediately rather than waiting up to 3s for the next
     // scheduled poll. No-op when the active cwd isn't being tracked
@@ -264,11 +258,10 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       }
       setNextWorkspaceCursor(data.nextCursor);
       setHasMoreWorkspaces(data.nextCursor !== null);
-      if (mode === "reset") {
-        setSessionRefreshDone(true);
-        if (sessionRefreshTimerRef.current) clearTimeout(sessionRefreshTimerRef.current);
-        sessionRefreshTimerRef.current = setTimeout(() => setSessionRefreshDone(false), 2000);
-      }
+      // The ✓ flash is fired by the RefreshIconButton itself when the user
+      // clicks it — see the Sessions section header. We deliberately don't
+      // toggle a "done" state here because the ✓ should reflect user
+      // intent (button click), not the completion of the network round-trip.
     } catch (e) {
       if (controller.signal.aborted) return;
       const msg = e instanceof Error ? e.message : String(e);
@@ -727,26 +720,10 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         open={sessionsOpen}
         onToggle={() => setSessionsOpen((v) => !v)}
         actions={
-          <Tooltip content={t("Refresh sessions")}>
-            <button
-              onClick={() => loadSessions()}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 26, height: 26, padding: 0, marginRight: 6,
-                background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "none",
-                border: "none",
-                color: sessionRefreshDone ? "#4ade80" : "var(--text-dim)",
-                cursor: "pointer",
-                borderRadius: 5,
-                flexShrink: 0,
-                transition: "color 0.3s, background 0.3s",
-              }}
-              onMouseEnter={(e) => { if (sessionRefreshDone) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-              onMouseLeave={(e) => { if (sessionRefreshDone) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
-            >
-              <MorphToggleIcon from={REFRESH} to={CHECK} active={sessionRefreshDone} size={13} strokeWidth={2.5} />
-            </button>
-          </Tooltip>
+          <RefreshIconButton
+            onClick={() => { void loadSessions(); }}
+            label={t("Refresh sessions")}
+          />
         }
       >
       <MultiCwdList
@@ -807,26 +784,10 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
                 <MorphToggleIcon from={CHEVRONS_UP} to={CHECK} active={explorerCollapseDone} size={13} strokeWidth={2.5} />
               </button>
               </Tooltip>
-              <Tooltip content={t("Refresh explorer")}>
-              <button
+              <RefreshIconButton
                 onClick={triggerExplorerRefresh}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 26, height: 26, padding: 0, marginRight: 6,
-                  background: explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none",
-                  border: "none",
-                  color: explorerRefreshDone ? "#4ade80" : "var(--text-dim)",
-                  cursor: "pointer",
-                  borderRadius: 5,
-                  flexShrink: 0,
-                  transition: "color 0.3s, background 0.3s",
-                }}
-                onMouseEnter={(e) => { if (explorerRefreshDone) return; e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { if (explorerRefreshDone) return; e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
-              >
-                <MorphToggleIcon from={REFRESH} to={CHECK} active={explorerRefreshDone} size={13} strokeWidth={2.5} />
-              </button>
-              </Tooltip>
+                label={t("Refresh explorer")}
+              />
             </>
           }
         >

@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 import { iconBtnStyle } from "./styles";
+import { RefreshIconButton } from "../ui/RefreshIconButton";
 import type { RssView } from "@/hooks/useRss";
 
 interface RssHeaderBarProps {
@@ -98,9 +99,11 @@ export function RssHeaderBar({
           {titleLabel}
         </div>
         {view.kind === "feeds" && (
-          <button type="button" onClick={onRefreshAll} style={iconBtnStyle} title={t("Refresh all")}>
-            ↻
-          </button>
+          <RefreshIconButton
+            onClick={onRefreshAll}
+            label={t("Refresh all")}
+            style={{ marginRight: 0 }}
+          />
         )}
         {view.kind === "feeds" && (
           <button type="button" onClick={onAdd} style={iconBtnStyle} title={t("Add RSS feed")}>
