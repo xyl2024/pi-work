@@ -2,6 +2,7 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { DatePicker } from "@/components/ui/DatePicker";
+import { Tooltip } from "@/components/ui/Tooltip";
 import type { Todo } from "@/hooks/useTodos";
 import { formatDeadline } from "./utils";
 
@@ -54,29 +55,30 @@ export function DeadlineControl({
         onOpenChange={onOpenChange}
         ariaLabel={t("Set deadline")}
         renderTrigger={({ open: isOpen, ref, onClick }) => (
-          <button
-            ref={ref}
-            onClick={onClick}
-            aria-label={t("Set deadline")}
-            title={t("Set deadline")}
-            aria-haspopup="dialog"
-            aria-expanded={isOpen}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 20, height: 20, padding: 0,
-              flexShrink: 0,
-              background: "transparent",
-              border: "none",
-              color: isOpen ? "var(--text)" : "var(--text-dim)",
-              cursor: "pointer",
-              borderRadius: 3,
-              fontFamily: "inherit",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = isOpen ? "var(--text)" : "var(--text-dim)")}
-          >
-            <CalendarIcon />
-          </button>
+          <Tooltip content={t("Set deadline")} side="top">
+            <button
+              ref={ref}
+              onClick={onClick}
+              aria-label={t("Set deadline")}
+              aria-haspopup="dialog"
+              aria-expanded={isOpen}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 20, height: 20, padding: 0,
+                flexShrink: 0,
+                background: "transparent",
+                border: "none",
+                color: isOpen ? "var(--text)" : "var(--text-dim)",
+                cursor: "pointer",
+                borderRadius: 3,
+                fontFamily: "inherit",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = isOpen ? "var(--text)" : "var(--text-dim)")}
+            >
+              <CalendarIcon />
+            </button>
+          </Tooltip>
         )}
       />
     );
@@ -105,30 +107,31 @@ export function DeadlineControl({
       onOpenChange={onOpenChange}
       ariaLabel={t("Change deadline")}
       renderTrigger={({ open: isOpen, ref, onClick }) => (
-        <button
-          ref={ref}
-          onClick={onClick}
-          aria-label={t("Change deadline")}
-          title={t("Change deadline")}
-          aria-haspopup="dialog"
-          aria-expanded={isOpen}
-          style={{
-            display: "flex", alignItems: "center", gap: 4,
-            padding: "1px 6px", fontSize: 11,
-            flexShrink: 0,
-            background: "transparent",
-            border: "none",
-            color: isOpen ? "var(--text)" : color,
-            cursor: "pointer",
-            borderRadius: 3,
-            fontFamily: "inherit",
-            textDecoration: todo.done ? "line-through" : "none",
-          }}
-          onMouseEnter={(e) => { if (!todo.done) e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = isOpen ? "var(--text)" : color; }}
-        >
-          <CalendarIcon /> {label}{suffix}
-        </button>
+        <Tooltip content={t("Change deadline")} side="top">
+          <button
+            ref={ref}
+            onClick={onClick}
+            aria-label={t("Change deadline")}
+            aria-haspopup="dialog"
+            aria-expanded={isOpen}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "1px 6px", fontSize: 11,
+              flexShrink: 0,
+              background: "transparent",
+              border: "none",
+              color: isOpen ? "var(--text)" : color,
+              cursor: "pointer",
+              borderRadius: 3,
+              fontFamily: "inherit",
+              textDecoration: todo.done ? "line-through" : "none",
+            }}
+            onMouseEnter={(e) => { if (!todo.done) e.currentTarget.style.color = "var(--text)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = isOpen ? "var(--text)" : color; }}
+          >
+            <CalendarIcon /> {label}{suffix}
+          </button>
+        </Tooltip>
       )}
     />
   );
