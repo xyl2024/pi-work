@@ -60,6 +60,8 @@ export const settings = {
   "Effect off": "效果关闭",
 
   // Agent Todo tools
+  "Todo agent tools": "待办 Agent 工具",
+  "Choose which todo tools the pi agent can use. Changes apply to new sessions only — running sessions keep their current tool set.": "选择 Pi Agent 可以使用的待办工具。变更仅对新会话生效——当前会话仍使用原有工具集。",
   "Pi agent tools": "Pi Agent 工具",
   "Agent tools settings": "设置暴露给 Pi Agent 的待办工具",
   "Tool: user_todos_list": "查看待办",

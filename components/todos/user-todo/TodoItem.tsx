@@ -342,7 +342,6 @@ export function TodoItem({
         flexDirection: "column",
         gap: 4,
         padding: "8px 6px",
-        borderBottom: "1px solid var(--border)",
       }}
     >
       <div
@@ -564,7 +563,6 @@ export function TodoItem({
                 onSave={commitCompletion}
                 onCancel={() => setEditingCompletion(false)}
                 onChange={handleCompletionEditorChange}
-                placeholder={t("Add completion status...")}
               />
             </div>
           ) : (
@@ -582,7 +580,7 @@ export function TodoItem({
                 transition: "border-color 0.3s",
               }}
             >
-              {todo.completionNote && hasCompletionNoteContent(todo.completionNote) ? (
+              {todo.completionNote && hasCompletionNoteContent(todo.completionNote) && (
                 <TodoDescriptionView
                   html={todo.completionNote}
                   searchTerm={searchTerm}
@@ -591,8 +589,6 @@ export function TodoItem({
                     if (idx >= 0) setLightboxIndex(idx);
                   }}
                 />
-              ) : (
-                <span style={{ fontStyle: "italic" }}>{t("Add completion status...")}</span>
               )}
             </div>
           )}

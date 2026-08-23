@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTodos, type Tag } from "@/hooks/useTodos";
-import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { FilterBar } from "./FilterBar";
 import { TodoItem } from "./TodoItem";
@@ -21,9 +20,8 @@ import type { Filters } from "./types";
 
 export function TodoPanel() {
   const { t, locale } = useI18n();
-  const { todos, loading, refresh, addTodo, updateTodo, deleteTodo, toggleDone, exportTodo, renameTag, deleteTag, setTagColor } = useTodos();
+  const { todos, loading, addTodo, updateTodo, deleteTodo, toggleDone, exportTodo } = useTodos();
   const confirm = useConfirm();
-  const toast = useToast();
   const [viewFilters, setViewFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -78,22 +76,23 @@ export function TodoPanel() {
 
   const tagSuggestions = useMemo(() => aggregateTags(todos), [todos]);
 
-  // Per-tag usage count, deduped case-insensitively. Powers the count column
-  // in the tag manager popover. Each todo contributes at most one to any
-  // given key, which is a defense-in-depth check on top of normalizeTags.
-  const tagCounts = useMemo(() => {
-    const map: Record<string, number> = {};
+  // Scrub tag filters whose names no longer exist on any todo. Tag
+  // renames and deletes now happen in the Settings modal, so this
+  // effect keeps `viewFilters.tags` in sync with the live tag catalog
+  // — otherwise a stale entry would silently match zero todos. Renamed
+  // tags fall back to "no filter" rather than auto-rewriting, since the
+  // rename mapping isn't visible at refresh time.
+  useEffect(() => {
+    if (viewFilters.tags.length === 0) return;
+    const validNames = new Set<string>();
     for (const todo of todos) {
-      const seen = new Set<string>();
-      for (const tag of todo.tags) {
-        const key = tag.name.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        map[key] = (map[key] ?? 0) + 1;
-      }
+      for (const tag of todo.tags) validNames.add(tag.name.toLowerCase());
     }
-    return map;
-  }, [todos]);
+    const nextTags = viewFilters.tags.filter((t) => validNames.has(t.toLowerCase()));
+    if (nextTags.length !== viewFilters.tags.length) {
+      applyFiltersChange({ ...viewFilters, tags: nextTags });
+    }
+  }, [todos, viewFilters, applyFiltersChange]);
 
   const visible = useMemo(() => {
     // The list is always sorted by priority desc -> createdAt desc, with
@@ -218,49 +217,6 @@ export function TodoPanel() {
     if (ok) deleteTodo(todo.id);
   };
 
-  // Tag-level handlers. The server returns { tag, affected } and we refresh
-  // the local list there; here we just surface the success toast and (for
-  // delete) scrub the tag out of the active filter so it doesn't silently
-  // become a no-op filter.
-  const handleSetTagColor = async (tag: string, color: string | null) => {
-    await setTagColor(tag, color);
-    // Success/error toast is surfaced by the context method itself; no further
-    // UI scrub needed since the refresh() inside setTagColor pulls the new
-    // color into every chip.
-  };
-
-  const handleRenameTag = async (from: string, to: string) => {
-    const result = await renameTag(from, to);
-    if (result) {
-      toast.show({ kind: "success", message: t("Tag renamed") });
-      // If `from` was in the active filter, swap the entry so the filtered
-      // list stays consistent. Comparison is case-insensitive, matching
-      // listTodos and the client filter eval.
-      if (viewFilters.tags.some((x) => x.toLowerCase() === from.toLowerCase())) {
-        const nextTags = viewFilters.tags.map((x) =>
-          x.toLowerCase() === from.toLowerCase() ? result.tag : x
-        );
-        applyFiltersChange({ ...viewFilters, tags: nextTags });
-      }
-    }
-  };
-
-  const handleDeleteTag = async (tag: string) => {
-    const result = await deleteTag(tag);
-    if (result) {
-      toast.show({ kind: "success", message: t("Tag deleted") });
-      // Drop the deleted tag from the active filter (case-insensitive match)
-      // so the filter doesn't silently become empty.
-      const lower = tag.toLowerCase();
-      if (viewFilters.tags.some((x) => x.toLowerCase() === lower)) {
-        applyFiltersChange({
-          ...viewFilters,
-          tags: viewFilters.tags.filter((x) => x.toLowerCase() !== lower),
-        });
-      }
-    }
-  };
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "transparent" }}>
       <FilterBar
@@ -273,12 +229,6 @@ export function TodoPanel() {
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
         tagSuggestions={tagSuggestions}
-        tagCounts={tagCounts}
-        onRenameTag={handleRenameTag}
-        onDeleteTag={handleDeleteTag}
-        onSetTagColor={handleSetTagColor}
-        onRefresh={refresh}
-        refreshing={loading}
       />
       <div data-scroll-wide style={{ flex: 2, minHeight: 0, overflowY: "auto", padding: "4px 6px" }}>
         {loading && todos.length === 0 && (

@@ -19,6 +19,8 @@ import { TypewriterEffectSection } from "./sections/TypewriterEffectSection";
 import { TypewriterSection } from "./sections/TypewriterSection";
 import { RetrySection } from "./sections/RetrySection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
+import { TodoAgentToolsSection } from "./sections/TodoAgentToolsSection";
+import { TodoTagsSection } from "./sections/TodoTagsSection";
 
 /**
  * Settings modal shell. Holds the global `config` state machine and the
@@ -40,6 +42,9 @@ import { SoundSettingsSection } from "./sections/SoundSettingsSection";
  *   9  Typewriter phrases  (own save flow; onDirtyChange → modal)
  *   10 Agent retry         (independent state machine; lives in
  *                          ~/.pi/agent/settings.json, not config.yaml)
+ *   11 UI Sounds           (immediate-apply master volume + per-event recipes)
+ *   12 Todo agent tools    (immediate-apply; ~/.pi-work/todo-tools.json)
+ *   13 Manage tags         (uses useTodos(); rename / delete / recolor)
  */
 export function SettingsModal({
   onClose,
@@ -296,6 +301,12 @@ export function SettingsModal({
 
             {/* 11: UI Sounds */}
             <SoundSettingsSection config={config} apply={apply} />
+
+            {/* 12: Todo agent tools */}
+            <TodoAgentToolsSection />
+
+            {/* 13: Manage tags */}
+            <TodoTagsSection />
           </div>
         </div>
       </div>

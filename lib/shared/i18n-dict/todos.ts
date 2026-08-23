@@ -88,6 +88,7 @@ export const todos = {
 
   // Tags
   "Manage tags": "管理标签",
+  "Rename, recolor, or delete tags across all your todos. Deleting a tag removes it from every todo that uses it.": "重命名、重新着色或删除全部待办中的标签。删除标签会从所有使用它的待办中移除。",
   "Delete tag?": "删除标签？",
   "tag": "标签",
   "Tags": "标签",

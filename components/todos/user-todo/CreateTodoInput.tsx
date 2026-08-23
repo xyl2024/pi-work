@@ -142,7 +142,6 @@ export function CreateTodoInput({
         onKeyUp={(e) => {
           setSelectionStart(e.currentTarget.selectionStart ?? 0);
         }}
-        placeholder={t("# to add tags")}
         aria-label={t("# to add tags")}
         onKeyDown={(e) => {
           if (e.key === "Enter") {

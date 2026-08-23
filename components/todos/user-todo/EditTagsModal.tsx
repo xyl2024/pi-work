@@ -87,7 +87,7 @@ export function EditTagsModal({
     }
     // Inherit color from the global catalog if the typed/selected name
     // matches an existing tag — same convention used by the create-todo
-    // input and TagManagerPopover.
+    // input and the Settings → Manage tags section.
     const existing = tagSuggestions.find((s) => s.name.toLowerCase() === key);
     persist([...tags, { name: trimmed, color: existing?.color ?? color }]);
     setDraft("");
