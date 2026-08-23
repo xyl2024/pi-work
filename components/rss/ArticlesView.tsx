@@ -36,7 +36,7 @@ export function ArticlesView({
           style={{
             padding: "8px 12px",
             borderBottom: "1px solid var(--border)",
-            background: "var(--bg-panel)",
+            background: "transparent",
           }}
         >
           <button

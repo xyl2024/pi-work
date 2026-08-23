@@ -61,13 +61,13 @@ export function CollectionPanel({ favoriteIds, onSelectSession, onToggleFavorite
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "transparent" }}>
       {/* Header — title + count + refresh */}
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
         padding: "8px 12px",
         borderBottom: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        background: "transparent",
         flexShrink: 0,
       }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>

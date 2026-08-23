@@ -214,7 +214,7 @@ export function RssPanel(): ReactElement {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        background: "var(--bg)",
+        background: "transparent",
         color: "var(--text)",
       }}
     >
@@ -241,7 +241,7 @@ export function RssPanel(): ReactElement {
           style={{
             padding: "8px 12px",
             borderBottom: "1px solid var(--border)",
-            background: "var(--bg-panel)",
+            background: "transparent",
             fontSize: 12,
             color: "var(--text-muted)",
           }}

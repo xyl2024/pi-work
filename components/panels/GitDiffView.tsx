@@ -198,7 +198,7 @@ export function GitDiffView({ cwd, status }: Props) {
       </div>
 
       {/* Diff view */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "var(--bg)" }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "transparent" }}>
         {diffError ? (
           <div style={{ padding: "16px 12px", fontSize: 12, color: "#f87171" }}>{diffError}</div>
         ) : diffLoading ? (

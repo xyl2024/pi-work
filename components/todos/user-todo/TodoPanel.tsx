@@ -262,7 +262,7 @@ export function TodoPanel() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "transparent" }}>
       <FilterBar
         filters={viewFilters}
         onFiltersChange={handleFiltersChange}

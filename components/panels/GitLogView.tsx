@@ -198,7 +198,7 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
         style={{
           flex: "0 0 42%", minWidth: 140, height: "100%",
           overflowY: "auto", borderRight: "1px solid var(--border)",
-          background: "var(--bg)",
+          background: "transparent",
         }}
       >
         {listError ? (
@@ -259,7 +259,7 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
       </div>
 
       {/* Detail + diff */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100%", background: "var(--bg)" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100%", background: "transparent" }}>
         {!selected ? (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
             {t("Select a commit to view its details")}
@@ -353,7 +353,7 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
             </div>
 
             {/* File diff for the selected commit file */}
-            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "var(--bg)" }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "transparent" }}>
               {fileDiffError ? (
                 <div style={{ padding: "16px 12px", fontSize: 12, color: "#f87171" }}>{fileDiffError}</div>
               ) : fileDiffLoading ? (

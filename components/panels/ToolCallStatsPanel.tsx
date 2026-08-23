@@ -167,7 +167,7 @@ export function ToolCallStatsPanel({ snapshot, onScrollToToolCall }: Props) {
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
-        background: "var(--bg-panel)",
+        background: "transparent",
       }}
     >
       {/* Header */}

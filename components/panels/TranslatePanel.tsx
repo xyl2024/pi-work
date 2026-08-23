@@ -299,7 +299,7 @@ export function TranslatePanel() {
   return (
     <div style={{
       display: "flex", flexDirection: "column", height: "100%",
-      background: "var(--bg)",
+      background: "transparent",
     }}>
       {/* Top bar: model selector + target selector + copy + clear */}
       <div style={{
@@ -573,7 +573,7 @@ export function TranslatePanel() {
         <div style={{
           padding: "8px 12px",
           borderBottom: "1px solid var(--border)",
-          background: "var(--bg)",
+          background: "transparent",
           flexShrink: 0,
           display: "flex", flexDirection: "column", gap: 6,
           maxHeight: 220,
@@ -611,7 +611,7 @@ export function TranslatePanel() {
           <pre style={{
             margin: 0,
             padding: "8px 10px",
-            background: "var(--bg)",
+            background: "transparent",
             color: "var(--text)",
             border: "1px solid var(--border)",
             borderRadius: 6,
@@ -650,7 +650,7 @@ export function TranslatePanel() {
           style={{
             width: "100%", flex: 1, minHeight: 0, resize: "none",
             padding: "8px 10px",
-            background: "var(--bg)",
+            background: "transparent",
             color: "var(--text)",
             border: "1px solid var(--border)",
             borderRadius: 6,
@@ -704,7 +704,7 @@ export function TranslatePanel() {
           style={{
             flex: 1, minHeight: 0, overflowY: "auto",
             padding: "10px 12px",
-            background: "var(--bg)",
+            background: "transparent",
             color: error ? "#ef4444" : "var(--text)",
             border: "1px solid var(--border)",
             borderRadius: 6,

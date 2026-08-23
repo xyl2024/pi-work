@@ -117,7 +117,7 @@ export function GitPanel({ cwd, onExpandPanel }: Props) {
   return (
     <div style={{
       display: "flex", flexDirection: "column", height: "100%",
-      background: "var(--bg)",
+      background: "transparent",
     }}>
       {/* Header: repo info + branch dropdown + mode toggle + refresh */}
       <div style={{

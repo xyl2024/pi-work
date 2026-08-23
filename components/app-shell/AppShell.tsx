@@ -1559,7 +1559,7 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
   const sortedTools = useMemo(() => [...tools].sort((a, b) => a.name.localeCompare(b.name)), [tools]);
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", background: "var(--bg-panel)", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
+    <div style={{ height: "100%", overflowY: "auto", background: "transparent", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
       <section style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
           {t("System Prompts")}

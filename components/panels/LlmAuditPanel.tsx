@@ -151,7 +151,7 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
   }, [rows]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "transparent" }}>
       <Toolbar filter={filter} onChangeFilter={setFilter} onRefresh={() => load()} />
 
       <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
@@ -312,7 +312,7 @@ function Pagination({
             padding: "3px 6px",
             borderRadius: 6,
             border: "1px solid var(--border)",
-            background: "var(--bg-subtle)",
+            background: "transparent",
             color: "var(--text)",
             fontSize: 12,
           }}
@@ -351,7 +351,7 @@ function Toolbar({
         gap: 6,
         padding: "6px 12px",
         borderBottom: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        background: "transparent",
         flexWrap: "wrap",
       }}
     >
@@ -402,7 +402,7 @@ function Kpi({ label, value, accent }: { label: string; value: string; accent: b
         padding: "10px 14px",
         borderRadius: 10,
         border: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        background: "transparent",
       }}
     >
       <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</div>
@@ -446,7 +446,7 @@ function CallList({
             style={{
               borderRadius: 10,
               border: "1px solid var(--border)",
-              background: "var(--bg-panel)",
+              background: "transparent",
               overflow: "hidden",
             }}
           >
@@ -568,7 +568,7 @@ function MetaTag({ label, danger }: { label: string; danger?: boolean }) {
         padding: "1px 7px",
         borderRadius: 5,
         border: "1px solid var(--border)",
-        background: "var(--bg-subtle)",
+        background: "transparent",
         color: danger ? "var(--danger, #e5484d)" : "var(--text-muted)",
       }}
     >
@@ -630,7 +630,7 @@ function Section({ title, body, mono }: { title: string; body: string; mono?: bo
           margin: 0,
           padding: "8px 10px",
           borderRadius: 8,
-          background: "var(--bg-subtle)",
+          background: "transparent",
           border: "1px solid var(--border)",
           fontSize: 11,
           fontFamily: mono ? "var(--font-mono)" : "inherit",

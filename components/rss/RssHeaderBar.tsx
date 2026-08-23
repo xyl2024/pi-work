@@ -58,7 +58,7 @@ export function RssHeaderBar({
         display: "flex",
         flexDirection: "column",
         borderBottom: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        background: "transparent",
       }}
     >
       <div
@@ -128,7 +128,7 @@ export function RssHeaderBar({
             placeholder="https://example.com/feed.xml"
             style={{
               flex: 1,
-              background: "var(--bg)",
+              background: "transparent",
               border: "1px solid var(--border)",
               borderRadius: 4,
               color: "var(--text)",

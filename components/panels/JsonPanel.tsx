@@ -469,7 +469,7 @@ export function JsonPanel() {
 const contentAreaStyle: React.CSSProperties = {
   flex: 1,
   minHeight: 0,
-  background: "var(--bg)",
+  background: "transparent",
   color: "var(--text)",
   border: "none",
   resize: "none",
@@ -485,7 +485,7 @@ const toolbarStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 4,
   padding: "6px 10px",
-  background: "var(--bg-panel)",
+  background: "transparent",
   borderBottom: "1px solid var(--border)",
   flexShrink: 0,
 };
@@ -502,7 +502,7 @@ const searchRowStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 6,
   padding: "6px 10px",
-  background: "var(--bg-panel)",
+  background: "transparent",
   borderBottom: "1px solid var(--border)",
   flexShrink: 0,
 };
@@ -516,7 +516,7 @@ const searchIconStyle: React.CSSProperties = {
 const searchInputStyle: React.CSSProperties = {
   flex: 1,
   minWidth: 0,
-  background: "var(--bg)",
+  background: "transparent",
   color: "var(--text)",
   border: "1px solid var(--border)",
   borderRadius: 4,
@@ -537,7 +537,7 @@ const viewerStyle: React.CSSProperties = {
   flex: 1,
   minHeight: 0,
   overflow: "auto",
-  background: "var(--bg)",
+  background: "transparent",
   fontFamily: "var(--font-mono)",
   fontSize: 12,
   lineHeight: 1.55,

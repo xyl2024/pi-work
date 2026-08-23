@@ -194,7 +194,7 @@ export function TokensPanel() {
   const totals = state.time?.totals;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "transparent" }}>
       <Toolbar
         range={range}
         onChangeRange={setRange}
@@ -289,7 +289,7 @@ function Toolbar({ range, onChangeRange }: ToolbarProps) {
         padding: "6px 12px",
         flexWrap: "wrap",
         borderBottom: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        background: "transparent",
         flexShrink: 0,
       }}
     >
@@ -367,7 +367,7 @@ function KpiCard({
   return (
     <div
       style={{
-        background: "var(--bg-panel)",
+        background: "transparent",
         border: "1px solid var(--border)",
         borderRadius: 8,
         padding: "10px 12px",
@@ -396,7 +396,7 @@ function ChartCard({
   return (
     <div
       style={{
-        background: "var(--bg-panel)",
+        background: "transparent",
         border: "1px solid var(--border)",
         borderRadius: 8,
         padding: "8px 10px 6px",
