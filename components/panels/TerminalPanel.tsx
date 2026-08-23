@@ -429,7 +429,7 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel }: TerminalPanelP
           alignItems: "center",
           flexShrink: 0,
           height: 34,
-          background: "var(--bg-panel)",
+          background: "transparent",
           borderBottom: "1px solid var(--border)",
           padding: "0 6px",
           gap: 2,

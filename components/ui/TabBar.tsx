@@ -74,7 +74,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
         overflow: "hidden",
         display: "flex",
         alignItems: "flex-end",
-        background: "var(--bg-panel)",
+        background: "transparent",
         flexShrink: 0,
         height: 36,
       }}
@@ -158,7 +158,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
                 height: 36,
                 paddingLeft: 12,
                 paddingRight: 6,
-                background: "var(--bg-panel)",
+                background: "transparent",
                 cursor: "pointer",
                 fontSize: 12,
                 color: isActive ? "var(--text)" : "var(--text-muted)",

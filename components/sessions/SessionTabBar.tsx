@@ -90,7 +90,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         minWidth: 0,
         height: 36,
         flexShrink: 0,
-        background: "var(--bg-panel)",
+        background: "transparent",
         // Top corners match the parent panel's rounded top; bottom stays
         // flat so the bar reads as "attached" to the content below instead
         // of "floating above" it.
@@ -126,7 +126,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
           style={{
             display: "flex",
             alignItems: "flex-end",
-            background: "var(--bg-panel)",
+            background: "transparent",
             overflowX: "auto",
             flexShrink: 0,
             height: 36,
@@ -164,7 +164,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               height: 36,
               paddingLeft: 12,
               paddingRight: 6,
-              background: "var(--bg-panel)",
+              background: "transparent",
               cursor: "pointer",
               fontSize: 12,
               color: active ? "var(--text)" : "var(--text-muted)",
