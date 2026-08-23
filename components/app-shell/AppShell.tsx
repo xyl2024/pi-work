@@ -1288,7 +1288,7 @@ export function AppShell() {
           still animates the squeeze when the right panel goes expanded:
           center grows 1->0 while the right panel grows 0->1, so the
           whiteboard takeover slides instead of snapping. */}
-      <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen ? "var(--panel-gap)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
+      <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen ? "var(--panel-gap-stack)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
         {/* Chat card — keeps a minimum height so dragging the terminal taller
             can never squash the input box out of view. */}
         <div style={{ flex: "1 1 0%", minHeight: MIN_CHAT_HEIGHT, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--panel-radius)", border: "1px solid var(--border)", background: "var(--bg)" }}>

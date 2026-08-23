@@ -7,6 +7,7 @@
 :root {
   --panel-padding: 12px;   /* screen edge → outermost panel */
   --panel-gap: 10px;       /* gap between adjacent panels */
+  --panel-gap-stack: 4px;  /* tighter gap for stacked cards inside one column (chat + terminal) */
   --panel-radius: 12px;    /* border-radius on every panel */
 }
 
