@@ -100,63 +100,63 @@ export function TaskListSidebar({
         flexShrink: 0,
       }}
     >
-      {/* Top action row */}
+      {/* Search and create */}
       <div style={{ padding: "10px 12px 8px", display: "flex", gap: 6, alignItems: "center" }}>
         <button
           onClick={onCreate}
+          aria-label={t("New task")}
+          title={t("New task")}
           style={{
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: 6,
-            background: "var(--accent)",
-            color: "#fff",
+            width: 26,
+            height: 26,
+            flexShrink: 0,
+            padding: 0,
             border: "none",
-            borderRadius: 6,
-            padding: "6px 10px",
-            fontSize: 12,
-            fontWeight: 600,
+            background: "transparent",
+            borderRadius: 4,
+            color: "var(--text-muted)",
             cursor: "pointer",
             fontFamily: "inherit",
-            width: "100%",
+            fontSize: 16,
+            lineHeight: 1,
           }}
         >
-          <IconPlus width={12} height={12} />
-          {t("New task")}
+          <IconPlus width={14} height={14} />
         </button>
-      </div>
-
-      {/* Search */}
-      <div style={{ padding: "4px 12px 8px", position: "relative" }}>
-        <IconSearch
-          width={11}
-          height={11}
-          style={{
-            position: "absolute",
-            left: 21,
-            top: "50%",
-            transform: "translateY(-50%)",
-            color: "var(--text-dim)",
-            pointerEvents: "none",
-          }}
-        />
-        <input
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder={t("Search name, cron, prompt...")}
-          className="scheduler-text-input"
-          style={{
-            width: "100%",
-            padding: "5px 10px 5px 26px",
-            fontSize: 11,
-            border: "1px solid var(--scheduler-input-border, var(--border))",
-            borderRadius: 6,
-            background: "var(--bg)",
-            color: "var(--text)",
-            fontFamily: "inherit",
-            boxSizing: "border-box",
-          }}
-        />
+        <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+          <IconSearch
+            width={11}
+            height={11}
+            style={{
+              position: "absolute",
+              left: 9,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "var(--text-dim)",
+              pointerEvents: "none",
+            }}
+          />
+          <input
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder={t("Search name, cron, prompt...")}
+            className="scheduler-text-input"
+            style={{
+              width: "100%",
+              padding: "5px 10px 5px 26px",
+              fontSize: 11,
+              border: "1px solid var(--scheduler-input-border, var(--border))",
+              borderRadius: 6,
+              background: "var(--bg)",
+              color: "var(--text)",
+              fontFamily: "inherit",
+              boxSizing: "border-box",
+            }}
+          />
+        </div>
       </div>
 
       {/* Filter pills */}
@@ -265,9 +265,8 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
         cursor: "pointer",
         borderBottom: "1px solid var(--border)",
         background: selected ? "var(--bg-selected)" : "transparent",
-        borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
-        paddingLeft: selected ? 10 : 12,
-        transition: "background 0.12s, border-color 0.12s",
+        paddingLeft: 12,
+        transition: "background 0.12s",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>

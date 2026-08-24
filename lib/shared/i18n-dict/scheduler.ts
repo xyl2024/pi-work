@@ -82,6 +82,7 @@ export const scheduler = {
   "Search name, cron, prompt...": "搜索名称、cron、提示词...",
   "No data": "暂无数据",
   "Enabled": "已启用",
+  "Paused": "已暂停",
   "Has errors": "有错误",
   "{n} tasks running": "{n} 个任务正在运行",
   "Failed to load: {error}": "加载失败：{error}",

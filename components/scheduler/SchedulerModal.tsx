@@ -265,6 +265,7 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
             <TaskDetail
               key={selectedTask.id}
               task={selectedTask}
+              modelIcons={meta?.modelIcons}
               triggering={triggering}
               onToggleEnabled={handleToggleEnabled}
               onTrigger={handleTrigger}

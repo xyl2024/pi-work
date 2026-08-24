@@ -30,6 +30,7 @@ import { IconEdit, IconPause, IconPlay, IconTrash } from "./icons";
 
 interface Props {
   task: ScheduledTask;
+  modelIcons?: Record<string, string>;
   triggering: boolean;
   onToggleEnabled: (task: ScheduledTask) => Promise<void> | void;
   onTrigger: (task: ScheduledTask) => Promise<void> | void;
@@ -40,7 +41,7 @@ interface Props {
 }
 
 export function TaskDetail({
-  task, triggering, onToggleEnabled, onTrigger, onEdit, onDelete, onOpenSession, onTaskUpdated,
+  task, modelIcons, triggering, onToggleEnabled, onTrigger, onEdit, onDelete, onOpenSession, onTaskUpdated,
 }: Props) {
   const { t } = useI18n();
   const toast = useToast();
@@ -128,28 +129,6 @@ export function TaskDetail({
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           <button
-            onClick={() => void onTrigger(task)}
-            disabled={triggering}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "5px 12px",
-              fontSize: 12,
-              fontWeight: 600,
-              background: "var(--accent)",
-              color: "#fff",
-              border: "none",
-              borderRadius: 6,
-              cursor: triggering ? "default" : "pointer",
-              opacity: triggering ? 0.6 : 1,
-              fontFamily: "inherit",
-            }}
-          >
-            <IconPlay width={11} height={11} />
-            {triggering ? t("Triggering...") : t("Run now")}
-          </button>
-          <button
             onClick={() => void handleToggle()}
             style={{
               display: "inline-flex",
@@ -186,6 +165,27 @@ export function TaskDetail({
           >
             <IconEdit width={11} height={11} />
             {t("Edit")}
+          </button>
+          <button
+            onClick={() => void onTrigger(task)}
+            disabled={triggering}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "5px 10px",
+              fontSize: 12,
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              color: "var(--text-muted)",
+              cursor: triggering ? "default" : "pointer",
+              opacity: triggering ? 0.6 : 1,
+              fontFamily: "inherit",
+            }}
+          >
+            <IconPlay width={11} height={11} />
+            {triggering ? t("Triggering...") : t("Run now")}
           </button>
           <Tooltip content={t("Delete task")}>
             <button
@@ -240,7 +240,7 @@ export function TaskDetail({
           />
         )}
         {tab === "prompt" && <TaskPromptTab task={task} />}
-        {tab === "config" && <TaskConfigTab task={task} onEdit={() => onEdit(task)} />}
+        {tab === "config" && <TaskConfigTab task={task} modelIcons={modelIcons} onEdit={() => onEdit(task)} />}
       </div>
     </div>
   );
