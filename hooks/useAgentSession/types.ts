@@ -4,6 +4,7 @@ import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 
 export interface SessionData {
   sessionId: string;
+  info?: SessionInfo | null;
   filePath: string;
   tree: SessionTreeNode[];
   leafId: string | null;

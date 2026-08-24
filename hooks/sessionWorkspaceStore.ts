@@ -27,6 +27,7 @@ export interface SessionWorkspaceState {
 export type SessionWorkspaceAction =
   | { type: "ensure_draft"; tabId?: string; cwd?: string | null }
   | { type: "open_session"; session: SessionInfo; tabId?: string }
+  | { type: "open_session_by_id"; sessionId: string }
   | { type: "activate"; tabId: string }
   | { type: "set_draft_cwd"; tabId: string; cwd: string | null }
   | { type: "upgrade_draft"; tabId: string; session: SessionInfo }
@@ -130,6 +131,27 @@ export function sessionWorkspaceReducer(
         return next;
       }
       return addTab(state, createDraftTab(action.tabId, action.cwd ?? null));
+    }
+
+    case "open_session_by_id": {
+      const existing = findSessionTab(state, action.sessionId);
+      if (existing) {
+        const next = copyState(state);
+        next.activeTabId = existing.tabId;
+        return next;
+      }
+      const placeholder: SessionInfo = {
+        path: "",
+        id: action.sessionId,
+        cwd: "",
+        name: action.sessionId,
+        created: "",
+        modified: "",
+        messageCount: 0,
+        firstMessage: "",
+        running: false,
+      };
+      return addTab(state, createSessionTab(placeholder));
     }
 
     case "open_session": {

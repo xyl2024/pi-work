@@ -68,6 +68,8 @@ interface Props {
   onRenameCompleted?: () => void;
   /** Fired as soon as the user confirms a rename — keeps in-memory state in sync. */
   onSessionNameChange?: (name: string) => void;
+  /** Fired when the full session payload finishes loading. */
+  onSessionInfoLoaded?: (session: SessionInfo) => void;
   /** Open a file path in the right-hand panel (used by Session Library
    *  "Open in tab" buttons). Optional; ChatWindow renders a working
    *  "open file" experience even without it (falls back to a no-op). */
@@ -87,7 +89,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
   const { t, locale } = useI18n();
   const toast = useToast();
   const isActiveRef = useRef(isActive);
@@ -97,6 +99,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, [toast]);
   const [slashResources, setSlashResources] = useState<SlashResource[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const sessionInfoReportedRef = useRef<string | null>(null);
 
   // ── Auto-name scheduling for brand-new sessions ──────────────────────
   // The first assistant message of a new session lands only after pi lazily
@@ -142,7 +145,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const statsEmit = useToolCallStatsEmit();
 
   const {
-    loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, streamState,
+    data, loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, streamState,
     agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps,
     toolSelection, availableTools, toolsLoading, toolsError, thinkingLevel,
     retryInfo,
@@ -167,6 +170,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     isActive,
     controllerId: tabId,
   });
+
+  useEffect(() => {
+    if (!data?.info || session?.id !== data.sessionId || sessionInfoReportedRef.current === data.sessionId) return;
+    sessionInfoReportedRef.current = data.sessionId;
+    onSessionInfoLoaded?.(data.info);
+  }, [data, onSessionInfoLoaded, session?.id]);
 
   // Tool call stats hook — snapshot is published to the module store so the
   // right-panel tab + vertical button (in AppShell) can render it.

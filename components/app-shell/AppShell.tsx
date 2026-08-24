@@ -191,6 +191,7 @@ interface WorkspaceChatTabProps {
   registerChatInputRef: (tabId: string, ref: RefObject<ChatInputHandle | null> | null) => void;
   onAgentEnd: (tabId: string) => void;
   onSessionCreated: (tabId: string, session: SessionInfo) => void;
+  onSessionInfoLoaded: (tabId: string, session: SessionInfo) => void;
   onFirstAssistantReady: (tabId: string) => void;
   modelsRefreshKey: number;
   scrollToEntryId: string | null;
@@ -210,6 +211,7 @@ function WorkspaceChatTabView({
   registerChatInputRef,
   onAgentEnd,
   onSessionCreated,
+  onSessionInfoLoaded,
   onFirstAssistantReady,
   modelsRefreshKey,
   scrollToEntryId,
@@ -245,6 +247,7 @@ function WorkspaceChatTabView({
         newSessionCwd={tab.kind === "draft" ? tab.cwd : null}
         onAgentEnd={() => onAgentEnd(tab.tabId)}
         onSessionCreated={(session) => onSessionCreated(tab.tabId, session)}
+        onSessionInfoLoaded={(session) => onSessionInfoLoaded(tab.tabId, session)}
         onFirstAssistantReady={() => onFirstAssistantReady(tab.tabId)}
         modelsRefreshKey={modelsRefreshKey}
         chatInputRef={chatInputRef}
@@ -566,17 +569,11 @@ export function AppShell() {
   // Called by SchedulerModal "Open session" — routes through the same
   // de-duplicating open path as the sidebar.
   const handleOpenScheduledSession = useCallback((sessionId: string) => {
-    void (async () => {
-      try {
-        const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as { info?: SessionInfo };
-        if (data.info) handleSelectSession(data.info);
-      } catch {
-        router.replace(`?session=${encodeURIComponent(sessionId)}`, { scroll: false });
-      }
-    })();
-  }, [handleSelectSession, router]);
+    // Switch immediately; the tab controller loads the session payload in the
+    // background and reports the real metadata once it arrives.
+    dispatchWorkspace({ type: "open_session_by_id", sessionId });
+    closeTopPanel();
+  }, [closeTopPanel]);
 
   const handleAgentEnd = useCallback((tabId?: string) => {
     setRefreshKey((k) => k + 1);
@@ -1358,6 +1355,7 @@ export function AppShell() {
                 registerChatInputRef={registerChatInputRef}
                 onAgentEnd={handleAgentEnd}
                 onSessionCreated={handleSessionCreated}
+                onSessionInfoLoaded={(_tabId, session) => dispatchWorkspace({ type: "open_session", session })}
                 onFirstAssistantReady={handleFirstAssistantReady}
                 modelsRefreshKey={modelsRefreshKey}
                 scrollToEntryId={pendingScrollEntryIds[tab.tabId] ?? null}
