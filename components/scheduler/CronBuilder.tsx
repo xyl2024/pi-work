@@ -28,7 +28,7 @@ import { DatePicker } from "@/components/ui/DatePicker";
 import { TimePicker, type TimeValue } from "@/components/ui/TimePicker";
 import { inputStyle } from "./styles";
 import { cronHumanize, parseDowList, DAY_ORDER } from "./utils";
-import { NumberStepper } from "./NumberStepper";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 
 // ── Constants ───────────────────────────────────────────────────
 

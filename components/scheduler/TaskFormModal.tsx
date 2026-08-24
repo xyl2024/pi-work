@@ -23,7 +23,7 @@ import { CwdPicker } from "@/components/sessions/CwdPicker";
 import { AnimatedPopover } from "@/components/ui/AnimatedPopover";
 import { Cron } from "croner";
 import { CronBuilder } from "./CronBuilder";
-import { NumberStepper } from "./NumberStepper";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import { apiFetch } from "./utils";
 import { pickClosestAvailableThinkingLevel, THINKING_LEVEL_ORDER } from "@/lib/shared/thinking-level-utils";
 import type { ModelMeta, ScheduledTask, TaskCreatePayload, TaskUpdatePayload } from "./types";

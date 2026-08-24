@@ -98,6 +98,8 @@ export function NumberStepper({
     const isDisabled = disabled || (side === "dec" ? atMin : atMax);
     return {
       width: 26,
+      minWidth: 26,
+      flex: "0 0 26px",
       padding: 0,
       border: "none",
       background: isActive ? "var(--bg-selected)" : isHover ? "var(--bg-hover)" : "transparent",
@@ -115,6 +117,8 @@ export function NumberStepper({
       data-disabled={disabled || undefined}
       style={{
         display: "inline-flex",
+        width: "fit-content",
+        flex: "0 0 auto",
         alignItems: "stretch",
         height: 28,
         border: `1px solid ${focused ? "var(--accent)" : "var(--border)"}`,
@@ -168,6 +172,9 @@ export function NumberStepper({
         onBlur={() => setFocused(false)}
         style={{
           width,
+          minWidth: width,
+          maxWidth: width,
+          flex: "0 0 auto",
           padding: 0,
           textAlign: "center",
           fontSize: 12,

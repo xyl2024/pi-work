@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { NumberStepper } from "@/components/ui/NumberStepper";
+import { NumericField } from "@/components/ui/NumericField";
 import { useToast } from "../../ui/Toast";
 import { Tooltip } from "../../ui/Tooltip";
 import { copyText } from "@/lib/client/clipboard";
 import { API_OPTIONS } from "./constants";
 import type { ModelEntry, RuntimeModelInfo } from "./types";
-import { Field, TextInput, NumInput, Check, SectionTitle, IconField, Select } from "./form-fields";
+import { Field, TextInput, Check, SectionTitle, IconField, Select } from "./form-fields";
 import { ThinkingLevelMapEditor } from "./ThinkingLevelMapEditor";
 import { cloneModelFromCatalog, hasDeepseekCompat, setDeepseekCompat } from "./utils";
 import { ModelCatalogPicker } from "./runtime";
@@ -52,10 +54,8 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
     onChange(cloneModelFromCatalog(source));
     setFillPickerOpen(false);
   };
-  const costVal = (k: keyof NonNullable<ModelEntry["cost"]>) => model.cost?.[k] !== undefined ? String(model.cost[k]) : "";
-  const setCost = (k: keyof NonNullable<ModelEntry["cost"]>, v: string) => {
-    const n = parseFloat(v);
-    onChange({ ...model, cost: { ...(model.cost ?? {}), [k]: isNaN(n) ? undefined : n } });
+  const setCost = (k: keyof NonNullable<ModelEntry["cost"]>, v: number | null) => {
+    onChange({ ...model, cost: { ...(model.cost ?? {}), [k]: v ?? undefined } });
   };
 
   return (
@@ -117,10 +117,26 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           <Field label="Context window (tokens)">
-            <NumInput value={model.contextWindow !== undefined ? String(model.contextWindow) : ""} onChange={(v) => set("contextWindow", v ? parseInt(v) : undefined)} placeholder="128000" />
+            <NumberStepper
+              value={model.contextWindow ?? NaN}
+              onChange={(v) => set("contextWindow", Number.isInteger(v) ? v : undefined)}
+              min={1}
+              max={10_000_000}
+              ariaLabel={t("Context window (tokens)")}
+              placeholder="128000"
+              width={92}
+            />
           </Field>
           <Field label="Max output tokens">
-            <NumInput value={model.maxTokens !== undefined ? String(model.maxTokens) : ""} onChange={(v) => set("maxTokens", v ? parseInt(v) : undefined)} placeholder="16384" />
+            <NumberStepper
+              value={model.maxTokens ?? NaN}
+              onChange={(v) => set("maxTokens", Number.isInteger(v) ? v : undefined)}
+              min={1}
+              max={10_000_000}
+              ariaLabel={t("Max output tokens")}
+              placeholder="16384"
+              width={92}
+            />
           </Field>
         </div>
 
@@ -129,7 +145,17 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
           <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
             {(["input", "output", "cacheRead", "cacheWrite"] as const).map((k) => (
               <Field key={k} label={k}>
-                <NumInput value={costVal(k)} onChange={(v) => setCost(k, v)} placeholder="0" />
+                <NumericField
+                  value={model.cost?.[k] ?? null}
+                  onCommit={(v) => setCost(k, v)}
+                  min={0}
+                  max={1_000_000}
+                  step={0.01}
+                  integer={false}
+                  placeholder="0"
+                  ariaLabel={k}
+                  width={92}
+                />
               </Field>
             ))}
           </div>

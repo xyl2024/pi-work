@@ -23,6 +23,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast, type ToastKind } from "@/components/ui/Toast";
+import { NumberStepper } from "@/components/ui/NumberStepper";
 import { SettingsSection } from "../SettingsSection";
 
 const KINDS: readonly ToastKind[] = ["success", "error", "info", "warning"];
@@ -63,9 +64,6 @@ export function ToastTestSection() {
   const [duration, setDuration] = useState<number>(DEFAULT_CUSTOM_DURATION);
 
   const messageValid = useMemo(() => message.trim().length > 0, [message]);
-  const durationValid =
-    Number.isFinite(duration) && duration >= MIN_DURATION_MS && duration <= MAX_DURATION_MS;
-
   const buildCommonInput = useCallback(
     (overrides?: { message?: string; durationMs?: number }) => {
       const finalMessage = overrides?.message ?? message.trim();
@@ -253,14 +251,14 @@ export function ToastTestSection() {
           onChange={(e) => setDuration(Number(e.target.value))}
           style={{ flex: 1, accentColor: "var(--accent)" }}
         />
-        <input
-          type="number"
+        <NumberStepper
+          value={duration}
+          onChange={setDuration}
           min={MIN_DURATION_MS}
           max={MAX_DURATION_MS}
           step={100}
-          value={duration}
-          onChange={(e) => setDuration(Number(e.target.value))}
-          style={{ ...inputStyle(!durationValid), width: 92, textAlign: "right" }}
+          ariaLabel={t("Custom duration (ms)")}
+          width={52}
         />
       </div>
 
