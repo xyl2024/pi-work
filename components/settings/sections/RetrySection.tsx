@@ -169,7 +169,7 @@ export function RetrySection() {
           disabled={retryResetting || retryResetOk || !retryConfig}
           style={{
             padding: "4px 12px", height: 28,
-            background: retryResetOk ? "#16a34a" : retryResetting ? "var(--bg-panel)" : "transparent",
+            background: retryResetOk ? "#16a34a" : retryResetting ? "var(--bg)" : "transparent",
             border: `1px solid ${retryResetOk ? "#16a34a" : "var(--border)"}`,
             borderRadius: 6,
             color: retryResetOk ? "#fff" : retryResetting ? "var(--text-muted)" : "var(--text-muted)",

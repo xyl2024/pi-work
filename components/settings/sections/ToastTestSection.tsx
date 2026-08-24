@@ -170,7 +170,7 @@ export function ToastTestSection() {
                 gap: 6,
                 padding: "5px 12px",
                 height: 30,
-                background: selected ? "var(--bg-panel)" : "transparent",
+                background: selected ? "var(--bg)" : "transparent",
                 border: selected ? `2px solid ${accent}` : "1px solid var(--border)",
                 borderRadius: 6,
                 color: selected ? "var(--text)" : "var(--text-muted)",
@@ -311,7 +311,7 @@ function inputStyle(invalid: boolean): React.CSSProperties {
     width: "100%",
     height: 32,
     padding: "4px 10px",
-    background: "var(--bg-panel)",
+    background: "var(--bg)",
     border: invalid ? "1px solid #ef4444" : "1px solid var(--border)",
     borderRadius: 6,
     color: "var(--text)",
@@ -377,7 +377,7 @@ function SecondaryButton({
       style={{
         padding: "6px 12px",
         height: 32,
-        background: "var(--bg-panel)",
+        background: "var(--bg)",
         border: "1px solid var(--border)",
         borderRadius: 6,
         color: "var(--text)",
@@ -391,7 +391,7 @@ function SecondaryButton({
         e.currentTarget.style.borderColor = "var(--text-muted)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = "var(--bg-panel)";
+        e.currentTarget.style.background = "var(--bg)";
         e.currentTarget.style.borderColor = "var(--border)";
       }}
     >

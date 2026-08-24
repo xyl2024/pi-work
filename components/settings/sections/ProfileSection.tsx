@@ -146,7 +146,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
           disabled={!profileCanSave}
           style={{
             padding: "4px 14px", height: 28,
-            background: profileSavedOk ? "#16a34a" : profileSaving ? "var(--bg-panel)" : "var(--accent)",
+            background: profileSavedOk ? "#16a34a" : profileSaving ? "var(--bg)" : "var(--accent)",
             border: "none", borderRadius: 6,
             color: profileSavedOk ? "#fff" : profileSaving ? "var(--text-muted)" : "#fff",
             cursor: profileCanSave ? "pointer" : "default",
@@ -173,7 +173,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
           style={{
             width: 64, height: 64, flexShrink: 0,
             borderRadius: "50%", overflow: "hidden",
-            background: "var(--bg-panel)",
+            background: "var(--bg)",
             display: "flex", alignItems: "center", justifyContent: "center",
             border: "1px solid var(--border)",
             position: "relative",
@@ -208,7 +208,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
             onClick={() => fileInputRef.current?.click()}
             style={{
               padding: "6px 12px", height: 32,
-              background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6,
+              background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6,
               color: "var(--text)", fontSize: 12, fontWeight: 500,
               cursor: "pointer",
               display: "inline-flex", alignItems: "center", gap: 6,
@@ -257,7 +257,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
         maxLength={64}
         style={{
           width: "100%", height: 32, padding: "4px 10px",
-          background: "var(--bg-panel)", border: "1px solid var(--border)",
+          background: "var(--bg)", border: "1px solid var(--border)",
           borderRadius: 6, color: "var(--text)", fontSize: 13,
         }}
       />

@@ -23,7 +23,7 @@ export function AppearanceSection() {
           onClick={() => setLocale("en")}
           style={{
             flex: 1, height: 36,
-            background: locale === "en" ? "var(--accent)" : "var(--bg-panel)",
+            background: locale === "en" ? "var(--accent)" : "var(--bg)",
             border: "1px solid var(--border)", borderRadius: 6,
             color: locale === "en" ? "#fff" : "var(--text)",
             cursor: "pointer", fontSize: 13, fontWeight: locale === "en" ? 600 : 500,
@@ -36,7 +36,7 @@ export function AppearanceSection() {
           onClick={() => setLocale("zh")}
           style={{
             flex: 1, height: 36,
-            background: locale === "zh" ? "var(--accent)" : "var(--bg-panel)",
+            background: locale === "zh" ? "var(--accent)" : "var(--bg)",
             border: "1px solid var(--border)", borderRadius: 6,
             color: locale === "zh" ? "#fff" : "var(--text)",
             cursor: "pointer", fontSize: 13, fontWeight: locale === "zh" ? 600 : 500,

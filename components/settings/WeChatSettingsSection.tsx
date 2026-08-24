@@ -311,7 +311,7 @@ export function WeChatSettingsSection() {
       {status?.configured && !isExpired && (
         <>
           {/* Top status bar (U2): workspace + session */}
-          <section style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-panel)" }}>
+          <section style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 8, background: "var(--bg)" }}>
             <div ref={workspaceMenuRef} style={{ position: "relative" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
                 <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("Current workspace")}:</span>
@@ -421,7 +421,7 @@ export function WeChatSettingsSection() {
           </section>
 
           {/* Account info (collapsed — most info now in the status bar) */}
-          <section style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-panel)" }}>
+          <section style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 8, background: "var(--bg)" }}>
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("Account")}</div>
             <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 12px", fontSize: 11 }}>
               <span style={{ color: "var(--text-muted)" }}>userId</span>
@@ -451,18 +451,18 @@ export function WeChatSettingsSection() {
               </span>
             </div>
             {contacts.length === 0 ? (
-              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, padding: "8px 10px", background: "var(--bg-panel)", border: "1px dashed var(--border)", borderRadius: 6, lineHeight: 1.5 }}>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, padding: "8px 10px", background: "var(--bg)", borderRadius: 6, lineHeight: 1.5 }}>
                 {t("No contacts yet. Ask a friend to scan the QR above and send you a message — they'll appear here.")}
               </p>
             ) : (
-              <div data-scroll-inset style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 160, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)" }}>
+              <div data-scroll-inset style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 160, overflowY: "auto", borderRadius: 6, background: "var(--bg)" }}>
                 {contacts.map((c) => (
                   <div
                     key={c.userId}
                     title={c.userId}
                     style={{
                       display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1,
-                      padding: "5px 10px", borderBottom: "1px solid var(--border)",
+                      padding: "5px 10px",
                       color: "var(--text)", fontSize: 11,
                     }}
                   >
@@ -509,7 +509,7 @@ export function WeChatSettingsSection() {
               </a>
 
               {phase && (
-                <div style={{ fontSize: 12, color: "var(--text)", padding: "4px 10px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 4 }}>
+                <div style={{ fontSize: 12, color: "var(--text)", padding: "4px 10px", background: "var(--bg)", borderRadius: 4 }}>
                   {phaseLabel}
                   {phaseMessage ? ` — ${phaseMessage}` : ""}
                 </div>
@@ -523,7 +523,7 @@ export function WeChatSettingsSection() {
                     onChange={(e) => setCode(e.target.value)}
                     placeholder={t("Pairing code")}
                     autoFocus
-                    style={{ width: 120, height: 28, padding: "4px 8px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", fontSize: 13, fontFamily: "var(--font-mono)" }}
+                    style={{ width: 120, height: 28, padding: "4px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text)", fontSize: 13, fontFamily: "var(--font-mono)" }}
                   />
                   <button
                     onClick={submitCode}

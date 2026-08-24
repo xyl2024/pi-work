@@ -155,7 +155,7 @@ export function RightBarSection({
         })}
       </div>
 
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+      <div style={{ marginTop: 20, paddingTop: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: 0 }}>
             {t("Button order")}
@@ -255,7 +255,7 @@ export function RightBarSection({
           "bottom" on disk; the resolver in RightBarColumn mirrors this
           fallback so the column is never misaligned before the
           settings fetch resolves. */}
-      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+      <div style={{ marginTop: 20, paddingTop: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
           <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: 0 }}>
             {t("Session-bound button alignment")}

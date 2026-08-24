@@ -110,7 +110,7 @@ export function TypewriterSection({
           disabled={!typewriterDirty || typewriterSaving || typewriterSavedOk}
           style={{
             padding: "4px 14px", height: 28,
-            background: typewriterSavedOk ? "#16a34a" : typewriterSaving ? "var(--bg-panel)" : "var(--accent)",
+            background: typewriterSavedOk ? "#16a34a" : typewriterSaving ? "var(--bg)" : "var(--accent)",
             border: "none", borderRadius: 6,
             color: typewriterSavedOk ? "#fff" : typewriterSaving ? "var(--text-muted)" : "#fff",
             cursor: (!typewriterDirty || typewriterSaving || typewriterSavedOk) ? "default" : "pointer",
@@ -143,7 +143,7 @@ export function TypewriterSection({
             placeholder={DEFAULT_TYPEWRITER_PHRASES[loc].join("\n")}
             style={{
               width: "100%", height: 140, padding: "8px 10px", resize: "vertical",
-              background: "var(--bg-panel)", border: "1px solid var(--border)",
+              background: "var(--bg)", border: "1px solid var(--border)",
               borderRadius: 6, color: "var(--text)", fontSize: 12,
               fontFamily: "var(--font-mono)", lineHeight: 1.55,
             }}

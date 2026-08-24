@@ -95,7 +95,7 @@ export function AppendSystemSection({
           disabled={!appendSystemDirty || appendSystemSaving || appendSystemSavedOk}
           style={{
             padding: "4px 14px", height: 28,
-            background: appendSystemSavedOk ? "#16a34a" : appendSystemSaving ? "var(--bg-panel)" : "var(--accent)",
+            background: appendSystemSavedOk ? "#16a34a" : appendSystemSaving ? "var(--bg)" : "var(--accent)",
             border: "none", borderRadius: 6,
             color: appendSystemSavedOk ? "#fff" : appendSystemSaving ? "var(--text-muted)" : "#fff",
             cursor: (!appendSystemDirty || appendSystemSaving || appendSystemSavedOk) ? "default" : "pointer",
@@ -150,7 +150,7 @@ export function AppendSystemSection({
       <div style={{
         fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)",
         padding: "4px 8px", marginBottom: 10,
-        background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 5,
+        background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5,
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>
         {appendSystem?.path ?? "~/.pi/agent/APPEND_SYSTEM.md"}
@@ -166,7 +166,7 @@ export function AppendSystemSection({
         spellCheck={false}
         style={{
           width: "100%", height: 220, padding: "10px 12px", resize: "vertical",
-          background: "var(--bg-panel)", border: "1px solid var(--border)",
+          background: "var(--bg)", border: "1px solid var(--border)",
           borderRadius: 6, color: "var(--text)", fontSize: 12,
           fontFamily: "var(--font-mono)", lineHeight: 1.55,
         }}
