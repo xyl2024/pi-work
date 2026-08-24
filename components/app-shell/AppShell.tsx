@@ -1067,6 +1067,7 @@ export function AppShell() {
   const activeRightPanelKind = rightPanelState === "closed" ? null : activeFileTab?.kind ?? null;
 
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalFullscreen, setTerminalFullscreen] = useState(false);
 
   const [terminalHeight, setTerminalHeight] = useState<number>(() => {
     if (typeof window === "undefined") return 200;
@@ -1091,6 +1092,12 @@ export function AppShell() {
   const toggleTerminal = useCallback(() => {
     setTerminalOpen((v) => !v);
   }, []);
+
+  // Fullscreen only has meaning while the terminal is open. Reset it when
+  // the panel is closed from the right bar or the keyboard shortcut.
+  useEffect(() => {
+    if (!terminalOpen) setTerminalFullscreen(false);
+  }, [terminalOpen]);
 
   // ── Right-bar button column context ──
   // Built late because it depends on toggleTerminal, which is declared
@@ -1384,10 +1391,10 @@ export function AppShell() {
           still animates the squeeze when the right panel goes expanded:
           center grows 1->0 while the right panel grows 0->1, so the
           whiteboard takeover slides instead of snapping. */}
-      <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen ? "var(--panel-gap-stack)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
+      <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen && !terminalFullscreen ? "var(--panel-gap-stack)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
         {/* Chat card — keeps a minimum height so dragging the terminal taller
             can never squash the input box out of view. */}
-        <div style={{ flex: "1 1 0%", minHeight: MIN_CHAT_HEIGHT, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--panel-radius)", border: "1px solid var(--panel-border)", background: "var(--bg)" }}>
+        <div style={{ flex: terminalFullscreen ? "0 0 0%" : "1 1 0%", minHeight: terminalFullscreen ? 0 : MIN_CHAT_HEIGHT, display: terminalFullscreen ? "none" : "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--panel-radius)", border: "1px solid var(--panel-border)", background: "var(--bg)" }}>
         {showChat && (
           <SessionTabBar
             leadingControl={
@@ -1480,9 +1487,9 @@ export function AppShell() {
           aria-hidden
           style={{
             flexShrink: 0,
-            height: terminalOpen ? 5 : 0,
-            cursor: terminalOpen ? "ns-resize" : "default",
-            pointerEvents: terminalOpen ? "auto" : "none",
+            height: terminalOpen && !terminalFullscreen ? 5 : 0,
+            cursor: terminalOpen && !terminalFullscreen ? "ns-resize" : "default",
+            pointerEvents: terminalOpen && !terminalFullscreen ? "auto" : "none",
             background: "transparent",
             transition: "height 0.2s ease",
           }}
@@ -1494,8 +1501,9 @@ export function AppShell() {
             with the height so there's no orphan frame when hidden. */}
         <div
           style={{
-            flexShrink: 0,
-            flexBasis: terminalOpen ? terminalHeight : 0,
+            flexShrink: terminalFullscreen ? 1 : 0,
+            flexGrow: terminalFullscreen ? 1 : 0,
+            flexBasis: terminalFullscreen ? 0 : (terminalOpen ? terminalHeight : 0),
             minHeight: 0,
             overflow: "hidden",
             border: terminalOpen ? "1px solid var(--panel-border)" : "none",
@@ -1503,13 +1511,16 @@ export function AppShell() {
             background: "var(--bg)",
             display: "flex",
             flexDirection: "column",
-            transition: "flex-basis 0.2s ease",
+            transition: "flex-basis 0.2s ease, flex-grow 0.2s ease",
           }}
         >
           <TerminalPanel
             defaultCwd={terminalDefaultCwd}
             open={terminalOpen}
+            fullscreen={terminalFullscreen}
+            onToggleFullscreen={() => setTerminalFullscreen((value) => !value)}
             onClosePanel={() => {
+              setTerminalFullscreen(false);
               setTerminalOpen(false);
             }}
           />

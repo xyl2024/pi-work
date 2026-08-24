@@ -9,6 +9,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../ui/Tooltip";
 import { useToast } from "@/components/ui/Toast";
 import { copyText } from "@/lib/client/clipboard";
+import { ICONS } from "@/components/ui/icons";
 
 const CWD_KEY = "pi-terminal-cwd";
 
@@ -19,6 +20,9 @@ export interface TerminalPanelProps {
   open: boolean;
   /** collapse the panel — terminals keep running (their WS stays open). */
   onClosePanel: () => void;
+  /** toggle occupying the whole center column above the terminal. */
+  fullscreen: boolean;
+  onToggleFullscreen: () => void;
 }
 
 interface TabInfo {
@@ -363,7 +367,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
  * backed by its own WebSocket + pty. Inactive tabs stay mounted so their
  * processes keep running while hidden.
  */
-export function TerminalPanel({ defaultCwd, open, onClosePanel }: TerminalPanelProps) {
+export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onToggleFullscreen }: TerminalPanelProps) {
   const { t } = useI18n();
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -594,6 +598,28 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel }: TerminalPanelP
         </Tooltip>
         </div>
         <div style={{ display: "flex", alignItems: "center", flexShrink: 0, gap: 2 }}>
+        <Tooltip content={t(fullscreen ? "Restore terminal" : "Maximize terminal")}>
+        <button
+          onClick={onToggleFullscreen}
+          aria-label={t(fullscreen ? "Restore terminal" : "Maximize terminal")}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 24,
+            height: 24,
+            padding: 0,
+            background: "transparent",
+            border: "none",
+            borderRadius: 4,
+            color: "var(--text-muted)",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          {fullscreen ? <ICONS.minimize size={14} /> : <ICONS.maximize size={14} />}
+        </button>
+        </Tooltip>
         <Tooltip content={t("Hide terminal")}>
         <button
           onClick={onClosePanel}
