@@ -12,6 +12,7 @@ export const sessions = {
   "View more sessions": "查看更多会话",
   "Search by name or content...": "按会话名或会话内容搜索…",
   "Loading sessions...": "正在加载会话...",
+  "End of results": "已加载全部会话",
 
   // Favorites
   "Favorite session": "收藏会话",

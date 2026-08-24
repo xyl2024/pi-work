@@ -6,8 +6,10 @@
  * Opened from the "..." menu on each cwd group header in the multi-cwd
  * sidebar. Lets the user browse the full session list for that cwd:
  *
- *   - paged (default 20/page, same cursor-based pagination as the
- *     sidebar's normal /api/sessions route)
+ *   - infinite-scroll (default 20 rows per fetch, same cursor-based
+ *     pagination as the sidebar's normal /api/sessions route). The next
+ *     page is requested automatically when the list scrolls within
+ *     LOAD_MORE_THRESHOLD_PX of the bottom — no "Next page" button.
  *   - searchable by either session name OR user/assistant message content
  *     (the server's `q` parameter maps to searchSessionsPaged, which
  *     walks every JSONL in the cwd's workspace dir and returns the
@@ -31,6 +33,10 @@ import type { SessionInfo, SessionSearchPagedResult } from "@/lib/shared/types";
 
 const PAGE_SIZE = 20;
 const DEBOUNCE_MS = 220;
+/** Trigger the next-page fetch when the bottom of the list is within
+ *  this many pixels of the viewport. Matches GitLogView's threshold so
+ *  the two infinite-scroll lists feel the same. */
+const LOAD_MORE_THRESHOLD_PX = 24;
 
 interface Props {
   /** Absolute path of the cwd whose sessions to browse. */
@@ -40,7 +46,13 @@ interface Props {
 }
 
 interface PageState {
+  /** True only for the very first fetch of the current query — prevents
+   *  the empty state from flashing in while the request is in flight. */
   loading: boolean;
+  /** True while a follow-up page (infinite-scroll triggered) is in
+   *  flight. Lets the bottom-of-list sentinel show a spinner without
+   *  wiping out the rows we already have. */
+  loadingMore: boolean;
   error: string | null;
   rows: SessionSearchPagedResult[];
   /** Opaque cursor produced by /api/sessions for the next page. */
@@ -51,6 +63,7 @@ interface PageState {
 
 const INITIAL_PAGE: PageState = {
   loading: false,
+  loadingMore: false,
   error: null,
   rows: [],
   nextCursor: null,
@@ -118,12 +131,12 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
   // settled value, not whatever the input was during a keystroke.
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState<PageState>(INITIAL_PAGE);
-  // Cursor history lets "Previous" walk back without reissuing the
-  // request that produced the current page. Index 0 is always null
-  // (first page has no incoming cursor).
-  const cursorHistoryRef = useRef<(string | null)[]>([null]);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // Ref to the scrolling element so we can restore scrollTop after a
+  // query reset (we want the new result list to start at the top, not
+  // wherever the old list happened to leave the thumb).
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Debounce the input → debouncedQuery. The fetch effect reads
   // debouncedQuery, so a fast typer doesn't fire one request per
@@ -145,23 +158,22 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
   // open), so the hook is active for the entire lifetime.
   useBodyScrollLock(true);
 
-  // Fetch a page. `cursor` is what we send on the wire; when the user
-  // changes the query or hits "Previous", `fetchPage(null, "reset")`
-  // starts a fresh page-1 fetch.
+  // Fetch a page. `cursor` is what we send on the wire. `mode`:
+  //   - "reset"    → first page of the current query; wipe rows.
+  //   - "append"   → infinite-scroll continuation; keep rows, append.
   const fetchPage = useCallback(
-    async (cursor: string | null, mode: "reset" | "page") => {
+    async (cursor: string | null, mode: "reset" | "append") => {
       abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
 
       setPage((prev) => ({
         ...prev,
-        loading: true,
+        loading: mode === "reset",
+        // Only flip the follow-up spinner on for "append" — on reset the
+        // primary loading: true is what we want users to see.
+        loadingMore: mode === "append",
         error: null,
-        // Keep the existing rows on "page" mode so the list doesn't
-        // flash to a "Loading..." placeholder while the next page
-        // arrives. On "reset" we drop them — the new query/cursor
-        // supersedes.
         rows: mode === "reset" ? [] : prev.rows,
       }));
 
@@ -187,17 +199,26 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
         if (controller.signal.aborted) return;
 
         setPage((prev) => {
-          const newRows = mode === "reset"
-            ? data.sessions
-            : (() => {
-                const seen = new Set(prev.rows.map((r) => r.id));
-                const incoming = data.sessions.filter((r) => !seen.has(r.id));
-                return incoming.length === 0 ? prev.rows : [...prev.rows, ...incoming];
-              })();
+          if (mode === "reset") {
+            return {
+              loading: false,
+              loadingMore: false,
+              error: null,
+              rows: data.sessions,
+              nextCursor: data.nextCursor ?? null,
+              total: data.total ?? null,
+            };
+          }
+          // Append — dedupe by id so an out-of-order retry doesn't
+          // produce duplicates if the user scrolled back near the
+          // boundary mid-fetch.
+          const seen = new Set(prev.rows.map((r) => r.id));
+          const incoming = data.sessions.filter((r) => !seen.has(r.id));
           return {
             loading: false,
+            loadingMore: false,
             error: null,
-            rows: newRows,
+            rows: incoming.length === 0 ? prev.rows : [...prev.rows, ...incoming],
             nextCursor: data.nextCursor ?? null,
             total: data.total ?? null,
           };
@@ -208,6 +229,7 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
         setPage((prev) => ({
           ...prev,
           loading: false,
+          loadingMore: false,
           error: msg,
         }));
       }
@@ -215,12 +237,16 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
     [cwd, debouncedQuery],
   );
 
-  // Re-fetch when the debounced query OR cwd changes. Clears the
-  // back-history so the user can't accidentally "Previous" past the
-  // new starting position.
+  // Re-fetch when the debounced query OR cwd changes. Snaps the list
+  // back to the top so the user always sees page 1 of their new query.
   useEffect(() => {
-    cursorHistoryRef.current = [null];
     void fetchPage(null, "reset");
+    // Reset the scroll container after the new rows render — requestAnimationFrame
+    // waits for the DOM to settle without us having to thread refs into the
+    // setPage callback.
+    requestAnimationFrame(() => {
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    });
   }, [debouncedQuery, cwd, fetchPage]);
 
   // Cleanup on unmount: abort any in-flight request.
@@ -230,20 +256,19 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
     };
   }, []);
 
-  const handleNext = useCallback(() => {
+  // Infinite-scroll trigger: fetch the next page when the scroll
+  // container is within LOAD_MORE_THRESHOLD_PX of the bottom. Guarded
+  // against the initial render (no rows yet) and the already-loading
+  // case so a fast scroller can't pile up requests.
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
     if (!page.nextCursor) return;
-    cursorHistoryRef.current = [...cursorHistoryRef.current, page.nextCursor];
-    void fetchPage(page.nextCursor, "page");
-  }, [page.nextCursor, fetchPage]);
-
-  const handlePrev = useCallback(() => {
-    const history = cursorHistoryRef.current;
-    if (history.length <= 1) return;
-    const next = history.slice(0, -1);
-    cursorHistoryRef.current = next;
-    const prevCursor = next[next.length - 1];
-    void fetchPage(prevCursor, "reset");
-  }, [fetchPage]);
+    if (page.loading || page.loadingMore) return;
+    if (page.rows.length === 0) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - LOAD_MORE_THRESHOLD_PX) {
+      void fetchPage(page.nextCursor, "append");
+    }
+  }, [page.nextCursor, page.loading, page.loadingMore, page.rows.length, fetchPage]);
 
   const handleRowClick = useCallback((row: SessionSearchPagedResult) => {
     // Forward as SessionInfo — the parent (sidebar) only consumes the
@@ -254,8 +279,8 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
   }, [onSelectSession, onClose]);
 
   const handleRetry = useCallback(() => {
-    const lastCursor = cursorHistoryRef.current[cursorHistoryRef.current.length - 1];
-    void fetchPage(lastCursor, "reset");
+    // Retry from the top of the current query — same as a fresh load.
+    void fetchPage(null, "reset");
   }, [fetchPage]);
 
   // Footer count label. Without a query, server doesn't return `total`
@@ -263,9 +288,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
   const totalLabel = page.total === null
     ? (page.nextCursor ? `${page.rows.length}+` : `${page.rows.length}`)
     : `${page.rows.length} / ${page.total}`;
-
-  const hasPrev = cursorHistoryRef.current.length > 1;
-  const hasNext = !!page.nextCursor;
 
   const inputPlaceholder = debouncedQuery
     ? t("Search sessions...")
@@ -438,8 +460,12 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
           )}
         </div>
 
-        {/* Result list */}
+        {/* Result list — infinite scroll: handleScroll requests the next
+            page when the bottom of this container comes within
+            LOAD_MORE_THRESHOLD_PX of the viewport. */}
         <div
+          ref={scrollRef}
+          onScroll={handleScroll}
           style={{
             flex: 1,
             minHeight: 0,
@@ -493,14 +519,22 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
             />
           ))}
 
-          {page.loading && page.rows.length > 0 && (
+          {/* Bottom sentinel: visible status of the infinite-scroll tail.
+              Has three states — mid-fetch, end-of-list, or "scroll for
+              more" hint when there are rows but more remain. */}
+          {page.rows.length > 0 && page.loadingMore && (
             <div style={{ padding: "12px 16px", textAlign: "center", color: "var(--text-muted)", fontSize: 12 }}>
               {t("Loading...")}
             </div>
           )}
+          {page.rows.length > 0 && !page.loadingMore && !page.nextCursor && (
+            <div style={{ padding: "12px 16px", textAlign: "center", color: "var(--text-dim)", fontSize: 11 }}>
+              {t("End of results")}
+            </div>
+          )}
         </div>
 
-        {/* Footer: pagination + count */}
+        {/* Footer: count only — pagination is now driven by scroll. */}
         <div
           style={{
             display: "flex",
@@ -517,52 +551,6 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
               ? `${t("Matches")}: ${totalLabel}`
               : `${t("Showing")}: ${totalLabel}`}
           </span>
-          <button
-            type="button"
-            onClick={handlePrev}
-            disabled={!hasPrev || page.loading}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "5px 10px",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: 5,
-              color: !hasPrev || page.loading ? "var(--text-dim)" : "var(--text)",
-              cursor: !hasPrev || page.loading ? "default" : "pointer",
-              fontSize: 12,
-              opacity: !hasPrev || page.loading ? 0.5 : 1,
-            }}
-          >
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-              <polyline points="10 4 6 8 10 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {t("Previous page")}
-          </button>
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={!hasNext || page.loading}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "5px 10px",
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: 5,
-              color: !hasNext || page.loading ? "var(--text-dim)" : "var(--text)",
-              cursor: !hasNext || page.loading ? "default" : "pointer",
-              fontSize: 12,
-              opacity: !hasNext || page.loading ? 0.5 : 1,
-            }}
-          >
-            {t("Next page")}
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-              <polyline points="6 4 10 8 6 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
         </div>
       </div>
     </div>,
