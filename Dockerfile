@@ -16,7 +16,9 @@
 # ============================================================
 # Stage 1 — build
 # ============================================================
-FROM mcr.microsoft.com/playwright:v1.62.1-jammy AS builder
+
+# FROM mcr.microsoft.com/playwright:v1.62.1-jammy AS builder
+FROM playwright-cli-devenv:extended AS builder
 
 WORKDIR /app
 
@@ -53,7 +55,8 @@ RUN npm run build
 # ============================================================
 # Stage 2 — production image
 # ============================================================
-FROM mcr.microsoft.com/playwright:v1.62.1-jammy
+# FROM mcr.microsoft.com/playwright:v1.62.1-jammy
+FROM playwright-cli-devenv:extended
 
 WORKDIR /app
 
