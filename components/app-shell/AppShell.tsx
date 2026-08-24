@@ -267,6 +267,29 @@ function WorkspaceChatTabView({
   );
 }
 
+const USEFUL_TIP_KEYS = [
+  "You can set a custom Prompt and invoke it with '/'.",
+  "For unrelated tasks, consider starting a new session.",
+  "Use '/' to run commands and custom Prompts or SKILLs.",
+  "Press Space anywhere to focus the conversation input.",
+  "Press Ctrl + K to open the command palette.",
+  "Switch to a higher thinking level for more complex tasks.",
+  "Turn common workflows into SKILLs to reduce repetitive work.",
+  "Keep optimizing your AGENTS.md for simplicity and efficiency.",
+  "Remove unnecessary plugins, MCPs, and SKILLs to keep context concise and efficient.",
+  "Align on requirements before implementing code.",
+  "You can switch the current conversation branch in the conversation tree on the right.",
+] as const;
+
+function shuffleTips<T>(items: readonly T[]): T[] {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 const WorkspaceChatTab = memo(WorkspaceChatTabView, (previous, next) =>
   previous.tab === next.tab &&
   previous.isActive === next.isActive &&
@@ -1086,7 +1109,29 @@ export function AppShell() {
     today: { tokens: 0, cost: 0 },
   });
   const [statusBarTime, setStatusBarTime] = useState(() => new Date());
+  const [usefulTipOrder, setUsefulTipOrder] = useState<string[]>([...USEFUL_TIP_KEYS]);
+  const [usefulTipIndex, setUsefulTipIndex] = useState(0);
+  const [usefulTipVisible, setUsefulTipVisible] = useState(true);
   const { count: runningSessionCount } = useRunningSessions();
+
+  useEffect(() => {
+    setUsefulTipOrder(shuffleTips(USEFUL_TIP_KEYS));
+  }, []);
+
+  useEffect(() => {
+    let transitionTimer: number | undefined;
+    const timer = window.setInterval(() => {
+      setUsefulTipVisible(false);
+      transitionTimer = window.setTimeout(() => {
+        setUsefulTipIndex((index) => (index + 1) % usefulTipOrder.length);
+        setUsefulTipVisible(true);
+      }, 350);
+    }, 10000);
+    return () => {
+      window.clearInterval(timer);
+      if (transitionTimer !== undefined) window.clearTimeout(transitionTimer);
+    };
+  }, [usefulTipOrder.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1674,6 +1719,22 @@ export function AppShell() {
           <span>{statusBar.git.branch ?? "no-git"} · {statusBar.git.changedFiles} changed</span>
         </button>
         <span style={{ marginLeft: 14 }}>running: {runningSessionCount}</span>
+        <span
+          aria-live="polite"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            margin: "0 14px",
+            overflow: "hidden",
+            textAlign: "left",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            opacity: usefulTipVisible ? 1 : 0,
+            transition: "opacity 350ms ease-in-out",
+          }}
+        >
+          {t(usefulTipOrder[usefulTipIndex] ?? USEFUL_TIP_KEYS[0])}
+        </span>
         <span style={{ marginLeft: "auto" }}>
           today: {statusBar.today.tokens.toLocaleString()} tokens · ${statusBar.today.cost.toFixed(4)}
         </span>

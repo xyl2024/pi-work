@@ -36,6 +36,7 @@ import { terminal } from "./terminal";
 import { toast } from "./toast";
 import { todos } from "./todos";
 import { wechat } from "./wechat";
+import { usefulTips } from "./useful-tips";
 
 export type Locale = "en" | "zh";
 
@@ -62,6 +63,7 @@ export const ZH_TRANSLATIONS = {
   ...toast,
   ...todos,
   ...wechat,
+  ...usefulTips,
   ...askUserQuestions,
 } as const;
 
