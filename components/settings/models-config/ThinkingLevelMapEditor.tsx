@@ -38,7 +38,7 @@ export function ThinkingLevelMapEditor({
           fontWeight: 400,
           transition: "background 0.1s, color 0.1s",
           whiteSpace: "nowrap",
-          background: "var(--bg-panel)",
+          background: "var(--bg)",
           color: "var(--text-dim)",
         };
         const btnActive: React.CSSProperties = {
@@ -107,7 +107,7 @@ export function ThinkingLevelMapEditor({
                 maxLength={10}
                 style={{
                   width: "12ch",
-                  background: state === "string" ? "var(--bg)" : "var(--bg-panel)",
+                  background: "var(--bg)",
                   border: "none",
                   color: state === "string" ? "var(--text)" : "var(--text-dim)",
                   fontFamily: "var(--font-mono)",

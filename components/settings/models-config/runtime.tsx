@@ -49,7 +49,7 @@ export function RuntimeModelCatalog() {
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
             {t("{n} providers", { n: catalog.providers.length })} · {t("{n} models", { n: catalog.modelCount })}
@@ -64,7 +64,7 @@ export function RuntimeModelCatalog() {
         <button
           onClick={() => { void loadCatalog(true); }}
           disabled={loading || refreshing}
-          style={{ padding: "6px 10px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: loading || refreshing ? "default" : "pointer", fontSize: 11, flexShrink: 0 }}
+          style={{ padding: "6px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: loading || refreshing ? "default" : "pointer", fontSize: 11, flexShrink: 0 }}
         >
           {refreshing ? t("Refreshing...") : t("Refresh catalog")}
         </button>
@@ -82,7 +82,7 @@ export function RuntimeModelCatalog() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {visibleProviders.map((provider) => (
-              <details key={provider.id} style={{ border: "1px solid var(--border)", borderRadius: 7, background: "var(--bg-panel)" }}>
+              <details key={provider.id} style={{ border: "1px solid var(--border)", borderRadius: 7, background: "var(--bg)" }}>
                 <summary style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "9px 11px", color: "var(--text)", fontSize: 12 }}>
                   <ProviderIcon id={provider.id} size={17} fallback={<ProviderGearIcon size={14} />} />
                   <strong>{provider.name}</strong>
@@ -211,9 +211,9 @@ export function ModelCatalogPicker({
                 <button
                   key={`${model.provider}:${model.id}`}
                   onClick={() => onSelect(model)}
-                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 10px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", cursor: "pointer", textAlign: "left" }}
+                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", cursor: "pointer", textAlign: "left" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
                 >
                   <ProviderIcon id={model.provider} size={20} fallback={<ProviderGearIcon size={16} />} />
                   <span style={{ flex: 1, minWidth: 0 }}>
@@ -257,7 +257,7 @@ export function RuntimeModelList({ providerId, configured }: { providerId: strin
       ) : models.length === 0 ? (
         <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No available models")}</div>
       ) : models.map((model) => (
-        <details key={model.id} style={{ border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)" }}>
+        <details key={model.id} style={{ border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)" }}>
           <summary style={{ cursor: "pointer", padding: "8px 10px", color: "var(--text)", fontSize: 12 }}>
             <span style={{ fontWeight: 600 }}>{model.name}</span>
             <span style={{ marginLeft: 8, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11 }}>{model.id}</span>
@@ -409,7 +409,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
             disabled={saving || !apiKey.trim() || savedOk}
             style={{
               padding: "6px 12px",
-              background: savedOk ? "#16a34a" : apiKey.trim() ? "var(--accent)" : "var(--bg-panel)",
+              background: savedOk ? "#16a34a" : apiKey.trim() ? "var(--accent)" : "var(--bg)",
               border: "none", borderRadius: 5,
               color: (apiKey.trim() || savedOk) ? "#fff" : "var(--text-dim)",
               cursor: (saving || !apiKey.trim() || savedOk) ? "not-allowed" : "pointer",
@@ -477,7 +477,7 @@ export function AddProviderPicker({
   const cardStyle: React.CSSProperties = {
     display: "flex", flexDirection: "row", alignItems: "center", gap: 8,
     padding: "10px 12px",
-    background: "var(--bg-panel)",
+    background: "var(--bg)",
     border: "1px solid var(--border)",
     borderRadius: 7,
     boxSizing: "border-box",
@@ -521,7 +521,7 @@ export function AddProviderPicker({
                   onClick={() => { onAddCustom(); onClose(); }}
                   style={cardStyle}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("OpenAI / Anthropic compatible")}</div>
@@ -542,7 +542,7 @@ export function AddProviderPicker({
                 <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
                   style={cardStyle}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
@@ -559,7 +559,7 @@ export function AddProviderPicker({
                 <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
                   style={cardStyle}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>

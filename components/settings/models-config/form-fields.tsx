@@ -7,7 +7,7 @@ import { ProviderIcon, ProviderGearIcon, hasProviderIcon, PROVIDER_ICON_IDS } fr
 
 export const inputStyle: React.CSSProperties = {
   padding: "6px 9px",
-  background: "var(--bg-panel)",
+  background: "var(--bg)",
   border: "1px solid var(--border)",
   borderRadius: 5,
   color: "var(--text)",

@@ -172,7 +172,7 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
                       type="button"
                       onClick={copyRawJson}
                       aria-label={t("Copy raw JSON")}
-                      style={{ padding: "3px 7px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
+                      style={{ padding: "3px 7px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" />
@@ -184,7 +184,7 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
                   <button
                     type="button"
                     onClick={enterRawEditMode}
-                    style={{ padding: "3px 7px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
+                    style={{ padding: "3px 7px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
                   >
                     {t("Edit as JSON")}
                   </button>
@@ -201,7 +201,7 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
                 spellCheck={false}
                 style={{ ...({
                   padding: "6px 9px",
-                  background: "var(--bg-panel)",
+                  background: "var(--bg)",
                   border: "1px solid var(--border)",
                   borderRadius: 5,
                   color: "var(--text)",

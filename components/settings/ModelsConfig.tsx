@@ -225,7 +225,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}
       >
         <div style={{ ...panelStyle, width: 860, height: "78vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
               {catalogOpen && (
                 <button
@@ -251,7 +251,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
               {!catalogOpen && (
                 <button
                   onClick={() => setCatalogOpen(true)}
-                  style={{ padding: "5px 9px", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
+                  style={{ padding: "5px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
                 >
                   {t("View all model data")}
                 </button>
@@ -262,7 +262,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
           {catalogOpen ? <RuntimeModelCatalog /> : (
             <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-              <div style={{ width: 210, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)" }}>
+              <div style={{ width: 210, display: "flex", flexDirection: "column", flexShrink: 0 }}>
                 <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
                   {activeOAuth.map((provider) => {
                     const isSelected = selection?.type === "oauth" && selection.providerId === provider.id;
@@ -297,7 +297,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                   })}
 
                   {(activeOAuth.length > 0 || activeApiKey.length > 0) && providers.length > 0 && (
-                    <div style={{ margin: "4px 8px", borderTop: "1px solid var(--border)" }} />
+                    <div style={{ margin: "4px 8px" }} />
                   )}
 
                   {loading ? (
@@ -355,7 +355,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                   })}
                 </div>
 
-                <div style={{ borderTop: "1px solid var(--border)", padding: "8px 6px" }}>
+                <div style={{ padding: "8px 6px" }}>
                   <button
                     onClick={() => setPickerOpen(true)}
                     style={{
@@ -382,7 +382,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           )}
 
           {!catalogOpen && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", flexShrink: 0 }}>
               {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
               <button onClick={requestClose} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
                 {t("Cancel")}
@@ -394,7 +394,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                   position: "relative",
                   padding: "6px 16px",
                   minWidth: 92,
-                  background: savedOk ? "#16a34a" : saving ? "var(--bg-panel)" : "var(--accent)",
+                  background: savedOk ? "#16a34a" : saving ? "var(--bg)" : "var(--accent)",
                   border: "none", borderRadius: 6,
                   color: savedOk ? "#fff" : saving ? "var(--text-muted)" : "#fff",
                   cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
