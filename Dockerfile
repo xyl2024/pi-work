@@ -80,15 +80,21 @@ COPY --from=builder /app/package-lock.json ./
 COPY --from=builder /app/next.config.ts    ./
 
 # Install production-only deps.
-#   better-sqlite3 is the only required native module here. `npm ci
-#   --ignore-scripts` skips postinstalls for every native dep (canvas,
-#   lightningcss, ...), so they sit in node_modules uncompiled. Then we
-#   rebuild ONLY better-sqlite3 against THIS image's Node ABI. canvas is
-#   only needed for server-side Excalidraw PNG export, which pi-work doesn't
-#   do — the client uses the browser's native canvas. lightningcss is a
-#   postcss plugin used only at build time, so it's irrelevant at runtime.
+#   better-sqlite3 and node-pty are the required native modules here.
+#   `npm ci --ignore-scripts` skips postinstalls for every native dep
+#   (canvas, lightningcss, ...), so they sit in node_modules uncompiled.
+#   Then we rebuild ONLY better-sqlite3 and node-pty against THIS image's
+#   Node ABI. canvas is only needed for server-side Excalidraw PNG export,
+#   which pi-work doesn't do — the client uses the browser's native
+#   canvas. lightningcss is a postcss plugin used only at build time, so
+#   it's irrelevant at runtime.
+#
+#   node-pty ships prebuilt binaries for darwin/win32 only — on Linux we
+#   MUST compile from source against the running Node ABI, otherwise
+#   `instrumentation.ts` → `lib/server/terminal/startup` will fail to
+#   load `./prebuilds/linux-x64/pty.node` at server boot.
 RUN npm ci --omit=dev --ignore-scripts \
- && npm rebuild better-sqlite3 \
+ && npm rebuild better-sqlite3 node-pty \
  && rm -rf /root/.npm /tmp/*
 
 EXPOSE 30141
