@@ -122,7 +122,7 @@ export function GitPanel({ cwd, onExpandPanel }: Props) {
       {/* Header: repo info + branch dropdown + mode toggle + refresh */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
-        padding: "8px 10px", borderBottom: "1px solid var(--border)",
+        padding: "8px 10px",
         flexShrink: 0,
       }}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>

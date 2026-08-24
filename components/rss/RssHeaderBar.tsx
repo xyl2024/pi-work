@@ -58,7 +58,6 @@ export function RssHeaderBar({
       style={{
         display: "flex",
         flexDirection: "column",
-        borderBottom: "1px solid var(--border)",
         background: "transparent",
       }}
     >

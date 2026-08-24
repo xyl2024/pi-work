@@ -288,7 +288,6 @@ function Toolbar({ range, onChangeRange }: ToolbarProps) {
         gap: 6,
         padding: "6px 12px",
         flexWrap: "wrap",
-        borderBottom: "1px solid var(--border)",
         background: "transparent",
         flexShrink: 0,
       }}

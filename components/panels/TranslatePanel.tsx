@@ -304,7 +304,7 @@ export function TranslatePanel() {
       {/* Top bar: model selector + target selector + copy + clear */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6, padding: "8px 10px",
-        borderBottom: "1px solid var(--border)", flexShrink: 0, position: "relative",
+        flexShrink: 0, position: "relative",
       }}>
         <div ref={dropdownRef} style={{ position: "relative" }}>
           <button

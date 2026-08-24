@@ -67,7 +67,6 @@ export function CollectionPanel({ favoriteIds, onSelectSession, onToggleFavorite
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
         padding: "8px 12px",
-        borderBottom: "1px solid var(--border)",
         background: "transparent",
         flexShrink: 0,
       }}>

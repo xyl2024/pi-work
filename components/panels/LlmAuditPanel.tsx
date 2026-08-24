@@ -351,7 +351,6 @@ function Toolbar({
         alignItems: "center",
         gap: 6,
         padding: "6px 12px",
-        borderBottom: "1px solid var(--border)",
         background: "transparent",
         flexWrap: "wrap",
       }}

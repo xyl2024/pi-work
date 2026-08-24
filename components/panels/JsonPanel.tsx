@@ -486,7 +486,6 @@ const toolbarStyle: React.CSSProperties = {
   gap: 4,
   padding: "6px 10px",
   background: "transparent",
-  borderBottom: "1px solid var(--border)",
   flexShrink: 0,
 };
 
@@ -503,7 +502,6 @@ const searchRowStyle: React.CSSProperties = {
   gap: 6,
   padding: "6px 10px",
   background: "transparent",
-  borderBottom: "1px solid var(--border)",
   flexShrink: 0,
 };
 

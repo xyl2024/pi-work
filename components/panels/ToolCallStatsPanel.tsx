@@ -177,7 +177,6 @@ export function ToolCallStatsPanel({ snapshot, onScrollToToolCall }: Props) {
           alignItems: "center",
           justifyContent: "space-between",
           padding: "6px 14px",
-          borderBottom: "1px solid var(--border)",
           flexShrink: 0,
         }}
       >
