@@ -519,6 +519,25 @@ pre, code {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
+
+/* Prose wrapping must never alter the source layout of a fenced code block.
+   This is especially visible with Markdown tables: `|` and `---` must stay
+   on their original lines instead of being wrapped character-by-character. */
+.markdown-body pre code,
+.markdown-file-preview pre code {
+  white-space: pre !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+/* Tailwind generates a `.table { display: table }` utility. Prism's Markdown
+   grammar also names table-related token spans `.table`, so that utility can
+   accidentally turn every token into a table-row-like block and stack the
+   source one token per line. This class is shared by chat, todo, file and
+   SkillConfig Prism previews. */
+.syntax-highlighted-code .token {
+  display: inline !important;
+}
 .markdown-body pre::-webkit-scrollbar,
 .markdown-file-preview pre::-webkit-scrollbar {
   width: 4px;

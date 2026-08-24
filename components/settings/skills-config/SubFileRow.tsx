@@ -162,6 +162,7 @@ export function SubFileRow({
           ) : content != null ? (
             <SyntaxHighlighter
               language={fileLanguage(file.name)}
+              className="syntax-highlighted-code"
               style={isDark ? vscDarkPlus : vs}
               customStyle={{
                 margin: 0,
@@ -175,7 +176,14 @@ export function SubFileRow({
                 maxHeight: 300,
                 overflow: "auto",
               }}
-              codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
+              codeTagProps={{
+                style: {
+                  fontFamily: "var(--font-mono)",
+                  whiteSpace: "pre",
+                  wordBreak: "normal",
+                  overflowWrap: "normal",
+                },
+              }}
             >
               {content}
             </SyntaxHighlighter>

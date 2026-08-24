@@ -210,6 +210,7 @@ export function SkillDetail({
           </span>
           <SyntaxHighlighter
             language="markdown"
+            className="syntax-highlighted-code"
             style={isDark ? vscDarkPlus : vs}
             customStyle={{
               height: 280,
@@ -223,7 +224,14 @@ export function SkillDetail({
               lineHeight: 1.55,
               fontFamily: "var(--font-mono)",
             }}
-            codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
+            codeTagProps={{
+              style: {
+                fontFamily: "var(--font-mono)",
+                whiteSpace: "pre",
+                wordBreak: "normal",
+                overflowWrap: "normal",
+              },
+            }}
           >
             {skillContent}
           </SyntaxHighlighter>

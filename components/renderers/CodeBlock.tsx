@@ -68,6 +68,7 @@ export function CodeBlock({ code, lang }: Props) {
     >
       <SyntaxHighlighter
         language={lang || "text"}
+        className="syntax-highlighted-code"
         style={isDark ? vscDarkPlus : vs}
         customStyle={{
           margin: 0,
@@ -76,8 +77,22 @@ export function CodeBlock({ code, lang }: Props) {
           lineHeight: 1.6,
           borderRadius: 0,
           background: "var(--bg)",
+          overflowX: "auto",
+          // Keep fenced Markdown source intact. `.markdown-body` uses
+          // `word-break: break-word` for prose, but it must not leak into
+          // code blocks or table pipes/dashes can wrap one token per line.
+          whiteSpace: "pre",
+          wordBreak: "normal",
+          overflowWrap: "normal",
         }}
-        codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
+        codeTagProps={{
+          style: {
+            fontFamily: "var(--font-mono)",
+            whiteSpace: "pre",
+            wordBreak: "normal",
+            overflowWrap: "normal",
+          },
+        }}
       >
         {code}
       </SyntaxHighlighter>
