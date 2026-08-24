@@ -1631,6 +1631,7 @@ export function AppShell() {
             <GitPanel
               cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
               onExpandPanel={handleExpandGitPanel}
+              isPanelExpanded={rightPanelState === "expanded"}
             />
           ) : activeFileTab?.kind === "conversationTree" ? (
             <ConversationTreePanel

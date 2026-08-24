@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { GitDiffFile, GitStatusResponse } from "@/lib/shared/git-diff-types";
 import { GitDiffViewer } from "./GitDiffViewer";
@@ -42,6 +42,10 @@ export function GitDiffView({ cwd, status }: Props) {
   const [diffTruncated, setDiffTruncated] = useState(false);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
+
+  const viewRef = useRef<HTMLDivElement>(null);
+  const [fileListHeight, setFileListHeight] = useState<number | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
 
   const loadDiff = useCallback(async (path: string, stagedSide: boolean) => {
     setDiffLoading(true);
@@ -102,6 +106,44 @@ export function GitDiffView({ cwd, status }: Props) {
 
   const selectedFile = visibleFiles.find((f) => f.path === selectedPath) ?? null;
 
+  const handleResizeStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const previousUserSelect = document.body.style.userSelect;
+    const previousCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "row-resize";
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const rect = view.getBoundingClientRect();
+      const minListHeight = 80;
+      const minDiffHeight = 80;
+      const nextHeight = Math.min(
+        Math.max(event.clientY - rect.top, minListHeight),
+        Math.max(minListHeight, rect.height - minDiffHeight),
+      );
+      setFileListHeight(nextHeight);
+    };
+    const handlePointerUp = () => setIsResizing(false);
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      document.body.style.userSelect = previousUserSelect;
+      document.body.style.cursor = previousCursor;
+    };
+  }, [isResizing]);
+
   if (status.files.length === 0) {
     return (
       <div style={{ padding: "24px 12px", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>
@@ -111,16 +153,13 @@ export function GitDiffView({ cwd, status }: Props) {
   }
 
   return (
-    <>
+    <div ref={viewRef} style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* Staged/Unstaged toggle */}
       <div style={{
         display: "flex", alignItems: "center", gap: 4,
         padding: "6px 10px", borderBottom: "1px solid var(--border)",
         flexShrink: 0,
       }}>
-        <span style={{ fontSize: 11, color: "var(--text-dim)", marginRight: 4 }}>
-          {t("View")}
-        </span>
         {([false, true] as const).map((side) => (
           <button
             key={side ? "staged" : "unstaged"}
@@ -146,8 +185,8 @@ export function GitDiffView({ cwd, status }: Props) {
 
       {/* File list */}
       <div style={{
-        flex: "0 0 40%", minHeight: 80, overflowY: "auto",
-        borderBottom: "1px solid var(--border)",
+        flex: fileListHeight === null ? "0 0 40%" : `0 0 ${fileListHeight}px`,
+        minHeight: 80, overflowY: fileListHeight === null ? "auto" : "auto",
       }}>
         {visibleFiles.length === 0 ? (
           <div style={{ padding: "20px 12px", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>
@@ -197,7 +236,19 @@ export function GitDiffView({ cwd, status }: Props) {
         )}
       </div>
 
-      {/* Diff view */}
+      {/* Resize handle + Diff view */}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        onPointerDown={handleResizeStart}
+        style={{
+          flex: "0 0 6px",
+          cursor: "row-resize",
+          background: "transparent",
+          border: "none",
+          touchAction: "none",
+        }}
+      />
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "transparent" }}>
         {diffError ? (
           <div style={{ padding: "16px 12px", fontSize: 12, color: "#f87171" }}>{diffError}</div>
@@ -217,6 +268,6 @@ export function GitDiffView({ cwd, status }: Props) {
           <GitDiffViewer diff={diffText} truncated={diffTruncated} />
         )}
       </div>
-    </>
+    </div>
   );
 }

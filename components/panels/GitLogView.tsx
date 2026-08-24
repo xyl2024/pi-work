@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { relativeTime } from "../rss/relativeTime";
 import type {
@@ -19,6 +19,10 @@ interface Props {
   branch: string | null;
   /** Bumped by GitPanel's refresh button; resets the list to page 1. */
   refreshToken: number;
+  /** Only show commit details while the right panel is expanded. */
+  showDetail: boolean;
+  /** Expands the host panel when a commit is selected. */
+  onCommitSelected?: () => void;
 }
 
 const PAGE_SIZE = 30;
@@ -43,7 +47,7 @@ function statusBadge(status: string): { label: string; color: string } {
  * per-file diff on the right. All state is local; GitPanel drives branch
  * selection and refresh via props.
  */
-export function GitLogView({ cwd, branch, refreshToken }: Props) {
+export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSelected }: Props) {
   const { t } = useI18n();
 
   const [commits, setCommits] = useState<GitLogCommit[]>([]);
@@ -61,6 +65,10 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
   const [fileDiffTruncated, setFileDiffTruncated] = useState(false);
   const [fileDiffLoading, setFileDiffLoading] = useState(false);
   const [fileDiffError, setFileDiffError] = useState<string | null>(null);
+
+  const detailColumnRef = useRef<HTMLDivElement>(null);
+  const [detailHeight, setDetailHeight] = useState<number | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
 
   const fetchPage = useCallback(async (skip: number, limit: number): Promise<GitLogPageResponse> => {
     const params = new URLSearchParams({ cwd });
@@ -95,6 +103,7 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
     setDetail(null);
     setSelectedFile(null);
     setFileDiffText(null);
+    setDetailHeight(null);
     void loadFirstPage();
   }, [cwd, branch, refreshToken, loadFirstPage]);
 
@@ -158,8 +167,48 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
   const handleSelectCommit = useCallback((c: GitLogCommit) => {
     setSelectedFile(null);
     setFileDiffText(null);
+    setDetailHeight(null);
     setSelected(c);
+    onCommitSelected?.();
+  }, [onCommitSelected]);
+
+  const handleResizeStart = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsResizing(true);
   }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const previousUserSelect = document.body.style.userSelect;
+    const previousCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "row-resize";
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const container = detailColumnRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const minHeight = 100;
+      const minDiffHeight = 80;
+      const nextHeight = Math.min(
+        Math.max(event.clientY - rect.top, minHeight),
+        Math.max(minHeight, rect.height - minDiffHeight),
+      );
+      setDetailHeight(nextHeight);
+    };
+    const handlePointerUp = () => setIsResizing(false);
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      document.body.style.userSelect = previousUserSelect;
+      document.body.style.cursor = previousCursor;
+    };
+  }, [isResizing]);
 
   // Load the file diff (inside the selected commit) when a file is picked.
   useEffect(() => {
@@ -196,7 +245,7 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
       <div
         onScroll={handleScroll}
         style={{
-          flex: "0 0 42%", minWidth: 140, height: "100%",
+          flex: showDetail ? "0 0 42%" : "1 1 100%", minWidth: 140, height: "100%",
           overflowY: "auto", borderRight: "1px solid var(--border)",
           background: "transparent",
         }}
@@ -259,7 +308,7 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
       </div>
 
       {/* Detail + diff */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100%", background: "transparent" }}>
+      {showDetail && <div ref={detailColumnRef} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", height: "100%", background: "transparent" }}>
         {!selected ? (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 12px", color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
             {t("Select a commit to view its details")}
@@ -267,7 +316,12 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
         ) : (
           <>
             {/* Detail */}
-            <div style={{ flex: "0 0 46%", minHeight: 100, overflowY: "auto", borderBottom: "1px solid var(--border)" }}>
+            <div style={{
+              flex: detailHeight === null ? "0 0 auto" : `0 0 ${detailHeight}px`,
+              minHeight: 100,
+              overflowY: detailHeight === null ? "visible" : "auto",
+              borderBottom: "1px solid var(--border)",
+            }}>
               {detailLoading ? (
                 <div style={{ padding: "16px 12px", fontSize: 12, color: "var(--text-dim)" }}>{t("Loading…")}</div>
               ) : detailError ? (
@@ -292,7 +346,7 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
                     <div style={{
                       fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5,
                       whiteSpace: "pre-wrap", wordBreak: "break-word",
-                      borderTop: "1px solid var(--border)", paddingTop: 6, maxHeight: 96, overflowY: "auto",
+                      borderTop: "1px solid var(--border)", paddingTop: 6,
                     }}>
                       {detail.body}
                     </div>
@@ -352,7 +406,19 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
               )}
             </div>
 
-            {/* File diff for the selected commit file */}
+            {/* Resize handle + file diff for the selected commit file */}
+            <div
+              role="separator"
+              aria-orientation="horizontal"
+              onPointerDown={handleResizeStart}
+              style={{
+                flex: "0 0 6px",
+                cursor: "row-resize",
+                background: "transparent",
+                borderBottom: "none",
+                touchAction: "none",
+              }}
+            />
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "transparent" }}>
               {fileDiffError ? (
                 <div style={{ padding: "16px 12px", fontSize: 12, color: "#f87171" }}>{fileDiffError}</div>
@@ -372,7 +438,7 @@ export function GitLogView({ cwd, branch, refreshToken }: Props) {
             </div>
           </>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

@@ -13,6 +13,8 @@ interface Props {
   /** Called when the Log view becomes active so the shell can widen the
    *  right panel (same "expanded" state the Canvas panel uses). */
   onExpandPanel?: () => void;
+  /** Whether the host right panel is currently expanded. */
+  isPanelExpanded?: boolean;
 }
 
 type Mode = "diff" | "log";
@@ -24,7 +26,7 @@ type Mode = "diff" | "log";
  *   - GitDiffView — worktree / staged changes
  *   - GitLogView  — branch-aware commit history + commit file diffs
  */
-export function GitPanel({ cwd, onExpandPanel }: Props) {
+export function GitPanel({ cwd, onExpandPanel, isPanelExpanded = false }: Props) {
   const { t } = useI18n();
   const toast = useToast();
 
@@ -241,7 +243,13 @@ export function GitPanel({ cwd, onExpandPanel }: Props) {
         </div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          <GitLogView cwd={cwd} branch={branch} refreshToken={refreshToken} />
+          <GitLogView
+            cwd={cwd}
+            branch={branch}
+            refreshToken={refreshToken}
+            showDetail={isPanelExpanded}
+            onCommitSelected={onExpandPanel}
+          />
         </div>
       )}
     </div>
