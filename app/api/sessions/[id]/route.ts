@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   deleteSession,
   readSessionDetails,
+  readSessionInfo,
   renameSession,
 } from "@/lib/server/sessions";
 import { getRpcSession } from "@/lib/server/rpc-manager";
@@ -16,8 +17,21 @@ export async function GET(req: Request, { params }: RouteContext) {
   const startedAt = Date.now();
   const url = new URL(req.url);
   const includeState = url.searchParams.has("includeState");
-  log.debug("get session requested", { id, includeState });
+  const summary = url.searchParams.has("summary");
+  log.debug("get session requested", { id, includeState, summary });
   try {
+    // Openers only need metadata. In particular, do not parse the complete
+    // JSONL/tree or scan every session before the chat controller loads it.
+    if (summary) {
+      const info = await readSessionInfo(id);
+      if (!info) {
+        log.warn("get session summary not found", { id, durationMs: elapsedMs(startedAt) });
+        return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      }
+      log.info("get session summary completed", { id, durationMs: elapsedMs(startedAt) });
+      return NextResponse.json({ info });
+    }
+
     const session = await readSessionDetails(id);
     if (!session) {
       log.warn("get session not found", { id, durationMs: elapsedMs(startedAt) });

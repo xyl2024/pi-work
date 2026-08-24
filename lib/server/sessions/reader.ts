@@ -607,6 +607,37 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
   };
 }
 
+/** Read only the metadata needed to locate/open a session tab. */
+export async function readSessionInfo(sessionId: string) {
+  const filePath = await resolveSessionPath(sessionId);
+  if (!filePath) return null;
+
+  const sm = SessionManager.open(filePath);
+  const header = sm.getHeader();
+  if (!header) return null;
+
+  let modified = header.timestamp ?? new Date().toISOString();
+  try {
+    modified = statSync(filePath).mtime.toISOString();
+  } catch {
+    // Use the header timestamp when stat fails.
+  }
+
+  return {
+    path: filePath,
+    id: header.id,
+    cwd: header.cwd ?? "",
+    // Deliberately omit the name in the lightweight opener path. The full
+    // session load remains responsible for loading conversation data.
+    created: header.timestamp,
+    modified,
+    // The opener only needs cwd/name/id. Avoid parsing the complete JSONL here.
+    messageCount: 0,
+    firstMessage: "",
+    running: false,
+  } satisfies SessionInfo;
+}
+
 /** Read the disk-backed session payload used by GET /api/sessions/[id]. */
 export async function readSessionDetails(sessionId: string) {
   const filePath = await resolveSessionPath(sessionId);
