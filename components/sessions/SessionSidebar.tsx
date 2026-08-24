@@ -16,6 +16,7 @@ import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "../ui/SidebarSection";
 import { GrokBotStage } from "../grokbot/GrokBotStage";
 import { GrokBotLab } from "../grokbot/GrokBotLab";
+import { useRunningSessions } from "@/hooks/runningSessionsStore";
 
 interface Props {
   selectedSession?: SessionInfo | null;
@@ -144,6 +145,7 @@ const SESSION_PAGE_SIZE_GROUPED = 3;
 const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 
 export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
+  const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
   const [labOpen, setLabOpen] = useState(false);
@@ -430,71 +432,32 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     }
   }, [workspaces, expandedCwds, perCwdSessions, fetchCwdSessions]);
 
-  // Poll /api/sessions/running every 3s for the `running` flag on each row.
-  // Merges into perCwdSessions — preserves scroll position + expand state.
+  // Merge the shared running-session snapshot into the visible rows. The
+  // singleton store owns the only /api/sessions/running poller.
   useEffect(() => {
-    const POLL_INTERVAL_MS = 3000;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let cancelled = false;
-
-    const fetchRunning = async () => {
-      try {
-        const res = await fetch("/api/sessions/running");
-        if (!res.ok) return;
-        const data = (await res.json()) as { sessions: { id: string; running: boolean }[] };
-        if (cancelled) return;
-        const byRunning = new Map(data.sessions.map((s) => [s.id, s.running] as const));
-        if (byRunning.size === 0) return;
-        setPerCwdSessions((prev) => {
-          let changed = false;
-          const next: Record<string, CwdSessionsState> = {};
-          for (const [cwd, state] of Object.entries(prev)) {
-            let rowChanged = false;
-            const rows = state.sessions.map((s) => {
-              if (byRunning.has(s.id) && s.running !== byRunning.get(s.id)) {
-                rowChanged = true;
-                return { ...s, running: byRunning.get(s.id)! };
-              }
-              return s;
-            });
-            if (rowChanged) {
-              changed = true;
-              next[cwd] = { ...state, sessions: rows };
-            } else {
-              next[cwd] = state;
-            }
+    if (runningById.size === 0) return;
+    setPerCwdSessions((prev) => {
+      let changed = false;
+      const next: Record<string, CwdSessionsState> = {};
+      for (const [cwd, state] of Object.entries(prev)) {
+        let rowChanged = false;
+        const rows = state.sessions.map((session) => {
+          if (runningById.has(session.id) && session.running !== runningById.get(session.id)) {
+            rowChanged = true;
+            return { ...session, running: runningById.get(session.id)! };
           }
-          return changed ? next : prev;
+          return session;
         });
-      } catch {
-        // best-effort
+        if (rowChanged) {
+          changed = true;
+          next[cwd] = { ...state, sessions: rows };
+        } else {
+          next[cwd] = state;
+        }
       }
-    };
-
-    const tick = () => {
-      if (cancelled || document.hidden) return;
-      fetchRunning().finally(() => {
-        if (cancelled || document.hidden) return;
-        timer = setTimeout(tick, POLL_INTERVAL_MS);
-      });
-    };
-
-    const onVisibility = () => {
-      if (document.hidden || cancelled) return;
-      if (timer) clearTimeout(timer);
-      timer = null;
-      tick();
-    };
-
-    document.addEventListener("visibilitychange", onVisibility);
-    timer = setTimeout(tick, POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, []);
+      return changed ? next : prev;
+    });
+  }, [runningById]);
 
   useEffect(() => {
     if (explorerRefreshKey !== undefined) setExplorerKey((k) => k + 1);

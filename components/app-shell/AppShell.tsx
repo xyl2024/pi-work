@@ -77,6 +77,7 @@ import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import type { RightBarCtx } from "../panels/right-bar/desc";
 import { useGitStatusStore } from "@/lib/client/git-status-store";
+import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
 import {
@@ -1076,6 +1077,45 @@ export function AppShell() {
   // what matters (cfg.order → ordered ids).
   const selectedSessionId = selectedSession?.id ?? null;
   const selectedCwd = selectedSession?.cwd ?? newSessionCwd ?? null;
+  const [statusBar, setStatusBar] = useState({
+    os: "—",
+    shell: "—",
+    ip: "—",
+    git: { branch: null as string | null, changedFiles: 0 },
+    runningSessions: 0,
+    today: { tokens: 0, cost: 0 },
+  });
+  const [statusBarTime, setStatusBarTime] = useState(() => new Date());
+  const { count: runningSessionCount } = useRunningSessions();
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const query = selectedCwd ? `?cwd=${encodeURIComponent(selectedCwd)}` : "";
+        const response = await fetch(`/api/status-bar${query}`, { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled) {
+          setStatusBar((previous) => ({ ...data, runningSessions: previous.runningSessions }));
+        }
+      } catch {
+        // The status bar is informational; retain the last known values.
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [selectedCwd]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setStatusBarTime(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const { snapshot: toolStatsSnapshot } = useToolCallStatsView();
   // Number of changed files for the active cwd's git repo — drives the
   // badge on the git-diff right-bar button. The store is event-driven
@@ -1254,7 +1294,9 @@ export function AppShell() {
 
   return (
     <>
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", padding: "var(--panel-padding)", border: "1px solid var(--border)", borderTop: "none", background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", padding: "var(--panel-padding)", paddingBottom: 4, border: "1px solid var(--border)", borderTop: "none", background: "var(--bg)" }}>
+      <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+      <div style={{ display: "flex", flex: 1, flexDirection: "column", minWidth: 0, minHeight: 0 }}>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       {/* Mobile overlay backdrop */}
       <div
@@ -1546,6 +1588,99 @@ export function AppShell() {
             </div>
           )}
         </div>
+      </div>
+      </div>
+
+      {/* Bottom status bar: spans the sidebar, chat, and right panel, but not
+          the separate right-side button column. */}
+      <div
+        style={{
+          flexShrink: 0,
+          minHeight: 20,
+          display: "flex",
+          alignItems: "center",
+          padding: "0 10px",
+          border: "none",
+          borderRadius: "var(--panel-radius)",
+          background: "var(--bg)",
+          color: "var(--text-muted)",
+          fontSize: 11,
+          lineHeight: 1,
+          marginTop: 4,
+        }}
+      >
+        <button
+          type="button"
+          onClick={toggleTerminal}
+          aria-label={t("Toggle terminal")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 2,
+            border: "none",
+            borderRadius: 6,
+            background: "transparent",
+            color: "inherit",
+            padding: "2px 0",
+            margin: 0,
+            font: "inherit",
+            lineHeight: 1,
+            whiteSpace: "nowrap",
+            cursor: "pointer",
+            transition: "background-color 0.12s ease",
+          }}
+          onMouseEnter={(event) => {
+            event.currentTarget.style.background = "var(--bg-hover)";
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.background = "transparent";
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 1024 1024" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
+            <path d="M213.333333 768c-12.8 0-21.333333-4.266667-29.866666-12.8-17.066667-17.066667-17.066667-42.666667 0-59.733333L366.933333 512 183.466667 328.533333c-17.066667-17.066667-17.066667-42.666667 0-59.733333s42.666667-17.066667 59.733333 0l213.333333 213.333333c17.066667 17.066667 17.066667 42.666667 0 59.733334l-213.333333 213.333333c-8.533333 8.533333-17.066667 12.8-29.866667 12.8zM810.666667 853.333333h-298.666667c-25.6 0-42.666667-17.066667-42.666667-42.666666s17.066667-42.666667 42.666667-42.666667h298.666667c25.6 0 42.666667 17.066667 42.666667 42.666667s-17.066667 42.666667-42.666667 42.666666z" fill="currentColor" />
+          </svg>
+          {statusBar.os} : {statusBar.shell}
+        </button>
+        <span style={{ marginLeft: 14 }}>{statusBar.ip}</span>
+        <button
+          type="button"
+          onClick={() => handleToggleRightPanelTab(GIT_DIFF_TAB_ID, handleOpenGitDiffTab)}
+          aria-label={t("Open git diff")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 2,
+            border: "none",
+            borderRadius: 6,
+            background: "transparent",
+            color: "inherit",
+            padding: "2px 0",
+            margin: "0 0 0 14px",
+            font: "inherit",
+            lineHeight: 1,
+            cursor: "pointer",
+            transition: "background-color 0.12s ease",
+          }}
+          onMouseEnter={(event) => {
+            event.currentTarget.style.background = "var(--bg-hover)";
+          }}
+          onMouseLeave={(event) => {
+            event.currentTarget.style.background = "transparent";
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 1024 1024" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
+            <path d="M110.933333 451.84L357.546667 204.8l72.106666 72.533333c-10.24 36.266667 6.4 75.946667 39.68 95.146667v236.373333c-25.6 14.506667-42.666667 42.24-42.666666 73.813334a85.333333 85.333333 0 0 0 85.333333 85.333333 85.333333 85.333333 0 0 0 85.333333-85.333333c0-31.573333-17.066667-59.306667-42.666666-73.813334V401.493333l88.32 89.173334c-2.986667 6.4-2.986667 13.653333-2.986667 21.333333a85.333333 85.333333 0 0 0 85.333333 85.333333 85.333333 85.333333 0 0 0 85.333334-85.333333 85.333333 85.333333 0 0 0-85.333334-85.333333c-7.68 0-14.933333 0-21.333333 2.986666L594.346667 320a84.48 84.48 0 0 0-49.066667-99.84c-18.346667-6.826667-37.546667-8.533333-54.613333-3.84L418.133333 144.213333l33.706667-33.28c33.28-33.706667 87.04-33.706667 120.32 0l340.906667 340.906667c33.706667 33.28 33.706667 87.04 0 120.32l-340.906667 340.906667c-33.28 33.706667-87.04 33.706667-120.32 0L110.933333 572.16c-33.706667-33.28-33.706667-87.04 0-120.32z" fill="currentColor" />
+          </svg>
+          <span>{statusBar.git.branch ?? "no-git"} · {statusBar.git.changedFiles} changed</span>
+        </button>
+        <span style={{ marginLeft: 14 }}>running: {runningSessionCount}</span>
+        <span style={{ marginLeft: "auto" }}>
+          today: {statusBar.today.tokens.toLocaleString()} tokens · ${statusBar.today.cost.toFixed(4)}
+        </span>
+        <span style={{ marginLeft: 14 }}>
+          {statusBarTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        </span>
+      </div>
       </div>
 
       {/* Right button bar — every toggle is driven by the
