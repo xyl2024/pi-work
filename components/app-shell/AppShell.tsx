@@ -384,16 +384,12 @@ export function AppShell() {
     }
   }, []);
 
-  // Tool metadata is only needed by the Context panel. Do not start an RPC
-  // session in the critical path of opening a historical conversation; load
-  // it for the active session in the background after the chat gets a chance
-  // to load and paint.
   useEffect(() => {
-    const sessionId = selectedSession?.id;
-    if (!sessionId) return;
-    const timer = setTimeout(() => void fetchTools(sessionId), 300);
-    return () => clearTimeout(timer);
-  }, [selectedSession?.id, fetchTools]);
+    for (const tabId of workspace.tabOrder) {
+      const tab = workspace.tabs[tabId];
+      if (tab?.sessionId) void fetchTools(tab.sessionId);
+    }
+  }, [workspace.tabOrder, workspace.tabs, fetchTools]);
 
   // Right panel — file tabs and the context tab
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
@@ -512,10 +508,11 @@ export function AppShell() {
       const tabId = knownTab?.tabId ?? `session:${session.id}`;
       setPendingScrollEntryIds((prev) => ({ ...prev, [tabId]: targetScrollEntryId }));
     }
+    void fetchTools(session.id);
     closeTopPanel();
     // URL synchronization is centralized below and uses replace, so opening a
     // background/existing tab never creates a browser-history entry by itself.
-  }, [closeTopPanel]);
+  }, [closeTopPanel, fetchTools]);
 
   // Command palette: convert search result to SessionInfo and open it
   const handleSelectSearchResult = useCallback((result: SessionSearchResult) => {
@@ -571,7 +568,7 @@ export function AppShell() {
   const handleOpenScheduledSession = useCallback((sessionId: string) => {
     void (async () => {
       try {
-        const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?summary`);
+        const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { info?: SessionInfo };
         if (data.info) handleSelectSession(data.info);
