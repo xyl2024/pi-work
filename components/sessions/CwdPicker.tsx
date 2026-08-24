@@ -158,7 +158,7 @@ export function CwdPicker({
           minWidth: 240,
           maxWidth: 300,
           background: "var(--bg-panel)",
-          border: "1px solid var(--border)",
+          border: "none",
           borderRadius: 10,
           boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
           fontSize: 12,
@@ -175,7 +175,7 @@ export function CwdPicker({
                     width: "100%",
                     padding: "8px 10px",
                     background: rcwd === cwd ? "var(--bg-selected)" : "none",
-                    border: "none", borderBottom: "1px solid var(--border)",
+                    border: "none",
                     color: rcwd === cwd ? "var(--text)" : "var(--text-muted)",
                     cursor: "pointer",
                     textAlign: "left",
@@ -209,7 +209,6 @@ export function CwdPicker({
                 display: "flex", alignItems: "center", gap: 7,
                 width: "100%", padding: "8px 10px",
                 background: "none", border: "none",
-                borderTop: (cwds?.length ?? 0) > 0 ? "1px solid var(--border)" : "none",
                 color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontSize: 11,
               }}
             >

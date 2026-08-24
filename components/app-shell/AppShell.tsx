@@ -1245,7 +1245,7 @@ export function AppShell() {
 
   return (
     <>
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", padding: "var(--panel-padding)", border: "1px solid var(--border)", background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", padding: "var(--panel-padding)", border: "1px solid var(--border)", borderTop: "none", background: "var(--bg)" }}>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       {/* Mobile overlay backdrop */}
       <div

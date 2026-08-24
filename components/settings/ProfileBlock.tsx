@@ -144,7 +144,6 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
       style={{
         position: "relative",
         padding: "8px 10px",
-        borderTop: "1px solid var(--border)",
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
