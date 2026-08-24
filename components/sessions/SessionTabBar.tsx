@@ -38,7 +38,7 @@ function StatusMark({ status }: { status: SessionTabStatus }) {
         aria-hidden
         style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
       >
-        <InlineLoader variant="aperture" size={14} color="var(--accent)" />
+        <InlineLoader variant="orbit" size={14} color="var(--accent)" />
       </span>
     );
   }
