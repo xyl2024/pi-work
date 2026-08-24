@@ -114,7 +114,7 @@ const THINKING_COLOR: Record<(typeof THINKING_LEVELS)[number], string> = {
 //
 // The model / thinking / tools controls reuse the chat input bar's pill
 // language: a borderless rounded trigger (hover/selected background only)
-// with an AnimatedPopover panel using the same chrome (bg-panel, 10px
+// with an AnimatedPopover panel using the same chrome (page background, 10px
 // radius, deep shadow). The cwd control reuses the actual CwdPicker used
 // in ChatInput.
 
@@ -147,7 +147,7 @@ const dropdownPanelStyle: CSSProperties = {
   left: 0,
   right: 0,
   zIndex: 1100,
-  background: "var(--bg-panel)",
+  background: "var(--bg)",
   border: "1px solid var(--border)",
   borderRadius: 10,
   boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
@@ -413,7 +413,6 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
             alignItems: "center",
             justifyContent: "space-between",
             padding: "14px 18px",
-            borderBottom: "1px solid var(--border)",
             flexShrink: 0,
           }}
         >
@@ -444,7 +443,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
               display: "flex",
               flexDirection: "column",
               gap: 4,
-              background: "var(--bg-panel)",
+              background: "var(--bg)",
             }}
           >
             {([
@@ -505,8 +504,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
             alignItems: "center",
             gap: 8,
             padding: "12px 18px",
-            borderTop: "1px solid var(--border)",
-            background: "var(--bg-panel)",
+            background: "var(--bg)",
             flexShrink: 0,
           }}
         >
@@ -846,7 +844,7 @@ function ToolsSelect({ form, update }: { form: FormState; update: <K extends key
             );
           })}
           {form.toolMode === "custom" && (
-            <div style={{ padding: "8px 10px", borderTop: "1px solid var(--border)", marginTop: 4 }}>
+            <div style={{ padding: "8px 10px", marginTop: 4 }}>
               <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{t("Comma-separated tool names")}</div>
               <input
                 value={form.toolNames}

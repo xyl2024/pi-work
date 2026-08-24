@@ -210,8 +210,7 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
             alignItems: "center",
             justifyContent: "space-between",
             padding: "12px 18px",
-            borderBottom: "1px solid var(--border)",
-            background: "var(--bg-panel)",
+            background: "var(--bg)",
             flexShrink: 0,
           }}
         >

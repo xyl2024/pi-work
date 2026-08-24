@@ -218,7 +218,7 @@ export function SkillDetail({
               padding: 12,
               borderRadius: 6,
               border: "1px solid var(--border)",
-              background: "var(--bg-panel)",
+              background: "var(--bg)",
               fontSize: 12,
               lineHeight: 1.55,
               fontFamily: "var(--font-mono)",
@@ -243,7 +243,7 @@ export function SkillDetail({
               border: "1px solid var(--border)",
               borderRadius: 6,
               overflow: "hidden",
-              background: "var(--bg-panel)",
+              background: "var(--bg)",
             }}
           >
             {group.files.map((file) => (

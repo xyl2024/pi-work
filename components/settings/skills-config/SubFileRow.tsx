@@ -168,7 +168,7 @@ export function SubFileRow({
                 padding: 10,
                 borderRadius: 4,
                 border: "1px solid var(--border)",
-                background: "var(--bg-panel)",
+                background: "var(--bg)",
                 fontSize: 11,
                 lineHeight: 1.5,
                 fontFamily: "var(--font-mono)",

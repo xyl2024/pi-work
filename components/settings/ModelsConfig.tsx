@@ -262,7 +262,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
           {catalogOpen ? <RuntimeModelCatalog /> : (
             <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-              <div style={{ width: 210, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+              <div style={{ width: 210, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
                 <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
                   {activeOAuth.map((provider) => {
                     const isSelected = selection?.type === "oauth" && selection.providerId === provider.id;

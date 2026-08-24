@@ -162,7 +162,7 @@ function PromptDetail({
             padding: 12,
             borderRadius: 6,
             border: "1px solid var(--border)",
-            background: "var(--bg-panel)",
+            background: "var(--bg)",
             color: "var(--text)",
             fontFamily: "var(--font-mono)",
             fontSize: 12,
@@ -328,7 +328,7 @@ function PromptEditorPanel({
           style={{
             padding: "7px 10px",
             fontSize: 13,
-            background: nameLocked ? "var(--bg-subtle)" : "var(--bg-panel)",
+            background: nameLocked ? "var(--bg-subtle)" : "var(--bg)",
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: nameLocked ? "var(--text-dim)" : "var(--text)",
@@ -347,7 +347,7 @@ function PromptEditorPanel({
           style={{
             padding: "7px 10px",
             fontSize: 13,
-            background: "var(--bg-panel)",
+            background: "var(--bg)",
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: "var(--text)",
@@ -364,7 +364,7 @@ function PromptEditorPanel({
           style={{
             padding: "7px 10px",
             fontSize: 13,
-            background: "var(--bg-panel)",
+            background: "var(--bg)",
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: "var(--text)",
@@ -385,7 +385,7 @@ function PromptEditorPanel({
             padding: "9px 10px",
             fontSize: 13,
             lineHeight: 1.5,
-            background: "var(--bg-panel)",
+            background: "var(--bg)",
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: "var(--text)",
@@ -546,7 +546,6 @@ export function PromptsConfig({
             alignItems: "center",
             justifyContent: "space-between",
             padding: "12px 18px",
-            borderBottom: "1px solid var(--border)",
             flexShrink: 0,
           }}
         >
@@ -590,7 +589,6 @@ export function PromptsConfig({
               display: "flex",
               flexDirection: "column",
               flexShrink: 0,
-              background: "var(--bg-panel)",
             }}
           >
             <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
@@ -672,7 +670,7 @@ export function PromptsConfig({
               )}
             </div>
 
-            <div style={{ padding: "8px 6px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+            <div style={{ padding: "8px 6px", flexShrink: 0 }}>
               <div
                 onClick={() => {
                   setMode("create");
@@ -758,7 +756,6 @@ export function PromptsConfig({
             alignItems: "center",
             justifyContent: "flex-end",
             padding: "10px 18px",
-            borderTop: "1px solid var(--border)",
             flexShrink: 0,
           }}
         >

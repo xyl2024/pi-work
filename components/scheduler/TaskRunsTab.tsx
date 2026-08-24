@@ -182,8 +182,7 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
   return (
     <div
       style={{
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
+        background: "var(--bg)",
         borderRadius: 8,
         padding: "10px 12px",
         display: "flex",
@@ -240,7 +239,6 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
                 aria-label={t("Open session")}
                 style={{
                   background: "transparent",
-                  border: "1px solid var(--border)",
                   borderRadius: 4,
                   color: "var(--text-muted)",
                   padding: "2px 6px",

@@ -108,11 +108,10 @@ export function TaskDetail({
       <div
         style={{
           padding: "14px 18px",
-          borderBottom: "1px solid var(--border)",
           display: "flex",
           flexDirection: "column",
           gap: 8,
-          background: "var(--bg-panel)",
+          background: "var(--bg)",
           flexShrink: 0,
         }}
       >
@@ -137,7 +136,6 @@ export function TaskDetail({
               padding: "5px 10px",
               fontSize: 12,
               background: "var(--bg)",
-              border: "1px solid var(--border)",
               borderRadius: 6,
               color: task.enabled ? "var(--warning)" : "var(--success)",
               cursor: "pointer",
@@ -156,7 +154,6 @@ export function TaskDetail({
               padding: "5px 10px",
               fontSize: 12,
               background: "var(--bg)",
-              border: "1px solid var(--border)",
               borderRadius: 6,
               color: "var(--text-muted)",
               cursor: "pointer",
@@ -176,7 +173,6 @@ export function TaskDetail({
               padding: "5px 10px",
               fontSize: 12,
               background: "var(--bg)",
-              border: "1px solid var(--border)",
               borderRadius: 6,
               color: "var(--text-muted)",
               cursor: triggering ? "default" : "pointer",
@@ -199,7 +195,6 @@ export function TaskDetail({
                 height: 28,
                 padding: 0,
                 background: "var(--bg)",
-                border: "1px solid var(--border)",
                 borderRadius: 6,
                 color: "var(--error)",
                 cursor: "pointer",

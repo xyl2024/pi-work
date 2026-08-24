@@ -134,8 +134,7 @@ export const tabBarStyle: CSSProperties = {
   display: "flex",
   gap: 4,
   padding: "4px 4px",
-  borderBottom: "1px solid var(--border)",
-  background: "var(--bg-panel)",
+  background: "var(--bg)",
 };
 
 export function tabItemStyle(active: boolean): CSSProperties {
@@ -144,11 +143,9 @@ export function tabItemStyle(active: boolean): CSSProperties {
     fontSize: 12,
     fontWeight: active ? 600 : 400,
     color: active ? "var(--text)" : "var(--text-muted)",
-    background: active ? "var(--bg)" : "transparent",
-    border: active ? "1px solid var(--border)" : "1px solid transparent",
-    borderBottomColor: active ? "var(--bg)" : "transparent",
+    background: "transparent",
+    border: "none",
     borderRadius: "6px 6px 0 0",
-    marginBottom: -1,
     cursor: "pointer",
     fontFamily: "inherit",
     transition: "color 0.12s",

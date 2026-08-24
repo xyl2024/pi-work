@@ -94,7 +94,7 @@ export function TaskListSidebar({
         minWidth: 240,
         maxWidth: 320,
         borderRight: "1px solid var(--border)",
-        background: "var(--bg-panel)",
+        background: "var(--bg)",
         display: "flex",
         flexDirection: "column",
         flexShrink: 0,
@@ -221,7 +221,7 @@ export function TaskListSidebar({
       )}
 
       {/* List */}
-      <div ref={listRef} data-scroll-side style={{ flex: 1, overflowY: "auto", borderTop: "1px solid var(--border)" }}>
+      <div ref={listRef} data-scroll-side style={{ flex: 1, overflowY: "auto" }}>
         {loading && tasks.length === 0 && (
           <EmptyHint text={t("Loading...")} />
         )}
@@ -263,7 +263,6 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
       style={{
         padding: "10px 12px",
         cursor: "pointer",
-        borderBottom: "1px solid var(--border)",
         background: selected ? "var(--bg-selected)" : "transparent",
         paddingLeft: 12,
         transition: "background 0.12s",

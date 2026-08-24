@@ -71,7 +71,7 @@ export function CronHumanizer({ cron, previewCount = 3, showCode = false, timezo
         </div>
       ))}
       {showCode && isValid && (
-        <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+        <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)", paddingTop: 6 }}>
           {cron}
         </div>
       )}

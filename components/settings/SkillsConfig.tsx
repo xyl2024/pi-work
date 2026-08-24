@@ -92,7 +92,6 @@ export function SkillsConfig({
             alignItems: "center",
             justifyContent: "space-between",
             padding: "12px 18px",
-            borderBottom: "1px solid var(--border)",
             flexShrink: 0,
           }}
         >
@@ -142,7 +141,6 @@ export function SkillsConfig({
               display: "flex",
               flexDirection: "column",
               flexShrink: 0,
-              background: "var(--bg-panel)",
             }}
           >
             <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
@@ -278,7 +276,6 @@ export function SkillsConfig({
             <div
               style={{
                 padding: "8px 6px",
-                borderTop: "1px solid var(--border)",
                 flexShrink: 0,
               }}
             >
@@ -360,7 +357,6 @@ export function SkillsConfig({
             alignItems: "center",
             justifyContent: "flex-end",
             padding: "10px 18px",
-            borderTop: "1px solid var(--border)",
             flexShrink: 0,
           }}
         >

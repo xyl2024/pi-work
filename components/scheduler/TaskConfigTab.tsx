@@ -49,7 +49,6 @@ export function TaskConfigTab({ task, modelIcons, onEdit }: Props) {
             fontSize: 11,
             fontWeight: 600,
             background: "var(--bg-hover)",
-            border: "1px solid var(--border)",
             borderRadius: 6,
             color: "var(--text)",
             cursor: "pointer",
@@ -125,8 +124,7 @@ function ConfigRow({ label, value }: { label: string; value: React.ReactNode }) 
         gap: 12,
         alignItems: "center",
         padding: "8px 12px",
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
+        background: "var(--bg)",
         borderRadius: 6,
       }}
     >
@@ -151,7 +149,6 @@ function ConfigPill({ children }: { children: React.ReactNode }) {
         gap: 6,
         padding: "3px 8px",
         background: "var(--bg)",
-        border: "1px solid var(--border)",
         borderRadius: 5,
       }}
     >
@@ -203,7 +200,6 @@ const mono: CSSProperties = {
   fontSize: 11,
   padding: "1px 5px",
   background: "var(--bg)",
-  border: "1px solid var(--border)",
   borderRadius: 3,
   color: "var(--text)",
 };

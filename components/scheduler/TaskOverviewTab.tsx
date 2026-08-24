@@ -115,8 +115,7 @@ function KpiCard({ label, value, hint, tone }: { label: string; value: string; h
     <div
       style={{
         padding: "10px 12px",
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
+        background: "var(--bg)",
         borderRadius: 8,
         display: "flex",
         flexDirection: "column",
@@ -161,7 +160,6 @@ const monoStyle: CSSProperties = {
   fontSize: 11,
   padding: "1px 5px",
   background: "var(--bg-subtle)",
-  border: "1px solid var(--border)",
   borderRadius: 3,
   color: "var(--text)",
 };
