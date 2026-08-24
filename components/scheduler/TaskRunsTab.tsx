@@ -11,14 +11,17 @@
  * stays accurate without the user having to manually refresh.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { StatusBadge } from "./StatusBadge";
 import { useNow } from "./useNow";
 import { formatDuration, formatRelative } from "./utils";
 import type { TaskRun } from "./types";
-import { IconExternal } from "./icons";
+import { IconChevronDown, IconExternal } from "./icons";
+import { useMarkdownComponents } from "@/components/chat/message-view/utils";
 
 export type RunFilter = "all" | "success" | "error" | "timeout" | "interrupted" | "running";
 
@@ -169,8 +172,9 @@ const LONG_RUNNING_THRESHOLD_MS = 10 * 60 * 1000;
 
 function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpenSession: (id: string) => void }) {
   const { t, locale } = useI18n();
-  const replyPreview = run.replyText?.slice(0, 240).trim() ?? null;
-  const replyMore = run.replyText && run.replyText.length > 240;
+  const [expanded, setExpanded] = useState(false);
+  const markdownComponents = useMarkdownComponents(false);
+  const hasReply = !!run.replyText?.trim();
 
   // For in-flight runs we don't know the duration yet, so we surface the
   // live elapsed time instead — and flag it as "long-running" once the
@@ -190,8 +194,20 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
         gap: 8,
       }}
     >
-      {/* Header row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      {/* Header row — clicking it toggles the stored reply. */}
+      <div
+        role={hasReply ? "button" : undefined}
+        tabIndex={hasReply ? 0 : undefined}
+        aria-expanded={hasReply ? expanded : undefined}
+        onClick={hasReply ? () => setExpanded((value) => !value) : undefined}
+        onKeyDown={hasReply ? (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setExpanded((value) => !value);
+          }
+        } : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", cursor: hasReply ? "pointer" : "default" }}
+      >
         <StatusBadge status={run.status} size="md" />
         {isLongRunning && (
           <Tooltip content={t("Long-running run warning")}>
@@ -235,7 +251,10 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
           {run.sessionId && (
             <Tooltip content={t("Open session")}>
               <button
-                onClick={() => onOpenSession(run.sessionId!)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenSession(run.sessionId!);
+                }}
                 aria-label={t("Open session")}
                 style={{
                   background: "transparent",
@@ -250,6 +269,14 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
                 <IconExternal width={10} height={10} />
               </button>
             </Tooltip>
+          )}
+          {hasReply && (
+            <IconChevronDown
+              width={13}
+              height={13}
+              aria-hidden="true"
+              style={{ color: "var(--text-muted)", transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+            />
           )}
         </div>
       </div>
@@ -270,21 +297,25 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
           {t(run.error)}
         </div>
       )}
-      {replyPreview && (
+      {hasReply && expanded && (
         <div
+          data-scroll-inset
+          className="markdown-body"
           style={{
-            fontSize: 12,
-            color: "var(--text)",
-            lineHeight: 1.5,
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
+            height: 320,
+            overflowY: "auto",
+            overflowX: "hidden",
+            padding: "10px 12px",
+            background: "var(--bg-subtle)",
+            borderRadius: 6,
           }}
         >
-          {replyPreview}
-          {replyMore && <span style={{ color: "var(--text-muted)" }}> ...</span>}
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+            {run.replyText}
+          </ReactMarkdown>
         </div>
       )}
-      {run.status === "success" && !replyPreview && (
+      {run.status === "success" && !hasReply && (
         <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("(no reply content)")}</div>
       )}
     </div>
