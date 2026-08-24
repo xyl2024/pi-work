@@ -130,6 +130,10 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             key={tab.tabId}
             data-session-tab-id={tab.tabId}
             onClick={() => onSelectTab(tab.tabId)}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              onCloseTab(tab.tabId);
+            }}
             onContextMenu={(event) => {
               event.preventDefault();
               const index = tabs.findIndex((item) => item.tabId === tab.tabId);

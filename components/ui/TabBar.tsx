@@ -126,6 +126,10 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               key={tab.id}
               data-tab-id={tab.id}
               onClick={() => onSelectTab(tab.id)}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                onCloseTab(tab.id);
+              }}
               onContextMenu={(e) => {
                 e.preventDefault();
                 onContextMenu?.(tab.id, e.clientX, e.clientY);
