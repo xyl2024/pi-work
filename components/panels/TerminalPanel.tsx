@@ -8,6 +8,7 @@ import "@xterm/xterm/css/xterm.css";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../ui/Tooltip";
 import { useToast } from "@/components/ui/Toast";
+import { copyText } from "@/lib/client/clipboard";
 
 const CWD_KEY = "pi-terminal-cwd";
 
@@ -135,6 +136,23 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
     });
     term.loadAddon(webLinks);
     term.open(container);
+    // Match common terminal emulators: Ctrl+Shift+C copies the active selection
+    // rather than sending the control sequence to the shell.
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown" || !event.ctrlKey || !event.shiftKey || event.code !== "KeyC") {
+        return true;
+      }
+      event.preventDefault();
+      if (!term.hasSelection()) return false;
+      void copyText(term.getSelection()).then(
+        () => term.clearSelection(),
+        (err: unknown) => {
+          console.error("terminal clipboard write failed", err);
+          toast.show({ kind: "error", message: tRef.current("Clipboard access denied") });
+        },
+      );
+      return false;
+    });
     if (active) term.focus();
     try {
       fit.fit();
@@ -198,15 +216,19 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
     // Right-click copy/paste. With selection → copy to clipboard; without →
     // paste from clipboard straight into the pty (same path as keyboard
     // input). xterm 6 does not bind the system clipboard on its own.
+    const sendClipboardText = (text: string) => {
+      if (!text) return;
+      const liveWs = wsRef.current;
+      if (liveWs?.readyState === WebSocket.OPEN) {
+        liveWs.send(JSON.stringify({ type: "data", data: text }));
+      }
+    };
+
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
-      if (!navigator.clipboard) {
-        toast.show({ kind: "error", message: tRef.current("Clipboard not available") });
-        return;
-      }
       if (term.hasSelection()) {
         const selection = term.getSelection();
-        navigator.clipboard.writeText(selection).then(
+        void copyText(selection).then(
           () => {
             term.clearSelection();
           },
@@ -215,23 +237,29 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
             toast.show({ kind: "error", message: tRef.current("Clipboard access denied") });
           },
         );
-      } else {
-        navigator.clipboard.readText().then(
-          (text) => {
-            if (!text) return;
-            const liveWs = wsRef.current;
-            if (liveWs && liveWs.readyState === WebSocket.OPEN) {
-              liveWs.send(JSON.stringify({ type: "data", data: text }));
-            }
-          },
-          (err: unknown) => {
-            console.error("terminal clipboard read failed", err);
-            toast.show({ kind: "error", message: tRef.current("Clipboard access denied") });
-          },
-        );
+        return;
       }
+
+      // Reading programmatically is prohibited by browsers on HTTP LAN origins.
+      // A user-initiated paste event still exposes clipboardData, so Ctrl/Cmd+V
+      // remains available below even when the async Clipboard API is not.
+      if (!navigator.clipboard?.readText) {
+        toast.show({ kind: "error", message: tRef.current("Use Ctrl + Shift + V to paste") });
+        return;
+      }
+      navigator.clipboard.readText().then(sendClipboardText, (err: unknown) => {
+        console.error("terminal clipboard read failed", err);
+        toast.show({ kind: "error", message: tRef.current("Use Ctrl + Shift + V to paste") });
+      });
+    };
+    const handlePaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData("text/plain");
+      if (text === undefined) return;
+      e.preventDefault();
+      sendClipboardText(text);
     };
     term.element?.addEventListener("contextmenu", handleContextMenu);
+    term.element?.addEventListener("paste", handlePaste);
 
     const ro = new ResizeObserver(() => {
       try {
@@ -247,6 +275,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
       dataSub.dispose();
       resizeSub.dispose();
       term.element?.removeEventListener("contextmenu", handleContextMenu);
+      term.element?.removeEventListener("paste", handlePaste);
       ro.disconnect();
       try {
         ws.close();

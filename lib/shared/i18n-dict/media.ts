@@ -9,6 +9,7 @@ export const media = {
   "Audio": "音频",
   "Clipboard access denied": "无法访问剪贴板",
   "Clipboard not available": "剪贴板不可用，请使用 HTTPS 或 localhost",
+  "Use Ctrl + Shift + V to paste": "请使用 Ctrl + Shift + V 粘贴",
   "Search files…": "搜索文件…",
   "No files in this session yet.": "本次会话还没有 show_media 调用过多媒体文件。",
   "Copy path": "复制路径",
