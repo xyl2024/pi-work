@@ -22,7 +22,7 @@ import { TaskDetail } from "./TaskDetail";
 import { TaskFormModal } from "./TaskFormModal";
 import { apiFetch } from "./utils";
 import type { ModelMeta, ScheduledTask } from "./types";
-import { IconClose } from "./icons";
+import { CloseIcon } from "@/components/ui/icons";
 
 interface Props {
   open: boolean;
@@ -239,7 +239,7 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
                 lineHeight: 1,
               }}
             >
-              <IconClose width={14} height={14} />
+              <CloseIcon width={14} height={14} />
             </button>
           </div>
         </div>

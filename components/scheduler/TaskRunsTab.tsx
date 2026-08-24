@@ -20,7 +20,7 @@ import { StatusBadge } from "./StatusBadge";
 import { useNow } from "./useNow";
 import { formatDuration, formatRelative } from "./utils";
 import type { TaskRun } from "./types";
-import { IconChevronDown, IconExternal } from "./icons";
+import { AlertIcon, ChevronDownIcon, ExternalLinkIcon } from "@/components/ui/icons";
 import { useMarkdownComponents } from "@/components/chat/message-view/utils";
 
 export type RunFilter = "all" | "success" | "error" | "timeout" | "interrupted" | "running";
@@ -225,11 +225,7 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
                 lineHeight: 1.4,
               }}
             >
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
+              <AlertIcon size={9} strokeWidth={2.5} style={{ flexShrink: 0 }} />
               {t("Long-running")}
             </span>
           </Tooltip>
@@ -266,12 +262,12 @@ function RunCard({ run, now, onOpenSession }: { run: TaskRun; now: number; onOpe
                   alignItems: "center",
                 }}
               >
-                <IconExternal width={10} height={10} />
+                <ExternalLinkIcon width={10} height={10} />
               </button>
             </Tooltip>
           )}
           {hasReply && (
-            <IconChevronDown
+            <ChevronDownIcon
               width={13}
               height={13}
               aria-hidden="true"

@@ -1516,7 +1516,7 @@ export function AppShell() {
                   onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelState === "expanded" ? "var(--accent)" : "var(--text-muted)"; }}
                 >
-                  {rightPanelState === "expanded" ? ExpandLeftIcon() : <ExpandRightIcon size={16} />}
+                  {rightPanelState === "expanded" ? <ExpandLeftIcon /> : <ExpandRightIcon size={16} />}
                 </button>
               </Tooltip>
             </div>

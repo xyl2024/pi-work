@@ -26,7 +26,7 @@ import { TaskConfigTab } from "./TaskConfigTab";
 import { apiFetch, isOnceDone } from "./utils";
 import { tabBarStyle, tabItemStyle } from "./styles";
 import type { DetailTab, ScheduledTask, TaskRun } from "./types";
-import { IconEdit, IconPause, IconPlay, IconTrash } from "./icons";
+import { EditIcon, PauseIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
 
 interface Props {
   task: ScheduledTask;
@@ -142,7 +142,7 @@ export function TaskDetail({
               fontFamily: "inherit",
             }}
           >
-            {task.enabled ? <IconPause width={11} height={11} /> : <IconPlay width={11} height={11} />}
+            {task.enabled ? <PauseIcon width={11} height={11} /> : <PlayIcon width={11} height={11} />}
             {task.enabled ? t("Pause") : t("Enable")}
           </button>
           <button
@@ -160,7 +160,7 @@ export function TaskDetail({
               fontFamily: "inherit",
             }}
           >
-            <IconEdit width={11} height={11} />
+            <EditIcon width={11} height={11} />
             {t("Edit")}
           </button>
           <button
@@ -180,7 +180,7 @@ export function TaskDetail({
               fontFamily: "inherit",
             }}
           >
-            <IconPlay width={11} height={11} />
+            <PlayIcon width={11} height={11} />
             {triggering ? t("Triggering...") : t("Run now")}
           </button>
           <Tooltip content={t("Delete task")}>
@@ -200,7 +200,7 @@ export function TaskDetail({
                 cursor: "pointer",
               }}
             >
-              <IconTrash width={12} height={12} />
+              <TrashIcon width={12} height={12} />
             </button>
           </Tooltip>
         </div>

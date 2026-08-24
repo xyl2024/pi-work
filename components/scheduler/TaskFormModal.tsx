@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
-import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
+import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/icons";
 import { CwdPicker } from "@/components/sessions/CwdPicker";
 import { AnimatedPopover } from "@/components/ui/AnimatedPopover";
 import { Cron } from "croner";
@@ -37,7 +37,7 @@ import {
   inputMonoStyle,
   textareaStyle,
 } from "./styles";
-import { IconClose } from "./icons";
+import { CheckIcon, CloseIcon, LightbulbIcon, ToolIcon } from "@/components/ui/icons";
 
 // ── Form state ───────────────────────────────────────────────────
 
@@ -191,9 +191,7 @@ function useDropdown() {
 /** Active checkmark / inactive spacer — ChatInput's row leading column. */
 function CheckOrGap({ active }: { active: boolean }) {
   return active ? (
-    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <polyline points="1.5 5 4 7.5 8.5 2.5" />
-    </svg>
+    <CheckIcon size={10} stroke="var(--accent)" style={{ flexShrink: 0 }} />
   ) : (
     <span style={{ width: 10, flexShrink: 0 }} />
   );
@@ -202,20 +200,14 @@ function CheckOrGap({ active }: { active: boolean }) {
 /** Lightbulb icon — same glyph as ChatInput's thinking trigger. */
 function ThinkingIcon() {
   return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
-      <line x1="7" y1="18" x2="12" y2="18" />
-      <line x1="8" y1="21" x2="11" y2="21" />
-    </svg>
+    <LightbulbIcon size={11} style={{ flexShrink: 0 }} />
   );
 }
 
 /** Wrench icon — same glyph as ChatInput's tools trigger. */
 function ToolsIcon() {
   return (
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </svg>
+    <ToolIcon size={11} style={{ flexShrink: 0 }} />
   );
 }
 
@@ -427,7 +419,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
               cursor: "pointer", padding: "2px 6px", lineHeight: 1,
             }}
           >
-            <IconClose width={16} height={16} />
+            <CloseIcon width={16} height={16} />
           </button>
         </div>
 

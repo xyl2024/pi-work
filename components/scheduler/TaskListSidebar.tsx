@@ -20,7 +20,7 @@ import { isOnceDone } from "./utils";
 import { useNow } from "./useNow";
 import { formatCompactRelative } from "./utils";
 import type { ScheduledTask, TaskRunStatus } from "./types";
-import { IconAlert, IconPlus, IconSearch } from "./icons";
+import { AlertIcon, ClockIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
 
 export type SidebarFilter = "all" | "enabled" | "disabled" | "error";
 
@@ -124,10 +124,10 @@ export function TaskListSidebar({
             lineHeight: 1,
           }}
         >
-          <IconPlus width={14} height={14} />
+          <PlusIcon width={14} height={14} />
         </button>
         <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
-          <IconSearch
+          <SearchIcon
             width={11}
             height={11}
             style={{
@@ -285,7 +285,7 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
           {task.name}
         </span>
         {showErrorBadge && (
-          <IconAlert width={11} height={11} style={{ color: lastStatus === "timeout" || lastStatus === "interrupted" ? "var(--warning)" : "var(--error)", flexShrink: 0 }} />
+          <AlertIcon width={11} height={11} style={{ color: lastStatus === "timeout" || lastStatus === "interrupted" ? "var(--warning)" : "var(--error)", flexShrink: 0 }} />
         )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.35 }}>
@@ -326,20 +326,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   const { t } = useI18n();
   return (
     <div style={{ padding: "32px 18px", textAlign: "center", color: "var(--text-muted)" }}>
-      <svg
-        width="56"
-        height="56"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ color: "var(--text-muted)", margin: "0 auto 12px", display: "block" }}
-      >
-        <circle cx="12" cy="12" r="9" />
-        <polyline points="12 7 12 12 15 14" />
-      </svg>
+      <ClockIcon size={56} strokeWidth={1.2} style={{ color: "var(--text-muted)", margin: "0 auto 12px", display: "block" }} />
       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>
         {t("No scheduled tasks yet")}
       </div>
@@ -364,7 +351,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
           fontFamily: "inherit",
         }}
       >
-        <IconPlus width={11} height={11} />
+        <PlusIcon width={11} height={11} />
         {t("New task")}
       </button>
     </div>

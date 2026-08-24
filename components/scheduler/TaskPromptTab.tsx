@@ -11,7 +11,7 @@ import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import type { ScheduledTask } from "./types";
-import { IconCheck, IconCopy } from "./icons";
+import { CheckIcon, CopyIcon } from "@/components/ui/icons";
 
 interface Props {
   task: ScheduledTask;
@@ -54,7 +54,7 @@ export function TaskPromptTab({ task }: Props) {
             fontFamily: "inherit",
           }}
         >
-          {copied ? <IconCheck width={10} height={10} /> : <IconCopy width={10} height={10} />}
+          {copied ? <CheckIcon width={10} height={10} /> : <CopyIcon width={10} height={10} />}
           {copied ? t("Copied") : t("Copy")}
         </button>
       </div>

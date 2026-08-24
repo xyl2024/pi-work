@@ -41,7 +41,7 @@ import {
   RssIcon,
   LlmAuditIcon,
   StarIconWithFill,
-} from "./icons";
+} from "@/components/ui/icons";
 import {
   ContextDocumentIcon,
   PencilIcon,
@@ -53,7 +53,7 @@ import {
   WrenchIcon,
   TerminalIcon,
   CalendarCheckIcon,
-} from "@/components/ui/animated-icons";
+} from "@/components/ui/icons";
 
 // Tab kinds the right column toggles. Kept narrow so an accidental
 // Tab.kind value surfaces as a type error in the descriptor registry.
@@ -169,7 +169,7 @@ const panelToggleDescriptor: RightBarDescriptor = {
   slot: "top",
   labelKey: "", // resolved below — active/inactive have different labels
   isActive: (ctx) => ctx.rightPanelState !== "closed",
-  content: () => PanelToggleIcon(),
+  content: () => <PanelToggleIcon />,
   onClick: (ctx) => ctx.toggleRightPanel(),
   // Wrap so we can swap the tooltip when active.
 };
@@ -250,7 +250,7 @@ const rssDescriptor: RightBarDescriptor = {
   labelKey: "RSS",
   isActive: (ctx) => ctx.activeTabKind === "rss",
   badge: (ctx) => <CountBadge count={ctx.rssUnread} />,
-  content: () => RssIcon(),
+  content: () => <RssIcon />,
   onClick: (ctx) => ctx.toggleRightPanelTab(RSS_TAB_ID, ctx.openTab.rss),
 };
 
@@ -279,7 +279,7 @@ const favoritesDescriptor: RightBarDescriptor = {
   // Active state uses fill="var(--accent)" instead of just the color flip,
   // matching the original SVG.
   content: (ctx) =>
-    StarIconWithFill(ctx.activeTabKind === "favorites" ? "var(--accent)" : "none"),
+    <StarIconWithFill fill={ctx.activeTabKind === "favorites" ? "var(--accent)" : "none"} />,
   onClick: (ctx) =>
     ctx.toggleRightPanelTab(FAVORITES_TAB_ID, ctx.openTab.favorites),
 };
@@ -313,7 +313,7 @@ const llmAuditDescriptor: RightBarDescriptor = {
   sessionBound: true,
   labelKey: "Open LLM API audit",
   isActive: (ctx) => ctx.activeTabKind === "llmAudit",
-  content: () => LlmAuditIcon(),
+  content: () => <LlmAuditIcon />,
   onClick: (ctx) =>
     ctx.toggleRightPanelTab(LLM_AUDIT_TAB_ID, ctx.openTab.llmAudit),
 };

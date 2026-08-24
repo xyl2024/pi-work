@@ -9,7 +9,7 @@
 
 import type { CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
+import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/icons";
 import type { ScheduledTask } from "./types";
 
 interface Props {
