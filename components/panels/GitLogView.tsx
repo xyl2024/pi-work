@@ -246,7 +246,7 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
         onScroll={handleScroll}
         style={{
           flex: showDetail ? "0 0 42%" : "1 1 100%", minWidth: 140, height: "100%",
-          overflowY: "auto", borderRight: "1px solid var(--border)",
+          overflowY: "auto", overflowX: "hidden", borderRight: "1px solid var(--border)",
           background: "transparent",
         }}
       >
@@ -273,22 +273,22 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
                 onClick={() => handleSelectCommit(c)}
                 style={{
                   display: "flex", flexDirection: "column", gap: 2,
-                  width: "100%", padding: "6px 10px",
+                  width: "calc(100% - 12px)", boxSizing: "border-box", margin: "3px 6px", padding: "7px 10px",
                   background: active ? "var(--bg-selected)" : "transparent",
-                  border: "none", borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent",
+                  border: "none", borderRadius: 6,
                   color: "var(--text)", cursor: "pointer", textAlign: "left",
-                  fontSize: 12, borderBottom: "1px solid var(--border)",
+                  fontSize: 12, overflowWrap: "anywhere",
                 }}
                 onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = active ? "var(--bg-selected)" : "transparent"; }}
               >
                 <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                   <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", fontWeight: 600 }}>{c.shortHash}</span>
-                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text)" }}>
+                  <span style={{ flex: 1, minWidth: 0, color: "var(--text)", whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}>
                     {c.subject}
                   </span>
                 </span>
-                <span style={{ fontSize: 10, color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span style={{ fontSize: 10, color: "var(--text-dim)", whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word" }}>
                   {c.authorName} · {formatDate(c.authorDate)}
                 </span>
               </button>

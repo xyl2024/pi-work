@@ -186,7 +186,7 @@ export function GitDiffView({ cwd, status }: Props) {
       {/* File list */}
       <div style={{
         flex: fileListHeight === null ? "0 0 40%" : `0 0 ${fileListHeight}px`,
-        minHeight: 80, overflowY: fileListHeight === null ? "auto" : "auto",
+        minHeight: 80, overflowY: fileListHeight === null ? "auto" : "auto", overflowX: "hidden",
       }}>
         {visibleFiles.length === 0 ? (
           <div style={{ padding: "20px 12px", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>
@@ -201,11 +201,11 @@ export function GitDiffView({ cwd, status }: Props) {
                 onClick={() => handleSelectFile(f)}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
-                  width: "100%", padding: "5px 10px",
+                  width: "calc(100% - 12px)", boxSizing: "border-box", margin: "3px 6px", padding: "6px 10px",
                   background: active ? "var(--bg-selected)" : "transparent",
-                  border: "none", borderLeft: active ? "2px solid var(--accent)" : "2px solid transparent",
+                  border: "none", borderRadius: 6,
                   color: "var(--text)", cursor: "pointer", textAlign: "left",
-                  fontSize: 12,
+                  fontSize: 12, overflowWrap: "anywhere",
                 }}
                 onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "var(--bg-hover)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = active ? "var(--bg-selected)" : "transparent"; }}
@@ -220,7 +220,7 @@ export function GitDiffView({ cwd, status }: Props) {
                   {GIT_STATUS_LABEL[f.status]}
                 </span>
                 <span style={{
-                  flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  flex: 1, minWidth: 0, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word",
                   color: f.status === "??" ? "var(--text-muted)" : "var(--text)",
                 }}>
                   {f.path}
