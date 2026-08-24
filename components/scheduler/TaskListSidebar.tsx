@@ -261,15 +261,16 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
       data-task-row={task.id}
       onClick={onSelect}
       style={{
-        padding: "10px 12px",
+        margin: "2px 8px",
+        padding: "8px 10px",
         cursor: "pointer",
         background: selected ? "var(--bg-selected)" : "transparent",
-        paddingLeft: 12,
+        borderRadius: 8,
         transition: "background 0.12s",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <StatusBadge status={isOnceDone(task) ? "done" : task.enabled ? "enabled" : "paused"} size="sm" />
+        <StatusBadge status={isOnceDone(task) ? "done" : task.enabled ? "enabled" : "paused"} size="sm" bare />
         <span
           style={{
             flex: 1,
@@ -287,17 +288,18 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
           <IconAlert width={11} height={11} style={{ color: lastStatus === "timeout" || lastStatus === "interrupted" ? "var(--warning)" : "var(--error)", flexShrink: 0 }} />
         )}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text)", fontWeight: 500 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-muted)", lineHeight: 1.35 }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           <CronHumanizer cron={task.cron} showCode={false} timezone={task.timezone} />
         </span>
-      </div>
-      <div style={{ marginTop: 3, fontSize: 11, color: "var(--text-muted)" }}>
-        {!task.enabled
-          ? t("Paused")
-          : isOnceDone(task)
-            ? t("Executed")
-            : t("Next: {time}", { time: formatCompactRelative(now, task.nextRunAt, locale) })}
+        <span style={{ flexShrink: 0, opacity: 0.75 }}>·</span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {!task.enabled
+            ? t("Paused")
+            : isOnceDone(task)
+              ? t("Executed")
+              : t("Next: {time}", { time: formatCompactRelative(now, task.nextRunAt, locale) })}
+        </span>
       </div>
     </div>
   );
