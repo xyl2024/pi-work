@@ -396,6 +396,18 @@ export function AppShell() {
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelState, setRightPanelState] = useState<"closed" | "normal" | "expanded">("closed");
 
+  // Open the right panel at its current width if it's already visible —
+  // only the "closed → normal" transition is forced. The user's expanded
+  // choice survives opening a file or switching to a different tab, so
+  // clicking another tab/file from an expanded panel doesn't snap the
+  // chat back. The expand toggle in the tab bar (and the canvas/tokens
+  // descriptors, which always force "expanded") remain the only ways to
+  // collapse the panel down. Used by every `handleOpenXxxTab` /
+  // `handleOpenFile` below.
+  const ensureRightPanelOpen = useCallback(() => {
+    setRightPanelState((v) => (v === "closed" ? "normal" : v));
+  }, []);
+
   // Favorites — global list of session IDs, shared between the sidebar indicator
   // and the right-panel CollectionPanel so the two views stay in sync.
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
@@ -716,8 +728,8 @@ export function AppShell() {
       return [...prev, { kind: "file", id: tabId, label: fileName, filePath }];
     });
     setActiveFileTabId(tabId);
-    setRightPanelState("normal");
-  }, []);
+    ensureRightPanelOpen();
+  }, [ensureRightPanelOpen]);
 
   // Open the todos tab. If it's already in the tab strip, just activate it;
   // if not, insert it at the leftmost position and activate it. Mirrors
@@ -728,8 +740,8 @@ export function AppShell() {
       return [{ kind: "todo", id: TODO_TAB_ID, label: t("Todos") }, ...prev];
     });
     setActiveFileTabId(TODO_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Open the favorites tab — same pattern as todos / file tabs.
   const handleOpenFavoritesTab = useCallback(() => {
@@ -738,8 +750,8 @@ export function AppShell() {
       return [{ kind: "favorites", id: FAVORITES_TAB_ID, label: t("Favorites") }, ...prev];
     });
     setActiveFileTabId(FAVORITES_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Open the translate tab — same pattern as todos / favorites.
   const handleOpenTranslateTab = useCallback(() => {
@@ -748,8 +760,8 @@ export function AppShell() {
       return [{ kind: "translate", id: TRANSLATE_TAB_ID, label: t("Translate") }, ...prev];
     });
     setActiveFileTabId(TRANSLATE_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Open the tool-calls tab. Toggles: clicking when it's already the active
   // tab hides the right panel entirely; otherwise activate (or create) the
@@ -766,8 +778,8 @@ export function AppShell() {
       return [{ kind: "toolCalls", id: TOOL_CALLS_TAB_ID, label: t("Tool Calls") }, ...prev];
     });
     setActiveFileTabId(TOOL_CALLS_TAB_ID);
-    setRightPanelState("normal");
-  }, [activeFileTabId, rightPanelState, t]);
+    ensureRightPanelOpen();
+  }, [activeFileTabId, rightPanelState, t, ensureRightPanelOpen]);
 
   // Open the JSON formatter tab — same pattern as todos / favorites / translate.
   const handleOpenJsonTab = useCallback(() => {
@@ -776,8 +788,8 @@ export function AppShell() {
       return [{ kind: "json", id: JSON_TAB_ID, label: t("JSON") }, ...prev];
     });
     setActiveFileTabId(JSON_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Global keyboard shortcuts.
   useEffect(() => {
@@ -845,8 +857,8 @@ export function AppShell() {
       return [{ kind: "canvas", id: CANVAS_TAB_ID, label: t("Canvas") }, ...prev];
     });
     setActiveFileTabId(CANVAS_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Open the RSS panel — same pattern as translate / http / json.
   const handleOpenRssTab = useCallback(() => {
@@ -855,8 +867,8 @@ export function AppShell() {
       return [{ kind: "rss", id: RSS_TAB_ID, label: t("RSS") }, ...prev];
     });
     setActiveFileTabId(RSS_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Open the Token-audit panel.
   const handleOpenTokensTab = useCallback(() => {
@@ -865,8 +877,8 @@ export function AppShell() {
       return [{ kind: "tokens", id: TOKENS_TAB_ID, label: t("Token audit") }, ...prev];
     });
     setActiveFileTabId(TOKENS_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Open the LLM API audit panel.
   const handleOpenLlmAuditTab = useCallback(() => {
@@ -875,8 +887,8 @@ export function AppShell() {
       return [{ kind: "llmAudit", id: LLM_AUDIT_TAB_ID, label: t("LLM API audit") }, ...prev];
     });
     setActiveFileTabId(LLM_AUDIT_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Open the Context panel — combines the session system prompt and tool list.
   const handleOpenContextTab = useCallback(() => {
@@ -891,8 +903,8 @@ export function AppShell() {
       return [{ kind: "context", id: CONTEXT_TAB_ID, label: t("Context") }, ...prev];
     });
     setActiveFileTabId(CONTEXT_TAB_ID);
-    setRightPanelState("normal");
-  }, [activeFileTabId, rightPanelState, t]);
+    ensureRightPanelOpen();
+  }, [activeFileTabId, rightPanelState, t, ensureRightPanelOpen]);
 
   // Open the git diff panel — same pattern as translate / rss / tokens.
   const handleOpenGitDiffTab = useCallback(() => {
@@ -901,8 +913,8 @@ export function AppShell() {
       return [{ kind: "gitDiff", id: GIT_DIFF_TAB_ID, label: t("Git Diff") }, ...prev];
     });
     setActiveFileTabId(GIT_DIFF_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Open the conversation-tree panel — card map of the session's tree.
   const handleOpenConversationTreeTab = useCallback(() => {
@@ -911,8 +923,8 @@ export function AppShell() {
       return [{ kind: "conversationTree", id: CONVERSATION_TREE_TAB_ID, label: t("Conversation Tree") }, ...prev];
     });
     setActiveFileTabId(CONVERSATION_TREE_TAB_ID);
-    setRightPanelState("normal");
-  }, [t]);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
 
   // Click on a card in the conversation-tree panel. We always resolve the
   // clicked card to the deepest leaf entry in its subtree, so the chat
