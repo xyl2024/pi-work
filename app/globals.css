@@ -36,6 +36,10 @@
   --bg-hover: #f0f0f0;
   --bg-selected: #ececec;
   --border: #cccccc;
+  /* Panel/card outer outline. Lighter than --border so the five floating
+     panels (sidebar, chat, terminal, right panel, right-bar column) read
+     as subtle separators without competing with inner UI borders. */
+  --panel-border: #ededed;
   --text: #1a1a1a;
   --text-muted: #6b7280;
   --text-dim: #9ca3af;
@@ -72,6 +76,7 @@
   --bg-hover: #2e2e2e;
   --bg-selected: #383838;
   --border: #3a3a3a;
+  --panel-border: #3a3a3a;
   --text: #bcbcbc;
   --text-muted: #9a9894;
   --text-dim: #8a8782;

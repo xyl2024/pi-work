@@ -127,7 +127,7 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
         width: 36,
         minHeight: 0,
         background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
+        border: "1px solid var(--panel-border)",
         // Floating-card mode (matches the 3 main panels): round the four
         // corners and surface a 10px gap to the right panel on its left
         // edge. `overflow: hidden` clips each 36×36 button to the

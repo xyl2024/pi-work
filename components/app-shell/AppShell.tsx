@@ -1267,7 +1267,7 @@ export function AppShell() {
         className={`sidebar-container${sidebarOpen ? "" : " sidebar-closed"}`}
         style={{
           background: "var(--bg-panel)",
-          border: "1px solid var(--border)",
+          border: "1px solid var(--panel-border)",
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
@@ -1291,7 +1291,7 @@ export function AppShell() {
       <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen ? "var(--panel-gap-stack)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
         {/* Chat card — keeps a minimum height so dragging the terminal taller
             can never squash the input box out of view. */}
-        <div style={{ flex: "1 1 0%", minHeight: MIN_CHAT_HEIGHT, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--panel-radius)", border: "1px solid var(--border)", background: "var(--bg)" }}>
+        <div style={{ flex: "1 1 0%", minHeight: MIN_CHAT_HEIGHT, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--panel-radius)", border: "1px solid var(--panel-border)", background: "var(--bg)" }}>
         {showChat && (
           <SessionTabBar
             leadingControl={
@@ -1401,7 +1401,7 @@ export function AppShell() {
             flexBasis: terminalOpen ? terminalHeight : 0,
             minHeight: 0,
             overflow: "hidden",
-            border: terminalOpen ? "1px solid var(--border)" : "none",
+            border: terminalOpen ? "1px solid var(--panel-border)" : "none",
             borderRadius: terminalOpen ? "var(--panel-radius)" : 0,
             background: "var(--bg)",
             display: "flex",
@@ -1425,7 +1425,7 @@ export function AppShell() {
         style={{
           display: "flex",
           flexDirection: "column",
-          border: "1px solid var(--border)",
+          border: "1px solid var(--panel-border)",
           background: "var(--bg)",
           width: rightPanelState === "closed" ? 0 : rightWidth,
           minWidth: rightPanelState === "closed" ? 0 : rightWidth,
