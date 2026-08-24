@@ -1,9 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useI18n, type Locale } from "@/hooks/useI18n";
-import { usePopoverPosition } from "@/hooks/usePopoverPosition";
+import {
+  PickerTrigger,
+  PopoverPortal,
+  useControllableOpen,
+  useDismissableLayer,
+} from "@/components/ui/popover";
 
 export interface TimeValue {
   /** Hour in 24h clock (0–23). */
@@ -125,60 +129,18 @@ export function TimePicker({
   const { t, locale: ctxLocale } = useI18n();
   const loc = locale ?? ctxLocale;
 
-  const isControlled = openProp !== undefined;
-  const [internalOpen, setInternalOpen] = useState(false);
-  const open = isControlled ? openProp : internalOpen;
-  const setOpen = useCallback(
-    (next: boolean | ((prev: boolean) => boolean)) => {
-      const resolved = typeof next === "function" ? next(open) : next;
-      if (!isControlled) setInternalOpen(resolved);
-      onOpenChange?.(resolved);
-    },
-    [isControlled, open, onOpenChange],
-  );
+  const { open, setOpen } = useControllableOpen(openProp, onOpenChange);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
-  const popoverPos = usePopoverPosition({
+  useDismissableLayer({
+    enabled: open,
+    containerRef,
     triggerRef,
-    popoverRef,
-    open,
-    align,
-    gap: 6,
+    onDismiss: () => setOpen(false),
   });
-
-  // Mount flag: only render the portal after the first client effect so SSR
-  // produces a stable tree (no portal) and the post-hydration render starts
-  // the portal cleanly without a hydration mismatch.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const onMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node | null;
-      if (!target) return;
-      if (containerRef.current && containerRef.current.contains(target)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, setOpen]);
 
   // Source-of-truth indices, normalized from `value` so the two columns
   // stay in sync with the controlled value. 0-based.
@@ -236,242 +198,209 @@ export function TimePicker({
   };
 
   const triggerClick = () => setOpen((v) => !v);
+  const handleTriggerClear = () => {
+    onChange(null);
+  };
 
   const formatted = current ? formatTime(current, format, loc) : "";
 
-  const defaultTrigger = (
-    <button
+  const trigger = renderTrigger ? (
+    renderTrigger({ open, ref: triggerRef, onClick: triggerClick, formatted, hasValue: value != null })
+  ) : (
+    <PickerTrigger
       ref={triggerRef}
-      type="button"
+      open={open}
       onClick={triggerClick}
-      aria-label={ariaLabel}
-      aria-haspopup="dialog"
-      aria-expanded={open}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 6,
-        width: "100%",
-        fontSize: size === "regular" ? 12 : 11,
-        padding: size === "regular" ? "6px 9px" : "1px 4px",
-        border: "1px solid var(--border)",
-        borderRadius: size === "regular" ? 6 : 3,
-        background: "var(--bg)",
-        color: value != null ? "var(--text)" : "var(--text-dim)",
-        fontFamily: "inherit",
-        cursor: "pointer",
-        boxSizing: "border-box",
-        textAlign: "left",
-        minHeight: size === "regular" ? undefined : 22,
-        ...triggerStyle,
-      }}
-    >
-      <ClockIcon size={size === "regular" ? 12 : 10} />
-      <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
-        {value != null ? formatted : (placeholder ?? t("Pick a time"))}
-      </span>
-      {clearable && value != null && (
-        <span
-          role="button"
-          aria-label={t("Clear")}
-          tabIndex={-1}
-          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onChange(null); }}
-          style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 14, height: 14, borderRadius: 3,
-            color: "var(--text-dim)", cursor: "pointer", flexShrink: 0,
-          }}
-        >
-          <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <line x1="2" y1="2" x2="8" y2="8" />
-            <line x1="8" y1="2" x2="2" y2="8" />
-          </svg>
-        </span>
-      )}
-    </button>
+      icon={<ClockIcon size={size === "regular" ? 12 : 10} />}
+      label={formatted}
+      placeholder={placeholder ?? t("Pick a time")}
+      clearable={clearable}
+      hasValue={value != null}
+      onClear={handleTriggerClear}
+      ariaLabel={ariaLabel}
+      size={size}
+      style={triggerStyle}
+      monoLabel
+    />
   );
-
-  const trigger = renderTrigger
-    ? renderTrigger({ open, ref: triggerRef, onClick: triggerClick, formatted, hasValue: value != null })
-    : defaultTrigger;
 
   // Splits the value into `displayH` / `displayM` strings for the hero area.
   const heroHH = current ? pad(format === "12h" ? to12Hour(current.h) : current.h) : "--";
   const heroMM = current ? pad(current.m) : "--";
 
-  const popoverNode = mounted ? createPortal(
+  return (
     <div
-      ref={popoverRef}
-      role="dialog"
-      aria-label={t("Pick a time")}
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
+      ref={containerRef}
       style={{
-        position: "fixed",
-        left: popoverPos?.left ?? -9999,
-        top: popoverPos?.top ?? -9999,
-        visibility: popoverPos ? "visible" : "hidden",
-            zIndex: 1000,
-            background: "var(--bg-panel)",
-            border: "1px solid var(--border)",
-            borderRadius: 12,
-            boxShadow: "0 16px 40px rgba(0,0,0,0.36), 0 2px 6px rgba(0,0,0,0.18)",
-            padding: 0,
-            width: 280,
-            userSelect: "none",
-            color: "var(--text)",
-            fontFamily: "inherit",
-            overflow: "hidden",
+        position: "relative",
+        display: renderTrigger ? "inline-block" : "block",
+        width: renderTrigger ? undefined : "100%",
+      }}
+    >
+      {trigger}
+      <PopoverPortal
+        open={open}
+        triggerRef={triggerRef}
+        popoverRef={popoverRef}
+        align={align}
+        gap={6}
+        ariaLabel={t("Pick a time")}
+        style={{
+          background: "var(--bg-panel)",
+          border: "1px solid var(--border)",
+          borderRadius: 12,
+          boxShadow: "0 16px 40px rgba(0,0,0,0.36), 0 2px 6px rgba(0,0,0,0.18)",
+          padding: 0,
+          width: 280,
+          userSelect: "none",
+          color: "var(--text)",
+          fontFamily: "inherit",
+          overflow: "hidden",
+        }}
+      >
+        {/* Hero: large HH:MM with optional AM/PM segment. */}
+        <div
+          style={{
+            padding: "20px 18px 16px",
+            borderBottom: "1px solid var(--border)",
+            background:
+              "linear-gradient(180deg, color-mix(in srgb, var(--bg-panel) 100%, transparent) 0%, var(--bg) 100%)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          {/* Hero: large HH:MM with optional AM/PM segment. */}
           <div
             style={{
-              padding: "20px 18px 16px",
-              borderBottom: "1px solid var(--border)",
-              background:
-                "linear-gradient(180deg, color-mix(in srgb, var(--bg-panel) 100%, transparent) 0%, var(--bg) 100%)",
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "space-between",
-              gap: 12,
+              fontSize: 40,
+              lineHeight: 1,
+              fontWeight: 300,
+              fontFamily: "var(--font-mono)",
+              letterSpacing: "-0.02em",
+              color: current ? "var(--text)" : "var(--text-dim)",
+              fontVariantNumeric: "tabular-nums",
+              display: "inline-flex",
+              alignItems: "baseline",
+              gap: 4,
             }}
+            aria-live="polite"
           >
+            <span>{heroHH}</span>
+            <span style={{ color: "var(--text-dim)", fontWeight: 200 }}>:</span>
+            <span>{heroMM}</span>
+          </div>
+          {format === "12h" && (
             <div
+              role="tablist"
+              aria-label={t("AM / PM")}
               style={{
-                fontSize: 40,
-                lineHeight: 1,
-                fontWeight: 300,
-                fontFamily: "var(--font-mono)",
-                letterSpacing: "-0.02em",
-                color: current ? "var(--text)" : "var(--text-dim)",
-                fontVariantNumeric: "tabular-nums",
                 display: "inline-flex",
-                alignItems: "baseline",
-                gap: 4,
+                flexDirection: "column",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                overflow: "hidden",
+                background: "var(--bg)",
+                flexShrink: 0,
               }}
-              aria-live="polite"
             >
-              <span>{heroHH}</span>
-              <span style={{ color: "var(--text-dim)", fontWeight: 200 }}>:</span>
-              <span>{heroMM}</span>
+              <SegmentButton
+                active={!isPm}
+                onClick={() => toggleAmPm(false)}
+                label={t("AM")}
+              />
+              <SegmentButton
+                active={isPm}
+                onClick={() => toggleAmPm(true)}
+                label={t("PM")}
+                borderTop
+              />
             </div>
-            {format === "12h" && (
-              <div
-                role="tablist"
-                aria-label={t("AM / PM")}
-                style={{
-                  display: "inline-flex",
-                  flexDirection: "column",
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  overflow: "hidden",
-                  background: "var(--bg)",
-                  flexShrink: 0,
-                }}
-              >
-                <SegmentButton
-                  active={!isPm}
-                  onClick={() => toggleAmPm(false)}
-                  label={t("AM")}
-                />
-                <SegmentButton
-                  active={isPm}
-                  onClick={() => toggleAmPm(true)}
-                  label={t("PM")}
-                  borderTop
-                />
-              </div>
-            )}
-          </div>
+          )}
+        </div>
 
-          {/* Column header */}
-          <div
+        {/* Column header */}
+        <div
+          style={{
+            display: "flex",
+            padding: "8px 12px 4px",
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+            color: "var(--text-dim)",
+          }}
+        >
+          <div style={{ flex: 1, textAlign: "center" }}>{t("Hour")}</div>
+          <div style={{ flex: 1, textAlign: "center" }}>{t("Minute")}</div>
+        </div>
+
+        {/* Wheel columns */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            padding: "4px 12px 8px",
+            position: "relative",
+          }}
+        >
+          <ColumnWheel
+            ariaLabel={t("Hour")}
+            items={hourList}
+            selectedIndex={hourIdx}
+            formatItem={(v) => pad(v)}
+            onCommit={commitHour}
+            isItemDisabled={(idx) => {
+              const h24 = format === "12h" ? from12Hour(hourList[idx], isPm) : hourList[idx];
+              const probe = { h: h24, m: current?.m ?? 0 };
+              return isDisabled(probe, min, max);
+            }}
+            initialFocus
+            // opened flag ensures the scroll-into-view runs every time
+            // the popover opens, even if the hour hasn't changed.
+            opened={open}
+          />
+          <ColumnWheel
+            ariaLabel={t("Minute")}
+            items={minutesArr}
+            selectedIndex={minIdx}
+            formatItem={(v) => pad(v)}
+            onCommit={commitMinute}
+            isItemDisabled={(idx) => {
+              const probe = { h: current?.h ?? 9, m: minutesArr[idx] };
+              return isDisabled(probe, min, max);
+            }}
+            opened={open}
+          />
+        </div>
+
+        {/* Footer: now / clear */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "8px 12px",
+            borderTop: "1px solid var(--border)",
+            background: "var(--bg-subtle)",
+          }}
+        >
+          <button type="button" onClick={handleClear} style={footerBtnStyle}>
+            {t("Clear")}
+          </button>
+          <button
+            type="button"
+            onClick={handleNow}
             style={{
-              display: "flex",
-              padding: "8px 12px 4px",
-              fontSize: 10,
+              ...footerBtnStyle,
+              color: "var(--accent)",
               fontWeight: 600,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              color: "var(--text-dim)",
             }}
           >
-            <div style={{ flex: 1, textAlign: "center" }}>{t("Hour")}</div>
-            <div style={{ flex: 1, textAlign: "center" }}>{t("Minute")}</div>
-          </div>
-
-          {/* Wheel columns */}
-          <div
-            style={{
-              display: "flex",
-              gap: 6,
-              padding: "4px 12px 8px",
-              position: "relative",
-            }}
-          >
-            <ColumnWheel
-              ariaLabel={t("Hour")}
-              items={hourList}
-              selectedIndex={hourIdx}
-              formatItem={(v) => pad(v)}
-              onCommit={commitHour}
-              isItemDisabled={(idx) => {
-                const h24 = format === "12h" ? from12Hour(hourList[idx], isPm) : hourList[idx];
-                const probe = { h: h24, m: current?.m ?? 0 };
-                return isDisabled(probe, min, max);
-              }}
-              initialFocus
-              // opened flag ensures the scroll-into-view runs every time
-              // the popover opens, even if the hour hasn't changed.
-              opened={open}
-            />
-            <ColumnWheel
-              ariaLabel={t("Minute")}
-              items={minutesArr}
-              selectedIndex={minIdx}
-              formatItem={(v) => pad(v)}
-              onCommit={commitMinute}
-              isItemDisabled={(idx) => {
-                const probe = { h: current?.h ?? 9, m: minutesArr[idx] };
-                return isDisabled(probe, min, max);
-              }}
-              opened={open}
-            />
-          </div>
-
-          {/* Footer: now / clear */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "8px 12px",
-              borderTop: "1px solid var(--border)",
-              background: "var(--bg-subtle)",
-            }}
-          >
-            <button type="button" onClick={handleClear} style={footerBtnStyle}>
-              {t("Clear")}
-            </button>
-            <button
-              type="button"
-              onClick={handleNow}
-              style={{
-                ...footerBtnStyle,
-                color: "var(--accent)",
-                fontWeight: 600,
-              }}
-            >
-              {t("Now")}
-            </button>
-          </div>
-        </div>,
-    document.body,
-  ) : null;
-
-  return (
-    <div ref={containerRef} style={{ position: "relative", display: renderTrigger ? "inline-block" : "block", width: renderTrigger ? undefined : "100%" }}>
-      {trigger}
-      {open && popoverNode}
+            {t("Now")}
+          </button>
+        </div>
+      </PopoverPortal>
     </div>
   );
 }
