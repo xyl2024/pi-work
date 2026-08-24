@@ -16,7 +16,7 @@
  * the shapes `lib/file-paths.ts` and the files route already handle.
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
@@ -24,7 +24,7 @@ import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { encodeFilePathForApi } from "@/lib/shared/file-paths";
 import { FolderIcon } from "../files/FileIcons";
-import { Tooltip } from "../ui/Tooltip";
+import { IconButton } from "../ui/IconButton";
 
 // ── Client-safe path helpers ─────────────────────────────────────────────
 
@@ -116,49 +116,6 @@ async function fetchSubdirs(dirPath: string): Promise<string[]> {
   return (data.entries ?? []).filter((e) => e.isDir).map((e) => e.name);
 }
 
-// ── Small icon button with tooltip + hover ───────────────────────────────
-
-function IconButton({
-  label,
-  onClick,
-  disabled = false,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <Tooltip content={label}>
-      <button
-        type="button"
-        aria-label={label}
-        onClick={onClick}
-        disabled={disabled}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 26,
-          height: 26,
-          flexShrink: 0,
-          background: hovered ? "var(--bg-hover)" : "none",
-          border: "none",
-          borderRadius: 6,
-          color: disabled ? "var(--text-dim)" : "var(--text-muted)",
-          cursor: disabled ? "default" : "pointer",
-          opacity: disabled ? 0.5 : 1,
-        }}
-      >
-        {children}
-      </button>
-    </Tooltip>
-  );
-}
 
 function DirRow({
   name,

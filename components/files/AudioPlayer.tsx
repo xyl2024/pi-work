@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { EqualizerBars } from "../sessions/session-library/MediaBits";
 import { SmartImage } from "../ui/SmartImage";
+import { IconButton } from "../ui/IconButton";
 
 interface Props {
   src: string;
@@ -485,18 +486,16 @@ export function AudioPlayer({ src, title, subtitle, cover = DEFAULT_COVER, varia
         <IconButton
           onClick={togglePlay}
           disabled={!ready}
-          ariaLabel={playing ? t("Pause") : t("Play")}
-          title={playing ? t("Pause") : t("Play")}
-          primary
+          label={playing ? t("Pause") : t("Play")}
+          variant="primary"
         >
           {playing ? "❚❚" : "▶"}
         </IconButton>
 
         <IconButton
           onClick={cycleSpeed}
-          ariaLabel={t("Speed")}
-          title={t("Speed")}
-          style={{ minWidth: 44 }}
+          label={t("Speed")}
+          style={{ minWidth: 44, padding: "0 8px" }}
         >
           {speed}×
         </IconButton>
@@ -511,8 +510,7 @@ export function AudioPlayer({ src, title, subtitle, cover = DEFAULT_COVER, varia
         >
           <IconButton
             onClick={toggleMute}
-            ariaLabel={muted || volume === 0 ? t("Unmute") : t("Mute")}
-            title={muted || volume === 0 ? t("Unmute") : t("Mute")}
+            label={muted || volume === 0 ? t("Unmute") : t("Mute")}
           >
             {muted || volume === 0 ? "🔇" : "🔊"}
           </IconButton>
@@ -537,52 +535,3 @@ export function AudioPlayer({ src, title, subtitle, cover = DEFAULT_COVER, varia
   );
 }
 
-function IconButton({
-  onClick,
-  disabled,
-  ariaLabel,
-  title,
-  primary,
-  children,
-  style,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  ariaLabel: string;
-  title: string;
-  primary?: boolean;
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={ariaLabel}
-      title={title}
-      style={{
-        height: 28,
-        minWidth: 28,
-        padding: "0 8px",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 4,
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        background: primary ? "var(--accent)" : "var(--bg-subtle)",
-        color: primary ? "var(--bg)" : "var(--text)",
-        border: "1px solid var(--border)",
-        borderRadius: 5,
-        fontSize: 12,
-        lineHeight: 1,
-        fontFamily: "var(--font-mono)",
-        transition: "background 0.1s ease-out, color 0.1s ease-out",
-        ...style,
-      }}
-    >
-      {children}
-    </button>
-  );
-}

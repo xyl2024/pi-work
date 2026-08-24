@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { IconButton } from "../ui/IconButton";
 
 const SPEEDS = [0.5, 1, 1.5, 2] as const;
 const BASE_TICK_MS = 700;
@@ -141,17 +142,15 @@ export function ReplayBar({
       <IconButton
         onClick={stepBack}
         disabled={index <= 0}
-        ariaLabel={t("Step back")}
-        title={t("Step back")}
+        label={t("Step back")}
       >
         ◀
       </IconButton>
 
       <IconButton
         onClick={togglePlay}
-        ariaLabel={playing ? t("Pause") : t("Play")}
-        title={playing ? t("Pause") : t("Play")}
-        primary
+        label={playing ? t("Pause") : t("Play")}
+        variant="primary"
       >
         {playing ? "❚❚" : "▶"}
       </IconButton>
@@ -159,17 +158,15 @@ export function ReplayBar({
       <IconButton
         onClick={stepForward}
         disabled={index >= total}
-        ariaLabel={t("Step forward")}
-        title={t("Step forward")}
+        label={t("Step forward")}
       >
         ▶
       </IconButton>
 
       <IconButton
         onClick={cycleSpeed}
-        ariaLabel={t("Speed")}
-        title={t("Speed")}
-        style={{ minWidth: 42 }}
+        label={t("Speed")}
+        style={{ minWidth: 42, padding: "0 8px" }}
       >
         {speed}×
       </IconButton>
@@ -220,59 +217,10 @@ export function ReplayBar({
         {positionLabel}
       </span>
 
-      <IconButton onClick={onClose} ariaLabel={t("Close replay")} title={t("Close replay")}>
+      <IconButton onClick={onClose} label={t("Close replay")}>
         ✕
       </IconButton>
     </div>
   );
 }
 
-function IconButton({
-  onClick,
-  disabled,
-  ariaLabel,
-  title,
-  primary,
-  children,
-  style,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  ariaLabel: string;
-  title: string;
-  primary?: boolean;
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={ariaLabel}
-      title={title}
-      style={{
-        height: 26,
-        minWidth: 26,
-        padding: "0 8px",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 4,
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.5 : 1,
-        background: primary ? "var(--accent)" : "var(--bg-subtle)",
-        color: primary ? "var(--bg)" : "var(--text)",
-        border: "1px solid var(--border)",
-        borderRadius: 5,
-        fontSize: 12,
-        lineHeight: 1,
-        fontFamily: "var(--font-mono)",
-        transition: "background 0.1s ease-out, color 0.1s ease-out",
-        ...style,
-      }}
-    >
-      {children}
-    </button>
-  );
-}

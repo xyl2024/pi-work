@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
+import { IconButton } from "../ui/IconButton";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { CHECK, MINIFY, ESCAPE_DOC } from "@/lib/client/icon-paths";
 import { parseJsonTolerant, escapeJsonString } from "@/lib/shared/json-parser";
@@ -544,48 +545,6 @@ const viewerStyle: React.CSSProperties = {
   color: "var(--text)",
 };
 
-function IconButton({ label, icon, active, onClick, disabled }: { label: string; icon: ReactNode; active?: boolean; onClick: () => void; disabled?: boolean }) {
-  const baseColor = disabled ? "var(--text-dim)" : active ? "var(--text)" : "var(--text-muted)";
-  const baseBg = active ? "var(--bg-selected)" : "transparent";
-  const hoverBg = active ? "var(--bg-selected)" : "var(--bg-hover)";
-  const hoverColor = disabled ? "var(--text-dim)" : "var(--text)";
-  return (
-    <Tooltip content={label}>
-      <button
-        onClick={onClick}
-        disabled={disabled}
-        aria-label={label}
-        style={{
-          width: 28,
-          height: 28,
-          padding: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: baseBg,
-          color: baseColor,
-          border: "1px solid",
-          borderColor: active ? "var(--border)" : "transparent",
-          borderRadius: 6,
-          cursor: disabled ? "default" : "pointer",
-          transition: "background 0.12s, color 0.12s, border-color 0.12s",
-        }}
-        onMouseEnter={(e) => {
-          if (disabled) return;
-          e.currentTarget.style.background = hoverBg;
-          e.currentTarget.style.color = hoverColor;
-        }}
-        onMouseLeave={(e) => {
-          if (disabled) return;
-          e.currentTarget.style.background = baseBg;
-          e.currentTarget.style.color = baseColor;
-        }}
-      >
-        {icon}
-      </button>
-    </Tooltip>
-  );
-}
 
 function ErrorBadge({ error, ignoredPrefix, ignoredSuffix }: { error: { message: string; ignoredPrefix?: string; ignoredSuffix?: string } | null; ignoredPrefix?: string; ignoredSuffix?: string }) {
   const { t } = useI18n();
