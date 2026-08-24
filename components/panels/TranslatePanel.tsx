@@ -57,7 +57,6 @@ export function TranslatePanel() {
 
   const [target, setTarget] = useState<LanguageCode>(DEFAULT_TARGET_LANGUAGE);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [hoveredAction, setHoveredAction] = useState<"prompts" | "copy" | null>(null);
   const [copied, setCopied] = useState(false);
 
   const [input, setInput] = useState("");
@@ -477,7 +476,7 @@ export function TranslatePanel() {
             aria-label={isStreaming ? t("Stop") : t("Translate")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              gap: 4, padding: "0 10px", height: 28,
+              width: 28, padding: 0, height: 28,
               background: isStreaming ? "var(--bg)" : "var(--accent)",
               color: isStreaming ? "var(--text)" : "var(--accent-fg, #fff)",
               border: "1px solid var(--border)", borderRadius: 6,
@@ -498,21 +497,17 @@ export function TranslatePanel() {
                 <path d="M15.5 17h7" />
               </svg>
             )}
-            {isStreaming ? t("Stop") : t("Translate")}
           </button>
         </Tooltip>
         <div style={{ flex: 1 }} />
         <Tooltip content={t("Prompt preview")}>
           <button
             onClick={() => setPreviewOpen((v) => !v)}
-            onMouseEnter={() => setHoveredAction("prompts")}
-            onMouseLeave={() => setHoveredAction(null)}
             aria-pressed={previewOpen}
             aria-label={t("Prompts")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              gap: hoveredAction === "prompts" ? 4 : 0,
-              padding: "0 10px", height: 28,
+              width: 28, padding: 0, height: 28,
               background: previewOpen ? "var(--bg-hover)" : "var(--bg)",
               color: "var(--text)",
               border: "1px solid var(--border)", borderRadius: 6,
@@ -526,43 +521,6 @@ export function TranslatePanel() {
               <line x1="9" y1="13" x2="15" y2="13" />
               <line x1="9" y1="17" x2="13" y2="17" />
             </svg>
-            <span style={{
-              opacity: hoveredAction === "prompts" ? 1 : 0,
-              maxWidth: hoveredAction === "prompts" ? 80 : 0,
-              overflow: "hidden", whiteSpace: "nowrap",
-              transition: "opacity 0.15s, max-width 0.15s",
-            }}>
-              {t("Prompts")}
-            </span>
-          </button>
-        </Tooltip>
-        <Tooltip content={t("Copy")}>
-          <button
-            onClick={handleCopy}
-            onMouseEnter={() => setHoveredAction("copy")}
-            onMouseLeave={() => setHoveredAction(null)}
-            disabled={!output}
-            aria-label={t("Copy")}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              gap: hoveredAction === "copy" ? 4 : 0,
-              padding: "0 10px", height: 28,
-              background: "var(--bg)", color: "var(--text)",
-              border: "1px solid var(--border)", borderRadius: 6,
-              cursor: !output ? "not-allowed" : "pointer", fontSize: 12,
-              opacity: !output ? 0.5 : 1,
-              transition: "gap 0.15s",
-            }}
-          >
-            <MorphToggleIcon from={COPY} to={CHECK} active={copied} size={11} />
-            <span style={{
-              opacity: hoveredAction === "copy" ? 1 : 0,
-              maxWidth: hoveredAction === "copy" ? 80 : 0,
-              overflow: "hidden", whiteSpace: "nowrap",
-              transition: "opacity 0.15s, max-width 0.15s",
-            }}>
-              {t("Copy")}
-            </span>
           </button>
         </Tooltip>
       </div>
@@ -671,7 +629,25 @@ export function TranslatePanel() {
           fontSize: 11, color: "var(--text-dim)", marginBottom: 4, minHeight: 16,
         }}>
           <span>{t("Translation output")}</span>
-          {isStreaming && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Tooltip content={t("Copy")}>
+              <button
+                onClick={handleCopy}
+                disabled={!output}
+                aria-label={t("Copy")}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 24, height: 20, padding: 0,
+                  background: "transparent", color: "var(--text-muted)",
+                  border: "none", borderRadius: 4,
+                  cursor: !output ? "not-allowed" : "pointer",
+                  opacity: !output ? 0.5 : 1,
+                }}
+              >
+                <MorphToggleIcon from={COPY} to={CHECK} active={copied} size={12} />
+              </button>
+            </Tooltip>
+            {isStreaming && (
             <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--accent)" }}>
               <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor" style={{ animation: "pulse 1.2s infinite" }}>
                 <circle cx="5" cy="5" r="3" />
@@ -696,7 +672,8 @@ export function TranslatePanel() {
                 </button>
               </Tooltip>
             </span>
-          )}
+            )}
+          </div>
         </div>
         <div
           ref={outputRef}
