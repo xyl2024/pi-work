@@ -291,7 +291,7 @@ function TaskRow({ task, now, selected, onSelect }: { task: ScheduledTask; now: 
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text)", fontWeight: 500 }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <CronHumanizer cron={task.cron} showCode={false} />
+          <CronHumanizer cron={task.cron} showCode={false} timezone={task.timezone} />
         </span>
       </div>
       <div style={{ marginTop: 3, fontSize: 11, color: "var(--text-muted)" }}>

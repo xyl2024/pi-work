@@ -358,6 +358,9 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         toolNames: form.toolMode === "custom" && toolNames && toolNames.length > 0 ? toolNames : toolNames ?? null,
         // null = use runner default; otherwise send the parsed ms.
         maxLifetimeMs: form.maxLifetimeMinutes.trim() === "" ? null : maxLifetimeMs,
+        // Cron is wall-clock based; persist the browser's IANA timezone so a
+        // UTC-hosted server still runs the task at the time shown in the UI.
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
 
       let saved: { task: ScheduledTask };

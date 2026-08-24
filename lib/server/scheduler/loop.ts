@@ -47,16 +47,16 @@ export function ensureLoop(): void {
 function reconcileStaleTasks(now: number): void {
   const rows = getSchedulerDb()
     .prepare(
-      `SELECT id, cron FROM scheduled_tasks
+      `SELECT id, cron, timezone FROM scheduled_tasks
         WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at < ?`,
     )
-    .all(now) as Array<{ id: string; cron: string }>;
+    .all(now) as Array<{ id: string; cron: string; timezone: string | null }>;
   if (rows.length === 0) return;
   log.info("skipping missed triggers — advancing to next future run", {
     count: rows.length,
   });
   for (const row of rows) {
-    advanceNextRun(row.id, row.cron);
+    advanceNextRun(row.id, row.cron, row.timezone ?? "UTC");
   }
 }
 
@@ -95,6 +95,7 @@ interface TaskRow {
   thinking_level: string | null;
   tool_names: string | null;
   max_lifetime_ms: number | null;
+  timezone: string | null;
   created_at: number;
   updated_at: number;
   last_run_at: number | null;
@@ -123,6 +124,7 @@ function rowToTask(row: TaskRow): ScheduledTask {
     thinkingLevel: row.thinking_level,
     toolNames,
     maxLifetimeMs: row.max_lifetime_ms,
+    timezone: row.timezone ?? "UTC",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastRunAt: row.last_run_at,
@@ -135,7 +137,7 @@ function loadDueTasks(now: number): ScheduledTask[] {
   const rows = getSchedulerDb()
     .prepare(
       `SELECT id, name, cron, cwd, prompt, enabled, provider, model_id,
-              thinking_level, tool_names, max_lifetime_ms, created_at, updated_at,
+              thinking_level, tool_names, max_lifetime_ms, timezone, created_at, updated_at,
               last_run_at, next_run_at
          FROM scheduled_tasks
         WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?
@@ -155,16 +157,16 @@ function loadNextWake(): number | null {
   return row.next;
 }
 
-function advanceNextRun(taskId: string, cron: string): void {
+function advanceNextRun(taskId: string, cron: string, timezone: string): void {
   // Compute via croner and persist. If cron is invalid, leave next_run_at
   // unchanged — the task will be re-evaluated next reschedule.
   try {
-    const next = new Cron(cron).nextRun();
+    const next = new Cron(cron, { timezone }).nextRun();
     getSchedulerDb()
       .prepare("UPDATE scheduled_tasks SET next_run_at = ? WHERE id = ?")
       .run(next ? next.getTime() : null, taskId);
   } catch (err) {
-    log.warn("failed to advance next_run_at", { taskId, cron, error: String(err) });
+    log.warn("failed to advance next_run_at", { taskId, cron, timezone, error: String(err) });
   }
 }
 
@@ -185,7 +187,7 @@ async function tick(): Promise<void> {
       const run = recordRunStart(task.id);
       // Advance the task's next_run_at BEFORE running, so an overlapping
       // tick (if any) doesn't see it as due again.
-      advanceNextRun(task.id, task.cron);
+      advanceNextRun(task.id, task.cron, task.timezone);
       // Fire-and-forget per task; runner.ts handles its own FIFO.
       void runTask(task, run.id);
     }

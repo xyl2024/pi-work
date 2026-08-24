@@ -123,7 +123,7 @@ export function TaskDetail({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--text-muted)" }}>
-          <CronHumanizer cron={task.cron} previewCount={5} showCode />
+          <CronHumanizer cron={task.cron} previewCount={5} showCode timezone={task.timezone} />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>

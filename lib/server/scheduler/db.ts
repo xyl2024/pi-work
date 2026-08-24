@@ -43,6 +43,7 @@ const SCHEMA = `
     thinking_level  TEXT,
     tool_names      TEXT,
     max_lifetime_ms INTEGER,
+    timezone        TEXT,
     created_at      INTEGER NOT NULL,
     updated_at      INTEGER NOT NULL,
     last_run_at     INTEGER,
@@ -82,6 +83,13 @@ function runMigrations(db: Database.Database): void {
   if (!hasMaxLifetime) {
     db.exec("ALTER TABLE scheduled_tasks ADD COLUMN max_lifetime_ms INTEGER");
     log.info("migration: added scheduled_tasks.max_lifetime_ms column");
+  }
+  const hasTimezone = taskColumns.some((c) => c.name === "timezone");
+  if (!hasTimezone) {
+    // Nullable temporarily: the API adopts the opening browser's timezone for
+    // legacy tasks, then persists it together with a corrected next_run_at.
+    db.exec("ALTER TABLE scheduled_tasks ADD COLUMN timezone TEXT");
+    log.info("migration: added scheduled_tasks.timezone column");
   }
 }
 

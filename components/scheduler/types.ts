@@ -28,6 +28,8 @@ export interface ScheduledTask {
    *  The scheduler waits for the real `agent_end` otherwise — long
    *  tasks deserve the real result, not a 5-min blanket cutoff. */
   maxLifetimeMs: number | null;
+  /** IANA timezone used to interpret the cron expression. */
+  timezone: string;
   createdAt: number;
   updatedAt: number;
   lastRunAt: number | null;
@@ -68,6 +70,7 @@ export interface TaskCreatePayload {
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
   maxLifetimeMs?: number | null;
+  timezone?: string;
 }
 
 /** Match `UpdateTaskInput` on the server. */
@@ -83,6 +86,7 @@ export interface TaskUpdatePayload {
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
   maxLifetimeMs?: number | null;
+  timezone?: string;
 }
 
 /**

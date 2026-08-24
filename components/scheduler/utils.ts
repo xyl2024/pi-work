@@ -325,6 +325,9 @@ export async function apiFetch<T>(input: string, init?: RequestInit): Promise<T>
     ...init,
     headers: {
       "Content-Type": "application/json",
+      // Cron expressions represent wall-clock time. Send the browser's IANA
+      // zone so the server can interpret legacy tasks consistently.
+      "X-Pi-Work-Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
       ...(init?.headers ?? {}),
     },
   });

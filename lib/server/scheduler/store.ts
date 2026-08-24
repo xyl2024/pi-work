@@ -46,6 +46,8 @@ export interface ScheduledTask {
    *  scheduler otherwise waits for the real `agent_end` — there's no
    *  5-minute blanket timeout (long tasks deserve the real result). */
   maxLifetimeMs: number | null;
+  /** IANA timezone used to interpret this task's cron expression. */
+  timezone: string;
   createdAt: number;
   updatedAt: number;
   lastRunAt: number | null;
@@ -76,6 +78,7 @@ export interface CreateTaskInput {
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
   maxLifetimeMs?: number | null;
+  timezone?: string;
 }
 
 export interface UpdateTaskInput {
@@ -90,6 +93,7 @@ export interface UpdateTaskInput {
   thinkingLevel?: string | null;
   toolNames?: string[] | null;
   maxLifetimeMs?: number | null;
+  timezone?: string;
 }
 
 export interface RecordRunEndInput {
@@ -176,6 +180,20 @@ function validateToolNames(raw: unknown): string[] | null {
   throw new SchedulerValidationError("toolNames", "toolNames must be an array or null");
 }
 
+/** Validate and canonicalize an IANA timezone name. */
+function validateTimezone(raw: unknown): string {
+  // UTC is a safe deterministic fallback for non-browser callers and legacy
+  // records. Browser requests always supply an IANA zone explicitly.
+  if (raw === undefined || raw === null || raw === "") return "UTC";
+  if (typeof raw !== "string") throw new SchedulerValidationError("timezone", "timezone must be a string");
+  const value = raw.trim();
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: value }).resolvedOptions().timeZone;
+  } catch {
+    throw new SchedulerValidationError("timezone", "timezone must be a valid IANA timezone");
+  }
+}
+
 /** null/undefined ⇒ leave as null (use runner default). 0/negative/fractional
  *  ⇒ validation error. Above the 24h ceiling ⇒ validation error. */
 function validateMaxLifetimeMs(raw: unknown): number | null {
@@ -202,10 +220,10 @@ function validateMaxLifetimeMs(raw: unknown): number | null {
 }
 
 /** Compute next_run_at for an enabled task; null if disabled or cron invalid. */
-function computeNextRun(cron: string, enabled: boolean): number | null {
+function computeNextRun(cron: string, enabled: boolean, timezone: string): number | null {
   if (!enabled) return null;
   try {
-    const next = new Cron(cron).nextRun();
+    const next = new Cron(cron, { timezone }).nextRun();
     return next ? next.getTime() : null;
   } catch {
     return null;
@@ -231,6 +249,7 @@ interface Row {
   thinking_level: string | null;
   tool_names: string | null;
   max_lifetime_ms: number | null;
+  timezone: string | null;
   created_at: number;
   updated_at: number;
   last_run_at: number | null;
@@ -252,9 +271,10 @@ function rowToTask(row: Row): ScheduledTask {
   // If next_run_at is stale (e.g. process was down across a trigger time),
   // recompute it. Cheap Cron.nextRun() — runs only on list, not on every read.
   const enabled = row.enabled === 1;
+  const timezone = row.timezone ?? "UTC";
   let nextRunAt = row.next_run_at;
   if (enabled && nextRunAt !== null && nextRunAt < Date.now()) {
-    nextRunAt = computeNextRun(row.cron, true);
+    nextRunAt = computeNextRun(row.cron, true, timezone);
   }
   return {
     id: row.id,
@@ -268,6 +288,7 @@ function rowToTask(row: Row): ScheduledTask {
     thinkingLevel: row.thinking_level,
     toolNames: parseToolNames(row.tool_names),
     maxLifetimeMs: row.max_lifetime_ms,
+    timezone,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastRunAt: row.last_run_at,
@@ -284,6 +305,33 @@ const TASK_WITH_LAST_RUN_QUERY = `
   ) AS last_run_status
   FROM scheduled_tasks t
 `;
+
+/**
+ * Assign a browser timezone to pre-timezone records and recompute their next
+ * trigger. This one-time compatibility repair prevents a UTC server from
+ * interpreting an existing user's "09:00" task as 09:00 UTC.
+ */
+export function adoptLegacyTaskTimezone(timezoneRaw: string | null): boolean {
+  if (!timezoneRaw) return false;
+  let timezone: string;
+  try {
+    timezone = validateTimezone(timezoneRaw);
+  } catch {
+    return false;
+  }
+  const db = getSchedulerDb();
+  const legacy = db.prepare("SELECT id, cron, enabled FROM scheduled_tasks WHERE timezone IS NULL").all() as Array<{ id: string; cron: string; enabled: number }>;
+  if (legacy.length === 0) return false;
+  const update = db.prepare("UPDATE scheduled_tasks SET timezone = ?, next_run_at = ? WHERE id = ?");
+  const repair = db.transaction(() => {
+    for (const task of legacy) {
+      update.run(timezone, computeNextRun(task.cron, task.enabled === 1, timezone), task.id);
+    }
+  });
+  repair();
+  log.info("adopted browser timezone for legacy scheduled tasks", { count: legacy.length, timezone });
+  return true;
+}
 
 export function listTasks(): ScheduledTask[] {
   const db = getSchedulerDb();
@@ -308,22 +356,23 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
   const thinkingLevel = validateOptionalString("thinkingLevel", input.thinkingLevel);
   const toolNames = validateToolNames(input.toolNames);
   const maxLifetimeMs = validateMaxLifetimeMs(input.maxLifetimeMs);
+  const timezone = validateTimezone(input.timezone);
   const now = Date.now();
   const id = newId();
-  const nextRunAt = computeNextRun(cron, enabled);
+  const nextRunAt = computeNextRun(cron, enabled, timezone);
 
   getSchedulerDb()
     .prepare(
       `INSERT INTO scheduled_tasks
         (id, name, cron, cwd, prompt, enabled, provider, model_id, thinking_level, tool_names,
-         max_lifetime_ms, created_at, updated_at, last_run_at, next_run_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
+         max_lifetime_ms, timezone, created_at, updated_at, last_run_at, next_run_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
     )
     .run(
       id, name, cron, cwd, prompt, enabled ? 1 : 0,
       provider, modelId, thinkingLevel,
       toolNames ? JSON.stringify(toolNames) : null,
-      maxLifetimeMs,
+      maxLifetimeMs, timezone,
       now, now, nextRunAt,
     );
 
@@ -346,16 +395,17 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
   if (input.thinkingLevel !== undefined) patch.thinkingLevel = validateOptionalString("thinkingLevel", input.thinkingLevel);
   if (input.toolNames !== undefined) patch.toolNames = validateToolNames(input.toolNames);
   if (input.maxLifetimeMs !== undefined) patch.maxLifetimeMs = validateMaxLifetimeMs(input.maxLifetimeMs);
+  if (input.timezone !== undefined) patch.timezone = validateTimezone(input.timezone);
 
   const merged: ScheduledTask = { ...existing, ...patch };
-  const nextRunAt = computeNextRun(merged.cron, merged.enabled);
+  const nextRunAt = computeNextRun(merged.cron, merged.enabled, merged.timezone);
 
   getSchedulerDb()
     .prepare(
       `UPDATE scheduled_tasks SET
         name = ?, cron = ?, cwd = ?, prompt = ?, enabled = ?,
         provider = ?, model_id = ?, thinking_level = ?, tool_names = ?,
-        max_lifetime_ms = ?,
+        max_lifetime_ms = ?, timezone = ?,
         updated_at = ?, next_run_at = ?
        WHERE id = ?`
     )
@@ -363,7 +413,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
       merged.name, merged.cron, merged.cwd, merged.prompt, merged.enabled ? 1 : 0,
       merged.provider, merged.modelId, merged.thinkingLevel,
       merged.toolNames ? JSON.stringify(merged.toolNames) : null,
-      merged.maxLifetimeMs,
+      merged.maxLifetimeMs, merged.timezone,
       Date.now(), nextRunAt, input.id,
     );
 

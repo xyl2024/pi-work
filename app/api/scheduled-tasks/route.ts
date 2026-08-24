@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import {
+  adoptLegacyTaskTimezone,
   createTask,
   deleteTask,
   listTasks,
@@ -22,10 +23,14 @@ import { reschedule } from "@/lib/server/scheduler/loop";
 
 const log = createLogger("api/scheduled-tasks");
 
-export async function GET() {
+export async function GET(req: Request) {
   const startedAt = Date.now();
   try {
+    // The browser supplies its IANA zone so tasks created before the timezone
+    // column existed can be repaired on their first scheduler-page load.
+    const repairedLegacyTasks = adoptLegacyTaskTimezone(req.headers.get("x-pi-work-timezone"));
     const tasks = listTasks();
+    if (repairedLegacyTasks) reschedule();
     log.info("tasks listed", { count: tasks.length, durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ tasks });
   } catch (error) {
@@ -49,6 +54,7 @@ export async function POST(req: Request) {
       thinkingLevel: body.thinkingLevel,
       toolNames: body.toolNames,
       maxLifetimeMs: body.maxLifetimeMs,
+      timezone: body.timezone,
     });
     reschedule();
     log.info("task created via api", { id: task.id, durationMs: elapsedMs(startedAt) });

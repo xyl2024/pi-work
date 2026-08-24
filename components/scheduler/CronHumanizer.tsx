@@ -18,6 +18,8 @@ interface Props {
   previewCount?: number;
   /** Render the raw cron in a monospace code chip. */
   showCode?: boolean;
+  /** IANA timezone used by the scheduler to interpret this cron. */
+  timezone?: string;
 }
 
 function formatTs(ts: number): string {
@@ -25,9 +27,9 @@ function formatTs(ts: number): string {
   return d.toLocaleString();
 }
 
-function nextRuns(cron: string, count: number): number[] {
+function nextRuns(cron: string, count: number, timezone?: string): number[] {
   try {
-    const c = new Cron(cron);
+    const c = new Cron(cron, timezone ? { timezone } : undefined);
     const out: number[] = [];
     let cursor = new Date();
     for (let i = 0; i < count; i++) {
@@ -42,10 +44,10 @@ function nextRuns(cron: string, count: number): number[] {
   }
 }
 
-export function CronHumanizer({ cron, previewCount = 3, showCode = false }: Props) {
+export function CronHumanizer({ cron, previewCount = 3, showCode = false, timezone }: Props) {
   const { t, locale } = useI18n();
   const human = useMemo(() => cronHumanize(cron, locale), [cron, locale]);
-  const upcoming = useMemo(() => nextRuns(cron, previewCount), [cron, previewCount]);
+  const upcoming = useMemo(() => nextRuns(cron, previewCount, timezone), [cron, previewCount, timezone]);
   const isValid = upcoming.length > 0;
   // 单次 cron 执行后 nextRun() 返回 null —— 不是无效，是已经过期/执行完毕
   const doneOnce = isOnceCron(cron) && !isValid;

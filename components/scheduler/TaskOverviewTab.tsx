@@ -55,7 +55,7 @@ export function TaskOverviewTab({ task, runs }: Props) {
         <SectionTitle>{t("Basic info")}</SectionTitle>
         <dl style={dlStyle}>
           <Row label={t("Cron expression")}>
-            <CronHumanizer cron={task.cron} previewCount={5} showCode />
+            <CronHumanizer cron={task.cron} previewCount={5} showCode timezone={task.timezone} />
           </Row>
           <Row label={t("Next run")}>
             {task.enabled
