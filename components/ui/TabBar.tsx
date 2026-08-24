@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { getFileIcon } from "../files/FileIcons";
+import { GitDiffIcon } from "@/components/ui/animated-icons";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 
@@ -115,6 +116,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               getFileIcon("AGENTS.md", 13)
             ) : tab.kind === "conversationTree" ? (
               <ConversationTreeTabIcon />
+            ) : tab.kind === "gitDiff" ? (
+              <GitDiffIcon size={13} />
             ) : (
               getFileIcon(tab.label, 13)
             );
