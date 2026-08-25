@@ -57,7 +57,7 @@ export function GrokBotStage({ onOpenLab }: Props) {
             aria-label={t("Pi Bot Lab")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 26, height: 26, padding: 0, marginRight: 6,
+              width: 26, height: 26, padding: 0,
               background: "none", border: "none",
               color: "var(--text-dim)", cursor: "pointer",
               borderRadius: 5, flexShrink: 0,
