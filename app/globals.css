@@ -1512,3 +1512,11 @@ li.todo-task-item[data-checked="true"] > div {
 @keyframes pi-spin {
   to { transform: rotate(360deg); }
 }
+
+/* TextSelectionToolbar: a short scale-in that confirms the toolbar
+ * just popped up. The toolbar component sets animation:
+ * selection-toolbar-in 0.12s ease-out forwards. */
+@keyframes selection-toolbar-in {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}

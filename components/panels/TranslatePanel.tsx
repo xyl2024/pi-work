@@ -14,6 +14,7 @@ import {
   isLanguageCode,
   type LanguageCode,
 } from "@/lib/shared/translate";
+import { subscribeTranslatePendingInput, consumeTranslatePendingInput } from "@/hooks/translateExternalInputStore";
 
 const STATE_STORAGE_KEY = "pi-translate-state";
 
@@ -96,6 +97,21 @@ export function TranslatePanel() {
       }
     } catch { /* malformed JSON or localStorage unavailable — ignore */ }
   }, []);
+
+  // Pick up text pushed in from outside the panel (e.g. the chat
+  // text-selection toolbar's Translate action). The subscriber also
+  // fires once on subscribe with the current pending value, so a
+  // panel that mounts *after* the toolbar pushed its text still
+  // receives it; consumeTranslatePendingInput drains the slot so a
+  // later remount (e.g. tab re-open) doesn't re-apply the same text.
+  // We replace the existing input wholesale (rather than appending)
+  // because the user gesture is "translate *this*", not "translate
+  // this together with whatever was already in the textarea".
+  useEffect(() => subscribeTranslatePendingInput((text) => {
+    consumeTranslatePendingInput();
+    setInput(text);
+    setError(null);
+  }), []);
 
   // Persist input/output/model/target to localStorage on every change. The
   // first run is skipped so the initial empty state doesn't overwrite the

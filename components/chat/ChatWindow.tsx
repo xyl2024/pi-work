@@ -40,6 +40,10 @@ import { SessionSearch } from "../sessions/SessionSearch";
 import { phaseLabel, phaseLoaderVariant, hasStreamingThinking, resolveReadPath, isGroupAnchor, findFinalAssistantIndex, hasDisplayableProcessMessage } from "./chat-window/utils";
 import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
 import { NewSessionPresets } from "./chat-window/NewSessionPresets";
+import { useTextSelection } from "@/hooks/useTextSelection";
+import { TextSelectionToolbar } from "./text-selection-toolbar";
+import { fireTranslateOpened } from "@/hooks/translateOpenStore";
+import { setTranslatePendingInput } from "@/hooks/translateExternalInputStore";
 
 interface Props {
   /** Stable owner token for active-session imperative bridges. */
@@ -180,6 +184,29 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // Tool call stats hook — snapshot is published to the module store so the
   // right-panel tab + vertical button (in AppShell) can render it.
   const { snapshot } = useToolCallStats(messages);
+
+  // ── Text-selection toolbar ──
+  // Scoped to the message scroll container so selections in the chat
+  // input, sidebars, or the right panel never trigger the toolbar.
+  // Quote inserts a markdown blockquote at the current input caret
+  // (reusing the existing insertText imperative handle). Translate
+  // publishes the snippet to the translate panel's external-input
+  // store and asks AppShell to open the translate tab via a
+  // fire-and-forget event.
+  const selection = useTextSelection(scrollContainerRef);
+  const handleQuoteSelection = useCallback((text: string) => {
+    // Markdown blockquote: `> text` followed by a blank line so the
+    // user lands on a fresh row to type their follow-up. The trailing
+    // blank line is what the standard chat "quote" affordance produces
+    // (Notion / Slack) — without it, the user's first keystroke would
+    // append to the same line as the quoted content.
+    chatInputRef?.current?.insertText(`> ${text}\n\n`);
+  }, [chatInputRef]);
+  const handleTranslateSelection = useCallback(() => {
+    if (!selection.text) return;
+    setTranslatePendingInput(selection.text);
+    fireTranslateOpened();
+  }, [selection.text]);
 
   useEffect(() => {
     onAgentStatusChange?.({
@@ -1029,6 +1056,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      <TextSelectionToolbar
+        state={selection}
+        onQuote={handleQuoteSelection}
+        onTranslate={handleTranslateSelection}
+        onHide={selection.hide}
+      />
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[rgba(37,99,235,0.06)] backdrop-blur-[1px]">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
