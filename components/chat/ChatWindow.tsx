@@ -204,7 +204,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, [chatInputRef]);
   const handleTranslateSelection = useCallback(() => {
     if (!selection.text) return;
-    setTranslatePendingInput(selection.text);
+    // Pin the target language to Chinese for this gesture so the
+    // TranslatePanel auto-fires once it has a model loaded. The
+    // user's saved `target` preference in the panel is left
+    // untouched.
+    setTranslatePendingInput({ text: selection.text, target: "zh" });
     fireTranslateOpened();
   }, [selection.text]);
 

@@ -116,8 +116,12 @@ export function TextSelectionToolbar({ state, onQuote, onTranslate, onHide }: Pr
     // Publish *before* opening the panel so a panel that is already
     // mounted (user re-translates a different snippet without closing
     // the tab) also picks up the new text. The store's subscriber
-    // pushes it into the textarea immediately.
-    setTranslatePendingInput(state.text);
+    // pushes it into the textarea and, because we attach `target:
+    // "zh"`, also auto-fires the translation into Chinese for this
+    // gesture. The user's saved `target` preference in the panel is
+    // not touched, so switching the tab back later still shows the
+    // language they last used.
+    setTranslatePendingInput({ text: state.text, target: "zh" });
     onTranslate();
     onHide();
   }, [state.text, onTranslate, onHide]);

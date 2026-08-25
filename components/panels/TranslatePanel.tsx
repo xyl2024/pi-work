@@ -68,6 +68,15 @@ export function TranslatePanel() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const outputRef = useRef<HTMLDivElement | null>(null);
 
+  // One-shot auto-translate request pushed in from outside the panel
+  // (e.g. the chat text-selection toolbar's Translate action, which
+  // sets `target: "zh"`). When set, an effect below fires a
+  // translation as soon as `model` is loaded and `input` matches the
+  // pushed text (so the user changing the textarea in the meantime
+  // cancels the auto-fire). Cleared once consumed so it doesn't
+  // re-trigger on later state changes.
+  const autoFireRef = useRef<{ text: string; target: LanguageCode } | null>(null);
+
   // Persistence refs (not in state — changes here should not trigger renders).
   // `savedModelRef` holds the model the user previously selected; the models
   // fetch effect consults it once the model list is available so we restore
@@ -107,10 +116,20 @@ export function TranslatePanel() {
   // We replace the existing input wholesale (rather than appending)
   // because the user gesture is "translate *this*", not "translate
   // this together with whatever was already in the textarea".
-  useEffect(() => subscribeTranslatePendingInput((text) => {
+  //
+  // If the publisher also attached a `target` (the text-selection
+  // toolbar does, with `target: "zh"` so the snippet is translated
+  // into Chinese automatically), we queue an auto-fire in
+  // `autoFireRef`. The actual runTranslation() call lives in a
+  // separate effect below so it can wait for `model` to finish
+  // loading before kicking the request off.
+  useEffect(() => subscribeTranslatePendingInput((next) => {
     consumeTranslatePendingInput();
-    setInput(text);
+    setInput(next.text);
     setError(null);
+    if (next.target) {
+      autoFireRef.current = { text: next.text, target: next.target };
+    }
   }), []);
 
   // Persist input/output/model/target to localStorage on every change. The
@@ -186,7 +205,7 @@ export function TranslatePanel() {
     abortRef.current?.abort();
   }, []);
 
-  const runTranslation = useCallback(async (text: string) => {
+  const runTranslation = useCallback(async (text: string, targetOverride?: LanguageCode) => {
     if (!model) return;
     // Replace any in-flight request.
     abortRef.current?.abort();
@@ -196,6 +215,11 @@ export function TranslatePanel() {
     setError(null);
     setIsStreaming(true);
 
+    // One-shot override (used by the external-push auto-fire path so a
+    // text-selection-driven translate can land in Chinese without us
+    // mutating the user's saved `target` preference).
+    const effectiveTarget: LanguageCode = targetOverride ?? target;
+
     try {
       const res = await fetch("/api/translate", {
         method: "POST",
@@ -204,7 +228,7 @@ export function TranslatePanel() {
           text,
           provider: model.provider,
           modelId: model.modelId,
-          target,
+          target: effectiveTarget,
         }),
         signal: ctrl.signal,
       });
@@ -255,6 +279,30 @@ export function TranslatePanel() {
       }
     }
   }, [model, target, toast, t]);
+
+  // Auto-fire translations queued by external publishers (today: the
+  // chat text-selection toolbar's Translate action, which sets
+  // `target: "zh"` so the snippet is translated into Chinese). Runs
+  // whenever `input`/`model`/`isStreaming` settle: the model list
+  // loads asynchronously, so the request can only fire once
+  // `model` is non-null. We also gate on `input === queued.text` so
+  // the auto-fire is cancelled if the user edits the textarea
+  // before the model finishes loading (their edit takes priority).
+  // Once consumed, `autoFireRef.current` is cleared so later state
+  // changes (e.g. `isStreaming` flipping back to false) don't
+  // re-trigger it.
+  useEffect(() => {
+    const queued = autoFireRef.current;
+    if (!queued) return;
+    if (isStreaming) return;
+    if (!model) return;
+    if (input.trim() !== queued.text.trim()) {
+      autoFireRef.current = null;
+      return;
+    }
+    autoFireRef.current = null;
+    void runTranslation(queued.text, queued.target);
+  }, [input, model, isStreaming, runTranslation]);
 
   // Translation fires only when the user clicks the Translate button (or hits
   // Cmd/Ctrl+Enter). handleTranslate doubles as Stop while a request is
