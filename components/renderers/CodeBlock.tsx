@@ -76,6 +76,7 @@ export function CodeBlock({ code, lang }: Props) {
           fontSize: 12.5,
           lineHeight: 1.6,
           borderRadius: 0,
+          border: "none",
           background: "var(--bg)",
           overflowX: "auto",
           // Keep fenced Markdown source intact. `.markdown-body` uses
