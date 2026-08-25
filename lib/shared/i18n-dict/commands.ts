@@ -3,6 +3,12 @@
 // in components/CommandPalette.tsx, not the chat layer.
 
 export const commands = {
+  Session: "会话",
+  Theme: "主题",
+  View: "视图",
+  Panel: "面板",
+  Modal: "弹窗",
+  Language: "语言",
   "Theme: Light": "主题：明亮",
   "Theme: Dark": "主题：暗色",
   "Thinking: Auto": "推理：自动",
