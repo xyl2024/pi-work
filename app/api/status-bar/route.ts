@@ -7,6 +7,32 @@ import { summarize } from "@/lib/server/token-audit-store";
 
 export const dynamic = "force-dynamic";
 
+let previousCpuSample: { usage: NodeJS.CpuUsage; timestamp: bigint } | null = null;
+
+function getProcessCpuUsage(): number | null {
+  const timestamp = process.hrtime.bigint();
+  const usage = process.cpuUsage();
+  const previous = previousCpuSample;
+  previousCpuSample = { usage, timestamp };
+  if (!previous) return null;
+
+  const elapsedMicros = Number(timestamp - previous.timestamp) / 1_000;
+  if (elapsedMicros <= 0) return null;
+
+  const userMicros = usage.user - previous.usage.user;
+  const systemMicros = usage.system - previous.usage.system;
+  return Math.min(100, Math.max(0, ((userMicros + systemMicros) / elapsedMicros) * 100));
+}
+
+function getServerMemory() {
+  const memory = process.memoryUsage();
+  return {
+    rss: memory.rss,
+    heapUsed: memory.heapUsed,
+    heapTotal: memory.heapTotal,
+  };
+}
+
 function getServerIp(): string {
   for (const interfaces of Object.values(os.networkInterfaces())) {
     for (const address of interfaces ?? []) {
@@ -64,6 +90,8 @@ export async function GET(request: Request) {
   const tokenTotals = summarize("today", "none").totals;
   return NextResponse.json({
     os: getOsName(),
+    cpu: getProcessCpuUsage(),
+    memory: getServerMemory(),
     shell: getShellName(),
     ip: getServerIp(),
     git,

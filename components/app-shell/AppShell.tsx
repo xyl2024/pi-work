@@ -96,6 +96,13 @@ interface ToolInfo {
   active: boolean;
 }
 
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB"];
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** unitIndex).toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
 // Fixed panel ratios (drag-resize removed). Center column takes the remainder.
 const LEFT_PANEL_RATIO = 0.18;
 const RIGHT_PANEL_RATIO = 0.32;
@@ -1111,6 +1118,8 @@ export function AppShell() {
     os: "—",
     shell: "—",
     ip: "—",
+    cpu: null as number | null,
+    memory: { rss: 0, heapUsed: 0, heapTotal: 0 },
     git: { branch: null as string | null, changedFiles: 0 },
     runningSessions: 0,
     today: { tokens: 0, cost: 0 },
@@ -1731,6 +1740,9 @@ export function AppShell() {
           <span>{statusBar.git.branch ?? "no-git"} · {statusBar.git.changedFiles} changed</span>
         </button>
         <span style={{ marginLeft: 14 }}>running: {runningSessionCount}</span>
+        <span style={{ marginLeft: 14 }}>
+          CPU {statusBar.cpu == null ? "—" : `${statusBar.cpu.toFixed(1)}%`} · RAM {formatBytes(statusBar.memory.rss)}
+        </span>
         <span
           aria-live="polite"
           style={{
