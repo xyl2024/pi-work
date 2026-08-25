@@ -24,12 +24,11 @@
  *   - styles.ts         — shared `iconBtnStyle` / `emptyStyle`
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useRss } from "@/hooks/useRss";
-import { clearRssScrollForFeed, flushRssScroll, scrollTopForView, setRssScroll } from "@/hooks/rssStore";
 import { emptyStyle } from "./styles";
 import { RssHeaderBar } from "./RssHeaderBar";
 import { FeedsView } from "./FeedsView";
@@ -46,58 +45,6 @@ export function RssPanel(): ReactElement {
   const [newUrl, setNewUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Single scroll ancestor for all three views.
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // ── View + scroll persistence (see hooks/rssStore.ts) ─────────────────
-  // Survives right-panel tab switches (module store) and full page refreshes
-  // (localStorage hydration in useRssViewState).
-
-  // Throttled scroll save: every scroll event queues the latest (view,
-  // scrollTop); rssStore coalesces these into at most one localStorage write
-  // per animation frame. `setRssView` itself flushes pending writes so a fast
-  // scroll + immediate navigation never loses the previous view's position.
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      setRssScroll(rss.view, el.scrollTop);
-    };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      el.removeEventListener("scroll", onScroll);
-    };
-  }, [rss.view]);
-
-  // Restore scroll position after every view change AND after async article
-  // loads complete. Runs in useLayoutEffect so the browser paints the
-  // restored position in the same frame, avoiding a visible jump from 0 → N.
-  // Guards against applying to a too-short container (e.g. during the brief
-  // window between view change and articles load).
-  useLayoutEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const target = scrollTopForView(rss.view);
-    if (target === undefined || target === 0) return;
-    if (el.scrollHeight <= el.clientHeight) return;
-    el.scrollTop = target;
-  }, [rss.view, rss.articlesByFeed]);
-
-  // pagehide / visibilitychange flush so the LAST scroll write lands on disk
-  // even if the user closes the tab while a throttled rAF is still in flight.
-  useEffect(() => {
-    const flush = () => flushRssScroll();
-    window.addEventListener("pagehide", flush);
-    const onVis = () => {
-      if (document.visibilityState === "hidden") flush();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => {
-      window.removeEventListener("pagehide", flush);
-      document.removeEventListener("visibilitychange", onVis);
-    };
-  }, []);
-
   // Stale-data fallback: if the saved view points at a feed / article that
   // no longer exists (deleted from another tab, or article pruned server
   // side), bounce out with a one-shot toast and clean up orphaned scroll keys.
@@ -111,7 +58,6 @@ export function RssPanel(): ReactElement {
         message: t("This feed no longer exists, returning to feed list"),
       });
       rss.navigate({ kind: "feeds" });
-      clearRssScrollForFeed(v.feedId);
       return;
     }
     if (v.kind === "reader") {
@@ -251,7 +197,7 @@ export function RssPanel(): ReactElement {
         </div>
       )}
 
-      <div ref={containerRef} style={{ flex: 1, overflow: "auto", padding: "0 0 16px" }}>
+      <div style={{ flex: 1, overflow: "auto", padding: "0 0 16px" }}>
         {rss.view.kind === "feeds" && (
           <FeedsView
             feeds={rss.feeds}
