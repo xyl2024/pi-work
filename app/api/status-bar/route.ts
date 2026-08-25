@@ -45,7 +45,7 @@ function getServerIp(): string {
 function getLinuxDistribution(): string | null {
   try {
     const content = readFileSync("/etc/os-release", "utf8");
-    const match = content.match(/^PRETTY_NAME=(.*)$/m) ?? content.match(/^NAME=(.*)$/m);
+    const match = content.match(/^NAME=(.*)$/m) ?? content.match(/^PRETTY_NAME=(.*)$/m);
     if (!match) return null;
 
     const value = match[1].trim().replace(/^("|')(.*)\1$/, "$2").trim();
@@ -73,15 +73,19 @@ function getShellName(): string {
 
 export async function GET(request: Request) {
   const cwd = new URL(request.url).searchParams.get("cwd");
-  let git: { branch: string | null; changedFiles: number } = {
+  let git: { branch: string | null; changedFiles: number; additions: number; deletions: number } = {
     branch: null,
     changedFiles: 0,
+    additions: 0,
+    deletions: 0,
   };
 
   if (cwd) {
     try {
       const status = await getRepoStatus(cwd);
-      git = { branch: status.branch, changedFiles: status.files.length };
+      const additions = status.files.reduce((sum, f) => sum + f.additions, 0);
+      const deletions = status.files.reduce((sum, f) => sum + f.deletions, 0);
+      git = { branch: status.branch, changedFiles: status.files.length, additions, deletions };
     } catch {
       // A cwd may no longer exist or may not be a Git repository.
     }

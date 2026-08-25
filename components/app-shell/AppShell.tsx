@@ -1127,7 +1127,7 @@ export function AppShell() {
     ip: "—",
     cpu: null as number | null,
     memory: { rss: 0, heapUsed: 0, heapTotal: 0 },
-    git: { branch: null as string | null, changedFiles: 0 },
+    git: { branch: null as string | null, changedFiles: 0, additions: 0, deletions: 0 },
     runningSessions: 0,
     today: { tokens: 0, cost: 0 },
   });
@@ -1672,7 +1672,7 @@ export function AppShell() {
           minHeight: 20,
           display: "flex",
           alignItems: "center",
-          padding: "0 10px",
+          padding: "0 2px",
           border: "none",
           borderRadius: "var(--panel-radius)",
           background: "var(--bg)",
@@ -1714,7 +1714,7 @@ export function AppShell() {
           </svg>
           {statusBar.os} : {statusBar.shell}
         </button>
-        <span style={{ marginLeft: 14 }}>{statusBar.ip}</span>
+        {statusBar.git.branch != null && (
         <button
           type="button"
           onClick={() => handleToggleRightPanelTab(GIT_DIFF_TAB_ID, handleOpenGitDiffTab)}
@@ -1728,7 +1728,7 @@ export function AppShell() {
             background: "transparent",
             color: "inherit",
             padding: "2px 0",
-            margin: "0 0 0 14px",
+            margin: "0 0 0 10px",
             font: "inherit",
             lineHeight: 1,
             cursor: "pointer",
@@ -1744,18 +1744,24 @@ export function AppShell() {
           <svg width="12" height="12" viewBox="0 0 1024 1024" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
             <path d="M110.933333 451.84L357.546667 204.8l72.106666 72.533333c-10.24 36.266667 6.4 75.946667 39.68 95.146667v236.373333c-25.6 14.506667-42.666667 42.24-42.666666 73.813334a85.333333 85.333333 0 0 0 85.333333 85.333333 85.333333 85.333333 0 0 0 85.333333-85.333333c0-31.573333-17.066667-59.306667-42.666666-73.813334V401.493333l88.32 89.173334c-2.986667 6.4-2.986667 13.653333-2.986667 21.333333a85.333333 85.333333 0 0 0 85.333333 85.333333 85.333333 85.333333 0 0 0 85.333334-85.333333 85.333333 85.333333 0 0 0-85.333334-85.333333c-7.68 0-14.933333 0-21.333333 2.986666L594.346667 320a84.48 84.48 0 0 0-49.066667-99.84c-18.346667-6.826667-37.546667-8.533333-54.613333-3.84L418.133333 144.213333l33.706667-33.28c33.28-33.706667 87.04-33.706667 120.32 0l340.906667 340.906667c33.706667 33.28 33.706667 87.04 0 120.32l-340.906667 340.906667c-33.28 33.706667-87.04 33.706667-120.32 0L110.933333 572.16c-33.706667-33.28-33.706667-87.04 0-120.32z" fill="currentColor" />
           </svg>
-          <span>{statusBar.git.branch ?? "no-git"} · {statusBar.git.changedFiles} changed</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+            {statusBar.git.branch}
+            {statusBar.git.additions > 0 && <span style={{ color: "#16a34a" }}>+{statusBar.git.additions}</span>}
+            {statusBar.git.deletions > 0 && <span style={{ color: "#ef4444" }}>-{statusBar.git.deletions}</span>}
+          </span>
         </button>
-        <span style={{ marginLeft: 14 }}>running: {runningSessionCount}</span>
-        <span style={{ marginLeft: 14 }}>
-          CPU {statusBar.cpu == null ? "—" : `${statusBar.cpu.toFixed(1)}%`} · RAM {formatBytes(statusBar.memory.rss)}
+        )}
+        <span style={{ marginLeft: 10 }}>Active: <span style={{ color: runningSessionCount > 0 ? "var(--accent)" : "inherit" }}>{runningSessionCount}</span></span>
+        <span style={{ marginLeft: 10 }}>
+          CPU {statusBar.cpu == null ? "—" : `${statusBar.cpu.toFixed(1)}%`} RAM {formatBytes(statusBar.memory.rss)}
         </span>
+        <span style={{ marginLeft: 10 }}>IP: {statusBar.ip}</span>
         <span
           aria-live="polite"
           style={{
             flex: 1,
             minWidth: 0,
-            margin: "0 14px",
+            margin: "0 10px",
             overflow: "hidden",
             textAlign: "left",
             textOverflow: "ellipsis",
@@ -1767,9 +1773,9 @@ export function AppShell() {
           {t(usefulTipOrder[usefulTipIndex] ?? USEFUL_TIP_KEYS[0])}
         </span>
         <span style={{ marginLeft: "auto" }}>
-          today: {statusBar.today.tokens.toLocaleString()} tokens · ${statusBar.today.cost.toFixed(4)}
+          Today: {statusBar.today.tokens.toString().replace(/\B(?=(\d{4})+(?!\d))/g, ",")} tokens ${statusBar.today.cost.toFixed(4)}
         </span>
-        <span style={{ marginLeft: 14 }}>
+        <span style={{ marginLeft: 10 }}>
           {statusBarTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
         </span>
       </div>
