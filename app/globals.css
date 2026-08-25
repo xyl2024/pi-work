@@ -1091,6 +1091,35 @@ li.todo-task-item[data-checked="true"] > div {
   pointer-events: none;
 }
 
+/* RSS panel interaction states. */
+.rss-list-item {
+  transition: background-color 120ms ease;
+}
+.rss-list-item:hover {
+  background: var(--bg-hover);
+}
+.rss-icon-button {
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.rss-icon-button:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-muted) !important;
+}
+.rss-header-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  font-size: 11px;
+  text-decoration: none;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background-color 120ms ease;
+}
+.rss-header-link:hover {
+  background: var(--bg-hover);
+}
+
 /* RSS reader body — sanitized third-party HTML rendered via html-react-parser
    in components/RssPanel.tsx. Kept under .rss-reader-body so it can't leak
    into the rest of the app. */

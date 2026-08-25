@@ -2,18 +2,16 @@
 
 import { useMemo, type ReactElement } from "react";
 import parseHtml, { domToReact, type DOMNode, type Element, type HTMLReactParserOptions } from "html-react-parser";
-import { iconBtnStyle, emptyStyle } from "./styles";
+import { emptyStyle } from "./styles";
 import { relativeTime } from "./relativeTime";
 import { sanitizeRssHtml } from "@/lib/shared/rss/sanitize";
 import { extractImagesFromHtml, type ImageItem } from "@/components/renderers/ImageLightbox";
 import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { SmartImage } from "@/components/ui/SmartImage";
-import type { RssArticle, RssFeed } from "@/lib/shared/rss/schema";
+import type { RssArticle } from "@/lib/shared/rss/schema";
 
 interface ReaderViewProps {
-  feed: RssFeed;
   article: RssArticle | null;
-  onBack: () => void;
   t: (k: string) => string;
 }
 
@@ -23,7 +21,7 @@ interface ReaderViewProps {
  * open any one in a full-screen lightbox, and rewrites every <a> to
  * target="_blank" so article links never replace the Pi Web session.
  */
-export function ReaderView({ feed, article, onBack, t }: ReaderViewProps): ReactElement {
+export function ReaderView({ article, t }: ReaderViewProps): ReactElement {
   const safeHtml = useMemo(() => sanitizeRssHtml(article?.contentHtml ?? ""), [
     article?.contentHtml,
   ]);
@@ -81,35 +79,6 @@ export function ReaderView({ feed, article, onBack, t }: ReaderViewProps): React
 
   return (
     <div style={{ padding: "12px 16px", fontSize: 13, lineHeight: 1.55 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 12,
-        }}
-      >
-        <button type="button" onClick={onBack} style={iconBtnStyle}>
-          ←
-        </button>
-        <div style={{ fontSize: 11, color: "var(--text-muted)", flex: 1 }}>
-          {feed.title ?? feed.url}
-        </div>
-        {article.link && (
-          <a
-            href={article.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              fontSize: 11,
-              color: "var(--accent)",
-              textDecoration: "none",
-            }}
-          >
-            {t("Open original")} ↗
-          </a>
-        )}
-      </div>
       <h2
         style={{
           fontSize: 18,

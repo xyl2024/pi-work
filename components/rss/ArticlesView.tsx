@@ -45,6 +45,8 @@ export function ArticlesView({
             style={{
               ...iconBtnStyle,
               fontSize: 12,
+              width: "auto",
+              height: "auto",
               padding: "4px 10px",
             }}
           >
@@ -62,9 +64,11 @@ export function ArticlesView({
             return (
               <li
                 key={article.id}
+                className="rss-list-item"
                 style={{
                   padding: "10px 12px",
-                  borderBottom: "1px solid var(--border)",
+                  margin: "2px 8px",
+                  borderRadius: 8,
                   cursor: "pointer",
                   display: "flex",
                   gap: 8,

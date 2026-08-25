@@ -3,11 +3,13 @@
 import type { ReactElement } from "react";
 import { iconBtnStyle } from "./styles";
 import { RefreshIconButton } from "../ui/RefreshIconButton";
+import { ArrowLeftIcon, ExternalLinkIcon, PlusIcon } from "../ui/icons/primitives";
 import type { RssView } from "@/hooks/useRss";
 
 interface RssHeaderBarProps {
   view: RssView;
   feedTitle: string | null;
+  articleLink: string | null;
   navigate: (next: RssView) => void;
   onAdd: () => void;
   onRefreshAll: () => void;
@@ -29,6 +31,7 @@ interface RssHeaderBarProps {
 export function RssHeaderBar({
   view,
   feedTitle,
+  articleLink,
   navigate,
   onAdd,
   onRefreshAll,
@@ -79,10 +82,11 @@ export function RssHeaderBar({
                 navigate({ kind: "feeds" });
               }
             }}
+            className="rss-icon-button"
             style={iconBtnStyle}
-            title={backLabel}
+            aria-label={backLabel}
           >
-            ←
+            <ArrowLeftIcon size={16} />
           </button>
         )}
         <div
@@ -104,9 +108,21 @@ export function RssHeaderBar({
             style={{ marginRight: 0 }}
           />
         )}
+        {view.kind === "reader" && articleLink && (
+          <a
+            href={articleLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rss-header-link"
+            aria-label={t("Open original")}
+          >
+            <ExternalLinkIcon size={14} />
+            <span>{t("Open original")}</span>
+          </a>
+        )}
         {view.kind === "feeds" && (
-          <button type="button" onClick={onAdd} style={iconBtnStyle} title={t("Add RSS feed")}>
-            +
+          <button type="button" onClick={onAdd} className="rss-icon-button" style={iconBtnStyle} aria-label={t("Add RSS feed")}>
+            <PlusIcon size={16} />
           </button>
         )}
       </div>
@@ -143,12 +159,19 @@ export function RssHeaderBar({
             disabled={submitting || newUrl.trim().length === 0}
             style={{
               ...iconBtnStyle,
+              width: "auto",
+              height: "auto",
+              padding: "4px 10px",
               opacity: submitting || newUrl.trim().length === 0 ? 0.5 : 1,
             }}
           >
             {t("Add")}
           </button>
-          <button type="button" onClick={cancelAdd} style={iconBtnStyle}>
+          <button
+            type="button"
+            onClick={cancelAdd}
+            style={{ ...iconBtnStyle, width: "auto", height: "auto", padding: "4px 10px" }}
+          >
             {t("Cancel")}
           </button>
         </form>

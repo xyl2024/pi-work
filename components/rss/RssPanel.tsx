@@ -221,6 +221,7 @@ export function RssPanel(): ReactElement {
       <RssHeaderBar
         view={rss.view}
         feedTitle={feed?.title ?? null}
+        articleLink={article?.link ?? null}
         navigate={rss.navigate}
         onAdd={() => setAdding(true)}
         onRefreshAll={handleRefreshAll}
@@ -325,11 +326,7 @@ export function RssPanel(): ReactElement {
 
         {rss.view.kind === "reader" && feed && (
           <ReaderView
-            feed={feed}
             article={article}
-            onBack={() =>
-              rss.navigate({ kind: "articles", feedId: feed.id })
-            }
             t={t}
           />
         )}

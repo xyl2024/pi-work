@@ -9,15 +9,19 @@
 import type { CSSProperties } from "react";
 
 export const iconBtnStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 26,
+  height: 26,
+  padding: 0,
   background: "transparent",
-  border: "1px solid var(--border)",
-  borderRadius: 4,
-  color: "var(--text)",
-  padding: "2px 8px",
-  fontSize: 14,
-  lineHeight: 1.4,
+  border: "none",
+  borderRadius: 5,
+  color: "var(--text-dim)",
   cursor: "pointer",
   flexShrink: 0,
+  transition: "color 120ms ease, background-color 120ms ease",
 };
 
 export const emptyStyle: CSSProperties = {

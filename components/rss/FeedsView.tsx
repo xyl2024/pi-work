@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { iconBtnStyle, emptyStyle } from "./styles";
 import { RefreshIconButton } from "../ui/RefreshIconButton";
 import { relativeTime } from "./relativeTime";
+import { TrashIcon } from "../ui/icons/primitives";
 import type { RssFeed } from "@/lib/shared/rss/schema";
 
 interface FeedsViewProps {
@@ -42,9 +43,11 @@ export function FeedsView({
       {feeds.map((feed) => (
         <li
           key={feed.id}
+          className="rss-list-item"
           style={{
             padding: "10px 12px",
-            borderBottom: "1px solid var(--border)",
+            margin: "2px 8px",
+            borderRadius: 8,
             cursor: "pointer",
             display: "flex",
             flexDirection: "column",
@@ -111,10 +114,11 @@ export function FeedsView({
                 e.stopPropagation();
                 void onDelete(feed.id);
               }}
+              className="rss-icon-button"
               style={iconBtnStyle}
-              title={t("Delete feed")}
+              aria-label={t("Delete feed")}
             >
-              ✕
+              <TrashIcon size={15} />
             </button>
           </div>
           {feed.lastError && (
