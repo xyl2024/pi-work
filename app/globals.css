@@ -104,6 +104,13 @@
   --info-bg: rgba(122, 162, 247, 0.14);
 }
 
+/* ── Sidebar-only hover/selected: deeper than the global tokens so session
+   rows read more clearly against the panel. Scoped to .session-sidebar so
+   other surfaces that reuse --bg-hover/--bg-selected (RSS, Tiptap, tour) are
+   not affected. */
+.theme-light .session-sidebar { --bg-hover: #e8e8e8; --bg-selected: #e2e2e2; }
+.theme-dark .session-sidebar { --bg-hover: #383838; --bg-selected: #404040; }
+
 /* Theme toggle: circular wipe via View Transitions API.
    Disable the UA cross-fade; the actual clip-path animation is driven by
    Element.animate() in hooks/useTheme.ts after transition.ready resolves. */

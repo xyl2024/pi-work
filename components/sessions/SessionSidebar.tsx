@@ -584,7 +584,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   }, [onSessionDeleted, fetchWorkspaces, fetchCwdSessions, selectedCwdProp]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div className="session-sidebar" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
       <div
         style={{
