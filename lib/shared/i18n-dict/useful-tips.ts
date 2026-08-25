@@ -12,4 +12,6 @@ export const usefulTips = {
   "Remove unnecessary plugins, MCPs, and SKILLs to keep context concise and efficient.": "卸载不必要的插件、MCP与SKILLS，保持上下文简洁高效。",
   "Align on requirements before implementing code.": "先对齐需求，后实现代码。",
   "You can switch the current conversation branch in the conversation tree on the right.": "你可以在右侧对话树中切换当前的对话分支。",
+  "Use Git to manage your projects.": "使用 Git 管理你的项目。",
+  "Press ↑/↓ in the input box to cycle through sent messages.": "在输入框中可以通过 ↑/↓ 键切换历史发送消息。",
 } as const;

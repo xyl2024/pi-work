@@ -287,6 +287,8 @@ const USEFUL_TIP_KEYS = [
   "Remove unnecessary plugins, MCPs, and SKILLs to keep context concise and efficient.",
   "Align on requirements before implementing code.",
   "You can switch the current conversation branch in the conversation tree on the right.",
+  "Use Git to manage your projects.",
+  "Press ↑/↓ in the input box to cycle through sent messages.",
 ] as const;
 
 function shuffleTips<T>(items: readonly T[]): T[] {
