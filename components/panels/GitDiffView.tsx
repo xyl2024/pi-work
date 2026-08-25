@@ -157,7 +157,7 @@ export function GitDiffView({ cwd, status }: Props) {
       {/* Staged/Unstaged toggle */}
       <div style={{
         display: "flex", alignItems: "center", gap: 4,
-        padding: "6px 10px", borderBottom: "1px solid var(--border)",
+        padding: "6px 10px",
         flexShrink: 0,
       }}>
         {([false, true] as const).map((side) => (
@@ -245,7 +245,8 @@ export function GitDiffView({ cwd, status }: Props) {
           flex: "0 0 6px",
           cursor: "row-resize",
           background: "transparent",
-          border: "none",
+          borderTop: "1px solid var(--border)",
+          borderBottom: "none",
           touchAction: "none",
         }}
       />
