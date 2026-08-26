@@ -25,9 +25,6 @@
 //      a missing key (settings not loaded yet) is treated as visible so
 //      the column is never empty on first paint.
 //
-// There is no longer a margin-top:auto bottom-pinned group — terminal
-// used to be that, but moving it to 'configurable' lets the user
-// reorder/hide it through the same Settings UI as the rest.
 
 import { Fragment, useMemo } from "react";
 import {
@@ -105,8 +102,7 @@ export function RightBarColumn({ cfg, ctx }: RightBarColumnProps) {
 
   // Fixed descriptors partitioned by their slot. The top group contains
   // panel show/hide plus the conditional expand/collapse toggle; any
-  // future fixed descriptor without a slot remains inline. Terminal moved
-  // to the configurable row.
+  // future fixed descriptor without a slot remains inline.
   const topFixed = RIGHT_BAR_DESCRIPTORS.filter(
     (d) => d.kind === "fixed" && d.slot === "top",
   );

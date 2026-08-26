@@ -1202,7 +1202,6 @@ export function AppShell() {
     hasOpenTabs: fileTabs.length > 0,
     selectedSessionId,
     selectedCwd,
-    terminalOpen,
     rssUnread,
     gitChangedCount,
     toolStats: {
@@ -1214,7 +1213,6 @@ export function AppShell() {
       setRightPanelState((v) => (v === "closed" ? "normal" : "closed")),
     toggleRightPanelTab: handleToggleRightPanelTab,
     setRightPanelState,
-    toggleTerminal,
     openTab: {
       todo: handleOpenTodoTab,
       canvas: handleOpenCanvasTab,

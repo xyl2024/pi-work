@@ -8,8 +8,7 @@
 // Two kinds of descriptors:
 //   - 'fixed'      — always visible, not in right_side_bar config, no
 //                    user-toggleable hidden state. Panel toggle (top),
-//                    expand/collapse (middle, conditional), terminal
-//                    (bottom — always pinned by behavior, not by style).
+//                    expand/collapse (middle, conditional).
 //   - 'configurable' — managed by RightSideBarConfig: each id has a boolean
 //                    visibility flag and an optional position in
 //                    `order` (see lib/config.ts). Settings modal lays them
@@ -51,7 +50,6 @@ import {
   ConversationTreeIcon,
   TokensIcon,
   WrenchIcon,
-  TerminalIcon,
   CalendarCheckIcon,
 } from "@/components/ui/icons";
 
@@ -82,7 +80,6 @@ export interface RightBarCtx {
   hasOpenTabs: boolean;
   selectedSessionId: string | null;
   selectedCwd: string | null;
-  terminalOpen: boolean;
   rssUnread: number;
   /** Number of changed files (M/A/D/R/C/T/? ?) for the active cwd's git
    *  repo. 0 when there's no cwd, the cwd isn't a repo, or the repo has
@@ -102,7 +99,6 @@ export interface RightBarCtx {
    *  never have to know how each tab is constructed. */
   toggleRightPanelTab: (tabId: string, openTab: () => void) => void;
   setRightPanelState: (s: "closed" | "normal" | "expanded") => void;
-  toggleTerminal: () => void;
   openTab: {
     todo: () => void;
     canvas: () => void;
@@ -127,9 +123,8 @@ export interface RightBarDescriptor {
   kind: "fixed" | "configurable";
   /** Visual slot — 'top' renders above the configurable row. Undefined =
    *  inline (renders among the configurable row, in user-configured
-   *  order). 'bottom' is unused now that terminal is configurable and
-   *  lives in the user-ordered row; kept on the type for legacy slots
-   *  registered through this module. */
+   *  order). 'bottom' is reserved for legacy slots registered through
+   *  this module. */
   slot?: "top" | "bottom";
   /** True when the button reads from active-session-bound state (system
    *  prompt / tools, per-session tool-call stats, branch tree, cwd's git
@@ -172,19 +167,6 @@ const panelToggleDescriptor: RightBarDescriptor = {
   content: () => <PanelToggleIcon />,
   onClick: (ctx) => ctx.toggleRightPanel(),
   // Wrap so we can swap the tooltip when active.
-};
-
-// Configurable: terminal toggle. Lives in the user-ordered row rather
-// than a fixed bottom slot so Settings can both hide it and reorder it
-// alongside the other panel buttons. (Was fixed/slot=bottom before —
-// that made it un-toggleable from the right-side bar settings.)
-const terminalDescriptor: RightBarDescriptor = {
-  id: "terminal",
-  kind: "configurable",
-  labelKey: "Terminal", // used by Settings checkbox label
-  isActive: (ctx) => ctx.terminalOpen,
-  content: () => <TerminalIcon size={16} />,
-  onClick: (ctx) => ctx.toggleTerminal(),
 };
 
 // Configurable: panel buttons. Their default order in the Settings list
@@ -384,7 +366,6 @@ const conversationTreeDescriptor: RightBarDescriptor = {
 export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   // 'fixed' group
   panelToggleDescriptor,
-  terminalDescriptor,
   // 'configurable' group — order here is the implicit default order used
   // when the user hasn't customized `cfg.order`.
   contextDescriptor,
@@ -428,7 +409,7 @@ export const RIGHT_BAR_DESCRIPTOR_BY_ID: ReadonlyMap<
 
 /** Resolve the user-visible label for a button. Handles descriptors whose
  *  label flips based on state (panel toggle: Hide/Show; expand: Collapse/
- *  Expand; terminal: Hide/Open). */
+ *  Expand). */
 export function resolveButtonLabel(
   desc: RightBarDescriptor,
   ctx: RightBarCtx,
@@ -438,8 +419,6 @@ export function resolveButtonLabel(
       return ctx.t(
         ctx.rightPanelState !== "closed" ? "Hide file panel" : "Show file panel",
       );
-    case "terminal":
-      return ctx.t(ctx.terminalOpen ? "Hide terminal" : "Open terminal");
     default:
       return ctx.t(desc.labelKey);
   }
