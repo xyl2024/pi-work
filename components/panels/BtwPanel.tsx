@@ -28,6 +28,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { IconButton } from "@/components/ui/IconButton";
+import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
 import { useBtw } from "@/hooks/useBtw";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageView, CollapseNonceProvider } from "@/components/chat/MessageView";
@@ -51,6 +52,10 @@ interface BtwPanelProps {
   /** All main-session messages (latest snapshot). Used by the hook
    *  on the FIRST send (handoff §3.4). */
   mainSessionMessages: AgentMessage[];
+  /** UX fallback: re-check readiness when the panel is stuck on
+   *  `btw.disabled.loading` even though a session is open. Wired to
+   *  the active controller's systemPrompt refresh in AppShell. */
+  onRefresh: () => void;
 }
 
 export function BtwPanel(props: BtwPanelProps) {
@@ -61,7 +66,7 @@ export function BtwPanel(props: BtwPanelProps) {
   );
 }
 
-function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thinkingLevel, mainSessionMessages }: BtwPanelProps) {
+function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thinkingLevel, mainSessionMessages, onRefresh }: BtwPanelProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const toast = useToast();
@@ -109,6 +114,14 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thi
     if (ok) btw.clear();
   }, [btw, confirm, t]);
 
+  // UX fallback: when the panel is disabled while loading (stale
+  // cwd/systemPrompt for an already-open session), let the user prod the
+  // active controller to re-fetch its readiness data. Visual feedback
+  // (REFRESH → ✓ flash) is handled by RefreshIconButton itself.
+  const handleRefresh = useCallback(() => {
+    onRefresh();
+  }, [onRefresh]);
+
   // ── Input wiring ──────────────────────────────────────────────────
   const disabledReason = useMemo(() => {
     if (!mainSessionId) return t("btw.disabled.noSession");
@@ -139,6 +152,10 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thi
         }}
       >
         <span style={{ flex: 1 }} />
+        <RefreshIconButton
+          onClick={() => void handleRefresh()}
+          label={t("btw.refreshHint")}
+        />
         <IconButton
           label={t("btw.clearButton")}
           icon={<ICONS.trash size={13} />}

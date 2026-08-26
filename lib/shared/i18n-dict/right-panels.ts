@@ -196,4 +196,5 @@ export const rightPanels = {
   "btw.error.modelUnavailable": "当前模型不可用，请切换主会话的模型。",
   "btw.disabled.noSession": "请先打开一个会话再使用 BTW。",
   "btw.disabled.loading": "主会话正在初始化…",
+  "btw.refreshHint": "重新检测就绪状态（卡在此处时可点击）",
 } as const;

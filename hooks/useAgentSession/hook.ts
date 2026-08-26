@@ -6,7 +6,7 @@ import { sendAgentCommand } from "@/lib/client/agent-client";
 import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
-import { setSessionUiState, setLeafChangeHandler } from "../sessionUiStore";
+import { setSessionUiState, setLeafChangeHandler, setSystemPromptRefreshHandler } from "../sessionUiStore";
 import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import { streamReducer } from "./utils";
 import { useAgentSessionEvents } from "./events";
@@ -312,6 +312,17 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       })
       .catch(() => {});
   }, []);
+
+  // Bridge the systemPrompt refresh out to the BTW panel's header refresh
+  // button. AppShell triggers this via useSystemPromptRefresh(); without a
+  // registered handler the button degrades to a no-op re-render.
+  useEffect(() => {
+    if (!isActive) return;
+    setSystemPromptRefreshHandler(refreshSystemPrompt, sessionIdRef.current ?? undefined);
+    return () => setSystemPromptRefreshHandler(null, sessionIdRef.current ?? undefined);
+    // refreshSystemPrompt is a stable useCallback; isActive flips on tab
+    // activation so we re-register the owner for the now-active session.
+  }, [isActive, refreshSystemPrompt]);
 
   const { handleAgentEventRef: eventHandlerRef } = useAgentSessionEvents({
     isActive,

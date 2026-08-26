@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect, useReducer, memo, type RefObject } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSessionUiState, useSessionLeafChange } from "@/hooks/sessionUiStore";
+import { useSessionUiState, useSessionLeafChange, useSystemPromptRefresh } from "@/hooks/sessionUiStore";
 import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
 import { SessionSidebar } from "../sessions/SessionSidebar";
 import { ChatWindow } from "../chat/ChatWindow";
@@ -404,6 +404,10 @@ export function AppShell() {
   // snapshot into this module-level bridge for the chat footer/right panels.
   const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, currentModel, mainSessionMessages, thinkingLevel, toolNames } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
+  // Trigger the active session controller to re-fetch & re-publish its
+  // systemPrompt — surfaced as the BTW panel's header refresh button so a
+  // session that got stuck on the "initializing" state can be prodded.
+  const refreshSystemPrompt = useSystemPromptRefresh();
 
   // Tools are cached per formal session. Activating an already-open tab only
   // reads this map; it never sends a new runtime request just because focus
@@ -1685,6 +1689,7 @@ export function AppShell() {
               toolNames={btwToolNames}
               thinkingLevel={thinkingLevel}
               mainSessionMessages={mainSessionMessages}
+              onRefresh={refreshSystemPrompt}
             />
           ) : activeFileTab?.kind === "gitDiff" ? (
             <GitPanel

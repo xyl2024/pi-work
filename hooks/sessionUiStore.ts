@@ -153,6 +153,8 @@ export function resetSessionUi() {
   leafChangeOwner = null;
   agentControlsRef = null;
   agentControlsOwner = null;
+  systemPromptRefreshRef = null;
+  systemPromptRefreshOwner = null;
   emit();
 }
 
@@ -182,6 +184,51 @@ export function useSessionLeafChange(): (leafId: string | null) => void {
   return useCallback((leafId: string | null) => {
     leafChangeHandlerRef?.(leafId);
   }, []);
+}
+
+// ── System-prompt refresh bridge ───────────────────────────────────────
+// The active session controller owns the authoritative systemPrompt (it
+// resolves it lazily from the runtime state). The BTW panel can get stuck
+// showing its "init" disabled state when the controller never published a
+// systemPrompt for an already-open session. Rather than have AppShell
+// hand-roll its own fetch of the runtime snapshot (which would race the
+// controller's write), the active controller registers its
+// `refreshSystemPrompt` here and the BTW panel's refresh button invokes it
+// through this bridge. Same ownership-guard pattern as `agentControls`.
+
+let systemPromptRefreshRef: (() => void) | null = null;
+let systemPromptRefreshOwner: string | null = null;
+const systemPromptRefreshListeners = new Set<() => void>();
+
+export function setSystemPromptRefreshHandler(fn: (() => void) | null, ownerId?: string) {
+  // A stale cleanup from an old active controller must not clear the
+  // handler that a newly-active controller just registered.
+  if (fn === null && ownerId && systemPromptRefreshOwner !== ownerId) return;
+  systemPromptRefreshRef = fn;
+  systemPromptRefreshOwner = fn === null ? null : ownerId ?? null;
+  for (const l of systemPromptRefreshListeners) l();
+}
+
+/** Stable trigger that AppShell's BTW refresh button calls to re-check
+ *  systemPrompt readiness. Inert (no-op) when no active controller has
+ *  registered a handler. */
+export function useSystemPromptRefresh(): () => void {
+  return useCallback(() => {
+    systemPromptRefreshRef?.();
+  }, []);
+}
+
+export function useSystemPromptRefreshAvailable(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      systemPromptRefreshListeners.add(cb);
+      return () => {
+        systemPromptRefreshListeners.delete(cb);
+      };
+    },
+    () => systemPromptRefreshRef !== null,
+    () => false,
+  );
 }
 
 // ── Agent controls (palette bridge) ─────────────────────────────────────
