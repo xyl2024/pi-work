@@ -23,12 +23,13 @@
 // loading states ("no session" / "loading") render a tooltip on the
 // textarea wrapper explaining why.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { IconButton } from "@/components/ui/IconButton";
 import { useBtw } from "@/hooks/useBtw";
+import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageView, CollapseNonceProvider } from "@/components/chat/MessageView";
 import { ICONS } from "@/components/ui/icons";
 import type { AgentMessage, AssistantMessage } from "@/lib/shared/types";
@@ -109,32 +110,6 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thi
   }, [btw, confirm, t]);
 
   // ── Input wiring ──────────────────────────────────────────────────
-  const [draft, setDraft] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key !== "Enter") return;
-      if (e.shiftKey) return; // Shift+Enter → newline
-      if (e.nativeEvent.isComposing) return;
-      if (isStreaming) return;
-      e.preventDefault();
-      const value = draft;
-      if (!value.trim()) return;
-      setDraft("");
-      if (textareaRef.current) textareaRef.current.style.height = "auto";
-      void btw.send(value);
-    },
-    [btw, draft, isStreaming],
-  );
-
-  const handleInput = useCallback(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
-  }, []);
-
   const disabledReason = useMemo(() => {
     if (!mainSessionId) return t("btw.disabled.noSession");
     if (!cwd || !systemPrompt) return t("btw.disabled.loading");
@@ -160,24 +135,9 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thi
           alignItems: "center",
           gap: 8,
           padding: "8px 12px",
-          borderBottom: "1px solid var(--border)",
           background: "transparent",
         }}
       >
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontWeight: 700,
-            fontSize: 10,
-            letterSpacing: 0.6,
-            color: "var(--accent)",
-            padding: "2px 6px",
-            borderRadius: 4,
-            background: "var(--accent-soft, rgba(83,179,203,0.12))",
-          }}
-        >
-          By the way
-        </span>
         <span style={{ flex: 1 }} />
         <IconButton
           label={t("btw.clearButton")}
@@ -228,8 +188,7 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thi
       <div
         style={{
           flexShrink: 0,
-          padding: "8px 12px 10px 12px",
-          borderTop: "1px solid var(--border)",
+          padding: "0 10px 10px",
           background: "transparent",
         }}
       >
@@ -245,106 +204,19 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thi
             {disabledReason}
           </div>
         )}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-end",
-            gap: 8,
-            border: "1px solid var(--border)",
-            borderRadius: 12,
-            padding: "6px 10px",
-            background: "var(--bg)",
-          }}
-        >
-          <textarea
-            ref={textareaRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onInput={handleInput}
-            disabled={isDisabled}
-            rows={1}
-            aria-label={t("btw.placeholder")}
-            title={disabledReason ?? undefined}
-            style={{
-              flex: 1,
-              minHeight: 22,
-              maxHeight: 160,
-              resize: "none",
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              color: "var(--text)",
-              fontFamily: "inherit",
-              fontSize: 13,
-              lineHeight: 1.5,
-              opacity: isDisabled ? 0.6 : 1,
-              cursor: isDisabled ? "not-allowed" : "text",
-            }}
-          />
-          {isStreaming ? (
-            <button
-              type="button"
-              onClick={() => btw.stop()}
-              aria-label={t("btw.stop")}
-              title={t("btw.stop")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                flexShrink: 0,
-                width: 30,
-                height: 30,
-                padding: 0,
-                background: "var(--bg-panel)",
-                border: "1px solid var(--border)",
-                color: "var(--text)",
-                borderRadius: "50%",
-                cursor: "pointer",
-                transition: "background 0.15s",
-              }}
-            >
-              <ICONS.stop size={13} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                if (!draft.trim()) return;
-                const value = draft;
-                setDraft("");
-                if (textareaRef.current) textareaRef.current.style.height = "auto";
-                void btw.send(value);
-              }}
-              disabled={isDisabled || !draft.trim()}
-              aria-label={t("Send")}
-              title={t("Send")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                width: 30,
-                height: 30,
-                padding: 0,
-                background: !isDisabled && draft.trim() ? "var(--accent)" : "var(--bg-panel)",
-                border: "none",
-                borderRadius: "50%",
-                color: !isDisabled && draft.trim() ? "#fff" : "var(--text-dim)",
-                cursor: !isDisabled && draft.trim() ? "pointer" : "not-allowed",
-                opacity: !isDisabled && draft.trim() ? 1 : 0.6,
-                boxShadow: !isDisabled && draft.trim() ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
-                transition: "background 0.15s, box-shadow 0.15s",
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            </button>
-          )}
-        </div>
+        <ChatInput
+          enterToSend
+          hideToolbar
+          disabled={isDisabled}
+          isStreaming={isStreaming}
+          sessionBusy={isDisabled}
+          onSend={(message) => void btw.send(message)}
+          onAbort={() => btw.stop()}
+          placeholder={t("Ask a quick question here, without polluting the main session's context")}
+          thinkingLevel={
+            thinkingLevel as "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+          }
+        />
       </div>
     </div>
   );

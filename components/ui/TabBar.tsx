@@ -92,7 +92,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               : tab.kind === "context"
                 ? t("Context")
                 : tab.kind === "btw"
-                  ? "BTW"
+                  ? t("By the way")
                   : tab.label;
           const tooltipContent =
             tab.kind === "file" ? tab.filePath : displayLabel;

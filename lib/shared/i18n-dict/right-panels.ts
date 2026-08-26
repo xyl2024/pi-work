@@ -179,14 +179,13 @@ export const rightPanels = {
   "Top sessions by cost": "Top 会话成本",
 
   // BTW (By the way) — right-side panel that asks a temporary agent
-  // read-only questions grounded in the active session. Only the right-bar
-  // button label / tooltip is translated here; the on-tab "BTW" mark is
-  // intentionally kept as English per the handoff §2 row #20.
+  // read-only questions grounded in the active session. The panel header
+  // shows no title; the on-tab "BTW" mark is intentionally kept as English
+  // per the handoff §2 row #20.
   "Open BTW": "打开 BTW",
-  "By the way": "BTW 旁注",
-  "btw.title": "BTW",
+  "By the way": "顺带一提",
   "btw.tooltip": "基于当前会话提问（仅只读工具，不影响主会话）",
-  "btw.placeholder": "基于当前会话问点什么…（Enter 发送，Shift+Enter 换行）",
+  "Ask a quick question here, without polluting the main session's context": "在这里顺手问一句，不污染主会话上下文",
   "btw.empty": "还没有 BTW 对话。发条消息开始。",
   "btw.clearButton": "清空 BTW 对话",
   "btw.clearConfirmTitle": "清空 BTW 对话？",

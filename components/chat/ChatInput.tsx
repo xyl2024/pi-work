@@ -91,6 +91,17 @@ interface Props {
     imageCount: number;
     cursorPosition: number;
   }) => void;
+  /** Enter sends immediately (instead of the default Ctrl/Cmd+Enter). Used
+   *  by compact panels (e.g. BTW) that want plain-Enter sending. */
+  enterToSend?: boolean;
+  /** Renders only the bordered input box itself: no bottom toolbar, no
+   *  image attachments / slash / prompt UI. While streaming, a stop button
+   *  replaces the send button (the toolbar's abort affordance is hidden). */
+  hideToolbar?: boolean;
+  /** Hard-disable the whole input (no session, not ready, ...). */
+  disabled?: boolean;
+  /** Static placeholder replacing the animated typewriter text. */
+  placeholder?: string;
 }
 
 export interface ChatInputHandle {
@@ -113,6 +124,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   sessionId,
   userMessageHistory,
   onDraftChange,
+  enterToSend = false,
+  hideToolbar = false,
+  disabled = false,
+  placeholder,
 }: Props, ref) {
   const { t, locale } = useI18n();
   const { contextUsage, sessionStats } = useSessionUiState();
@@ -254,15 +269,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ta.style.height = `${Math.min(ta.scrollHeight, 200)}px`;
   }, []);
 
-  // ── Ctrl/Cmd+Enter sends; bare /new / /compact rides the same gate so the
-  //    shortcut is consistent across "send a message" and "fire a built-in
-  //    slash action". Plain Enter / Shift+Enter fall through to the browser
-  //    default (newline), which is what users want when typing multi-line
-  //    drafts or in the middle of an IME composition session. ─────────────
+  // ── Ctrl/Cmd+Enter sends (or plain Enter when `enterToSend`); bare
+  //    /new / /compact rides the same gate so the shortcut is consistent
+  //    across "send a message" and "fire a built-in slash action". Plain
+  //    Enter / Shift+Enter fall through to the browser default (newline),
+  //    which is what users want when typing multi-line drafts or in the
+  //    middle of an IME composition session. ─────────────────────────────
   const handleEnterAndBuiltin = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return false;
-      if (!(e.ctrlKey || e.metaKey)) return false;
+      if (!(e.ctrlKey || e.metaKey) && !enterToSend) return false;
       // Bare built-in slash actions (no trailing args) trigger the action
       // directly, bypassing the prompt-template expansion that prompt/skill
       // commands go through in selectSlashResource.
@@ -283,7 +299,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       handleSend();
       return true;
     },
-    [value, onSlashAction, handleSend, setSelectedSlashResource, setSlashMenuOpen],
+    [value, onSlashAction, handleSend, setSelectedSlashResource, setSlashMenuOpen, enterToSend],
   );
 
   // ── Shift+Backspace clears selected slash resource ─────────────────────
@@ -418,18 +434,20 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       }}
     >
       {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        style={{ display: "none" }}
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          void processImageFiles(files);
-          e.target.value = "";
-        }}
-      />
+      {!hideToolbar && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            void processImageFiles(files);
+            e.target.value = "";
+          }}
+        />
+      )}
       <div style={{ maxWidth: 820, margin: "0 auto" }}>
         {/* Retry banner */}
         {retryInfo && (
@@ -447,9 +465,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         )}
         {/* Image previews */}
-        <AttachmentList images={attachedImages} onRemove={removeImage} />
+        {!hideToolbar && <AttachmentList images={attachedImages} onRemove={removeImage} />}
 
-        {selectedPromptResource && (
+        {!hideToolbar && selectedPromptResource && (
           <PromptPreview resource={selectedPromptResource} preview={selectedPromptPreview} />
         )}
 
@@ -469,7 +487,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             position: "relative",
           } as React.CSSProperties}
         >
-          {!value && !isFocused && typewriterEffectEnabled && (
+          {!value && !isFocused && typewriterEffectEnabled && !hideToolbar && (
             <span
               aria-hidden
               style={{
@@ -503,7 +521,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
             onKeyDown={handleKeyDown}
             onInput={handleInput}
-            onPaste={handlePaste}
+            onPaste={hideToolbar ? undefined : handlePaste}
             onSelect={(e) => {
               const pos = e.currentTarget.selectionStart ?? value.length;
               setCursorPosition(pos);
@@ -517,13 +535,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
             onBlur={() => setIsFocused(false)}
             placeholder={
-              isFocused
-                ? ""
-                : !value
+              placeholder !== undefined
+                ? placeholder
+                : isFocused
                   ? ""
-                  : t("Message...")
+                  : !value
+                    ? ""
+                    : t("Message...")
             }
             rows={1}
+            disabled={disabled}
             style={{
               flex: 1,
               background: "none",
@@ -540,22 +561,45 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             data-hide-v-scrollbar
           />
 
-          {!isStreaming && (
+          {hideToolbar && isStreaming ? (
+            <button
+              type="button"
+              onClick={onAbort}
+              aria-label={t("Stop")}
+              title={t("Stop")}
+              style={{
+                flexShrink: 0,
+                alignSelf: "flex-end",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 34, height: 34, padding: 0,
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                borderRadius: "50%",
+                color: "#ef4444",
+                cursor: "pointer",
+                transition: "background 0.15s",
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 10 10" fill="none">
+                <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
+              </svg>
+            </button>
+          ) : !isStreaming && (
             <button
               onClick={handleSend}
-              disabled={sessionBusy || (!value.trim() && !attachedImages.length && !selectedSlashResource)}
+              disabled={disabled || sessionBusy || (!value.trim() && !attachedImages.length && !selectedSlashResource)}
               aria-label={t("Send")}
               style={{
                 flexShrink: 0,
                 alignSelf: "flex-end",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 34, height: 34, padding: 0,
-                background: (value.trim() || attachedImages.length || selectedSlashResource) ? "var(--accent)" : "var(--bg-panel)",
+                background: (!disabled && !sessionBusy && (value.trim() || attachedImages.length || selectedSlashResource)) ? "var(--accent)" : "var(--bg-panel)",
                 border: "none",
                 borderRadius: "50%",
-                color: (value.trim() || attachedImages.length || selectedSlashResource) ? "#fff" : "var(--text-dim)",
-                cursor: (value.trim() || attachedImages.length || selectedSlashResource) ? "pointer" : "not-allowed",
-                boxShadow: (value.trim() || attachedImages.length || selectedSlashResource) ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
+                color: (!disabled && !sessionBusy && (value.trim() || attachedImages.length || selectedSlashResource)) ? "#fff" : "var(--text-dim)",
+                cursor: (!disabled && !sessionBusy && (value.trim() || attachedImages.length || selectedSlashResource)) ? "pointer" : "not-allowed",
+                boxShadow: (!disabled && !sessionBusy && (value.trim() || attachedImages.length || selectedSlashResource)) ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
                 transition: "background 0.15s, box-shadow 0.15s",
               }}
             >
@@ -567,7 +611,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           )}
         </div>
         </CollapsiblePanel>
-        {(selectedSlashResource || (slashMenuOpen && slashQuery)) && (
+        {(selectedSlashResource || (slashMenuOpen && slashQuery)) && !hideToolbar && (
           <div style={{ position: "relative" }}>
             {selectedSlashResource && (
               <SlashCommandHint resource={selectedSlashResource} onRemove={() => setSelectedSlashResource(null)} />
@@ -590,38 +634,40 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         )}
 
-        <BottomToolbar
-          t={t}
-          isStreaming={isStreaming}
-          onSlashAction={onSlashAction}
-          hasAttachedImages={attachedImages.length > 0}
-          fileInputRef={fileInputRef}
-          model={model}
-          modelNames={modelNames}
-          modelIcons={modelIcons}
-          modelList={modelList}
-          onModelChange={onModelChange}
-          cwd={cwd}
-          onCwdChange={onCwdChange}
-          contextUsage={contextUsage}
-          sessionStats={sessionStats}
-          thinkingLevel={thinkingLevel}
-          onThinkingLevelChange={onThinkingLevelChange}
-          availableThinkingLevels={availableThinkingLevels}
-          thinkingLevelMap={thinkingLevelMap}
-          toolSelection={toolSelection ?? "all"}
-          availableTools={availableTools ?? []}
-          toolsLoading={toolsLoading ?? false}
-          toolsError={toolsError ?? null}
-          toolDropdownRef={toolDropdownRef}
-          toolDropdownOpen={toolDropdownOpen}
-          setToolDropdownOpen={setToolDropdownOpen}
-          onToolSelectionChange={onToolSelectionChange}
-          onEnsureAvailableTools={onEnsureAvailableTools}
-          customExpanded={customExpanded}
-          toggleCustomExpanded={() => toggleCustomExpanded(() => onEnsureAvailableTools?.())}
-          onAbort={onAbort}
-        />
+        {!hideToolbar && (
+          <BottomToolbar
+            t={t}
+            isStreaming={isStreaming}
+            onSlashAction={onSlashAction}
+            hasAttachedImages={attachedImages.length > 0}
+            fileInputRef={fileInputRef}
+            model={model}
+            modelNames={modelNames}
+            modelIcons={modelIcons}
+            modelList={modelList}
+            onModelChange={onModelChange}
+            cwd={cwd}
+            onCwdChange={onCwdChange}
+            contextUsage={contextUsage}
+            sessionStats={sessionStats}
+            thinkingLevel={thinkingLevel}
+            onThinkingLevelChange={onThinkingLevelChange}
+            availableThinkingLevels={availableThinkingLevels}
+            thinkingLevelMap={thinkingLevelMap}
+            toolSelection={toolSelection ?? "all"}
+            availableTools={availableTools ?? []}
+            toolsLoading={toolsLoading ?? false}
+            toolsError={toolsError ?? null}
+            toolDropdownRef={toolDropdownRef}
+            toolDropdownOpen={toolDropdownOpen}
+            setToolDropdownOpen={setToolDropdownOpen}
+            onToolSelectionChange={onToolSelectionChange}
+            onEnsureAvailableTools={onEnsureAvailableTools}
+            customExpanded={customExpanded}
+            toggleCustomExpanded={() => toggleCustomExpanded(() => onEnsureAvailableTools?.())}
+            onAbort={onAbort}
+          />
+        )}
       </div>
     </div>
   );
