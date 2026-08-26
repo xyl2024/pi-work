@@ -14,4 +14,5 @@ export const usefulTips = {
   "You can switch the current conversation branch in the conversation tree on the right.": "你可以在右侧对话树中切换当前的对话分支。",
   "Use Git to manage your projects.": "使用 Git 管理你的项目。",
   "Press ↑/↓ in the input box to cycle through sent messages.": "在输入框中可以通过 ↑/↓ 键切换历史发送消息。",
+  "Use /btw to ask a question without affecting the current context.": "使用 /btw 在不影响当前上下文的情况下提出一个问题。",
 } as const;

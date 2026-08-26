@@ -291,6 +291,7 @@ const USEFUL_TIP_KEYS = [
   "You can switch the current conversation branch in the conversation tree on the right.",
   "Use Git to manage your projects.",
   "Press ↑/↓ in the input box to cycle through sent messages.",
+  "Use /btw to ask a question without affecting the current context.",
 ] as const;
 
 function shuffleTips<T>(items: readonly T[]): T[] {
