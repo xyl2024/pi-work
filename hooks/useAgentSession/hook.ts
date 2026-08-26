@@ -664,6 +664,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       loadSession(session.id, true, true).then(async (agentState) => {
         if (disposedRef.current) return;
         applyAgentRuntimeState(agentState);
+        // Backstop for a wrapper that wasn't alive at includeState time (e.g.
+        // right after server boot): GET /api/agent/[id] lazily boots the RPC
+        // session, so one re-fetch publishes systemPrompt/contextUsage without
+        // waiting for the user to hit the BTW panel's refresh button.
+        if (agentState && !agentState.state) {
+          refreshAgentRuntimeState(session.id).catch(() => {});
+        }
         // Connect SSE whenever the wrapper is alive and reporting any kind
         // of busyness — streaming, compacting, or a generic "running" flag.
         // Without this, a page refresh in the middle of a manual compact

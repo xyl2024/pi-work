@@ -4,7 +4,7 @@ import {
   readSessionDetails,
   renameSession,
 } from "@/lib/server/sessions";
-import { getRpcSession } from "@/lib/server/rpc-manager";
+import { getRpcSession, startRpcSession } from "@/lib/server/rpc-manager";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]");
@@ -31,7 +31,28 @@ export async function GET(req: Request, { params }: RouteContext) {
         const state = await rpc.send({ type: "get_state" });
         agentState = { running: true, state };
       } else {
-        agentState = { running: false };
+        // Wrapper not alive (e.g. right after server boot) — lazily boot it so
+        // the client learns the session's real state (systemPrompt etc.) on
+        // this request instead of an empty `{ running: false }` that leaves
+        // BTW / Context panels stuck on "main session initializing…". Mirrors
+        // the events endpoint's lazy-start behavior. Boot failure degrades to
+        // the old calm response so session loading never breaks.
+        try {
+          const resolved = await startRpcSession(
+            id,
+            session.filePath,
+            session.info?.cwd || process.cwd(),
+          );
+          const state = await resolved.session.send({ type: "get_state" });
+          agentState = { running: true, state };
+        } catch (bootError) {
+          log.warn("get session includeState failed to start rpc session", {
+            id,
+            error: String(bootError),
+            durationMs: elapsedMs(startedAt),
+          });
+          agentState = { running: false };
+        }
       }
     }
 
