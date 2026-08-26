@@ -41,6 +41,7 @@
   ],
   "scripts": {
     "dev": "next dev -p 30141",
+    "dev:isolated": "node scripts/dev-isolated.mjs",
     "build": "next build --webpack",
     "postinstall": "find node_modules -path '*/pdfjs-dist/build/pdf.worker.min.mjs' -not -path '*/legacy/*' | head -1 | xargs -I{} cp {} public/pdf.worker.min.mjs",
     "start": "next start -p 30141",

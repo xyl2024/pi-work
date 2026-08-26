@@ -35,7 +35,7 @@ import {
 } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { homedir } from "node:os";
+import { dataPath } from "./data-dir";
 
 export interface SessionNameEntry {
   name: string;
@@ -49,7 +49,7 @@ const SIDE_CAR_DIR_NAME = "session-names";
 const SAFE_ID_RE = /^[A-Za-z0-9_-]{4,128}$/;
 
 function getSideCarDir(): string {
-  return join(homedir(), ".pi-work", SIDE_CAR_DIR_NAME);
+  return dataPath(SIDE_CAR_DIR_NAME);
 }
 
 function ensureSideCarDir(): string {

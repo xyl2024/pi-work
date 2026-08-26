@@ -8,7 +8,7 @@
  * so the inbound poller is duplicated and the rescan logs drown out
  * every other log channel.
  *
- * The lock is a small JSON file at ~/.pi-work/wechat-monitor.lock. The
+ * The lock is a small JSON file at <data root>/wechat-monitor.lock. The
  * holder writes its PID + a renewedAt timestamp every 30 seconds.
  * Newcomers read the file and ask (a) is the holder's PID alive, (b)
  * is the renewedAt fresh. If either check fails, the lock is stale
@@ -31,13 +31,13 @@ import {
   unlinkSync,
   writeSync,
 } from "fs";
-import { homedir } from "os";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { createLogger } from "@/lib/server/logger";
+import { dataPath } from "@/lib/server/data-dir";
 
 const log = createLogger("wechat/monitor-lock");
 
-const LOCK_PATH = join(homedir(), ".pi-work", "wechat-monitor.lock");
+const LOCK_PATH = dataPath("wechat-monitor.lock");
 const STALE_RENEW_MS = 90_000;
 const RENEW_INTERVAL_MS = 30_000;
 

@@ -148,7 +148,8 @@ async function migrateOne(file: string, force: boolean): Promise<{ action: Actio
 async function main(): Promise<void> {
   const force = process.argv.includes("--force");
   const home = homedir();
-  const sessionsDir = join(home, ".pi", "agent", "sessions");
+  const agentDir = process.env.PI_CODING_AGENT_DIR || join(home, ".pi", "agent");
+  const sessionsDir = join(agentDir, "sessions");
   console.log(`sessions dir: ${sessionsDir}`);
   console.log(`mode: ${force ? "FORCE (overwrite existing sidecars)" : "skip existing sidecars"}`);
 

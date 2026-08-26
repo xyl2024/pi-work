@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { existsSync, readFileSync } from "fs";
 import { join, resolve } from "path";
-import { homedir } from "os";
 import JSZip from "jszip";
 import DOMPurify from "isomorphic-dompurify";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { getTodoById } from "@/lib/server/user-todo/store";
 import { extractTodoImageFilenames } from "@/lib/shared/user-todo/images-utils";
 import { buildDescriptionSanitizeConfig } from "@/lib/shared/description-sanitize";
+import { dataPath } from "@/lib/server/data-dir";
 
 const log = createLogger("api/todos/[id]/export");
-const TODO_IMAGES_DIR = join(homedir(), ".pi-work", "todo_images");
+const TODO_IMAGES_DIR = dataPath("todo_images");
 
 // Build a filesystem-safe slug from the todo title. Keep ASCII letters/digits
 // and CJK ideographs; collapse everything else into a single hyphen. Cap at

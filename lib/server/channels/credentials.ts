@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync, chmodSync } from "fs";
-import { homedir } from "os";
 import { join } from "path";
 import type { WeChatAccount } from "@/lib/shared/wechat/types";
+import { dataPath } from "../data-dir";
 
-function root(): string { return join(homedir(), ".pi-work", "channels"); }
+function root(): string { return dataPath("channels"); }
 function pathFor(channelId: string): string { return join(root(), channelId, "account.json"); }
 
 export function loadChannelAccount(channelId: string): WeChatAccount | null {

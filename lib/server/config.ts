@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
-import { homedir } from "os";
 import { load, dump } from "js-yaml";
 import { createLogger } from "./logger";
+import { dataPath } from "./data-dir";
 import {
   AGENT_CUSTOM_TOOL_NAMES,
   UI_SOUND_EVENT_IDS,
@@ -263,7 +263,7 @@ function parseUiSounds(raw: unknown): UiSoundsConfig {
   };
 }
 
-const CONFIG_DIR = join(homedir(), ".pi-work");
+const CONFIG_DIR = dataPath();
 const CONFIG_PATH = join(CONFIG_DIR, "config.yaml");
 
 function ensureConfigDir(): void {

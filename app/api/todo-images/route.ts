@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
-import { homedir } from "os";
 import { randomUUID } from "crypto";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { TODO_IMAGE_MIME_TO_EXT } from "@/lib/shared/user-todo/images-utils";
+import { dataPath } from "@/lib/server/data-dir";
 
 const log = createLogger("api/todo-images");
-const TODO_IMAGES_DIR = join(homedir(), ".pi-work", "todo_images");
+const TODO_IMAGES_DIR = dataPath("todo_images");
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
 function pickExt(mime: string): string {

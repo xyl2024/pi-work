@@ -6,8 +6,8 @@
  * pattern as `lib/scheduler/db.ts` so Next.js dev-mode HMR doesn't open
  * a fresh handle on every reload.
  *
- * File location: `~/.pi-work/rss.db` by default, override with `PI_WORK_RSS_DB`
- * env var.
+ * File location: the data root's `rss.db` by default (`~/.pi-work`, or
+ * `PI_WORK_DATA_DIR`), override with `PI_WORK_RSS_DB` env var.
  *
  * Schema highlights:
  *   - `rss_articles (feed_id, guid)` is UNIQUE — we upsert by guid within a
@@ -21,9 +21,9 @@
 
 import Database from "better-sqlite3";
 import { mkdirSync } from "fs";
-import { dirname, join } from "path";
-import { homedir } from "os";
+import { dirname } from "path";
 import { createLogger } from "../logger";
+import { dataPath } from "../data-dir";
 
 const log = createLogger("rss-db");
 
@@ -34,7 +34,7 @@ declare global {
 function resolveDbPath(): string {
   const override = process.env.PI_WORK_RSS_DB?.trim();
   if (override) return override;
-  return join(homedir(), ".pi-work", "rss.db");
+  return dataPath("rss.db");
 }
 
 const SCHEMA = `

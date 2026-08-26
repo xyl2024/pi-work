@@ -1,16 +1,16 @@
 import Database from "better-sqlite3";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { mkdirSync } from "fs";
-import { homedir } from "os";
 import { randomUUID } from "crypto";
 import type { ChannelProvider, ChannelRecord, ChannelStatus } from "@/lib/shared/channels/types";
+import { dataPath } from "../data-dir";
 
 declare global {
   var __piChannelsDb: Database.Database | undefined;
 }
 
 function dbPath(): string {
-  return process.env.PI_WORK_CHANNELS_DB?.trim() || join(homedir(), ".pi-work", "channels.db");
+  return process.env.PI_WORK_CHANNELS_DB?.trim() || dataPath("channels.db");
 }
 
 export function db(): Database.Database {

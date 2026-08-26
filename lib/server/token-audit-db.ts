@@ -8,15 +8,16 @@
  * (continuous INSERT per pi `message_end`, no cascade) shouldn't entangle with
  * any other domain.
  *
- * File location: `~/.pi-work/token-audit.db` by default, override with
+ * File location: the data root's `token-audit.db` by default
+ * (`~/.pi-work`, or `PI_WORK_DATA_DIR`), override with
  * `PI_WORK_TOKEN_AUDIT_DB` env var.
  */
 
 import Database from "better-sqlite3";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { mkdirSync } from "fs";
-import { homedir } from "os";
 import { createLogger } from "./logger";
+import { dataPath } from "./data-dir";
 
 const log = createLogger("token-audit-db");
 
@@ -27,7 +28,7 @@ declare global {
 function resolveDbPath(): string {
   const override = process.env.PI_WORK_TOKEN_AUDIT_DB?.trim();
   if (override) return override;
-  return join(homedir(), ".pi-work", "token-audit.db");
+  return dataPath("token-audit.db");
 }
 
 const SCHEMA = `

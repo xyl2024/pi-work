@@ -8,15 +8,16 @@
  * WAL-heavy) and have a completely different lifecycle — an append-only
  * detail log, not an aggregate stats table.
  *
- * File location: `~/.pi-work/llm-audit.db` by default, override with
+ * File location: the data root's `llm-audit.db` by default
+ * (`~/.pi-work`, or `PI_WORK_DATA_DIR`), override with
  * `PI_WORK_LLM_AUDIT_DB` env var.
  */
 
 import Database from "better-sqlite3";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { mkdirSync } from "fs";
-import { homedir } from "os";
 import { createLogger } from "./logger";
+import { dataPath } from "./data-dir";
 import type {
   AuditedSession,
   LlmAuditSource,
@@ -34,7 +35,7 @@ declare global {
 function resolveDbPath(): string {
   const override = process.env.PI_WORK_LLM_AUDIT_DB?.trim();
   if (override) return override;
-  return join(homedir(), ".pi-work", "llm-audit.db");
+  return dataPath("llm-audit.db");
 }
 
 const SCHEMA = `

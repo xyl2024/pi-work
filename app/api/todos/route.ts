@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { join } from "path";
-import { homedir } from "os";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import {
   listTodos,
@@ -12,9 +10,12 @@ import {
   type Priority,
   type Tag,
 } from "@/lib/server/user-todo/store";
+import { dataPath } from "@/lib/server/data-dir";
 
 const log = createLogger("api/todos");
-const TODOS_FILE = join(homedir(), ".pi-work", "todos.json");
+// Kept for source compatibility — user-todo/store is SQLite-backed now and
+// ignores this path.
+const TODOS_FILE = dataPath("todos.json");
 
 function validationResponse(err: TodoValidationError) {
   return NextResponse.json({ error: err.message }, { status: 400 });

@@ -12,10 +12,10 @@
  */
 
 import Database from "better-sqlite3";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import { mkdirSync } from "fs";
-import { homedir } from "os";
 import { createLogger } from "../logger";
+import { dataPath } from "../data-dir";
 
 const log = createLogger("scheduler-db");
 
@@ -27,7 +27,7 @@ declare global {
 function resolveDbPath(): string {
   const override = process.env.PI_WORK_SCHEDULER_DB?.trim();
   if (override) return override;
-  return join(homedir(), ".pi-work", "scheduler.db");
+  return dataPath("scheduler.db");
 }
 
 const SCHEMA = `

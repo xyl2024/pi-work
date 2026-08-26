@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { join } from "path";
-import { homedir } from "os";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { readStringArray, writeStringArray } from "@/lib/server/json-array-store";
+import { dataPath } from "@/lib/server/data-dir";
 
 const log = createLogger("api/favorites");
-const FAVORITES_FILE = join(homedir(), ".pi-work", "favorites.json");
+const FAVORITES_FILE = dataPath("favorites.json");
 
 // GET /api/favorites
 export async function GET() {

@@ -72,6 +72,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 - Todo、Scheduler、RSS、Inbox、Token 审计、LLM 审计等功能各自使用 `~/.pi-work/` 下的 SQLite 数据库，并支持对应的 `PI_WORK_*_DB` 环境变量覆盖。
 - 自定义工具、Append System、文件预览限制和右侧面板等配置通常在新 Agent session 创建时读取；修改设置后不要假定已有 session 会自动更新。
 - `PI_CODING_AGENT_DIR` 可覆盖 pi 数据目录；不要在测试中直接污染真实用户目录，优先使用临时目录或项目已有的测试脚本。
+- 新增环境隔离：所有 Pi Work 数据默认位于 `~/.pi-work/`，可用 `PI_WORK_DATA_DIR` 整体覆盖（各 `PI_WORK_*_DB` 单项覆盖优先级更高）；生产与开发多实例并存时，用 `npm run dev:isolated`（`scripts/dev-isolated.mjs`）启动完全隔离的开发实例（独立数据根、pi 数据目录与端口）。
 
 ## 开发约定
 
@@ -90,6 +91,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 ```bash
 npm install
 npm run dev                         # Next.js 开发服务器，端口 30141
+npm run dev:isolated                # 隔离开发实例（web 30143 / ws 30144，独立数据根，见 scripts/dev-isolated.mjs）
 node_modules/.bin/tsc --noEmit
 node_modules/.bin/eslint <修改的文件>
 npm run lint

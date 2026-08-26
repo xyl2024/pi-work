@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync } from "fs";
 import { basename, dirname, extname, isAbsolute, join, resolve } from "path";
-import { homedir } from "os";
+import { dataPath } from "./data-dir";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -50,7 +50,7 @@ function getDefaultLogDir(): string {
   const configuredDir = process.env.PI_WORK_LOG_DIR?.trim();
   if (configuredDir) return resolveConfiguredPath(configuredDir);
 
-  return join(homedir(), ".pi-work", "logs");
+  return dataPath("logs");
 }
 
 function getDateStamp(date = new Date()): string {

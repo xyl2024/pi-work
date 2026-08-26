@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { join } from "path";
-import { homedir } from "os";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { readStringArray, writeStringArray } from "@/lib/server/json-array-store";
+import { dataPath } from "@/lib/server/data-dir";
 
 const log = createLogger("api/pinned-cwds");
-const PINNED_FILE = join(homedir(), ".pi-work", "pinned.json");
+const PINNED_FILE = dataPath("pinned.json");
 
 // GET /api/pinned-cwds
 export async function GET() {

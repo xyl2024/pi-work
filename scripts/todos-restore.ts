@@ -13,10 +13,9 @@
  */
 
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "fs";
-import { dirname, join } from "path";
-import { homedir } from "os";
+import { dirname } from "path";
 import Database from "better-sqlite3";
-
+import { dataPath } from "../lib/server/data-dir";
 interface TodoRow {
   id: string;
   title: string;
@@ -46,8 +45,8 @@ interface Todo {
 function parseArgs(argv: string[]): { dbPath: string; outPath: string } {
   const dbOverride = argv.find((a) => a.startsWith("--db="))?.slice("--db=".length);
   const outOverride = argv.find((a) => a.startsWith("--out="))?.slice("--out=".length);
-  const dbPath = dbOverride ?? process.env.PI_WORK_TODOS_DB ?? join(homedir(), ".pi-work", "todos.db");
-  const outPath = outOverride ?? join(homedir(), ".pi-work", "todos.json");
+  const dbPath = dbOverride ?? process.env.PI_WORK_TODOS_DB ?? dataPath("todos.db");
+  const outPath = outOverride ?? dataPath("todos.json");
   return { dbPath, outPath };
 }
 

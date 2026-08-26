@@ -67,6 +67,8 @@ npm run build
 npm start
 ```
 
+若生产实例（`npm start`，端口 30141）与开发实例在同一目录并存，两者共享 `~/.pi-work/` 与 `~/.pi/agent/` 会互相干扰（定时任务/频道重复执行等）；开发请用隔离模式 `npm run dev:isolated`（数据、端口完全独立，详见下方“多实例隔离”）。
+
 在本机长期运行时，也可以使用项目环境提供的启动脚本：
 
 ```bash
@@ -88,6 +90,38 @@ Pi Work 默认使用以下数据目录：
 - LLM 审计数据库：`~/.pi-work/llm-audit.db`
 
 可通过 `PI_CODING_AGENT_DIR` 指定 pi 数据目录。各数据库也支持对应的 `PI_WORK_*_DB` 环境变量覆盖路径。
+
+所有 Pi Work 数据（`config.yaml`、各数据库、频道凭据、会话命名 sidecar、Agent Todo、Profile、日志、微信监控锁等）默认都位于 `~/.pi-work/`。设置 `PI_WORK_DATA_DIR` 可整体指向另一个数据根；`PI_WORK_*_DB` 单项覆盖优先级高于它。
+
+### 多实例隔离（开发 / 生产并存）
+
+在同一目录同时运行生产实例（`next start` / `bin/pi-work.js`，端口 30141）和开发实例（`next dev`，端口 30141）时，两个进程会共享同一份 `~/.pi-work/` 与 `~/.pi/agent/`，导致后台循环与存储互相竞争：同一定时任务被触发两次、频道 worker 重复轮询、SQLite / JSON 丢失更新等。
+
+用隔离模式启动开发实例，让开发使用完全独立的数据：
+
+```bash
+npm run dev:isolated          # 等价于 node scripts/dev-isolated.mjs
+```
+
+`dev:isolated` 默认把开发实例隔离到：
+
+- Web 端口 `30143`（生产的 30141 空闲）
+- 终端 WebSocket 端口 `30144`（生产的 30142 空闲）
+- Pi Work 数据根 `~/.pi-work-dev`（`PI_WORK_DATA_DIR`）
+- pi agent 目录 `~/.pi-dev/agent`（`PI_CODING_AGENT_DIR`）
+
+自定义路径与端口：
+
+```bash
+node scripts/dev-isolated.mjs --port 4000 --term-port 4001 \
+  --data-dir ~/.pi-work-staging --agent-dir ~/.pi-staging/agent
+```
+
+首次启动的隔离 agent 目录没有登录凭证和模型（`auth.json` / `models.json`），需要在界面重新登录或手动复制：
+
+```bash
+cp -r ~/.pi/agent ~/.pi-dev/agent
+```
 
 日志默认写入：
 

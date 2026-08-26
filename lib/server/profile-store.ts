@@ -1,11 +1,11 @@
 import { readFileSync, writeFileSync, mkdirSync, unlinkSync, existsSync } from "fs";
 import { join, resolve } from "path";
-import { homedir } from "os";
 import { createLogger } from "./logger";
+import { dataPath } from "./data-dir";
 
 const log = createLogger("profile-store");
 
-export const PROFILE_DIR = join(homedir(), ".pi-work", "profile");
+export const PROFILE_DIR = dataPath("profile");
 const USER_FILE = join(PROFILE_DIR, "user.json");
 const AVATAR_FILE = join(PROFILE_DIR, "avatar.png");
 

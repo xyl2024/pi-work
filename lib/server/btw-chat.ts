@@ -181,7 +181,11 @@ function normalizeContextForSdk(messages: unknown[]): unknown[] {
 }
 
 export async function startBtwChat(req: BtwChatRequest): Promise<BtwChatHandle> {
-  const agentDir = path.join(process.env.HOME ?? "", ".pi", "agent");
+  // Prefer PI_CODING_AGENT_DIR so an isolated instance (dev vs prod) never
+  // inherits the other instance's auth/models.
+  const agentDir =
+    process.env.PI_CODING_AGENT_DIR ||
+    path.join(process.env.HOME ?? "", ".pi", "agent");
   const startedAt = Date.now();
 
   // Resolve the model on the audit-wrapped ModelRuntime so the fetch call is

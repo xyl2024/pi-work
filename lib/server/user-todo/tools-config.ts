@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { homedir } from "os";
 import { TODO_TOOL_NAMES, type TodoToolName } from "./tools";
+import { dataPath } from "../data-dir";
 
-const CONFIG_DIR = join(homedir(), ".pi-work");
+const CONFIG_DIR = dataPath();
 const CONFIG_PATH = join(CONFIG_DIR, "todo-tools.json");
 
 function isTodoToolName(value: unknown): value is TodoToolName {

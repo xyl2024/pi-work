@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { existsSync, readFileSync } from "fs";
 import { join, resolve } from "path";
-import { homedir } from "os";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { TODO_IMAGE_FILENAME_RE, mimeForTodoImageFilename } from "@/lib/shared/user-todo/images-utils";
+import { dataPath } from "@/lib/server/data-dir";
 
 const log = createLogger("api/todo-images/[filename]");
-const TODO_IMAGES_DIR = join(homedir(), ".pi-work", "todo_images");
+const TODO_IMAGES_DIR = dataPath("todo_images");
 
 // GET /api/todo-images/[filename]
 export async function GET(

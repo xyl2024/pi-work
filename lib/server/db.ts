@@ -13,8 +13,8 @@
 import Database from "better-sqlite3";
 import { existsSync, mkdirSync, readFileSync, renameSync } from "fs";
 import { dirname, join } from "path";
-import { homedir } from "os";
 import { createLogger } from "@/lib/server/logger";
+import { dataPath } from "./data-dir";
 
 const log = createLogger("todo-store");
 
@@ -26,7 +26,7 @@ declare global {
 function resolveDbPath(): string {
   const override = process.env.PI_WORK_TODOS_DB?.trim();
   if (override) return override;
-  return join(homedir(), ".pi-work", "todos.db");
+  return dataPath("todos.db");
 }
 
 const SCHEMA = `
@@ -164,7 +164,8 @@ function ensurePriorityColumn(db: Database.Database): void {
 }
 
 /**
- * One-shot import from the legacy `~/.pi-work/todos.json` into the new DB.
+ * One-shot import from the legacy `todos.json` (inside the data root) into
+ * the new DB.
  * Called from `getDb()` on first open. The original JSON is renamed (not
  * deleted) to `todos.json.migrated.<unix_ts>` so the data is preserved as
  * a fallback.
