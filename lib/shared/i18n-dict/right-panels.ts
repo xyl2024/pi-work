@@ -197,4 +197,8 @@ export const rightPanels = {
   "btw.disabled.noSession": "请先打开一个会话再使用 BTW。",
   "btw.disabled.loading": "主会话正在初始化…",
   "btw.refreshHint": "重新检测就绪状态（卡在此处时可点击）",
+  "About BTW": "BTW 使用说明",
+  "BTW means \"By The Way\": ask questions grounded in the current session's context without interrupting the main session, and without polluting its context.": "BTW 意为 By The Way，用于在不中断主会话的情况下，基于当前会话的上下文进行提问，不会污染主会话的上下文。",
+  "This BTW chat runs in Chat-Only mode: no Agent loop, and no tool calls.": "此处的 BTW 对话为 Chat-Only 模式，无 Agent loop，无法调用工具。",
+  "It reuses the current context prompt 100% verbatim, ensuring input-cache hits.": "100% 完整复用当前时刻上下文提示词，确保输入缓存命中。",
 } as const;

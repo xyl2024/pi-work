@@ -34,6 +34,7 @@ import { useBtw } from "@/hooks/useBtw";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageView, CollapseNonceProvider } from "@/components/chat/MessageView";
 import { ICONS } from "@/components/ui/icons";
+import { Tooltip } from "../ui/Tooltip";
 import type { AssistantMessage } from "@/lib/shared/types";
 
 interface BtwPanelProps {
@@ -89,6 +90,29 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
   const isStreaming = btw.phase === "streaming" || btw.phase === "loading";
   const isDisabled = !mainSessionId || !model || !systemPrompt || !cwd;
 
+  // Help tooltip content — mirrors the model catalog tooltip layout
+  // (bold title + bulleted list) used in the models config dialog.
+  const btwHelpContent = (
+    <div
+      style={{
+        maxWidth: 280,
+        display: "flex",
+        flexDirection: "column",
+        gap: 7,
+        fontSize: 11,
+        lineHeight: 1.45,
+        overflowWrap: "anywhere",
+      }}
+    >
+      <div style={{ fontWeight: 700 }}>{t("About BTW")}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <div>• {t("BTW means \"By The Way\": ask questions grounded in the current session's context without interrupting the main session, and without polluting its context.")}</div>
+        <div>• {t("This BTW chat runs in Chat-Only mode: no Agent loop, and no tool calls.")}</div>
+        <div>• {t("It reuses the current context prompt 100% verbatim, ensuring input-cache hits.")}</div>
+      </div>
+    </div>
+  );
+
   // ── Header actions ────────────────────────────────────────────────
   const handleClear = useCallback(async () => {
     if (btw.messages.length === 0) return;
@@ -139,6 +163,34 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
           background: "transparent",
         }}
       >
+        {/* Left-aligned help button — same “?” affordance as the models
+            config dialog header tooltip. Interactive so the tooltip text
+            stays hoverable / selectable with the mouse. */}
+        <Tooltip content={btwHelpContent} side="bottom" align="start" delayDuration={300} interactive>
+          <button
+            type="button"
+            aria-label={t("About BTW")}
+            style={{
+              width: 22,
+              height: 22,
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "1px solid var(--text-dim)",
+              borderRadius: "50%",
+              background: "transparent",
+              color: "var(--text-muted)",
+              cursor: "help",
+              fontSize: 13,
+              fontWeight: 700,
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            ?
+          </button>
+        </Tooltip>
         <span style={{ flex: 1 }} />
         <RefreshIconButton
           onClick={() => void handleRefresh()}
