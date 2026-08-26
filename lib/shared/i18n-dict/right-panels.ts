@@ -185,7 +185,6 @@ export const rightPanels = {
   "Open BTW": "打开 BTW",
   "By the way": "顺带一提",
   "btw.tooltip": "基于当前会话提问（仅只读工具，不影响主会话）",
-  "Ask a quick question here, without polluting the main session's context": "在这里顺手问一句，不污染主会话上下文",
   "btw.empty": "还没有 BTW 对话。发条消息开始。",
   "btw.clearButton": "清空 BTW 对话",
   "btw.clearConfirmTitle": "清空 BTW 对话？",

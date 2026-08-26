@@ -4,27 +4,19 @@
 //
 // Right-side panel that asks the model a question grounded in the active
 // session's context via a pure-chat call (no agent loop, no tool
-// execution — see `lib/server/btw-chat.ts`). Per the handoff, this panel
-// must NEVER write to the main session's JSONL, NEVER enter the main
-// session's RPC registry, and NEVER touch any server-side store.
-// localStorage (`pi-work:btw:<sessionId>`) is the only durable home.
+// execution — see `lib/server/btw-chat.ts`). This panel must NEVER write
+// to the main session's JSONL, NEVER enter the main session's RPC
+// registry, and NEVER touch any server-side store — localStorage
+// (`pi-work:btw:<sessionId>`) is the only durable home.
 //
-// The shell is intentionally minimal:
-//   - header: title + "Clear" button (secondary confirmation via
-//     `useConfirm`; handoff §3.3 manual clear is destructive)
-//   - body: scrollable message list rendering user + assistant turns
-//     with the same `MessageView` the main chat uses, plus a thin
-//     "streaming" placeholder for the in-flight assistant
-//   - footer: textarea (Enter send / Shift+Enter newline, handoff
-//     §3.2) plus an explicit "Stop" button while streaming
-//
-// Error / disabled states use the same look as the other right panels —
-// a single line of muted text in the empty state, an inline error pill
-// with a retry affordance when `phase === "error"`. Disabled-while-
-// loading states ("no session" / "loading") render a tooltip on the
-// textarea wrapper explaining why.
+// The shell reuses the main chat's components: `MessageView` for turns,
+// a `LoadingState` "Thinking..." placeholder while the assistant
+// streams, and `ChatInput` in its `hideToolbar` compact mode (Enter to
+// send, Stop while streaming, no placeholder). Errors surface as a red
+// inline pill with a retry affordance; disabled states show an
+// explanatory line above the input.
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
@@ -35,6 +27,8 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageView, CollapseNonceProvider } from "@/components/chat/MessageView";
 import { ICONS } from "@/components/ui/icons";
 import { Tooltip } from "../ui/Tooltip";
+import LoadingState from "../ui/LoadingState";
+import { hasStreamingThinking } from "../chat/chat-window/utils";
 import type { AssistantMessage } from "@/lib/shared/types";
 
 interface BtwPanelProps {
@@ -74,6 +68,35 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
 
   const btw = useBtw({ mainSessionId });
 
+  // Model-name / icon maps for the assistant header — mirrors the main
+  // chat's /api/models fetch (useAgentSession) so message headers show
+  // friendly model names + provider icons instead of raw model ids.
+  const [modelNames, setModelNames] = useState<Record<string, string>>({});
+  const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/models")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { models?: Record<string, string>; modelIcons?: Record<string, string> } | null) => {
+        if (cancelled || !d) return;
+        setModelNames(d.models ?? {});
+        if (d.modelIcons) setModelIcons(d.modelIcons);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // Last persisted user turn — the error pill's retry re-sends it. The
+  // user message is persisted before the fetch fires (send-first §3.3),
+  // so an error never loses the question.
+  const lastUserText = useMemo(() => {
+    for (let i = btw.messages.length - 1; i >= 0; i--) {
+      const m = btw.messages[i];
+      if (m.role === "user" && typeof m.content === "string") return m.content;
+    }
+    return null;
+  }, [btw.messages]);
+
   // Surface quota / quota errors via the global toast so the user is
   // nudged to clear without losing focus on the input.
   const lastErrorRef = useRef<string | null>(null);
@@ -90,8 +113,6 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
   const isStreaming = btw.phase === "streaming" || btw.phase === "loading";
   const isDisabled = !mainSessionId || !model || !systemPrompt || !cwd;
 
-  // Help tooltip content — mirrors the model catalog tooltip layout
-  // (bold title + bulleted list) used in the models config dialog.
   const btwHelpContent = (
     <div
       style={{
@@ -126,10 +147,8 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
     if (ok) btw.clear();
   }, [btw, confirm, t]);
 
-  // UX fallback: when the panel is disabled while loading (stale
-  // cwd/systemPrompt for an already-open session), let the user prod the
-  // active controller to re-fetch its readiness data. Visual feedback
-  // (REFRESH → ✓ flash) is handled by RefreshIconButton itself.
+  // UX fallback: if the panel is stuck on "loading" for an already-open
+  // session, prod the active controller to re-fetch its readiness data.
   const handleRefresh = useCallback(() => {
     onRefresh();
   }, [onRefresh]);
@@ -163,9 +182,7 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
           background: "transparent",
         }}
       >
-        {/* Left-aligned help button — same “?” affordance as the models
-            config dialog header tooltip. Interactive so the tooltip text
-            stays hoverable / selectable with the mouse. */}
+        {/* "?" help button — interactive so the tooltip stays hoverable. */}
         <Tooltip content={btwHelpContent} side="bottom" align="start" delayDuration={300} interactive>
           <button
             type="button"
@@ -214,17 +231,73 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
           padding: "8px 12px",
         }}
       >
+        {btw.phase === "error" && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              padding: "8px 10px",
+              borderRadius: 8,
+              border: "1px solid rgba(248,113,113,0.45)",
+              background: "rgba(248,113,113,0.06)",
+              color: "#f87171",
+              fontSize: 12,
+              lineHeight: 1.5,
+              marginBottom: 12,
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 0, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {t(btw.errorMessage ?? "btw.error.network")}
+            </div>
+            {lastUserText && (
+              <button
+                type="button"
+                onClick={() => void btw.send(lastUserText)}
+                aria-label={t("Retry")}
+                style={{
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "3px 8px",
+                  height: 22,
+                  background: "none",
+                  border: "1px solid rgba(248,113,113,0.45)",
+                  borderRadius: 5,
+                  color: "#f87171",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  whiteSpace: "nowrap",
+                  transition: "color 0.12s",
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+                {t("Retry")}
+              </button>
+            )}
+          </div>
+        )}
         {btw.messages.length === 0 && btw.streamingMessage === null ? (
           <div style={{ padding: "32px 12px", textAlign: "center", color: "var(--text-dim)", fontSize: 12, lineHeight: 1.6 }}>
             {t("btw.empty")}
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          // Same list spacing as the main chat: each MessageView carries
+          // its own 16px bottom margin; no extra container gap.
+          <div style={{ display: "flex", flexDirection: "column" }}>
             {btw.messages.map((message, idx) => (
               <MessageView
                 key={`${idx}-${message.role}-${(message as { timestamp?: number }).timestamp ?? ""}`}
                 message={message}
-                showTimestamp={false}
+                // Turn-final assistants show their time on hover, same
+                // rule as ChatWindow (BTW has one assistant per turn).
+                showTimestamp={message.role === "assistant"}
+                modelNames={modelNames}
+                modelIcons={modelIcons}
                 toolResults={btw.inFlightToolResults}
               />
             ))}
@@ -233,10 +306,17 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
                 key="btw-streaming"
                 message={btw.streamingMessage}
                 isStreaming
-                showTimestamp={false}
+                modelNames={modelNames}
+                modelIcons={modelIcons}
                 toolResults={btw.inFlightToolResults}
               />
             )}
+            {isStreaming && btw.streamingMessage &&
+              (btw.streamingMessage.content.length === 0 || hasStreamingThinking(btw.streamingMessage)) && (
+                <div className="py-2">
+                  <LoadingState label={t("Thinking...")} variant="spark" />
+                </div>
+              )}
           </div>
         )}
       </div>
@@ -269,7 +349,6 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
           sessionBusy={isDisabled}
           onSend={(message) => void btw.send(message)}
           onAbort={() => btw.stop()}
-          placeholder={t("Ask a quick question here, without polluting the main session's context")}
           thinkingLevel={
             thinkingLevel as "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
           }
