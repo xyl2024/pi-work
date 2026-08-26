@@ -59,10 +59,15 @@ function renameAssistantContent(content: unknown): unknown[] {
   return content.map((block) => renameToolCallBlock(block));
 }
 
-function normalizeContextForSdk(messages: unknown[]): unknown[] {
+function normalizeUserContent(content) {
+  if (typeof content === "string") return [{ type: "text", text: content }];
+  return content;
+}
+
+function normalizeContextForSdk(messages) {
   return messages.map((m) => {
     if (!m || typeof m !== "object") return m;
-    const msg = m as Record<string, unknown>;
+    const msg = m;
     if (msg.role === "assistant") {
       return {
         ...msg,
@@ -79,6 +84,9 @@ function normalizeContextForSdk(messages: unknown[]): unknown[] {
         isError: typeof msg.isError === "boolean" ? msg.isError : false,
         timestamp: typeof msg.timestamp === "number" ? msg.timestamp : Date.now(),
       };
+    }
+    if (msg.role === "user") {
+      return { ...msg, content: normalizeUserContent(msg.content) };
     }
     return m;
   });
@@ -140,11 +148,20 @@ test("normalizeContextForSdk backfills assistant provider/model/api", () => {
   assert.equal((out[1] as { api: string }).api, "");
 });
 
-test("normalizeContextForSdk passes user through unchanged", () => {
-  const messages = [{ role: "user", content: "hello" }];
+test("normalizeContextForSdk normalises string user content to text blocks", () => {
+  const messages = [{ role: "user", content: "hello", timestamp: 1 }];
   const out = normalizeContextForSdk(messages);
-  assert.equal((out[0] as { role: string }).role, "user");
-  assert.equal((out[0] as { content: string }).content, "hello");
+  const user = out[0];
+  assert.equal(user.role, "user");
+  assert.deepEqual(user.content, [{ type: "text", text: "hello" }], "bare string content becomes text block array");
+  assert.equal(user.timestamp, 1, "other fields preserved");
+});
+
+test("normalizeContextForSdk leaves block-shaped user content unchanged", () => {
+  const content = [{ type: "text", text: "already blocks" }, { type: "image", mimeType: "image/png" }];
+  const messages = [{ role: "user", content, timestamp: 1 }];
+  const out = normalizeContextForSdk(messages);
+  assert.deepEqual(out[0].content, content, "array content passes through untouched");
 });
 
 test("normalizeContextForSdk normalises assistant toolCalls", () => {

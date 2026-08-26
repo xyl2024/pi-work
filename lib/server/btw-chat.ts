@@ -129,6 +129,16 @@ function renameAssistantContent(content: unknown): unknown[] {
   return content.map((block) => renameToolCallBlock(block));
 }
 
+/** Normalise a user message's `content`: a bare string becomes a
+ *  `[{ type: "text", text }]` block array, mirroring the main agent loop's
+ *  `normalizePromptInput` (pi-agent-core agent.js) so the LLM provider sees
+ *  the exact same message shape as the main session — the fast path for the
+ *  first-send snapshot (SDK-shaped, already block content) is untouched. */
+function normalizeUserContent(content: unknown): unknown {
+  if (typeof content === "string") return [{ type: "text", text: content }];
+  return content;
+}
+
 /** Convert our `lib/shared/types.AgentMessage[]` shape into the SDK's
  *  `AgentMessage[]` shape. Renames toolCall field names and backfills
  *  provider/model on assistant messages so the LLM provider's message
@@ -157,6 +167,14 @@ function normalizeContextForSdk(messages: unknown[]): unknown[] {
         isError: typeof rec.isError === "boolean" ? rec.isError : false,
         timestamp: typeof rec.timestamp === "number" ? rec.timestamp : Date.now(),
       };
+    }
+    if (rec.role === "user") {
+      // Mirror the main agent loop's normalizePromptInput: a bare string
+      // user turn becomes a `[{ type: "text", text }]` block array so the
+      // LLM provider request is byte-identical in shape to the main
+      // session's (prompt-cache prefix alignment). First-send snapshot
+      // messages already carry block content and pass through unchanged.
+      return { ...rec, content: normalizeUserContent(rec.content) };
     }
     return m;
   });
