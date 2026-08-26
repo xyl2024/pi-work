@@ -47,3 +47,7 @@ third
 
 # playwright-cli skill output
 /.playwright-cli/
+
+# local agent tooling
+/.codegraph/
+/.qoder/
