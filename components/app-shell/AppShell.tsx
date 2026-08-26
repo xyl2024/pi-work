@@ -432,6 +432,9 @@ export function AppShell() {
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
   const [rightPanelState, setRightPanelState] = useState<"closed" | "normal" | "expanded">("closed");
+  // Incremented whenever the Git panel is opened, including reopening it
+  // after the right panel was closed. GitPanel uses this to refresh status.
+  const [gitPanelOpenRefreshToken, setGitPanelOpenRefreshToken] = useState(0);
 
   // Open the right panel at its current width if it's already visible —
   // only the "closed → normal" transition is forced. The user's expanded
@@ -950,6 +953,7 @@ export function AppShell() {
       return [{ kind: "gitDiff", id: GIT_DIFF_TAB_ID, label: t("Git Diff") }, ...prev];
     });
     setActiveFileTabId(GIT_DIFF_TAB_ID);
+    setGitPanelOpenRefreshToken((n) => n + 1);
     ensureRightPanelOpen();
   }, [t, ensureRightPanelOpen]);
 
@@ -1646,6 +1650,7 @@ export function AppShell() {
           ) : activeFileTab?.kind === "gitDiff" ? (
             <GitPanel
               cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+              openRefreshToken={gitPanelOpenRefreshToken}
               onExpandPanel={handleExpandGitPanel}
               isPanelExpanded={rightPanelState === "expanded"}
             />

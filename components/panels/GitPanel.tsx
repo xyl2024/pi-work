@@ -10,6 +10,8 @@ import { GitLogView } from "./GitLogView";
 
 interface Props {
   cwd: string | null;
+  /** Changes whenever the panel is opened, so opening it refreshes status. */
+  openRefreshToken?: number;
   /** Called when the Log view becomes active so the shell can widen the
    *  right panel (same "expanded" state the Canvas panel uses). */
   onExpandPanel?: () => void;
@@ -26,7 +28,7 @@ type Mode = "diff" | "log";
  *   - GitDiffView — worktree / staged changes
  *   - GitLogView  — branch-aware commit history + commit file diffs
  */
-export function GitPanel({ cwd, onExpandPanel, isPanelExpanded = false }: Props) {
+export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpanded = false }: Props) {
   const { t } = useI18n();
   const toast = useToast();
 
@@ -79,7 +81,9 @@ export function GitPanel({ cwd, onExpandPanel, isPanelExpanded = false }: Props)
     }
   }, [cwd]);
 
-  // Reset + load the overview when the cwd changes (or on mount).
+  // Reset + load the overview when the cwd changes, on mount, or when the
+  // panel is opened again. This keeps the status fresh after changes made
+  // while the panel was closed.
   useEffect(() => {
     setStatus(null);
     setError(null);
@@ -87,7 +91,7 @@ export function GitPanel({ cwd, onExpandPanel, isPanelExpanded = false }: Props)
     setBranch(null);
     setRefreshToken((n) => n + 1);
     if (cwd) void loadStatus();
-  }, [cwd, loadStatus]);
+  }, [cwd, loadStatus, openRefreshToken]);
 
   // Lazy-load the branch list the first time Log mode is entered.
   useEffect(() => {
