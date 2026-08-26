@@ -172,4 +172,24 @@ export const rightPanels = {
   "Cost by provider": "按提供方分摊",
   "Cost by category": "按类别分摊",
   "Top sessions by cost": "Top 会话成本",
+
+  // BTW (By the way) — right-side panel that asks a temporary agent
+  // read-only questions grounded in the active session. Only the right-bar
+  // button label / tooltip is translated here; the on-tab "BTW" mark is
+  // intentionally kept as English per the handoff §2 row #20.
+  "Open BTW": "打开 BTW",
+  "By the way": "BTW 旁注",
+  "btw.title": "BTW",
+  "btw.tooltip": "基于当前会话提问（仅只读工具，不影响主会话）",
+  "btw.placeholder": "基于当前会话问点什么…（Enter 发送，Shift+Enter 换行）",
+  "btw.empty": "还没有 BTW 对话。发条消息开始。",
+  "btw.clearButton": "清空 BTW 对话",
+  "btw.clearConfirmTitle": "清空 BTW 对话？",
+  "btw.clearConfirmBody": "当前与本会话相关的所有 BTW 问答都会被永久删除，无法恢复。",
+  "btw.stop": "停止生成",
+  "btw.error.network": "网络中断，请重试。",
+  "btw.error.contextTooLarge": "主会话上下文过大，请先压缩主会话再使用 BTW。",
+  "btw.error.modelUnavailable": "当前模型不可用，请切换主会话的模型。",
+  "btw.disabled.noSession": "请先打开一个会话再使用 BTW。",
+  "btw.disabled.loading": "主会话正在初始化…",
 } as const;

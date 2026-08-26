@@ -778,6 +778,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // conversation-tree panel can lock card clicks for the entire turn,
   // not just the streaming sub-window. (See SessionUiState.agentRunning.)
   useEffect(() => { if (isActive) setSessionUiState({ agentRunning }); }, [isActive, agentRunning]);
+  // Publish the active model + message transcript for cross-tab panels
+  // (BTW reads both — `displayModel` to mirror the model and
+  // `mainSessionMessages` to feed the BTW agent's first send with the
+  // same context the user can see). The active-only filter mirrors the
+  // other sessionUi fields; a background controller's messages must
+  // never overwrite the visible chat's transcript.
+  useEffect(() => { if (isActive) setSessionUiState({ currentModel: displayModel }); }, [isActive, displayModel]);
+  useEffect(() => { if (isActive) setSessionUiState({ mainSessionMessages: messages }); }, [isActive, messages]);
 
   // Clear a controller's pending bot reaction when it moves to the
   // background (and again on final unmount). Background events must not

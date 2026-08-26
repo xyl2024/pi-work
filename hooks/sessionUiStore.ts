@@ -63,6 +63,16 @@ export interface SessionUiState {
    * would race the in-flight response even during non-streaming gaps.
    */
   agentRunning: boolean;
+  /** Main session's current model snapshot — read by the BTW panel
+   *  to pick the same provider / model for its throwaway in-memory
+   *  agent. `null` until the chat controller publishes it (new session
+   *  draft, model not yet resolved, etc.). */
+  currentModel: { provider: string; modelId: string } | null;
+  /** Main session's current message transcript — used by the BTW hook
+   *  on the FIRST send so the BTW agent boots with the same context
+   *  the user can see in the chat. Snapshotted at the moment
+   *  `useAgentSession` publishes it. */
+  mainSessionMessages: import("@/lib/shared/types").AgentMessage[];
 }
 
 const INITIAL: SessionUiState = {
@@ -73,6 +83,8 @@ const INITIAL: SessionUiState = {
   contextUsage: null,
   isStreaming: false,
   agentRunning: false,
+  currentModel: null,
+  mainSessionMessages: [],
 };
 
 let state: SessionUiState = INITIAL;

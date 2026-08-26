@@ -22,6 +22,7 @@ import type { RightBarButtonId } from "@/lib/shared/right-bar";
 import { CountBadge } from "@/components/ui/CountBadge";
 import {
   TODO_TAB_ID,
+  BTW_TAB_ID,
   FAVORITES_TAB_ID,
   TRANSLATE_TAB_ID,
   TOOL_CALLS_TAB_ID,
@@ -69,6 +70,7 @@ export type RightBarTabKind = Extract<
   | "conversationTree"
   | "llmAudit"
   | "context"
+  | "btw"
 >;
 
 export interface RightBarCtx {
@@ -112,6 +114,7 @@ export interface RightBarCtx {
     conversationTree: () => void;
     llmAudit: () => void;
     context: () => void;
+    btw: () => void;
   };
 }
 
@@ -310,6 +313,37 @@ const contextDescriptor: RightBarDescriptor = {
   onClick: (ctx) => ctx.toggleRightPanelTab(CONTEXT_TAB_ID, ctx.openTab.context),
 };
 
+// BTW (By the way): session-bound, reads from the active main session.
+// Disabled when there's no stable sessionId yet (handoff §2 #14), and
+// shows a small textual mark in place of an icon so the user can spot it
+// without learning a new glyph — the button label itself stays the
+// short all-caps "BTW" per the handoff's i18n rules.
+const btwDescriptor: RightBarDescriptor = {
+  id: "btw",
+  kind: "configurable",
+  sessionBound: true,
+  labelKey: "Open BTW",
+  isActive: (ctx) => ctx.activeTabKind === "btw",
+  isDisabled: (ctx) => !ctx.selectedSessionId,
+  // Tiny text mark — mirrors the tab-bar glyph so the column + the tab
+  // are visually consistent.
+  content: () => (
+    <span
+      aria-hidden
+      style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: 0.6,
+        color: "var(--text-muted)",
+      }}
+    >
+      BTW
+    </span>
+  ),
+  onClick: (ctx) => ctx.toggleRightPanelTab(BTW_TAB_ID, ctx.openTab.btw),
+};
+
 const toolCallsDescriptor: RightBarDescriptor = {
   id: "toolCalls",
   kind: "configurable",
@@ -380,6 +414,7 @@ export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   llmAuditDescriptor,
   toolCallsDescriptor,
   conversationTreeDescriptor,
+  btwDescriptor,
 ] as const;
 
 // Tab.kind → RightBarButtonId reverse lookup lives in `lib/types.ts` as a

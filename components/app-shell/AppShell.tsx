@@ -28,6 +28,7 @@ import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
 import { GitPanel } from "../panels/GitPanel";
+import { BtwPanel } from "../panels/BtwPanel";
 import { useToolCallStatsView, useToolCallStatsScroll } from "@/hooks/toolCallStatsStore";
 import { subscribeTranslateOpened } from "@/hooks/translateOpenStore";
 import { ModelsConfig } from "../settings/ModelsConfig";
@@ -67,6 +68,7 @@ import {
   CONVERSATION_TREE_TAB_ID,
   LLM_AUDIT_TAB_ID,
   CONTEXT_TAB_ID,
+  BTW_TAB_ID,
   RIGHT_BAR_ID_FOR_TAB_KIND,
 } from "@/lib/shared/types";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
@@ -400,7 +402,7 @@ export function AppShell() {
   // Session-level UI state (branch tree, system prompt, stats, context usage)
   // is owned by each tab controller. Only the active controller projects its
   // snapshot into this module-level bridge for the chat footer/right panels.
-  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning } = useSessionUiState();
+  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, currentModel, mainSessionMessages } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
 
   // Tools are cached per formal session. Activating an already-open tab only
@@ -946,6 +948,26 @@ export function AppShell() {
     ensureRightPanelOpen();
   }, [activeFileTabId, rightPanelState, t, ensureRightPanelOpen]);
 
+  // Open the BTW (By the way) panel — read-only questions grounded in
+  // the active session. The tab id / label stay constant ("BTW") per
+  // handoff §2 #20; only the right-panel body re-renders based on the
+  // active session id (which is captured via `selectedSession?.id` at
+  // render time, not stored in the tab descriptor).
+  const handleOpenBtwTab = useCallback(() => {
+    const alreadyActive = activeFileTabId === BTW_TAB_ID && rightPanelState !== "closed";
+    if (alreadyActive) {
+      setActiveFileTabId(null);
+      setRightPanelState("closed");
+      return;
+    }
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "btw")) return prev;
+      return [{ kind: "btw", id: BTW_TAB_ID, label: "BTW" }, ...prev];
+    });
+    setActiveFileTabId(BTW_TAB_ID);
+    ensureRightPanelOpen();
+  }, [activeFileTabId, rightPanelState, ensureRightPanelOpen]);
+
   // Open the git diff panel — same pattern as translate / rss / tokens.
   const handleOpenGitDiffTab = useCallback(() => {
     setFileTabs((prev) => {
@@ -1230,6 +1252,7 @@ export function AppShell() {
       conversationTree: handleOpenConversationTreeTab,
       llmAudit: handleOpenLlmAuditTab,
       context: handleOpenContextTab,
+      btw: handleOpenBtwTab,
     },
   };
 
@@ -1646,6 +1669,14 @@ export function AppShell() {
             <ContextPanel
               systemPrompt={systemPrompt}
               tools={tools}
+            />
+          ) : activeFileTab?.kind === "btw" ? (
+            <BtwPanel
+              mainSessionId={selectedSession?.id ?? null}
+              cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+              model={currentModel}
+              systemPrompt={systemPrompt}
+              mainSessionMessages={mainSessionMessages}
             />
           ) : activeFileTab?.kind === "gitDiff" ? (
             <GitPanel

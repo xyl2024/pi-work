@@ -168,6 +168,17 @@ export function SessionItem({
     try {
       const res = await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // Per handoff §2 #25: when the main session is deleted, drop the
+      // BTW record for the same id from localStorage. We do this in the
+      // success path (after the server confirmed the delete); the delete
+      // itself must not block on the localStorage removal, so a
+      // quota / SecurityError here silently fails.
+      try {
+        window.localStorage.removeItem(`pi-work:btw:${session.id}`);
+      } catch {
+        // Best-effort cleanup; the user can clear BTW from the panel
+        // even if localStorage is full / private-mode.
+      }
       onDeleted?.(session.id);
       toast.show({ kind: "success", message: t("Session deleted") });
     } catch (err) {

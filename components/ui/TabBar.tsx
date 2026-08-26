@@ -19,7 +19,8 @@ export type Tab =
   | { kind: "gitDiff"; id: string; label: string }
   | { kind: "conversationTree"; id: string; label: string }
   | { kind: "llmAudit"; id: string; label: string }
-  | { kind: "context"; id: string; label: string };
+  | { kind: "context"; id: string; label: string }
+  | { kind: "btw"; id: string; label: string };
 
 interface Props {
   tabs: Tab[];
@@ -90,7 +91,9 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               ? t("Token audit")
               : tab.kind === "context"
                 ? t("Context")
-                : tab.label;
+                : tab.kind === "btw"
+                  ? "BTW"
+                  : tab.label;
           const tooltipContent =
             tab.kind === "file" ? tab.filePath : displayLabel;
           const icon =
@@ -118,6 +121,10 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               <ICONS.conversationTree size={13} />
             ) : tab.kind === "gitDiff" ? (
               <ICONS.gitDiff size={13} />
+            ) : tab.kind === "btw" ? (
+              // Tiny text "BTW" mark — keeps the tab recognisable
+              // without pulling in another icon glyph.
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-muted)" }}>BTW</span>
             ) : (
               getFileIcon(tab.label, 13)
             );

@@ -371,6 +371,7 @@ export const GIT_DIFF_TAB_ID = "gitDiff:global";
 export const CONVERSATION_TREE_TAB_ID = "conversationTree:global";
 export const LLM_AUDIT_TAB_ID = "llmAudit:global";
 export const CONTEXT_TAB_ID = "context:global";
+export const BTW_TAB_ID = "btw:global";
 
 // Map a Tab.kind back to the corresponding configurable right-bar button id.
 // Used by AppShell's auto-close effect: when a panel whose button was just
@@ -396,7 +397,8 @@ type TabKindForAutoClose =
   | "gitDiff"
   | "conversationTree"
   | "llmAudit"
-  | "context";
+  | "context"
+  | "btw";
 export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<
   Record<TabKindForAutoClose, RightBarButtonId>
 > = {
@@ -412,4 +414,5 @@ export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<
   conversationTree: "conversationTree",
   llmAudit: "llmAudit",
   context: "context",
+  btw: "btw",
 };
