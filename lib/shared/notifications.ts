@@ -22,6 +22,8 @@ export interface TaskChannelConfig {
   type: string;
   /** Recipient for that channel (channel-specific). */
   recipientId: string;
+  /** Concrete configured channel instance. Required for new tasks. */
+  channelId?: string;
   /** Extra channel-specific settings (future-proofing). */
   [key: string]: unknown;
 }

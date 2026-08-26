@@ -152,6 +152,8 @@ export type LoginPhase =
   | "error";
 
 export interface LoginSession {
+  /** Channel receiving this login result. */
+  channelId?: string;
   sessionKey: string;
   qrcodeUrl: string;
   qrcode: string;

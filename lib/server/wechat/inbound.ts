@@ -1,83 +1,50 @@
 /**
- * Inbound WeChat message handler.
+ * Channel-scoped inbound WeChat message handler.
  *
- * This is the heart of the WeChat channel. Two callers:
- *   - `app/api/weixin/inbound/route.ts` — HTTP entry, for external triggers
- *   - `lib/wechat/monitor.ts`           — background poller, internal call
+ * This is the heart of a WeChat channel: given an inbound message it
+ * reuses (or cold-starts) the channel's agent session, runs the prompt,
+ * and replies with the agent's final text.
  *
- * Concurrency: calls are serialized per-account via an in-memory FIFO
- * chain (see `inboundChains` below). The monitor fires `void handleInbound`
- * for every message in a getUpdates batch, and without the chain those
- * calls would race on the same AgentSessionWrapper in two ways:
- *   1. Cold-start race — two parallel calls both see currentSessionId
- *      null and call coldStart with different tempKeys, creating two
- *      orphan sessions. Serialized, the second call sees the first's
- *      setCurrentSession and reuses that session.
- *   2. Wrong-reply race — two parallel calls each subscribe to onEvent
- *      on the same wrapper. The first agent_end fires for both, both
- *      resolve with the same reply text, and the second call's actual
- *      reply is lost (no one listening for the second agent_end).
- *      Serialized, the second call's waitForAgentReply subscribes only
- *      after the first call's agent_end has already fired and been
- *      unsubscribed from.
+ * Isolation guarantees (multi-channel):
+ *   - every access goes through the channel record / channel credentials;
+ *     there is no global single-account state any more;
+ *   - messages are serialized per `channelId` via an in-memory FIFO chain;
+ *   - idempotency: a message key (upstream message_id, else a hash of
+ *     channel+user+time+text) is claimed before processing, so redeliveries
+ *     never produce a duplicate reply;
+ *   - a reply is only sent while the channel is still `connected` — after
+ *     disable/delete/expire the agent work may finish, but no reply goes out;
+ *   - token rejection marks only this channel `expired`.
  *
- * Flow per message (R3 / B2 / L2 / N1):
- *   1. If text === "/new": clear currentSessionId, log the command, and
- *      reply "session reset". The next real WeChat message will see no
- *      binding and cold-start on its own — that message becomes the first
- *      turn of the new session, so /new itself never reaches the agent.
- *   2. Otherwise reuse currentSessionId, or cold-start if missing.
- *   3. Send a prompt through the AgentSessionWrapper (startRpcSession +
- *      session.send, both in-process — no HTTP).
- *   4. Best-effort sendtyping() to the user.
- *   5. Subscribe via session.onEvent, wait for `agent_end`, and send the
- *      full reply back via sendTextMessage.
- *   6. On any error, send a brief failure notice to the user.
- *
- * Side effects on state:
- *   - state.setCurrentSession(id) after every successful cold-start.
- *   - state.setCurrentSession(null) on /new (clears the binding).
- *   - state.recordContact(...) is called by the monitor before this is invoked.
- *   - logSessionEvent(...) writes a JSONL line for every lifecycle step.
- *
- * Note: this module calls `lib/rpc-manager` directly in-process. The HTTP
- * `/api/agent/*` routes still exist for the browser UI — they wrap the
- * same primitives. We deliberately avoid HTTP self-calls here because the
- * listening port varies (dev=30141, prod=14514) and a hardcoded fallback
- * silently broke the channel when the two diverged.
+ * Caller: `lib/server/channels/wechat-worker.ts` (per-channel poll loop).
  */
-import { existsSync } from "fs";
+import { existsSync, statSync } from "fs";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { state, api } from "./";
+import { api } from "@/lib/server/wechat";
 import { getRpcSession, startRpcSession } from "@/lib/server/rpc-manager";
 import { resolveSessionPath } from "@/lib/server/session-reader";
 import { logSessionEvent } from "./sessions-log";
 import { createLogger } from "@/lib/server/logger";
+import { getChannel, updateChannel } from "@/lib/server/channels";
+import { loadChannelAccount } from "@/lib/server/channels/credentials";
+import {
+  abandonMessage,
+  buildMessageKey,
+  claimMessage,
+  markProcessed,
+} from "@/lib/server/channels/messages";
+import { isPathAllowed, getAllowedRoots } from "@/lib/server/file-access";
 import type { AgentEvent } from "@/lib/server/rpc-manager";
+import type { WeChatAccount } from "@/lib/shared/wechat/types";
 
 const log = createLogger("wechat/inbound");
 
 /** A 5min safety net — even if the agent misbehaves we won't wait forever. */
 const AGENT_END_TIMEOUT_MS = 5 * 60 * 1000;
 
-/**
- * Per-account FIFO chain of in-flight handleInbound calls.
- *
- * The monitor loop fires `void handleInbound(...)` for every message in a
- * getUpdates batch, and those calls must be processed strictly in arrival
- * order. See the file-top docstring's "Concurrency" section for the two
- * specific races this prevents.
- *
- * A failure (rejection) in the previous call is caught here so the chain
- * doesn't poison itself — the impl reports errors to WeChat via safeReply,
- * so a rejection in this module would be a bug, not a user-facing condition.
- */
+/** Per-channel FIFO chain of in-flight handleInbound calls. */
 const inboundChains = new Map<string, Promise<unknown>>();
 
-// Minimal local types — we only need to walk the well-known shape returned
-// on agent_end. They are compatible with @earendil-works/pi-ai's
-// AssistantMessage / TextContent but defined inline to avoid pulling the
-// full type graph into this file.
 interface TextBlock { type: "text"; text: string }
 interface AssistantMsg {
   role: "assistant";
@@ -88,14 +55,13 @@ interface AssistantMsg {
 type AgentMessage = AssistantMsg | { role: "user" | "toolResult"; [k: string]: unknown };
 
 /**
- * Cold-start a fresh session in the current workspace, with all tools
- * enabled and the default model from settings.json (K1=c, K2=a).
+ * Cold-start a fresh session in the given workspace, with all tools
+ * enabled and the default model from settings.json.
  */
 async function coldStart(workspaceId: string, firstMessage: string): Promise<string> {
   if (!existsSync(workspaceId)) {
     throw new Error(`Directory does not exist: ${workspaceId}`);
   }
-  // One-time key so startRpcSession's lock doesn't conflict with real session ids.
   const tempKey = `__new__${Date.now()}`;
   const { session, realSessionId } = await startRpcSession(tempKey, "", workspaceId, "all");
   await session.send({ type: "prompt", message: firstMessage });
@@ -114,23 +80,7 @@ async function sendPrompt(sessionId: string, message: string): Promise<void> {
   await session.send({ type: "prompt", message });
 }
 
-/**
- * Subscribe to the wrapper's event stream and wait for `agent_end`. Returns
- * the final assistant reply text by walking `event.messages` backwards and
- * joining the text content blocks of the last assistant message. This is the
- * stable path: pi guarantees the full `messages` snapshot on agent_end,
- * whereas the per-token `message_update` events vary in shape between
- * providers (Anthropic / OpenAI / Google all format `assistantMessageEvent`
- * differently).
- *
- * If `agent_end` carries an `error` field, or the last assistant message
- * has stopReason === "error" / "aborted", throws so the caller can surface
- * it to the user.
- */
 async function waitForAgentReply(sessionId: string): Promise<string> {
-  // The session should already be running (cold-start or sendPrompt
-  // just kicked it). If for some reason it's gone, fail loudly rather
-  // than silently waiting on a dead stream.
   const session = getRpcSession(sessionId);
   if (!session?.isAlive()) {
     throw new Error(`Session not running: ${sessionId}`);
@@ -191,38 +141,42 @@ async function waitForAgentReply(sessionId: string): Promise<string> {
 }
 
 export interface InboundMessage {
+  channelId: string;
   fromUserId: string;
   text: string;
   contextToken?: string;
+  /** Upstream message id, when available — used for idempotency. */
+  messageId?: number | string;
+  createTimeMs?: number;
 }
 
 /**
- * Main entry. Resolves once this call's reply has been sent to WeChat
- * (or attempts have been exhausted), after awaiting any earlier in-flight
- * call on the same account (see the file-top docstring's "Concurrency"
- * section).
- *
- * Never throws — all errors are logged and surfaced to the user via a
- * best-effort failure message, and the chain catches rejections so one
- * failed call doesn't poison the next.
+ * Main entry. Serially processes the message on the channel's FIFO chain
+ * and resolves once the reply has been sent (or the message was safely
+ * skipped). Never throws — errors are logged and surfaced best-effort.
  */
 export async function handleInbound(msg: InboundMessage): Promise<void> {
-  // Key by accountId so different accounts (in principle) don't block
-  // each other. The impl re-reads loadAccount() because the account may
-  // have changed (login/logout) by the time the chain actually runs.
-  const account = state.loadAccount();
-  const key = account?.accountId ?? "__no_account__";
-  const prev = inboundChains.get(key) ?? Promise.resolve();
-  // Catch on the previous promise so a rejection doesn't break the
-  // chain. The impl itself shouldn't reject (it reports via safeReply),
-  // but the .catch is belt-and-suspenders against an unexpected throw.
-  const next = prev.catch(() => undefined).then(() => handleInboundImpl(msg));
-  inboundChains.set(key, next);
+  // Idempotency gate — dedupe across redeliveries *before* queueing, so a
+  // replayed batch never doubles the queue.
+  const messageKey = buildMessageKey({
+    channelId: msg.channelId,
+    messageId: msg.messageId,
+    userId: msg.fromUserId,
+    createTimeMs: msg.createTimeMs,
+    text: msg.text,
+  });
+  const claim = claimMessage(msg.channelId, messageKey);
+  if (claim !== "accepted") return;
+
+  const prev = inboundChains.get(msg.channelId) ?? Promise.resolve();
+  const next = prev.catch(() => undefined).then(() => handleInboundImpl(msg, messageKey));
+  inboundChains.set(msg.channelId, next);
   return next;
 }
 
-async function handleInboundImpl(msg: InboundMessage): Promise<void> {
+async function handleInboundImpl(msg: InboundMessage, messageKey: string): Promise<void> {
   const startedAt = Date.now();
+  const { channelId } = msg;
   logSessionEvent({
     kind: "inbound",
     fromUserId: msg.fromUserId,
@@ -230,51 +184,77 @@ async function handleInboundImpl(msg: InboundMessage): Promise<void> {
     contextToken: msg.contextToken,
   });
 
-  const account = state.loadAccount();
+  const channel = getChannel(channelId);
+  if (!channel || channel.status !== "connected") {
+    // Disabled/deleted/expired during queueing — drop, no reply.
+    abandonMessage(channelId, messageKey);
+    return;
+  }
+  const account = loadChannelAccount(channelId);
   if (!account) {
-    log.warn("inbound dropped — no account configured", { fromUserId: msg.fromUserId });
+    log.warn("inbound dropped — channel has no credentials", { channelId, fromUserId: msg.fromUserId });
+    abandonMessage(channelId, messageKey);
     return;
   }
-  if (!account.userId) {
-    log.warn("inbound dropped — account missing userId", { fromUserId: msg.fromUserId });
+
+  try {
+    await processMessage(channelId, account, msg, startedAt);
+    markProcessed(channelId, messageKey);
+  } catch (err) {
+    // Forgive the key so an upstream redelivery can be retried.
+    abandonMessage(channelId, messageKey);
+    const errorStr = err instanceof Error ? err.message : String(err);
+    log.error("inbound failed", { channelId, fromUserId: msg.fromUserId, error: errorStr });
+    logSessionEvent({
+      kind: "agent_error",
+      sessionId: "(block)",
+      fromUserId: msg.fromUserId,
+      error: errorStr,
+    });
+    await safeReplyIfActive(account, msg, `❌ 处理失败：${errorStr.slice(0, 200)}`);
+  }
+}
+
+async function processMessage(
+  channelId: string,
+  account: WeChatAccount,
+  msg: InboundMessage,
+  startedAt: number,
+): Promise<void> {
+  const channel = getChannel(channelId);
+  if (!channel || channel.status !== "connected") return;
+
+  // Workspace handling: no workspace → tell the user and skip the agent.
+  if (!channel.workspaceId) {
+    log.warn("inbound dropped — channel has no workspace", { channelId, fromUserId: msg.fromUserId });
+    await safeReplyIfActive(account, msg, "❌ 当前未设置 workspace，请到 pi-work 频道面板里选一个。");
     return;
   }
-  if (!account.currentWorkspaceId) {
-    log.warn("inbound dropped — no current workspace", { fromUserId: msg.fromUserId });
-    await safeReply(account, msg.fromUserId, "❌ 当前未设置 workspace，请到 pi-work 微信面板里选一个。", msg.contextToken);
+  if (!workspaceUsable(channel.workspaceId)) {
+    log.warn("inbound paused — workspace unusable", { channelId, workspaceId: channel.workspaceId });
+    await safeReplyIfActive(account, msg, "❌ 当前 workspace 不可用，请在频道面板重新选择。");
     return;
   }
 
   const isNew = msg.text.trim() === "/new";
   if (isNew) {
-    // /new is a reset command: clear currentSessionId and acknowledge. We
-    // do NOT cold-start here — the next inbound WeChat message will see
-    // no currentSessionId, fall through the cold-start branch, and become
-    // the first turn of a fresh session. (N1)
     logSessionEvent({ kind: "command", fromUserId: msg.fromUserId, command: "/new" });
-    state.setCurrentSession(null);
-    await safeReply(
-      account,
-      msg.fromUserId,
-      "✅ 已重置，下条消息开始新会话。",
-      msg.contextToken,
-    );
+    updateChannel(channelId, { currentSessionId: null });
+    await safeReplyIfActive(account, msg, "✅ 已重置，下条消息开始新会话。");
     return;
   }
 
-  let sessionId: string | null = account.currentSessionId ?? null;
-
-  // B2: send typing as soon as we know we're about to do work.
-  void fireTyping(account, msg.fromUserId, msg.contextToken);
+  let sessionId: string | null = channel.currentSessionId ?? null;
+  void fireTyping(account, msg);
 
   try {
     if (!sessionId) {
-      sessionId = await coldStart(account.currentWorkspaceId, msg.text);
-      state.setCurrentSession(sessionId);
+      sessionId = await coldStart(channel.workspaceId, msg.text);
+      updateChannel(channelId, { currentSessionId: sessionId });
       logSessionEvent({
         kind: "cold_start",
         sessionId,
-        cwd: account.currentWorkspaceId,
+        cwd: channel.workspaceId,
         fromUserId: msg.fromUserId,
       });
     } else {
@@ -296,70 +276,82 @@ async function handleInboundImpl(msg: InboundMessage): Promise<void> {
       durationMs,
       replyText,
     });
-    if (!replyText) {
-      await safeReply(account, msg.fromUserId, "（agent 没有产生输出）", msg.contextToken);
-      return;
-    }
-    await safeReply(account, msg.fromUserId, replyText, msg.contextToken);
+    await safeReplyIfActive(account, msg, replyText || "（agent 没有产生输出）");
   } catch (err) {
-    const errorStr = err instanceof Error ? err.message : String(err);
+    // Surface to the user but keep the session binding — the user can
+    // retry with a follow-up message.
     logSessionEvent({
       kind: "agent_error",
       sessionId: sessionId ?? "(none)",
       fromUserId: msg.fromUserId,
-      error: errorStr,
+      error: err instanceof Error ? err.message : String(err),
     });
-    log.error("inbound failed", { fromUserId: msg.fromUserId, sessionId, error: errorStr });
-    await safeReply(account, msg.fromUserId, `❌ 处理失败：${errorStr.slice(0, 200)}`, msg.contextToken);
+    await safeReplyIfActive(account, msg, `❌ 处理失败：${String(err).slice(0, 200)}`);
   }
 }
 
-async function fireTyping(
-  account: { baseUrl: string; token: string },
-  to: string,
-  contextToken?: string,
-): Promise<void> {
+/**
+ * Whether the workspace path is a real directory inside an allowed root.
+ * The channel keeps its connection either way — only the agent run pauses.
+ */
+async function workspaceUsable(workspaceId: string): Promise<boolean> {
+  if (!existsSync(workspaceId)) return false;
   try {
-    await api.sendTyping({ baseUrl: account.baseUrl, token: account.token, to, contextToken });
+    if (!statSync(workspaceId).isDirectory()) return false;
+    const roots = await getAllowedRoots();
+    return isPathAllowed(workspaceId, roots);
+  } catch {
+    return false;
+  }
+}
+
+async function fireTyping(account: { baseUrl: string; token: string }, msg: InboundMessage): Promise<void> {
+  try {
+    await api.sendTyping({ baseUrl: account.baseUrl, token: account.token, to: msg.fromUserId, contextToken: msg.contextToken });
   } catch (err) {
-    log.debug("sendtyping failed (ignored)", { to, error: String(err) });
+    log.debug("sendtyping failed (ignored)", { channelId: msg.channelId, to: msg.fromUserId, error: String(err) });
   }
 }
 
-async function safeReply(
-  account: { baseUrl: string; token: string; userId?: string },
-  to: string,
+/**
+ * Send a reply only if the channel is still `connected`. After disable /
+ * delete / expire the in-flight agent may finish, but nothing goes out —
+ * the "no replies after state change" invariant.
+ */
+async function safeReplyIfActive(
+  account: { baseUrl: string; token: string },
+  msg: InboundMessage,
   text: string,
-  contextToken?: string,
 ): Promise<void> {
+  const channel = getChannel(msg.channelId);
+  if (!channel || channel.status !== "connected") return;
   try {
-    const resp = await api.sendTextMessage({
+    await api.sendTextMessage({
       baseUrl: account.baseUrl,
       token: account.token,
-      to,
+      to: msg.fromUserId,
       text,
-      contextToken,
+      contextToken: msg.contextToken,
       clientId: api.newClientId(),
     });
     logSessionEvent({
       kind: "reply",
       sessionId: "(reply)",
-      fromUserId: to,
+      fromUserId: msg.fromUserId,
       length: text.length,
     });
-    void resp; // currently empty, kept for future message_id extraction
   } catch (err) {
     const errStr = err instanceof Error ? err.message : String(err);
-    log.warn("reply failed", { to, error: errStr });
+    log.warn("reply failed", { channelId: msg.channelId, to: msg.fromUserId, error: errStr });
     logSessionEvent({
       kind: "reply_failed",
       sessionId: "(reply)",
-      fromUserId: to,
+      fromUserId: msg.fromUserId,
       error: errStr,
     });
-    // E4 detection: 401/expired → mark account as expired
+    // E4 detection: 401/expired → mark only this channel as expired.
     if (/401|expired|invalid|token/i.test(errStr)) {
-      state.markAccountExpired();
+      updateChannel(msg.channelId, { status: "expired" });
     }
   }
 }

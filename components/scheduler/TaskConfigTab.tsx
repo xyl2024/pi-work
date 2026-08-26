@@ -16,9 +16,11 @@ interface Props {
   task: ScheduledTask;
   modelIcons?: Record<string, string>;
   onEdit: () => void;
+  /** channelId → { name, status } for wechat channels (TaskDetail fetches). */
+  channelMeta?: Record<string, { name: string; status: string }> | null;
 }
 
-export function TaskConfigTab({ task, modelIcons, onEdit }: Props) {
+export function TaskConfigTab({ task, modelIcons, onEdit, channelMeta }: Props) {
   const { t } = useI18n();
   const { provider, modelId, thinkingLevel, toolNames, cwd, maxLifetimeMs } = task;
   const modelIcon = resolveProviderIcon(provider, modelId, modelIcons);
@@ -123,11 +125,16 @@ export function TaskConfigTab({ task, modelIcons, onEdit }: Props) {
                   task.notification.onTimeout ? t("On timeout") : null,
                 ].filter(Boolean).join(" · ") || t("No outcome selected")}
               </span>
-              {task.notification.channels.map((c) => (
-                <span key={`${c.type}:${c.recipientId}`} style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  {c.type}: <code style={mono}>{c.recipientId}</code>
-                </span>
-              ))}
+              {task.notification.channels.map((c) => {
+                const meta = c.type === "wechat" && c.channelId ? channelMeta?.[c.channelId] : undefined;
+                return (
+                  <span key={`${c.type}:${c.channelId ?? c.recipientId}`} style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    {c.type}
+                    {meta ? `: ${meta.name}` : c.channelId ? ` ${t("channels.unavailable")}` : ""}
+                    <code style={{ ...mono, marginLeft: 6 }}>{c.recipientId}</code>
+                  </span>
+                );
+              })}
             </span>
           ) : (
             <Missing>{t("Not set")}</Missing>

@@ -100,7 +100,23 @@ function claimLock(): boolean {
   }
 
   const existing = readLock();
-  if (!existing) return false;
+  if (!existing) {
+    // Lock file exists but is empty / corrupt (e.g. the previous process
+    // was SIGKILLed between truncating and writing a renewal record).
+    // There is no valid holder to respect, so reclaim by overwriting it.
+    // We deliberately overwrite rather than unlink: another process may
+    // be mid-renew (`openSync("w")` then `writeSync`), and unlinking the
+    // inode out from under it would silently lose the lock for everyone.
+    log.warn("wechat monitor lock corrupt/empty, reclaiming", { pid: process.pid });
+    try {
+      const fd = openSync(LOCK_PATH, "w", 0o600);
+      writeFreshLock(fd, record);
+      return true;
+    } catch (err) {
+      log.warn("failed to reclaim wechat monitor lock", { error: String(err) });
+      return false;
+    }
+  }
   if (existing.pid === process.pid) return true;
   if (pidAlive(existing.pid) && Date.now() - existing.renewedAt < STALE_RENEW_MS) {
     return false;

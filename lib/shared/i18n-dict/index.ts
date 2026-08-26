@@ -15,6 +15,7 @@
 
 import { askUserQuestions } from "./ask-user-questions";
 import { chat } from "./chat";
+import { channels } from "./channels";
 import { commands } from "./commands";
 import { common } from "./common";
 import { fileViewer } from "./file-viewer";
@@ -43,6 +44,7 @@ export type Locale = "en" | "zh";
 export const ZH_TRANSLATIONS = {
   ...common,
   ...chat,
+  ...channels,
   ...commands,
   ...fileViewer,
   ...grokbot,

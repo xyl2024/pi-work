@@ -99,10 +99,15 @@ async function postJson<T>(baseUrl: string, endpoint: string, body: unknown, tok
   }
 }
 
-async function postJsonWithTimeout<T>(baseUrl: string, endpoint: string, body: unknown, token: string | undefined, timeoutMs: number): Promise<T> {
+async function postJsonWithTimeout<T>(baseUrl: string, endpoint: string, body: unknown, token: string | undefined, timeoutMs: number, externalSignal?: AbortSignal): Promise<T> {
   const url = `${baseUrl.replace(/\/$/, "")}/${endpoint}`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(new DOMException("timeout", "TimeoutError")), timeoutMs);
+  if (externalSignal) {
+    const onAbort = () => controller.abort(externalSignal.reason ?? new DOMException("aborted", "AbortError"));
+    if (externalSignal.aborted) onAbort();
+    else externalSignal.addEventListener("abort", onAbort, { once: true });
+  }
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -249,6 +254,7 @@ export async function getUpdates(params: {
   token: string;
   getUpdatesBuf: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }): Promise<GetUpdatesResp> {
   const timeout = params.timeoutMs ?? GET_UPDATES_DEFAULT_TIMEOUT_MS;
   try {
@@ -261,11 +267,12 @@ export async function getUpdates(params: {
       },
       params.token,
       timeout,
+      params.signal,
     );
   } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      // Client-side timeout: return an empty success response so the caller
-      // can keep polling with the same cursor.
+    if (err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError")) {
+      // Client-side timeout / explicit abort: return an empty success
+      // response so the caller can keep polling with the same cursor.
       return { ret: 0, msgs: [], get_updates_buf: params.getUpdatesBuf };
     }
     throw err;

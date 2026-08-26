@@ -104,8 +104,15 @@ export interface UpdateTaskInput {
 
 function validateNotification(raw: unknown): TaskNotification | null {
   if (raw === null || raw === undefined) return null;
-  // sanitizeNotification returns null for empty input; treat as no-notification.
-  return sanitizeNotification(raw);
+  try {
+    // sanitizeNotification returns null for empty input; treat as no-notification.
+    return sanitizeNotification(raw);
+  } catch (err) {
+    // Channel validation failures (e.g. a wechat channelId that is missing
+    // or stale) surface as a 400 to the caller rather than a 500.
+    const message = err instanceof Error ? err.message : String(err);
+    throw new SchedulerValidationError("notification", message);
+  }
 }
 
 export interface RecordRunEndInput {

@@ -43,6 +43,7 @@ interface Props {
   onOpenSkills?: () => void;
   onOpenPrompts?: () => void;
   onOpenScheduler?: () => void;
+  onOpenChannels?: () => void;
   onOpenMcp?: () => void;
   onOpenSettings?: () => void;
   onOpenInbox?: () => void;
@@ -144,7 +145,7 @@ const WORKSPACE_PAGE_SIZE = 5;
 const SESSION_PAGE_SIZE_GROUPED = 3;
 const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenSettings, onOpenInbox, inboxUnread, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -774,6 +775,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           onOpenSkills={onOpenSkills}
           onOpenPrompts={onOpenPrompts}
           onOpenScheduler={onOpenScheduler}
+          onOpenChannels={onOpenChannels}
           onOpenInbox={onOpenInbox}
           inboxUnread={inboxUnread}
           refreshKey={profileRefreshKey}

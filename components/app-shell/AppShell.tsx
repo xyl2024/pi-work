@@ -38,6 +38,7 @@ import { PromptsConfig } from "../settings/PromptsConfig";
 import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerModal } from "../scheduler";
+import { ChannelsModal } from "../channels/ChannelsModal";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
 import { CommandPalette } from "./CommandPalette";
@@ -375,6 +376,7 @@ export function AppShell() {
   const [promptsConfigOpen, setPromptsConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
+  const [channelsOpen, setChannelsOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -400,6 +402,7 @@ export function AppShell() {
     setPromptsConfigOpen(false);
     setSettingsConfigOpen(false);
     setSchedulerOpen(false);
+    setChannelsOpen(false);
     setInboxOpen(false);
     setPaletteOpen(true);
   }, []);
@@ -1354,6 +1357,7 @@ export function AppShell() {
     openSkills: () => setSkillsConfigOpen(true),
     openPrompts: () => setPromptsConfigOpen(true),
     openScheduler: () => setSchedulerOpen(true),
+    openChannels: () => setChannelsOpen(true),
     openTodosTab: handleOpenTodoTab,
     openFavoritesTab: handleOpenFavoritesTab,
     openCanvasTab: handleOpenCanvasTab,
@@ -1405,6 +1409,7 @@ export function AppShell() {
       onOpenSkills={() => setSkillsConfigOpen(true)}
       onOpenPrompts={() => setPromptsConfigOpen(true)}
       onOpenScheduler={() => setSchedulerOpen(true)}
+      onOpenChannels={() => setChannelsOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onOpenInbox={() => setInboxOpen(true)}
       inboxUnread={inboxUnread}
@@ -1861,6 +1866,12 @@ export function AppShell() {
         open={schedulerOpen}
         onClose={() => setSchedulerOpen(false)}
         onOpenSession={handleOpenScheduledSession}
+      />
+    )}
+    {channelsOpen && (
+      <ChannelsModal
+        open={channelsOpen}
+        onClose={() => setChannelsOpen(false)}
       />
     )}
     {inboxOpen && (

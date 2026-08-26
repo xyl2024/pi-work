@@ -28,6 +28,12 @@ import { tabBarStyle, tabItemStyle } from "./styles";
 import type { DetailTab, ScheduledTask, TaskRun } from "./types";
 import { EditIcon, PauseIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
 
+interface ChannelMeta {
+  id: string;
+  name: string;
+  status: string;
+}
+
 interface Props {
   task: ScheduledTask;
   modelIcons?: Record<string, string>;
@@ -51,6 +57,26 @@ export function TaskDetail({
   const [runs, setRuns] = useState<TaskRun[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
   const [runFilter, setRunFilter] = useState<RunFilter>("all");
+  /** channelId → { name, status } for rendering wechat notification targets. */
+  const [channelMeta, setChannelMeta] = useState<Record<string, { name: string; status: string }> | null>(null);
+
+  // Fetch channel metadata once so the config tab can show channel names
+  // instead of raw ids (and "channel unavailable" when a channel is gone).
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/channels?provider=wechat", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : Promise.resolve({ channels: [] })))
+      .then((data: { channels?: ChannelMeta[] }) => {
+        if (!alive) return;
+        const meta: Record<string, { name: string; status: string }> = {};
+        for (const channel of data.channels ?? []) {
+          meta[channel.id] = { name: channel.name, status: channel.status };
+        }
+        setChannelMeta(meta);
+      })
+      .catch(() => { /* keep null */ });
+    return () => { alive = false; };
+  }, [task.id]);
 
   const loadRuns = useCallback(async () => {
     setRunsLoading(true);
@@ -235,7 +261,7 @@ export function TaskDetail({
           />
         )}
         {tab === "prompt" && <TaskPromptTab task={task} />}
-        {tab === "config" && <TaskConfigTab task={task} modelIcons={modelIcons} onEdit={() => onEdit(task)} />}
+        {tab === "config" && <TaskConfigTab task={task} modelIcons={modelIcons} channelMeta={channelMeta} onEdit={() => onEdit(task)} />}
       </div>
     </div>
   );

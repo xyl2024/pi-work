@@ -17,6 +17,7 @@ interface Props {
   onOpenSkills?: () => void;
   onOpenPrompts?: () => void;
   onOpenScheduler?: () => void;
+  onOpenChannels?: () => void;
   onOpenInbox?: () => void;
   inboxUnread?: number;
   refreshKey?: number;
@@ -42,7 +43,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenInbox, inboxUnread, refreshKey }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenInbox, inboxUnread, refreshKey }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -136,7 +137,7 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenPrompts || onOpenScheduler);
+  const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenPrompts || onOpenScheduler || onOpenChannels);
 
   return (
     <div
@@ -390,6 +391,22 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
                 <polyline points="12 7 12 12 15 14" />
               </svg>
               <span>{t("Scheduled tasks")}</span>
+            </button>
+          )}
+          {onOpenChannels && (
+            <button
+              role="menuitem"
+              onClick={() => { setMenuOpen(false); onOpenChannels(); }}
+              style={itemBaseStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <path d="M3.27 6.96L12 12.01l8.73-5.05" />
+                <path d="M12 22.08V12" />
+              </svg>
+              <span>{t("Channels")}</span>
             </button>
           )}
         </div>

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
-import { WeChatSettingsSection } from "./WeChatSettingsSection";
 import { InboxTestSection } from "./InboxTestSection";
 import { setSettings } from "@/hooks/settingsStore";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
@@ -32,22 +31,21 @@ import { ToastTestSection } from "./sections/ToastTestSection";
  * Section layout (sidebar ↔ body, identical order to NAV_ITEMS):
  *   0  Profile             (own save flow; onDirtyChange → modal)
  *   1  Appearance          (no save — hooks apply immediately)
- *   2  WeChat Connection   (<WeChatSettingsSection />)
- *   3  Append System Prompt(textarea save + immediate-apply toggle;
+ *   2  Append System Prompt(textarea save + immediate-apply toggle;
  *                          onDirtyChange → modal)
- *   4  Custom Tools        (immediate-apply)
- *   5  Right-side buttons  (immediate-apply; visibility / order /
+ *   3  Custom Tools        (immediate-apply)
+ *   4  Right-side buttons  (immediate-apply; visibility / order /
  *                          alignment)
- *   6  Inbox Test          (<InboxTestSection />)
- *   7  Toast Test          (<ToastTestSection />, client-side preview)
- *   8  File preview limits (immediate-apply per kind)
- *   9  Typewriter effect   (immediate-apply toggle)
- *   10 Typewriter phrases  (own save flow; onDirtyChange → modal)
- *   11 Agent retry         (independent state machine; lives in
+ *   5  Inbox Test          (<InboxTestSection />)
+ *   6  Toast Test          (<ToastTestSection />, client-side preview)
+ *   7  File preview limits (immediate-apply per kind)
+ *   8  Typewriter effect   (immediate-apply toggle)
+ *   9  Typewriter phrases  (own save flow; onDirtyChange → modal)
+ *   10 Agent retry         (independent state machine; lives in
  *                          ~/.pi/agent/settings.json, not config.yaml)
- *   12 UI Sounds           (immediate-apply master volume + per-event recipes)
- *   13 Todo agent tools    (immediate-apply; ~/.pi-work/todo-tools.json)
- *   14 Manage tags         (uses useTodos(); rename / delete / recolor)
+ *   11 UI Sounds           (immediate-apply master volume + per-event recipes)
+ *   12 Todo agent tools    (immediate-apply; ~/.pi-work/todo-tools.json)
+ *   13 Manage tags         (uses useTodos(); rename / delete / recolor)
  */
 export function SettingsModal({
   onClose,
@@ -259,16 +257,7 @@ export function SettingsModal({
             {/* 1: Appearance */}
             <AppearanceSection />
 
-            {/* 2: WeChat Connection */}
-            <SettingsSection id="wechat">
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>{t("WeChat Connection")}</h3>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0", lineHeight: 1.5 }}>
-                {t("Manage WeChat connection.")}
-              </p>
-              <WeChatSettingsSection />
-            </SettingsSection>
-
-            {/* 3: Append System Prompt */}
+            {/* 2: Append System Prompt */}
             <AppendSystemSection
               config={config}
               apply={apply}

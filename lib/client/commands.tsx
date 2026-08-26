@@ -96,6 +96,7 @@ export interface CommandContext {
   openSkills: () => void;
   openPrompts: () => void;
   openScheduler: () => void;
+  openChannels: () => void;
 
   // Right-panel tabs
   openTodosTab: () => void;
@@ -301,6 +302,14 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     keywords: ["scheduler", "cron", "schedule", "timer", "tasks", "定时", "任务", "定时任务"],
     icon: <ClockIcon />,
     run: () => ctx.openScheduler(),
+  });
+  cmds.push({
+    id: "modal.channels",
+    title: t("Open channels"),
+    group: "Modal",
+    keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
+    icon: <GlobeIcon />,
+    run: () => ctx.openChannels(),
   });
 
   // ── Language (2) ──

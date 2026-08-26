@@ -33,7 +33,6 @@ export const FILE_VIEWER_UI: Array<{ kind: FileViewerKind; labelKey: string }> =
 export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-profile",       labelKey: "Profile" },
   { id: "settings-section-appearance",    labelKey: "Appearance" },
-  { id: "settings-section-wechat",        labelKey: "WeChat Connection" },
   { id: "settings-section-append-system", labelKey: "Append System Prompt" },
   { id: "settings-section-custom-tools",  labelKey: "Custom Tools" },
   { id: "settings-section-right-bar",     labelKey: "Right-side buttons" },

@@ -63,6 +63,7 @@ interface FormState {
   notifyError: boolean;
   notifyTimeout: boolean;
   channelType: string;
+  channelId: string;
   recipientId: string;
 }
 
@@ -83,6 +84,7 @@ const EMPTY: FormState = {
   notifyError: true,
   notifyTimeout: true,
   channelType: "wechat",
+  channelId: "",
   recipientId: "",
 };
 
@@ -252,6 +254,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   /** Known WeChat contact ids (xxx@im.wechat), loaded on open for the
    *  recipient picker. */
   const [contacts, setContacts] = useState<string[]>([]);
+  const [wechatChannels, setWechatChannels] = useState<Array<{ id: string; name: string; userId: string | null; status: string }>>([]);
   /** Validation errors are suppressed until the user first clicks Save;
    *  flipping this on reveals field red-text and the per-section nav dots. */
   const [submitted, setSubmitted] = useState(false);
@@ -262,9 +265,9 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   useEffect(() => {
     if (!open) return;
     // Best-effort: load known WeChat contacts for the recipient dropdown.
-    apiFetch<{ contacts?: { userId: string }[] }>("/api/weixin/contacts")
-      .then((res) => setContacts((res.contacts ?? []).map((c) => c.userId)))
-      .catch(() => setContacts([]));
+    apiFetch<{ channels?: Array<{ id: string; name: string; userId: string | null; status: string }> }>("/api/channels?provider=wechat")
+      .then((res) => { setWechatChannels(res.channels ?? []); setContacts((res.channels ?? []).map((channel) => channel.userId).filter((id): id is string => Boolean(id))); })
+      .catch(() => setWechatChannels([]));
     if (task) {
       const toolNames = task.toolNames ?? [];
       const n = task.notification;
@@ -287,6 +290,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         notifyError: n?.onError ?? true,
         notifyTimeout: n?.onTimeout ?? true,
         channelType: n?.channels[0]?.type ?? "wechat",
+        channelId: n?.channels[0]?.channelId ?? "",
         recipientId: n?.channels[0]?.recipientId ?? "",
       });
     } else {
@@ -327,10 +331,13 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   const recipientError = (submitted && form.notifyEnabled && !recipientId)
     ? t("Please enter a WeChat recipient")
     : null;
+  const channelError = (submitted && form.notifyEnabled && !form.channelId)
+    ? t("Please select a WeChat channel")
+    : null;
   const errors: Record<string, string | null> = {
     basics: nameError ?? promptError ?? cwdError ?? modelError ?? thinkingError,
     schedule: cronError ?? maxLifetimeError,
-    notifications: recipientError,
+    notifications: channelError ?? recipientError,
   };
 
   const submit = async () => {
@@ -348,7 +355,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
       !form.thinkingLevel.trim() ||
       !form.cronValid ||
       (maxLifetimeRaw.length > 0 && maxLifetimeMs === null) ||
-      notifRecipientRequired;
+      notifRecipientRequired || (form.notifyEnabled && !form.channelId);
     if (hasError) {
       onToast("error", t("Please fix form errors first"));
       // Jump to the first section that has an error
@@ -363,7 +370,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
             !form.thinkingLevel.trim()
           );
         if (s === "schedule") return !form.cronValid;
-        if (s === "notifications") return notifRecipientRequired;
+        if (s === "notifications") return notifRecipientRequired || (form.notifyEnabled && !form.channelId);
         return false;
       });
       if (firstError) setSection(firstError);
@@ -383,7 +390,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
               onSuccess: form.notifySuccess,
               onError: form.notifyError,
               onTimeout: form.notifyTimeout,
-              channels: [{ type: form.channelType, recipientId }],
+              channels: [{ type: form.channelType, channelId: form.channelId || undefined, recipientId }],
             }
           : null;
 
@@ -536,7 +543,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
               <ScheduleSection form={form} update={update} cronError={cronError} maxLifetimeError={maxLifetimeError} />
             )}
             {section === "notifications" && (
-              <NotificationsSection form={form} update={update} contacts={contacts} error={recipientError} />
+              <NotificationsSection form={form} update={update} contacts={contacts} wechatChannels={wechatChannels} error={channelError ?? recipientError} />
             )}
           </div>
         </div>
@@ -644,7 +651,7 @@ function ScheduleSection({ form, update, cronError, maxLifetimeError }: { form: 
   );
 }
 
-function NotificationsSection({ form, update, contacts, error }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; contacts: string[]; error: string | null }) {
+function NotificationsSection({ form, update, contacts, wechatChannels, error }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; contacts: string[]; wechatChannels: Array<{ id: string; name: string; userId: string | null; status: string }>; error: string | null }) {
   const { t } = useI18n();
 
   if (!form.notifyEnabled) {
@@ -691,6 +698,22 @@ function NotificationsSection({ form, update, contacts, error }: { form: FormSta
           style={{ ...inputStyle, maxWidth: 260 }}
         >
           <option value="wechat">{t("WeChat")}</option>
+        </select>
+      </Field>
+
+      <Field label={t("WeChat channel")}>
+        <select
+          value={form.channelId}
+          onChange={(e) => {
+            const id = e.target.value;
+            const selected = wechatChannels.find((channel) => channel.id === id);
+            update("channelId", id);
+            if (selected?.userId) update("recipientId", selected.userId);
+          }}
+          style={{ ...inputStyle, maxWidth: 360 }}
+        >
+          <option value="">{t("Select a channel")}</option>
+          {wechatChannels.filter((channel) => channel.status === "connected").map((channel) => <option key={channel.id} value={channel.id}>{channel.name}{channel.userId ? ` (${channel.userId})` : ""}</option>)}
         </select>
       </Field>
 
