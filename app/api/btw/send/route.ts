@@ -19,12 +19,13 @@
 
 import type { AgentMessage } from "@/lib/shared/types";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
-import { startBtwAgent, type BtwAgentHandle, BTW_TOOL_WHITELIST } from "@/lib/server/btw-agent";
+import { startBtwAgent, type BtwAgentHandle } from "@/lib/server/btw-agent";
 import { runWithLlmAuditContext } from "@/lib/server/llm-audit";
 
 export const dynamic = "force-dynamic";
 
 const log = createLogger("api/btw/send");
+type BtwThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 interface BtwSendRequestBody {
   mainSessionId?: unknown;
@@ -40,10 +41,7 @@ interface BtwSendRequestBody {
    *  `messages` array is the main session's full context, and the
    *  agent should treat it as the conversation's history. */
   isInitialContext?: unknown;
-  /** Server-side sanity check: the client must declare the tool set it
-   *  expects to be allowed. Lets us surface "policy mismatch" early
-   *  without booting an agent that would have lied about its tools. */
-  toolAllowList?: unknown;
+  toolNames?: unknown;
 }
 
 function asString(value: unknown, field: string): string {
@@ -68,6 +66,8 @@ function validateRequest(body: unknown): {
   messages: AgentMessage[];
   userMessage: AgentMessage;
   isInitialContext: boolean;
+  toolNames: string[];
+  thinkingLevel: BtwThinkingLevel;
 } {
   if (!body || typeof body !== "object") {
     throw new Error("invalid request body");
@@ -94,31 +94,12 @@ function validateRequest(body: unknown): {
   }
   const userMessage = b.userMessage as AgentMessage;
 
-  // The client promises to only ask for the read-only whitelist; we
-  // honour the promise server-side by passing that exact list into
-  // `startBtwAgent`. A mismatch is a contract error, not a runtime
-  // one — reject before booting any model.
-  if (!Array.isArray(b.toolAllowList)) {
-    throw new Error("toolAllowList is required");
-  }
-  const allowSet = new Set(b.toolAllowList.map((s) => String(s)));
-  for (const name of BTW_TOOL_WHITELIST) {
-    if (!allowSet.has(name)) {
-      throw new Error(`toolAllowList missing required tool: ${name}`);
-    }
-  }
-  for (const name of allowSet) {
-    if (!(BTW_TOOL_WHITELIST as readonly string[]).includes(name)) {
-      throw new Error(`toolAllowList contains non-read-only tool: ${name}`);
-    }
-  }
-
-  // `thinkingLevel` is fixed to "off" per handoff §2 #10. A client that
-  // sends something else gets a 400 instead of silently being overridden,
-  // so future bugs surface as 4xx instead of "why isn't thinking working".
-  if (b.thinkingLevel !== undefined && b.thinkingLevel !== "off" && b.thinkingLevel !== "none") {
-    throw new Error("thinkingLevel must be 'off' or 'none'");
-  }
+  if (!Array.isArray(b.toolNames)) throw new Error("toolNames is required");
+  const toolNames = b.toolNames.map((name) => asString(name, "toolNames[]"));
+  const thinkingLevelValue = asString(b.thinkingLevel, "thinkingLevel");
+  const thinkingLevels: BtwThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+  if (!thinkingLevels.includes(thinkingLevelValue as BtwThinkingLevel)) throw new Error("invalid thinkingLevel");
+  const thinkingLevel = thinkingLevelValue as BtwThinkingLevel;
 
   const isInitialContext = b.isInitialContext === true;
 
@@ -130,6 +111,8 @@ function validateRequest(body: unknown): {
     messages,
     userMessage,
     isInitialContext,
+    toolNames,
+    thinkingLevel,
   };
 }
 
@@ -254,6 +237,8 @@ export async function POST(req: Request) {
             cwd: parsed.cwd,
             model: parsed.model,
             systemPrompt,
+            toolNames: parsed.toolNames,
+            thinkingLevel: parsed.thinkingLevel,
             contextMessages,
             userMessage: parsed.userMessage,
             signal: req.signal ?? new AbortController().signal,

@@ -32,15 +32,17 @@ import {
 import path from "node:path";
 import { createLogger } from "./logger";
 import { runWithLlmAuditContext } from "./llm-audit";
+import { readConfig } from "./config";
+import { readEnabledCustomTools } from "./custom-tools-config";
+import { readEnabledTodoTools } from "./user-todo/tools-config";
+import { buildTodoTools } from "./user-todo/tools";
+import { buildShowFileTool } from "./show-file-tool";
+import { buildAgentTodoTool, AGENT_TODO_SYSTEM_PROMPT_BLOCK } from "./agent-todo-tool/tool";
+import { buildAskUserQuestionsTool } from "./ask-user-questions-tool";
 import type { AgentMessage } from "../shared/types";
 
 const log = createLogger("btw-agent");
-
-/** Tools exposed to BTW. Read-only file inspection only; bash / edit /
- *  write are excluded by both omission (never added to the allowlist)
- *  and by the read-only filesystem role baked into the SDK's built-in
- *  tools (they only access paths inside `cwd`). Per handoff §2 #2 + §7. */
-export const BTW_TOOL_WHITELIST = ["read", "grep", "ls", "find"] as const;
+type BtwThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface BtwAgentRequest {
   /** The active main session id, used only for audit attribution. */
@@ -63,6 +65,10 @@ export interface BtwAgentRequest {
    * message is appended at the end.
    */
   contextMessages: AgentMessage[];
+  /** Active tools copied from the main session. */
+  toolNames: string[];
+  /** Thinking level copied from the main session. */
+  thinkingLevel: BtwThinkingLevel;
   /** New user turn appended to `contextMessages`. The server-side
    *  prompt call replaces whatever the agent's prior state held, so
    *  the caller is responsible for building the full pre-prompt
@@ -218,9 +224,21 @@ export async function startBtwAgent(req: BtwAgentRequest): Promise<BtwAgentHandl
   // BTW-specific block (§2 #11). Skills / append prompts / agents files
   // are still discovered from `~/.pi/agent/` and the cwd, matching how
   // the main session sees the world.
+  const enabledCustom = readEnabledCustomTools();
+  let appendSystemPrompt: string[] | undefined;
+  try {
+    if (!readConfig().append_system.enabled) appendSystemPrompt = [];
+  } catch {
+    // readConfig already applies its fail-safe defaults.
+  }
   const resourceLoader = new DefaultResourceLoader({
     cwd: req.cwd,
     agentDir,
+    ...(appendSystemPrompt !== undefined ? { appendSystemPrompt } : {}),
+    appendSystemPromptOverride: (baseAppend: string[]) =>
+      enabledCustom.has("agent_todo")
+        ? [...baseAppend, AGENT_TODO_SYSTEM_PROMPT_BLOCK]
+        : baseAppend,
   });
   await resourceLoader.reload();
 
@@ -232,19 +250,27 @@ export async function startBtwAgent(req: BtwAgentRequest): Promise<BtwAgentHandl
     resourceLoader,
     modelRuntime,
     model,
-    thinkingLevel: "off", // handoff §2 #10 — fixed off/none
-    // `tools` is the SDK's allowlist for the initial active tool set.
-    // Passing it at construction time is what locks the agent to the
-    // read-only whitelist — the default is `[read, bash, edit, write]`,
-    // which would let BTW run side-effect tools. The SDK rebuilds the
-    // base system prompt to match this allowlist, so we override it
-    // back to the main session's prompt right after construction.
-    tools: [...BTW_TOOL_WHITELIST],
+    thinkingLevel: req.thinkingLevel,
+    tools: req.toolNames,
+    customTools: [
+      ...buildTodoTools(readEnabledTodoTools()),
+      ...(enabledCustom.has("show_media") || enabledCustom.has("show_file")
+        ? buildShowFileTool()
+        : []),
+      ...(enabledCustom.has("agent_todo") ? buildAgentTodoTool() : []),
+      ...(enabledCustom.has("ask_user_questions")
+        ? buildAskUserQuestionsTool({ source: "user" })
+        : []),
+    ],
   });
   const session: AgentSession = agentRuntime.session;
   if (!session || typeof session.subscribe !== "function") {
     throw new Error("createAgentSession did not return an AgentSession");
   }
+
+  // Keep BTW's system prompt aligned with the main session after the SDK
+  // applies the selected tool set.
+  session.setThinkingLevel(req.thinkingLevel);
 
   // Per handoff §2 #11: BTW uses the **main session's** original system
   // prompt verbatim, no BTW-specific prefix. The SDK computed a

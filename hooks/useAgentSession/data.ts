@@ -176,7 +176,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
         const sid = sessionIdRef.current;
         if (!sid) throw new Error("No session id");
         const tools = await sendAgentCommand<ToolWithActive[]>(sid, { type: "get_tools" });
-        catalog = tools.map(({ name, description }) => ({ name, description }));
+        catalog = tools.map(({ name, description, active }) => ({ name, description, active }));
       }
       catalog.sort((a, b) => a.name.localeCompare(b.name));
       setAvailableTools(catalog);

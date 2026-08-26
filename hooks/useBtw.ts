@@ -34,10 +34,6 @@ import {
   BtwStorageQuotaError,
 } from "@/lib/client/btw-storage";
 
-/** Allowed tool set; duplicated from the server-side whitelist for the
-//  initial-fetch contract (the SSE route rejects mismatches). */
-const BTW_TOOL_WHITELIST = ["read", "grep", "ls", "find"] as const;
-
 /** Public state machine value for the panel. */
 export type BtwPhase = "idle" | "loading" | "streaming" | "error";
 
@@ -91,6 +87,9 @@ export interface UseBtwArgs {
    *  verbatim to the BTW agent (handoff §2 #11). When null, send()
    *  refuses. */
   systemPrompt: string | null;
+  /** Active tools and thinking level copied from the main session. */
+  toolNames: string[];
+  thinkingLevel: string;
   /** Full main-session messages at the moment the panel is opened;
    *  used to feed the agent on the FIRST send (handoff §3.4). The
    *  hook reads this from a ref so it doesn't need to re-subscribe
@@ -217,7 +216,7 @@ function applyPartialToolResult(
 }
 
 export function useBtw(args: UseBtwArgs): UseBtwApi {
-  const { mainSessionId, cwd, model, systemPrompt, getMainSessionMessages } = args;
+  const { mainSessionId, cwd, model, systemPrompt, toolNames, thinkingLevel, getMainSessionMessages } = args;
   const enabled = !!mainSessionId;
 
   const [persisted, setPersisted] = useState<BtwPersisted | null>(() =>
@@ -373,11 +372,11 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
             cwd,
             model,
             systemPrompt,
-            thinkingLevel: "off",
+            toolNames,
+            thinkingLevel,
             messages: baseMessages,
             userMessage,
             isInitialContext,
-            toolAllowList: [...BTW_TOOL_WHITELIST],
           }),
           signal: controller.signal,
         });
@@ -583,7 +582,7 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
         inFlight.current = null;
       }
     },
-    [cwd, getMainSessionMessages, mainSessionId, model, systemPrompt, persist, persisted, phase],
+    [cwd, getMainSessionMessages, mainSessionId, model, systemPrompt, toolNames, thinkingLevel, persist, persisted, phase],
   );
 
   // ── stop ────────────────────────────────────────────────────────────

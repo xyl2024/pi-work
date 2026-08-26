@@ -68,6 +68,10 @@ export interface SessionUiState {
    *  agent. `null` until the chat controller publishes it (new session
    *  draft, model not yet resolved, etc.). */
   currentModel: { provider: string; modelId: string } | null;
+  /** Main session's current thinking level. */
+  thinkingLevel: string;
+  /** Main session's active tool names. */
+  toolNames: string[];
   /** Main session's current message transcript — used by the BTW hook
    *  on the FIRST send so the BTW agent boots with the same context
    *  the user can see in the chat. Snapshotted at the moment
@@ -84,6 +88,8 @@ const INITIAL: SessionUiState = {
   isStreaming: false,
   agentRunning: false,
   currentModel: null,
+  thinkingLevel: "off",
+  toolNames: [],
   mainSessionMessages: [],
 };
 

@@ -44,6 +44,9 @@ interface BtwPanelProps {
   /** Main session's current effective system prompt — passed through
    *  verbatim to the BTW agent per handoff §2 #11. */
   systemPrompt: string | null;
+  /** Active main-session tools and thinking level. */
+  toolNames: string[];
+  thinkingLevel: string;
   /** All main-session messages (latest snapshot). Used by the hook
    *  on the FIRST send (handoff §3.4). */
   mainSessionMessages: AgentMessage[];
@@ -57,7 +60,7 @@ export function BtwPanel(props: BtwPanelProps) {
   );
 }
 
-function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, mainSessionMessages }: BtwPanelProps) {
+function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thinkingLevel, mainSessionMessages }: BtwPanelProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const toast = useToast();
@@ -71,6 +74,8 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, mainSessionMes
     cwd,
     model,
     systemPrompt,
+    toolNames,
+    thinkingLevel,
     getMainSessionMessages,
   });
 

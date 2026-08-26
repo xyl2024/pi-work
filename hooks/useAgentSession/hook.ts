@@ -785,6 +785,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // other sessionUi fields; a background controller's messages must
   // never overwrite the visible chat's transcript.
   useEffect(() => { if (isActive) setSessionUiState({ currentModel: displayModel }); }, [isActive, displayModel]);
+  useEffect(() => {
+    if (isActive) setSessionUiState({ thinkingLevel, toolNames: toolSelection === "all" ? availableTools.map((tool) => tool.name) : toolSelection });
+  }, [isActive, thinkingLevel, toolSelection, availableTools]);
   useEffect(() => { if (isActive) setSessionUiState({ mainSessionMessages: messages }); }, [isActive, messages]);
 
   // Clear a controller's pending bot reaction when it moves to the

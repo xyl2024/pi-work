@@ -92,6 +92,7 @@ export interface ToolResultMessage {
 export interface ToolInfo {
   name: string;
   description: string;
+  active?: boolean;
 }
 
 /** The user's tool selection state for a session. `[]` ≡ "Off" (no tools);
