@@ -26,6 +26,7 @@ import { resolveSessionPath } from "@/lib/server/session-reader";
 import { logSessionEvent } from "./sessions-log";
 import { createLogger } from "@/lib/server/logger";
 import { getChannel, updateChannel } from "@/lib/server/channels";
+import { pushActivity } from "@/lib/server/channels/activity";
 import { loadChannelAccount } from "@/lib/server/channels/credentials";
 import {
   abandonMessage,
@@ -197,6 +198,9 @@ async function handleInboundImpl(msg: InboundMessage, messageKey: string): Promi
     return;
   }
 
+  pushActivity(channelId, { kind: "message_received", fromUserId: msg.fromUserId, text: msg.text });
+
+
   try {
     await processMessage(channelId, account, msg, startedAt);
     markProcessed(channelId, messageKey);
@@ -227,11 +231,13 @@ async function processMessage(
   // Workspace handling: no workspace → tell the user and skip the agent.
   if (!channel.workspaceId) {
     log.warn("inbound dropped — channel has no workspace", { channelId, fromUserId: msg.fromUserId });
+    pushActivity(channelId, { kind: "workspace_missing", fromUserId: msg.fromUserId });
     await safeReplyIfActive(account, msg, "❌ 当前未设置 workspace，请到 pi-work 频道面板里选一个。");
     return;
   }
   if (!workspaceUsable(channel.workspaceId)) {
     log.warn("inbound paused — workspace unusable", { channelId, workspaceId: channel.workspaceId });
+    pushActivity(channelId, { kind: "workspace_unusable", fromUserId: msg.fromUserId, detail: channel.workspaceId });
     await safeReplyIfActive(account, msg, "❌ 当前 workspace 不可用，请在频道面板重新选择。");
     return;
   }
@@ -240,6 +246,7 @@ async function processMessage(
   if (isNew) {
     logSessionEvent({ kind: "command", fromUserId: msg.fromUserId, command: "/new" });
     updateChannel(channelId, { currentSessionId: null });
+    pushActivity(channelId, { kind: "session_reset", fromUserId: msg.fromUserId });
     await safeReplyIfActive(account, msg, "✅ 已重置，下条消息开始新会话。");
     return;
   }
@@ -251,6 +258,7 @@ async function processMessage(
     if (!sessionId) {
       sessionId = await coldStart(channel.workspaceId, msg.text);
       updateChannel(channelId, { currentSessionId: sessionId });
+      pushActivity(channelId, { kind: "session_started", sessionId, fromUserId: msg.fromUserId, text: msg.text });
       logSessionEvent({
         kind: "cold_start",
         sessionId,
@@ -265,10 +273,12 @@ async function processMessage(
         text: msg.text,
       });
       await sendPrompt(sessionId, msg.text);
+      pushActivity(channelId, { kind: "agent_sent", sessionId, fromUserId: msg.fromUserId, text: msg.text });
     }
 
     const replyText = await waitForAgentReply(sessionId);
     const durationMs = Date.now() - startedAt;
+    pushActivity(channelId, { kind: "agent_done", sessionId: sessionId ?? undefined, durationMs, text: replyText || undefined });
     logSessionEvent({
       kind: "agent_end",
       sessionId,
@@ -285,6 +295,12 @@ async function processMessage(
       sessionId: sessionId ?? "(none)",
       fromUserId: msg.fromUserId,
       error: err instanceof Error ? err.message : String(err),
+    });
+    pushActivity(channelId, {
+      kind: "agent_error",
+      sessionId: sessionId ?? undefined,
+      fromUserId: msg.fromUserId,
+      detail: err instanceof Error ? err.message : String(err),
     });
     await safeReplyIfActive(account, msg, `❌ 处理失败：${String(err).slice(0, 200)}`);
   }
@@ -334,6 +350,7 @@ async function safeReplyIfActive(
       contextToken: msg.contextToken,
       clientId: api.newClientId(),
     });
+    pushActivity(msg.channelId, { kind: "reply", fromUserId: msg.fromUserId, text });
     logSessionEvent({
       kind: "reply",
       sessionId: "(reply)",
@@ -348,6 +365,11 @@ async function safeReplyIfActive(
       sessionId: "(reply)",
       fromUserId: msg.fromUserId,
       error: errStr,
+    });
+    pushActivity(msg.channelId, {
+      kind: "reply_failed",
+      fromUserId: msg.fromUserId,
+      detail: errStr,
     });
     // E4 detection: 401/expired → mark only this channel as expired.
     if (/401|expired|invalid|token/i.test(errStr)) {

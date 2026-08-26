@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
 import { SmartImage } from "../ui/SmartImage";
+import { ChannelActivityFeed } from "./ChannelActivityFeed";
 import type { ChannelRecord } from "@/lib/shared/channels/types";
 
 type LoginPhase =
@@ -52,11 +53,33 @@ interface StatusDetail {
   currentSessionId: string | null;
   workspaceAvailable: boolean | null;
   monitorRunning: boolean;
+  health?: {
+    alive: boolean;
+    backingOff: boolean;
+    consecutiveFailures: number;
+    lastPollAt: string | null;
+    lastFailureAt: string | null;
+    nextRetryAt: string | null;
+    retryInMs: number | null;
+  };
 }
 
 function shortenPath(p: string, max = 36): string {
   if (p.length <= max) return p;
   return "…" + p.slice(p.length - max + 1);
+}
+
+function fmtAgo(iso: string): string {
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  if (s < 60) return `${Math.floor(s)}s`;
+  const m = s / 60;
+  if (m < 60) return `${Math.floor(m)}m`;
+  return `${(m / 60).toFixed(1)}h`;
+}
+
+function retryIn(retryInMs: number | null): string {
+  if (retryInMs == null) return "刚刚";
+  return retryInMs >= 1000 ? `${Math.round(retryInMs / 1000)}s` : `${Math.round(retryInMs)}ms`;
 }
 
 export function WechatChannelDetail({
@@ -327,6 +350,22 @@ export function WechatChannelDetail({
 
   const workspace = detail?.currentWorkspaceId ?? channel.workspaceId;
   const workspaceBroken = detail?.workspaceAvailable === false;
+  const h = detail?.health;
+  let runtimeStatus: string | null = null;
+  let healthMeta: string | null = null;
+  if (channel.status === "connected") {
+    if (h?.backingOff) {
+      runtimeStatus = `⚠ ${t("channels.healthBackoff", { n: h.consecutiveFailures, s: retryIn(h.retryInMs) })}`;
+    } else if (h?.alive) {
+      runtimeStatus = `● ${t("channels.statusLive")}`;
+    } else {
+      runtimeStatus = `○ ${t("channels.healthNoHeartbeat")}`;
+    }
+    if (h?.lastPollAt) {
+      healthMeta = `${t("channels.healthLastPoll")} ${t("channels.healthAgo", { s: fmtAgo(h.lastPollAt) })}`;
+      if (h.consecutiveFailures > 0) healthMeta += ` · failure×${h.consecutiveFailures}`;
+    }
+  }
   const statusColor =
     channel.status === "connected" ? "var(--accent)"
       : channel.status === "expired" ? "#ef4444"
@@ -403,7 +442,7 @@ export function WechatChannelDetail({
             </strong>
             <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
               {t(STATUS_LABEL_KEYS[channel.status])}
-              {detail?.monitorRunning ? ` · ${t("channels.statusLive")}` : ""}
+              {runtimeStatus ? ` · ${runtimeStatus}` : ""}
             </span>
             <button
               onClick={startRename}
@@ -425,6 +464,11 @@ export function WechatChannelDetail({
           </>
         )}
       </section>
+
+      {/* Worker heartbeat / backoff meta */}
+      {healthMeta && (
+        <div style={{ fontSize: 11, color: "var(--text-muted)", paddingLeft: 18 }}>{healthMeta}</div>
+      )}
 
       {/* Identity */}
       <section style={{ display: "flex", flexDirection: "column", gap: 4, padding: 12, borderRadius: 8, background: "var(--bg)", fontSize: 12 }}>
@@ -663,6 +707,8 @@ export function WechatChannelDetail({
           )}
         </section>
       )}
+
+      <ChannelActivityFeed channelId={channel.id} />
     </div>
   );
 }

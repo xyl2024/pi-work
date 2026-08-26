@@ -22,6 +22,8 @@ import { registerWorker, startChannel } from "./manager";
 import { loadChannelAccount } from "./credentials";
 import { handleInbound } from "@/lib/server/wechat/inbound";
 import { clearChannelMessages, pruneMessages } from "./messages";
+import { pushActivity } from "./activity";
+import { clearWorkerHealth, updateWorkerHealth } from "./health";
 import type { WeixinMessage } from "@/lib/shared/wechat/types";
 import { createLogger } from "@/lib/server/logger";
 
@@ -80,6 +82,8 @@ export function createWeChatWorker(channelId: string) {
         ticksSincePrune: 0,
       };
       workers.set(channelId, runtime);
+      clearWorkerHealth(channelId);
+      pushActivity(channelId, { kind: "worker_started" });
       void tick(channelId, runtime);
     },
     stop() {
@@ -87,6 +91,8 @@ export function createWeChatWorker(channelId: string) {
       if (!runtime) return;
       stopRuntime(runtime);
       workers.delete(channelId);
+      clearWorkerHealth(channelId);
+      pushActivity(channelId, { kind: "worker_stopped" });
     },
     isRunning() {
       return workers.has(channelId);
@@ -151,6 +157,14 @@ async function tick(channelId: string, runtime: WorkerRuntime): Promise<void> {
       log.warn("channel getUpdates non-zero ret", { channelId, ret: response.ret, errmsg: response.errmsg });
     }
 
+    // Heartbeat: a non-throwing getUpdates means the link is alive.
+    updateWorkerHealth(channelId, {
+      lastPollAt: new Date().toISOString(),
+      lastFailureAt: null,
+      consecutiveFailures: 0,
+      nextRetryAt: null,
+    });
+
     if (response.get_updates_buf) {
       updateChannel(channelId, { syncBuf: response.get_updates_buf });
     }
@@ -188,16 +202,23 @@ async function tick(channelId: string, runtime: WorkerRuntime): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     if (isTokenError(message)) {
       log.warn("channel token rejected, marking expired", { channelId, error: message });
+      pushActivity(channelId, { kind: "token_expired", detail: message });
       try {
         updateChannel(channelId, { status: "expired" });
       } catch (err) {
         log.warn("failed to mark channel expired", { channelId, error: String(err) });
       }
       clearChannelMessages(channelId);
+      updateWorkerHealth(channelId, { consecutiveFailures: 0, nextRetryAt: null });
       stopRuntime(runtime);
       return;
     }
     runtime.failures += 1;
+    updateWorkerHealth(channelId, {
+      consecutiveFailures: runtime.failures,
+      lastFailureAt: new Date().toISOString(),
+      nextRetryAt: new Date(Date.now() + backoffDelay(runtime)).toISOString(),
+    });
     log.warn("channel poll failed", { channelId, error: message, failures: runtime.failures });
   } finally {
     runtime.inFlight = false;
