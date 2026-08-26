@@ -62,6 +62,10 @@ interface Props {
   /** Called after the scroll-to-entry navigation completes */
   onScrollComplete?: () => void;
   onNewSessionRequest?: () => void;
+  /** Slash action `/btw`: open the right BTW panel and focus its input.
+   *  Wired by AppShell so the main-chat slash menu can jump straight into
+   *  a BTW question. */
+  onOpenBtw?: () => void;
   /** Current cwd of the chat context — shown by ChatInput's CwdPicker (the
    *  active session's cwd, or the new-session pick while no session is selected). */
   cwd?: string | null;
@@ -93,7 +97,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenBtw, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
   const { t, locale } = useI18n();
   const toast = useToast();
   const isActiveRef = useRef(isActive);
@@ -1026,6 +1030,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         onSlashAction={(action) => {
           if (action === "new") onNewSessionRequest?.();
           else if (action === "compact") handleCompactClick();
+          else if (action === "btw") onOpenBtw?.();
         }}
         sessionId={currentSessionId}
         userMessageHistory={userMessageHistory}

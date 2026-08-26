@@ -45,7 +45,21 @@ export const BUILTIN_COMPACT: SlashResource = {
   content: "",
 };
 
-export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT];
+/** Built-in `/btw` slash command — opens the right BTW panel and focuses its
+ *  input so the user can immediately ask a question grounded in the active
+ *  session's context (same `source: "action"` path as `/new` and `/compact`;
+ *  handled by AppShell via `onSlashAction?.("btw")` → opens the tab + bumps
+ *  the BtwPanel focus request). */
+export const BUILTIN_BTW: SlashResource = {
+  source: "action",
+  name: "BTW",
+  command: "btw",
+  description: "打开 BTW 面板并向当前会话提问",
+  path: "",
+  content: "",
+};
+
+export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT, BUILTIN_BTW];
 
 /** Typewriter phrases by locale. Defaults to the bundled phrases whenever
  *  the settings store hasn't loaded yet or the user-supplied list is empty

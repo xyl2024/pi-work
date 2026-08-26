@@ -23,7 +23,7 @@ import { useToast } from "@/components/ui/Toast";
 import { IconButton } from "@/components/ui/IconButton";
 import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
 import { useBtw } from "@/hooks/useBtw";
-import { ChatInput } from "@/components/chat/ChatInput";
+import { ChatInput, type ChatInputHandle } from "@/components/chat/ChatInput";
 import { MessageView, CollapseNonceProvider } from "@/components/chat/MessageView";
 import { ICONS } from "@/components/ui/icons";
 import { Tooltip } from "../ui/Tooltip";
@@ -51,6 +51,10 @@ interface BtwPanelProps {
    *  `btw.disabled.loading` even though a session is open. Wired to
    *  the active controller's systemPrompt refresh in AppShell. */
   onRefresh: () => void;
+  /** `/btw` slash command focus trigger: AppShell bumps this counter each
+   *  time the slash action fires so the panel can focus its input (also
+   *  runs on mount when the panel opens with a pending request). */
+  focusRequest?: number;
 }
 
 export function BtwPanel(props: BtwPanelProps) {
@@ -61,12 +65,21 @@ export function BtwPanel(props: BtwPanelProps) {
   );
 }
 
-function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel, onRefresh }: BtwPanelProps) {
+function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel, onRefresh, focusRequest }: BtwPanelProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const toast = useToast();
 
   const btw = useBtw({ mainSessionId });
+
+  // Imperative focus for the `/btw` slash command: AppShell bumps
+  // `focusRequest` after opening the tab, and this effect (which also runs
+  // right after mount when the request changed) focuses the input.
+  const chatInputRef = useRef<ChatInputHandle>(null);
+  useEffect(() => {
+    if (!focusRequest) return;
+    chatInputRef.current?.focus();
+  }, [focusRequest]);
 
   // Model-name / icon maps for the assistant header — mirrors the main
   // chat's /api/models fetch (useAgentSession) so message headers show
@@ -342,6 +355,7 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel,
           </div>
         )}
         <ChatInput
+          ref={chatInputRef}
           enterToSend
           hideToolbar
           disabled={isDisabled}

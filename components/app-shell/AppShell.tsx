@@ -208,6 +208,8 @@ interface WorkspaceChatTabProps {
   scrollToEntryId: string | null;
   onScrollComplete: () => void;
   onNewSessionRequest: (cwdOverride?: string) => void;
+  /** `/btw` slash action handler (open BTW panel + focus its input). */
+  onOpenBtw: () => void;
   onCwdChange: (cwd: string) => void;
   onRenameCompleted: () => void;
   onSessionNameChange: (tabId: string, name: string) => void;
@@ -228,6 +230,7 @@ function WorkspaceChatTabView({
   scrollToEntryId,
   onScrollComplete,
   onNewSessionRequest,
+  onOpenBtw,
   onCwdChange,
   onRenameCompleted,
   onSessionNameChange,
@@ -265,6 +268,7 @@ function WorkspaceChatTabView({
         scrollToEntryId={scrollToEntryId}
         onScrollComplete={onScrollComplete}
         onNewSessionRequest={onNewSessionRequest}
+        onOpenBtw={onOpenBtw}
         cwd={tab.session?.cwd ?? tab.cwd}
         onCwdChange={onCwdChange}
         onRenameCompleted={onRenameCompleted}
@@ -958,6 +962,17 @@ export function AppShell() {
   // handoff §2 #20; only the right-panel body re-renders based on the
   // active session id (which is captured via `selectedSession?.id` at
   // render time, not stored in the tab descriptor).
+  // Ensure-open helper shared by the right-bar toggle and the `/btw` slash
+  // action: adds the tab if missing, activates it, and opens the panel.
+  const ensureBtwTabOpen = useCallback(() => {
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "btw")) return prev;
+      return [{ kind: "btw", id: BTW_TAB_ID, label: "BTW" }, ...prev];
+    });
+    setActiveFileTabId(BTW_TAB_ID);
+    ensureRightPanelOpen();
+  }, [ensureRightPanelOpen]);
+
   const handleOpenBtwTab = useCallback(() => {
     const alreadyActive = activeFileTabId === BTW_TAB_ID && rightPanelState !== "closed";
     if (alreadyActive) {
@@ -965,13 +980,17 @@ export function AppShell() {
       setRightPanelState("closed");
       return;
     }
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "btw")) return prev;
-      return [{ kind: "btw", id: BTW_TAB_ID, label: "BTW" }, ...prev];
-    });
-    setActiveFileTabId(BTW_TAB_ID);
-    ensureRightPanelOpen();
-  }, [activeFileTabId, rightPanelState, ensureRightPanelOpen]);
+    ensureBtwTabOpen();
+  }, [activeFileTabId, rightPanelState, ensureBtwTabOpen]);
+
+  // `/btw` slash action (and the command-palette path): always open the BTW
+  // tab (never toggle-close it) and bump the focus request so BtwPanel
+  // focuses its input once mounted/visible.
+  const [btwFocusRequest, setBtwFocusRequest] = useState(0);
+  const handleSlashOpenBtw = useCallback(() => {
+    ensureBtwTabOpen();
+    setBtwFocusRequest((n) => n + 1);
+  }, [ensureBtwTabOpen]);
 
   // Open the git diff panel — same pattern as translate / rss / tokens.
   const handleOpenGitDiffTab = useCallback(() => {
@@ -1508,6 +1527,7 @@ export function AppShell() {
                   return next;
                 })}
                 onNewSessionRequest={handleSlashNew}
+                onOpenBtw={handleSlashOpenBtw}
                 onCwdChange={handleCwdPicked}
                 onRenameCompleted={handleSessionRenameCompleted}
                 onSessionNameChange={handleSessionNameChange}
@@ -1683,6 +1703,7 @@ export function AppShell() {
               systemPrompt={systemPrompt}
               thinkingLevel={thinkingLevel}
               onRefresh={refreshSystemPrompt}
+              focusRequest={btwFocusRequest}
             />
           ) : activeFileTab?.kind === "gitDiff" ? (
             <GitPanel
