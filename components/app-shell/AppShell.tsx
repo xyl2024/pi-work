@@ -48,6 +48,7 @@ import { useDisableDefaultTab } from "@/hooks/useDisableDefaultTab";
 import { useInboxUnreadCount } from "@/hooks/useInboxUnreadCount";
 import { useRssUnreadCount } from "@/hooks/useRssUnreadCount";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
+import { ICONS } from "../ui/icons";
 import { MENU, PANEL_LEFT } from "@/lib/client/icon-paths";
 import { ExpandLeftIcon } from "../panels/right-bar/icons";
 import { ExpandRightIcon } from "../ui/animated-icons";
@@ -1772,9 +1773,7 @@ export function AppShell() {
             event.currentTarget.style.background = "transparent";
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 1024 1024" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
-            <path d="M213.333333 768c-12.8 0-21.333333-4.266667-29.866666-12.8-17.066667-17.066667-17.066667-42.666667 0-59.733333L366.933333 512 183.466667 328.533333c-17.066667-17.066667-17.066667-42.666667 0-59.733333s42.666667-17.066667 59.733333 0l213.333333 213.333333c17.066667 17.066667 17.066667 42.666667 0 59.733334l-213.333333 213.333333c-8.533333 8.533333-17.066667 12.8-29.866667 12.8zM810.666667 853.333333h-298.666667c-25.6 0-42.666667-17.066667-42.666667-42.666666s17.066667-42.666667 42.666667-42.666667h298.666667c25.6 0 42.666667 17.066667 42.666667 42.666667s-17.066667 42.666667-42.666667 42.666666z" fill="currentColor" />
-          </svg>
+          <ICONS.terminalBox size={12} />
           {statusBar.os} : {statusBar.shell}
         </button>
         {statusBar.git.branch != null && (
@@ -1804,9 +1803,7 @@ export function AppShell() {
             event.currentTarget.style.background = "transparent";
           }}
         >
-          <svg width="12" height="12" viewBox="0 0 1024 1024" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
-            <path d="M110.933333 451.84L357.546667 204.8l72.106666 72.533333c-10.24 36.266667 6.4 75.946667 39.68 95.146667v236.373333c-25.6 14.506667-42.666667 42.24-42.666666 73.813334a85.333333 85.333333 0 0 0 85.333333 85.333333 85.333333 85.333333 0 0 0 85.333333-85.333333c0-31.573333-17.066667-59.306667-42.666666-73.813334V401.493333l88.32 89.173334c-2.986667 6.4-2.986667 13.653333-2.986667 21.333333a85.333333 85.333333 0 0 0 85.333333 85.333333 85.333333 85.333333 0 0 0 85.333334-85.333333 85.333333 85.333333 0 0 0-85.333334-85.333333c-7.68 0-14.933333 0-21.333333 2.986666L594.346667 320a84.48 84.48 0 0 0-49.066667-99.84c-18.346667-6.826667-37.546667-8.533333-54.613333-3.84L418.133333 144.213333l33.706667-33.28c33.28-33.706667 87.04-33.706667 120.32 0l340.906667 340.906667c33.706667 33.28 33.706667 87.04 0 120.32l-340.906667 340.906667c-33.28 33.706667-87.04 33.706667-120.32 0L110.933333 572.16c-33.706667-33.28-33.706667-87.04 0-120.32z" fill="currentColor" />
-          </svg>
+          <ICONS.gitBranch size={12} />
           <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
             {statusBar.git.branch}
             {statusBar.git.additions > 0 && <span style={{ color: "#16a34a" }}>+{statusBar.git.additions}</span>}

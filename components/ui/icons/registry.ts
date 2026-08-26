@@ -44,6 +44,7 @@ import {
   ToolIcon,
   TrashIcon,
 } from "./primitives";
+import { GitBranchIcon, TerminalBoxIcon } from "./filled";
 import {
   ConversationTreeIcon,
   GitDiffIcon,
@@ -103,6 +104,8 @@ export const ICONS = {
   tokens: TokensChartIcon,
   sun: SunIcon,
   terminal: TerminalGlyphIcon,
+  terminalBox: TerminalBoxIcon,
+  gitBranch: GitBranchIcon,
   tool: ToolIcon,
   trash: TrashIcon,
 } as const satisfies Record<string, ComponentType<never>>;
