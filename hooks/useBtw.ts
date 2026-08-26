@@ -11,6 +11,12 @@
 // MAIN session's RPC events and JSONL writes, and BTW is forbidden
 // from touching either. The two live in independent stores.
 //
+// Since the switch to pure chat (§方案 B), `send()` no longer forwards the
+// main session's model/systemPrompt/tools/context: the server re-reads
+// those live off the main-session wrapper (`btw_context` RPC) so the
+// provider request shares the main session's prompt-cache prefix. The
+// client only sends the user message (+ continuation history).
+//
 // Persistence model (mirrors `lib/client/btw-storage.ts`):
 //   - `user` message is written synchronously to localStorage BEFORE
 //     `fetch()` is fired (handoff §3.3 "user 消息在 send 调用前同步写入")
@@ -59,7 +65,9 @@ export interface UseBtwApi extends BtwState {
   /** Latest user-driven error to surface as a toast / inline. */
   lastError: string | null;
   /** Send a user turn. Persists the user message immediately, then
-   *  fires the SSE request. */
+   *  fires the SSE request. The server re-reads the main session's live
+   *  model/context/tools via the `btw_context` RPC — the client only
+   *  forwards the user message (+ BTW history on continuations). */
   send(text: string): Promise<void>;
   /** Stop the current turn: abort the SSE, drop the in-flight
    *  assistant. The already-written user message stays. */
@@ -76,25 +84,6 @@ export interface UseBtwArgs {
   /** Main session id. When null/undefined, BTW is disabled and the
    *  hook returns an inert API (handoff §2 #14). */
   mainSessionId: string | null;
-  /** Main session cwd snapshot at send time. When null, send() refuses
-   *  to fire (no cwd = no agent = no BTW). */
-  cwd: string | null;
-  /** Model snapshot from the main session, in the same shape as
-   *  `/api/agent/[id]` returns. When null, send() refuses (handoff
-   *  §2 #23). */
-  model: { provider: string; modelId: string } | null;
-  /** Main session's current effective system prompt — passed through
-   *  verbatim to the BTW agent (handoff §2 #11). When null, send()
-   *  refuses. */
-  systemPrompt: string | null;
-  /** Active tools and thinking level copied from the main session. */
-  toolNames: string[];
-  thinkingLevel: string;
-  /** Full main-session messages at the moment the panel is opened;
-   *  used to feed the agent on the FIRST send (handoff §3.4). The
-   *  hook reads this from a ref so it doesn't need to re-subscribe
-   *  on every chat update. */
-  getMainSessionMessages?: () => AgentMessage[];
 }
 
 interface InternalSendState {
@@ -216,7 +205,7 @@ function applyPartialToolResult(
 }
 
 export function useBtw(args: UseBtwArgs): UseBtwApi {
-  const { mainSessionId, cwd, model, systemPrompt, toolNames, thinkingLevel, getMainSessionMessages } = args;
+  const { mainSessionId } = args;
   const enabled = !!mainSessionId;
 
   const [persisted, setPersisted] = useState<BtwPersisted | null>(() =>
@@ -294,14 +283,9 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      if (!mainSessionId || !cwd || !model || !systemPrompt) {
-        const why = !mainSessionId
-          ? "btw.disabled.noSession"
-          : !cwd || !systemPrompt
-            ? "btw.disabled.loading"
-            : "btw.error.modelUnavailable";
-        setLastError(why);
-        setErrorMessage(why);
+      if (!mainSessionId) {
+        setLastError("btw.disabled.noSession");
+        setErrorMessage("btw.disabled.noSession");
         setPhase("error");
         return;
       }
@@ -316,14 +300,10 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
         timestamp: Date.now(),
       };
 
-      // Build the pre-prompt messages:
-      //   - First send (no persisted record yet): use the main session's
-      //     full context + this user message.
-      //   - Continuation: use the persisted BTW history + this user.
+      // First send serialises the main session's full context server-side
+      // (live `btw_context` snapshot); continuations send the persisted
+      // BTW history so the server appends under it verbatim.
       const isInitialContext = !persisted;
-      const baseMessages: AgentMessage[] = isInitialContext
-        ? (getMainSessionMessages?.() ?? [])
-        : (persisted?.messages ?? []);
 
       // §3.3 "user 消息在 send 调用前同步写入" — persist the user message
       // BEFORE firing fetch so a page reload mid-stream still shows the
@@ -338,7 +318,6 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
         : {
             version: 1,
             mainSessionId,
-            modelSnapshot: { provider: model.provider, modelId: model.modelId },
             createdAt: now,
             lastUpdated: now,
             messages: [userMessage],
@@ -354,8 +333,6 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
 
       const controller = new AbortController();
       const assistant = INITIAL_ASSISTANT();
-      assistant.provider = model.provider;
-      assistant.model = model.modelId;
       const state: InternalSendState = {
         controller,
         assistant,
@@ -369,14 +346,11 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             mainSessionId,
-            cwd,
-            model,
-            systemPrompt,
-            toolNames,
-            thinkingLevel,
-            messages: baseMessages,
             userMessage,
             isInitialContext,
+            // Continuation history only: the first-send context is
+            // re-read live server-side from the main-session wrapper.
+            ...(isInitialContext ? {} : { messages: persisted?.messages ?? [] }),
           }),
           signal: controller.signal,
         });
@@ -455,8 +429,6 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
               // Reset the streaming placeholder. Mirrors main chat's
               // behaviour on agent_start.
               state.assistant = INITIAL_ASSISTANT();
-              state.assistant.provider = model!.provider;
-              state.assistant.model = model!.modelId;
               state.toolResults = new Map();
               setStreamingMessage({ ...state.assistant });
               setInFlightToolResults(new Map());
@@ -582,7 +554,7 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
         inFlight.current = null;
       }
     },
-    [cwd, getMainSessionMessages, mainSessionId, model, systemPrompt, toolNames, thinkingLevel, persist, persisted, phase],
+    [mainSessionId, persist, persisted, phase],
   );
 
   // ── stop ────────────────────────────────────────────────────────────

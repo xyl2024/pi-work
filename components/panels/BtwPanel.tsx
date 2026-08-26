@@ -2,10 +2,11 @@
 
 // ── BTW (By the way) panel ──────────────────────────────────────────────
 //
-// Right-side panel that asks a temporary, in-memory, read-only-only
-// agent grounded in the active session's context. Per the handoff, this
-// panel must NEVER write to the main session's JSONL, NEVER enter the
-// main session's RPC registry, and NEVER touch any server-side store.
+// Right-side panel that asks the model a question grounded in the active
+// session's context via a pure-chat call (no agent loop, no tool
+// execution — see `lib/server/btw-chat.ts`). Per the handoff, this panel
+// must NEVER write to the main session's JSONL, NEVER enter the main
+// session's RPC registry, and NEVER touch any server-side store.
 // localStorage (`pi-work:btw:<sessionId>`) is the only durable home.
 //
 // The shell is intentionally minimal:
@@ -33,25 +34,24 @@ import { useBtw } from "@/hooks/useBtw";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { MessageView, CollapseNonceProvider } from "@/components/chat/MessageView";
 import { ICONS } from "@/components/ui/icons";
-import type { AgentMessage, AssistantMessage } from "@/lib/shared/types";
+import type { AssistantMessage } from "@/lib/shared/types";
 
 interface BtwPanelProps {
   /** Main session id — when null the panel renders the "no session"
    *  empty state and the input is disabled. */
   mainSessionId: string | null;
-  /** Main session cwd at send time. */
+  /** Main session cwd — readiness gate only. The pure-chat send no
+   *  longer needs it (no filesystem access). */
   cwd: string | null;
-  /** Main session's current model snapshot. */
+  /** Main session's current model snapshot — readiness gate only. The
+   *  server re-reads the live model via the `btw_context` RPC on send. */
   model: { provider: string; modelId: string } | null;
-  /** Main session's current effective system prompt — passed through
-   *  verbatim to the BTW agent per handoff §2 #11. */
+  /** Main session's current effective system prompt — readiness gate
+   *  only, and mirrored verbatim server-side on send ($2 #11). */
   systemPrompt: string | null;
-  /** Active main-session tools and thinking level. */
-  toolNames: string[];
+  /** Main session's thinking level — used only for the input border
+   *  styling; the send uses the server-side live value. */
   thinkingLevel: string;
-  /** All main-session messages (latest snapshot). Used by the hook
-   *  on the FIRST send (handoff §3.4). */
-  mainSessionMessages: AgentMessage[];
   /** UX fallback: re-check readiness when the panel is stuck on
    *  `btw.disabled.loading` even though a session is open. Wired to
    *  the active controller's systemPrompt refresh in AppShell. */
@@ -66,24 +66,12 @@ export function BtwPanel(props: BtwPanelProps) {
   );
 }
 
-function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, toolNames, thinkingLevel, mainSessionMessages, onRefresh }: BtwPanelProps) {
+function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, thinkingLevel, onRefresh }: BtwPanelProps) {
   const { t } = useI18n();
   const confirm = useConfirm();
   const toast = useToast();
-  const messagesRef = useRef(mainSessionMessages);
-  messagesRef.current = mainSessionMessages;
 
-  const getMainSessionMessages = useCallback(() => messagesRef.current, []);
-
-  const btw = useBtw({
-    mainSessionId,
-    cwd,
-    model,
-    systemPrompt,
-    toolNames,
-    thinkingLevel,
-    getMainSessionMessages,
-  });
+  const btw = useBtw({ mainSessionId });
 
   // Surface quota / quota errors via the global toast so the user is
   // nudged to clear without losing focus on the input.

@@ -1,4 +1,4 @@
-// Smoke test for the server-side context normaliser in btw-agent.ts.
+// Smoke test for the server-side context normaliser in btw-chat.ts.
 // Verifies the field-name renaming that fixes the
 // "tool result's tool id ... not found" 400 from the LLM API: our
 // shared-types `ToolCallContent` uses `{ toolCallId, toolName, input }`,
@@ -28,7 +28,7 @@ function test(name: string, fn: () => void) {
   }
 }
 
-// ── Helpers (kept in sync with lib/server/btw-agent.ts) ────────────────
+// ── Helpers (kept in sync with lib/server/btw-chat.ts) ──────────────────
 function renameToolCallBlock(block: unknown): unknown {
   if (!block || typeof block !== "object") return block;
   const b = block as Record<string, unknown>;

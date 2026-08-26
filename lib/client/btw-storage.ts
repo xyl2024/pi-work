@@ -28,7 +28,10 @@ const BTW_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export interface BtwPersisted {
   version: typeof BTW_STORAGE_VERSION;
   mainSessionId: string;
-  modelSnapshot: { provider: string; modelId: string };
+  /** Snapshot of the provider/model used at record creation. Dropped by
+   *  the pure-chat switch (the server re-reads the live model on every
+   *  send); kept optional so legacy records continue to validate. */
+  modelSnapshot?: { provider: string; modelId: string };
   createdAt: number;
   /** Epoch ms of the latest committed user/assistant write. Drives §3.3
    *  7-day expiry — if (now - lastUpdated) > 7d the whole record is
@@ -176,9 +179,11 @@ function isBtwPersisted(value: unknown): value is BtwPersisted {
   if (typeof v.mainSessionId !== "string") return false;
   if (typeof v.createdAt !== "number" || !Number.isFinite(v.createdAt)) return false;
   if (typeof v.lastUpdated !== "number" || !Number.isFinite(v.lastUpdated)) return false;
-  if (!v.modelSnapshot || typeof v.modelSnapshot !== "object") return false;
-  const ms = v.modelSnapshot as Record<string, unknown>;
-  if (typeof ms.provider !== "string" || typeof ms.modelId !== "string") return false;
+  if ("modelSnapshot" in v) {
+    if (!v.modelSnapshot || typeof v.modelSnapshot !== "object") return false;
+    const ms = v.modelSnapshot as Record<string, unknown>;
+    if (typeof ms.provider !== "string" || typeof ms.modelId !== "string") return false;
+  }
   if (!Array.isArray(v.messages)) return false;
   return true;
 }

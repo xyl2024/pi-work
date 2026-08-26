@@ -537,6 +537,50 @@ export class AgentSessionWrapper {
         };
       }
 
+      case "btw_context": {
+        // Snapshot of the main session's LIVE model-request inputs, used by
+        // the BTW panel to replay the exact same systemPrompt / messages /
+        // tools to the provider (pure chat, no agent loop) so prompt-cache
+        // prefixes line up. Reads the underlying SDK Agent state directly
+        // (state.messages carries SDK-shaped blocks incl. thinking
+        // signatures + toolCall id/name/arguments) — not the UI-rendered
+        // transcript, which would drop those fields.
+        const agent = (this.inner as unknown as {
+          agent?: {
+            state?: {
+              systemPrompt?: string;
+              thinkingLevel?: string;
+              tools?: Array<{
+                name: string;
+                description: string;
+                parameters: unknown;
+                constrainedSampling?: unknown;
+              }>;
+              messages?: unknown[];
+            };
+          };
+        }).agent;
+        const model = this.inner.model;
+        const tools = ((agent?.state?.tools ?? []) as Array<Record<string, unknown>>).map((t) => {
+          const out: Record<string, unknown> = {
+            name: typeof t.name === "string" ? t.name : "",
+            description: typeof t.description === "string" ? t.description : "",
+            parameters: t.parameters,
+          };
+          if (t.constrainedSampling !== undefined) {
+            out.constrainedSampling = t.constrainedSampling;
+          }
+          return out;
+        });
+        return {
+          model: model ? { provider: model.provider, id: model.id } : undefined,
+          systemPrompt: agent?.state?.systemPrompt ?? "",
+          thinkingLevel: agent?.state?.thinkingLevel ?? "off",
+          tools,
+          messages: agent?.state?.messages ?? [],
+        };
+      }
+
       case "set_model": {
         const { provider, modelId } = command as { provider: string; modelId: string };
         const runtime = this.inner.modelRuntime;

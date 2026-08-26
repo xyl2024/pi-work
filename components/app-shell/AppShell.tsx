@@ -402,7 +402,7 @@ export function AppShell() {
   // Session-level UI state (branch tree, system prompt, stats, context usage)
   // is owned by each tab controller. Only the active controller projects its
   // snapshot into this module-level bridge for the chat footer/right panels.
-  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, currentModel, mainSessionMessages, thinkingLevel, toolNames } = useSessionUiState();
+  const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, currentModel, thinkingLevel } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
   // Trigger the active session controller to re-fetch & re-publish its
   // systemPrompt — surfaced as the BTW panel's header refresh button so a
@@ -415,12 +415,6 @@ export function AppShell() {
   const [toolsBySession, setToolsBySession] = useState<Record<string, ToolInfo[]>>({});
   const toolsFetchedRef = useRef<Set<string>>(new Set());
   const tools = selectedSession ? toolsBySession[selectedSession.id] ?? [] : [];
-  // Prefer the live get_tools snapshot here. The session controller's
-  // availableTools is lazy-loaded for the chat popover and can therefore be
-  // empty even though the main agent already has active tools.
-  const btwToolNames = tools.length > 0
-    ? tools.filter((tool) => tool.active).map((tool) => tool.name)
-    : toolNames;
 
   const fetchTools = useCallback(async (sessionId: string) => {
     if (toolsFetchedRef.current.has(sessionId)) return;
@@ -1686,9 +1680,7 @@ export function AppShell() {
               cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
               model={currentModel}
               systemPrompt={systemPrompt}
-              toolNames={btwToolNames}
               thinkingLevel={thinkingLevel}
-              mainSessionMessages={mainSessionMessages}
               onRefresh={refreshSystemPrompt}
             />
           ) : activeFileTab?.kind === "gitDiff" ? (
