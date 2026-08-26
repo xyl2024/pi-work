@@ -111,6 +111,29 @@ export function TaskConfigTab({ task, modelIcons, onEdit }: Props) {
           </span>
         }
       />
+      <ConfigRow
+        label={t("Notifications")}
+        value={
+          task.notification && task.notification.channels.length > 0 ? (
+            <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span>
+                {[
+                  task.notification.onSuccess ? t("On success") : null,
+                  task.notification.onError ? t("On error") : null,
+                  task.notification.onTimeout ? t("On timeout") : null,
+                ].filter(Boolean).join(" · ") || t("No outcome selected")}
+              </span>
+              {task.notification.channels.map((c) => (
+                <span key={`${c.type}:${c.recipientId}`} style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  {c.type}: <code style={mono}>{c.recipientId}</code>
+                </span>
+              ))}
+            </span>
+          ) : (
+            <Missing>{t("Not set")}</Missing>
+          )
+        }
+      />
     </div>
   );
 }

@@ -13,7 +13,9 @@
 import { Cron } from "croner";
 import { existsSync } from "fs";
 import { getSchedulerDb } from "./db";
+import { sanitizeNotification } from "@/lib/server/notifications";
 import { createLogger } from "../logger";
+import type { TaskNotification } from "@/lib/shared/notifications";
 
 const log = createLogger("scheduler-store");
 
@@ -48,6 +50,8 @@ export interface ScheduledTask {
   maxLifetimeMs: number | null;
   /** IANA timezone used to interpret this task's cron expression. */
   timezone: string;
+  /** Notification config (channels + which outcomes trigger). null = off. */
+  notification: TaskNotification | null;
   createdAt: number;
   updatedAt: number;
   lastRunAt: number | null;
@@ -79,6 +83,7 @@ export interface CreateTaskInput {
   toolNames?: string[] | null;
   maxLifetimeMs?: number | null;
   timezone?: string;
+  notification?: TaskNotification | null;
 }
 
 export interface UpdateTaskInput {
@@ -94,6 +99,13 @@ export interface UpdateTaskInput {
   toolNames?: string[] | null;
   maxLifetimeMs?: number | null;
   timezone?: string;
+  notification?: TaskNotification | null;
+}
+
+function validateNotification(raw: unknown): TaskNotification | null {
+  if (raw === null || raw === undefined) return null;
+  // sanitizeNotification returns null for empty input; treat as no-notification.
+  return sanitizeNotification(raw);
 }
 
 export interface RecordRunEndInput {
@@ -250,6 +262,7 @@ interface Row {
   tool_names: string | null;
   max_lifetime_ms: number | null;
   timezone: string | null;
+  notification: string | null;
   created_at: number;
   updated_at: number;
   last_run_at: number | null;
@@ -262,6 +275,16 @@ function parseToolNames(raw: string | null): string[] | null {
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseNotification(raw: string | null): TaskNotification | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as TaskNotification;
+    return parsed && typeof parsed === "object" ? parsed : null;
   } catch {
     return null;
   }
@@ -289,6 +312,7 @@ function rowToTask(row: Row): ScheduledTask {
     toolNames: parseToolNames(row.tool_names),
     maxLifetimeMs: row.max_lifetime_ms,
     timezone,
+    notification: parseNotification(row.notification),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastRunAt: row.last_run_at,
@@ -357,6 +381,7 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
   const toolNames = validateToolNames(input.toolNames);
   const maxLifetimeMs = validateMaxLifetimeMs(input.maxLifetimeMs);
   const timezone = validateTimezone(input.timezone);
+  const notification = validateNotification(input.notification);
   const now = Date.now();
   const id = newId();
   const nextRunAt = computeNextRun(cron, enabled, timezone);
@@ -365,14 +390,15 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
     .prepare(
       `INSERT INTO scheduled_tasks
         (id, name, cron, cwd, prompt, enabled, provider, model_id, thinking_level, tool_names,
-         max_lifetime_ms, timezone, created_at, updated_at, last_run_at, next_run_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
+         max_lifetime_ms, timezone, notification, created_at, updated_at, last_run_at, next_run_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
     )
     .run(
       id, name, cron, cwd, prompt, enabled ? 1 : 0,
       provider, modelId, thinkingLevel,
       toolNames ? JSON.stringify(toolNames) : null,
       maxLifetimeMs, timezone,
+      notification ? JSON.stringify(notification) : null,
       now, now, nextRunAt,
     );
 
@@ -396,6 +422,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
   if (input.toolNames !== undefined) patch.toolNames = validateToolNames(input.toolNames);
   if (input.maxLifetimeMs !== undefined) patch.maxLifetimeMs = validateMaxLifetimeMs(input.maxLifetimeMs);
   if (input.timezone !== undefined) patch.timezone = validateTimezone(input.timezone);
+  if (input.notification !== undefined) patch.notification = validateNotification(input.notification);
 
   const merged: ScheduledTask = { ...existing, ...patch };
   const nextRunAt = computeNextRun(merged.cron, merged.enabled, merged.timezone);
@@ -405,7 +432,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
       `UPDATE scheduled_tasks SET
         name = ?, cron = ?, cwd = ?, prompt = ?, enabled = ?,
         provider = ?, model_id = ?, thinking_level = ?, tool_names = ?,
-        max_lifetime_ms = ?, timezone = ?,
+        max_lifetime_ms = ?, timezone = ?, notification = ?,
         updated_at = ?, next_run_at = ?
        WHERE id = ?`
     )
@@ -414,6 +441,7 @@ export function updateTask(input: UpdateTaskInput): ScheduledTask {
       merged.provider, merged.modelId, merged.thinkingLevel,
       merged.toolNames ? JSON.stringify(merged.toolNames) : null,
       merged.maxLifetimeMs, merged.timezone,
+      merged.notification ? JSON.stringify(merged.notification) : null,
       Date.now(), nextRunAt, input.id,
     );
 

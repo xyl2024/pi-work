@@ -19,6 +19,7 @@ import { startRpcSession } from "@/lib/server/rpc-manager";
 import type { AgentEvent } from "@/lib/server/rpc-manager";
 import { recordRunEnd, type ScheduledTask } from "./store";
 import { pushMessage } from "@/lib/server/inbox-store";
+import { notify, shouldNotify } from "@/lib/server/notifications";
 import { createLogger } from "../logger";
 
 const log = createLogger("scheduler/runner");
@@ -77,6 +78,27 @@ function safePush(taskId: string, input: Parameters<typeof pushMessage>[0]): voi
   }
 }
 
+/** Fire task notifications (best-effort, never blocks the run). */
+function dispatchNotifications(
+  task: ScheduledTask,
+  outcome: "success" | "error" | "timeout",
+  text: string,
+  detail: string,
+  runId?: string,
+): void {
+  if (!shouldNotify(task.notification, outcome)) return;
+  void notify(task.notification!, {
+    taskId: task.id,
+    taskName: task.name,
+    outcome,
+    text,
+    detail,
+    runId,
+  }).catch((err) => {
+    log.warn("notification dispatch failed", { taskId: task.id, error: String(err) });
+  });
+}
+
 export function runTask(task: ScheduledTask, runId: string): Promise<void> {
   const prev = taskChains.get(task.id) ?? Promise.resolve();
   const next = prev
@@ -100,6 +122,7 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       title: task.name,
       payload: { body: `cwd missing: ${task.cwd}` },
     });
+    dispatchNotifications(task, "error", `cwd missing: ${task.cwd}`, msg, runId);
     return;
   }
 
@@ -151,6 +174,7 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       title: task.name,
       payload: { body: reply ? reply.slice(0, 200) : "Task completed" },
     });
+    dispatchNotifications(task, "success", reply ? reply.slice(0, 120) : "Task completed", reply || "", runId);
   } catch (err) {
     const errorStr = err instanceof Error ? err.message : String(err);
     const isTimeout = err instanceof MaxLifetimeExceededError;
@@ -165,6 +189,12 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       title: task.name,
       payload: { body: errorStr.slice(0, 200) },
     });
+    // Notify on real errors and timeouts; interruptions from server restart
+    // are surfaced in the runs tab but not blared to a phone.
+    if (status === "error" || status === "timeout") {
+      const label = status === "timeout" ? "Timeout" : "Error";
+      dispatchNotifications(task, status, `${label}: ${task.name}`, errorStr, runId);
+    }
   }
 }
 

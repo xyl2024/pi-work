@@ -18,6 +18,7 @@ import { Cron } from "croner";
 import { getSchedulerDb } from "./db";
 import { recordRunStart, type ScheduledTask } from "./store";
 import { runTask } from "./runner";
+import type { TaskNotification } from "@/lib/shared/notifications";
 import { createLogger } from "../logger";
 
 const log = createLogger("scheduler/loop");
@@ -96,10 +97,21 @@ interface TaskRow {
   tool_names: string | null;
   max_lifetime_ms: number | null;
   timezone: string | null;
+  notification: string | null;
   created_at: number;
   updated_at: number;
   last_run_at: number | null;
   next_run_at: number | null;
+}
+
+function parseNotification(raw: string | null): TaskNotification | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as TaskNotification;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function rowToTask(row: TaskRow): ScheduledTask {
@@ -125,6 +137,7 @@ function rowToTask(row: TaskRow): ScheduledTask {
     toolNames,
     maxLifetimeMs: row.max_lifetime_ms,
     timezone: row.timezone ?? "UTC",
+    notification: parseNotification(row.notification),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastRunAt: row.last_run_at,
@@ -137,7 +150,7 @@ function loadDueTasks(now: number): ScheduledTask[] {
   const rows = getSchedulerDb()
     .prepare(
       `SELECT id, name, cron, cwd, prompt, enabled, provider, model_id,
-              thinking_level, tool_names, max_lifetime_ms, timezone, created_at, updated_at,
+              thinking_level, tool_names, max_lifetime_ms, timezone, notification, created_at, updated_at,
               last_run_at, next_run_at
          FROM scheduled_tasks
         WHERE enabled = 1 AND next_run_at IS NOT NULL AND next_run_at <= ?

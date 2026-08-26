@@ -44,6 +44,7 @@ const SCHEMA = `
     tool_names      TEXT,
     max_lifetime_ms INTEGER,
     timezone        TEXT,
+    notification    TEXT,
     created_at      INTEGER NOT NULL,
     updated_at      INTEGER NOT NULL,
     last_run_at     INTEGER,
@@ -90,6 +91,11 @@ function runMigrations(db: Database.Database): void {
     // legacy tasks, then persists it together with a corrected next_run_at.
     db.exec("ALTER TABLE scheduled_tasks ADD COLUMN timezone TEXT");
     log.info("migration: added scheduled_tasks.timezone column");
+  }
+  const hasNotification = taskColumns.some((c) => c.name === "notification");
+  if (!hasNotification) {
+    db.exec("ALTER TABLE scheduled_tasks ADD COLUMN notification TEXT");
+    log.info("migration: added scheduled_tasks.notification column");
   }
 }
 

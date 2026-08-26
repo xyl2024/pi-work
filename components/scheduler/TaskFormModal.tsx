@@ -27,6 +27,7 @@ import { NumberStepper } from "@/components/ui/NumberStepper";
 import { apiFetch } from "./utils";
 import { pickClosestAvailableThinkingLevel, THINKING_LEVEL_ORDER } from "@/lib/shared/thinking-level-utils";
 import type { ModelMeta, ScheduledTask, TaskCreatePayload, TaskUpdatePayload } from "./types";
+import type { TaskNotification } from "@/lib/shared/notifications";
 import {
   btnGhost,
   btnPrimary,
@@ -56,6 +57,13 @@ interface FormState {
   toolNames: string; // comma-separated
   /** Max lifetime in minutes. Empty / 0 ⇒ use the runner's default (2h). */
   maxLifetimeMinutes: string;
+  // Notification
+  notifyEnabled: boolean;
+  notifySuccess: boolean;
+  notifyError: boolean;
+  notifyTimeout: boolean;
+  channelType: string;
+  recipientId: string;
 }
 
 const EMPTY: FormState = {
@@ -70,6 +78,12 @@ const EMPTY: FormState = {
   toolMode: "all",
   toolNames: "",
   maxLifetimeMinutes: "",
+  notifyEnabled: false,
+  notifySuccess: true,
+  notifyError: true,
+  notifyTimeout: true,
+  channelType: "wechat",
+  recipientId: "",
 };
 
 // Server-side bounds (kept in sync with lib/scheduler-store.ts).
@@ -234,17 +248,26 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
 
   const [form, setForm] = useState<FormState>(EMPTY);
   const [saving, setSaving] = useState(false);
-  const [section, setSection] = useState<"basics" | "schedule">("basics");
+  const [section, setSection] = useState<"basics" | "schedule" | "notifications">("basics");
+  /** Known WeChat contact ids (xxx@im.wechat), loaded on open for the
+   *  recipient picker. */
+  const [contacts, setContacts] = useState<string[]>([]);
   /** Validation errors are suppressed until the user first clicks Save;
    *  flipping this on reveals field red-text and the per-section nav dots. */
   const [submitted, setSubmitted] = useState(false);
 
   // Initial / reset form whenever the open state changes (a different
-  // task, or a fresh create).
+  // task, or a fresh create). Also refreshes the available WeChat contact
+  // list so the recipient picker reflects current contacts.
   useEffect(() => {
     if (!open) return;
+    // Best-effort: load known WeChat contacts for the recipient dropdown.
+    apiFetch<{ contacts?: { userId: string }[] }>("/api/weixin/contacts")
+      .then((res) => setContacts((res.contacts ?? []).map((c) => c.userId)))
+      .catch(() => setContacts([]));
     if (task) {
       const toolNames = task.toolNames ?? [];
+      const n = task.notification;
       setForm({
         name: task.name,
         cron: task.cron,
@@ -259,6 +282,12 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         toolMode: task.toolNames === null ? "all" : toolNames.length === 0 ? "none" : "custom",
         toolNames: toolNames.join(", "),
         maxLifetimeMinutes: formatMaxLifetimeForForm(task.maxLifetimeMs),
+        notifyEnabled: !!n && n.channels.length > 0,
+        notifySuccess: n?.onSuccess ?? true,
+        notifyError: n?.onError ?? true,
+        notifyTimeout: n?.onTimeout ?? true,
+        channelType: n?.channels[0]?.type ?? "wechat",
+        recipientId: n?.channels[0]?.recipientId ?? "",
       });
     } else {
       setForm({ ...EMPTY, cwd: initialCwd ?? "" });
@@ -294,9 +323,14 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   // feedback, not form-level required-field validation, so it's intentional
   // that it surfaces before submit.
   const cronError = submitted && !form.cronValid ? t("Schedule syntax error") : null;
+  const recipientId = form.recipientId.trim();
+  const recipientError = (submitted && form.notifyEnabled && !recipientId)
+    ? t("Please enter a WeChat recipient")
+    : null;
   const errors: Record<string, string | null> = {
     basics: nameError ?? promptError ?? cwdError ?? modelError ?? thinkingError,
     schedule: cronError ?? maxLifetimeError,
+    notifications: recipientError,
   };
 
   const submit = async () => {
@@ -304,6 +338,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
     // First click reveals validation; subsequent edits keep the red text
     // visible until the next successful submit (which closes the modal).
     setSubmitted(true);
+    const notifRecipientRequired = form.notifyEnabled && !recipientId;
     const hasError =
       !form.name.trim() ||
       !form.cwd.trim() ||
@@ -312,11 +347,12 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
       !form.modelId.trim() ||
       !form.thinkingLevel.trim() ||
       !form.cronValid ||
-      (maxLifetimeRaw.length > 0 && maxLifetimeMs === null);
+      (maxLifetimeRaw.length > 0 && maxLifetimeMs === null) ||
+      notifRecipientRequired;
     if (hasError) {
       onToast("error", t("Please fix form errors first"));
       // Jump to the first section that has an error
-      const firstError = (["basics", "schedule"] as const).find((s) => {
+      const firstError = (["basics", "schedule", "notifications"] as const).find((s) => {
         if (s === "basics")
           return (
             !form.name.trim() ||
@@ -327,6 +363,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
             !form.thinkingLevel.trim()
           );
         if (s === "schedule") return !form.cronValid;
+        if (s === "notifications") return notifRecipientRequired;
         return false;
       });
       if (firstError) setSection(firstError);
@@ -339,6 +376,17 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
       else if (form.toolMode === "none") toolNames = [];
       else toolNames = form.toolNames.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
 
+      // Build the notification payload: null (off) unless enabled + recipient.
+      const notification: TaskNotification | null =
+        form.notifyEnabled && recipientId
+          ? {
+              onSuccess: form.notifySuccess,
+              onError: form.notifyError,
+              onTimeout: form.notifyTimeout,
+              channels: [{ type: form.channelType, recipientId }],
+            }
+          : null;
+
       const body: TaskCreatePayload | TaskUpdatePayload = {
         name: form.name.trim(),
         cron: form.cron.trim(),
@@ -348,6 +396,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         modelId: form.modelId.trim() || null,
         thinkingLevel: form.thinkingLevel.trim() || null,
         toolNames: form.toolMode === "custom" && toolNames && toolNames.length > 0 ? toolNames : toolNames ?? null,
+        notification,
         // null = use runner default; otherwise send the parsed ms.
         maxLifetimeMs: form.maxLifetimeMinutes.trim() === "" ? null : maxLifetimeMs,
         // Cron is wall-clock based; persist the browser's IANA timezone so a
@@ -441,6 +490,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
             {([
               { id: "basics", label: t("Basic config") },
               { id: "schedule", label: t("Scheduler") },
+              { id: "notifications", label: t("Notifications") },
             ] as const).map((s) => {
               const err = errors[s.id];
               const active = section === s.id;
@@ -484,6 +534,9 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
             )}
             {section === "schedule" && (
               <ScheduleSection form={form} update={update} cronError={cronError} maxLifetimeError={maxLifetimeError} />
+            )}
+            {section === "notifications" && (
+              <NotificationsSection form={form} update={update} contacts={contacts} error={recipientError} />
             )}
           </div>
         </div>
@@ -588,6 +641,94 @@ function ScheduleSection({ form, update, cronError, maxLifetimeError }: { form: 
         </div>
       </Field>
     </div>
+  );
+}
+
+function NotificationsSection({ form, update, contacts, error }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; contacts: string[]; error: string | null }) {
+  const { t } = useI18n();
+
+  if (!form.notifyEnabled) {
+    return (
+      <div>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 12 }}>
+          <input
+            type="checkbox"
+            checked={form.notifyEnabled}
+            onChange={(e) => update("notifyEnabled", e.target.checked)}
+          />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t("Send notifications when this task runs")}</span>
+        </label>
+        <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>
+          {t("Notification hint")}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={form.notifyEnabled}
+          onChange={(e) => update("notifyEnabled", e.target.checked)}
+        />
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t("Send notifications when this task runs")}</span>
+      </label>
+
+      <Field label={t("Notify on outcome")}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+          <OutcomeToggle label={t("On success")} checked={form.notifySuccess} onChange={(v) => update("notifySuccess", v)} />
+          <OutcomeToggle label={t("On error")} checked={form.notifyError} onChange={(v) => update("notifyError", v)} />
+          <OutcomeToggle label={t("On timeout")} checked={form.notifyTimeout} onChange={(v) => update("notifyTimeout", v)} />
+        </div>
+      </Field>
+
+      <Field label={t("Channel")}>
+        <select
+          value={form.channelType}
+          onChange={(e) => update("channelType", e.target.value)}
+          style={{ ...inputStyle, maxWidth: 260 }}
+        >
+          <option value="wechat">{t("WeChat")}</option>
+        </select>
+      </Field>
+
+      <Field
+        label={t("Recipient")}
+        hint={t("Recipient hint")}
+        error={error}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <input
+            value={form.recipientId}
+            onChange={(e) => update("recipientId", e.target.value)}
+            placeholder="xxx@im.wechat"
+            style={inputMonoStyle}
+            list="wechat-recipient-options"
+          />
+          {contacts.length > 0 && (
+            <datalist id="wechat-recipient-options">
+              {contacts.map((id) => <option key={id} value={id} />)}
+            </datalist>
+          )}
+          {contacts.length > 0 && (
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              {t("Known contacts")}: {contacts.slice(0, 5).join(", ")}{contacts.length > 5 ? "…" : ""}
+            </span>
+          )}
+        </div>
+      </Field>
+    </div>
+  );
+}
+
+function OutcomeToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span style={{ fontSize: 12, color: "var(--text)" }}>{label}</span>
+    </label>
   );
 }
 

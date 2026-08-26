@@ -55,6 +55,7 @@ export async function POST(req: Request) {
       toolNames: body.toolNames,
       maxLifetimeMs: body.maxLifetimeMs,
       timezone: body.timezone,
+      notification: body.notification,
     });
     reschedule();
     log.info("task created via api", { id: task.id, durationMs: elapsedMs(startedAt) });

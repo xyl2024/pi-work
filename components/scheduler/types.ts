@@ -9,6 +9,8 @@
  * server, the resulting TypeScript error here is the canary.
  */
 
+import type { TaskNotification } from "@/lib/shared/notifications";
+
 export type TaskRunStatus = "running" | "success" | "error" | "timeout" | "interrupted";
 
 export interface ScheduledTask {
@@ -30,6 +32,8 @@ export interface ScheduledTask {
   maxLifetimeMs: number | null;
   /** IANA timezone used to interpret the cron expression. */
   timezone: string;
+  /** Notification config (channels + which outcomes trigger). null = off. */
+  notification: TaskNotification | null;
   createdAt: number;
   updatedAt: number;
   lastRunAt: number | null;
@@ -71,6 +75,7 @@ export interface TaskCreatePayload {
   toolNames?: string[] | null;
   maxLifetimeMs?: number | null;
   timezone?: string;
+  notification?: TaskNotification | null;
 }
 
 /** Match `UpdateTaskInput` on the server. */
@@ -87,6 +92,7 @@ export interface TaskUpdatePayload {
   toolNames?: string[] | null;
   maxLifetimeMs?: number | null;
   timezone?: string;
+  notification?: TaskNotification | null;
 }
 
 /**

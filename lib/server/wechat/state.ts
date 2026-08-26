@@ -3,11 +3,15 @@
  *
  * Credentials:    ~/.pi-work/wechat/account.json (chmod 600)
  * Login sessions: in-memory Map, lost on restart (intentional — user re-scans).
- * Contacts:       in-memory Map keyed by accountId → userId → WeChatContact.
- *                 Lost on restart (intentional — fresh slate after server bounce).
+ * Contacts:       persisted to ~/.pi-work/wechat/contacts.json, loaded into an
+ *                 in-memory Map (accountId → userId → WeChatContact) as a
+ *                 read cache. recordContact writes through to disk so restarts
+ *                 keep known @im.wechat ids (useful for outbound-only flows
+ *                 like scheduled-task notifications, which never see an
+ *                 inbound message again to jog the cache).
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, chmodSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import { homedir } from "os";
 import { randomUUID } from "crypto";
 import { createLogger } from "@/lib/server/logger";
@@ -154,31 +158,68 @@ export function dropSession(sessionKey: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory contact list (per accountId)
+// Persistent contact list (per accountId)
 // ---------------------------------------------------------------------------
+//
+// Contacts live on disk (`contacts.json`) so @im.wechat sender ids survive a
+// server restart. The in-memory Map is a read-through cache: monitor tick
+// calls recordContact frequently enough (every poll with a message) that a
+// disk write per message is fine, and the cache keeps listContacts cheap.
+// A single file keyed by accountId (rather than one file per account) keeps
+// the filename free of any account-controlled characters.
 
 const contacts = new Map<string, Map<string, WeChatContact>>();
 
+function contactsPath(): string {
+  return join(wechatDir(), "contacts.json");
+}
+
+/** Read the whole contact store from disk. Corruption → empty store. */
+function loadContactsStore(): Record<string, WeChatContact[]> {
+  const p = contactsPath();
+  if (!existsSync(p)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(p, "utf8")) as Record<string, WeChatContact[]>;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) return raw;
+  } catch (err) {
+    log.warn("failed to read contacts store", { error: String(err) });
+  }
+  return {};
+}
+
+/** Atomic-ish write of the full contact store. Best-effort. */
+function saveContactsStore(store: Record<string, WeChatContact[]>): void {
+  const p = contactsPath();
+  try {
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, JSON.stringify(store, null, 2), "utf8");
+    chmodSync(p, 0o600);
+  } catch (err) {
+    log.warn("failed to persist contacts store", { error: String(err) });
+  }
+}
+
+/** Hydrate a contact cache bucket from disk (once, lazily). */
 function getContactsBucket(accountId: string): Map<string, WeChatContact> {
   let bucket = contacts.get(accountId);
-  if (!bucket) {
-    bucket = new Map();
-    contacts.set(accountId, bucket);
-  }
+  if (bucket) return bucket;
+  const persisted = loadContactsStore()[accountId] ?? [];
+  bucket = new Map(persisted.map((c) => [c.userId, c]));
+  contacts.set(accountId, bucket);
   return bucket;
 }
 
 /** List all known contacts for an account, most recently seen first. */
 export function listContacts(accountId: string): WeChatContact[] {
-  const bucket = contacts.get(accountId);
-  if (!bucket) return [];
+  const bucket = getContactsBucket(accountId);
   return Array.from(bucket.values()).sort((a, b) => (a.lastSeen < b.lastSeen ? 1 : -1));
 }
 
 /**
  * Record (or update) a contact based on an inbound message. Called from
  * the monitor loop. Updates `lastSeen` / `messageCount` / preview and
- * refreshes the cached context token.
+ * refreshes the cached context token. Persists to disk so the sender id
+ * survives a server restart.
  */
 export function recordContact(
   accountId: string,
@@ -198,11 +239,20 @@ export function recordContact(
     contextToken: contextToken ?? existing?.contextToken,
   };
   bucket.set(userId, next);
+  // Write-through: rewrite only this account's bucket, keep the rest intact.
+  const store = loadContactsStore();
+  store[accountId] = Array.from(bucket.values());
+  saveContactsStore(store);
   log.debug("contact recorded", { accountId, userId, messageCount: next.messageCount });
   return next;
 }
 
-/** Clear all contacts for an account (called on logout). */
+/** Clear all contacts for an account (memory + disk). Called on logout. */
 export function clearContacts(accountId: string): void {
   contacts.delete(accountId);
+  const store = loadContactsStore();
+  if (accountId in store) {
+    delete store[accountId];
+    saveContactsStore(store);
+  }
 }

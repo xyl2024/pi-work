@@ -186,4 +186,20 @@ export const scheduler = {
   "Long-running": "长时间运行",
   "Long-running run warning": "该任务已运行超过 10 分钟，agent 仍在正常工作，可继续等待真实结果",
   "default": "默认",
+
+  // Notifications
+  "Notifications": "通知",
+  "Send notifications when this task runs": "任务运行时发送通知",
+  "Notification hint": "在任务运行完成、失败或超时时，通过配置的渠道（如微信）发送通知。",
+  "Notify on outcome": "通知时机",
+  "On success": "成功时",
+  "On error": "失败时",
+  "On timeout": "超时时",
+  "Channel": "通知渠道",
+  "WeChat": "微信",
+  "Recipient": "接收人",
+  "Recipient hint": "微信接收人的 @im.wechat 用户 ID，可从已知联系人中选择或手动输入",
+  "Please enter a WeChat recipient": "请输入微信接收人",
+  "Known contacts": "已知联系人",
+  "No outcome selected": "未选择任何通知时机",
 } as const;
