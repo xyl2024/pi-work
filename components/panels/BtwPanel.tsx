@@ -27,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { useI18n } from "@/hooks/useI18n";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
+import { IconButton } from "@/components/ui/IconButton";
 import { useBtw } from "@/hooks/useBtw";
 import { MessageView, CollapseNonceProvider } from "@/components/chat/MessageView";
 import { ICONS } from "@/components/ui/icons";
@@ -155,49 +156,31 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, mainSessionMes
           gap: 8,
           padding: "8px 12px",
           borderBottom: "1px solid var(--border)",
-          background: "var(--bg-subtle)",
+          background: "transparent",
         }}
       >
         <span
-          aria-hidden
           style={{
             fontFamily: "var(--font-mono)",
             fontWeight: 700,
             fontSize: 10,
-            letterSpacing: 0.8,
+            letterSpacing: 0.6,
             color: "var(--accent)",
             padding: "2px 6px",
             borderRadius: 4,
             background: "var(--accent-soft, rgba(83,179,203,0.12))",
           }}
         >
-          BTW
+          By the way
         </span>
-        <span style={{ flex: 1, color: "var(--text-muted)", fontSize: 12 }}>
-          {t("btw.title")}
-        </span>
-        <button
-          type="button"
+        <span style={{ flex: 1 }} />
+        <IconButton
+          label={t("btw.clearButton")}
+          icon={<ICONS.trash size={13} />}
           onClick={() => void handleClear()}
           disabled={btw.messages.length === 0}
-          aria-label={t("btw.clearButton")}
-          title={t("btw.clearButton")}
-          style={{
-            background: "transparent",
-            border: "1px solid var(--border)",
-            color: "var(--text-muted)",
-            borderRadius: 4,
-            padding: "3px 8px",
-            fontSize: 11,
-            cursor: btw.messages.length === 0 ? "not-allowed" : "pointer",
-            opacity: btw.messages.length === 0 ? 0.5 : 1,
-          }}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <ICONS.close size={11} />
-            {t("btw.clearButton")}
-          </span>
-        </button>
+          size="sm"
+        />
       </div>
 
       {/* Body */}
@@ -242,7 +225,7 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, mainSessionMes
           flexShrink: 0,
           padding: "8px 12px 10px 12px",
           borderTop: "1px solid var(--border)",
-          background: "var(--bg-subtle)",
+          background: "transparent",
         }}
       >
         {disabledReason && (
@@ -263,8 +246,8 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, mainSessionMes
             alignItems: "flex-end",
             gap: 8,
             border: "1px solid var(--border)",
-            borderRadius: 6,
-            padding: "6px 8px",
+            borderRadius: 12,
+            padding: "6px 10px",
             background: "var(--bg)",
           }}
         >
@@ -274,7 +257,6 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, mainSessionMes
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
             onInput={handleInput}
-            placeholder={t("btw.placeholder")}
             disabled={isDisabled}
             rows={1}
             aria-label={t("btw.placeholder")}
@@ -300,22 +282,25 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, mainSessionMes
               type="button"
               onClick={() => btw.stop()}
               aria-label={t("btw.stop")}
+              title={t("btw.stop")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
+                justifyContent: "center",
                 gap: 4,
-                background: "transparent",
+                flexShrink: 0,
+                width: 30,
+                height: 30,
+                padding: 0,
+                background: "var(--bg-panel)",
                 border: "1px solid var(--border)",
                 color: "var(--text)",
-                borderRadius: 4,
-                padding: "4px 8px",
-                fontSize: 11,
+                borderRadius: "50%",
                 cursor: "pointer",
-                flexShrink: 0,
+                transition: "background 0.15s",
               }}
             >
-              <span style={{ display: "inline-block", width: 8, height: 8, background: "currentColor", borderRadius: 1 }} aria-hidden />
-              {t("btw.stop")}
+              <ICONS.stop size={13} />
             </button>
           ) : (
             <button
@@ -329,25 +314,29 @@ function BtwPanelInner({ mainSessionId, cwd, model, systemPrompt, mainSessionMes
               }}
               disabled={isDisabled || !draft.trim()}
               aria-label={t("Send")}
+              title={t("Send")}
               style={{
-                background: "transparent",
-                border: "1px solid var(--border)",
-                color: !isDisabled && draft.trim() ? "var(--accent)" : "var(--text-dim)",
-                borderRadius: 4,
-                padding: "4px 8px",
-                fontSize: 11,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                width: 30,
+                height: 30,
+                padding: 0,
+                background: !isDisabled && draft.trim() ? "var(--accent)" : "var(--bg-panel)",
+                border: "none",
+                borderRadius: "50%",
+                color: !isDisabled && draft.trim() ? "#fff" : "var(--text-dim)",
                 cursor: !isDisabled && draft.trim() ? "pointer" : "not-allowed",
                 opacity: !isDisabled && draft.trim() ? 1 : 0.6,
-                flexShrink: 0,
+                boxShadow: !isDisabled && draft.trim() ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
+                transition: "background 0.15s, box-shadow 0.15s",
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <line x1="22" y1="2" x2="11" y2="13" />
-                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                </svg>
-                {t("Send")}
-              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
             </button>
           )}
         </div>

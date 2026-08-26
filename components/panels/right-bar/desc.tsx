@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/icons";
 import {
   ContextDocumentIcon,
+  MessageSquareMoreIcon,
   PencilIcon,
   TranslateIcon,
   JsonBracesIcon,
@@ -314,10 +315,10 @@ const contextDescriptor: RightBarDescriptor = {
 };
 
 // BTW (By the way): session-bound, reads from the active main session.
-// Disabled when there's no stable sessionId yet (handoff §2 #14), and
-// shows a small textual mark in place of an icon so the user can spot it
-// without learning a new glyph — the button label itself stays the
-// short all-caps "BTW" per the handoff's i18n rules.
+// Disabled when there's no stable sessionId yet (handoff §2 #14). The
+// button shows the animated speech-bubble-with-dots glyph so the user
+// can spot it without reading, while the tooltip keeps the "Open BTW"
+// label per the handoff's i18n rules.
 const btwDescriptor: RightBarDescriptor = {
   id: "btw",
   kind: "configurable",
@@ -325,22 +326,9 @@ const btwDescriptor: RightBarDescriptor = {
   labelKey: "Open BTW",
   isActive: (ctx) => ctx.activeTabKind === "btw",
   isDisabled: (ctx) => !ctx.selectedSessionId,
-  // Tiny text mark — mirrors the tab-bar glyph so the column + the tab
-  // are visually consistent.
-  content: () => (
-    <span
-      aria-hidden
-      style={{
-        fontFamily: "var(--font-mono)",
-        fontSize: 9,
-        fontWeight: 700,
-        letterSpacing: 0.6,
-        color: "var(--text-muted)",
-      }}
-    >
-      BTW
-    </span>
-  ),
+  // Speech-bubble-with-dots glyph — matches the tab-bar message mark
+  // and animates on hover (dots blink in sequence).
+  content: () => <MessageSquareMoreIcon size={16} />,
   onClick: (ctx) => ctx.toggleRightPanelTab(BTW_TAB_ID, ctx.openTab.btw),
 };
 

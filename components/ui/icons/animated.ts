@@ -7,6 +7,7 @@ export {
   ExpandRightIcon,
   GitDiffIcon,
   JsonBracesIcon,
+  MessageSquareMoreIcon,
   PencilIcon,
   SettingsIcon,
   TerminalIcon,

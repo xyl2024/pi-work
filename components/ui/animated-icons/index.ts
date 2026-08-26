@@ -12,5 +12,6 @@ export { WrenchIcon } from "./WrenchIcon";
 export { TerminalIcon } from "./TerminalIcon";
 export { CalendarCheckIcon } from "./CalendarCheckIcon";
 export { SettingsIcon } from "./SettingsIcon";
+export { MessageSquareMoreIcon } from "./MessageSquareMoreIcon";
 export { BellIcon } from "./BellIcon";
 export { ICON_WRAP, useIconHover } from "./shared";
