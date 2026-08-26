@@ -250,6 +250,7 @@ export async function POST(req: Request) {
             sessionName: null,
           },
           () => startBtwAgent({
+            mainSessionId: parsed.mainSessionId,
             cwd: parsed.cwd,
             model: parsed.model,
             systemPrompt,
@@ -287,12 +288,11 @@ export async function POST(req: Request) {
           send(evt);
         });
 
-        // Defensive: if the agent somehow ends before we attach the
-        // subscription (synchronous prompt failure during construction),
-        // we still want the client to see `agent_end` so it can drop the
-        // in-flight assistant placeholder. The simplest way is to arm a
-        // short-lived watcher; in practice the subscribe() above is fast
-        // enough that this never fires.
+        // Start only after the subscriber is installed. This ordering is
+        // essential: a fast model can emit the complete BTW turn
+        // synchronously enough for subscribe-after-prompt to lose the
+        // terminal event and leave the browser waiting forever.
+        agent.start();
       } catch (error) {
         log.error("btw agent start failed", {
           mainSessionId: parsed.mainSessionId,

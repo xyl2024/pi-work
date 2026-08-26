@@ -196,6 +196,10 @@ export function listProviderCalls(p: ListProviderCallsParams): { rows: ProviderC
     whereParts.push("model_id = ?");
     args.push(p.modelId);
   }
+  if (p.source) {
+    whereParts.push("source = ?");
+    args.push(p.source);
+  }
   if (p.from != null) {
     whereParts.push("ts >= ?");
     args.push(p.from);

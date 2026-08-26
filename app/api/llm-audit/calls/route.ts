@@ -1,5 +1,5 @@
 /**
- * GET /api/llm-audit/calls?limit=N&offset=N&sessionId=...&status=ok|error&modelId=...&from=...&to=...
+ * GET /api/llm-audit/calls?limit=N&offset=N&sessionId=...&status=ok|error&modelId=...&source=...&from=...&to=...
  *
  * Returns `{ rows, total }` from `provider_calls`. Rows exclude the heavy
  * bodies by default? — no: rows carry request/response bodies, the panel
@@ -29,16 +29,21 @@ export async function GET(req: Request) {
     const statusParam = url.searchParams.get("status");
     const status = statusParam === "ok" || statusParam === "error" ? statusParam : null;
     const modelId = url.searchParams.get("modelId");
+    const sourceParam = url.searchParams.get("source");
+    const source = sourceParam === "user" || sourceParam === "scheduled" || sourceParam === "direct" || sourceParam === "btw" || sourceParam === "unknown"
+      ? sourceParam
+      : null;
     const fromRaw = url.searchParams.get("from");
     const toRaw = url.searchParams.get("to");
     const from = fromRaw && Number.isFinite(Number(fromRaw)) ? Number(fromRaw) : null;
     const to = toRaw && Number.isFinite(Number(toRaw)) ? Number(toRaw) : null;
 
-    const result = listProviderCalls({ limit, offset, sessionId, status, modelId, from, to });
+    const result = listProviderCalls({ limit, offset, sessionId, status, modelId, source, from, to });
     log.info("llm-audit calls", {
       sessionId,
       status,
       modelId,
+      source,
       limit,
       offset,
       returned: result.rows.length,

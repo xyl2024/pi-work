@@ -25,6 +25,7 @@ import type { ProviderCall } from "@/lib/shared/llm-audit-types";
 const PAGE_LIMIT = 10;
 
 type StatusFilter = "" | "ok" | "error";
+type SourceFilter = "" | "user" | "scheduled" | "direct" | "btw" | "unknown";
 
 // ── formatters ────────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
   const { t } = useI18n();
   const toast = useToast();
   const [filter, setFilter] = useState<StatusFilter>("");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("");
   const [offset, setOffset] = useState(0);
   const [rows, setRows] = useState<ProviderCall[] | null>(null);
   const [total, setTotal] = useState(0);
@@ -93,6 +95,9 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
         offset: String(offset),
       });
       if (filter) params.set("status", filter);
+      if (sourceFilter) params.set("source", sourceFilter);
+      // LLM audit is session-scoped whenever a main session is active,
+      // including BTW calls. Never broaden a BTW filter to all sessions.
       if (effectiveSessionId) params.set("sessionId", effectiveSessionId);
       const res = await fetch(`/api/llm-audit/calls?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -108,7 +113,7 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
     } finally {
       setLoading(false);
     }
-  }, [filter, offset, effectiveSessionId, toast, t]);
+  }, [filter, sourceFilter, offset, effectiveSessionId, toast, t]);
 
   useEffect(() => {
     load();
@@ -117,7 +122,7 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
   // Reset paging on filter or session change.
   useEffect(() => {
     setOffset(0);
-  }, [filter, effectiveSessionId]);
+  }, [filter, sourceFilter, effectiveSessionId]);
 
   const toggleDetail = useCallback(
     async (id: number) => {
@@ -153,7 +158,13 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "transparent" }}>
-      <Toolbar filter={filter} onChangeFilter={setFilter} onRefresh={() => load()} />
+      <Toolbar
+        filter={filter}
+        onChangeFilter={setFilter}
+        sourceFilter={sourceFilter}
+        onChangeSourceFilter={setSourceFilter}
+        onRefresh={() => load()}
+      />
 
       <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Pagination — at the top so the page controls stay adjacent to the
@@ -331,10 +342,14 @@ function Pagination({
 function Toolbar({
   filter,
   onChangeFilter,
+  sourceFilter,
+  onChangeSourceFilter,
   onRefresh,
 }: {
   filter: StatusFilter;
   onChangeFilter: (f: StatusFilter) => void;
+  sourceFilter: SourceFilter;
+  onChangeSourceFilter: (f: SourceFilter) => void;
   onRefresh: () => void;
 }) {
   const { t } = useI18n();
@@ -371,6 +386,33 @@ function Toolbar({
             }}
           >
             {o.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 4 }}>
+        {([
+          ["", t("All sources")],
+          ["btw", t("BTW")],
+          ["user", t("User")],
+          ["scheduled", t("Scheduled")],
+          ["direct", t("Direct")],
+          ["unknown", t("Unknown")],
+        ] as Array<[SourceFilter, string]>).map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => onChangeSourceFilter(value)}
+            style={{
+              padding: "3px 10px",
+              fontSize: 12,
+              borderRadius: 6,
+              border: "1px solid var(--border)",
+              cursor: "pointer",
+              background: sourceFilter === value ? "var(--accent)" : "transparent",
+              color: sourceFilter === value ? "#fff" : "var(--text-muted)",
+            }}
+          >
+            {label}
           </button>
         ))}
       </div>

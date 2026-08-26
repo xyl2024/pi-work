@@ -43,6 +43,8 @@ const log = createLogger("btw-agent");
 export const BTW_TOOL_WHITELIST = ["read", "grep", "ls", "find"] as const;
 
 export interface BtwAgentRequest {
+  /** The active main session id, used only for audit attribution. */
+  mainSessionId: string;
   /** The main session's current `cwd` — snapshotted at send time. */
   cwd: string;
   /** Provider/model resolved against the runtime. */
@@ -84,6 +86,9 @@ export interface BtwAgentHandle {
   /** Abort the in-flight prompt. Idempotent. Safe to call multiple
    *  times (e.g. user-click "stop" + client fetch abort). */
   abort(): Promise<void>;
+  /** Start the prompt. Must be called after subscribe() so no early events
+   *  can be lost. Idempotent; a disposed handle cannot be started. */
+  start(): void;
   /** Tear down the agent: unsubscribe, abort, dispose. Always safe to
    *  call more than once — the wrapper guards against double-dispose.
    *  After dispose(), no further events will fire. */
@@ -311,44 +316,17 @@ export async function startBtwAgent(req: BtwAgentRequest): Promise<BtwAgentHandl
     req.signal.addEventListener("abort", onAbort, { once: true });
   }
 
-  // Fire the prompt inside the LLM-audit ALS context so every fetch
-  // the SDK makes carries `source: "btw"`. The promise itself is
-  // returned to a "started" promise — caller doesn't `await` it
-  // because they want events as they stream in. We pass the new user
-  // message text as the prompt argument; the SDK appends it to
-  // `state.messages` and starts a fresh turn.
+  // The prompt is deliberately started by handle.start() below, after the
+  // route has attached its SSE subscriber. Starting it here would create a
+  // race where fast responses emit terminal events before subscribe().
   const userText = typeof req.userMessage.content === "string"
     ? req.userMessage.content
     : req.userMessage.content
         .filter((b) => b.type === "text")
         .map((b) => (b as { text: string }).text)
         .join("\n");
-  void runWithLlmAuditContext(
-    {
-      sessionId: null, // BTW isn't a session; sessionId=null in the audit row
-      source: "btw",
-      cwd: req.cwd,
-      sessionName: null,
-    },
-    async () => {
-      try {
-        await session.prompt(userText);
-      } catch (error) {
-        // Errors during the prompt path are surfaced through the SDK's
-        // own event stream (agent_end with stopReason=error), so we don't
-        // need to re-throw here. Log so dev-mode HMR surfaces a real
-        // stack instead of a silent swallow.
-        if (typeof error !== "undefined") {
-          log.debug("btw prompt finished", {
-            error: String(error),
-            durationMs: Date.now() - startedAt,
-          });
-        }
-      }
-    },
-  );
 
-  log.info("btw agent started", {
+  log.info("btw agent prepared", {
     cwd: req.cwd,
     model: { provider: req.model.provider, id: req.model.modelId },
     contextMessages: req.contextMessages.length,
@@ -356,7 +334,36 @@ export async function startBtwAgent(req: BtwAgentRequest): Promise<BtwAgentHandl
   });
 
   let disposed = false;
+  let startedPrompt = false;
   return {
+    start() {
+      if (disposed || startedPrompt) return;
+      startedPrompt = true;
+      // Fire the prompt only after the caller has subscribed. Errors during
+      // prompt are surfaced by the SDK event stream; keep the promise
+      // handled so no unhandled rejection can escape the request.
+      void runWithLlmAuditContext(
+        {
+          // Keep BTW calls associated with the active main session so the
+          // session-bound audit panel can display them together with the
+          // source=btw filter.
+          sessionId: req.mainSessionId,
+          source: "btw",
+          cwd: req.cwd,
+          sessionName: null,
+        },
+        async () => {
+          try {
+            await session.prompt(userText);
+          } catch (error) {
+            log.debug("btw prompt finished", {
+              error: String(error),
+              durationMs: Date.now() - startedAt,
+            });
+          }
+        },
+      );
+    },
     subscribe(listener) {
       if (disposed) return () => {};
       const unsub = session.subscribe((event) => {

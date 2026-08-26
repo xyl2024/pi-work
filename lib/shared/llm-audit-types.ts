@@ -75,6 +75,8 @@ export interface ListProviderCallsParams {
   /** "ok" = 2xx, "error" = non-2xx or network error, undefined = all */
   status?: "ok" | "error" | null;
   modelId?: string | null;
+  /** Filter by audit origin; undefined = all sources. */
+  source?: LlmAuditSource | null;
   /** Epoch-ms lower bound (inclusive). */
   from?: number | null;
   /** Epoch-ms upper bound (exclusive). */
