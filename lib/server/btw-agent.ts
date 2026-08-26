@@ -245,7 +245,11 @@ export async function startBtwAgent(req: BtwAgentRequest): Promise<BtwAgentHandl
   const agentRuntime = await createAgentSession({
     cwd: req.cwd,
     agentDir,
-    sessionManager: SessionManager.inMemory(),
+    // Use the main session id for the temporary runtime as well. The pi
+    // agent core forwards its sessionId to provider stream options, where
+    // providers derive prompt_cache_key from it. A fresh BTW id would split
+    // the provider prompt cache even when the prompt/context is identical.
+    sessionManager: SessionManager.inMemory(req.cwd, { id: req.mainSessionId }),
     settingsManager: SettingsManager.inMemory({}),
     resourceLoader,
     modelRuntime,
