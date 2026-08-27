@@ -10,7 +10,6 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { useSettings } from "@/hooks/settingsStore";
 import {
   AGENT_TODO_TOOL_NAME,
   countTasks,
@@ -32,8 +31,8 @@ export function useAgentTodo(
   sessionId: string | null,
   refreshKey = 0,
 ): UseAgentTodoResult {
-  const settings = useSettings();
-  const agentTodoEnabled = settings?.custom_tools.enabled.includes(AGENT_TODO_TOOL_NAME) === true;
+  const [agentTodoEnabled, setAgentTodoEnabled] = useState(true);
+  useEffect(() => { void fetch("/api/tools-market").then((r) => r.json()).then((d) => setAgentTodoEnabled((d.enabled ?? []).includes(AGENT_TODO_TOOL_NAME))).catch(() => setAgentTodoEnabled(true)); }, []);
   const sessionKey = agentTodoEnabled && sessionId ? sessionId : null;
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const sessionKeyRef = useRef<string | null>(null);

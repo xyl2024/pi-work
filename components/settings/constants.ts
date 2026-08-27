@@ -34,13 +34,11 @@ export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-profile",       labelKey: "Profile" },
   { id: "settings-section-appearance",    labelKey: "Appearance" },
   { id: "settings-section-append-system", labelKey: "Append System Prompt" },
-  { id: "settings-section-custom-tools",  labelKey: "Custom Tools" },
   { id: "settings-section-right-bar",     labelKey: "Right-side buttons" },
   { id: "settings-section-inbox-test",    labelKey: "Inbox Test" },
   { id: "settings-section-toast-test",    labelKey: "Toast Test" },
   { id: "settings-section-file-preview",  labelKey: "File preview limits" },
   { id: "settings-section-retry",         labelKey: "Agent retry" },
   { id: "settings-section-ui-sounds",     labelKey: "UI Sounds" },
-  { id: "settings-section-todo-agent-tools", labelKey: "Todo agent tools" },
   { id: "settings-section-todo-tags",        labelKey: "Manage tags" },
 ];

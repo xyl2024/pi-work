@@ -4,11 +4,8 @@ import { load, dump } from "js-yaml";
 import { createLogger } from "./logger";
 import { dataPath } from "./data-dir";
 import {
-  AGENT_CUSTOM_TOOL_NAMES,
   UI_SOUND_EVENT_IDS,
-  type AgentCustomToolName,
   type AppendSystemConfig,
-  type CustomToolsConfig,
   type DangerousPatternRule,
   type DangerousPatternsConfig,
   type PiWorkConfig,
@@ -69,9 +66,6 @@ const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = {
 const DEFAULT_CONFIG: PiWorkConfig = {
   dangerous_patterns: DEFAULT_DANGEROUS_PATTERNS,
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
-  custom_tools: {
-    enabled: [...AGENT_CUSTOM_TOOL_NAMES],
-  },
   // Preserve pre-existing behavior: append file loads by default.
   append_system: { enabled: true },
   // Preserves pre-feature behavior: same hardcoded limits the route used
@@ -132,35 +126,6 @@ function parseRightSideBar(raw: unknown): RightSideBarConfig {
     out.session_bound_alignment = resolveSessionBoundAlignment(obj.session_bound_alignment);
   }
   return out;
-}
-
-// Fail-open only when the field is genuinely missing / unreadable —
-// an explicit `enabled: []` MUST be honored as "disable everything"
-// (the user pushed the button, we trust them). When the array is
-// non-empty but every entry is unknown, fall back to defaults: that's
-// almost certainly a typo / schema mismatch and silently disabling
-// every tool would be a worse surprise than the typo itself.
-function parseCustomTools(raw: unknown): CustomToolsConfig {
-  if (!raw || typeof raw !== "object") return { enabled: [...AGENT_CUSTOM_TOOL_NAMES] };
-  const obj = raw as Record<string, unknown>;
-  const enabledRaw = obj.enabled;
-  if (!Array.isArray(enabledRaw)) return { enabled: [...AGENT_CUSTOM_TOOL_NAMES] };
-  if (enabledRaw.length === 0) return { enabled: [] };
-  const seen = new Set<AgentCustomToolName>();
-  for (const item of enabledRaw) {
-    if (typeof item !== "string") continue;
-    // Normalize the legacy `show_file` spelling to the current `show_media`
-    // name, so the Settings UI checkbox (keyed by tool name) and the
-    // runtime tool registration always agree. `show_file` remains a legal
-    // input so old config.yaml files keep working — it just never survives
-    // the parse.
-    const name = item === "show_file" ? "show_media" : item;
-    if ((AGENT_CUSTOM_TOOL_NAMES as readonly string[]).includes(name)) {
-      seen.add(name as AgentCustomToolName);
-    }
-  }
-  if (seen.size === 0) return { enabled: [...AGENT_CUSTOM_TOOL_NAMES] };
-  return { enabled: [...seen] };
 }
 
 // Fail-open for the missing/garbled case (keep the on-by-default behavior
@@ -278,7 +243,6 @@ export function readConfig(): PiWorkConfig {
     return {
       dangerous_patterns: parseDangerousPatterns(cfg.dangerous_patterns),
       right_side_bar: parseRightSideBar(cfg.right_side_bar),
-      custom_tools: parseCustomTools(cfg.custom_tools),
       append_system: parseAppendSystem(cfg.append_system),
       file_viewer: parseFileViewer(cfg.file_viewer),
       ui_sounds: parseUiSounds(cfg.ui_sounds),

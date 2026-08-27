@@ -39,6 +39,7 @@ import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerModal } from "../scheduler";
 import { ChannelsModal } from "../channels/ChannelsModal";
+import { ToolsMarketModal } from "../tools-market/ToolsMarketModal";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
 import { CommandPalette } from "./CommandPalette";
@@ -377,6 +378,7 @@ export function AppShell() {
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
+  const [toolsMarketOpen, setToolsMarketOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -1358,6 +1360,7 @@ export function AppShell() {
     openPrompts: () => setPromptsConfigOpen(true),
     openScheduler: () => setSchedulerOpen(true),
     openChannels: () => setChannelsOpen(true),
+    openToolMarket: () => setToolsMarketOpen(true),
     openTodosTab: handleOpenTodoTab,
     openFavoritesTab: handleOpenFavoritesTab,
     openCanvasTab: handleOpenCanvasTab,
@@ -1410,6 +1413,7 @@ export function AppShell() {
       onOpenPrompts={() => setPromptsConfigOpen(true)}
       onOpenScheduler={() => setSchedulerOpen(true)}
       onOpenChannels={() => setChannelsOpen(true)}
+      onOpenToolMarket={() => setToolsMarketOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onOpenInbox={() => setInboxOpen(true)}
       inboxUnread={inboxUnread}
@@ -1868,6 +1872,7 @@ export function AppShell() {
         onOpenSession={handleOpenScheduledSession}
       />
     )}
+    {toolsMarketOpen && <ToolsMarketModal open={toolsMarketOpen} onClose={() => setToolsMarketOpen(false)} />}
     {channelsOpen && (
       <ChannelsModal
         open={channelsOpen}

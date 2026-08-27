@@ -12,12 +12,10 @@ import { useImmediateApply } from "./use-immediate-apply";
 import { AppearanceSection } from "./sections/AppearanceSection";
 import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
-import { CustomToolsSection } from "./sections/CustomToolsSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
-import { TodoAgentToolsSection } from "./sections/TodoAgentToolsSection";
 import { TodoTagsSection } from "./sections/TodoTagsSection";
 import { ToastTestSection } from "./sections/ToastTestSection";
 
@@ -31,7 +29,6 @@ import { ToastTestSection } from "./sections/ToastTestSection";
  *   1  Appearance          (no save — hooks apply immediately)
  *   2  Append System Prompt(textarea save + immediate-apply toggle;
  *                          onDirtyChange → modal)
- *   3  Custom Tools        (immediate-apply)
  *   4  Right-side buttons  (immediate-apply; visibility / order /
  *                          alignment)
  *   5  Inbox Test          (<InboxTestSection />)
@@ -40,7 +37,6 @@ import { ToastTestSection } from "./sections/ToastTestSection";
  *   8  Agent retry         (independent state machine; lives in
  *                          ~/.pi/agent/settings.json, not config.yaml)
  *   9  UI Sounds           (immediate-apply master volume + per-event recipes)
- *   10 Todo agent tools    (immediate-apply; ~/.pi-work/todo-tools.json)
  *   11 Manage tags         (uses useTodos(); rename / delete / recolor)
  */
 export function SettingsModal({
@@ -259,9 +255,6 @@ export function SettingsModal({
               onDirtyChange={setAppendSystemDirty}
             />
 
-            {/* 4: Custom Tools */}
-            <CustomToolsSection config={config} apply={apply} />
-
             {/* 5: Right-side buttons */}
             <RightBarSection config={config} apply={apply} />
 
@@ -285,9 +278,6 @@ export function SettingsModal({
 
             {/* 10: UI Sounds */}
             <SoundSettingsSection config={config} apply={apply} />
-
-            {/* 11: Todo agent tools */}
-            <TodoAgentToolsSection />
 
             {/* 12: Manage tags */}
             <TodoTagsSection />

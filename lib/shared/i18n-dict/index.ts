@@ -37,6 +37,7 @@ import { starterPrompts } from "./starter-prompts";
 import { terminal } from "./terminal";
 import { toast } from "./toast";
 import { todos } from "./todos";
+import { toolsMarket } from "./tools-market";
 import { wechat } from "./wechat";
 import { usefulTips } from "./useful-tips";
 
@@ -67,6 +68,7 @@ export const ZH_TRANSLATIONS = {
   ...terminal,
   ...toast,
   ...todos,
+  ...toolsMarket,
   ...wechat,
   ...usefulTips,
   ...askUserQuestions,

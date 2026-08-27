@@ -97,6 +97,7 @@ export interface CommandContext {
   openPrompts: () => void;
   openScheduler: () => void;
   openChannels: () => void;
+  openToolMarket: () => void;
 
   // Right-panel tabs
   openTodosTab: () => void;
@@ -310,6 +311,15 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
     icon: <GlobeIcon />,
     run: () => ctx.openChannels(),
+  });
+
+  cmds.push({
+    id: "open-tool-market",
+    title: t("Open Tool Market"),
+    group: "Modal",
+    keywords: ["tools", "market", "custom tools", "工具", "工具市场"],
+    icon: <span>🧰</span>,
+    run: () => ctx.openToolMarket(),
   });
 
   // ── Language (2) ──

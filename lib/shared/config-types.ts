@@ -34,7 +34,6 @@ export interface AppendSystemConfig {
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   right_side_bar: RightSideBarConfig;
-  custom_tools: CustomToolsConfig;
   append_system: AppendSystemConfig;
   file_viewer: FileViewerConfig;
   ui_sounds: UiSoundsConfig;
