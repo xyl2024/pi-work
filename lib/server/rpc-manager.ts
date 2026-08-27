@@ -14,6 +14,8 @@ import { buildShowFileTool } from "./show-file-tool";
 import { writeSessionName, deleteSessionName } from "./session-names";
 import { buildAgentTodoTool, AGENT_TODO_SYSTEM_PROMPT_BLOCK } from "./agent-todo-tool/tool";
 import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-questions-tool";
+import { getRegistry } from "./session-registry";
+import { buildSessionInfoTools } from "./self-tools/session-tools";
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
@@ -700,21 +702,16 @@ export class AgentSessionWrapper {
 // ============================================================================
 // Session registry
 // ============================================================================
+//
+// The live-session map (`__piSessions`) plus `getRpcSession` /
+// `listRunningRpcSessions` live in lib/server/session-registry.ts so the
+// server-only self-management tools can read them without a circular import.
+// They are re-exported here for backward compatibility with existing
+// importers. `__piStartLocks` is only used internally by this module, so it
+// stays local.
 
 declare global {
-  var __piSessions: Map<string, AgentSessionWrapper> | undefined;
   var __piStartLocks: Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> | undefined;
-}
-
-function getRegistry(): Map<string, AgentSessionWrapper> {
-  if (!globalThis.__piSessions) {
-    globalThis.__piSessions = new Map();
-    const cleanup = () => globalThis.__piSessions?.forEach((s) => s.destroy());
-    process.once("exit", cleanup);
-    process.once("SIGINT", cleanup);
-    process.once("SIGTERM", cleanup);
-  }
-  return globalThis.__piSessions;
 }
 
 function getLocks(): Map<string, Promise<{ session: AgentSessionWrapper; realSessionId: string }>> {
@@ -722,23 +719,7 @@ function getLocks(): Map<string, Promise<{ session: AgentSessionWrapper; realSes
   return globalThis.__piStartLocks;
 }
 
-export function getRpcSession(sessionId: string): AgentSessionWrapper | undefined {
-  return getRegistry().get(sessionId);
-}
-
-/**
- * Snapshot of which registered sessions are currently running.
- * Reads `globalThis.__piSessions` only — no disk I/O — so callers can poll
- * this cheaply (the SessionSidebar uses it every 3s to render a spinner on
- * the active row).
- */
-export function listRunningRpcSessions(): { id: string; running: boolean }[] {
-  const out: { id: string; running: boolean }[] = [];
-  for (const [id, wrapper] of getRegistry()) {
-    out.push({ id, running: wrapper.isRunning() });
-  }
-  return out;
-}
+export { getRpcSession, listRunningRpcSessions } from "./session-registry";
 
 /**
  * Get or create an AgentSession for the given session.
@@ -985,6 +966,13 @@ export async function startRpcSession(
               },
               source: capturedSource,
             })
+          : []),
+        // Self-management tools: read-only visibility into Pi Work's own live
+        // sessions + disk-backed session details. Gated together via
+        // ~/.pi-work/tools-market.json (TOOL_MARKET_IDS).
+        ...(enabledTools.has("pi_work_get_active_sessions_id") ||
+        enabledTools.has("pi_work_get_session_info_by_id")
+          ? buildSessionInfoTools()
           : []),
       ],
     });
