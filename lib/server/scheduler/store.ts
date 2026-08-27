@@ -398,7 +398,7 @@ export function createTask(input: CreateTaskInput): ScheduledTask {
       `INSERT INTO scheduled_tasks
         (id, name, cron, cwd, prompt, enabled, provider, model_id, thinking_level, tool_names,
          max_lifetime_ms, timezone, notification, created_at, updated_at, last_run_at, next_run_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
     )
     .run(
       id, name, cron, cwd, prompt, enabled ? 1 : 0,
