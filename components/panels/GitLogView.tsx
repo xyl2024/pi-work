@@ -315,11 +315,16 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
           </div>
         ) : (
           <>
-            {/* Detail */}
+            {/* Detail
+              By default (before the user drags the handle) the section is
+              content-sized, but capped at half the pane — otherwise a commit
+              with many files would push the diff view out of the visible
+              area. Larger lists scroll inside the capped section. */}
             <div style={{
               flex: detailHeight === null ? "0 0 auto" : `0 0 ${detailHeight}px`,
               minHeight: 100,
-              overflowY: detailHeight === null ? "visible" : "auto",
+              maxHeight: detailHeight === null ? "50%" : undefined,
+              overflowY: "auto",
               borderBottom: "1px solid var(--border)",
             }}>
               {detailLoading ? (
