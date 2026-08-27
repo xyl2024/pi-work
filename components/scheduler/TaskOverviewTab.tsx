@@ -18,9 +18,11 @@ import type { ScheduledTask, TaskRun } from "./types";
 interface Props {
   task: ScheduledTask;
   runs: TaskRun[];
+  /** channelId → { name, status } for wechat channels (passed from TaskDetail). */
+  channelMeta?: Record<string, { name: string; status: string }> | null;
 }
 
-export function TaskOverviewTab({ task, runs }: Props) {
+export function TaskOverviewTab({ task, runs, channelMeta }: Props) {
   const { t, locale } = useI18n();
   const stats = computeStats(runs);
   const now = useNow(30_000);
@@ -72,6 +74,40 @@ export function TaskOverviewTab({ task, runs }: Props) {
           </Row>
           <Row label={t("Created at")}>{new Date(task.createdAt).toLocaleString()}</Row>
           <Row label={t("Updated at")}>{new Date(task.updatedAt).toLocaleString()}</Row>
+        </dl>
+      </section>
+
+      {/* Notification metadata */}
+      <section>
+        <SectionTitle>{t("Notifications")}</SectionTitle>
+        <dl style={dlStyle}>
+          <Row label={t("Notify on outcome")}>
+            {task.notification && task.notification.channels.length > 0 ? (
+              [
+                task.notification.onSuccess ? t("On success") : null,
+                task.notification.onError ? t("On error") : null,
+                task.notification.onTimeout ? t("On timeout") : null,
+              ].filter(Boolean).join(" · ") || t("No outcome selected")
+            ) : (
+              <Missing>{t("Not set")}</Missing>
+            )}
+          </Row>
+          <Row label={t("Channel")}>
+            {task.notification && task.notification.channels.length > 0 ? (
+              task.notification.channels.map((c) => {
+                const meta = c.type === "wechat" && c.channelId ? channelMeta?.[c.channelId] : undefined;
+                return (
+                  <span key={`${c.type}:${c.channelId ?? c.recipientId}`} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {c.type}
+                    {meta ? `: ${meta.name}` : c.channelId ? ` ${t("channels.unavailable")}` : ""}
+                    <code style={monoStyle}>{c.recipientId}</code>
+                  </span>
+                );
+              })
+            ) : (
+              <Missing>{t("Not set")}</Missing>
+            )}
+          </Row>
         </dl>
       </section>
 

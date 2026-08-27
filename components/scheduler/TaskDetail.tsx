@@ -23,10 +23,11 @@ import { TaskOverviewTab } from "./TaskOverviewTab";
 import { TaskRunsTab, type RunFilter } from "./TaskRunsTab";
 import { TaskPromptTab } from "./TaskPromptTab";
 import { TaskConfigTab } from "./TaskConfigTab";
+import { TogglePill } from "@/components/ui/TogglePill";
 import { apiFetch, isOnceDone } from "./utils";
 import { tabBarStyle, tabItemStyle } from "./styles";
 import type { DetailTab, ScheduledTask, TaskRun } from "./types";
-import { EditIcon, PauseIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
+import { EditIcon, PlayIcon, TrashIcon } from "@/components/ui/icons";
 
 interface ChannelMeta {
   id: string;
@@ -112,9 +113,9 @@ export function TaskDetail({
     return () => clearInterval(id);
   }, [tab, runs, loadRuns]);
 
-  const handleToggle = async () => {
-    await onToggleEnabled(task);
-    onTaskUpdated({ ...task, enabled: !task.enabled });
+  const handleToggle = async (nextEnabled: boolean) => {
+    await onToggleEnabled({ ...task, enabled: nextEnabled });
+    onTaskUpdated({ ...task, enabled: nextEnabled });
   };
 
   const handleDelete = async () => {
@@ -153,24 +154,12 @@ export function TaskDetail({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <button
-            onClick={() => void handleToggle()}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "5px 10px",
-              fontSize: 12,
-              background: "var(--bg)",
-              borderRadius: 6,
-              color: task.enabled ? "var(--warning)" : "var(--success)",
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            {task.enabled ? <PauseIcon width={11} height={11} /> : <PlayIcon width={11} height={11} />}
-            {task.enabled ? t("Pause") : t("Enable")}
-          </button>
+          <TogglePill
+            on={task.enabled}
+            onChange={(next) => void handleToggle(next)}
+            size="sm"
+            label={t("Enabled")}
+          />
           <button
             onClick={() => onEdit(task)}
             style={{
@@ -248,7 +237,7 @@ export function TaskDetail({
 
       {/* Tab body */}
       <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-        {tab === "overview" && <TaskOverviewTab task={task} runs={runs} />}
+        {tab === "overview" && <TaskOverviewTab task={task} runs={runs} channelMeta={channelMeta} />}
         {tab === "runs" && (
           <TaskRunsTab
             runs={runs}

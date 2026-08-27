@@ -133,10 +133,12 @@ export function SchedulerModal({ open, onClose, onOpenSession }: Props) {
 
   const handleToggleEnabled = useCallback(async (task: ScheduledTask) => {
     try {
+      // `task.enabled` here is the desired target state (the caller passes a
+      // task stub with the next value already applied).
       const updated = await apiFetch<{ task: ScheduledTask }>("/api/scheduled-tasks", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: task.id, enabled: !task.enabled }),
+        body: JSON.stringify({ id: task.id, enabled: task.enabled }),
       });
       // Optimistic replace from server response
       setTasks((prev) => prev.map((t) => (t.id === task.id ? updated.task : t)));
