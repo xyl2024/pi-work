@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { type Locale, ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
+import { EN_TRANSLATIONS, type Locale, ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 export type { Locale };
 
 interface I18nContextValue {
@@ -76,7 +76,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       t: (key, params) => {
         const raw = locale === "zh"
           ? ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS] ?? key
-          : key;
+          : EN_TRANSLATIONS[key as keyof typeof EN_TRANSLATIONS] ?? key;
         return interpolate(raw, params);
       },
     };

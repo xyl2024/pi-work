@@ -14,6 +14,7 @@
 // keep working unchanged.
 
 import { askUserQuestions } from "./ask-user-questions";
+import { EN_TRANSLATIONS } from "./en";
 import { chat } from "./chat";
 import { channels } from "./channels";
 import { commands } from "./commands";
@@ -40,6 +41,8 @@ import { wechat } from "./wechat";
 import { usefulTips } from "./useful-tips";
 
 export type Locale = "en" | "zh";
+
+export { EN_TRANSLATIONS };
 
 export const ZH_TRANSLATIONS = {
   ...common,
@@ -73,5 +76,5 @@ export function tServer(key: string, locale: Locale): string {
   if (locale === "zh") {
     return ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS] ?? key;
   }
-  return key;
+  return EN_TRANSLATIONS[key as keyof typeof EN_TRANSLATIONS] ?? key;
 }
