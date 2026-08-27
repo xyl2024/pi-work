@@ -1180,7 +1180,7 @@ export function AppShell() {
   const [statusBar, setStatusBar] = useState({
     os: "—",
     shell: "—",
-    ip: "—",
+    channels: 0,
     cpu: null as number | null,
     memory: { rss: 0, heapUsed: 0, heapTotal: 0 },
     git: { branch: null as string | null, changedFiles: 0, additions: 0, deletions: 0 },
@@ -1817,10 +1817,10 @@ export function AppShell() {
         </button>
         )}
         <span style={{ marginLeft: 10 }}>Active: <span style={{ color: runningSessionCount > 0 ? "var(--accent)" : "inherit" }}>{runningSessionCount}</span></span>
+        <span style={{ marginLeft: 10 }}>{t("Channels")}: {statusBar.channels}</span>
         <span style={{ marginLeft: 10 }}>
           CPU {statusBar.cpu == null ? "—" : `${statusBar.cpu.toFixed(1)}%`} RAM {formatBytes(statusBar.memory.rss)}
         </span>
-        <span style={{ marginLeft: 10 }}>IP: {statusBar.ip}</span>
         <span
           aria-live="polite"
           style={{

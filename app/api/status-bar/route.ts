@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import os from "node:os";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import { getRepoStatus } from "@/lib/server/git-diff";
 import { summarize } from "@/lib/server/token-audit-store";
+import { listChannels } from "@/lib/server/channels";
 
 export const dynamic = "force-dynamic";
 
@@ -31,15 +31,6 @@ function getServerMemory() {
     heapUsed: memory.heapUsed,
     heapTotal: memory.heapTotal,
   };
-}
-
-function getServerIp(): string {
-  for (const interfaces of Object.values(os.networkInterfaces())) {
-    for (const address of interfaces ?? []) {
-      if (address.family === "IPv4" && !address.internal) return address.address;
-    }
-  }
-  return "127.0.0.1";
 }
 
 function getLinuxDistribution(): string | null {
@@ -92,12 +83,13 @@ export async function GET(request: Request) {
   }
 
   const tokenTotals = summarize("today", "none").totals;
+  const activeChannels = listChannels().filter((c) => c.status === "connected").length;
   return NextResponse.json({
     os: getOsName(),
     cpu: getProcessCpuUsage(),
     memory: getServerMemory(),
     shell: getShellName(),
-    ip: getServerIp(),
+    channels: activeChannels,
     git,
     today: {
       tokens: tokenTotals.inputTokens + tokenTotals.outputTokens + tokenTotals.cacheReadTokens + tokenTotals.cacheWriteTokens,
