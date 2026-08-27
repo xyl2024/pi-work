@@ -7,11 +7,9 @@ import { AttachmentList } from "./AttachmentList";
 import { SlashCommandHint } from "./SlashCommandHint";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { PromptPreview } from "./PromptPreview";
-import { Typewriter } from "../ui/Typewriter";
 import { CollapsiblePanel } from "../ui/CollapsiblePanel";
 import { findDirectSlashResource, formatSlashContent, type SlashResource } from "@/lib/shared/slash-commands";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
-import { useTypewriterPhrases } from "./chat-input/hooks/useTypewriterPhrases";
 import { useImageAttachments } from "./chat-input/hooks/useImageAttachments";
 import { useInputHistory } from "./chat-input/hooks/useInputHistory";
 import { useToolsDropdown } from "./chat-input/hooks/useToolsDropdown";
@@ -100,8 +98,6 @@ interface Props {
   hideToolbar?: boolean;
   /** Hard-disable the whole input (no session, not ready, ...). */
   disabled?: boolean;
-  /** Static placeholder replacing the animated typewriter text. */
-  placeholder?: string;
 }
 
 export interface ChatInputHandle {
@@ -127,19 +123,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   enterToSend = false,
   hideToolbar = false,
   disabled = false,
-  placeholder,
 }: Props, ref) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const { contextUsage, sessionStats } = useSessionUiState();
 
   // ── Textarea + caret ──────────────────────────────────────────────────
   const [value, setValue] = useState("");
   const [cursorPosition, setCursorPosition] = useState(0);
-  const [isFocused, setIsFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // ── Settings-derived typewriter state ─────────────────────────────────
-  const { typewriterPhrases, typewriterEffectEnabled, typewriterKey } = useTypewriterPhrases(locale);
 
   // ── Image attachments (file input ref + URL lifecycle owned by hook) ──
   const {
@@ -487,24 +478,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             position: "relative",
           } as React.CSSProperties}
         >
-          {!value && !isFocused && typewriterEffectEnabled && !hideToolbar && (
-            <span
-              aria-hidden
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: 14,
-                transform: "translateY(-50%)",
-                pointerEvents: "none",
-                color: "var(--text-muted)",
-                fontSize: 14,
-                lineHeight: 1.6,
-                fontWeight: 400,
-              }}
-            >
-              <Typewriter key={typewriterKey} phrases={typewriterPhrases} />
-            </span>
-          )}
           <textarea
             ref={textareaRef}
             value={value}
@@ -531,18 +504,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               const pos = e.currentTarget.selectionStart ?? value.length;
               setCursorPosition(pos);
               setSlashMenuOpen(Boolean(slashQuery));
-              setIsFocused(true);
             }}
-            onBlur={() => setIsFocused(false)}
-            placeholder={
-              placeholder !== undefined
-                ? placeholder
-                : isFocused
-                  ? ""
-                  : !value
-                    ? ""
-                    : t("Message...")
-            }
             rows={1}
             disabled={disabled}
             style={{

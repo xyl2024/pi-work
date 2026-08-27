@@ -15,7 +15,7 @@ import {
  * Section: UI sounds.
  *
  * - Master toggle + master volume slider (immediate-apply, same shape as
- *   typewriter_effect / append_system).
+ *   append_system).
  * - Per-event sound picker. The first dropdown entry is "None" (empty string),
  *   which the parser keeps as "do not play for this event".
  * - "Restore defaults" button rewrites the per-event map only; the user's
@@ -23,9 +23,8 @@ import {
  * - Clicking the small speaker button next to a built-in name plays it for
  *   preview without committing to the setting.
  *
- * Lives in `components/settings/sections/` next to the typewriter-effect
- * toggle; both share the same "immediate-apply" mechanism (`apply()` prop
- * from `use-immediate-apply.ts`).
+ * Lives in `components/settings/sections/`; shares the same
+ * "immediate-apply" mechanism (`apply()` prop from `use-immediate-apply.ts`).
  */
 
 const EVENT_LABEL_KEYS: Record<UiSoundEventId, string> = {

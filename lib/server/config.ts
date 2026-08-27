@@ -12,15 +12,10 @@ import {
   type DangerousPatternRule,
   type DangerousPatternsConfig,
   type PiWorkConfig,
-  type TypewriterEffectConfig,
   type UiSoundEventId,
   type UiSoundsConfig,
 } from "../shared/config-types";
 import { DEFAULT_UI_SOUND_EVENTS } from "../shared/ui-sounds-defaults";
-import {
-  DEFAULT_TYPEWRITER_PHRASES,
-  parseTypewriterPhrases,
-} from "../shared/typewriter-phrases";
 import {
   FILE_VIEWER_LIMITS,
   FILE_VIEWER_KINDS,
@@ -79,14 +74,6 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   },
   // Preserve pre-existing behavior: append file loads by default.
   append_system: { enabled: true },
-  // Bundled quote collection — also the fallback for parseTypewriterPhrases
-  // when the field is missing, malformed, or partially empty.
-  typewriter_phrases: {
-    en: [...DEFAULT_TYPEWRITER_PHRASES.en],
-    zh: [...DEFAULT_TYPEWRITER_PHRASES.zh],
-  },
-  // Preserve pre-toggle behavior: typewriter effect on by default.
-  typewriter_effect: { enabled: true },
   // Preserves pre-feature behavior: same hardcoded limits the route used
   // before the value became user-configurable.
   file_viewer: {
@@ -180,16 +167,6 @@ function parseCustomTools(raw: unknown): CustomToolsConfig {
 // so an old config.yaml doesn't silently turn the append off). An explicit
 // `enabled: false` is honored — the user pushed the button, we trust them.
 function parseAppendSystem(raw: unknown): AppendSystemConfig {
-  if (!raw || typeof raw !== "object") return { enabled: true };
-  const obj = raw as Record<string, unknown>;
-  return { enabled: obj.enabled !== false };
-}
-
-// Fail-open for the missing/garbled case (keeps the typewriter visible by
-// default so an old config.yaml doesn't silently strip the animation).
-// An explicit `enabled: false` is honored — the user pushed the toggle,
-// we trust them.
-function parseTypewriterEffect(raw: unknown): TypewriterEffectConfig {
   if (!raw || typeof raw !== "object") return { enabled: true };
   const obj = raw as Record<string, unknown>;
   return { enabled: obj.enabled !== false };
@@ -303,8 +280,6 @@ export function readConfig(): PiWorkConfig {
       right_side_bar: parseRightSideBar(cfg.right_side_bar),
       custom_tools: parseCustomTools(cfg.custom_tools),
       append_system: parseAppendSystem(cfg.append_system),
-      typewriter_phrases: parseTypewriterPhrases(cfg.typewriter_phrases),
-      typewriter_effect: parseTypewriterEffect(cfg.typewriter_effect),
       file_viewer: parseFileViewer(cfg.file_viewer),
       ui_sounds: parseUiSounds(cfg.ui_sounds),
     };

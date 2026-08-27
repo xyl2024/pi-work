@@ -16,7 +16,6 @@ export const chat = {
   "Retrying": "正在重试",
 
   // Input bar
-  "Message...": "输入消息...",
   "Send": "发送",
   "Stop": "停止",
   "Upload image": "上传图片",

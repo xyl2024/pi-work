@@ -1,4 +1,3 @@
-import type { Locale } from "./i18n-dict";
 import type { FileViewerConfig } from "./file-viewer-limits";
 import type { RightSideBarConfig } from "./right-bar";
 
@@ -32,19 +31,11 @@ export interface AppendSystemConfig {
   enabled: boolean;
 }
 
-export type TypewriterPhrases = Record<Locale, string[]>;
-
-export interface TypewriterEffectConfig {
-  enabled: boolean;
-}
-
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   right_side_bar: RightSideBarConfig;
   custom_tools: CustomToolsConfig;
   append_system: AppendSystemConfig;
-  typewriter_phrases: TypewriterPhrases;
-  typewriter_effect: TypewriterEffectConfig;
   file_viewer: FileViewerConfig;
   ui_sounds: UiSoundsConfig;
 }

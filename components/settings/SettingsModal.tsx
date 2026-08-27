@@ -15,8 +15,6 @@ import { AppendSystemSection } from "./sections/AppendSystemSection";
 import { CustomToolsSection } from "./sections/CustomToolsSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
-import { TypewriterEffectSection } from "./sections/TypewriterEffectSection";
-import { TypewriterSection } from "./sections/TypewriterSection";
 import { RetrySection } from "./sections/RetrySection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 import { TodoAgentToolsSection } from "./sections/TodoAgentToolsSection";
@@ -39,13 +37,11 @@ import { ToastTestSection } from "./sections/ToastTestSection";
  *   5  Inbox Test          (<InboxTestSection />)
  *   6  Toast Test          (<ToastTestSection />, client-side preview)
  *   7  File preview limits (immediate-apply per kind)
- *   8  Typewriter effect   (immediate-apply toggle)
- *   9  Typewriter phrases  (own save flow; onDirtyChange → modal)
- *   10 Agent retry         (independent state machine; lives in
+ *   8  Agent retry         (independent state machine; lives in
  *                          ~/.pi/agent/settings.json, not config.yaml)
- *   11 UI Sounds           (immediate-apply master volume + per-event recipes)
- *   12 Todo agent tools    (immediate-apply; ~/.pi-work/todo-tools.json)
- *   13 Manage tags         (uses useTodos(); rename / delete / recolor)
+ *   9  UI Sounds           (immediate-apply master volume + per-event recipes)
+ *   10 Todo agent tools    (immediate-apply; ~/.pi-work/todo-tools.json)
+ *   11 Manage tags         (uses useTodos(); rename / delete / recolor)
  */
 export function SettingsModal({
   onClose,
@@ -59,11 +55,10 @@ export function SettingsModal({
   const [loading, setLoading] = useState(true);
 
   // ── Unsaved-changes tracking from child sections ───────────────────
-  // The two textarea-backed sections (AppendSystem + Typewriter) own
-  // their own draft state and report dirty-ness back here so the
-  // close-confirm prompt can warn before discarding those edits.
+  // The textarea-backed AppendSystem section owns its own draft state
+  // and reports dirty-ness back here so the close-confirm prompt can
+  // warn before discarding those edits.
   const [appendSystemDirty, setAppendSystemDirty] = useState(false);
-  const [typewriterDirty, setTypewriterDirty] = useState(false);
 
   // Initial load of /api/settings. Publish to the settings store so
   // AppShell reflects the snapshot on first paint; the
@@ -141,11 +136,11 @@ export function SettingsModal({
   // `window.confirm` prompt, `true` to close without prompting, or
   // `false` to abort.
   const shouldConfirm = useCallback(() => {
-    if (typewriterDirty || appendSystemDirty) {
+    if (appendSystemDirty) {
       return t("Discard unsaved changes?");
     }
     return true;
-  }, [typewriterDirty, appendSystemDirty, t]);
+  }, [appendSystemDirty, t]);
   const { requestClose, backdropStyle, panelStyle } = useModalAnimation({
     isOpen: true,
     onClose,
@@ -285,26 +280,16 @@ export function SettingsModal({
             {/* 8: File preview limits */}
             <FilePreviewSection config={config} apply={apply} />
 
-            {/* 9: Typewriter effect */}
-            <TypewriterEffectSection config={config} apply={apply} />
-
-            {/* 10: Typewriter phrases */}
-            <TypewriterSection
-              config={config}
-              apply={apply}
-              onDirtyChange={setTypewriterDirty}
-            />
-
-            {/* 11: Agent retry */}
+            {/* 9: Agent retry */}
             <RetrySection />
 
-            {/* 12: UI Sounds */}
+            {/* 10: UI Sounds */}
             <SoundSettingsSection config={config} apply={apply} />
 
-            {/* 13: Todo agent tools */}
+            {/* 11: Todo agent tools */}
             <TodoAgentToolsSection />
 
-            {/* 14: Manage tags */}
+            {/* 12: Manage tags */}
             <TodoTagsSection />
           </div>
         </div>

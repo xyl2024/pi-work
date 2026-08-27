@@ -49,16 +49,6 @@ export const settings = {
   "Show Media": "Show Media（内联展示多媒体文件）",
   "Ask User Questions": "Ask User Questions（向用户提问）",
 
-  // Chat input typewriter phrases
-  "Typewriter phrases": "打字机文案",
-  "Custom phrases cycled in the empty chat input. One phrase per line. Empty lines are ignored. Leave both blank to use the bundled defaults.": "在空聊天框中循环显示的文案，每行一条。空行会被忽略；两个都留空则使用内置默认文案。",
-  "English phrases": "英文文案",
-  "Chinese phrases": "中文文案",
-  "Typewriter effect": "打字机效果",
-  "Show cycling animated phrases in the empty chat input. Turn off to show a static placeholder instead.": "在空白输入框中循环展示打字机动画文案。关闭后改为显示静态占位文案。",
-  "Effect on": "效果开启",
-  "Effect off": "效果关闭",
-
   // Agent Todo tools
   "Todo agent tools": "待办 Agent 工具",
   "Choose which todo tools the pi agent can use. Changes apply to new sessions only — running sessions keep their current tool set.": "选择 Pi Agent 可以使用的待办工具。变更仅对新会话生效——当前会话仍使用原有工具集。",

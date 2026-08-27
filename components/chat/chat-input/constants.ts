@@ -1,8 +1,6 @@
 "use client";
 
-import type { Locale } from "@/hooks/useI18n";
 import type { ThinkingLevel } from "../ThinkingPicker";
-import { DEFAULT_TYPEWRITER_PHRASES } from "@/lib/shared/typewriter-phrases";
 import type { SlashResource } from "@/lib/shared/slash-commands";
 
 // Border color reflects the active reasoning intensity: gray = off, then a
@@ -60,12 +58,3 @@ export const BUILTIN_BTW: SlashResource = {
 };
 
 export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT, BUILTIN_BTW];
-
-/** Typewriter phrases by locale. Defaults to the bundled phrases whenever
- *  the settings store hasn't loaded yet or the user-supplied list is empty
- *  for the active locale. An empty list would otherwise deadlock the
- *  Typewriter effect on `phrases[0] === undefined`. */
-export const TYPEWRITER_PHRASES: Record<Locale, string[]> = {
-  en: [...DEFAULT_TYPEWRITER_PHRASES.en],
-  zh: [...DEFAULT_TYPEWRITER_PHRASES.zh],
-};

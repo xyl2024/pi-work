@@ -8,9 +8,9 @@ import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
  * Shared "immediate-apply" handler for the settings modal sections
- * (Right-side buttons, Custom Tools, File preview limits, Typewriter
- * effect, APPEND_SYSTEM.md loader, etc.). Each section owns a small
- * piece of `PiWorkConfig`; when the user toggles something we
+ * (Right-side buttons, Custom Tools, File preview limits, APPEND_SYSTEM
+ * loader, etc.). Each section owns a small piece of `PiWorkConfig`; when
+ * the user toggles something we
  *
  *   1. optimistically setConfig (publishes to AppShell immediately)
  *   2. PUT the whole PiWorkConfig to /api/settings

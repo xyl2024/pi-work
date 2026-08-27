@@ -39,8 +39,6 @@ export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-inbox-test",    labelKey: "Inbox Test" },
   { id: "settings-section-toast-test",    labelKey: "Toast Test" },
   { id: "settings-section-file-preview",  labelKey: "File preview limits" },
-  { id: "settings-section-typewriter-effect", labelKey: "Typewriter effect" },
-  { id: "settings-section-typewriter",    labelKey: "Typewriter phrases" },
   { id: "settings-section-retry",         labelKey: "Agent retry" },
   { id: "settings-section-ui-sounds",     labelKey: "UI Sounds" },
   { id: "settings-section-todo-agent-tools", labelKey: "Todo agent tools" },
