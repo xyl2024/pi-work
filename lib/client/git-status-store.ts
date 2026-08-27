@@ -133,15 +133,23 @@ export function stopTracking(): void {
  *  an immediate refetch. No-op for non-active cwds (their consumers aren't
  *  rendering anyway). Called from:
  *    - FileExplorer after a manual write/delete/rename (via onFileMutated),
- *    - useAgentSession after each `edit` / `write` tool execution ends.
+ *    - useAgentSession after each `edit` / `write` tool execution ends,
+ *    - useAgentSession after a `bash` tool whose command touched git
+ *      (with `force = true` — see below).
  *  Bursts (multiple edits in quick succession) are collapsed by the
- *  in-flight abort + the server-side `__piRepoStatusCache` (2s TTL). */
-export function notifyMutated(cwd: string): void {
+ *  in-flight abort + the server-side `__piRepoStatusCache` (2s TTL).
+ *
+ *  `force = true` bypasses the server's 2s status cache entirely. Use it
+ *  when git-level state may have just changed (bash ran a git subcommand):
+ *  a plain refetch could land inside the cache window behind an earlier
+ *  edit-triggered fetch and return the pre-`git add` stale list, with no
+ *  follow-up fetch scheduled. */
+export function notifyMutated(cwd: string, force = false): void {
   if (state.currentCwd !== cwd) return;
-  void fetchAndStore(cwd);
+  void fetchAndStore(cwd, force);
 }
 
-async function fetchAndStore(cwd: string): Promise<void> {
+async function fetchAndStore(cwd: string, force = false): Promise<void> {
   // Cancel any in-flight fetch — only one request per cwd at a time.
   // When notifyMutated fires within ms of the previous one (e.g. the
   // agent emits a burst of edit/write calls), this dedupes them so we
@@ -156,7 +164,7 @@ async function fetchAndStore(cwd: string): Promise<void> {
   const timeoutId = setTimeout(() => fetchAbort?.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`/api/git?cwd=${encodeURIComponent(cwd)}`, { signal });
+    const res = await fetch(`/api/git?cwd=${encodeURIComponent(cwd)}${force ? "&force=1" : ""}`, { signal });
     if (!res.ok) return;
     const data = (await res.json()) as GitStatusResponse;
 

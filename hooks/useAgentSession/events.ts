@@ -271,7 +271,17 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         if (toolName === AGENT_TODO_TOOL_NAME) setAgentTodoRefreshKey((key) => key + 1);
         const gitCwd = session?.cwd ?? newSessionCwd;
         if (toolName && WORKTREE_MUTATING_TOOL_NAMES.has(toolName) && gitCwd) notifyMutated(gitCwd);
-        if (toolName === "bash" && gitCwd && bashCommandTouchesGit(toolCallArgsRef.current.get(id))) notifyMutated(gitCwd);
+        // bash can also mutate the worktree when the command runs a git
+        // subcommand. The end event doesn't carry args, so we read them
+        // from the scratchpad we populated on _start. Read-only commands
+        // (git status, git log) match too, but the wasted fetch is
+        // negligible. We pass `force = true` so git-level changes (`git
+        // add` / `git commit` / `git stash`) are reflected immediately
+        // instead of falling into the server's 2s status cache behind an
+        // earlier edit-triggered fetch.
+        if (toolName === "bash" && gitCwd && bashCommandTouchesGit(toolCallArgsRef.current.get(id))) {
+          notifyMutated(gitCwd, true);
+        }
         toolCallArgsRef.current.delete(id);
         if (toolName && isShowFileToolName(toolName) && result?.details) {
           const files = (result.details as { files?: unknown }).files;

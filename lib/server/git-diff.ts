@@ -31,7 +31,13 @@ const REPO_ROOT_TTL_MS = 5_000;
  *  refetches on edit/write tool events instead of polling, but bursts of
  *  consecutive edits still hit the same cwd in quick succession; this
  *  cache collapses them into one `git status` invocation per 2s window
- *  per cwd, and keeps status fresh when reads land in the same window. */
+ *  per cwd, and keeps status fresh when reads land in the same window.
+ *
+ *  Callers that know git-level state may have just changed (a bash tool
+ *  that ran a git subcommand) pass `force: true` to bypass the cache
+ *  entirely, so `git add` / `git commit` / `git stash` are reflected
+ *  immediately instead of falling into the 2s window behind an earlier
+ *  edit-triggered fetch. */
 const REPO_STATUS_TTL_MS = 2_000;
 
 /** Cap on a single file's diff output; anything larger is truncated and
@@ -177,10 +183,14 @@ function countUntrackedLines(repoRoot: string, filePath: string): { add: number;
  *  doing path math itself). `cwdRelToRepo` is the prefix we stripped, in
  *  case any consumer needs it (the GitPanel ignores it; the
  *  git-status-store uses it as a no-op signal). */
-export async function getRepoStatus(cwd: string): Promise<GitStatusResponse> {
+export async function getRepoStatus(cwd: string, opts: { force?: boolean } = {}): Promise<GitStatusResponse> {
   const now = Date.now();
   const cache = globalThis.__piRepoStatusCache;
-  if (cache) {
+  // `force` bypasses the read side of the cache but still writes through:
+  // used when the caller knows git-level state just changed (a bash tool
+  // that ran a git subcommand), so the refreshed value is immediately
+  // available to subsequent (deduped) subscribers.
+  if (!opts.force && cache) {
     const hit = cache.get(cwd);
     if (hit && hit.expiresAt > now) return hit.value;
   }
