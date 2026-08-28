@@ -133,8 +133,12 @@ export class AgentSessionWrapper {
       sessionFile: this.sessionFile || undefined,
     });
     this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
-      this.resetIdleTimer();
+      // A running turn may legitimately spend far longer than the idle TTL in
+      // one model request or tool call. Update state first so the idle reaper
+      // is suspended for the entire active turn instead of detaching its SSE
+      // listeners after ten quiet minutes.
       this.updateRunningState(event);
+      this.resetIdleTimer();
       // Push the freshest conversation tree after every persisted message
       // (message_end is when pi writes the entry to the session file), so
       // the conversation-tree panel can render new cards without waiting
@@ -219,7 +223,22 @@ export class AgentSessionWrapper {
 
   private resetIdleTimer(): void {
     if (this.idleTimer) clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.destroy(), 10 * 60 * 1000);
+    this.idleTimer = null;
+
+    // The TTL is for inactive wrappers only. In particular, do not treat a
+    // silent long-running tool/model request as an abandoned browser session:
+    // destroy() unsubscribes the wrapper but does not abort the underlying
+    // AgentSession, which otherwise makes the UI look interrupted while the
+    // agent can still continue and eventually finish in the background.
+    if (this.isRunning()) return;
+
+    this.idleTimer = setTimeout(() => {
+      // An event can start a turn just as this callback is queued. Never reap
+      // an active wrapper in that race; its terminal event will arm the idle
+      // timer again.
+      if (this.isRunning()) return;
+      this.destroy();
+    }, 10 * 60 * 1000);
   }
 
   onEvent(listener: EventListener): () => void {

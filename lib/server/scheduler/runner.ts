@@ -297,10 +297,11 @@ function waitForAgentReply(
       ? ((event as Record<string, unknown>).messages as AssistantMsg[])
       : null;
     if (!messages) {
-      // No messages snapshot — treat as success with empty reply so the run
-      // is recorded. This can happen if pi changed its event shape.
+      // A scheduler task has no other durable completion signal. Do not mark
+      // it successful merely because pi emitted agent_end without the message
+      // snapshot we need to verify a final reply.
       log.warn("agent_end without messages snapshot", { runId });
-      finish(null, "");
+      fail(new Error("agent ended without a messages snapshot"));
       return;
     }
 
@@ -315,6 +316,14 @@ function waitForAgentReply(
         .filter((b): b is TextBlock => b.type === "text")
         .map((b) => b.text ?? "")
         .join("");
+      // A normal-looking `agent_end` can still carry an empty final assistant
+      // message (for example, a model silently stops after a tool result).
+      // For unattended work that is not evidence of task completion; record a
+      // visible error instead of a false-success run.
+      if (!text.trim()) {
+        fail(new Error("agent ended without a final assistant reply"));
+        return;
+      }
       finish(null, text);
       return;
     }
