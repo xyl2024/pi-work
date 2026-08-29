@@ -197,7 +197,7 @@ export function TodoItem({
         onSelect: () => { onDelete(); },
       },
     ];
-    cm.open({ x: e.clientX, y: e.clientY, items });
+    cm.open({ x: e.clientX, y: e.clientY, items, triggerElement: e.currentTarget as HTMLElement });
   };
 
   const commitTitle = () => {

@@ -144,7 +144,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
                 { key: "close-right", label: t("Close tabs to the right"), onSelect: () => onBatchClose?.(tab.tabId, "right"), disabled: index === tabs.length - 1 },
                 { key: "close-others", label: t("Close other tabs"), onSelect: () => onBatchClose?.(tab.tabId, "others"), disabled: tabs.length <= 1 },
               ];
-              cm.open({ x: event.clientX, y: event.clientY, items });
+              cm.open({ x: event.clientX, y: event.clientY, items, triggerElement: event.currentTarget as HTMLElement });
             }}
             style={{
               display: "flex",

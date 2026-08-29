@@ -27,7 +27,7 @@ interface Props {
   activeTabId: string;
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
-  onContextMenu?: (tabId: string, x: number, y: number) => void;
+  onContextMenu?: (tabId: string, x: number, y: number, triggerElement: HTMLElement | null) => void;
 }
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMenu }: Props) {
@@ -139,7 +139,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
-                onContextMenu?.(tab.id, e.clientX, e.clientY);
+                onContextMenu?.(tab.id, e.clientX, e.clientY, e.currentTarget as HTMLElement);
               }}
               style={{
                 display: "flex",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useImageLightbox } from "@/hooks/useImageLightbox";
@@ -17,20 +17,7 @@ import { BlockView } from "./blocks";
 import { formatTime, TurnDuration, UsageIcons } from "./utils";
 import type { AssistantMessage, ToolResultMessage, TextContent, ThinkingContent, ToolCallContent, ReadFileInfo } from "@/lib/shared/types";
 
-export function AssistantMessageView({
-  message,
-  isStreaming,
-  toolResults,
-  modelNames,
-  modelIcons,
-  showTimestamp,
-  keywords,
-  isSearchMatch,
-  afterContent,
-  turnDuration,
-  readFiles,
-  onOpenFile,
-}: {
+interface AssistantMessageViewProps {
   message: AssistantMessage;
   isStreaming?: boolean;
   toolResults?: Map<string, ToolResultMessage>;
@@ -45,7 +32,22 @@ export function AssistantMessageView({
   onOpenFile?: (filePath: string, fileName: string) => void;
   sessionId?: string;
   entryId?: string;
-}) {
+}
+
+function AssistantMessageViewInner({
+  message,
+  isStreaming,
+  toolResults,
+  modelNames,
+  modelIcons,
+  showTimestamp,
+  keywords,
+  isSearchMatch,
+  afterContent,
+  turnDuration,
+  readFiles,
+  onOpenFile,
+}: AssistantMessageViewProps) {
   const { t } = useI18n();
   const toast = useToast();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
@@ -75,19 +77,38 @@ export function AssistantMessageView({
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
 
-  const textContent = blocks
-    .filter((block): block is TextContent => block.type === "text")
-    .map((block) => block.text)
-    .join("\n");
-  const copyableContent = textContent || blocks
-    .map((block) => {
-      if (block.type === "text") return block.text;
-      if (block.type === "thinking") return block.thinking;
-      if (block.type === "toolCall") return `${block.toolName}(${JSON.stringify(block.input ?? {})})`;
-      return "";
-    })
-    .filter(Boolean)
-    .join("\n");
+  const textContent = useMemo(
+    () => blocks
+      .filter((block): block is TextContent => block.type === "text")
+      .map((block) => block.text)
+      .join("\n"),
+    [blocks],
+  );
+  const copyableContent = useMemo(
+    () => textContent || blocks
+      .map((block) => {
+        if (block.type === "text") return block.text;
+        if (block.type === "thinking") return block.thinking;
+        if (block.type === "toolCall") return `${block.toolName}(${JSON.stringify(block.input ?? {})})`;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n"),
+    [blocks, textContent],
+  );
+  // Estimated chars while streaming — extracted out of the JSX IIFE so
+  // it doesn't run on every render (only when blocks grow / streaming
+  // flag flips).
+  const streamChars = useMemo(() => {
+    if (!isStreaming) return 0;
+    let chars = 0;
+    for (const block of blocks) {
+      if (block.type === "text") chars += (block as TextContent).text?.length ?? 0;
+      else if (block.type === "thinking") chars += (block as ThinkingContent).thinking?.length ?? 0;
+      else if (block.type === "toolCall") chars += JSON.stringify((block as ToolCallContent).input ?? {}).length;
+    }
+    return chars;
+  }, [isStreaming, blocks]);
 
   const copyContent = () => {
     copyText(copyableContent)
@@ -155,7 +176,13 @@ export function AssistantMessageView({
       if (chars === 0) return;
       if (streamStartRef.current === null) streamStartRef.current = now;
       const elapsed = (now - streamStartRef.current) / 1000;
-      if (elapsed > 0.5) setTps(chars / 4 / elapsed);
+      if (elapsed > 0.5) {
+        const next = chars / 4 / elapsed;
+        // Skip the re-render when the rounded value is unchanged (tps is
+        // displayed with one decimal). With a 300 ms tick this often
+        // avoids 1-2 redundant renders per second during streaming.
+        setTps((prev) => (prev !== null && Math.abs(prev - next) < 0.05 ? prev : next));
+      }
     };
     const id = setInterval(tick, 300);
     return () => clearInterval(id);
@@ -185,13 +212,7 @@ export function AssistantMessageView({
           </>
         )}
         {isStreaming && (() => {
-          let chars = 0;
-          for (const block of blocks) {
-            if (block.type === "text") chars += (block as TextContent).text?.length ?? 0;
-            else if (block.type === "thinking") chars += (block as ThinkingContent).thinking?.length ?? 0;
-            else if (block.type === "toolCall") chars += JSON.stringify((block as ToolCallContent).input ?? {}).length;
-          }
-          const est = Math.round(chars / 4);
+          const est = Math.round(streamChars / 4);
           return (
             <>
               {est > 0 && (
@@ -363,3 +384,19 @@ export function AssistantMessageView({
     </div>
   );
 }
+
+/**
+ * `message` is the heavy prop. For historical entries it's stable, so
+ * the default shallow memo short-circuits the surrounding re-renders
+ * that flow through ChatWindowContent when the streaming store ticks.
+ * The streaming bubble intentionally re-renders on every snapshot
+ * flip (it lives outside the memoized boundary in StreamingBubble),
+ * so memo here is the safety net for *historical* messages.
+ *
+ * `afterContent` and `toolResults` are caller-owned React/Map refs;
+ * callers that want to avoid extra renders should pass stable refs
+ * (which ChatWindow already does — toolResults only changes when an
+ * in-flight tool result actually changes).
+ */
+export const AssistantMessageView = memo(AssistantMessageViewInner);
+AssistantMessageView.displayName = "AssistantMessageView";

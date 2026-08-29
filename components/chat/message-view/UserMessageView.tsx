@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
@@ -15,7 +15,7 @@ import type { ImageContent, UserMessage } from "@/lib/shared/types";
 const COLLAPSED_USER_MSG_HEIGHT = 240;
 const BUBBLE_VERTICAL_EXTRA = 18;
 
-export function UserMessageView({ message, isFocused, onNavigate, prevAssistantEntryId, onEditContent, keywords, isSearchMatch }: {
+function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEntryId, onEditContent, keywords, isSearchMatch }: {
   message: UserMessage;
   isFocused?: boolean;
   onNavigate?: (entryId: string) => void;
@@ -354,3 +354,10 @@ export function UserMessageView({ message, isFocused, onNavigate, prevAssistantE
     </div>
   );
 }
+
+/**
+ * Memoized so historical user messages don't re-render on every
+ * streaming token — they're stable once the user submits.
+ */
+export const UserMessageView = memo(UserMessageViewInner);
+UserMessageView.displayName = "UserMessageView";

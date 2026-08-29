@@ -13,6 +13,8 @@ import type {
 import { countToolCallsByName } from "@/lib/shared/message-display";
 import { getFileName } from "@/lib/shared/file-paths";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
+import { StreamingBubble } from "./StreamingBubble";
+import { useIsStreaming, useIsStreamingThinking } from "@/hooks/useStreamingMessage";
 import { SessionLibraryModal } from "../sessions/session-library/SessionLibraryModal";
 import { SessionLibraryOpenButton } from "../sessions/SessionLibraryOpenButton";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
@@ -37,7 +39,7 @@ import { useToolCallStats } from "@/hooks/useToolCallStats";
 import { setToolCallStatsScrollCallback, setToolCallStatsState } from "@/hooks/toolCallStatsStore";
 import { setAgentControls } from "@/hooks/sessionUiStore";
 import { SessionSearch } from "../sessions/SessionSearch";
-import { phaseLabel, phaseLoaderVariant, hasStreamingThinking, resolveReadPath, isGroupAnchor, findFinalAssistantIndex, hasDisplayableProcessMessage } from "./chat-window/utils";
+import { phaseLabel, phaseLoaderVariant, resolveReadPath, isGroupAnchor, findFinalAssistantIndex, hasDisplayableProcessMessage } from "./chat-window/utils";
 import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
 import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 import { useTextSelection } from "@/hooks/useTextSelection";
@@ -97,6 +99,7 @@ interface Props {
 }
 
 function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenBtw, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
+  const streamingKey = tabId ?? session?.id ?? "default";
   const { t, locale } = useI18n();
   const toast = useToast();
   const isActiveRef = useRef(isActive);
@@ -197,6 +200,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // store and asks AppShell to open the translate tab via a
   // fire-and-forget event.
   const selection = useTextSelection(scrollContainerRef);
+  // Subscribe to the streaming store directly so per-token updates do
+  // not re-render ChatWindowContent's tree (ChatInput, historical
+  // MessageViews, panels, ...). The streaming bubble is rendered by
+  // StreamingBubble, which subscribes on its own.
+  const streamingStoreIsStreaming = useIsStreaming(streamingKey);
+  const streamingStoreIsThinking = useIsStreamingThinking(streamingKey);
   const handleQuoteSelection = useCallback((text: string) => {
     // Markdown blockquote: `> text` followed by a blank line so the
     // user lands on a fresh row to type their follow-up. The trailing
@@ -574,7 +583,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         setTimeout(() => { isProgrammaticScrollRef.current = false; }, 150);
       }
     }
-  }, [streamState.streamingMessage, streamState.isStreaming, scrollContainerRef, userJustSentRef]);
+  }, [streamingStoreIsStreaming, streamState.isStreaming, scrollContainerRef, userJustSentRef]);
 
   // ── Auto-scroll to the truncation point as replay advances ──
   useEffect(() => {
@@ -747,7 +756,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, [isActive, handleScrollToToolCall, tabId]);
 
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
-  const isStreamingThinking = streamState.isStreaming && hasStreamingThinking(streamState.streamingMessage);
+  const isStreamingThinking = streamState.isStreaming && streamingStoreIsThinking;
 
   const availableThinkingLevels = displayModelValue
     ? (modelThinkingLevels[`${displayModelValue.provider}:${displayModelValue.modelId}`] ?? null)
@@ -1402,9 +1411,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               return rendered;
             })()}
 
-            {streamState.isStreaming && streamState.streamingMessage && (
-              <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming modelNames={modelNames} modelIcons={modelIcons} />
-            )}
+            <StreamingBubble tabId={streamingKey} modelNames={modelNames} modelIcons={modelIcons} />
 
             {/* Trailing compaction dividers — points whose `beforeMessageEntryId`
                 doesn't exist yet (compaction just landed at the tail). Renders
@@ -1420,7 +1427,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               </div>
             )}
 
-            {agentRunning && !streamState.streamingMessage && (
+            {agentRunning && !streamState.isStreaming && (
               <div className="py-2">
                 <LoadingState
                   label={phaseLabel(agentPhase, t)}
@@ -1429,7 +1436,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               </div>
             )}
 
-            {agentRunning && !streamState.streamingMessage && (
+            {agentRunning && !streamState.isStreaming && (
               <div style={{ height: 120 }} />
             )}
 

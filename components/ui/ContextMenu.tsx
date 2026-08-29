@@ -18,11 +18,35 @@ interface ContextMenuState {
   x: number;
   y: number;
   items: ContextMenuItem[];
+  /**
+   * Scroll root that should dismiss this menu when *it* scrolls. When
+   * `null`, *any* scroll on the page closes the menu (legacy behavior).
+   *
+   * Set by `open()` callers via `triggerElement`: the provider walks
+   * up to the nearest scrollable ancestor so that programmatic
+   * scrolling in unrelated areas (e.g. ChatWindow auto-scrolling while
+   * a message is streaming) doesn't dismiss a context menu the user
+   * just opened on a different surface (e.g. the session tab bar).
+   */
+  scrollRoot: HTMLElement | Window | null;
+}
+
+interface ContextMenuOpenArgs {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
+  /**
+   * Optional DOM element that originated the menu (typically the right
+   * click target). Used to determine the scroll root that should
+   * dismiss this menu. Pass `null`/omit to keep the legacy
+   * "close on any scroll" behavior.
+   */
+  triggerElement?: HTMLElement | null;
 }
 
 interface ContextMenuContextValue {
   state: ContextMenuState | null;
-  open: (args: { x: number; y: number; items: ContextMenuItem[] }) => void;
+  open: (args: ContextMenuOpenArgs) => void;
   close: () => void;
 }
 
@@ -38,6 +62,44 @@ const ESTIMATED_WIDTH = 220;
 const ESTIMATED_HEIGHT_PER_ITEM = 24;
 const EDGE_PADDING = 8;
 
+function findScrollableAncestor(el: HTMLElement | null): HTMLElement | Window {
+  let cur: HTMLElement | null = el;
+  while (cur && cur !== document.body) {
+    const style = typeof window !== "undefined" ? window.getComputedStyle(cur) : null;
+    if (style) {
+      const overflowY = style.overflowY;
+      const overflowX = style.overflowX;
+      // Only use an element as the root when it can actually scroll. Many
+      // layout containers use `overflow: hidden` merely for clipping and
+      // should not shadow the real scroll container above them.
+      const canScrollY =
+        (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+        cur.scrollHeight > cur.clientHeight;
+      const canScrollX =
+        (overflowX === "auto" || overflowX === "scroll" || overflowX === "overlay") &&
+        cur.scrollWidth > cur.clientWidth;
+      if (canScrollY || canScrollX) return cur;
+    }
+    cur = cur.parentElement;
+  }
+  return window;
+}
+
+function isScrollInRoot(target: EventTarget | null, root: HTMLElement | Window | null): boolean {
+  if (!target) return false;
+  // No explicit root: any scroll closes (back‑forward behavior).
+  if (root === null) return true;
+  if (root === window) {
+    // window-level scrolls only — target is the document / window itself.
+    return target === window || target === document || (target instanceof HTMLElement && target === document.documentElement);
+  }
+  if (!(target instanceof Node)) return false;
+  if (target === root) return true;
+  // Some browsers set `e.target` to the deepest scrollable element;
+  // others set it to a parent. Use contains() to cover both.
+  return (root as HTMLElement).contains(target);
+}
+
 export function ContextMenuProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ContextMenuState | null>(null);
   const stateRef = useRef<ContextMenuState | null>(null);
@@ -48,7 +110,7 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     setState(null);
   }, []);
 
-  const open = useCallback((args: { x: number; y: number; items: ContextMenuItem[] }) => {
+  const open = useCallback((args: ContextMenuOpenArgs) => {
     // Clamp position to viewport
     const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
     const vh = typeof window !== "undefined" ? window.innerHeight : 768;
@@ -56,10 +118,17 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
     const totalH = args.items.length * ESTIMATED_HEIGHT_PER_ITEM + separators * 9;
     const x = Math.min(args.x, vw - ESTIMATED_WIDTH - EDGE_PADDING);
     const y = Math.min(args.y, vh - totalH - EDGE_PADDING);
-    setState({ id: nextId(), x: Math.max(EDGE_PADDING, x), y: Math.max(EDGE_PADDING, y), items: args.items });
+    const scrollRoot = args.triggerElement ? findScrollableAncestor(args.triggerElement) : null;
+    setState({
+      id: nextId(),
+      x: Math.max(EDGE_PADDING, x),
+      y: Math.max(EDGE_PADDING, y),
+      items: args.items,
+      scrollRoot,
+    });
   }, []);
 
-  // Close triggers: outside mousedown, ESC, scroll, resize
+  // Close triggers: outside mousedown, ESC, scroll (scoped), resize
   useEffect(() => {
     if (!state) return;
 
@@ -75,7 +144,14 @@ export function ContextMenuProvider({ children }: { children: ReactNode }) {
         close();
       }
     };
-    const onScroll = () => close();
+    // Only dismiss the menu when the *trigger's* scroll root actually
+    // scrolls. This prevents ChatWindow's per-token auto-scroll from
+    // killing a context menu the user just opened on the session tab
+    // bar, the right-side panel, etc. Legacy `state.scrollRoot === null`
+    // callers still get the old "any scroll closes" behavior.
+    const onScroll = (e: Event) => {
+      if (isScrollInRoot(e.target, state.scrollRoot)) close();
+    };
     const onResize = () => close();
 
     // Use capture so we get the event before any inner handlers

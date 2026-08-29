@@ -1142,7 +1142,7 @@ export function AppShell() {
   }, []);
 
   // Build the per-tab right-click menu. Single tab → no batch actions shown.
-  const handleTabContextMenu = useCallback((tabId: string, x: number, y: number) => {
+  const handleTabContextMenu = useCallback((tabId: string, x: number, y: number, triggerElement: HTMLElement | null) => {
     const idx = fileTabs.findIndex((t) => t.id === tabId);
     if (idx === -1) return;
     const hasLeft = idx > 0;
@@ -1154,7 +1154,7 @@ export function AppShell() {
       { key: "close-right", label: t("Close tabs to the right"), onSelect: () => handleCloseRightTabs(tabId), disabled: !hasRight },
       { key: "close-others", label: t("Close other tabs"), onSelect: () => handleCloseOtherTabs(tabId), disabled: !hasOthers },
     ];
-    cm.open({ x, y, items });
+    cm.open({ x, y, items, triggerElement });
   }, [fileTabs, t, cm, handleCloseFileTab, handleCloseLeftTabs, handleCloseRightTabs, handleCloseOtherTabs]);
 
   const handleFileDeleted = useCallback((filePath: string) => {

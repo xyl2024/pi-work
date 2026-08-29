@@ -10,6 +10,12 @@ import { setGrokbotConfig } from "@/lib/client/grokbot-store";
 import { setShowFileResult } from "../showFileResultsStore";
 import { setPendingAskUserQuestions } from "../askUserQuestionsStore";
 import type { AskUserQuestion } from "@/lib/shared/ask-user-questions-tool-types";
+import {
+  scheduleStreamingUpdate,
+  flushStreamingUpdateSync,
+  startStreaming as startStreamingStore,
+  endStreaming as endStreamingStore,
+} from "../streamingMessageStore";
 import { bashCommandTouchesGit, isBodyMessage, sameCompletedMessage } from "./utils";
 import type { AgentEvent, AgentPhase, AgentRuntimeState, StateSetter, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
 
@@ -29,6 +35,7 @@ type PermissionRef = {
 };
 
 type AgentSessionEventsOptions = {
+  controllerId: string;
   isActive: boolean;
   session: SessionInfo | null;
   newSessionCwd: string | null;
@@ -69,6 +76,7 @@ type AgentSessionEventsOptions = {
 export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
   const handlerRef = useRef<((event: AgentEvent) => void) | null>(null);
   const {
+    controllerId,
     isActive,
     session,
     newSessionCwd,
@@ -132,6 +140,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         setCompactingSync(false);
         setAgentPhase({ kind: "waiting_model" });
         dispatch({ type: "start" });
+        startStreamingStore(controllerId);
         statsEmitRef.current?.({ type: "reset" });
         refreshSystemPrompt();
         lastAssistantIsBodyRef.current = false;
@@ -143,6 +152,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
+        endStreamingStore(controllerId);
         const hadAssistantError = pendingAssistantErrorRef.current !== null;
         if (pendingAssistantErrorRef.current) {
           setRuntimeError(pendingAssistantErrorRef.current);
@@ -179,7 +189,15 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
       case "message_update": {
         const message = event.message as Partial<AgentMessage> | undefined;
         if (message && message.role !== "user") {
-          dispatch({ type: "update", message: normalizeToolCalls(message as AgentMessage) });
+          const normalized = normalizeToolCalls(message as AgentMessage);
+          // Both flags flip to true here. We never publish the actual
+          // message through the reducer — it lives in the standalone
+          // streaming store, so per-token updates only re-render
+          // StreamingBubble (not the whole ChatWindowContent tree).
+          dispatch({ type: "start" });
+          startStreamingStore(controllerId);
+          // rAF-coalesced: many tokens per frame → at most one snapshot flip.
+          scheduleStreamingUpdate(controllerId, normalized);
         }
         setAgentPhase(null);
         break;
@@ -188,6 +206,10 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         const completed = event.message as AgentMessage | undefined;
         if (completed && completed.role !== "user") {
           const normalized = normalizeToolCalls(completed);
+          // Force-flush any pending streaming message before clearing the
+          // stream flag, so the final state isn't lost if a token arrived
+          // in the same frame as message_end.
+          flushStreamingUpdateSync(controllerId, normalized);
           setMessages((previous) => previous.some((message) => sameCompletedMessage(message, normalized))
             ? previous
             : [...previous, normalized]);
@@ -197,6 +219,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           onFirstAssistantReady?.();
         }
         dispatch({ type: "reset" });
+        endStreamingStore(controllerId);
         setAgentPhase({ kind: "waiting_model" });
         if (completed?.role === "assistant" && completed.stopReason === "error") {
           pendingAssistantErrorRef.current = completed.errorMessage ?? "Model call failed";
@@ -316,6 +339,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
+        endStreamingStore(controllerId);
         const errorMessage = event.error as string | undefined || t("Failed to send message");
         setRuntimeError(errorMessage);
         showToast({ kind: "error", message: errorMessage });
@@ -378,6 +402,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           setAgentRunningSync(false);
           setAgentPhase(null);
           dispatch({ type: "end" });
+          endStreamingStore(controllerId);
         }
         if (event.errorMessage && !compactInFlightRef.current) showToast({ kind: "error", message: event.errorMessage as string });
         const compactSessionId = sessionIdRef.current;
@@ -400,6 +425,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     botRevertTimerRef,
     closeEvents,
     compactInFlightRef,
+    controllerId,
     dispatch,
     isActive,
     lastAssistantIsBodyRef,

@@ -276,7 +276,7 @@ function TreeNode({
       { key: "sep2", separatorBefore: true, label: "", onSelect: () => {} },
       { key: "delete", label: t("Delete"), destructive: true, onSelect: () => { onDelete(); } },
     ];
-    cm.open({ x: e.clientX, y: e.clientY, items });
+    cm.open({ x: e.clientX, y: e.clientY, items, triggerElement: e.currentTarget as HTMLElement });
   }, [node, cwd, t, copyText, onOpenFile, onDelete, cm]);
 
   // ---- rename submit ----

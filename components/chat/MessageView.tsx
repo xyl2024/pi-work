@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { AgentMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared/types";
 import { UserMessageView } from "./message-view/UserMessageView";
 import { AssistantMessageView } from "./message-view/AssistantMessageView";
@@ -33,7 +34,16 @@ interface Props {
   onOpenFile?: (filePath: string, fileName: string) => void;
 }
 
-export function MessageView({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, onOpenFile }: Props) {
+/**
+ * `message` is the heavy prop. For history entries it's stable across
+ * token updates (we re-render only on prop change), and for the
+ * streaming bubble we deliberately want re-render on every snapshot
+ * flip — that's why StreamingBubble doesn't memo its inner prop
+ * comparison further. Default shallow memoization short-circuits
+ * historical re-renders when neither message content nor props move,
+ * which is the common case during a streaming turn.
+ */
+function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, onOpenFile }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
 
   if (message.role === "user") {
@@ -55,5 +65,8 @@ export function MessageView({ message, isStreaming, toolResults, modelNames, mod
   }
   return null;
 }
+
+export const MessageView = memo(MessageViewInner);
+MessageView.displayName = "MessageView";
 
 export { CollapseNonceProvider, useCollapseNonce };

@@ -10,6 +10,10 @@ import { setSessionUiState, setLeafChangeHandler, setSystemPromptRefreshHandler 
 import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import { streamReducer } from "./utils";
 import { useAgentSessionEvents } from "./events";
+import {
+  endStreaming as endStreamingStore,
+  startStreaming as startStreamingStore,
+} from "../streamingMessageStore";
 import { useAgentSessionTransport } from "./transport";
 import { useAgentSessionData } from "./data";
 import type {
@@ -31,6 +35,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     modelsRefreshKey, statsEmit,
     scrollToEntryId, onScrollComplete, isActive = true, controllerId,
   } = opts;
+  const streamingKey = controllerId ?? session?.id ?? "default";
   const { t } = useI18n();
   const toast = useToast();
   const isActiveRef = useRef(isActive);
@@ -257,6 +262,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     refreshAgentRuntimeState,
   } = useAgentSessionData({
     sessionIdRef,
+    streamingKey,
     modelThinkingLevels,
     setData,
     setActiveLeafId,
@@ -325,6 +331,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [isActive, refreshSystemPrompt]);
 
   const { handleAgentEventRef: eventHandlerRef } = useAgentSessionEvents({
+    controllerId: streamingKey,
     isActive,
     session,
     newSessionCwd,
@@ -386,6 +393,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setCompactingSync(false);
     setAgentPhase({ kind: "waiting_model" });
     dispatch({ type: "start" });
+    startStreamingStore(streamingKey);
     pendingScrollToUserRef.current = true;
     userJustSentRef.current = true;
 
@@ -454,9 +462,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setCompactingSync(false);
       setAgentPhase(null);
       dispatch({ type: "end" });
+      endStreamingStore(streamingKey);
       closeEvents();
     }
-  }, [isNew, newSessionCwd, newSessionModel, toolSelection, thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, onSessionCreated, refreshSystemPrompt, setAgentRunningSync, setCompactingSync, showToast, t]);
+  }, [isNew, newSessionCwd, newSessionModel, toolSelection, thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, onSessionCreated, refreshSystemPrompt, setAgentRunningSync, setCompactingSync, showToast, streamingKey, t]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;

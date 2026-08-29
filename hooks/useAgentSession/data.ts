@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
 import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/shared/types";
 import { pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
+import { endStreaming as endStreamingStore } from "../streamingMessageStore";
 import type {
   AgentPhase,
   AgentRuntimeState,
@@ -16,6 +17,7 @@ import type {
 
 type UseAgentSessionDataOptions = {
   sessionIdRef: SessionIdRef;
+  streamingKey: string;
   modelThinkingLevels: Record<string, string[]>;
   setData: StateSetter<SessionData | null>;
   setActiveLeafId: StateSetter<string | null>;
@@ -48,6 +50,7 @@ type UseAgentSessionDataOptions = {
 export function useAgentSessionData(options: UseAgentSessionDataOptions) {
   const {
     sessionIdRef,
+    streamingKey,
     modelThinkingLevels,
     setData,
     setActiveLeafId,
@@ -214,8 +217,9 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
       setCompactingSync(false);
       setAgentPhase(null);
       dispatch({ type: "end" });
+      endStreamingStore(streamingKey);
     }
-  }, [dispatch, setAgentPhase, setAgentRunningSync, setCompactingSync, setContextUsage, setSystemPrompt]);
+  }, [dispatch, setAgentPhase, setAgentRunningSync, setCompactingSync, setContextUsage, setSystemPrompt, streamingKey]);
 
   const refreshAgentRuntimeState = useCallback(async (sid = sessionIdRef.current) => {
     if (!sid) return null;
