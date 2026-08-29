@@ -86,6 +86,7 @@ import { useGitStatusStore } from "@/lib/client/git-status-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
+import { useLayoutMode, getLayoutModeSync } from "@/hooks/layoutModeStore";
 import {
   createSessionWorkspaceState,
   getActiveSessionTab,
@@ -332,6 +333,32 @@ export function AppShell() {
   const settings = useEnsureSettings();
   const rightSideBarConfig = settings?.right_side_bar ?? null;
   const { cwds: recentCwds } = useCwdList();
+  // Layout mode (Agentic / Classic) — toggles which column hosts the
+  // chat card vs. the file / panel card. The terminal stays in the
+  // center column in both modes (it's part of the "work area", not the
+  // chat region). See hooks/layoutModeStore.ts for the persistence
+  // semantics.
+  const layoutMode = useLayoutMode();
+
+  // Classic mode hides the chat card behind the right column being
+  // closed, so the very first commit has to paint with the column
+  // open. The `useState` initializer above already handles the
+  // *persisted* case by reading the mode synchronously from
+  // localStorage; this effect covers the *in-session* switch — when the
+  // user flips the Agentic ↔ Classic toggle after the page has
+  // loaded, we re-open the right column so the chat isn't lost behind
+  // a width:0 panel. Only auto-opens; manual close after the switch
+  // is left alone until the next mode change.
+  useEffect(() => {
+    if (layoutMode === "classic" && rightPanelState === "closed") {
+      setRightPanelState("normal");
+    }
+    // We intentionally key this on layoutMode only — depending on
+    // rightPanelState too would re-fire after the auto-open and try
+    // to "re-open" a panel that's already open, which is a no-op but
+    // makes the effect noisy in the React DevTools profiler.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutMode]);
 
   // Fetch the recent-cwd list exactly once at app start (shared with the
   // CwdPicker, which never refetches on open or remount).
@@ -448,7 +475,18 @@ export function AppShell() {
   // Right panel — file tabs and the context tab
   const [fileTabs, setFileTabs] = useState<Tab[]>([]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
-  const [rightPanelState, setRightPanelState] = useState<"closed" | "normal" | "expanded">("closed");
+  // The right column hosts different cards depending on the layout mode:
+  //   • Agentic → file / panel card, hidden by default (matches the
+  //     pre-mode-toggle behavior: the right column is opt-in).
+  //   • Classic → chat card, so the column must be open by default or
+  //     the user lands on an empty right column with no chat visible.
+  // We read the persisted mode synchronously here so the very first
+  // render already paints the correct state — going through the React
+  // subscription would commit the wrong state first and then flip on
+  // the next tick, producing a visible flash.
+  const [rightPanelState, setRightPanelState] = useState<"closed" | "normal" | "expanded">(() =>
+    getLayoutModeSync() === "classic" ? "normal" : "closed",
+  );
   // Incremented whenever the Git panel is opened, including reopening it
   // after the right panel was closed. GitPanel uses this to refresh status.
   const [gitPanelOpenRefreshToken, setGitPanelOpenRefreshToken] = useState(0);
@@ -1389,6 +1427,277 @@ export function AppShell() {
     [commandContext, t],
   );
 
+  // ── Layout-mode building blocks ────────────────────────────────
+  // The "chat card" (SessionTabBar + the active controller) and the
+  // "panel card" (file/panel tab bar + content body) are each rendered
+  // exactly once per layout. We build them once here so the JSX
+  // returned below stays flat — the center / right columns just pick
+  // which card goes where based on `layoutMode`. Terminal always lives
+  // in the center column, so it stays in the render path that wraps
+  // `chatCard` / `panelCard` at the JSX root.
+  //
+  // Two leading-control buttons live on the *column* position rather
+  // than on the card they decorate, so the layout mode can swap them
+  // without losing the user's muscle memory:
+  //
+  //   • `sidebarToggleLeading` always sits at the *center column*'s
+  //     top-left corner — it hides/shows the global left sidebar.
+  //     In Agentic mode that column hosts the chat, so the button is
+  //     rendered as the SessionTabBar's `leadingControl`; in Classic
+  //     mode the same button rides the panel card's tab bar instead.
+  //
+  //   • `expandPanelLeading` always sits at the *right column*'s
+  //     top-left corner — it widens/narrows the right column.
+  //     In Agentic mode it lives on the panel card's tab bar; in
+  //     Classic mode it moves to the chat card's SessionTabBar.
+  //
+  // Because each button's column is fixed, swapping the buttons
+  // between the two cards automatically puts them back in the same
+  // physical location the user expects regardless of the mode.
+  const sidebarToggleLeading = (
+    <Tooltip content={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}>
+      <button
+        type="button"
+        onClick={() => setSidebarOpen((v) => !v)}
+        aria-label={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 36,
+          height: 36,
+          padding: 0,
+          background: "none",
+          border: "none",
+          color: "var(--text-muted)",
+          cursor: "pointer",
+          flexShrink: 0,
+          transition: "color 0.12s",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
+      >
+        <MorphToggleIcon from={MENU} to={PANEL_LEFT} active={sidebarOpen} />
+      </button>
+    </Tooltip>
+  );
+
+  // Visibility for the right-column expand button:
+  //   • Agentic: only when the panel actually has tabs to show — the
+  //     button was originally panel-chrome, so an empty panel keeps
+  //     its leading slot empty.
+  //   • Classic: the button rides the chat card; show it whenever the
+  //     right column is open at all (so the user can collapse/expand
+  //     even if no file tabs are open yet).
+  const showExpandPanelLeading = layoutMode === "agentic"
+    ? rightPanelState !== "closed" && fileTabs.length > 0
+    : rightPanelState !== "closed";
+
+  const expandPanelLeading = showExpandPanelLeading ? (
+    <Tooltip content={rightPanelState === "expanded" ? t("Collapse panel") : t("Expand panel")}>
+      <button
+        type="button"
+        onClick={() => setRightPanelState((v) => v === "expanded" ? "normal" : "expanded")}
+        aria-label={rightPanelState === "expanded" ? t("Collapse panel") : t("Expand panel")}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 36,
+          height: 36,
+          padding: 0,
+          background: "none",
+          border: "none",
+          color: rightPanelState === "expanded" ? "var(--accent)" : "var(--text-muted)",
+          cursor: "pointer",
+          flexShrink: 0,
+          transition: "color 0.12s",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelState === "expanded" ? "var(--accent)" : "var(--text-muted)"; }}
+      >
+        {rightPanelState === "expanded" ? <ExpandLeftIcon /> : <ExpandRightIcon size={16} />}
+      </button>
+    </Tooltip>
+  ) : null;
+
+  // Which leading control each card should expose. The mapping is the
+  // inverse of the two buttons above: the chat card always rides the
+  // center column, so it gets the sidebar toggle in Agentic mode and
+  // the expand toggle in Classic mode; the panel card is the mirror.
+  const chatLeadingControl = layoutMode === "agentic" ? sidebarToggleLeading : expandPanelLeading;
+  const panelLeadingControl = layoutMode === "agentic" ? expandPanelLeading : sidebarToggleLeading;
+
+  const chatCard = (
+    <div
+      style={{
+        flex: terminalFullscreen ? "0 0 0%" : "1 1 0%",
+        minHeight: terminalFullscreen ? 0 : MIN_CHAT_HEIGHT,
+        display: terminalFullscreen ? "none" : "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        borderRadius: "var(--panel-radius)",
+        border: "1px solid var(--panel-border)",
+        background: "var(--bg)",
+      }}
+    >
+      {showChat && (
+        <SessionTabBar
+          leadingControl={chatLeadingControl}
+          tabs={workspace.tabOrder.map((tabId) => workspace.tabs[tabId]).filter((tab): tab is SessionTab => Boolean(tab))}
+          activeTabId={activeTabId}
+          onSelectTab={handleActivateSessionTab}
+          onCloseTab={(tabId) => { void handleCloseSessionTab(tabId); }}
+          onBatchClose={(tabId, mode) => { void handleBatchCloseSessionTabs(tabId, mode); }}
+          onReload={handleReloadSessionTab}
+          onNewSession={() => handleSlashNew()}
+        />
+      )}
+
+      {/* Chat content. Every opened tab keeps its controller mounted so its
+          messages, input draft, scroll position and SSE survive activation
+          changes. Only the active controller is visible/projected. */}
+      <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+        {showChat && workspace.tabOrder.map((tabId) => {
+          const tab = workspace.tabs[tabId];
+          if (!tab) return null;
+          return (
+            <WorkspaceChatTab
+              key={`${tab.tabId}:${reloadCounters[tab.tabId] ?? 0}`}
+              tab={tab}
+              isActive={tab.tabId === activeTabId}
+              registerChatInputRef={registerChatInputRef}
+              onAgentEnd={handleAgentEnd}
+              onSessionCreated={handleSessionCreated}
+              onSessionInfoLoaded={(_tabId, session) => dispatchWorkspace({ type: "open_session", session })}
+              onFirstAssistantReady={handleFirstAssistantReady}
+              modelsRefreshKey={modelsRefreshKey}
+              scrollToEntryId={pendingScrollEntryIds[tab.tabId] ?? null}
+              onScrollComplete={() => setPendingScrollEntryIds((prev) => {
+                if (!(tab.tabId in prev)) return prev;
+                const next = { ...prev };
+                delete next[tab.tabId];
+                return next;
+              })}
+              onNewSessionRequest={handleSlashNew}
+              onOpenBtw={handleSlashOpenBtw}
+              onCwdChange={handleCwdPicked}
+              onRenameCompleted={handleSessionRenameCompleted}
+              onSessionNameChange={handleSessionNameChange}
+              onOpenFile={handleOpenFile}
+              onDraftChange={handleDraftChange}
+              onAgentStatusChange={handleAgentStatusChange}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // Panel card — the right-side workspace that hosts file viewers,
+  // tool lists, canvas, RSS, BTW, etc. Built once; the layout mode
+  // decides whether it sits next to (Agentic) or instead of (Classic)
+  // the chat card. The same expand / collapse right-panel state is
+  // used in both modes: expanding still pushes the *other* center
+  // card off-screen so the right column takes the full width.
+  const panelCard = (
+    <>
+      {/* Right panel tab bar — mirrors the SessionTabBar chrome (one
+          leading-control slot on the left, tabs filling the rest). The
+          leading slot is filled by `panelLeadingControl` so the expand
+          toggle in Agentic mode swaps to the sidebar toggle in Classic
+          mode, keeping the right column's top-left corner semantics
+          consistent across modes. */}
+      <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "transparent", height: 34, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 6px", gap: 2 }}>
+        {panelLeadingControl && (
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "stretch" }}>
+            {panelLeadingControl}
+          </div>
+        )}
+        <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+          <TabBar
+            tabs={fileTabs}
+            activeTabId={activeFileTabId ?? ""}
+            onSelectTab={(tabId) => {
+              setActiveFileTabId(tabId);
+            }}
+            onCloseTab={(tabId) => {
+              handleCloseFileTab(tabId);
+            }}
+            onContextMenu={handleTabContextMenu}
+          />
+        </div>
+      </div>
+
+      {/* File content — same body routing as the original right panel.
+          Pulled into a fragment-level child so the surrounding column
+          handles flex / overflow without an extra wrapper div. */}
+      <div style={{ flex: 1, overflow: "hidden" }}>
+        {activeFileTab?.kind === "todo" ? (
+          <MemoTodoPanel />
+        ) : activeFileTab?.kind === "favorites" ? (
+          <CollectionPanel
+            favoriteIds={favoriteIds}
+            onSelectSession={handleSelectSession}
+            onToggleFavorite={toggleSessionFavorite}
+          />
+        ) : activeFileTab?.kind === "translate" ? (
+          <TranslatePanel />
+        ) : activeFileTab?.kind === "toolCalls" ? (
+          <ToolCallStatsTabBody />
+        ) : activeFileTab?.kind === "json" ? (
+          <JsonPanel />
+        ) : activeFileTab?.kind === "file" ? (
+          <FileViewer
+            filePath={activeFileTab.filePath}
+            cwd={selectedSession?.cwd ?? newSessionCwd ?? undefined}
+            rightPanelState={rightPanelState}
+          />
+        ) : activeFileTab?.kind === "canvas" ? (
+          <CanvasPanel />
+        ) : activeFileTab?.kind === "rss" ? (
+          <RssPanel />
+        ) : activeFileTab?.kind === "tokens" ? (
+          <TokensPanel />
+        ) : activeFileTab?.kind === "llmAudit" ? (
+          <LlmAuditPanel currentSessionId={selectedSession?.id ?? null} />
+        ) : activeFileTab?.kind === "context" ? (
+          <ContextPanel
+            systemPrompt={systemPrompt}
+            tools={tools}
+          />
+        ) : activeFileTab?.kind === "btw" ? (
+          <BtwPanel
+            mainSessionId={selectedSession?.id ?? null}
+            cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+            model={currentModel}
+            systemPrompt={systemPrompt}
+            thinkingLevel={thinkingLevel}
+            onRefresh={refreshSystemPrompt}
+            focusRequest={btwFocusRequest}
+          />
+        ) : activeFileTab?.kind === "gitDiff" ? (
+          <GitPanel
+            cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+            openRefreshToken={gitPanelOpenRefreshToken}
+            onExpandPanel={handleExpandGitPanel}
+            isPanelExpanded={rightPanelState === "expanded"}
+          />
+        ) : activeFileTab?.kind === "conversationTree" ? (
+          <ConversationTreePanel
+            isStreaming={isStreaming}
+            agentRunning={agentRunning}
+            onCardClick={(card) => handleConversationTreeCardClick(card.id)}
+          />
+        ) : (
+          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
+            {t("No file open")}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   const sidebarContent = (
     <SessionSidebar
       selectedSession={selectedSession}
@@ -1461,99 +1770,22 @@ export function AppShell() {
 
       {/* Drag handle removed — sidebar width is fixed. */}
 
-      {/* Center column: chat card + terminal card stacked, both rounded
-          panels. The terminal embeds inside this column (replacing the
-          previous floating overlay), so opening it only squeezes the chat
-          card — the sidebar and right panel are untouched. flex-grow
+      {/* Center column: the layout mode decides which card lives up top:
+            - Agentic: chat card + terminal card (original behavior).
+            - Classic: panel card + terminal card (chat moves to the
+                       right column instead).
+          The terminal stays anchored to this column in both modes — it
+          is part of the "work area", not the chat region. flex-grow
           still animates the squeeze when the right panel goes expanded:
           center grows 1->0 while the right panel grows 0->1, so the
           whiteboard takeover slides instead of snapping. */}
       <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen && !terminalFullscreen ? "var(--panel-gap-stack)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
-        {/* Chat card — keeps a minimum height so dragging the terminal taller
-            can never squash the input box out of view. */}
-        <div style={{ flex: terminalFullscreen ? "0 0 0%" : "1 1 0%", minHeight: terminalFullscreen ? 0 : MIN_CHAT_HEIGHT, display: terminalFullscreen ? "none" : "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--panel-radius)", border: "1px solid var(--panel-border)", background: "var(--bg)" }}>
-        {showChat && (
-          <SessionTabBar
-            leadingControl={
-              <Tooltip content={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}>
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen((v) => !v)}
-                  aria-label={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 36,
-                    height: 36,
-                    padding: 0,
-                    background: "none",
-                    border: "none",
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                    transition: "color 0.12s",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-                >
-                  <MorphToggleIcon from={MENU} to={PANEL_LEFT} active={sidebarOpen} />
-                </button>
-              </Tooltip>
-            }
-            tabs={workspace.tabOrder.map((tabId) => workspace.tabs[tabId]).filter((tab): tab is SessionTab => Boolean(tab))}
-            activeTabId={activeTabId}
-            onSelectTab={handleActivateSessionTab}
-            onCloseTab={(tabId) => { void handleCloseSessionTab(tabId); }}
-            onBatchClose={(tabId, mode) => { void handleBatchCloseSessionTabs(tabId, mode); }}
-            onReload={handleReloadSessionTab}
-            onNewSession={() => handleSlashNew()}
-          />
-        )}
+        {layoutMode === "agentic" ? chatCard : panelCard}
 
-        {/* Chat content. Every opened tab keeps its controller mounted so its
-            messages, input draft, scroll position and SSE survive activation
-            changes. Only the active controller is visible/projected. */}
-        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-          {showChat && workspace.tabOrder.map((tabId) => {
-            const tab = workspace.tabs[tabId];
-            if (!tab) return null;
-            return (
-              <WorkspaceChatTab
-                key={`${tab.tabId}:${reloadCounters[tab.tabId] ?? 0}`}
-                tab={tab}
-                isActive={tab.tabId === activeTabId}
-                registerChatInputRef={registerChatInputRef}
-                onAgentEnd={handleAgentEnd}
-                onSessionCreated={handleSessionCreated}
-                onSessionInfoLoaded={(_tabId, session) => dispatchWorkspace({ type: "open_session", session })}
-                onFirstAssistantReady={handleFirstAssistantReady}
-                modelsRefreshKey={modelsRefreshKey}
-                scrollToEntryId={pendingScrollEntryIds[tab.tabId] ?? null}
-                onScrollComplete={() => setPendingScrollEntryIds((prev) => {
-                  if (!(tab.tabId in prev)) return prev;
-                  const next = { ...prev };
-                  delete next[tab.tabId];
-                  return next;
-                })}
-                onNewSessionRequest={handleSlashNew}
-                onOpenBtw={handleSlashOpenBtw}
-                onCwdChange={handleCwdPicked}
-                onRenameCompleted={handleSessionRenameCompleted}
-                onSessionNameChange={handleSessionNameChange}
-                onOpenFile={handleOpenFile}
-                onDraftChange={handleDraftChange}
-                onAgentStatusChange={handleAgentStatusChange}
-              />
-            );
-          })}
-        </div>
-        </div>
-
-        {/* Drag handle sitting in the gap between the chat card and the
+        {/* Drag handle sitting in the gap between the work card and the
             terminal card. Always mounted so the running pty/WS and layout
             survive collapse, but height: 0 when closed so it neither
-            overlaps the chat card (which would push it past the parent's
+            overlaps the work card (which would push it past the parent's
             overflow:hidden and clip its bottom border) nor occupies any
             space. Transitions alongside the gap and terminal card. */}
         <div
@@ -1605,7 +1837,11 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* Right panel: file viewer — always mounted, width animated via CSS */}
+      {/* Right column: in Agentic mode this is the file / panel card,
+          in Classic mode it's the chat card. Width still animates via
+          rightPanelState so expand/collapse semantics are identical in
+          both modes — the user expands whichever card is on the right
+          and the center column shrinks to make room. */}
       <div
         className={`right-panel-container right-panel-${rightPanelState}`}
         style={{
@@ -1617,124 +1853,9 @@ export function AppShell() {
           minWidth: rightPanelState === "closed" ? 0 : rightWidth,
         }}
       >
-        {/* Right panel tab bar */}
-        <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "transparent", height: 34, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 6px", gap: 2 }}>
-          {/* Expand/collapse the right panel. Mirrors the leading
-              "hide sidebar" control on the session tab bar — fixed to
-              the left edge with flexShrink: 0 so it never scrolls out
-              of view when the tabs overflow horizontally. Same behavior
-              as the right-bar column's expand button: only rendered when
-              the panel is open and has tabs, and toggles between
-              "normal" and "expanded". */}
-          {rightPanelState !== "closed" && fileTabs.length > 0 && (
-            <div style={{ flexShrink: 0, display: "flex", alignItems: "stretch" }}>
-              <Tooltip content={rightPanelState === "expanded" ? t("Collapse panel") : t("Expand panel")}>
-                <button
-                  type="button"
-                  onClick={() => setRightPanelState((v) => v === "expanded" ? "normal" : "expanded")}
-                  aria-label={rightPanelState === "expanded" ? t("Collapse panel") : t("Expand panel")}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 36,
-                    height: 36,
-                    padding: 0,
-                    background: "none",
-                    border: "none",
-                    color: rightPanelState === "expanded" ? "var(--accent)" : "var(--text-muted)",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                    transition: "color 0.12s",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = rightPanelState === "expanded" ? "var(--accent)" : "var(--text-muted)"; }}
-                >
-                  {rightPanelState === "expanded" ? <ExpandLeftIcon /> : <ExpandRightIcon size={16} />}
-                </button>
-              </Tooltip>
-            </div>
-          )}
-          <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-            <TabBar
-              tabs={fileTabs}
-              activeTabId={activeFileTabId ?? ""}
-              onSelectTab={(tabId) => {
-                setActiveFileTabId(tabId);
-              }}
-              onCloseTab={(tabId) => {
-                handleCloseFileTab(tabId);
-              }}
-              onContextMenu={handleTabContextMenu}
-            />
-          </div>
-        </div>
-
-        {/* File content */}
-        <div style={{ flex: 1, overflow: "hidden" }}>
-          {activeFileTab?.kind === "todo" ? (
-            <MemoTodoPanel />
-          ) : activeFileTab?.kind === "favorites" ? (
-            <CollectionPanel
-              favoriteIds={favoriteIds}
-              onSelectSession={handleSelectSession}
-              onToggleFavorite={toggleSessionFavorite}
-            />
-          ) : activeFileTab?.kind === "translate" ? (
-            <TranslatePanel />
-          ) : activeFileTab?.kind === "toolCalls" ? (
-            <ToolCallStatsTabBody />
-          ) : activeFileTab?.kind === "json" ? (
-            <JsonPanel />
-          ) : activeFileTab?.kind === "file" ? (
-            <FileViewer
-              filePath={activeFileTab.filePath}
-              cwd={selectedSession?.cwd ?? newSessionCwd ?? undefined}
-              rightPanelState={rightPanelState}
-            />
-          ) : activeFileTab?.kind === "canvas" ? (
-            <CanvasPanel />
-          ) : activeFileTab?.kind === "rss" ? (
-            <RssPanel />
-          ) : activeFileTab?.kind === "tokens" ? (
-            <TokensPanel />
-          ) : activeFileTab?.kind === "llmAudit" ? (
-            <LlmAuditPanel currentSessionId={selectedSession?.id ?? null} />
-          ) : activeFileTab?.kind === "context" ? (
-            <ContextPanel
-              systemPrompt={systemPrompt}
-              tools={tools}
-            />
-          ) : activeFileTab?.kind === "btw" ? (
-            <BtwPanel
-              mainSessionId={selectedSession?.id ?? null}
-              cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
-              model={currentModel}
-              systemPrompt={systemPrompt}
-              thinkingLevel={thinkingLevel}
-              onRefresh={refreshSystemPrompt}
-              focusRequest={btwFocusRequest}
-            />
-          ) : activeFileTab?.kind === "gitDiff" ? (
-            <GitPanel
-              cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
-              openRefreshToken={gitPanelOpenRefreshToken}
-              onExpandPanel={handleExpandGitPanel}
-              isPanelExpanded={rightPanelState === "expanded"}
-            />
-          ) : activeFileTab?.kind === "conversationTree" ? (
-            <ConversationTreePanel
-              isStreaming={isStreaming}
-              agentRunning={agentRunning}
-              onCardClick={(card) => handleConversationTreeCardClick(card.id)}
-            />
-          ) : (
-            <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-              {t("No file open")}
-            </div>
-          )}
-        </div>
+        {layoutMode === "agentic" ? panelCard : chatCard}
       </div>
+
       </div>
 
       {/* Bottom status bar: spans the sidebar, chat, and right panel, but not

@@ -195,20 +195,15 @@ const canvasDescriptor: RightBarDescriptor = {
   labelKey: "Open canvas",
   isActive: (ctx) => ctx.activeTabKind === "canvas",
   content: () => <PencilIcon size={16} />,
-  // Canvas widens the panel to "expanded" when activated so the whiteboard
-  // gets the full right column. Re-clicking when already expanded falls
-  // back to "normal"; matching the previous handleToggleCanvasTab logic.
-  onClick: (ctx) => {
-    if (
-      ctx.activeTabKind === "canvas" &&
-      ctx.rightPanelState === "expanded"
-    ) {
-      ctx.setRightPanelState("normal");
-      return;
-    }
-    ctx.toggleRightPanelTab(CANVAS_TAB_ID, ctx.openTab.canvas);
-    ctx.setRightPanelState("expanded");
-  },
+  // Canvas no longer forces the right panel into the "expanded" state —
+  // the panel opens at its normal width so the chat (or whatever card
+  // shares the center column) keeps room to breathe. The previous
+  // auto-expand behavior made sense when the chat was always in the
+  // center column, but with the layout-mode switcher the canvas can
+  // sit next to the chat (Classic mode) where forcing expanded would
+  // hide the chat behind it.
+  onClick: (ctx) =>
+    ctx.toggleRightPanelTab(CANVAS_TAB_ID, ctx.openTab.canvas),
 };
 
 const translateDescriptor: RightBarDescriptor = {
@@ -276,21 +271,11 @@ const tokensDescriptor: RightBarDescriptor = {
   labelKey: "Open token audit",
   isActive: (ctx) => ctx.activeTabKind === "tokens",
   content: () => <TokensIcon size={16} />,
-  // Mirrors canvasDescriptor: open the tab and widen the panel to
-  // "expanded" so the token-audit dashboard gets the full right column
-  // (chat flex shrinks to 0). Re-clicking when already expanded falls
-  // back to "normal".
-  onClick: (ctx) => {
-    if (
-      ctx.activeTabKind === "tokens" &&
-      ctx.rightPanelState === "expanded"
-    ) {
-      ctx.setRightPanelState("normal");
-      return;
-    }
-    ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens);
-    ctx.setRightPanelState("expanded");
-  },
+  // Token audit no longer auto-expands the right panel — see
+  // canvasDescriptor for the rationale (the panel can sit next to the
+  // chat in Classic mode, where forcing expanded would hide it).
+  onClick: (ctx) =>
+    ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens),
 };
 
 const llmAuditDescriptor: RightBarDescriptor = {

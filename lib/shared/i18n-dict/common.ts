@@ -233,4 +233,17 @@ export const common = {
   "Failed to delete session": "删除会话失败",
   "Failed to rename session": "重命名会话失败",
   "Failed to update pin": "更新置顶失败",
+
+  // Layout mode switcher (sidebar top). "Agentic" / "Classic" are
+  // product-style identifiers; keep them as-is in zh to match the
+  // button label and stay searchable.
+  "Layout mode": "布局模式",
+  "Agentic": "Agentic",
+  "Classic": "Classic",
+  "Switch to Agentic layout": "切换到 Agentic 布局",
+  "Switch to Classic layout": "切换到 Classic 布局",
+  "Agentic layout: chat in the center, file panel on the right.":
+    "Agentic 布局：对话在中央，文件面板在右侧。",
+  "Classic layout: file panel in the center, chat on the right.":
+    "Classic 布局：文件面板在中央，对话在右侧。",
 } as const;
