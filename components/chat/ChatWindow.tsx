@@ -42,8 +42,7 @@ import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
 import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
-import { fireTranslateOpened } from "@/hooks/translateOpenStore";
-import { setTranslatePendingInput } from "@/hooks/translateExternalInputStore";
+import { TranslateBubble } from "./translate-bubble";
 
 interface Props {
   /** Stable owner token for active-session imperative bridges. */
@@ -206,15 +205,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     // append to the same line as the quoted content.
     chatInputRef?.current?.insertText(`> ${text}\n\n`);
   }, [chatInputRef]);
-  const handleTranslateSelection = useCallback(() => {
-    if (!selection.text) return;
-    // Pin the target language to Chinese for this gesture so the
-    // TranslatePanel auto-fires once it has a model loaded. The
-    // user's saved `target` preference in the panel is left
-    // untouched.
-    setTranslatePendingInput({ text: selection.text, target: "zh" });
-    fireTranslateOpened();
-  }, [selection.text]);
 
   useEffect(() => {
     onAgentStatusChange?.({
@@ -1068,9 +1058,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       <TextSelectionToolbar
         state={selection}
         onQuote={handleQuoteSelection}
-        onTranslate={handleTranslateSelection}
         onHide={selection.hide}
       />
+      <TranslateBubble />
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[rgba(37,99,235,0.06)] backdrop-blur-[1px]">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

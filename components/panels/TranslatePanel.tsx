@@ -14,7 +14,7 @@ import {
   isLanguageCode,
   type LanguageCode,
 } from "@/lib/shared/translate";
-import { subscribeTranslatePendingInput, consumeTranslatePendingInput } from "@/hooks/translateExternalInputStore";
+import { useTranslationStream } from "@/hooks/useTranslationStream";
 
 const STATE_STORAGE_KEY = "pi-translate-state";
 
@@ -61,10 +61,7 @@ export function TranslatePanel() {
   const [copied, setCopied] = useState(false);
 
   const [input, setInput] = useState("");
-  const [output, setOutput] = useState("");
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const { output, isStreaming, error, start, stop, setOutput } = useTranslationStream();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const outputRef = useRef<HTMLDivElement | null>(null);
 
@@ -105,32 +102,7 @@ export function TranslatePanel() {
         setTarget(data.target);
       }
     } catch { /* malformed JSON or localStorage unavailable — ignore */ }
-  }, []);
-
-  // Pick up text pushed in from outside the panel (e.g. the chat
-  // text-selection toolbar's Translate action). The subscriber also
-  // fires once on subscribe with the current pending value, so a
-  // panel that mounts *after* the toolbar pushed its text still
-  // receives it; consumeTranslatePendingInput drains the slot so a
-  // later remount (e.g. tab re-open) doesn't re-apply the same text.
-  // We replace the existing input wholesale (rather than appending)
-  // because the user gesture is "translate *this*", not "translate
-  // this together with whatever was already in the textarea".
-  //
-  // If the publisher also attached a `target` (the text-selection
-  // toolbar does, with `target: "zh"` so the snippet is translated
-  // into Chinese automatically), we queue an auto-fire in
-  // `autoFireRef`. The actual runTranslation() call lives in a
-  // separate effect below so it can wait for `model` to finish
-  // loading before kicking the request off.
-  useEffect(() => subscribeTranslatePendingInput((next) => {
-    consumeTranslatePendingInput();
-    setInput(next.text);
-    setError(null);
-    if (next.target) {
-      autoFireRef.current = { text: next.text, target: next.target };
-    }
-  }), []);
+  }, [setOutput]);
 
   // Persist input/output/model/target to localStorage on every change. The
   // first run is skipped so the initial empty state doesn't overwrite the
@@ -200,86 +172,6 @@ export function TranslatePanel() {
     el.scrollTop = el.scrollHeight;
   }, [output]);
 
-  // Abort any in-flight request on unmount.
-  useEffect(() => () => {
-    abortRef.current?.abort();
-  }, []);
-
-  const runTranslation = useCallback(async (text: string, targetOverride?: LanguageCode) => {
-    if (!model) return;
-    // Replace any in-flight request.
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setOutput("");
-    setError(null);
-    setIsStreaming(true);
-
-    // One-shot override (used by the external-push auto-fire path so a
-    // text-selection-driven translate can land in Chinese without us
-    // mutating the user's saved `target` preference).
-    const effectiveTarget: LanguageCode = targetOverride ?? target;
-
-    try {
-      const res = await fetch("/api/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text,
-          provider: model.provider,
-          modelId: model.modelId,
-          target: effectiveTarget,
-        }),
-        signal: ctrl.signal,
-      });
-      if (!res.ok || !res.body) {
-        const errText = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status}${errText ? `: ${errText}` : ""}`);
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        let idx;
-        while ((idx = buf.indexOf("\n\n")) >= 0) {
-          const frame = buf.slice(0, idx);
-          buf = buf.slice(idx + 2);
-          const line = frame.split("\n").find((l) => l.startsWith("data: "));
-          if (!line) continue;
-          let payload: { type?: string; text?: string; message?: string };
-          try { payload = JSON.parse(line.slice(6)); } catch { continue; }
-          if (payload.type === "delta" && typeof payload.text === "string") {
-            setOutput((o) => o + payload.text!);
-          } else if (payload.type === "error") {
-            throw new Error(payload.message || t("Translation failed"));
-          }
-          // "done" → loop exits on next read returning done.
-        }
-      }
-      // Strip leading/trailing whitespace (spaces, tabs, newlines) from the
-      // final accumulated translation. Models frequently pad the response
-      // with surrounding newlines; without this, the user sees a blank line
-      // before/after the actual translation.
-      setOutput((o) => o.trim());
-    } catch (e) {
-      if ((e as { name?: string })?.name === "AbortError") return;
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
-      toast.show({ kind: "error", message: msg || t("Translation failed") });
-    } finally {
-      // Only reset if we're still the active controller — a newer
-      // translation may have taken over while we were unwinding.
-      if (abortRef.current === ctrl) {
-        abortRef.current = null;
-        setIsStreaming(false);
-      }
-    }
-  }, [model, target, toast, t]);
-
   // Auto-fire translations queued by external publishers (today: the
   // chat text-selection toolbar's Translate action, which sets
   // `target: "zh"` so the snippet is translated into Chinese). Runs
@@ -301,8 +193,8 @@ export function TranslatePanel() {
       return;
     }
     autoFireRef.current = null;
-    void runTranslation(queued.text, queued.target);
-  }, [input, model, isStreaming, runTranslation]);
+    start({ text: queued.text, target: queued.target, provider: model.provider, modelId: model.modelId });
+  }, [input, model, isStreaming, start]);
 
   // Translation fires only when the user clicks the Translate button (or hits
   // Cmd/Ctrl+Enter). handleTranslate doubles as Stop while a request is
@@ -310,17 +202,17 @@ export function TranslatePanel() {
 
   const handleTranslate = useCallback(() => {
     if (isStreaming) {
-      abortRef.current?.abort();
+      stop();
       return;
     }
     const trimmed = input.trim();
     if (!trimmed || !model) return;
-    void runTranslation(trimmed);
-  }, [input, isStreaming, model, runTranslation]);
+    start({ text: trimmed, target, provider: model.provider, modelId: model.modelId });
+  }, [input, isStreaming, model, start, stop, target]);
 
   const handleStop = useCallback(() => {
-    abortRef.current?.abort();
-  }, []);
+    stop();
+  }, [stop]);
 
   const handleCopy = useCallback(async () => {
     if (!output) return;

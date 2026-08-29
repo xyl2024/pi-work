@@ -1527,3 +1527,12 @@ li.todo-task-item[data-checked="true"] > div {
   from { transform: scale(0.92); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }
 }
+
+/* TranslateBubble: slightly larger fade-rise than the toolbar so the
+ * popover reads as a "real" container instead of another toolbar.
+ * The bubble component sets animation:
+ * translate-bubble-in 0.14s ease-out forwards. */
+@keyframes translate-bubble-in {
+  from { transform: translateY(4px) scale(0.97); opacity: 0; }
+  to   { transform: translateY(0)   scale(1);    opacity: 1; }
+}

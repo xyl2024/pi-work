@@ -30,7 +30,6 @@ import { LlmAuditPanel } from "../panels/LlmAuditPanel";
 import { GitPanel } from "../panels/GitPanel";
 import { BtwPanel } from "../panels/BtwPanel";
 import { useToolCallStatsView, useToolCallStatsScroll } from "@/hooks/toolCallStatsStore";
-import { subscribeTranslateOpened } from "@/hooks/translateOpenStore";
 import { ModelsConfig } from "../settings/ModelsConfig";
 import { SkillsConfig } from "../settings/SkillsConfig";
 import { Tooltip } from "../ui/Tooltip";
@@ -851,12 +850,6 @@ export function AppShell() {
     setActiveFileTabId(TRANSLATE_TAB_ID);
     ensureRightPanelOpen();
   }, [t, ensureRightPanelOpen]);
-
-  // Text-selection toolbar publishes "open translate" through a
-  // fire-and-forget channel rather than a prop chain; subscribe here
-  // and reuse the same handler the right-bar button uses. Stable
-  // unsubscribe keeps the listener list bounded across re-renders.
-  useEffect(() => subscribeTranslateOpened(handleOpenTranslateTab), [handleOpenTranslateTab]);
 
   // Open the tool-calls tab. Toggles: clicking when it's already the active
   // tab hides the right panel entirely; otherwise activate (or create) the

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
-import { setTranslatePendingInput } from "@/hooks/translateExternalInputStore";
 import type { TextSelectionState } from "@/hooks/useTextSelection";
+import { openTranslateBubble } from "@/hooks/translateBubbleStore";
 
 /** Small icon — keeps the toolbar footprint compact so it doesn't
  *  dominate the user's selection. */
@@ -41,14 +41,10 @@ interface Props {
    *  parent is responsible for inserting it into the chat input as a
    *  markdown blockquote. */
   onQuote: (text: string) => void;
-  /** Called when the user clicks Translate. The parent opens the
-   *  right-hand translate panel; the toolbar pushes the text into the
-   *  panel via the translateExternalInputStore. */
-  onTranslate: () => void;
   /** Dismiss the toolbar after an action completes. The toolbar calls
-   *  this on every button press so a successful Quote / Translate /
-   *  Copy doesn't leave the toolbar hovering over the chat after the
-   *  user's intent is already fulfilled. */
+   *  this on every button press so a successful Quote / Copy /
+   *  Translate gesture doesn't leave the toolbar hovering over the
+   *  chat after the user's intent is already fulfilled. */
   onHide: () => void;
 }
 
@@ -60,8 +56,14 @@ interface Props {
  * space using the `rect` provided by the hook. The toolbar itself is
  * a single fixed-position element; the only state it owns is the
  * transient "Copied!" affordance on the Copy button.
+ *
+ * Translation gestures are no longer coupled to the right-side
+ * TranslatePanel: clicking `toChinese` / `toEnglish` publishes to the
+ * module-level `translateBubbleStore`, and a single TranslateBubble
+ * instance (mounted at the chat root) renders the floating
+ * popover. This keeps the toolbar a pure intent-publisher.
  */
-export function TextSelectionToolbar({ state, onQuote, onTranslate, onHide }: Props) {
+export function TextSelectionToolbar({ state, onQuote, onHide }: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const ref = useRef<HTMLDivElement | null>(null);
@@ -70,7 +72,7 @@ export function TextSelectionToolbar({ state, onQuote, onTranslate, onHide }: Pr
 
   // Toolbar dimensions are needed to clamp into the viewport. Read
   // them from the rendered element after every visibility flip; the
-  // toolbar is small (3 buttons) so the cost is negligible.
+  // toolbar is small (4 buttons) so the cost is negligible.
   useEffect(() => {
     if (!state.visible) {
       setPos(null);
@@ -111,20 +113,18 @@ export function TextSelectionToolbar({ state, onQuote, onTranslate, onHide }: Pr
     onHide();
   }, [state.text, toast, t, onHide]);
 
-  const handleTranslate = useCallback(() => {
-    if (!state.text) return;
-    // Publish *before* opening the panel so a panel that is already
-    // mounted (user re-translates a different snippet without closing
-    // the tab) also picks up the new text. The store's subscriber
-    // pushes it into the textarea and, because we attach `target:
-    // "zh"`, also auto-fires the translation into Chinese for this
-    // gesture. The user's saved `target` preference in the panel is
-    // not touched, so switching the tab back later still shows the
-    // language they last used.
-    setTranslatePendingInput({ text: state.text, target: "zh" });
-    onTranslate();
-    onHide();
-  }, [state.text, onTranslate, onHide]);
+  // Both translation gestures share the same flow: open the bubble
+  // for the chosen direction, then hide the toolbar so the bubble
+  // has the visual focus. `openTranslateBubble` is a no-op if
+  // `state.text` is empty, so the empty-selection case is safe.
+  const openBubble = useCallback((direction: "zh" | "en") => {
+    if (!state.text || !state.rect) return;
+    openTranslateBubble(direction, state.text, {
+      top: state.rect.top,
+      centerX: state.rect.centerX,
+      width: state.rect.width,
+    });
+  }, [state.text, state.rect]);
 
   const handleQuote = useCallback(() => {
     if (!state.text) return;
@@ -136,10 +136,11 @@ export function TextSelectionToolbar({ state, onQuote, onTranslate, onHide }: Pr
   // render — the buttons themselves are stable across selections
   // apart from their onClick targets.
   const buttons = useMemo(() => [
-    { key: "translate", label: t("Translate"), icon: Icon.Translate, onClick: handleTranslate },
+    { key: "to-zh", label: t("toChinese"), icon: Icon.Translate, onClick: () => openBubble("zh") },
+    { key: "to-en", label: t("toEnglish"), icon: Icon.Translate, onClick: () => openBubble("en") },
     { key: "quote", label: t("Quote"), icon: Icon.Quote, onClick: handleQuote },
     { key: "copy", label: copied ? t("Copied") : t("Copy"), icon: Icon.Copy, onClick: handleCopy },
-  ], [t, handleTranslate, handleQuote, handleCopy, copied]);
+  ], [t, openBubble, handleQuote, handleCopy, copied]);
 
   if (!state.visible) return null;
 
