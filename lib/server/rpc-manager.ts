@@ -139,6 +139,7 @@ export class AgentSessionWrapper {
       // listeners after ten quiet minutes.
       this.updateRunningState(event);
       this.resetIdleTimer();
+      if (event.type === "agent_end") this.logEmptyTerminalReply(event);
       // Push the freshest conversation tree after every persisted message
       // (message_end is when pi writes the entry to the session file), so
       // the conversation-tree panel can render new cards without waiting
@@ -204,6 +205,30 @@ export class AgentSessionWrapper {
         error: String(e),
       });
     }
+  }
+
+  /**
+   * A successful HTTP stream can still become an empty terminal assistant
+   * message after provider/adapter processing. Emit only safe metadata here;
+   * paired with llm-audit's SSE-terminal log this makes the next occurrence
+   * attributable without logging prompts, replies, or tool arguments.
+   */
+  private logEmptyTerminalReply(event: AgentEvent): void {
+    const messages = Array.isArray(event.messages) ? event.messages : [];
+    const lastAssistant = [...messages].reverse().find((message) => (
+      !!message && typeof message === "object" && (message as { role?: unknown }).role === "assistant"
+    )) as { content?: unknown; stopReason?: unknown; usage?: unknown } | undefined;
+    if (!lastAssistant || !Array.isArray(lastAssistant.content) || lastAssistant.content.length !== 0) return;
+
+    const model = this.inner.model;
+    log.warn("agent ended with an empty terminal assistant message", {
+      sessionId: this.sessionId,
+      provider: model?.provider ?? null,
+      modelId: model?.id ?? null,
+      stopReason: typeof lastAssistant.stopReason === "string" ? lastAssistant.stopReason : null,
+      usage: lastAssistant.usage ?? null,
+      messageCount: messages.length,
+    });
   }
 
   private updateRunningState(event: AgentEvent): void {

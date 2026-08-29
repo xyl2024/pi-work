@@ -278,6 +278,87 @@ export async function refreshAuditModelRuntime(): Promise<boolean> {
   return true;
 }
 
+// ── Empty-stream diagnostics ───────────────────────────────────────────────
+
+/**
+ * Consume a clone of an SSE provider response without retaining its content.
+ * We only emit a diagnostic when a stream terminates normally without any text
+ * or tool-call delta. That is the ambiguous case behind a persisted empty
+ * assistant reply: the metadata distinguishes an upstream empty stream from a
+ * later Pi/adapter transformation, without putting model output in logs.
+ */
+function observeEmptySseTerminal(
+  response: Response,
+  meta: { sessionId: string | null; provider: string | null; modelId: string | null; api: string | null; attempt: number },
+): void {
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("text/event-stream") || !response.body) return;
+
+  void (async () => {
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let pending = "";
+    let sawTextDelta = false;
+    let sawToolCallDelta = false;
+    const terminalReasons = new Set<string>();
+    const eventTypes = new Set<string>();
+
+    const inspectLine = (line: string) => {
+      if (!line.startsWith("data:")) return;
+      const raw = line.slice(5).trim();
+      if (!raw || raw === "[DONE]") return;
+      try {
+        const event = JSON.parse(raw) as Record<string, unknown>;
+        if (typeof event.type === "string") eventTypes.add(event.type);
+        const choices = Array.isArray(event.choices) ? event.choices : [];
+        for (const choice of choices) {
+          if (!choice || typeof choice !== "object") continue;
+          const item = choice as Record<string, unknown>;
+          if (typeof item.finish_reason === "string") terminalReasons.add(item.finish_reason);
+          const delta = item.delta as Record<string, unknown> | undefined;
+          if (typeof delta?.content === "string" && delta.content.length > 0) sawTextDelta = true;
+          if (Array.isArray(delta?.tool_calls) && delta.tool_calls.length > 0) sawToolCallDelta = true;
+        }
+        const delta = event.delta as Record<string, unknown> | undefined;
+        if (typeof delta?.text === "string" && delta.text.length > 0) sawTextDelta = true;
+        if (event.type === "content_block_start" || event.type === "content_block_delta") {
+          const block = (event.content_block ?? delta) as Record<string, unknown> | undefined;
+          if (block?.type === "tool_use" || block?.type === "input_json_delta") sawToolCallDelta = true;
+        }
+        if (typeof event.stop_reason === "string") terminalReasons.add(event.stop_reason);
+        if (typeof event.status === "string" && ["completed", "incomplete", "cancelled"].includes(event.status)) {
+          terminalReasons.add(event.status);
+        }
+      } catch {
+        // Providers may send non-JSON keepalives. Never interfere with pi's stream.
+      }
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        pending += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+        const lines = pending.split(/\r?\n/);
+        pending = lines.pop() ?? "";
+        for (const line of lines) inspectLine(line);
+        if (done) break;
+      }
+      if (pending) inspectLine(pending);
+      if (!sawTextDelta && !sawToolCallDelta) {
+        log.warn("provider SSE ended without text or tool-call delta", {
+          ...meta,
+          terminalReasons: [...terminalReasons],
+          eventTypes: [...eventTypes].slice(-8),
+        });
+      }
+    } catch (error) {
+      log.debug("provider SSE diagnostic read failed", { ...meta, error: String(error) });
+    } finally {
+      reader.releaseLock();
+    }
+  })();
+}
+
 // ── fetch patch ────────────────────────────────────────────────────────────
 
 /**
@@ -361,6 +442,9 @@ export function installLlmFetchAudit(): void {
       } catch (e) {
         log.warn("llm-audit insert failed", { error: String(e) });
       }
+      // A cloned reader observes only protocol metadata and runs independently
+      // of the SDK's consumer. It never stores model text or tool arguments.
+      observeEmptySseTerminal(response.clone(), { sessionId, provider, modelId, api, attempt });
       return response;
     } catch (error) {
       try {
