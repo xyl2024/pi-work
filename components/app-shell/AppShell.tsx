@@ -1521,12 +1521,16 @@ export function AppShell() {
   const chatLeadingControl = layoutMode === "agentic" ? sidebarToggleLeading : expandPanelLeading;
   const panelLeadingControl = layoutMode === "agentic" ? expandPanelLeading : sidebarToggleLeading;
 
+  // Terminal fullscreen hides whichever card lives in the *center* column
+  // (chat in Agentic, panel in Classic) so the xterm gets the whole work
+  // area; the right column's card is untouched in both modes.
+  const chatHiddenByTerminalFullscreen = terminalFullscreen && layoutMode === "agentic";
   const chatCard = (
     <div
       style={{
-        flex: terminalFullscreen ? "0 0 0%" : "1 1 0%",
-        minHeight: terminalFullscreen ? 0 : MIN_CHAT_HEIGHT,
-        display: terminalFullscreen ? "none" : "flex",
+        flex: chatHiddenByTerminalFullscreen ? "0 0 0%" : "1 1 0%",
+        minHeight: chatHiddenByTerminalFullscreen ? 0 : MIN_CHAT_HEIGHT,
+        display: chatHiddenByTerminalFullscreen ? "none" : "flex",
         flexDirection: "column",
         overflow: "hidden",
         borderRadius: "var(--panel-radius)",
@@ -1773,7 +1777,19 @@ export function AppShell() {
           center grows 1->0 while the right panel grows 0->1, so the
           whiteboard takeover slides instead of snapping. */}
       <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen && !terminalFullscreen ? "var(--panel-gap-stack)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
-        {layoutMode === "agentic" ? chatCard : panelCard}
+        {layoutMode === "agentic" ? chatCard : (
+          <div
+            style={{
+              display: terminalFullscreen ? "none" : "flex",
+              flex: "1 1 0%",
+              flexDirection: "column",
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
+            {panelCard}
+          </div>
+        )}
 
         {/* Drag handle sitting in the gap between the work card and the
             terminal card. Always mounted so the running pty/WS and layout
