@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runNpx } from "@/lib/server/npx";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { sanitizeChildEnv } from "@/lib/server/env-sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -121,7 +122,7 @@ export async function POST(req: Request) {
       log.warn("skill search api failed; falling back to npx", { query: trimmedQuery, error });
       const { stdout, stderr } = await runNpx(["skills", "find", trimmedQuery], {
         timeout: 20000,
-        env: { ...process.env, FORCE_COLOR: "0" },
+        env: { ...sanitizeChildEnv(process.env), FORCE_COLOR: "0" },
       });
 
       const results = parseSearchOutput(stdout + stderr).slice(0, limit);

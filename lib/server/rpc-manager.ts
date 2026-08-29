@@ -19,6 +19,7 @@ import { buildSessionInfoTools } from "./self-tools/session-tools";
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
+import { createPiWorkBashTool } from "./pi-bash-tool";
 
 const log = createLogger("rpc-manager");
 
@@ -988,6 +989,9 @@ export async function startRpcSession(
       // with an existing config.yaml entry don't lose access after the
       // rename.
       customTools: [
+        // Override the SDK built-in bash definition. Its hook runs after
+        // session PI_* variables are injected and does not mutate process.env.
+        createPiWorkBashTool(cwd),
         ...buildTodoTools(["user_todos_list", "user_todo_description"].filter((name) => enabledTools.has(name as "user_todos_list" | "user_todo_description"))),
         ...(enabledTools.has("show_media")
           ? buildShowFileTool()

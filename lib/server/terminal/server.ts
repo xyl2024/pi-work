@@ -27,6 +27,7 @@ import { homedir } from "os";
 import { WebSocketServer, WebSocket } from "ws";
 import * as pty from "node-pty";
 import { createLogger } from "@/lib/server/logger";
+import { sanitizeChildEnv } from "@/lib/server/env-sanitize";
 
 const log = createLogger("terminal/server");
 
@@ -109,12 +110,28 @@ function handleConnection(ws: WebSocket): void {
         }
         killPty();
         try {
+          // We explicitly build the pty env from a sanitised copy of
+          // `process.env` rather than passing `{ ...process.env }`:
+          // the launcher (`pi-work-start`) injects `NODE_ENV=production`,
+          // `PORT=14514`, `HOSTNAME`, internal tokens, WSL/Win interop
+          // vars, and a long `PATH` that includes Windows-side bins.
+          // Without this scrub the user opens their terminal and
+          // immediately finds `npm`/`git`/`code` behave as if they're
+          // running inside the Pi Work production server.
+          //
+          // Build the env explicitly so this code path remains safe even
+          // when instrumentation is skipped (e.g. NEXT_RUNTIME !== "nodejs").
+          // `TERM` is forced to `xterm-256color` because that's what the
+          // front-end xterm.js advertises; preserving the host's TERM
+          // can mislead the shell into 16-colour mode.
+          const ptyEnv = sanitizeChildEnv(process.env);
+          ptyEnv.TERM = "xterm-256color";
           ptyProcess = pty.spawn(resolveShell(), [], {
             name: "xterm-256color",
             cols: 80,
             rows: 24,
             cwd: normalized.path,
-            env: { ...process.env, TERM: "xterm-256color" } as Record<string, string>,
+            env: ptyEnv as Record<string, string>,
           });
         } catch (err) {
           send({ type: "error", message: `Failed to start shell: ${String(err)}` });
