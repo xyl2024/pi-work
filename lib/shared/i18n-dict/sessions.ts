@@ -31,4 +31,13 @@ export const sessions = {
   "session": "个会话",
   "sessions": "个会话",
   "+{n} more": "还有 {n} 条",
+
+  // Per-cwd custom icon
+  "Set custom icon": "设置自定义图标",
+  "Default folder icon": "默认文件夹图标",
+  "Search icons...": "搜索图标…",
+  "Search emoji...": "搜索 Emoji…",
+  "Icons": "图标",
+  "Emoji": "表情",
+  "No icons match": "没有匹配的图标",
 } as const;

@@ -89,6 +89,7 @@
     "js-yaml": "^4.1.1",
     "jszip": "^3.10.1",
     "lowlight": "^3.3.0",
+    "lucide-react": "^1.37.0",
     "marked": "^18.0.5",
     "monaco-editor": "^0.52.2",
     "morphicons": "^1.7.0",

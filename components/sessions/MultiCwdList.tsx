@@ -7,7 +7,9 @@ import { useI18n } from "@/hooks/useI18n";
 import { SessionItem } from "./SessionItem";
 import { Tooltip } from "../ui/Tooltip";
 import { CollapsiblePanel } from "../ui/CollapsiblePanel";
-import { CwdIcon } from "../files/FileIcons";
+import { CwdProjectIcon } from "../files/CwdProjectIcon";
+import { CwdIconPicker } from "../files/CwdIconPicker";
+import { useCwdIcon, setCwdIcon, initCwdIcons } from "@/hooks/cwdIconStore";
 import { useAllPendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 
 /**
@@ -233,6 +235,13 @@ function CwdGroup({
   const { t } = useI18n();
   const headerRef = useRef<HTMLDivElement | null>(null);
 
+  // Per-cwd custom icon (loaded lazily via the app-wide store).
+  useEffect(() => {
+    initCwdIcons();
+  }, []);
+  const cwdIcon = useCwdIcon(workspace.cwd);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+
   // Forward the header DOM node to the parent so it can scrollIntoView when
   // the active cwd changes (e.g. via picker → list sync).
   useEffect(() => {
@@ -337,7 +346,7 @@ function CwdGroup({
   const [loadMenuVisible, setLoadMenuVisible] = useState(false);
   const loadMenuRef = useRef<HTMLDivElement | null>(null);
   const loadMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const showLoadMoreTrigger = group?.hasMore && (rowHovered || triggerHovered || loadMenuOpen);
+  const showLoadMoreTrigger = rowHovered || triggerHovered || loadMenuOpen;
 
   const cancelMenuClose = useCallback(() => {
     // no-op; kept for symmetry with SessionItem
@@ -449,7 +458,7 @@ function CwdGroup({
             flexShrink: 0,
           }}
         >
-          <CwdIcon size={14} />
+          <CwdProjectIcon cwd={workspace.cwd} size={14} />
         </span>
 
         {/* Path — basename, then the fold/unfold chevron immediately after
@@ -615,8 +624,38 @@ function CwdGroup({
                 }}
               />
             )}
+            <CwdMenuRow
+              index={1}
+              icon={
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v12" />
+                  <path d="M7 8l5-5 5 5" />
+                  <path d="M5 21h14" />
+                </svg>
+              }
+              label={t("Set custom icon")}
+              onClick={() => {
+                setLoadMenuOpen(false);
+                // Flush any pending menu-close timer before opening the modal.
+                cancelMenuClose();
+                setIconPickerOpen(true);
+              }}
+            />
           </div>,
           document.body,
+        )}
+
+        {iconPickerOpen && (
+          <CwdIconPicker
+            open
+            title={t("Set custom icon")}
+            current={cwdIcon ?? null}
+            onSelect={async (icon) => {
+              const ok = await setCwdIcon(workspace.cwd, icon);
+              if (ok) setIconPickerOpen(false);
+            }}
+            onClose={() => setIconPickerOpen(false)}
+          />
         )}
       </div>
 

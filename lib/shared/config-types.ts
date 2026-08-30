@@ -37,6 +37,8 @@ export interface PiWorkConfig {
   append_system: AppendSystemConfig;
   file_viewer: FileViewerConfig;
   ui_sounds: UiSoundsConfig;
+  /** Per-cwd custom icon override: absolute cwd path → lucide icon name. */
+  cwd_icons: Record<string, string>;
 }
 
 /**

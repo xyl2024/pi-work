@@ -78,6 +78,7 @@ const DEFAULT_CONFIG: PiWorkConfig = {
     masterVolume: 0.45,
     events: { ...DEFAULT_UI_SOUND_EVENTS },
   },
+  cwd_icons: {},
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -205,6 +206,20 @@ function parseUiSounds(raw: unknown): UiSoundsConfig {
   };
 }
 
+// Per-cwd custom icon overrides. Missing/garbled entries are silently
+// dropped; values are validated against known lucide names at render time
+// (client assets), so here we only enforce the shape (string keys → string
+// values) to keep a hand-edited YAML from breaking the file route.
+function parseCwdIcons(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  const obj = raw as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [cwd, icon] of Object.entries(obj)) {
+    if (typeof icon === "string" && icon.length > 0) out[cwd] = icon;
+  }
+  return out;
+}
+
 const CONFIG_DIR = dataPath();
 const CONFIG_PATH = join(CONFIG_DIR, "config.yaml");
 
@@ -246,6 +261,7 @@ export function readConfig(): PiWorkConfig {
       append_system: parseAppendSystem(cfg.append_system),
       file_viewer: parseFileViewer(cfg.file_viewer),
       ui_sounds: parseUiSounds(cfg.ui_sounds),
+      cwd_icons: parseCwdIcons(cfg.cwd_icons),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });

@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useCwdList, initCwdList } from "@/hooks/cwdListStore";
+import { initCwdIcons } from "@/hooks/cwdIconStore";
 import { Tooltip } from "../ui/Tooltip";
 import { AnimatedPopover } from "../ui/AnimatedPopover";
-import { CwdIcon } from "../files/FileIcons";
+import { CwdProjectIcon } from "../files/CwdProjectIcon";
 import { CwdFolderDialog } from "./CwdFolderDialog";
 
 /**
@@ -65,6 +66,7 @@ export function CwdPicker({
   // AppShell also calls it on mount).
   useEffect(() => {
     initCwdList();
+    initCwdIcons();
   }, []);
 
   // Close on outside mousedown.
@@ -139,7 +141,7 @@ export function CwdPicker({
               Pinned to var(--accent) so it pops in the trigger pill; the
               button label keeps the inherited text/text-muted ramp. */}
           <span style={{ display: "flex", flexShrink: 0, color: "var(--accent)" }}>
-            <CwdIcon size={14} />
+            <CwdProjectIcon cwd={cwd} size={14} />
           </span>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, fontFamily: "var(--font-mono)" }}>
             {buttonLabel}
@@ -184,7 +186,7 @@ export function CwdPicker({
                   }}
                 >
                   <span style={{ display: "flex", flexShrink: 0, color: "var(--accent)" }}>
-                    <CwdIcon size={14} />
+                    <CwdProjectIcon cwd={rcwd} size={14} />
                   </span>
                   <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {basenameOf(rcwd)}
