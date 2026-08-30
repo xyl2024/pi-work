@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
 import type { AgentMessage, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
 import { sendAgentCommand } from "@/lib/client/agent-client";
+import { readLastUsedModel, writeLastUsedModel } from "@/lib/client/last-used-model";
 import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
@@ -400,6 +401,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const piImages = images?.map((img) => ({ type: "image" as const, data: img.data, mimeType: img.mimeType }));
 
     try {
+      const sendModel = isNew && newSessionCwd ? newSessionModel : currentModel;
+      if (sendModel) {
+        // Remember the model actually being used so the next new session can
+        // default to it instead of the global settings default.
+        writeLastUsedModel({ provider: sendModel.provider, modelId: sendModel.modelId });
+      }
       if (isNew && newSessionCwd) {
         const selectedModel = newSessionModel;
         if (selectedModel) setPendingModel(selectedModel);
@@ -465,7 +472,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       endStreamingStore(streamingKey);
       closeEvents();
     }
-  }, [isNew, newSessionCwd, newSessionModel, toolSelection, thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, onSessionCreated, refreshSystemPrompt, setAgentRunningSync, setCompactingSync, showToast, streamingKey, t]);
+  }, [isNew, newSessionCwd, newSessionModel, currentModel, toolSelection, thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, onSessionCreated, refreshSystemPrompt, setAgentRunningSync, setCompactingSync, showToast, streamingKey, t]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -778,11 +785,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (d.modelList) {
         setModelList(d.modelList);
         if (isNew && d.modelList.length > 0) {
+          // Prefer the model the user last used over the global default from
+          // settings.json, matching the pre-pre-selection behaviour. Falls
+          // back to the settings default, then to the first available model.
           const def = d.defaultModel;
-          const match = def && d.modelList.find((m) => m.id === def.modelId && m.provider === def.provider);
-          const selected = match
-            ? { provider: match.provider, modelId: match.id }
-            : { provider: d.modelList[0].provider, modelId: d.modelList[0].id };
+          const defMatch = def && d.modelList.find((m) => m.id === def.modelId && m.provider === def.provider);
+          const lastUsed = readLastUsedModel();
+          const lastUsedMatch = lastUsed && d.modelList.find((m) => m.id === lastUsed.modelId && m.provider === lastUsed.provider);
+          const selected = lastUsedMatch
+            ? { provider: lastUsedMatch.provider, modelId: lastUsedMatch.id }
+            : defMatch
+              ? { provider: defMatch.provider, modelId: defMatch.id }
+              : { provider: d.modelList[0].provider, modelId: d.modelList[0].id };
           setNewSessionModel(selected);
           // Seed the thinking level to "off" for new sessions. We previously
           // defaulted to the freshly-selected model's middle supported level,
