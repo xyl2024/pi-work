@@ -124,7 +124,12 @@ export function TextSelectionToolbar({ state, onQuote, onHide }: Props) {
       centerX: state.rect.centerX,
       width: state.rect.width,
     });
-  }, [state.text, state.rect]);
+    // Dismiss the toolbar after opening the bubble so the bubble has the
+    // visual focus — same as Copy / Quote. Otherwise the toolbar stays on
+    // top (it renders after the bubble in some trees, e.g. the right
+    // panel) and floats over the translation.
+    onHide();
+  }, [state.text, state.rect, onHide]);
 
   const handleQuote = useCallback(() => {
     if (!state.text) return;

@@ -6,6 +6,8 @@ import { useSessionUiState, useSessionLeafChange, useSystemPromptRefresh } from 
 import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
 import { SessionSidebar } from "../sessions/SessionSidebar";
 import { ChatWindow } from "../chat/ChatWindow";
+import { TextSelectionToolbar } from "../chat/text-selection-toolbar";
+import { useTextSelection } from "@/hooks/useTextSelection";
 import { SessionTabBar } from "../sessions/SessionTabBar";
 import { FileViewer } from "../files/FileViewer";
 import { TabBar, type Tab } from "../ui/TabBar";
@@ -412,6 +414,11 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const chatInputRefs = useRef<Map<string, RefObject<ChatInputHandle | null>>>(new Map());
+  // Text-selection toolbar scoped to the right side panel card (files /
+  // panels). Reuses the same translation / copy / quote affordances as the
+  // chat toolbar so selections inside the right panel can be acted on too.
+  const rightPanelRef = useRef<HTMLDivElement | null>(null);
+  const rightPanelSelection = useTextSelection(rightPanelRef);
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession } = usePendingPermissions();
 
@@ -543,6 +550,12 @@ export function AppShell() {
     if (!activeTabId) return null;
     return chatInputRefs.current.get(activeTabId)?.current ?? null;
   }, [activeTabId]);
+
+  // Quote from the right panel inserts a markdown blockquote into the
+  // active tab's chat input, matching the chat toolbar's behaviour.
+  const handleRightPanelQuote = useCallback((text: string) => {
+    getActiveChatInput()?.insertText(`> ${text}\n\n`);
+  }, [getActiveChatInput]);
 
   const handleAtMention = useCallback((filePath: string) => {
     // Insert a cwd-relative path (no code-block backticks) so it reads as
@@ -1632,7 +1645,7 @@ export function AppShell() {
       {/* File content — same body routing as the original right panel.
           Pulled into a fragment-level child so the surrounding column
           handles flex / overflow without an extra wrapper div. */}
-      <div style={{ flex: 1, overflow: "hidden" }}>
+      <div ref={rightPanelRef} style={{ flex: 1, overflow: "hidden" }}>
         {activeFileTab?.kind === "todo" ? (
           <MemoTodoPanel />
         ) : activeFileTab?.kind === "favorites" ? (
@@ -2033,6 +2046,11 @@ export function AppShell() {
       onSelectSession={handleSelectSearchResult}
       commands={commands}
       t={t}
+    />
+    <TextSelectionToolbar
+      state={rightPanelSelection}
+      onQuote={handleRightPanelQuote}
+      onHide={rightPanelSelection.hide}
     />
     </>
   );
