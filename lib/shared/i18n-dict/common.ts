@@ -234,8 +234,8 @@ export const common = {
   "Failed to rename session": "重命名会话失败",
   "Failed to update pin": "更新置顶失败",
 
-  // Layout mode switcher (sidebar top). "Agentic" / "Classic" are
-  // product-style identifiers; keep them as-is in zh to match the
+  // Layout mode switcher (settings → Appearance). "Agentic" / "Classic"
+  // are product-style identifiers; keep them as-is in zh to match the
   // button label and stay searchable.
   "Layout mode": "布局模式",
   "Agentic": "Agentic",

@@ -17,8 +17,6 @@ import { SidebarSection } from "../ui/SidebarSection";
 import { GrokBotStage } from "../grokbot/GrokBotStage";
 import { GrokBotLab } from "../grokbot/GrokBotLab";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
-import { useLayoutMode, useSetLayoutMode, type LayoutMode } from "@/hooks/layoutModeStore";
-import { LAYOUT_MODE_LABELS, LAYOUT_MODES } from "@/hooks/layoutModeStore";
 
 interface Props {
   selectedSession?: SessionInfo | null;
@@ -154,15 +152,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const { t } = useI18n();
   const toast = useToast();
   const [labOpen, setLabOpen] = useState(false);
-  // Layout mode toggle (Agentic / Classic). The chosen mode lives in the
-  // shared layoutModeStore; here we just project the current value and
-  // expose a setter for the segmented control at the top of the sidebar.
-  const layoutMode = useLayoutMode();
-  const setLayoutMode = useSetLayoutMode();
-  const handlePickLayoutMode = useCallback((next: LayoutMode) => {
-    if (next === layoutMode) return;
-    setLayoutMode(next);
-  }, [layoutMode, setLayoutMode]);
   // Cwd whose paged-search modal is currently open. Null when no modal
   // is showing. The "View more sessions" affordance on each cwd group
   // header sets this; the modal closes by setting it back to null.
@@ -686,15 +675,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         </div>
         </div>
 
-      {/* Layout mode toggle — two-state segmented control pinned at the
-          very top of the sidebar. Agentic = current chat-in-center /
-          panel-on-right layout; Classic = panel-in-center / chat-on-right.
-          Terminal panel stays in the center column in both modes. */}
-      <LayoutModeSwitcher
-        mode={layoutMode}
-        onPick={handlePickLayoutMode}
-      />
-
       {/* GrokBot companion — always-on living bot at the top of the sidebar.
           Click the bot (or the gear) to open the full lab modal. */}
       <GrokBotStage onOpenLab={() => setLabOpen(true)} />
@@ -815,87 +795,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           onSelectSession={onSelectSession}
         />
       )}
-    </div>
-  );
-}
-
-// Two-state segmented control rendered at the top of the sidebar. Each
-// option is a small button; the active one keeps the accent background,
-// the inactive one falls back to a subtle hover tint. Tooltips on each
-// button explain what the layout swaps, so the toggle is self-documenting
-// without needing a separate help affordance.
-function LayoutModeSwitcher({
-  mode,
-  onPick,
-}: {
-  mode: LayoutMode;
-  onPick: (next: LayoutMode) => void;
-}) {
-  const { t } = useI18n();
-  const options: LayoutMode[] = LAYOUT_MODES;
-  return (
-    <div
-      role="radiogroup"
-      aria-label={t("Layout mode")}
-      style={{
-        display: "flex",
-        alignItems: "stretch",
-        gap: 2,
-        margin: "0 10px 10px",
-        padding: 2,
-        background: "var(--bg-hover)",
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        flexShrink: 0,
-      }}
-    >
-      {options.map((option) => {
-        const active = option === mode;
-        const tooltip = option === "agentic"
-          ? t("Agentic layout: chat in the center, file panel on the right.")
-          : t("Classic layout: file panel in the center, chat on the right.");
-        const ariaLabel = option === "agentic"
-          ? t("Switch to Agentic layout")
-          : t("Switch to Classic layout");
-        return (
-          <Tooltip key={option} content={tooltip}>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={active}
-              aria-label={ariaLabel}
-              onClick={() => onPick(option)}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                padding: "4px 8px",
-                font: "inherit",
-                fontSize: 11,
-                fontWeight: active ? 600 : 500,
-                lineHeight: 1.2,
-                color: active ? "var(--text)" : "var(--text-muted)",
-                background: active ? "var(--bg-selected)" : "transparent",
-                border: "none",
-                borderRadius: 6,
-                cursor: "pointer",
-                transition: "background 0.12s ease, color 0.12s ease",
-              }}
-              onMouseEnter={(event) => {
-                if (active) return;
-                event.currentTarget.style.background = "color-mix(in srgb, var(--bg-selected) 55%, transparent)";
-                event.currentTarget.style.color = "var(--text)";
-              }}
-              onMouseLeave={(event) => {
-                if (active) return;
-                event.currentTarget.style.background = "transparent";
-                event.currentTarget.style.color = "var(--text-muted)";
-              }}
-            >
-              {LAYOUT_MODE_LABELS[option]}
-            </button>
-          </Tooltip>
-        );
-      })}
     </div>
   );
 }
