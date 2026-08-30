@@ -40,6 +40,7 @@ import { todos } from "./todos";
 import { toolsMarket } from "./tools-market";
 import { wechat } from "./wechat";
 import { usefulTips } from "./useful-tips";
+import { workflow } from "./workflow";
 
 export type Locale = "en" | "zh";
 
@@ -71,6 +72,7 @@ export const ZH_TRANSLATIONS = {
   ...toolsMarket,
   ...wechat,
   ...usefulTips,
+  ...workflow,
   ...askUserQuestions,
 } as const;
 
