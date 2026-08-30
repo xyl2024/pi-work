@@ -27,3 +27,11 @@ export function useIsStreaming(key: string): boolean {
     () => false,
   );
 }
+
+export function useStreamingHasContent(key: string): boolean {
+  return useSyncExternalStore(
+    (listener) => subscribeStreaming(key, listener),
+    () => getStreamingSnapshot(key).hasContent,
+    () => false,
+  );
+}

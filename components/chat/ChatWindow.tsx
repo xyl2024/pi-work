@@ -14,7 +14,7 @@ import { countToolCallsByName } from "@/lib/shared/message-display";
 import { getFileName } from "@/lib/shared/file-paths";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { StreamingBubble } from "./StreamingBubble";
-import { useIsStreaming, useIsStreamingThinking } from "@/hooks/useStreamingMessage";
+import { useIsStreaming, useIsStreamingThinking, useStreamingHasContent } from "@/hooks/useStreamingMessage";
 import { SessionLibraryModal } from "../sessions/session-library/SessionLibraryModal";
 import { SessionLibraryOpenButton } from "../sessions/SessionLibraryOpenButton";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
@@ -206,6 +206,14 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // StreamingBubble, which subscribes on its own.
   const streamingStoreIsStreaming = useIsStreaming(streamingKey);
   const streamingStoreIsThinking = useIsStreamingThinking(streamingKey);
+  // True once streamed content (thinking/body) is on screen, false during
+  // the wait-for-first-token gap and between messages. The phase-loading
+  // indicator below keys off this instead of `streamState.isStreaming` —
+  // the reducer flag flips true at send time (handleSend dispatches
+  // "start"), so `agentRunning && !streamState.isStreaming` would never
+  // render while waiting for the model. Only flips on content
+  // appear/disappear, so per-token updates don't re-render this tree.
+  const streamingStoreHasContent = useStreamingHasContent(streamingKey);
   const handleQuoteSelection = useCallback((text: string) => {
     // Markdown blockquote: `> text` followed by a blank line so the
     // user lands on a fresh row to type their follow-up. The trailing
@@ -1427,7 +1435,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               </div>
             )}
 
-            {agentRunning && !streamState.isStreaming && (
+            {agentRunning && !streamingStoreHasContent && (
               <div className="py-2">
                 <LoadingState
                   label={phaseLabel(agentPhase, t)}
@@ -1436,7 +1444,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               </div>
             )}
 
-            {agentRunning && !streamState.isStreaming && (
+            {agentRunning && !streamingStoreHasContent && (
               <div style={{ height: 120 }} />
             )}
 
