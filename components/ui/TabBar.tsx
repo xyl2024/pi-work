@@ -3,6 +3,21 @@
 import { useCallback, useRef } from "react";
 import { getFileIcon } from "@/components/ui/icons";
 import { ICONS } from "@/components/ui/icons";
+import {
+  Bot,
+  Braces,
+  CalendarCheck,
+  ChartColumn,
+  ChartSpline,
+  GitBranch,
+  GitGraph,
+  Languages,
+  MessageSquareMore,
+  Pencil,
+  Rss,
+  Star,
+  Wrench,
+} from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 
@@ -98,33 +113,31 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
             tab.kind === "file" ? tab.filePath : displayLabel;
           const icon =
             tab.kind === "todo" ? (
-              <ICONS.check size={13} />
+              <CalendarCheck size={13} />
             ) : tab.kind === "favorites" ? (
-              <ICONS.star size={13} />
+              <Star size={13} fill={isActive ? "var(--accent)" : "none"} />
             ) : tab.kind === "translate" ? (
-              <ICONS.language size={13} />
+              <Languages size={13} />
             ) : tab.kind === "toolCalls" ? (
-              <ICONS.tool size={13} />
+              <Wrench size={13} />
             ) : tab.kind === "json" ? (
-              <ICONS.json size={13} />
+              <Braces size={13} />
             ) : tab.kind === "canvas" ? (
-              <ICONS.canvas size={13} />
+              <Pencil size={13} />
             ) : tab.kind === "rss" ? (
-              <ICONS.rss size={13} />
+              <Rss size={13} />
             ) : tab.kind === "tokens" ? (
-              <ICONS.tokens size={13} />
+              <ChartSpline size={13} />
             ) : tab.kind === "llmAudit" ? (
-              <ICONS.llmAudit size={13} />
+              <ChartColumn size={13} />
             ) : tab.kind === "context" ? (
-              getFileIcon("AGENTS.md", 13)
+              <Bot size={13} />
             ) : tab.kind === "conversationTree" ? (
-              <ICONS.conversationTree size={13} />
+              <GitBranch size={13} />
             ) : tab.kind === "gitDiff" ? (
-              <ICONS.gitDiff size={13} />
+              <GitGraph size={13} />
             ) : tab.kind === "btw" ? (
-              // Tiny text "BTW" mark — keeps the tab recognisable
-              // without pulling in another icon glyph.
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: "var(--text-muted)" }}>BTW</span>
+              <MessageSquareMore size={13} />
             ) : (
               getFileIcon(tab.label, 13)
             );
