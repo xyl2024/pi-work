@@ -41,6 +41,7 @@ export const common = {
   "Enable": "启用",
   "Disable": "停用",
   "Off": "关闭",
+  "On": "开启",
   "Show": "展开",
   "Show less": "收起",
   "Show all ({n})": "显示全部（{n}）",

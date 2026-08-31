@@ -39,6 +39,8 @@ export interface PiWorkConfig {
   ui_sounds: UiSoundsConfig;
   /** Per-cwd custom icon override: absolute cwd path → lucide icon name. */
   cwd_icons: Record<string, string>;
+  /** Per-cwd Skill files excluded from the model prompt (resources are untouched). */
+  disabled_skills: Record<string, string[]>;
 }
 
 /**

@@ -79,6 +79,7 @@ const DEFAULT_CONFIG: PiWorkConfig = {
     events: { ...DEFAULT_UI_SOUND_EVENTS },
   },
   cwd_icons: {},
+  disabled_skills: {},
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -220,6 +221,17 @@ function parseCwdIcons(raw: unknown): Record<string, string> {
   return out;
 }
 
+function parseDisabledSkills(raw: unknown): Record<string, string[]> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, string[]> = {};
+  for (const [cwd, paths] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(paths)) continue;
+    const valid = paths.filter((path): path is string => typeof path === "string" && path.length > 0);
+    if (valid.length > 0) out[cwd] = [...new Set(valid)];
+  }
+  return out;
+}
+
 const CONFIG_DIR = dataPath();
 const CONFIG_PATH = join(CONFIG_DIR, "config.yaml");
 
@@ -262,6 +274,7 @@ export function readConfig(): PiWorkConfig {
       file_viewer: parseFileViewer(cfg.file_viewer),
       ui_sounds: parseUiSounds(cfg.ui_sounds),
       cwd_icons: parseCwdIcons(cfg.cwd_icons),
+      disabled_skills: parseDisabledSkills(cfg.disabled_skills),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });

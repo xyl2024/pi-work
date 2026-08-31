@@ -64,6 +64,19 @@ export function SkillsConfig({
 
   const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
 
+  const toggleSkillInvocation = useCallback(async (filePath: string, disableModelInvocation: boolean) => {
+    const response = await fetch("/api/skills", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cwd, filePath, disableModelInvocation }),
+    });
+    const data = await response.json() as { error?: string };
+    if (!response.ok) throw new Error(data.error ?? `HTTP ${response.status}`);
+    setSkills((current) => current.map((skill) =>
+      skill.filePath === filePath ? { ...skill, disableModelInvocation } : skill,
+    ));
+  }, [cwd]);
+
   return (
     <div
       style={backdropStyle}
@@ -332,6 +345,9 @@ export function SkillsConfig({
                 key={selectedSkill.filePath}
                 skill={selectedSkill}
                 cwd={cwd}
+                onToggleInvocation={(disableModelInvocation) =>
+                  toggleSkillInvocation(selectedSkill.filePath, disableModelInvocation)
+                }
               />
             ) : (
               <div

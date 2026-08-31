@@ -148,9 +148,15 @@ export async function PUT(req: Request) {
     // missing fields from being misread, and we don't want to rely on
     // it during a write that explicitly validates.
     const onDisk = readConfig();
-    const next: PiWorkConfig = body.file_viewer || body.ui_sounds
-      ? body
-      : { ...onDisk, ...body, file_viewer: onDisk.file_viewer, ui_sounds: onDisk.ui_sounds };
+    const next: PiWorkConfig = {
+      ...onDisk,
+      ...body,
+      // Keep fields owned by newer server versions when an older client
+      // submits a partial config. Skill toggles must never be lost here.
+      file_viewer: body.file_viewer ?? onDisk.file_viewer,
+      ui_sounds: body.ui_sounds ?? onDisk.ui_sounds,
+      disabled_skills: body.disabled_skills ?? onDisk.disabled_skills,
+    };
 
     writeConfig(next);
     log.info("settings written", { durationMs: elapsedMs(startedAt) });

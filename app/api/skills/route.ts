@@ -1,66 +1,72 @@
 import { NextResponse } from "next/server";
-import { existsSync, readFileSync, writeFileSync } from "fs";
-import { DefaultResourceLoader, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import { DefaultResourceLoader, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { readConfig, writeConfig } from "@/lib/server/config";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/skills?cwd=<path>
-// Uses DefaultResourceLoader (same logic as AgentSession startup) so settings.json
-// skill paths, package skills, and .agents/skills directories are all included.
+async function loadSkills(cwd: string) {
+  const loader = new DefaultResourceLoader({
+    cwd,
+    agentDir: getAgentDir(),
+    noExtensions: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
+  });
+  await loader.reload();
+  return loader.getSkills();
+}
+
+// GET /api/skills?cwd=<path> — returns discovered Skills with Pi Work overrides applied.
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const cwd = searchParams.get("cwd");
+  const cwd = new URL(req.url).searchParams.get("cwd");
   if (!cwd) return NextResponse.json({ error: "cwd required" }, { status: 400 });
 
   try {
-    // This endpoint only needs skill resources. Do not execute user extensions here:
-    // an extension factory may perform arbitrary startup work (for example, a network
-    // probe) and would make this read-only request depend on unrelated services.
-    const loader = new DefaultResourceLoader({
-      cwd,
-      agentDir: getAgentDir(),
-      noExtensions: true,
-      noPromptTemplates: true,
-      noThemes: true,
-      noContextFiles: true,
+    const { skills, diagnostics } = await loadSkills(cwd);
+    const disabled = new Set(readConfig().disabled_skills[cwd] ?? []);
+    return NextResponse.json({
+      skills: skills.map((skill) => ({
+        ...skill,
+        disableModelInvocation: disabled.has(skill.filePath),
+      })),
+      diagnostics,
     });
-    await loader.reload();
-    const { skills, diagnostics } = loader.getSkills();
-    return NextResponse.json({ skills, diagnostics });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
 
-// PATCH /api/skills — toggle disable-model-invocation on a SKILL.md file
+// PATCH /api/skills — toggle a Skill in Pi Work's per-cwd config.
+// The SKILL.md and all other installed resources remain untouched.
 export async function PATCH(req: Request) {
   try {
-    const body = await req.json() as { filePath: string; disableModelInvocation: boolean };
-    const { filePath, disableModelInvocation } = body;
-    if (!filePath) return NextResponse.json({ error: "filePath required" }, { status: 400 });
-    if (!existsSync(filePath)) return NextResponse.json({ error: "file not found" }, { status: 404 });
-
-    const content = readFileSync(filePath, "utf8");
-    const key = "disable-model-invocation";
-
-    // Use parseFrontmatter to check current value, then do a surgical line edit
-    // to preserve the original YAML formatting of all other fields.
-    const { frontmatter } = parseFrontmatter<Record<string, unknown>>(content);
-    const alreadySet = Boolean(frontmatter[key]);
-
-    let updated = content;
-    if (disableModelInvocation && !alreadySet) {
-      // Add key after the opening --- line
-      updated = content.replace(/^---\r?\n/, `---\n${key}: true\n`);
-      // If no frontmatter exists, create one
-      if (updated === content) updated = `---\n${key}: true\n---\n${content}`;
-    } else if (!disableModelInvocation && alreadySet) {
-      // Remove the key line entirely
-      updated = content.replace(new RegExp(`^${key}\\s*:.*\\r?\\n`, "m"), "");
+    const body = await req.json() as {
+      cwd: string;
+      filePath: string;
+      disableModelInvocation: boolean;
+    };
+    const { cwd, filePath, disableModelInvocation } = body;
+    if (!cwd || !filePath || typeof disableModelInvocation !== "boolean") {
+      return NextResponse.json({ error: "cwd, filePath and disableModelInvocation are required" }, { status: 400 });
     }
 
-    writeFileSync(filePath, updated, "utf8");
-    return NextResponse.json({ success: true });
+    const { skills } = await loadSkills(cwd);
+    if (!skills.some((skill) => skill.filePath === filePath)) {
+      return NextResponse.json({ error: "skill is not loaded for this cwd" }, { status: 404 });
+    }
+
+    const config = readConfig();
+    const current = new Set(config.disabled_skills[cwd] ?? []);
+    if (disableModelInvocation) current.add(filePath);
+    else current.delete(filePath);
+
+    const disabledSkills = { ...config.disabled_skills };
+    if (current.size > 0) disabledSkills[cwd] = [...current].sort();
+    else delete disabledSkills[cwd];
+    writeConfig({ ...config, disabled_skills: disabledSkills });
+
+    return NextResponse.json({ success: true, disableModelInvocation });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }

@@ -854,8 +854,10 @@ export async function startRpcSession(
     // `discoverAppendSystemPromptFile()` never runs. Read once per session
     // start — toggling at runtime only affects sessions started afterward.
     let appendSystemPromptLoaderOption: string[] | undefined;
+    let disabledSkillPaths = new Set<string>();
     try {
       const cfg = readConfig();
+      disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
       if (!cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }
@@ -881,6 +883,12 @@ export async function startRpcSession(
         enabledTools.has("agent_todo")
           ? [...baseAppend, AGENT_TODO_SYSTEM_PROMPT_BLOCK]
           : baseAppend,
+      // Keep installed Skills discoverable and explicitly invokable, while
+      // omitting the ones disabled in Pi Work from the model prompt.
+      skillsOverride: (base) => ({
+        ...base,
+        skills: base.skills.filter((skill) => !disabledSkillPaths.has(skill.filePath)),
+      }),
       extensionFactories: [
         (pi) => {
           pi.on("tool_call", async (event) => {

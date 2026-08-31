@@ -23,9 +23,11 @@ import { SubFileRow } from "./SubFileRow";
 export function SkillDetail({
   skill,
   cwd,
+  onToggleInvocation,
 }: {
   skill: Skill;
   cwd: string;
+  onToggleInvocation: (disableModelInvocation: boolean) => Promise<void>;
 }) {
   const { t } = useI18n();
   const { isDark } = useTheme();
@@ -35,6 +37,7 @@ export function SkillDetail({
   const [detail, setDetail] = useState<SkillDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [toggleLoading, setToggleLoading] = useState(false);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -160,6 +163,37 @@ export function SkillDetail({
         >
           {displayPath(skill.filePath)}
         </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!skill.disableModelInvocation}
+          title={skill.disableModelInvocation ? t("Enable") : t("Disable")}
+          disabled={toggleLoading}
+          onClick={async () => {
+            setToggleLoading(true);
+            setDetailError(null);
+            try {
+              await onToggleInvocation(!skill.disableModelInvocation);
+            } catch (error) {
+              setDetailError(String(error));
+            } finally {
+              setToggleLoading(false);
+            }
+          }}
+          style={{
+            border: "1px solid var(--border)",
+            borderRadius: 999,
+            padding: "3px 8px",
+            background: skill.disableModelInvocation ? "var(--bg)" : "var(--accent)",
+            color: skill.disableModelInvocation ? "var(--text-muted)" : "white",
+            cursor: toggleLoading ? "wait" : "pointer",
+            opacity: toggleLoading ? 0.6 : 1,
+            fontSize: 11,
+            flexShrink: 0,
+          }}
+        >
+          {toggleLoading ? t("Loading...") : skill.disableModelInvocation ? t("Off") : t("On")}
+        </button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
