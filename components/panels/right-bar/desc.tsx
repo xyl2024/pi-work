@@ -18,6 +18,7 @@
 // through the ctx for state, and write via the callbacks it exposes.
 
 import type { ReactNode } from "react";
+import type { LayoutMode } from "@/hooks/layoutModeStore";
 import type { RightBarButtonId } from "@/lib/shared/right-bar";
 import { CountBadge } from "@/components/ui/CountBadge";
 import {
@@ -78,6 +79,12 @@ export type RightBarTabKind = Extract<
 export interface RightBarCtx {
   // ── observed state ──
   rightPanelState: "closed" | "normal" | "expanded";
+  /** Agentic / Classic layout. Descriptors like canvas and token audit
+   *  use it to decide whether opening them should auto-expand the panel
+   *  (Agentic: the panel hosts the file/canvas card, so it takes the
+   *  full column; Classic: the panel sits next to the chat, so expanding
+   *  would hide it). */
+  layoutMode: LayoutMode;
   activeTabKind: Tab["kind"] | null;
   /** True when at least one tab is open in the right panel. Used by the
    *  expand/collapse button to gate itself. */
@@ -196,15 +203,20 @@ const canvasDescriptor: RightBarDescriptor = {
   labelKey: "Open canvas",
   isActive: (ctx) => ctx.activeTabKind === "canvas",
   content: () => <Pencil size={16} />,
-  // Canvas no longer forces the right panel into the "expanded" state —
-  // the panel opens at its normal width so the chat (or whatever card
-  // shares the center column) keeps room to breathe. The previous
-  // auto-expand behavior made sense when the chat was always in the
-  // center column, but with the layout-mode switcher the canvas can
-  // sit next to the chat (Classic mode) where forcing expanded would
-  // hide the chat behind it.
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(CANVAS_TAB_ID, ctx.openTab.canvas),
+  // Opening from the right-bar button auto-expands the panel in Agentic
+  // mode — there the panel hosts the file/canvas card, so the canvas
+  // gets the full column. In Classic mode the panel card sits next to
+  // the chat, so it opens at normal width — forcing expanded there would
+  // hide the chat behind it. Toggling an already-open canvas still
+  // closes the panel (no expand).
+  onClick: (ctx) => {
+    const wasOpen =
+      ctx.activeTabKind === "canvas" && ctx.rightPanelState !== "closed";
+    ctx.toggleRightPanelTab(CANVAS_TAB_ID, ctx.openTab.canvas);
+    if (!wasOpen && ctx.layoutMode === "agentic") {
+      ctx.setRightPanelState("expanded");
+    }
+  },
 };
 
 const translateDescriptor: RightBarDescriptor = {
@@ -275,11 +287,18 @@ const tokensDescriptor: RightBarDescriptor = {
   labelKey: "Open token audit",
   isActive: (ctx) => ctx.activeTabKind === "tokens",
   content: () => <ChartSpline size={16} />,
-  // Token audit no longer auto-expands the right panel — see
-  // canvasDescriptor for the rationale (the panel can sit next to the
-  // chat in Classic mode, where forcing expanded would hide it).
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens),
+  // Opening from the right-bar button auto-expands the panel in Agentic
+  // mode only (same rationale as canvasDescriptor): the token audit
+  // charts get the full column when the panel hosts the work card, but
+  // stay at normal width in Classic mode so the chat keeps its room.
+  onClick: (ctx) => {
+    const wasOpen =
+      ctx.activeTabKind === "tokens" && ctx.rightPanelState !== "closed";
+    ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens);
+    if (!wasOpen && ctx.layoutMode === "agentic") {
+      ctx.setRightPanelState("expanded");
+    }
+  },
 };
 
 const llmAuditDescriptor: RightBarDescriptor = {

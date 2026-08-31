@@ -1316,6 +1316,7 @@ export function AppShell() {
     : 0;
   const rightBarCtx: RightBarCtx = {
     rightPanelState,
+    layoutMode,
     activeTabKind: activeRightPanelKind,
     hasOpenTabs: fileTabs.length > 0,
     selectedSessionId,
