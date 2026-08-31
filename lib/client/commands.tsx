@@ -5,6 +5,20 @@ import type { ThemePreset } from "@/hooks/useTheme";
 import { PRESETS } from "@/hooks/useTheme";
 import type { Locale } from "@/hooks/useI18n";
 import { ICONS } from "@/components/ui/icons";
+import {
+  Braces,
+  CalendarCheck,
+  ChartColumn,
+  ChartSpline,
+  GitGraph,
+  Languages,
+  LetterText,
+  PanelRight,
+  Pencil,
+  Star,
+  Store,
+  Wrench,
+} from "lucide-react";
 
 // ── AgentControls ────────────────────────────────────────────────────────
 // Imperative controls owned by useAgentSession (inside ChatWindow). ChatWindow
@@ -26,23 +40,28 @@ const StopIcon = ICONS.stop;
 const SunIcon = ICONS.sun;
 const MoonIcon = ICONS.moon;
 const SidebarIcon = ICONS.sidebar;
-const PanelRightIcon = ICONS.panelRight;
-const CheckIcon = ICONS.check;
-const CanvasIcon = ICONS.canvas;
-const StarIcon = ICONS.star;
 const GlobeIcon = ICONS.globe;
-const TerminalIcon = ICONS.terminal;
-const BracesIcon = ICONS.braces;
 const GearIcon = ICONS.gear;
 const ChipIcon = ICONS.chip;
 const SparkleIcon = ICONS.sparkle;
 const BookIcon = ICONS.book;
 
 const ClockIcon = ICONS.clock;
-const LangIcon = ICONS.language;
-const TokensIcon = ICONS.tokens;
-const GitDiffIcon = ICONS.gitDiff;
-const LlmAuditIcon = ICONS.llmAudit;
+
+// Keep right-panel command icons identical to the right-bar descriptors.
+const RightPanelIcon = () => <PanelRight size={16} />;
+const TodosPanelIcon = () => <CalendarCheck size={16} />;
+const CanvasPanelIcon = () => <Pencil size={16} />;
+const FavoritesPanelIcon = () => <Star size={16} />;
+const TranslatePanelIcon = () => <Languages size={16} />;
+const ToolCallsPanelIcon = () => <Wrench size={16} />;
+const JsonPanelIcon = () => <Braces size={16} />;
+const TokensPanelIcon = () => <ChartSpline size={16} />;
+const GitDiffPanelIcon = () => <GitGraph size={16} />;
+const LlmAuditPanelIcon = () => <ChartColumn size={16} />;
+const ToolMarketIcon = () => <Store size={16} />;
+const EnglishLanguageIcon = () => <LetterText size={16} />;
+const ChineseLanguageIcon = () => <Languages size={16} />;
 
 // Theme icons: light → sun, dark → moon.
 const ThemeIcon = ({ preset }: { preset: ThemePreset }) => {
@@ -182,7 +201,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Toggle right panel"),
     group: "View",
     keywords: ["right", "panel", "toggle", "右", "面板"],
-    icon: <PanelRightIcon />,
+    icon: <RightPanelIcon />,
     shortcut: "⌘⌥B",
     run: () => ctx.toggleRightPanel(),
   });
@@ -192,7 +211,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open todos"),
     group: "Panel",
     keywords: ["todo", "task", "待办", "任务"],
-    icon: <CheckIcon />,
+    icon: <TodosPanelIcon />,
     run: () => ctx.openTodosTab(),
   });
   cmds.push({
@@ -200,7 +219,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open canvas"),
     group: "Panel",
     keywords: ["canvas", "draw", "excalidraw", "whiteboard", "画布", "白板"],
-    icon: <CanvasIcon />,
+    icon: <CanvasPanelIcon />,
     run: () => ctx.openCanvasTab(),
   });
   cmds.push({
@@ -208,7 +227,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open favorites"),
     group: "Panel",
     keywords: ["favorite", "star", "collection", "收藏", "星标"],
-    icon: <StarIcon />,
+    icon: <FavoritesPanelIcon />,
     run: () => ctx.openFavoritesTab(),
   });
   cmds.push({
@@ -216,7 +235,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open translate"),
     group: "Panel",
     keywords: ["translate", "translation", "翻译"],
-    icon: <GlobeIcon />,
+    icon: <TranslatePanelIcon />,
     run: () => ctx.openTranslateTab(),
   });
   cmds.push({
@@ -224,7 +243,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open tool calls"),
     group: "Panel",
     keywords: ["tool", "calls", "stats", "工具", "调用", "统计"],
-    icon: <TerminalIcon />,
+    icon: <ToolCallsPanelIcon />,
     run: () => ctx.openToolCallsTab(),
   });
   cmds.push({
@@ -232,7 +251,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open JSON formatter"),
     group: "Panel",
     keywords: ["json", "format", "格式化"],
-    icon: <BracesIcon />,
+    icon: <JsonPanelIcon />,
     run: () => ctx.openJsonTab(),
   });
   cmds.push({
@@ -240,7 +259,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open token audit"),
     group: "Panel",
     keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
-    icon: <TokensIcon />,
+    icon: <TokensPanelIcon />,
     run: () => ctx.openTokensTab(),
   });
   cmds.push({
@@ -248,7 +267,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open git diff"),
     group: "Panel",
     keywords: ["git", "diff", "changes", "status", "变更", "改动", "差异"],
-    icon: <GitDiffIcon />,
+    icon: <GitDiffPanelIcon />,
     run: () => ctx.openGitDiffTab(),
   });
 
@@ -257,7 +276,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open LLM API audit"),
     group: "Panel",
     keywords: ["llm", "api", "audit", "request", "response", "调用", "审计", "请求", "响应"],
-    icon: <LlmAuditIcon />,
+    icon: <LlmAuditPanelIcon />,
     run: () => ctx.openLlmAuditTab(),
   });
 
@@ -318,7 +337,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Open Tool Market"),
     group: "Modal",
     keywords: ["tools", "market", "custom tools", "工具", "工具市场"],
-    icon: <span>🧰</span>,
+    icon: <ToolMarketIcon />,
     run: () => ctx.openToolMarket(),
   });
 
@@ -328,7 +347,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Language: English"),
     group: "Language",
     keywords: ["language", "english", "en", "语言", "英文"],
-    icon: <LangIcon />,
+    icon: <EnglishLanguageIcon />,
     run: () => ctx.setLocale("en"),
   });
   cmds.push({
@@ -336,7 +355,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     title: t("Language: Chinese"),
     group: "Language",
     keywords: ["language", "chinese", "zh", "中文", "语言"],
-    icon: <LangIcon />,
+    icon: <ChineseLanguageIcon />,
     run: () => ctx.setLocale("zh"),
   });
 

@@ -27,6 +27,8 @@ export const commands = {
   "Open HTTP debug": "打开 HTTP 调试",
   "Open JSON formatter": "打开 JSON 格式化",
   "Open models config": "打开模型配置",
+  "Open settings": "打开设置",
+  "Open channels": "打开频道",
   "Open skills": "打开技能",
   "Open prompts": "打开提示词",
   "Language: English": "语言：English",
