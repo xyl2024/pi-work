@@ -243,7 +243,6 @@ const gitDiffDescriptor: RightBarDescriptor = {
   // Disabled when there's no cwd at all (no selected session, no
   // in-flight new-session cwd) — matches the original inline guard.
   isDisabled: (ctx) => !ctx.selectedCwd,
-  badge: (ctx) => <CountBadge count={ctx.gitChangedCount} />,
   content: () => <GitGraph size={16} />,
   onClick: (ctx) =>
     ctx.toggleRightPanelTab(GIT_DIFF_TAB_ID, ctx.openTab.gitDiff),
