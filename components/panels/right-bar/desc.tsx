@@ -227,7 +227,7 @@ const rssDescriptor: RightBarDescriptor = {
   kind: "configurable",
   labelKey: "RSS",
   isActive: (ctx) => ctx.activeTabKind === "rss",
-  badge: (ctx) => <CountBadge count={ctx.rssUnread} />,
+  badge: (ctx) => <CountBadge count={ctx.rssUnread} size="sm" />,
   content: () => <Rss size={16} />,
   onClick: (ctx) => ctx.toggleRightPanelTab(RSS_TAB_ID, ctx.openTab.rss),
 };
