@@ -50,6 +50,7 @@
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
   },
   "dependencies": {
+    "@colbymchenry/codegraph": "1.6.0",
     "@earendil-works/pi-ai": "0.84.4",
     "@earendil-works/pi-coding-agent": "0.84.4",
     "@excalidraw/excalidraw": "^0.18.0",

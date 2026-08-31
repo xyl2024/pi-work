@@ -16,6 +16,8 @@ import { buildAgentTodoTool, AGENT_TODO_SYSTEM_PROMPT_BLOCK } from "./agent-todo
 import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-questions-tool";
 import { getRegistry } from "./session-registry";
 import { buildSessionInfoTools } from "./self-tools/session-tools";
+import { buildCodeGraphTools } from "./codegraph-tool";
+import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
@@ -882,6 +884,27 @@ export async function startRpcSession(
       extensionFactories: [
         (pi) => {
           pi.on("tool_call", async (event) => {
+            // CodeGraph index construction: mode=sync is lightweight and runs
+            // freely, but mode=init/index are minutes-long full scans — treat
+            // them like a dangerous command and require the user's explicit
+            // approval (indexing is the user's decision, never the agent's).
+            if (isToolCallEventType<"codegraph_build", { mode?: unknown }>("codegraph_build", event)) {
+              const mode = typeof event.input?.mode === "string" ? event.input.mode : "sync";
+              if (mode === "sync") return;
+              const w = wrapperRef.current;
+              if (!w) return;
+              if (w.isRuleAllowedThisSession(`codegraph_${mode}`)) return;
+              const command =
+                mode === "init"
+                  ? `codegraph init ${event.input?.path ?? "<cwd>"}`
+                  : `codegraph index ${event.input?.path ?? "<cwd>"}`;
+              const decision = await w.requestPermission(event.toolCallId, `codegraph_${mode}`, command);
+              if (decision === "deny") {
+                return { block: true, reason: `Denied by user: ${mode === "init" ? "index creation" : "index rebuild"}` };
+              }
+              return undefined;
+            }
+
             if (!isToolCallEventType("bash", event)) return;
             const command = event.input.command;
             const match = matchDangerousPattern(command);
@@ -1022,6 +1045,11 @@ export async function startRpcSession(
         enabledTools.has("pi_work_get_session_info_by_id")
           ? buildSessionInfoTools()
           : []),
+        // CodeGraph semantic code-intelligence tools: drive the CodeGraph SDK's
+        // MCP ToolHandler in-process (see lib/server/codegraph-tool.ts). All
+        // eight are gated by the same ~/.pi-work/tools-market.json entry list;
+        // enabling any one registers the whole family (they share the SDK pool).
+        ...(CODEGRAPH_TOOL_IDS.some((id) => enabledTools.has(id)) ? buildCodeGraphTools() : []),
       ],
     });
     capturedSessionId = inner.sessionId as string;
