@@ -25,7 +25,8 @@ export type RightBarButtonId =
   | "conversationTree"
   | "llmAudit"
   | "context"
-  | "btw";
+  | "btw"
+  | "githubTrending";
 
 /** Where session-bound buttons sit within the configurable row.
  *

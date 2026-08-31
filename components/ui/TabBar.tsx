@@ -18,6 +18,7 @@ import {
   Star,
   Wrench,
 } from "lucide-react";
+import GithubIcon from "@lobehub/icons/es/Github/components/Mono";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 
@@ -35,7 +36,8 @@ export type Tab =
   | { kind: "conversationTree"; id: string; label: string }
   | { kind: "llmAudit"; id: string; label: string }
   | { kind: "context"; id: string; label: string }
-  | { kind: "btw"; id: string; label: string };
+  | { kind: "btw"; id: string; label: string }
+  | { kind: "githubTrending"; id: string; label: string };
 
 interface Props {
   tabs: Tab[];
@@ -138,6 +140,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               <GitGraph size={13} />
             ) : tab.kind === "btw" ? (
               <MessageSquareMore size={13} />
+            ) : tab.kind === "githubTrending" ? (
+              <GithubIcon size={13} />
             ) : (
               getFileIcon(tab.label, 13)
             );

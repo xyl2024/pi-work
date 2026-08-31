@@ -34,6 +34,7 @@ import {
   CONVERSATION_TREE_TAB_ID,
   LLM_AUDIT_TAB_ID,
   CONTEXT_TAB_ID,
+  GITHUB_TRENDING_TAB_ID,
 } from "@/lib/shared/types";
 import type { Tab } from "@/components/ui/TabBar";
 import {
@@ -52,6 +53,7 @@ import {
   Star,
   Wrench,
 } from "lucide-react";
+import GithubIcon from "@lobehub/icons/es/Github/components/Mono";
 
 // Tab kinds the right column toggles. Kept narrow so an accidental
 // Tab.kind value surfaces as a type error in the descriptor registry.
@@ -70,6 +72,7 @@ export type RightBarTabKind = Extract<
   | "llmAudit"
   | "context"
   | "btw"
+  | "githubTrending"
 >;
 
 export interface RightBarCtx {
@@ -114,6 +117,7 @@ export interface RightBarCtx {
     llmAudit: () => void;
     context: () => void;
     btw: () => void;
+    githubTrending: () => void;
   };
 }
 
@@ -354,6 +358,23 @@ const toolCallsDescriptor: RightBarDescriptor = {
     ctx.toggleRightPanelTab(TOOL_CALLS_TAB_ID, ctx.openTab.toolCalls),
 };
 
+// GitHub Trending: global (not session-bound) — public data anyone can
+// browse. Defaults right after RSS in the configurable row: another
+// "external feed" panel, so they sit shoulder-to-shoulder. The button and
+// tab-bar glyph is the GitHub Octocat (brand icon), not a generic arrow.
+const githubTrendingDescriptor: RightBarDescriptor = {
+  id: "githubTrending",
+  kind: "configurable",
+  labelKey: "GitHub Trending",
+  isActive: (ctx) => ctx.activeTabKind === "githubTrending",
+  content: () => <GithubIcon size={16} />,
+  onClick: (ctx) =>
+    ctx.toggleRightPanelTab(
+      GITHUB_TRENDING_TAB_ID,
+      ctx.openTab.githubTrending,
+    ),
+};
+
 const conversationTreeDescriptor: RightBarDescriptor = {
   id: "conversationTree",
   kind: "configurable",
@@ -380,6 +401,7 @@ export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   translateDescriptor,
   jsonDescriptor,
   rssDescriptor,
+  githubTrendingDescriptor,
   gitDiffDescriptor,
   favoritesDescriptor,
   tokensDescriptor,

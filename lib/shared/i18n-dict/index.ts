@@ -20,6 +20,7 @@ import { channels } from "./channels";
 import { commands } from "./commands";
 import { common } from "./common";
 import { fileViewer } from "./file-viewer";
+import { githubTrending } from "./github-trending";
 import { grokbot } from "./grokbot";
 import { inbox } from "./inbox";
 import { media } from "./media";
@@ -52,6 +53,7 @@ export const ZH_TRANSLATIONS = {
   ...channels,
   ...commands,
   ...fileViewer,
+  ...githubTrending,
   ...grokbot,
   ...inbox,
   ...media,

@@ -26,6 +26,7 @@ import { ToolCallStatsPanel } from "../panels/ToolCallStatsPanel";
 import { JsonPanel } from "../panels/JsonPanel";
 import { CanvasPanel } from "../panels/CanvasPanel";
 import { RssPanel } from "../rss/RssPanel";
+import { GitHubTrendingPanel } from "../panels/github-trending/GitHubTrendingPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
@@ -74,6 +75,7 @@ import {
   LLM_AUDIT_TAB_ID,
   CONTEXT_TAB_ID,
   BTW_TAB_ID,
+  GITHUB_TRENDING_TAB_ID,
   RIGHT_BAR_ID_FOR_TAB_KIND,
 } from "@/lib/shared/types";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
@@ -974,6 +976,19 @@ export function AppShell() {
     ensureRightPanelOpen();
   }, [t, ensureRightPanelOpen]);
 
+  // Open the GitHub Trending panel — same pattern as rss / tokens.
+  const handleOpenGithubTrendingTab = useCallback(() => {
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "githubTrending")) return prev;
+      return [
+        { kind: "githubTrending", id: GITHUB_TRENDING_TAB_ID, label: t("GitHub Trending") },
+        ...prev,
+      ];
+    });
+    setActiveFileTabId(GITHUB_TRENDING_TAB_ID);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
+
   // Open the Token-audit panel.
   const handleOpenTokensTab = useCallback(() => {
     setFileTabs((prev) => {
@@ -1330,6 +1345,7 @@ export function AppShell() {
       llmAudit: handleOpenLlmAuditTab,
       context: handleOpenContextTab,
       btw: handleOpenBtwTab,
+      githubTrending: handleOpenGithubTrendingTab,
     },
   };
 
@@ -1670,6 +1686,8 @@ export function AppShell() {
           <CanvasPanel />
         ) : activeFileTab?.kind === "rss" ? (
           <RssPanel />
+        ) : activeFileTab?.kind === "githubTrending" ? (
+          <GitHubTrendingPanel />
         ) : activeFileTab?.kind === "tokens" ? (
           <TokensPanel />
         ) : activeFileTab?.kind === "llmAudit" ? (
