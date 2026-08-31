@@ -84,6 +84,45 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 - 修改 pi 依赖时保持相关 `@earendil-works/pi-*` 包版本同步，使用精确版本并更新 `package-lock.json`。
 - 除非用户允许，否则永远不要直接或间接损坏 `~/.pi` 或 `~/.pi-work` 的用户数据，这是红线。
 
+## 中英代码术语表
+
+用于把中文需求转换为 CodeGraph、搜索和代码阅读时使用的英文代码术语。括号内为已确认的代码符号或文件路径，优先使用这些精确名称查询。
+
+| 中文术语 | 英文代码术语 / 精确符号 |
+|---|---|
+| 命令面板 | `CommandPalette`（`components/app-shell/CommandPalette.tsx`） |
+| 命令注册 | `buildCommands`、`Command`（`lib/client/commands.tsx`） |
+| 右侧按钮列 | `RightBarColumn`（`components/panels/right-bar/RightBarColumn.tsx`） |
+| 右侧按钮描述器 | `RightBarDescriptor`、`RIGHT_BAR_DESCRIPTORS`（`components/panels/right-bar/desc.tsx`） |
+| 右侧面板配置 | `RightSideBarConfig`、`RightBarButtonId`（`lib/shared/right-bar.ts`） |
+| 待办 | `todos`、`todosDescriptor`、`openTab.todo` |
+| 画布 | `canvas`、`canvasDescriptor`、`openTab.canvas` |
+| 翻译 | `translate`、`translateDescriptor`、`openTab.translate` |
+| JSON 格式化 | `json`、`jsonDescriptor`、`openTab.json` |
+| RSS | `rss`、`rssDescriptor`、`openTab.rss` |
+| 收藏 | `favorites`、`favoritesDescriptor`、`openTab.favorites` |
+| Token 审计 | `tokens`、`tokensDescriptor`、`openTab.tokens` |
+| 工具调用 | `toolCalls`、`toolCallsDescriptor`、`openTab.toolCalls` |
+| Git 差异 | `gitDiff`、`gitDiffDescriptor`、`openTab.gitDiff` |
+| 会话树 | `conversationTree`、`conversationTreeDescriptor`、`openTab.conversationTree` |
+| LLM API 审计 | `llmAudit`、`llmAuditDescriptor`、`openTab.llmAudit` |
+| Context 面板 | `context`、`contextDescriptor`、`openTab.context` |
+| BTW 面板 | `btw`、`btwDescriptor`、`openTab.btw` |
+| 工具市场 | `openToolMarket`、`ToolMarket` |
+| 设置 | `openSettings`、`modal.settings` |
+| 频道 | `openChannels`、`modal.channels` |
+| 会话 | `session`、`AgentSessionWrapper` |
+| 左侧边栏 | `SessionSidebar`（`components/sessions/SessionSidebar.tsx`） |
+| 会话标签页 | `SessionTabBar`、`SessionTab`（`components/sessions/SessionTabBar.tsx`、`hooks/sessionWorkspaceStore.ts`） |
+| 右侧标签页 | `TabBar`、`Tab`（`components/ui/TabBar.tsx`） |
+| 工作目录 | `cwd`、`selectedCwd` |
+| cwd 选择器 | `CwdPicker`（`components/sessions/CwdPicker.tsx`） |
+| 模型选择器 | `ModelPicker`（`components/chat/ModelPicker.tsx`） |
+| 思考强度 / 推理强度 | `ThinkingPicker`、`ThinkingLevel`、`ThinkingLevelOption`（`components/chat/ThinkingPicker.tsx`、`hooks/useAgentSession/types.ts`） |
+| 压缩上下文 | `handleCompactClick`、`handleCompact`、`compact`（`components/chat/ChatWindow.tsx`、`hooks/useAgentSession/hook.ts`） |
+| 国际化 | `useI18n`、`t`、`lib/shared/i18n-dict/` |
+| 左下角快捷菜单 / 快捷菜单 / 头像快捷菜单 | `ProfileBlock`、`menuOpen`、`openMenu`（`components/settings/ProfileBlock.tsx`） |
+
 ## 常用命令与验证
 
 仓库根 `.npmrc` 设 `production=false`：即使 shell 带 `NODE_ENV=production`，`npm install` 也会安装 devDependencies（否则缺 typescript/tailwindcss/eslint 等会导致 `next build` 因 `@/` 路径别名未注册而失败）。
