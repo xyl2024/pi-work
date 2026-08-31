@@ -183,6 +183,7 @@ export const chat = {
   "System prompt is empty (tools are disabled)": "系统提示词为空（工具已禁用）",
   "Send a message to load the system prompt.": "发送一条消息后加载系统提示词",
   "Pi base + Append": "Pi 内置 + 追加",
+  "Quick jump": "快捷跳转",
 
   // Auto-name / compact
   "Auto-name": "自动命名",

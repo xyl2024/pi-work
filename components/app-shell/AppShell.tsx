@@ -2058,6 +2058,7 @@ export function AppShell() {
 
 function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; tools: ToolInfo[] }) {
   const { t } = useI18n();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const segments = useMemo(() => splitSystemPrompt(systemPrompt ?? ""), [systemPrompt]);
   const pathColor = useMemo(() => {
     const map = new Map<string, string>();
@@ -2073,76 +2074,52 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
     [segments],
   );
   const sortedTools = useMemo(() => [...tools].sort((a, b) => a.name.localeCompare(b.name)), [tools]);
+  const jumpTo = useCallback((id: string) => {
+    scrollRef.current?.querySelector<HTMLElement>(`[data-context-anchor="${id}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+  const jumpItems = [
+    ...(systemPrompt ? [{ id: "base", label: t("Pi base + Append"), color: "var(--text-dim)" }] : []),
+    ...agentsSegments.map((seg, idx) => ({ id: `agents-${idx}`, label: seg.path, color: pathColor.get(seg.path)! })),
+    { id: "tools", label: t("Tools"), color: "var(--accent)" },
+  ];
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", background: "transparent", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
-      <section style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
-          {t("System Prompts")}
-        </div>
+    <div ref={scrollRef} style={{ height: "100%", overflowY: "auto", background: "transparent", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
+      {jumpItems.length > 1 && (
+        <nav aria-label={t("Quick jump")} style={{ position: "sticky", top: 0, zIndex: 2, display: "flex", alignItems: "center", gap: 5, overflowX: "auto", padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "color-mix(in srgb, var(--bg) 94%, transparent)", backdropFilter: "blur(6px)" }}>
+          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("Quick jump")}</span>
+          {jumpItems.map((item) => (
+            <button key={item.id} type="button" onClick={() => jumpTo(item.id)} title={item.label} style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, maxWidth: 190, padding: "3px 7px", border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg-secondary)", color: "var(--text-muted)", font: "inherit", fontSize: 10, cursor: "pointer" }}>
+              <span style={{ width: 7, height: 7, borderRadius: 2, flexShrink: 0, background: item.color }} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+      <section data-context-anchor="base" style={{ scrollMarginTop: 42, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{t("System Prompts")}</div>
         {systemPrompt ? (
           <div>
             {agentsSegments.length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 10, fontSize: 11, color: "var(--text-muted)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--text-dim)", flexShrink: 0 }} />
-                  <span>{t("Pi base + Append")}</span>
-                </div>
-                {agentsSegments.map((seg) => {
-                  const color = pathColor.get(seg.path)!;
-                  return (
-                    <div key={seg.path} style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
-                      <span style={{ fontFamily: "var(--font-mono)", maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>
-                        {seg.path}
-                      </span>
-                    </div>
-                  );
-                })}
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: "var(--text-dim)" }} /><span>{t("Pi base + Append")}</span></div>
+                {agentsSegments.map((seg) => <div key={seg.path} style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: pathColor.get(seg.path)! }} /><span style={{ fontFamily: "var(--font-mono)", maxWidth: 360, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>{seg.path}</span></div>)}
               </div>
             )}
             <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
               {segments.map((seg, idx) => {
-                if (seg.kind === "base") {
-                  return <span key={`base-${idx}`}>{seg.text}</span>;
-                }
+                if (seg.kind === "base") return <span key={`base-${idx}`}>{seg.text}</span>;
                 const color = pathColor.get(seg.path)!;
-                return (
-                  <span key={`agents-${idx}-${seg.path}`} style={{ display: "block", borderLeft: `3px solid ${color}`, background: `${color}14`, marginTop: 8, marginBottom: 8, paddingLeft: 10, paddingTop: 4, paddingBottom: 4 }}>
-                    <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>
-                      {seg.path}
-                    </div>
-                    {seg.text}
-                  </span>
-                );
+                return <span key={`agents-${idx}-${seg.path}`} data-context-anchor={`agents-${agentsSegments.indexOf(seg)}`} style={{ scrollMarginTop: 42, display: "block", borderLeft: `3px solid ${color}`, background: `${color}14`, marginTop: 8, marginBottom: 8, paddingLeft: 10, paddingTop: 4, paddingBottom: 4 }}><div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>{seg.path}</div>{seg.text}</span>;
               })}
             </div>
           </div>
-        ) : (
-          <div style={{ fontStyle: "italic" }}>{t("System prompt is empty (tools are disabled)")}</div>
-        )}
+        ) : <div style={{ fontStyle: "italic" }}>{t("System prompt is empty (tools are disabled)")}</div>}
       </section>
-      <section style={{ padding: "12px 16px" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
-          {t("Tools")}
-        </div>
-        {sortedTools.length === 0 ? (
-          <div style={{ fontStyle: "italic" }}>{t("Loading tools...")}</div>
-        ) : (
-          <div>
-            {sortedTools.map((tool) => (
-              <div key={tool.name} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid color-mix(in srgb, var(--border) 55%, transparent)" }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--text-dim)", flexShrink: 0, marginTop: 4 }} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: "var(--text)", fontWeight: 500, fontFamily: "var(--font-mono)" }}>{tool.name}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.5 }}>
-                    {tool.description || t("No description")}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <section data-context-anchor="tools" style={{ scrollMarginTop: 42, padding: "12px 16px" }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{t("Tools")}</div>
+        {sortedTools.length === 0 ? <div style={{ fontStyle: "italic" }}>{t("Loading tools...")}</div> : <div>{sortedTools.map((tool) => <div key={tool.name} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid color-mix(in srgb, var(--border) 55%, transparent)" }}><div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--text-dim)", flexShrink: 0, marginTop: 4 }} /><div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: "var(--text)", fontWeight: 500, fontFamily: "var(--font-mono)" }}>{tool.name}</div><div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.5 }}>{tool.description || t("No description")}</div></div></div>)}</div>}
       </section>
     </div>
   );
