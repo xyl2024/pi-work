@@ -1913,7 +1913,7 @@ export function AppShell() {
             border: "none",
             borderRadius: 6,
             background: "transparent",
-            color: "inherit",
+            color: "var(--accent)",
             padding: "2px 0",
             margin: 0,
             font: "inherit",
@@ -1923,7 +1923,7 @@ export function AppShell() {
             transition: "background-color 0.12s ease",
           }}
           onMouseEnter={(event) => {
-            event.currentTarget.style.background = "var(--bg-hover)";
+            event.currentTarget.style.background = "color-mix(in srgb, var(--accent) 12%, transparent)";
           }}
           onMouseLeave={(event) => {
             event.currentTarget.style.background = "transparent";
