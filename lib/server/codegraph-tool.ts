@@ -31,7 +31,7 @@ import path from "node:path";
 import { Type } from "typebox";
 import { defineTool, type AgentToolResult, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { getAllowedRoots, isPathAllowed } from "./file-access";
-import { sdkModule, codeGraphModule, type CodeGraphToolHandler, type CodeGraphToolResult, type CodeGraphBuildResult } from "./codegraph-sdk";
+import { getSdkModule, getCodeGraphModule, type CodeGraphToolHandler, type CodeGraphToolResult, type CodeGraphBuildResult } from "./codegraph-sdk";
 
 /** Idle TTL before the pooled ToolHandler closes all cached project connections. */
 const IDLE_TTL_MS = 15 * 60 * 1000;
@@ -50,7 +50,8 @@ function getPooledHandler(): CodeGraphToolHandler {
     lastUsedAt = now;
     return pooledHandler;
   }
-  pooledHandler = new sdkModule.ToolHandler(null);
+  const sdk = getSdkModule();
+  pooledHandler = new sdk.ToolHandler(null);
   lastUsedAt = now;
   // Reset the idle timer on every fresh creation.
   if (idleTimer) clearTimeout(idleTimer);
@@ -419,13 +420,13 @@ const buildTool = defineTool<typeof buildParams, Record<string, unknown>>({
     if (!resolved.ok) return errorResult(resolved.error);
 
     if (mode === "init") {
-      if (codeGraphModule.isInitialized(resolved.abs)) {
+      if (getCodeGraphModule().isInitialized(resolved.abs)) {
         return textResult(
           `CodeGraph is already initialized for ${resolved.abs}. Use mode=sync for an incremental update, or mode=index to rebuild from scratch.`,
         );
       }
       try {
-        const cg = await codeGraphModule.init(resolved.abs, { index: true });
+        const cg = await getCodeGraphModule().init(resolved.abs, { index: true });
         const stats = cg.getStats();
         cg.close();
         return textResult(
@@ -439,7 +440,7 @@ const buildTool = defineTool<typeof buildParams, Record<string, unknown>>({
       }
     }
 
-    if (!codeGraphModule.isInitialized(resolved.abs)) {
+    if (!getCodeGraphModule().isInitialized(resolved.abs)) {
       return textResult(
         `CodeGraph is not initialized for ${resolved.abs} (no .codegraph/ index). ` +
           `Build it with codegraph_build (mode=init) — the tool pauses for user confirmation before the heavy scan. ` +
@@ -448,7 +449,7 @@ const buildTool = defineTool<typeof buildParams, Record<string, unknown>>({
     }
 
     try {
-      const cg = codeGraphModule.openSync(resolved.abs);
+      const cg = getCodeGraphModule().openSync(resolved.abs);
       let result: CodeGraphBuildResult;
       try {
         if (mode === "index") {

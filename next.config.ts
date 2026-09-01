@@ -16,6 +16,10 @@ const nextConfig: NextConfig = {
     "better-sqlite3",
     "node-pty",
     "ws",
+    // CodeGraph's compiled bundle ships tree-sitter wasm loaders that neither
+    // webpack nor Turbopack can compile (duplicate-symbol errors). Keep it out
+    // of the bundle so it resolves via Node require at runtime instead.
+    "@colbymchenry/codegraph-linux-x64",
   ],
   allowedDevOrigins: ['192.168.*.*'],
   env: {

@@ -22,14 +22,34 @@
  * banner that defines `require`).
  */
 
+import { createRequire } from "node:module";
+
 declare const __non_webpack_require__: NodeRequire | undefined;
 
-const runtimeRequire: NodeRequire =
-  typeof __non_webpack_require__ === "function"
-    ? __non_webpack_require__
-    : require;
-
 const target = `${process.platform}-${process.arch}`;
+
+const TOOL_HANDLER_PATH = `@colbymchenry/codegraph-${target}/lib/dist/mcp/tools.js`;
+const INDEX_PATH = `@colbymchenry/codegraph-${target}/lib/dist/index.js`;
+
+/**
+ * Resolve the Node `require` needed to reach the compiled bundle's deep
+ * path. Loaded lazily (only on first tool call), and the module's own
+ * top level never touches `require` — that is what kept webpack builds
+ * happy and now keeps Turbopack dev from rejecting the dynamic path.
+ *
+ * - webpack builds: `__non_webpack_require__` escapes the module graph, so
+ *   the bundle's `require.resolve('tree-sitter-wasms/out/*.wasm')` template
+ *   strings are never context-scanned (see the history note below).
+ * - Turbopack dev: `__non_webpack_require__` is absent and dynamic `require`
+ *   is rejected at module evaluation, so we fall back to `createRequire`,
+ *   which Turbopack whitelists as a runtime dynamic-loading escape hatch.
+ *   `NEXT_RUNTIME` is set under the Next.js server runtime.
+ */
+function runtimeRequire(): NodeRequire {
+  if (typeof __non_webpack_require__ === "function") return __non_webpack_require__;
+  if (process.env.TURBOPACK) return createRequire(import.meta.url);
+  return require;
+}
 
 // ── MCP ToolHandler (read/query tools) ────────────────────────────────
 
@@ -50,9 +70,19 @@ export interface CodeGraphSdkModule {
   ToolHandler: new (defaultCodeGraph: unknown) => CodeGraphToolHandler;
 }
 
-export const sdkModule = runtimeRequire(
-  `@colbymchenry/codegraph-${target}/lib/dist/mcp/tools.js`,
-) as CodeGraphSdkModule;
+let cachedSdk: CodeGraphSdkModule | undefined;
+/**
+ * Lazy accessor for the compiled MCP ToolHandler bundle. Kept off the module
+ * top level so neither webpack (context-scan) nor Turbopack (dynamic-require
+ * guard) trips over it during module evaluation; it only resolves when a
+ * codegraph tool is actually invoked.
+ */
+export function getSdkModule(): CodeGraphSdkModule {
+  if (!cachedSdk) {
+    cachedSdk = runtimeRequire()(TOOL_HANDLER_PATH) as CodeGraphSdkModule;
+  }
+  return cachedSdk;
+}
 
 // ── CodeGraph main class (index construction: init/index/sync) ────────
 
@@ -92,13 +122,22 @@ export interface CodeGraphInstance {
 
 // The bundle publishes the class both as `default` and as a named export;
 // pick whichever is present at runtime.
-const mainModule = runtimeRequire(
-  `@colbymchenry/codegraph-${target}/lib/dist/index.js`,
-) as CodeGraphMain & { default?: CodeGraphMain; CodeGraph?: CodeGraphMain };
-
-export const codeGraphModule: CodeGraphMain =
-  mainModule.default && typeof mainModule.default.init === "function"
-    ? mainModule.default
-    : mainModule.CodeGraph && typeof mainModule.CodeGraph.init === "function"
-      ? mainModule.CodeGraph
-      : mainModule;
+let cachedMain: CodeGraphMain | undefined;
+/**
+ * Lazy accessor for the compiled main bundle; see `getSdkModule`.
+ */
+export function getCodeGraphModule(): CodeGraphMain {
+  if (!cachedMain) {
+    const mainModule = runtimeRequire()(INDEX_PATH) as CodeGraphMain & {
+      default?: CodeGraphMain;
+      CodeGraph?: CodeGraphMain;
+    };
+    cachedMain =
+      mainModule.default && typeof mainModule.default.init === "function"
+        ? mainModule.default
+        : mainModule.CodeGraph && typeof mainModule.CodeGraph.init === "function"
+          ? mainModule.CodeGraph
+          : mainModule;
+  }
+  return cachedMain;
+}
