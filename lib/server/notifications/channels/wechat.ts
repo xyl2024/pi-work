@@ -51,12 +51,13 @@ const wechatChannel: NotificationChannel = {
       throw new Error(msg);
     }
 
-    const text = [
-      `【${payload.taskName}】`,
-      "",
-      payload.text,
-      payload.detail ? `\n${payload.detail.slice(0, 500)}` : "",
-    ].join("\n");
+    // Success notifications pass a short preview in `text` and the full
+    // reply in `detail`. When the preview is the beginning of the detail,
+    // sending both produces the same reply twice in WeChat.
+    const body = payload.detail && payload.text && payload.detail.startsWith(payload.text)
+      ? payload.detail
+      : [payload.text, payload.detail ? `\n${payload.detail.slice(0, 500)}` : ""].join("\n");
+    const text = [`【${payload.taskName}】`, "", body].join("\n");
 
     const clientId = api.newClientId();
     try {
