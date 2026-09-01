@@ -11,7 +11,7 @@ import { useStreamingMessage } from "@/hooks/useStreamingMessage";
  * The height is dynamic: it grows with the content up to this maximum, then
  * scrolls once the live output exceeds it.
  */
-const STREAMING_VIEWPORT_MAX_HEIGHT = 360;
+const STREAMING_VIEWPORT_MAX_HEIGHT = 500;
 const BOTTOM_THRESHOLD_PX = 1;
 
 interface Props {
