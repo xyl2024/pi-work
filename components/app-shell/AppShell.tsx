@@ -204,6 +204,65 @@ function splitSystemPrompt(systemPrompt: string): SystemPromptSegment[] {
   return segments;
 }
 
+// ── Context panel: fine-grained quick-jump anchors inside the base prompt ──
+// The pi base prompt is a flat text blob; we cut it at its known section
+// headings so the context panel can offer per-section jump targets (Available
+// tools / Guidelines / Pi documentation / user's Append) instead of only the
+// whole base block. Parsing is defensive: headings that aren't found simply
+// yield no anchor, and a custom-prompt setup that matches nothing falls back
+// to the whole-block base anchor.
+
+type BasePromptBlock = {
+  /** data-context-anchor id; null for unanchored filler. */
+  anchor: string | null;
+  text: string;
+};
+
+const BASE_HEADING_ANCHORS: Array<{ id: string; re: RegExp }> = [
+  { id: "available-tools", re: /Available tools:/ },
+  { id: "guidelines", re: /Guidelines:/ },
+  { id: "pi-docs", re: /Pi documentation/ },
+];
+
+/** Index just after pi's \"Always read pi .md files…\" line (the end of the
+ *  Pi documentation section). `-1` when the pi docs section is absent. */
+function findPiDocsEnd(text: string): number {
+  const m = /Always read pi\s*\.md files[^\n]*/.exec(text);
+  return m ? m.index + m[0].length : -1;
+}
+
+/** Non-whitespace (non-cwd) content still following the pi docs section —
+ *  i.e. the user's APPEND_SYSTEM.md block. */
+function hasAppendSection(text: string, after: number): boolean {
+  const rest = text.slice(after).replace(/\nCurrent working directory:[\s\S]*$/, "");
+  return rest.trim().length > 0;
+}
+
+/** Slice a base segment into anchorable blocks at its known headings. */
+function splitBaseBlocks(text: string): BasePromptBlock[] {
+  const marks: Array<{ index: number; id: string }> = [];
+  for (const { id, re } of BASE_HEADING_ANCHORS) {
+    const m = re.exec(text);
+    if (m) marks.push({ index: m.index, id });
+  }
+  const piDocsEnd = findPiDocsEnd(text);
+  if (piDocsEnd >= 0 && hasAppendSection(text, piDocsEnd)) {
+    marks.push({ index: piDocsEnd, id: "append" });
+  }
+  marks.sort((a, b) => a.index - b.index);
+  const blocks: BasePromptBlock[] = [];
+  let cursor = 0;
+  for (let i = 0; i < marks.length; i++) {
+    const mark = marks[i];
+    const end = i + 1 < marks.length ? marks[i + 1].index : text.length;
+    if (mark.index > cursor) blocks.push({ anchor: null, text: text.slice(cursor, mark.index) });
+    blocks.push({ anchor: mark.id, text: text.slice(mark.index, end) });
+    cursor = end;
+  }
+  if (cursor < text.length) blocks.push({ anchor: null, text: text.slice(cursor) });
+  return blocks;
+}
+
 interface WorkspaceChatTabProps {
   tab: SessionTab;
   isActive: boolean;
@@ -2078,6 +2137,22 @@ export function AppShell() {
 function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; tools: ToolInfo[] }) {
   const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [jumpOpen, setJumpOpen] = useState(false);
+  const [hoveredJumpId, setHoveredJumpId] = useState<string | null>(null);
+  // Delayed close so the menu doesn't vanish mid-traversal from the trigger
+  // button across the small gap into the menu (150ms grace, cancelled on re-entry).
+  const jumpCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelJumpClose = useCallback(() => {
+    if (jumpCloseTimerRef.current !== null) {
+      clearTimeout(jumpCloseTimerRef.current);
+      jumpCloseTimerRef.current = null;
+    }
+  }, []);
+  const scheduleJumpClose = useCallback(() => {
+    cancelJumpClose();
+    jumpCloseTimerRef.current = setTimeout(() => setJumpOpen(false), 150);
+  }, [cancelJumpClose]);
+  useEffect(() => () => { if (jumpCloseTimerRef.current !== null) clearTimeout(jumpCloseTimerRef.current); }, []);
   const segments = useMemo(() => splitSystemPrompt(systemPrompt ?? ""), [systemPrompt]);
   const pathColor = useMemo(() => {
     const map = new Map<string, string>();
@@ -2097,25 +2172,88 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
     scrollRef.current?.querySelector<HTMLElement>(`[data-context-anchor="${id}"]`)
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
-  const jumpItems = [
-    ...(systemPrompt ? [{ id: "base", label: t("Pi base + Append"), color: "var(--text-dim)" }] : []),
-    ...agentsSegments.map((seg, idx) => ({ id: `agents-${idx}`, label: seg.path, color: pathColor.get(seg.path)! })),
-    { id: "tools", label: t("Tools"), color: "var(--accent)" },
-  ];
+  // Fine-grained anchors inside the base prompt (Available tools / Guidelines /
+  // Pi documentation / Append) — only shown when the heading is actually present.
+  const baseBlocks = useMemo(
+    () => segments.flatMap((seg) => (seg.kind === "base" ? splitBaseBlocks(seg.text) : [])),
+    [segments],
+  );
+  const baseAnchors = useMemo(() => {
+    const present = new Set(baseBlocks.map((b) => b.anchor).filter((a): a is string => a !== null));
+    const items: { id: string; label: string; color: string }[] = [];
+    if (systemPrompt) items.push({ id: "base", label: t("Pi base + Append"), color: "var(--text-dim)" });
+    if (present.has("available-tools")) items.push({ id: "available-tools", label: t("Available tools"), color: "var(--text-dim)" });
+    if (present.has("guidelines")) items.push({ id: "guidelines", label: t("Guidelines"), color: "var(--text-dim)" });
+    if (present.has("pi-docs")) items.push({ id: "pi-docs", label: t("Pi documentation"), color: "var(--text-dim)" });
+    if (present.has("append")) items.push({ id: "append", label: t("Append"), color: "var(--text-dim)" });
+    return items;
+  }, [systemPrompt, baseBlocks, t]);
+  // Jump menu groups: base prompt sections, per-AGENTS.md instructions, tools.
+  const jumpGroups = useMemo(
+    () =>
+      [
+        ...(baseAnchors.length > 0 ? [{ label: null, items: baseAnchors }] : []),
+        ...(agentsSegments.length > 0
+          ? [{
+              label: t("AGENTS.md"),
+              items: agentsSegments.map((seg, idx) => ({ id: `agents-${idx}`, label: seg.path, color: pathColor.get(seg.path)! })),
+            }]
+          : []),
+        { label: null, items: [{ id: "tools", label: t("Tools"), color: "var(--accent)" }] },
+      ].filter((group) => group.items.length > 0),
+    [baseAnchors, agentsSegments, pathColor, t],
+  );
 
   return (
     <div ref={scrollRef} style={{ height: "100%", overflowY: "auto", background: "transparent", color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
-      {jumpItems.length > 1 && (
-        <nav aria-label={t("Quick jump")} style={{ position: "sticky", top: 0, zIndex: 2, display: "flex", alignItems: "center", gap: 5, overflowX: "auto", padding: "7px 10px", borderBottom: "1px solid var(--border)", background: "color-mix(in srgb, var(--bg) 94%, transparent)", backdropFilter: "blur(6px)" }}>
-          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("Quick jump")}</span>
-          {jumpItems.map((item) => (
-            <button key={item.id} type="button" onClick={() => jumpTo(item.id)} title={item.label} style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, maxWidth: 190, padding: "3px 7px", border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg-secondary)", color: "var(--text-muted)", font: "inherit", fontSize: 10, cursor: "pointer" }}>
-              <span style={{ width: 7, height: 7, borderRadius: 2, flexShrink: 0, background: item.color }} />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-      )}
+      {/* Floating quick-jump button (top-right). The sticky wrapper is
+          height:0 so it overlays the scroll content without reserving a row,
+          and the button + menu live in an absolutely-positioned shell. The
+          shell is a DOM child of the wrapper, so hovering the menu keeps the
+          wrapper (and thus the open state) alive; closing is deferred 150ms
+          so crossing the 2px gap never collapses the menu prematurely. */}
+      <div style={{ position: "sticky", top: 0, height: 0, zIndex: 3 }} onMouseLeave={scheduleJumpClose}>
+        <div style={{ position: "absolute", top: 8, right: 8 }} onMouseEnter={() => { cancelJumpClose(); setJumpOpen(true); }}>
+          <button
+            type="button"
+            aria-label={t("Quick jump")}
+            aria-expanded={jumpOpen}
+            title={t("Quick jump")}
+            style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, border: "1px solid var(--border)", borderRadius: 6, background: jumpOpen ? "var(--bg-hover)" : "var(--bg-panel)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+          </button>
+          {jumpOpen && (
+            <div
+              onMouseEnter={cancelJumpClose}
+              style={{ position: "absolute", top: "calc(100% + 2px)", right: 0, width: 244, maxHeight: 340, overflowY: "auto", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 10px 28px rgba(0,0,0,0.25)", padding: 6, zIndex: 4 }}
+            >
+              {jumpGroups.map((group, gi) => (
+                <div key={gi} style={{ padding: "2px 0" }}>
+                  {group.label && <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", padding: "4px 8px 2px" }}>{group.label}</div>}
+                  {group.items.map((item) => {
+                    const hovered = hoveredJumpId === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => { jumpTo(item.id); cancelJumpClose(); setJumpOpen(false); }}
+                        onMouseEnter={() => setHoveredJumpId(item.id)}
+                        onMouseLeave={() => setHoveredJumpId(null)}
+                        title={item.label}
+                        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "5px 8px", borderRadius: 5, border: "none", background: hovered ? "var(--bg-hover)" : "transparent", color: "var(--text-muted)", font: "inherit", fontSize: 11, textAlign: "left", cursor: "pointer" }}
+                      >
+                        <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: item.color }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: item.id.startsWith("agents-") ? "var(--font-mono)" : "inherit" }}>{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
       <section data-context-anchor="base" style={{ scrollMarginTop: 42, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{t("System Prompts")}</div>
         {systemPrompt ? (
@@ -2128,9 +2266,26 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
             )}
             <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
               {segments.map((seg, idx) => {
-                if (seg.kind === "base") return <span key={`base-${idx}`}>{seg.text}</span>;
+                if (seg.kind === "base") {
+                  // Cut the base blob at its known headings so quick-jump can
+                  // target per-section anchors instead of the whole block.
+                  const blocks = splitBaseBlocks(seg.text);
+                  return (
+                    <span key={`base-${idx}`}>
+                      {blocks.map((block, bi) => (
+                        <span
+                          key={bi}
+                          data-context-anchor={block.anchor ?? undefined}
+                          style={block.anchor ? { display: "block", scrollMarginTop: 44 } : undefined}
+                        >
+                          {block.text}
+                        </span>
+                      ))}
+                    </span>
+                  );
+                }
                 const color = pathColor.get(seg.path)!;
-                return <span key={`agents-${idx}-${seg.path}`} data-context-anchor={`agents-${agentsSegments.indexOf(seg)}`} style={{ scrollMarginTop: 42, display: "block", borderLeft: `3px solid ${color}`, background: `${color}14`, marginTop: 8, marginBottom: 8, paddingLeft: 10, paddingTop: 4, paddingBottom: 4 }}><div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>{seg.path}</div>{seg.text}</span>;
+                return <span key={`agents-${idx}-${seg.path}`} data-context-anchor={`agents-${agentsSegments.indexOf(seg)}`} style={{ scrollMarginTop: 44, display: "block", borderLeft: `3px solid ${color}`, background: `${color}14`, marginTop: 8, marginBottom: 8, paddingLeft: 10, paddingTop: 4, paddingBottom: 4 }}><div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={seg.path}>{seg.path}</div>{seg.text}</span>;
               })}
             </div>
           </div>
@@ -2138,7 +2293,27 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
       </section>
       <section data-context-anchor="tools" style={{ scrollMarginTop: 42, padding: "12px 16px" }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{t("Tools")}</div>
-        {sortedTools.length === 0 ? <div style={{ fontStyle: "italic" }}>{t("Loading tools...")}</div> : <div>{sortedTools.map((tool) => <div key={tool.name} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid color-mix(in srgb, var(--border) 55%, transparent)" }}><div style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--text-dim)", flexShrink: 0, marginTop: 4 }} /><div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: "var(--text)", fontWeight: 500, fontFamily: "var(--font-mono)" }}>{tool.name}</div><div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.5 }}>{tool.description || t("No description")}</div></div></div>)}</div>}
+        {sortedTools.length === 0 ? (
+          <div style={{ fontStyle: "italic" }}>{t("Loading tools...")}</div>
+        ) : (
+          <div>
+            {sortedTools.map((tool) => {
+              // `active` comes from the server's `get_tools` (per-session
+              // `getActiveToolNames()`); the catalog lists every available tool
+              // and greys out the ones this session didn't enable.
+              const enabled = tool.active === true;
+              return (
+                <div key={tool.name} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderBottom: "1px solid color-mix(in srgb, var(--border) 55%, transparent)", opacity: enabled ? 1 : 0.5 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: "50%", background: enabled ? "var(--accent)" : "var(--text-dim)", flexShrink: 0, marginTop: 4 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: enabled ? "var(--text)" : "var(--text-dim)", fontWeight: enabled ? 500 : 400, fontFamily: "var(--font-mono)" }}>{tool.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.5 }}>{tool.description || t("No description")}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );

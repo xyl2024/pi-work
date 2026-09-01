@@ -184,6 +184,10 @@ export const chat = {
   "Send a message to load the system prompt.": "发送一条消息后加载系统提示词",
   "Pi base + Append": "Pi 内置 + 追加",
   "Quick jump": "快捷跳转",
+  "Available tools": "可用工具",
+  "Guidelines": "指南",
+  "Pi documentation": "Pi 文档",
+  "AGENTS.md": "AGENTS.md",
 
   // Auto-name / compact
   "Auto-name": "自动命名",
