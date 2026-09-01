@@ -1737,9 +1737,13 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           onOpenFile={handleOpenFileFromLibrary}
         />
       )}
+      </>
+      )}
       {/* /model modal — portal'd into document.body; selection happens via
           handleModelChange (covers new-session and live-session paths).
-          On close, focus returns to the chat input for keyboard users. */}
+          Rendered OUTSIDE the isEmptyNew ternary so it exists on both the
+          new-session page and existing-session pages. On close, focus
+          returns to the chat input for keyboard users. */}
       <ModelPickerModal
         open={modelModalOpen}
         model={displayModelValue}
@@ -1753,8 +1757,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           chatInputRef?.current?.focus();
         }}
       />
-      </>
-      )}
     </div>
   );
 }
