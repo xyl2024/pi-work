@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { DefaultResourceLoader, getAgentDir, SessionManager } from "@earendil-works/pi-coding-agent";
 import { resolveSessionPath } from "@/lib/server/session-reader";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { readConfig } from "@/lib/server/config";
 
 const log = createLogger("api/slash-commands");
 
@@ -91,8 +92,14 @@ async function loadSlashCommands(cwd: string, startedAt: number): Promise<Cached
       content: prompt.content,
     }));
 
+    // Hide Skills the user has disabled (disabled_skills in Pi Work config,
+    // keyed by cwd) from the slash menu — same rule /api/skills uses for
+    // `disableModelInvocation`.
+    const disabledSkillPaths = new Set(readConfig().disabled_skills[cwd] ?? []);
     const skills: SlashResource[] = await Promise.all(
-      loader.getSkills().skills.map(async (skill) => ({
+      loader.getSkills().skills
+        .filter((skill) => !disabledSkillPaths.has(skill.filePath))
+        .map(async (skill) => ({
         source: "skill" as const,
         name: skill.name,
         command: `skill:${skill.name}`,
