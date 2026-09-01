@@ -28,7 +28,6 @@ import { AgentTodoPanel } from "../todos/AgentTodoPanel";
 import { AskUserQuestionsPanel } from "./AskUserQuestionsPanel";
 import { ReplayBar } from "./ReplayBar";
 import LoadingState from "../ui/LoadingState";
-import { SixPetalSpiralLoader } from "../ui/SixPetalSpiralLoader";
 import { useAgentSession } from "@/hooks/useAgentSession";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useI18n } from "@/hooks/useI18n";
@@ -1561,28 +1560,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   {liveTurnActive && (
                     <>
                       <StreamingMessageViewport tabId={streamingKey}>
-                        {/* Six-Petal Spiral loading animation: shown inside the
-                            fixed-height viewport after a message is sent and
-                            until the FIRST answer character streams out
-                            (`streamingStoreIsBody` — text block on screen).
-                            Unlike `hasContent` (which flips on thinking /
-                            tool-call content too), the animation stays visible
-                            through the thinking/tool phase and unmounts only
-                            when actual body text arrives, per the product
-                            requirement. When it unmounts, its rAF loop is torn
-                            down. */}
-                        {!streamingStoreIsBody && (
-                          <div
-                            style={{
-                              minHeight: 320,
-                              display: "grid",
-                              placeItems: "center",
-                              boxSizing: "border-box",
-                            }}
-                          >
-                            <SixPetalSpiralLoader />
-                          </div>
-                        )}
                         {streamingRendered}
                         <StreamingBubble
                           tabId={streamingKey}
