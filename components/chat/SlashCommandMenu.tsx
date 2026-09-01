@@ -35,7 +35,7 @@ export function SlashCommandMenu({
         const active = index === activeIndex;
         return (
           <button
-            key={`${item.source}:${item.path}`}
+            key={`${item.source}:${item.command}:${item.path}`}
             onMouseDown={(e) => {
               e.preventDefault();
               onSelect(item);
