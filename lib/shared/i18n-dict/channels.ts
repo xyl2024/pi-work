@@ -95,4 +95,11 @@ export const channels = {
   "channels.healthNoHeartbeat": "无心跳",
   "channels.healthLastPoll": "上次轮询",
   "channels.healthAgo": "{s}前",
+
+  "Notification channel": "通知渠道",
+  "No notification": "不通知",
+  "Notify this session's replies to a channel": "将会话的回复通知到选中的频道",
+  "Failed to set notification channel": "设置通知频道失败",
+  "Notification channel set": "通知渠道已设置",
+  "Notification channel cleared": "已取消通知渠道",
 } as const;

@@ -38,6 +38,12 @@ export interface ChatHeaderActions {
   isCompacting: boolean;
   /** Session is busy with another turn (compact button is disabled). */
   compactDisabled: boolean;
+  /** Persist the session's reply-notification channel (null = clear). */
+  onSetNotifyChannel: (channelId: string | null) => void;
+  /** Session selected — renders the "Notification channel" menu entry. */
+  notifyVisible: boolean;
+  /** Currently bound channel id (null = no notification) — menu label. */
+  currentNotifyChannelId: string | null;
 }
 
 let state: ChatHeaderActions | null = null;

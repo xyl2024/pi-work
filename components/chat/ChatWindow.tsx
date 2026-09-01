@@ -42,6 +42,7 @@ import { SessionSearch } from "../sessions/SessionSearch";
 import { phaseLabel, phaseLoaderVariant, resolveReadPath, isGroupAnchor, findFinalAssistantIndex, hasDisplayableProcessMessage } from "./chat-window/utils";
 import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
 import { NewSessionPresets } from "./chat-window/NewSessionPresets";
+import { NewSessionNotifyPicker } from "./chat-window/NewSessionNotifyPicker";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
 import { TranslateBubble } from "./translate-bubble";
@@ -110,6 +111,16 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const [slashResources, setSlashResources] = useState<SlashResource[]>([]);
   const [isExporting, setIsExporting] = useState(false);
   const sessionInfoReportedRef = useRef<string | null>(null);
+
+  // Notification channel picked on the new-session page (null = no notify).
+  // Persisted to the server once the session is created (currentSessionId
+  // flips from null → real id) so reloads keep the binding.
+  const [notifyChannelId, setNotifyChannelId] = useState<string | null>(null);
+  const savedNotifySessionRef = useRef<string | null>(null);
+  // Notification channel bound to the CURRENT (existing) session, loaded from
+  // the server on session change. Mirrors the sidecar on disk; the MoreMenu
+  // entry edits it via handleSetNotifyChannel.
+  const [sessionNotifyChannelId, setSessionNotifyChannelId] = useState<string | null>(null);
 
   // ── Auto-name scheduling for brand-new sessions ──────────────────────
   // The first assistant message of a new session lands only after pi lazily
@@ -180,6 +191,81 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     isActive,
     controllerId: tabId,
   });
+
+  // Persist the new-session notification channel once the session is created
+  // (currentSessionId flips from null → real id after POST /api/agent/new).
+  // Best-effort: a failure only toasts, it never blocks chat.
+  useEffect(() => {
+    if (!currentSessionId || notifyChannelId == null) return;
+    if (savedNotifySessionRef.current === currentSessionId) return;
+    savedNotifySessionRef.current = currentSessionId;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/sessions/${encodeURIComponent(currentSessionId)}/notify`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channelId: notifyChannelId }),
+        });
+        if (!res.ok && isActiveRef.current) {
+          showToast({ kind: "error", message: t("Failed to set notification channel") });
+        } else {
+          setSessionNotifyChannelId(notifyChannelId);
+        }
+      } catch {
+        if (isActiveRef.current) {
+          showToast({ kind: "error", message: t("Failed to set notification channel") });
+        }
+      }
+    })();
+  }, [currentSessionId, notifyChannelId, showToast, t]);
+
+  // Load the existing session's notification binding on session change.
+  useEffect(() => {
+    const sid = session?.id;
+    if (!sid) return;
+    let cancelled = false;
+    setSessionNotifyChannelId(null);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}/notify`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { config?: { channelId?: unknown } | null };
+        if (cancelled) return;
+        // A brand-new session that just saved its binding through the creation
+        // path may still be racing this read — trust the in-memory save over
+        // the (possibly stale) disk answer.
+        if (savedNotifySessionRef.current === sid) return;
+        setSessionNotifyChannelId(
+          typeof data.config?.channelId === "string" ? data.config.channelId : null,
+        );
+      } catch {
+        // keep null — the MoreMenu entry then shows "No notification"
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session?.id]);
+
+  // Persist a notification-channel change made from the MoreMenu (existing
+  // sessions). PUT with an empty channelId clears the binding.
+  const handleSetNotifyChannel = useCallback(async (channelId: string | null) => {
+    const sid = session?.id ?? currentSessionId;
+    if (!sid) return;
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}/notify`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelId: channelId ?? "" }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSessionNotifyChannelId(channelId);
+      showToast({
+        kind: "success",
+        message: channelId ? t("Notification channel set") : t("Notification channel cleared"),
+      });
+    } catch {
+      showToast({ kind: "error", message: t("Failed to set notification channel") });
+    }
+  }, [session?.id, currentSessionId, showToast, t]);
 
   useEffect(() => {
     if (!data?.info || session?.id !== data.sessionId || sessionInfoReportedRef.current === data.sessionId) return;
@@ -932,6 +1018,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     compactVisible: Boolean(session) && !agentRunning,
     isCompacting: agentPhase?.kind === "compacting",
     compactDisabled: agentRunning,
+    // Reply-notification channel binding (MoreMenu entry). The loader
+    // callback is stable; the memo rebuilds only when the id changes.
+    onSetNotifyChannel: handleSetNotifyChannel,
+    notifyVisible: Boolean(session),
+    currentNotifyChannelId: sessionNotifyChannelId,
   }), [
     openReplay,
     streamState.isStreaming,
@@ -945,6 +1036,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     isAutoNaming,
     handleCompactClick,
     agentPhase,
+    handleSetNotifyChannel,
+    sessionNotifyChannelId,
   ]);
 
   useEffect(() => {
@@ -1139,6 +1232,13 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
             </div>
 
             <NewSessionPresets onPickPrompt={(prompt) => chatInputRef?.current?.insertText(prompt)} />
+
+            <div style={{ marginTop: 26, display: "flex", justifyContent: "center" }}>
+              <NewSessionNotifyPicker
+                value={notifyChannelId}
+                onChange={setNotifyChannelId}
+              />
+            </div>
           </div>
           <div className="relative">{chatInputElement}</div>
         </>

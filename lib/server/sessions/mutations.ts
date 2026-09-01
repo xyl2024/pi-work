@@ -12,6 +12,7 @@ import {
   deleteSessionName,
   writeSessionName,
 } from "@/lib/server/session-names";
+import { deleteSessionNotify } from "@/lib/server/session-notify";
 import {
   invalidateSessionListCache,
   invalidateSessionPathCache,
@@ -162,6 +163,7 @@ export async function deleteSession(
   invalidateSessionListCache();
   deleteSessionName(sessionId);
   deleteAgentTodoFile(sessionId);
+  deleteSessionNotify(sessionId);
 
   return { filePath, reparentedChildren };
 }

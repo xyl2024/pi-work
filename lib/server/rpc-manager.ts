@@ -22,6 +22,10 @@ import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision,
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { createPiWorkBashTool } from "./pi-bash-tool";
+import { notify } from "./notifications";
+import { readSessionNotify } from "./session-notify";
+import { getChannel } from "./channels/db";
+import type { NotificationPayload, TaskNotification } from "../shared/notifications";
 
 const log = createLogger("rpc-manager");
 
@@ -106,6 +110,10 @@ export class AgentSessionWrapper {
   private pendingPermissions: Map<string, PendingPermission> = new Map();
   private allowedThisSession: Set<string> = new Set();
   private pendingUserInputs: Map<string, PendingUserInput> = new Map();
+  // Text of the latest assistant body reply of the current turn — used by
+  // per-session reply notifications (see start() + deliverSessionNotify).
+  // Reset on agent_start, updated on each assistant message_end.
+  private lastAssistantText = "";
 
   constructor(
     public readonly inner: AgentSessionLike,
@@ -143,6 +151,19 @@ export class AgentSessionWrapper {
       this.updateRunningState(event);
       this.resetIdleTimer();
       if (event.type === "agent_end") this.logEmptyTerminalReply(event);
+      // Per-session reply notifications: track the last assistant body reply of
+      // this turn (agent_start → agent_end) and, when the turn ends, forward it
+      // to the session's configured notification channel. Only fires for
+      // sessions that explicitly opted in on the new-session page — others have
+      // no sidecar and this is a no-op.
+      if (event.type === "agent_start") {
+        this.lastAssistantText = "";
+      } else if (event.type === "message_end") {
+        const body = extractAssistantBodyText(event.message);
+        if (body) this.lastAssistantText = body;
+      } else if (event.type === "agent_end") {
+        void this.deliverSessionNotify();
+      }
       // Push the freshest conversation tree after every persisted message
       // (message_end is when pi writes the entry to the session file), so
       // the conversation-tree panel can render new cards without waiting
@@ -232,6 +253,58 @@ export class AgentSessionWrapper {
       usage: lastAssistant.usage ?? null,
       messageCount: messages.length,
     });
+  }
+
+  /**
+   * Forward this turn's final assistant reply to the session's configured
+   * notification channel (set on the new-session page). Reads the sidecar at
+   * send time so a channel re-scan / config update is always picked up.
+   * No-op when the session has no notification config or the reply is empty.
+   */
+  private async deliverSessionNotify(): Promise<void> {
+    const text = this.lastAssistantText;
+    if (!text) return;
+    const config = readSessionNotify(this.sessionId);
+    if (!config) return;
+    const channel = getChannel(config.channelId);
+    if (!channel || channel.provider !== "wechat") return;
+    const userId = channel.userId;
+    if (!userId) return;
+
+    let sessionName = "";
+    try {
+      sessionName = this.inner.sessionManager.getSessionName()?.trim() ?? "";
+    } catch {
+      // ignore — fall back to a generic label
+    }
+    const taskName = sessionName || "Session notification";
+    const notification: TaskNotification = {
+      onSuccess: true,
+      onError: false,
+      onTimeout: false,
+      channels: [{ type: "wechat", channelId: config.channelId, recipientId: userId }],
+    };
+    const payload: NotificationPayload = {
+      taskId: this.sessionId,
+      taskName,
+      outcome: "success",
+      text,
+      detail: text,
+    };
+    try {
+      await notify(notification, payload);
+      log.debug("session reply notification delivered", {
+        sessionId: this.sessionId,
+        channelId: config.channelId,
+        length: text.length,
+      });
+    } catch (err) {
+      log.warn("session reply notification delivery failed", {
+        sessionId: this.sessionId,
+        channelId: config.channelId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   private updateRunningState(event: AgentEvent): void {
@@ -744,6 +817,30 @@ export class AgentSessionWrapper {
       sessionFile: this.sessionFile || undefined,
     });
   }
+}
+
+/**
+ * Extract the plain-text body of an assistant message, skipping thinking /
+ * tool-call / image blocks. Returns "" when the message isn't an assistant
+ * body reply (user, errored, no text). Used to build per-session reply
+ * notifications.
+ */
+function extractAssistantBodyText(message: unknown): string {
+  if (!message || typeof message !== "object") return "";
+  const m = message as { role?: unknown; content?: unknown; stopReason?: unknown };
+  if (m.role !== "assistant") return "";
+  if (m.stopReason === "error") return "";
+  const content = m.content;
+  if (!Array.isArray(content)) return "";
+  const parts: string[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const b = block as { type?: unknown; text?: unknown };
+    if (b.type === "text" && typeof b.text === "string" && b.text.trim()) {
+      parts.push(b.text.trim());
+    }
+  }
+  return parts.join("\n\n");
 }
 
 // ============================================================================
