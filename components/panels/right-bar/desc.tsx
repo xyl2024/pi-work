@@ -287,18 +287,8 @@ const tokensDescriptor: RightBarDescriptor = {
   labelKey: "Open token audit",
   isActive: (ctx) => ctx.activeTabKind === "tokens",
   content: () => <ChartSpline size={16} />,
-  // Opening from the right-bar button auto-expands the panel in Agentic
-  // mode only (same rationale as canvasDescriptor): the token audit
-  // charts get the full column when the panel hosts the work card, but
-  // stay at normal width in Classic mode so the chat keeps its room.
-  onClick: (ctx) => {
-    const wasOpen =
-      ctx.activeTabKind === "tokens" && ctx.rightPanelState !== "closed";
-    ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens);
-    if (!wasOpen && ctx.layoutMode === "agentic") {
-      ctx.setRightPanelState("expanded");
-    }
-  },
+  onClick: (ctx) =>
+    ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens),
 };
 
 const llmAuditDescriptor: RightBarDescriptor = {

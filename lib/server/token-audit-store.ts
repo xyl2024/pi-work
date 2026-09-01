@@ -194,7 +194,7 @@ function emptyBucket(): SummaryBucket {
   };
 }
 
-export function summarize(range: Range, groupBy: GroupBy): SummarizeResult {
+export function summarize(range: Range, groupBy: GroupBy, sessionIds?: string[]): SummarizeResult {
   const db = getTokenAuditDb();
   const cutoff = rangeCutoff(range);
   const where: string[] = [];
@@ -202,6 +202,14 @@ export function summarize(range: Range, groupBy: GroupBy): SummarizeResult {
   if (cutoff !== null) {
     where.push("ts >= ?");
     args.push(cutoff);
+  }
+  if (sessionIds) {
+    if (sessionIds.length === 0) {
+      where.push("1 = 0");
+    } else {
+      where.push(`session_id IN (${sessionIds.map(() => "?").join(", ")})`);
+      args.push(...sessionIds);
+    }
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 

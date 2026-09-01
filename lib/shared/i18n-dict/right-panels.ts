@@ -129,6 +129,8 @@ export const rightPanels = {
   // Token audit
   "Token audit": "Token 用量",
   "Open token audit": "打开 Token 用量",
+  "Filter by cwd": "按 cwd 筛选",
+  "All cwds": "全部 cwd",
   "Last 7 days": "最近 7 天",
   "Last 30 days": "最近 30 天",
   "All time": "全部时间",

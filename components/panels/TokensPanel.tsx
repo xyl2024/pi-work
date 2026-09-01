@@ -27,8 +27,9 @@ const RANGES: Range[] = ["today", "7d", "30d", "all"];
 
 // ── formatters ────────────────────────────────────────────────────────────
 
-function fmtNum(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+function fmtNum(n: number, locale: "en" | "zh" = "en"): string {
+  if (locale === "zh" && n >= 100_000_000) return `${(n / 100_000_000).toFixed(2)}亿`;
+  if (locale === "en" && n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(Math.round(n));
 }
@@ -137,10 +138,6 @@ function useChartTheme() {
 interface FetchState {
   time: SummarizeResult | null;
   model: SummarizeResult | null;
-  session: SummarizeResult | null;
-  /** sessionId → human-readable name (only sessions that have a non-empty
-   *  `session_info` entry are mapped; everything else falls back to id). */
-  sessionNames: Map<string, string>;
 }
 
 export function TokensPanel() {
@@ -148,44 +145,42 @@ export function TokensPanel() {
   const toast = useToast();
 
   const [range, setRange] = useState<Range>("7d");
+  const [cwdFilter, setCwdFilter] = useState<string | null>(null);
+  const [cwds, setCwds] = useState<string[]>([]);
   const [state, setState] = useState<FetchState>({
     time: null,
     model: null,
-    session: null,
-    sessionNames: new Map(),
   });
 
   const timeGroupBy: "hour" | "day" = range === "today" ? "hour" : "day";
 
+  useEffect(() => {
+    void fetch("/api/workspaces?limit=10000")
+      .then((res) => res.ok ? res.json() as Promise<{ workspaces?: Array<{ cwd?: string }> }> : Promise.reject(new Error("failed to load cwds")))
+      .then((data) => setCwds((data.workspaces ?? []).map((workspace) => workspace.cwd).filter((cwd): cwd is string => !!cwd)))
+      .catch(() => { /* best-effort; the filter remains at all cwds */ });
+  }, []);
+
   const reload = useCallback(async () => {
     try {
-      const [timeRes, modelRes, sessionRes, sessionsRes] = await Promise.all([
-        fetch(`/api/token-audit/summary?range=${range}&groupBy=${timeGroupBy}`),
-        fetch(`/api/token-audit/summary?range=${range}&groupBy=model`),
-        fetch(`/api/token-audit/summary?range=${range}&groupBy=session`),
-        // Large limit so the map covers every session that could appear in
-        // the Top-sessions chart. The list endpoint already caches for 5s.
-        fetch(`/api/sessions?limit=10000`),
+      const cwdParam = cwdFilter ? `&cwd=${encodeURIComponent(cwdFilter)}` : "";
+      const [timeRes, modelRes] = await Promise.all([
+        fetch(`/api/token-audit/summary?range=${range}&groupBy=${timeGroupBy}${cwdParam}`),
+        fetch(`/api/token-audit/summary?range=${range}&groupBy=model${cwdParam}`),
       ]);
-      if (!timeRes.ok || !modelRes.ok || !sessionRes.ok || !sessionsRes.ok) {
-        throw new Error(`HTTP ${timeRes.status}/${modelRes.status}/${sessionRes.status}/${sessionsRes.status}`);
+      if (!timeRes.ok || !modelRes.ok) {
+        throw new Error(`HTTP ${timeRes.status}/${modelRes.status}`);
       }
-      const [time, model, session, sessionsData] = (await Promise.all([
+      const [time, model] = (await Promise.all([
         timeRes.json(),
         modelRes.json(),
-        sessionRes.json(),
-        sessionsRes.json(),
-      ])) as [SummarizeResult, SummarizeResult, SummarizeResult, { sessions?: Array<{ id: string; name?: string }> }];
-      const sessionNames = new Map<string, string>();
-      for (const s of sessionsData.sessions ?? []) {
-        if (s.name && s.name.trim()) sessionNames.set(s.id, s.name);
-      }
-      setState({ time, model, session, sessionNames });
+      ])) as [SummarizeResult, SummarizeResult];
+      setState({ time, model });
     } catch (e) {
       toast.show({ kind: "error", message: `${t("Failed to load token audit")}: ${String(e)}` });
     }
     // timeGroupBy is derived in render from range; range triggers the refetch.
-  }, [range, timeGroupBy, toast, t]);
+  }, [range, timeGroupBy, cwdFilter, toast, t]);
 
   useEffect(() => {
     void reload();
@@ -197,7 +192,10 @@ export function TokensPanel() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, background: "transparent" }}>
       <Toolbar
         range={range}
+        cwdFilter={cwdFilter}
+        cwds={cwds}
         onChangeRange={setRange}
+        onChangeCwd={setCwdFilter}
       />
       <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
         <KpiStrip totals={totals} />
@@ -212,9 +210,6 @@ export function TokensPanel() {
           <ChartCard title={t("Cost over time")}>
             <CostOverTimeChart range={range} buckets={state.time?.buckets ?? []} />
           </ChartCard>
-          <ChartCard title={t("Token composition")}>
-            <TokenCompositionChart range={range} buckets={state.time?.buckets ?? []} />
-          </ChartCard>
           <ChartCard title={t("Cost by model")}>
             <CostByCategoryChart
               buckets={state.model?.buckets ?? []}
@@ -222,20 +217,6 @@ export function TokensPanel() {
               labelKey={(b) => b.key}
               unknownLabel={t("Unknown")}
             />
-          </ChartCard>
-          <ChartCard title={t("Cost by provider")}>
-            <CostByCategoryChart
-              buckets={groupByProvider(state.model?.buckets ?? [])}
-              totalCost={state.model?.totals.costTotal ?? 0}
-              labelKey={(b) => b.key}
-              unknownLabel={t("Unknown")}
-            />
-          </ChartCard>
-          <ChartCard title={t("Cache hit rate")}>
-            <CacheHitRateChart range={range} buckets={state.time?.buckets ?? []} />
-          </ChartCard>
-          <ChartCard title={t("Top sessions by cost")}>
-            <TopSessionsChart buckets={state.session?.buckets.slice(0, 10) ?? []} sessionNames={state.sessionNames} />
           </ChartCard>
         </div>
       </div>
@@ -245,40 +226,17 @@ export function TokensPanel() {
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
-/** The model key is "provider/model_id". Aggregate by provider. */
-function groupByProvider(buckets: SummaryBucket[]): SummaryBucket[] {
-  const byProv = new Map<string, SummaryBucket>();
-  for (const b of buckets) {
-    const slash = b.key.indexOf("/");
-    const prov = slash >= 0 ? b.key.slice(0, slash) : b.key;
-    const prev = byProv.get(prov);
-    if (prev) {
-      prev.calls += b.calls;
-      prev.inputTokens += b.inputTokens;
-      prev.outputTokens += b.outputTokens;
-      prev.cacheReadTokens += b.cacheReadTokens;
-      prev.cacheWriteTokens += b.cacheWriteTokens;
-      prev.costTotal += b.costTotal;
-      prev.durationMs += b.durationMs;
-      if (b.firstAt && (!prev.firstAt || b.firstAt < prev.firstAt)) prev.firstAt = b.firstAt;
-      if (b.lastAt && b.lastAt > prev.lastAt) prev.lastAt = b.lastAt;
-    } else {
-      byProv.set(prov, { ...b, key: prov });
-    }
-  }
-  const out = Array.from(byProv.values());
-  out.sort((a, b) => b.costTotal - a.costTotal);
-  return out;
-}
-
 // ── toolbar ───────────────────────────────────────────────────────────────
 
 interface ToolbarProps {
   range: Range;
+  cwdFilter: string | null;
+  cwds: string[];
   onChangeRange: (r: Range) => void;
+  onChangeCwd: (cwd: string | null) => void;
 }
 
-function Toolbar({ range, onChangeRange }: ToolbarProps) {
+function Toolbar({ range, cwdFilter, cwds, onChangeRange, onChangeCwd }: ToolbarProps) {
   const { t } = useI18n();
   return (
     <div
@@ -298,6 +256,26 @@ function Toolbar({ range, onChangeRange }: ToolbarProps) {
       {RANGES.map((r) => (
         <ChipButton key={r} active={range === r} onClick={() => onChangeRange(r)} label={rangeLabel(r, t)} />
       ))}
+      <select
+        value={cwdFilter ?? ""}
+        onChange={(e) => onChangeCwd(e.target.value || null)}
+        aria-label={t("Filter by cwd")}
+        style={{
+          marginLeft: 4,
+          maxWidth: 280,
+          minWidth: 120,
+          padding: "2px 6px",
+          border: "1px solid var(--border)",
+          borderRadius: 4,
+          background: "var(--bg)",
+          color: "var(--text-muted)",
+          fontSize: 10,
+          fontFamily: "var(--font-mono)",
+        }}
+      >
+        <option value="">{t("All cwds")}</option>
+        {cwds.map((cwd) => <option key={cwd} value={cwd}>{cwd}</option>)}
+      </select>
     </div>
   );
 }
@@ -316,13 +294,13 @@ interface KpiStripProps {
 }
 
 function KpiStrip({ totals }: KpiStripProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { formatCost } = useFormatCurrency();
   if (!totals) {
     return (
       <div style={kpiGridStyle}>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <KpiCard key={i} label={i === 0 ? t("Total cost") : i === 1 ? t("Calls") : i === 2 ? t("Total tokens") : i === 3 ? t("Avg duration") : t("Cache hit rate")} value="—" />
+        {[0, 1, 2, 3].map((i) => (
+          <KpiCard key={i} label={i === 0 ? t("Total cost") : i === 1 ? t("Calls") : i === 2 ? t("Total tokens") : t("Cache hit rate")} value="—" />
         ))}
       </div>
     );
@@ -331,14 +309,12 @@ function KpiStrip({ totals }: KpiStripProps) {
     totals.inputTokens + totals.outputTokens + totals.cacheReadTokens + totals.cacheWriteTokens;
   const hitDenom = totals.inputTokens + totals.cacheReadTokens;
   const hitRate = hitDenom > 0 ? totals.cacheReadTokens / hitDenom : null;
-  const avgMs = totals.calls > 0 ? totals.durationMs / totals.calls : 0;
   return (
     <div style={kpiGridStyle}>
       <KpiCard label={t("Total cost")} value={formatCost(totals.costTotal)} accent />
-      <KpiCard label={t("Calls")} value={fmtNum(totals.calls)} sub={totals.calls > 0 ? `${totals.calls} ${t("audit")}` : undefined} />
-      <KpiCard label={t("Total tokens")} value={fmtNum(totalTokens)} sub={t("incl. cache")} />
-      <KpiCard label={t("Avg duration")} value={avgMs > 0 ? `${(avgMs / 1000).toFixed(1)}s` : "—"} />
-      <KpiCard label={t("Cache hit rate")} value={hitRate === null ? "—" : fmtPct(hitRate)} sub={hitRate !== null ? fmtNum(totals.cacheReadTokens) : undefined} />
+      <KpiCard label={t("Calls")} value={fmtNum(totals.calls, locale)} sub={totals.calls > 0 ? `${totals.calls} ${t("audit")}` : undefined} />
+      <KpiCard label={t("Total tokens")} value={fmtNum(totalTokens, locale)} sub={t("incl. cache")} />
+      <KpiCard label={t("Cache hit rate")} value={hitRate === null ? "—" : fmtPct(hitRate)} sub={hitRate !== null ? fmtNum(totals.cacheReadTokens, locale) : undefined} />
     </div>
   );
 }
@@ -513,39 +489,6 @@ function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryB
   return <EchartsChart option={option} height={220} ariaLabel={t("Cost over time")} />;
 }
 
-function TokenCompositionChart({ range, buckets }: { range: Range; buckets: SummaryBucket[] }) {
-  const { t } = useI18n();
-  const theme = useChartTheme();
-  const series = useMemo(() => padTimeBuckets(range, buckets), [range, buckets]);
-  const option = useMemo<echarts.EChartsCoreOption>(() => {
-    const xs = series.map((p) => (range === "today" ? fmtHour(p.ts) : fmtMonthDay(p.ts)));
-    return {
-      animation: false,
-      grid: { left: 50, right: 14, top: 18, bottom: 22 },
-      tooltip: { trigger: "axis", backgroundColor: theme.tooltipBg, borderColor: theme.axis, textStyle: { color: theme.text, fontSize: 11 } },
-      legend: { textStyle: { color: theme.text, fontSize: 10 }, top: 0, right: 0, itemWidth: 10, itemHeight: 10 },
-      xAxis: {
-        type: "category",
-        data: xs,
-        axisLine: { lineStyle: { color: theme.axis } },
-        axisLabel: { color: theme.text, fontSize: 10, fontFamily: "var(--font-mono)", interval: range === "today" ? 2 : "auto" },
-      },
-      yAxis: {
-        type: "value",
-        axisLabel: { color: theme.text, fontSize: 10, formatter: (v: number) => fmtNum(v) },
-        splitLine: { lineStyle: { color: theme.axis, type: "dashed", opacity: 0.4 } },
-      },
-      series: [
-        { name: t("Cache write"), type: "line", stack: "tokens", smooth: true, areaStyle: {}, symbol: "none", data: series.map((p) => p.b.cacheWriteTokens), color: PALETTE[7] },
-        { name: t("Cache read"), type: "line", stack: "tokens", smooth: true, areaStyle: {}, symbol: "none", data: series.map((p) => p.b.cacheReadTokens), color: PALETTE[1] },
-        { name: t("Input tokens"), type: "line", stack: "tokens", smooth: true, areaStyle: {}, symbol: "none", data: series.map((p) => p.b.inputTokens), color: PALETTE[0] },
-        { name: t("Output tokens"), type: "line", stack: "tokens", smooth: true, areaStyle: {}, symbol: "none", data: series.map((p) => p.b.outputTokens), color: PALETTE[3] },
-      ],
-    };
-  }, [series, theme, t, range]);
-  return <EchartsChart option={option} height={220} ariaLabel={t("Token composition")} />;
-}
-
 function CostByCategoryChart({
   buckets,
   totalCost,
@@ -622,97 +565,6 @@ function CostByCategoryChart({
   return <EchartsChart option={option} height={260} ariaLabel={t("Cost by category")} />;
 }
 
-function CacheHitRateChart({ range, buckets }: { range: Range; buckets: SummaryBucket[] }) {
-  const { t } = useI18n();
-  const theme = useChartTheme();
-  const series = useMemo(() => padTimeBuckets(range, buckets), [range, buckets]);
-  const option = useMemo<echarts.EChartsCoreOption>(() => {
-    const xs = series.map((p) => (range === "today" ? fmtHour(p.ts) : fmtMonthDay(p.ts)));
-    const rates = series.map((p) => {
-      const denom = p.b.inputTokens + p.b.cacheReadTokens;
-      if (denom === 0) return null;
-      return +(p.b.cacheReadTokens / denom * 100).toFixed(1);
-    });
-    return {
-      animation: false,
-      grid: { left: 50, right: 14, top: 18, bottom: 22 },
-      tooltip: { trigger: "axis", backgroundColor: theme.tooltipBg, borderColor: theme.axis, textStyle: { color: theme.text, fontSize: 11 }, valueFormatter: ((v: unknown) => (v == null ? "—" : `${v}%`)) as never },
-      xAxis: {
-        type: "category",
-        data: xs,
-        axisLine: { lineStyle: { color: theme.axis } },
-        axisLabel: { color: theme.text, fontSize: 10, fontFamily: "var(--font-mono)", interval: range === "today" ? 2 : "auto" },
-      },
-      yAxis: {
-        type: "value",
-        min: 0,
-        max: 100,
-        axisLabel: { color: theme.text, fontSize: 10, formatter: (v: number) => `${v}%` },
-        splitLine: { lineStyle: { color: theme.axis, type: "dashed", opacity: 0.4 } },
-      },
-      series: [
-        {
-          type: "line",
-          data: rates,
-          smooth: true,
-          symbol: "circle",
-          symbolSize: 4,
-          connectNulls: true,
-          lineStyle: { width: 2 },
-          areaStyle: { opacity: 0.18 },
-          color: PALETTE[2],
-        },
-      ],
-    };
-  }, [series, theme, range]);
-  return <EchartsChart option={option} height={220} ariaLabel={t("Cache hit rate")} />;
-}
-
-function TopSessionsChart({ buckets, sessionNames }: { buckets: SummaryBucket[]; sessionNames: Map<string, string> }) {
-  const { t } = useI18n();
-  const theme = useChartTheme();
-  const { formatCost } = useFormatCurrency();
-  const option = useMemo<echarts.EChartsCoreOption>(() => {
-    if (buckets.length === 0) return emptyBars(theme, t("No token usage recorded yet."));
-    const sorted = [...buckets].sort((a, b) => b.costTotal - a.costTotal);
-    // Prefer the human-readable session name (set via /rename or auto-name);
-    // fall back to the sessionId for never-renamed sessions or when the
-    // /api/sessions fetch failed before this map was populated.
-    const displayName = (id: string): string => {
-      const n = sessionNames.get(id);
-      return n && n.trim() ? n : id;
-    };
-    return {
-      animation: false,
-      grid: { left: 12, right: 60, top: 8, bottom: 8, containLabel: true },
-      tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, backgroundColor: theme.tooltipBg, borderColor: theme.axis, textStyle: { color: theme.text, fontSize: 11 }, formatter: ((params: unknown): string => {
-        const arr = Array.isArray(params) ? params : [params];
-        const p = arr[0] as { name?: string; value?: number };
-        return `<div style="font-family:var(--font-mono);font-size:11px">${shortLabel(p.name ?? "")}<br/>${formatCost(p.value ?? 0)}</div>`;
-      }) as never },
-      xAxis: {
-        type: "value",
-        axisLabel: { color: theme.text, fontSize: 10, formatter: (v: number) => formatCost(v) },
-        splitLine: { lineStyle: { color: theme.axis, type: "dashed", opacity: 0.4 } },
-      },
-      yAxis: {
-        type: "category",
-        data: sorted.map((b) => shortLabel(displayName(b.key), 18)).reverse(),
-        axisLine: { lineStyle: { color: theme.axis } },
-        axisLabel: { color: theme.text, fontSize: 10, fontFamily: "var(--font-mono)" },
-      },
-      series: [
-        {
-          type: "bar",
-          data: sorted.map((b, i) => ({ value: +b.costTotal.toFixed(4), itemStyle: { color: paletteColor(i) } })).reverse(),
-          barWidth: "60%",
-        },
-      ],
-    };
-  }, [buckets, theme, t, formatCost, sessionNames]);
-  return <EchartsChart option={option} height={260} ariaLabel={t("Top sessions by cost")} />;
-}
-
 // ── atoms ─────────────────────────────────────────────────────────────────
 
 function ChipButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
@@ -769,13 +621,3 @@ function emptyDonut(theme: ReturnType<typeof useChartTheme>, totalCost: number, 
   };
 }
 
-function emptyBars(theme: ReturnType<typeof useChartTheme>, message: string): echarts.EChartsCoreOption {
-  return {
-    animation: false,
-    grid: { left: 12, right: 60, top: 8, bottom: 8, containLabel: true },
-    xAxis: { type: "value", show: false },
-    yAxis: { type: "category", data: [], axisLabel: { color: theme.text } },
-    series: [{ type: "bar", data: [] }],
-    graphic: [{ type: "text", left: "center", top: "middle", style: { text: message, fill: theme.text, fontSize: 11, fontStyle: "italic", textAlign: "center" } }],
-  };
-}

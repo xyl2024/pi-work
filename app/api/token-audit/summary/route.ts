@@ -7,6 +7,7 @@
  */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { summarize, type GroupBy, type Range } from "@/lib/server/token-audit-store";
 
 const log = createLogger("api/token-audit-summary");
@@ -24,7 +25,11 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const range = parseRange(url.searchParams.get("range"));
     const groupBy = parseGroupBy(url.searchParams.get("groupBy"));
-    const result = summarize(range, groupBy);
+    const cwd = url.searchParams.get("cwd")?.trim() || null;
+    const sessionIds = cwd
+      ? (await listAllSessionsHeaderOnly(cwd)).map((session) => session.id)
+      : undefined;
+    const result = summarize(range, groupBy, sessionIds);
     log.info("token-audit summary", {
       range,
       groupBy,

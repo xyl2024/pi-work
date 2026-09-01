@@ -565,9 +565,9 @@ export function AppShell() {
   // only the "closed → normal" transition is forced. The user's expanded
   // choice survives opening a file or switching to a different tab, so
   // clicking another tab/file from an expanded panel doesn't snap the
-  // chat back. The expand toggle in the tab bar (and the canvas/tokens
-  // descriptors, which always force "expanded") remain the only ways to
-  // collapse the panel down. Used by every `handleOpenXxxTab` /
+  // chat back. The expand toggle in the tab bar (and the canvas descriptor,
+  // which always forces "expanded") remain the only ways to collapse the
+  // panel down. Used by every `handleOpenXxxTab` /
   // `handleOpenFile` below.
   const ensureRightPanelOpen = useCallback(() => {
     setRightPanelState((v) => (v === "closed" ? "normal" : v));
