@@ -13,6 +13,7 @@ export const chat = {
   "Running": "正在运行",
   "Waiting for model...": "正在等待模型...",
   "Thinking...": "正在思考...",
+  "Outputting...": "正在输出...",
   "Retrying": "正在重试",
 
   // Input bar

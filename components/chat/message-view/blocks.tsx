@@ -43,10 +43,17 @@ function TextBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }
 
 function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }: { block: ThinkingContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean; onImageClick?: (src: string) => void }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(!!isSearchMatch);
+  const [expanded, setExpanded] = useState(true);
   const userExpandedRef = useRef(false);
+  const previousSearchMatchRef = useRef(isSearchMatch);
   useEffect(() => {
-    if (!userExpandedRef.current && !isSearchMatch) setExpanded(false);
+    // Keep the new default-expanded state on first mount. When a search
+    // highlight goes away, preserve the existing behavior of folding an
+    // untouched thinking block back up.
+    if (previousSearchMatchRef.current && !isSearchMatch && !userExpandedRef.current) {
+      setExpanded(false);
+    }
+    previousSearchMatchRef.current = isSearchMatch;
   }, [isSearchMatch]);
   const collapseNonce = useCollapseNonce();
   useEffect(() => {
@@ -131,7 +138,7 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
 
 function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: ToolResultMessage }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const collapseNonce = useCollapseNonce();
   useEffect(() => {
     if (collapseNonce > 0) setExpanded(false);

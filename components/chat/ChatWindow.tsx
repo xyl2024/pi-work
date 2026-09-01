@@ -14,7 +14,8 @@ import { countToolCallsByName } from "@/lib/shared/message-display";
 import { getFileName } from "@/lib/shared/file-paths";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { StreamingBubble } from "./StreamingBubble";
-import { useIsStreaming, useIsStreamingThinking, useStreamingHasContent } from "@/hooks/useStreamingMessage";
+import { StreamingMessageViewport } from "./StreamingMessageViewport";
+import { useIsStreaming, useIsStreamingBody, useIsStreamingThinking, useStreamingHasContent } from "@/hooks/useStreamingMessage";
 import { SessionLibraryModal } from "../sessions/session-library/SessionLibraryModal";
 import { SessionLibraryOpenButton } from "../sessions/SessionLibraryOpenButton";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
@@ -292,6 +293,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // StreamingBubble, which subscribes on its own.
   const streamingStoreIsStreaming = useIsStreaming(streamingKey);
   const streamingStoreIsThinking = useIsStreamingThinking(streamingKey);
+  const streamingStoreIsBody = useIsStreamingBody(streamingKey);
   // True once streamed content (thinking/body) is on screen, false during
   // the wait-for-first-token gap and between messages. The phase-loading
   // indicator below keys off this instead of `streamState.isStreaming` —
@@ -710,6 +712,20 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const renderEntryIds = replayActive ? entryIds.slice(0, replayIndex) : entryIds;
   const renderEntryTimestamps = replayActive ? entryTimestamps.slice(0, replayIndex) : entryTimestamps;
 
+  // Tool results are shared by historical messages and the live viewport. The
+  // latter needs the in-flight overlay too, so a running tool can keep showing
+  // partial output inside the fixed-height area.
+  const toolResultsMap = useMemo(() => {
+    const map = new Map<string, ToolResultMessage>();
+    for (const msg of messages) {
+      if (msg.role === "toolResult") map.set(msg.toolCallId, msg);
+    }
+    for (const [id, partial] of inFlightToolResults) {
+      if (!map.has(id)) map.set(id, partial);
+    }
+    return map;
+  }, [messages, inFlightToolResults]);
+
   // Map each compaction point's first displayed message entry id → the point,
   // so the chat list can insert a divider right before that message. Points
   // with no `beforeMessageEntryId` are tail-markers (compaction landed at
@@ -782,6 +798,27 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   for (let i = renderMessages.length - 1; i >= 0; i--) {
     if (renderMessages[i].role === "user") { lastUserIdx = i; break; }
   }
+  // Keep the current turn in a nested fixed-height scrollport while the agent
+  // is active. Compaction is deliberately excluded because it does not add a
+  // new message and should retain the ordinary chat layout.
+  const liveTurnActive = agentRunning && agentPhase?.kind !== "compacting" && lastUserIdx !== -1;
+
+  // When the live viewport is removed, its contents return to the ordinary
+  // chat flow. Re-pin the page-level scrollport so the completed answer is not
+  // left below the old fixed viewport height.
+  const previousLiveTurnRef = useRef(false);
+  useEffect(() => {
+    if (previousLiveTurnRef.current && !liveTurnActive && !userScrolledUpRef.current) {
+      const frame = window.requestAnimationFrame(() => {
+        const container = scrollContainerRef.current;
+        if (container) container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
+      });
+      previousLiveTurnRef.current = liveTurnActive;
+      return () => window.cancelAnimationFrame(frame);
+    }
+    previousLiveTurnRef.current = liveTurnActive;
+  }, [liveTurnActive, scrollContainerRef]);
+
   let lastAnchorIdx = -1;
   for (let i = renderMessages.length - 1; i >= 0; i--) {
     if (isGroupAnchor(renderMessages[i])) { lastAnchorIdx = i; break; }
@@ -1263,26 +1300,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           <div className="mx-auto max-w-[820px]">
 
             {(() => {
-              const toolResultsMap = new Map<string, ToolResultMessage>();
-              for (const msg of messages) {
-                if (msg.role === "toolResult") {
-                  toolResultsMap.set(msg.toolCallId, msg);
-                }
-              }
-              // Overlay in-flight partial tool output on top of the settled
-              // messages array. Only used for toolCallIds without a settled
-              // toolResult yet, so once message_end lands the messages entry
-              // wins automatically and we render the authoritative final
-              // output. This is what makes a long-running bash command
-              // stream its output to the UI in real time instead of showing
-              // nothing until tool_execution_end.
-              for (const [id, partial] of inFlightToolResults) {
-                if (!toolResultsMap.has(id)) {
-                  toolResultsMap.set(id, partial);
-                }
-              }
-              // Last turn anchor — computed in the
-              // component body so the streaming gallery below shares it.
               let refIdx = 0;
 
               // Render one message at idx. Optional messageOverride renders a
@@ -1298,6 +1315,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   attachRef?: boolean;
                   showTimestamp?: boolean;
                   keySuffix?: string;
+                  inStreamingViewport?: boolean;
                   afterContent?: React.ReactNode;
                   readFiles?: ReadFileInfo[];
                   onOpenFile?: (filePath: string, fileName: string) => void;
@@ -1350,10 +1368,14 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 );
                 if (currentRefIdx === -1) return view;
                 return (
-                  <div key={key} ref={(el) => {
-                    messageRefs.current[currentRefIdx] = el;
-                    if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
-                  }}>
+                  <div
+                    key={key}
+                    ref={(el) => {
+                      messageRefs.current[currentRefIdx] = el;
+                      if (idx === lastUserIdx) { (lastUserMsgRef as { current: HTMLDivElement | null }).current = el; }
+                    }}
+                    className={opts.inStreamingViewport ? "streaming-message-item" : undefined}
+                  >
                     {view}
                   </div>
                 );
@@ -1364,6 +1386,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               // to the next anchor; intermediate assistant messages + the
               // process portion of the final assistant are collapsed by default.
               const rendered: React.ReactNode[] = [];
+              const streamingRendered: React.ReactNode[] = [];
               // Divider before the message at `idx` if that message is the
               // first displayed message after a compaction point.
               const maybeDivider = (idx: number): React.ReactNode => {
@@ -1381,7 +1404,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 if (div) rendered.push(div);
                 const msg = renderMessages[idx];
                 if (!isGroupAnchor(msg)) {
-                  rendered.push(renderOne(idx));
+                  (liveTurnActive && idx > lastUserIdx ? streamingRendered : rendered).push(
+                    renderOne(idx, { inStreamingViewport: liveTurnActive && idx > lastUserIdx }),
+                  );
                   idx += 1;
                   continue;
                 }
@@ -1399,7 +1424,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     // checking it again here would duplicate its divider.
                     const d = i === userIdx ? null : maybeDivider(i);
                     if (d) rendered.push(d);
-                    rendered.push(renderOne(i));
+                    (liveTurnActive && i > lastUserIdx ? streamingRendered : rendered).push(
+                      renderOne(i, { inStreamingViewport: liveTurnActive && i > lastUserIdx }),
+                    );
                   }
                   idx = endIdx;
                   continue;
@@ -1449,12 +1476,13 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 const processCount = visibleProcessIndices.length;
 
                 // While the agent is still running on this turn, render the
-                // process inline instead of folding it. Folding only kicks in
-                // once the turn is complete (agentRunning flips back to false)
-                // so users see the full think → tool-call → intermediate text
-                // flow as it streams, then get a single collapsed summary at
-                // the end. Without this, each message_end would re-mount the
-                // fold group with a new key and snap it shut on every step.
+                // process inline inside the live viewport instead of folding
+                // it. Folding only kicks in once the turn is complete
+                // (agentRunning flips back to false), so users see the full
+                // think → tool-call → intermediate text flow as it streams,
+                // then get a single collapsed summary at the end. Without
+                // this, each message_end would re-mount the fold group with a
+                // new key and snap it shut on every step.
                 //
                 // Explicitly excludes the compacting phase: agentRunning flips
                 // true while compacting too, but compact doesn't add new
@@ -1477,7 +1505,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     {visibleProcessIndices.map((i) => (
                       <Fragment key={`proc-${i}`}>
                         {maybeDivider(i)}
-                        {renderOne(i, { keySuffix: "process" })}
+                        {renderOne(i, {
+                          keySuffix: "process",
+                          inStreamingViewport: isCurrentTurnInProgress,
+                        })}
                       </Fragment>
                     ))}
                   </Fragment>
@@ -1485,7 +1516,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
                 if (processCount > 0) {
                   if (isCurrentTurnInProgress) {
-                    rendered.push(<Fragment key={`process-${userIdx}`}>{processChildren}</Fragment>);
+                    streamingRendered.push(<Fragment key={`process-${userIdx}`}>{processChildren}</Fragment>);
                   } else {
                     rendered.push(
                       <ProcessDetailsGroup
@@ -1505,21 +1536,58 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 // default to collapsed and fold along with "全部折叠", while
                 // the trailing text/image is always visible.
                 const finalDiv = maybeDivider(finalAssistantIdx);
-                if (finalDiv) rendered.push(finalDiv);
-                rendered.push(
+                if (finalDiv) (isCurrentTurnInProgress ? streamingRendered : rendered).push(finalDiv);
+                (isCurrentTurnInProgress ? streamingRendered : rendered).push(
                   renderOne(finalAssistantIdx, {
                     keySuffix: "answer",
                     readFiles,
                     onOpenFile: handleOpenFileFromLibrary,
+                    inStreamingViewport: isCurrentTurnInProgress,
                   }),
                 );
 
                 idx = endIdx;
               }
-              return rendered;
+              return (
+                <>
+                  {rendered}
+                  {liveTurnActive && (
+                    <>
+                      <StreamingMessageViewport tabId={streamingKey}>
+                        {streamingRendered}
+                        <StreamingBubble
+                          tabId={streamingKey}
+                          toolResults={toolResultsMap}
+                          modelNames={modelNames}
+                          modelIcons={modelIcons}
+                        />
+                      </StreamingMessageViewport>
+                      <div className="py-2" style={{ height: 40, boxSizing: "border-box" }}>
+                        {isStreamingThinking ? (
+                          <LoadingState label={t("Thinking...")} variant="dot-pulse" />
+                        ) : streamingStoreIsBody ? (
+                          <LoadingState label={t("Outputting...")} variant="spark" />
+                        ) : agentRunning && !streamingStoreHasContent ? (
+                          <LoadingState
+                            label={phaseLabel(agentPhase, t)}
+                            variant={phaseLoaderVariant(agentPhase)}
+                          />
+                        ) : null}
+                      </div>
+                    </>
+                  )}
+                </>
+              );
             })()}
 
-            <StreamingBubble tabId={streamingKey} modelNames={modelNames} modelIcons={modelIcons} />
+            {!liveTurnActive && (
+              <StreamingBubble
+                tabId={streamingKey}
+                toolResults={toolResultsMap}
+                modelNames={modelNames}
+                modelIcons={modelIcons}
+              />
+            )}
 
             {/* Trailing compaction dividers — points whose `beforeMessageEntryId`
                 doesn't exist yet (compaction just landed at the tail). Renders
@@ -1529,13 +1597,13 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               <CompactionDivider key={`comp-tail-${point.entryId}`} point={point} />
             ))}
 
-            {isStreamingThinking && (
+            {!liveTurnActive && isStreamingThinking && (
               <div className="py-2">
-                <LoadingState label={t("Thinking...")} variant="spark" />
+                <LoadingState label={t("Thinking...")} variant="dot-pulse" />
               </div>
             )}
 
-            {agentRunning && !streamingStoreHasContent && (
+            {!liveTurnActive && agentRunning && !streamingStoreHasContent && (
               <div className="py-2">
                 <LoadingState
                   label={phaseLabel(agentPhase, t)}
@@ -1544,7 +1612,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               </div>
             )}
 
-            {agentRunning && !streamingStoreHasContent && (
+            {!liveTurnActive && agentRunning && !streamingStoreHasContent && (
               <div style={{ height: 120 }} />
             )}
 

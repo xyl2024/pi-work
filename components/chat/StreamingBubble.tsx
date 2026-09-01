@@ -9,7 +9,7 @@
  */
 
 import { memo } from "react";
-import type { AgentMessage } from "@/lib/shared/types";
+import type { AgentMessage, ToolResultMessage } from "@/lib/shared/types";
 import { MessageView } from "./MessageView";
 import { useStreamingMessage } from "@/hooks/useStreamingMessage";
 
@@ -17,12 +17,23 @@ interface Props {
   tabId: string;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
+  toolResults?: Map<string, ToolResultMessage>;
 }
 
-function StreamingBubbleInner({ tabId, modelNames, modelIcons }: Props) {
+function StreamingBubbleInner({ tabId, modelNames, modelIcons, toolResults }: Props) {
   const { isStreaming, streamingMessage } = useStreamingMessage(tabId);
   if (!isStreaming || !streamingMessage) return null;
-  return <MessageView message={streamingMessage as AgentMessage} isStreaming modelNames={modelNames} modelIcons={modelIcons} />;
+  return (
+    <div className="streaming-message-item">
+      <MessageView
+        message={streamingMessage as AgentMessage}
+        isStreaming
+        toolResults={toolResults}
+        modelNames={modelNames}
+        modelIcons={modelIcons}
+      />
+    </div>
+  );
 }
 
 export const StreamingBubble = memo(StreamingBubbleInner);

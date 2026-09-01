@@ -32,6 +32,15 @@ function isThinkingMessage(message: Partial<AgentMessage> | null): boolean {
   const block = message.content[message.content.length - 1];
   return block?.type === "thinking" && typeof block.thinking === "string";
 }
+
+/** True when the live assistant is currently emitting answer text rather than
+ * thinking or assembling a tool call. Kept as a boolean selector so the chat
+ * window does not re-render on every text token. */
+export function isStreamingBodyMessage(message: Partial<AgentMessage> | null): boolean {
+  if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return false;
+  const block = message.content[message.content.length - 1];
+  return block?.type === "text" && typeof block.text === "string";
+}
 function setSnapshot(e: Entry, next: StreamingSnapshot) {
   if (e.snapshot.isStreaming === next.isStreaming && e.snapshot.isThinking === next.isThinking && e.snapshot.hasContent === next.hasContent && e.snapshot.streamingMessage === next.streamingMessage) return;
   e.snapshot = next; emit(e);

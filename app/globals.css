@@ -11,6 +11,13 @@
   --panel-radius: 12px;    /* border-radius on every panel */
 }
 
+/* The shared assistant message view keeps a bottom margin for the normal
+   conversation flow. The live viewport owns its own padding, so trim only
+   the last live item to avoid a doubled bottom gap. */
+[data-streaming-message-viewport] > .streaming-message-viewport-content > .streaming-message-item:last-child > div > div {
+  margin-bottom: 0 !important;
+}
+
 @theme {
   --color-bg: var(--bg);
   --color-bg-panel: var(--bg-panel);
@@ -689,6 +696,19 @@ span.linenumber {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+@keyframes loading-dot-pulse {
+  0%, 100% { transform: scale(0.65); opacity: 0.45; }
+  40%      { transform: scale(1);    opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-loading-dot-pulse] span {
+    animation: none !important;
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
 }
 
 /* Running-session title in the sidebar: slow, shallow accent breathing so a
