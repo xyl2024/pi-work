@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Tooltip } from "../ui/Tooltip";
 import { getFileIcon } from "../files/FileIcons";
+import { ToolIcon } from "../ui/icons";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
+import { normalizeFilePathSlashes } from "@/lib/shared/file-paths";
 import type { ReadFileInfo } from "@/lib/shared/types";
 
 const MAX_VISIBLE = 2;
@@ -132,6 +134,34 @@ export function ReadFileChips({ files, onOpenFile }: Props) {
   );
 }
 
+/** SKILL.md 特化:读到的文件是 SKILL.md 时,chip 不显示文件名,
+ *  而是展示 SKILL 的名称(SKILL.md 所在目录的目录名),图标用扳手。 */
+function isSkillFile(file: ReadFileInfo): boolean {
+  // 严格区分大小写:仅大写的 SKILL.md 视为 skill 标记文件。
+  return file.name === "SKILL.md";
+}
+
+/** SKILL 名称 = SKILL.md 所在目录的目录名(取 path 的父目录 basename)。 */
+function skillDisplayName(file: ReadFileInfo): string {
+  const normalized = normalizeFilePathSlashes(file.path).replace(/\/+$/, "");
+  const parts = normalized.split("/");
+  parts.pop(); // 去掉 SKILL.md 本身
+  return parts[parts.length - 1] ?? file.name;
+}
+
+/** chip 上展示的名称:SKILL.md 特化为 SKILL 名称,其余为文件名。 */
+function chipLabel(file: ReadFileInfo): string {
+  return isSkillFile(file) ? skillDisplayName(file) : file.name;
+}
+
+/** chip 上的图标:SKILL.md 用扳手,其余走文件类型图标。 */
+function fileChipIcon(file: ReadFileInfo, size: number): React.ReactNode {
+  if (isSkillFile(file)) {
+    return <ToolIcon size={size} style={{ flexShrink: 0 }} />;
+  }
+  return getFileIcon(file.name, size);
+}
+
 /** One pill: [file icon + basename]. Ellipsizes long names; Tooltip shows the
  *  full absolute path. Click opens the file in the right-hand panel. */
 function Chip({ file, onClick }: { file: ReadFileInfo; onClick: () => void }) {
@@ -158,9 +188,9 @@ function Chip({ file, onClick }: { file: ReadFileInfo; onClick: () => void }) {
           overflow: "hidden",
         }}
       >
-        {getFileIcon(file.name, 12)}
+        {fileChipIcon(file, 12)}
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-          {file.name}
+          {chipLabel(file)}
         </span>
       </button>
     </Tooltip>
@@ -256,9 +286,9 @@ function FileListBubble({ files, open, maxHeight, direction, onOpen }: {
               onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
             >
-              {getFileIcon(f.name, 13)}
+              {fileChipIcon(f, 13)}
               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {f.name}
+                {chipLabel(f)}
               </span>
             </button>
           </Tooltip>
