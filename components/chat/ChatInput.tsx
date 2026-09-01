@@ -274,7 +274,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       // directly, bypassing the prompt-template expansion that prompt/skill
       // commands go through in selectSlashResource.
       const trimmed = value.trim();
-      if (trimmed === "/new" || trimmed === "/compact" || trimmed === "/btw") {
+      if (trimmed === "/new" || trimmed === "/compact" || trimmed === "/btw" || trimmed === "/model") {
         const action = trimmed.slice(1);
         onSlashAction?.(action);
         setValue("");

@@ -21,6 +21,7 @@ import { SessionLibraryOpenButton } from "../sessions/SessionLibraryOpenButton";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
 import { resetSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
+import { ModelPickerModal } from "./ModelPickerModal";
 import { Tooltip } from "../ui/Tooltip";
 import { usePendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 import { AgentTodoPanel } from "../todos/AgentTodoPanel";
@@ -529,6 +530,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const [replayIndex, setReplayIndex] = useState(0);
   const [replayPlaying, setReplayPlaying] = useState(false);
   const [replaySpeed, setReplaySpeed] = useState(1);
+
+  // ── /model slash command → model-picker modal ──
+  const [modelModalOpen, setModelModalOpen] = useState(false);
   const handleReplayIndexChange = useCallback((n: number) => setReplayIndex(n), []);
   const handleReplayPlayingChange = useCallback((p: boolean) => setReplayPlaying(p), []);
   const handleReplaySpeedChange = useCallback((s: number) => setReplaySpeed(s), []);
@@ -1168,6 +1172,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           if (action === "new") onNewSessionRequest?.();
           else if (action === "compact") handleCompactClick();
           else if (action === "btw") onOpenBtw?.();
+          else if (action === "model") setModelModalOpen(true);
         }}
         sessionId={currentSessionId}
         userMessageHistory={userMessageHistory}
@@ -1732,6 +1737,22 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           onOpenFile={handleOpenFileFromLibrary}
         />
       )}
+      {/* /model modal — portal'd into document.body; selection happens via
+          handleModelChange (covers new-session and live-session paths).
+          On close, focus returns to the chat input for keyboard users. */}
+      <ModelPickerModal
+        open={modelModalOpen}
+        model={displayModelValue}
+        modelNames={modelNames}
+        modelIcons={modelIcons}
+        modelList={modelList}
+        disabled={agentRunning}
+        onModelChange={handleModelChange}
+        onClose={() => {
+          setModelModalOpen(false);
+          chatInputRef?.current?.focus();
+        }}
+      />
       </>
       )}
     </div>

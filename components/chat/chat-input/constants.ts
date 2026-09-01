@@ -57,4 +57,18 @@ export const BUILTIN_BTW: SlashResource = {
   content: "",
 };
 
-export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT, BUILTIN_BTW];
+/** Built-in `/model` slash command — opens the model-picker modal (same
+ *  choice the toolbar's ModelPicker offers) so keyboard-first users can
+ *  switch the session model without reaching for the mouse. Handled by
+ *  ChatWindow via `onSlashAction?.("model")`.
+ */
+export const BUILTIN_MODEL: SlashResource = {
+  source: "action",
+  name: "Model",
+  command: "model",
+  description: "切换模型 / Switch model",
+  path: "",
+  content: "",
+};
+
+export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT, BUILTIN_BTW, BUILTIN_MODEL];
