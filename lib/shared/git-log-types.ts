@@ -29,7 +29,9 @@ export interface GitCommitFile {
   deletions: number;
 }
 
-/** Response of GET /api/git/log?cwd=&branch=&skip=&limit=. */
+/** Response of GET /api/git/log?cwd=&branch=&skip=&limit=.
+ *  The endpoint also accepts optional `since`/`until` ISO-day params that
+ *  restrict results to commits in that date range (end-inclusive). */
 export interface GitLogPageResponse {
   commits: GitLogCommit[];
   /** True when more commits exist beyond this page (`skip + limit`). */

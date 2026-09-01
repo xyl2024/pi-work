@@ -37,27 +37,41 @@ export async function getBranchList(repoRoot: string): Promise<string[]> {
   return res.stdout.split("\n").filter(Boolean);
 }
 
-/** One page of commit history for `branch` (null = HEAD), skipping merge
- *  commits. `skip` is the cumulative offset for infinite-scroll style
- *  loading; `hasMore` is computed by fetching one extra commit. */
+/** Optional date-range filter for a log page. Values are loose git-supplied
+ *  date strings (ISO day `YYYY-MM-DD` from the client date pickers). When set,
+ *  git restricts commits to those committed within [since, until] — passed
+ *  through as `--since`/`--until` so git's own date parsing handles them.
+ *  `until` is end-inclusive for the whole day (client sends the day, not
+ *  midnight), so we leave it verbatim. */
+export interface LogDateFilter {
+  /** Earliest commit date (inclusive). */
+  since?: string;
+  /** Latest commit date (inclusive). */
+  until?: string;
+}
+
 export async function getLogPage(
   repoRoot: string,
   branch: string | null,
   skip: number,
   limit: number,
+  dateFilter?: LogDateFilter,
 ): Promise<GitLogPageResponse> {
   const clamped = Math.min(Math.max(limit, 1), LOG_MAX_PAGE_SIZE);
-  const res = await runGit(repoRoot, [
+  const args: string[] = [
     "log",
     ...(branch ? [branch] : []),
     "--no-merges",
+    ...(dateFilter?.since ? [`--since=${dateFilter.since}`] : []),
+    ...(dateFilter?.until ? [`--until=${dateFilter.until}`] : []),
     `--skip=${Math.max(skip, 0)}`,
     `--max-count=${clamped + 1}`,
     // Hash, short hash, author name, author email, author date (strict
     // ISO), subject, parent hashes. Fields are NUL-separated, records
     // newline-separated.
     "--format=%H%x00%h%x00%an%x00%ae%x00%aI%x00%s%x00%P",
-  ]);
+  ];
+  const res = await runGit(repoRoot, args);
   if (!res) {
     // Invalid branch (deleted while listed) or git broken → empty page,
     // matching the "empty state" contract every other git route uses.

@@ -10,6 +10,7 @@ import type {
   GitLogPageResponse,
 } from "@/lib/shared/git-log-types";
 import { GitDiffViewer } from "./GitDiffViewer";
+import { DatePicker } from "../ui/DatePicker";
 import { GIT_STATUS_COLOR, GIT_STATUS_LABEL } from "./GitDiffView";
 
 interface Props {
@@ -32,6 +33,17 @@ const MAX_COMMITS = 500;
 function formatDate(iso: string): string {
   const ts = new Date(iso).getTime();
   return Number.isNaN(ts) ? iso : relativeTime(ts, "");
+}
+
+/** Convert a unix-ms day to `YYYY-MM-DD` (local time) for git's
+ *  `--since/--until`. The DatePicker operates at day granularity, and
+ *  omitting any time component makes git treat the range end as inclusive. */
+function toISODay(ts: number): string {
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function statusBadge(status: string): { label: string; color: string } {
@@ -66,6 +78,13 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
   const [fileDiffLoading, setFileDiffLoading] = useState(false);
   const [fileDiffError, setFileDiffError] = useState<string | null>(null);
 
+  // Date-range filter (e.g. "show commits from May to June"). Each is the
+  // selected day as unix-ms (DatePicker granularity) or null = unfiltered.
+  // Changing either resets the list back to page 1.
+  const [sinceTs, setSinceTs] = useState<number | null>(null);
+  const [untilTs, setUntilTs] = useState<number | null>(null);
+  const dateFilterDirty = sinceTs !== null || untilTs !== null;
+
   const detailColumnRef = useRef<HTMLDivElement>(null);
   const [detailHeight, setDetailHeight] = useState<number | null>(null);
   const [isResizing, setIsResizing] = useState(false);
@@ -73,12 +92,14 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
   const fetchPage = useCallback(async (skip: number, limit: number): Promise<GitLogPageResponse> => {
     const params = new URLSearchParams({ cwd });
     if (branch) params.set("branch", branch);
+    if (sinceTs !== null) params.set("since", toISODay(sinceTs));
+    if (untilTs !== null) params.set("until", toISODay(untilTs));
     params.set("skip", String(skip));
     params.set("limit", String(limit));
     const res = await fetch(`/api/git/log?${params.toString()}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as GitLogPageResponse;
-  }, [cwd, branch]);
+  }, [cwd, branch, sinceTs, untilTs]);
 
   const loadFirstPage = useCallback(async () => {
     setListLoading(true);
@@ -94,7 +115,8 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
     }
   }, [fetchPage]);
 
-  // Reset everything + load page 1 when cwd / branch / refresh changes.
+  // Reset everything + load page 1 when cwd / branch / refresh / date
+  // filter changes.
   useEffect(() => {
     setCommits([]);
     setHasMore(true);
@@ -105,7 +127,7 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
     setFileDiffText(null);
     setDetailHeight(null);
     void loadFirstPage();
-  }, [cwd, branch, refreshToken, loadFirstPage]);
+  }, [cwd, branch, refreshToken, sinceTs, untilTs, loadFirstPage]);
 
   // Infinite scroll: append the next page when the list nears the bottom.
   const loadMore = useCallback(async () => {
@@ -239,6 +261,19 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
     return () => { cancelled = true; };
   }, [selected, selectedFile, cwd]);
 
+  const handleReset = useCallback(() => {
+    let changed = false;
+    if (sinceTs !== null) { setSinceTs(null); changed = true; }
+    if (untilTs !== null) { setUntilTs(null); changed = true; }
+    if (changed) {
+      setSelected(null);
+      setDetail(null);
+      setSelectedFile(null);
+      setFileDiffText(null);
+      setDetailHeight(null);
+    }
+  }, [sinceTs, untilTs]);
+
   return (
     <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
       {/* Commit list */}
@@ -250,6 +285,47 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
           background: "transparent",
         }}
       >
+        {/* Date-range filter bar (sticky so it stays visible while scrolling) */}
+        <div style={{
+          position: "sticky", top: 0, zIndex: 2,
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "6px 8px 8px",
+          borderBottom: dateFilterDirty ? "1px solid var(--border)" : "1px solid transparent",
+          background: "transparent",
+        }}>
+          <DatePicker
+            value={sinceTs}
+            onChange={setSinceTs}
+            max={untilTs ?? undefined}
+            placeholder={t("From")}
+            ariaLabel={t("From date")}
+            align="end"
+          />
+          <span style={{ color: "var(--text-dim)", fontSize: 11 }}>–</span>
+          <DatePicker
+            value={untilTs}
+            onChange={setUntilTs}
+            min={sinceTs ?? undefined}
+            placeholder={t("To")}
+            ariaLabel={t("To date")}
+            align="end"
+          />
+          {dateFilterDirty && (
+            <button
+              onClick={handleReset}
+              title={t("Show all")}
+              style={{
+                padding: "2px 7px", fontSize: 11,
+                background: "var(--bg)", color: "var(--text-muted)",
+                border: "1px solid var(--border)", borderRadius: 5,
+                cursor: "pointer", flexShrink: 0,
+                fontFamily: "inherit",
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
         {listError ? (
           <div style={{ padding: "16px 12px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
             <div style={{ fontSize: 12, color: "#f87171", textAlign: "center" }}>{listError}</div>
@@ -262,7 +338,7 @@ export function GitLogView({ cwd, branch, refreshToken, showDetail, onCommitSele
           </div>
         ) : commits.length === 0 && !listLoading ? (
           <div style={{ padding: "24px 12px", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>
-            {t("No commits on this branch")}
+            {dateFilterDirty ? t("No commits in this date range") : t("No commits on this branch")}
           </div>
         ) : (
           commits.map((c) => {

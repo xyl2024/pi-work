@@ -36,6 +36,13 @@ export const rightPanels = {
   "No file changes in this commit": "该提交没有文件变更",
   "Reached the limit": "已达加载上限",
   "Commit not found": "未找到提交",
+  "From date": "起始日期",
+  "To date": "结束日期",
+  "From": "起始",
+  "To": "结束",
+  "Filter by date": "按日期过滤",
+  "Show all": "全部日期",
+  "No commits in this date range": "该日期范围内暂无提交",
 
   // HTTP debug panel
   "HTTP": "HTTP",
