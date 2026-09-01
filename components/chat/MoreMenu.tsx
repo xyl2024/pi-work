@@ -19,9 +19,19 @@ import type { ChannelRecord } from "@/lib/shared/channels/types";
  * current session's reply notifications.
  */
 
+import {
+  CompressIcon,
+  DownloadIcon,
+  EditIcon,
+  NotificationIcon,
+  RefreshIcon,
+} from "@/components/ui/icons";
+
 type Item = {
   key: string;
   label: string;
+  /** Rendered inline before the label. */
+  icon: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
   /** True for submenu entries — clicking switches views instead of closing. */
@@ -66,22 +76,30 @@ export function MoreMenu() {
   const items = useMemo<Item[]>(() => {
     if (!headerActions) return [];
     return [
-      headerActions.replayVisible ? { key: "replay", label: t("Replay"), onClick: headerActions.onOpenReplay } : null,
+      headerActions.replayVisible ? {
+        key: "replay",
+        label: t("Replay"),
+        icon: <RefreshIcon size={14} />,
+        onClick: headerActions.onOpenReplay,
+      } : null,
       headerActions.exportVisible ? {
         key: "export",
         label: headerActions.isExporting ? t("Exporting...") : t("Export session"),
+        icon: <DownloadIcon size={14} />,
         onClick: headerActions.onExport,
         disabled: headerActions.isExporting,
       } : null,
       headerActions.autoNameVisible ? {
         key: "auto-name",
         label: headerActions.isAutoNaming ? t("Naming...") : t("Auto-name session"),
+        icon: <EditIcon size={14} />,
         onClick: headerActions.onAutoName,
         disabled: headerActions.isAutoNaming || !headerActions.canAutoName,
       } : null,
       headerActions.compactVisible ? {
         key: "compact",
         label: headerActions.isCompacting ? t("Compacting...") : t("Compact"),
+        icon: <CompressIcon size={14} />,
         onClick: headerActions.onCompact,
         disabled: headerActions.isCompacting || headerActions.compactDisabled,
       } : null,
@@ -90,6 +108,7 @@ export function MoreMenu() {
         label: currentBinding
           ? `${t("Notification channel")} · ${currentBinding}`
           : t("Notification channel"),
+        icon: <NotificationIcon size={14} />,
         onClick: () => setView("channels"),
         openSubmenu: true,
       } : null,
@@ -306,6 +325,8 @@ export function MoreMenu() {
               style={{
                 display: "flex",
                 alignItems: "center",
+                gap: 9,
+                lineHeight: 1,
                 width: "100%",
                 padding: "8px 12px",
                 border: "none",
@@ -327,6 +348,7 @@ export function MoreMenu() {
                 e.currentTarget.style.color = "var(--text-muted)";
               }}
             >
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{item.icon}</span>
               {item.label}
             </button>
           ))
