@@ -9,10 +9,9 @@
  * `useTheme()` and dispose + re-init on `preset`/`isDark` change so the new
  * theme registers correctly at `init` time.
  *
- * `option` identity changes (new object) also trigger re-init rather than just
- * `setOption` — same reason: keeps the lifecycle simple and side-effect free
- * across theme and data updates. The chart is small enough that re-init cost
- * is negligible.
+ * Option updates use setOption so transient ECharts interaction state (such as
+ * tooltip and legend selection) survives ordinary React re-renders. The chart
+ * is only re-initialized when its theme changes.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -64,10 +63,9 @@ export function EchartsChart({ option, height, ariaLabel }: Props) {
     };
   }, []);
 
-  // Init / re-init on theme or option change. ECharts binds its theme at
-  // init time, so a theme switch needs dispose + re-init; doing the same on
-  // option change keeps the lifecycle uniform and avoids edge cases where
-  // setOption with a different series type only partially updates.
+  // ECharts binds its theme at init time, so a theme switch needs dispose +
+  // re-init. Do not include `option` here: disposing the instance on every
+  // React render loses tooltip state and resets legend selections.
   const bg = useMemo(() => readThemeBg(isDark), [isDark]);
   useEffect(() => {
     setRenderError(null);
@@ -75,18 +73,6 @@ export function EchartsChart({ option, height, ariaLabel }: Props) {
     const el = containerRef.current;
     const chart = lib.init(el, isDark ? "dark" : undefined, { renderer: "canvas" });
     chartRef.current = chart;
-    try {
-      // Inject theme background so echarts' built-in "dark" theme (#100C2A)
-      // doesn't punch through. Spread `option` after so a user-supplied
-      // backgroundColor still wins.
-      const merged: echarts.EChartsCoreOption = {
-        backgroundColor: bg,
-        ...option,
-      };
-      chart.setOption(merged);
-    } catch (e) {
-      setRenderError(e instanceof Error ? e.message : String(e));
-    }
     const ro = new ResizeObserver(() => chart.resize());
     ro.observe(el);
     return () => {
@@ -94,7 +80,25 @@ export function EchartsChart({ option, height, ariaLabel }: Props) {
       chart.dispose();
       chartRef.current = null;
     };
-  }, [lib, option, isDark, preset, bg]);
+  }, [lib, isDark, preset]);
+
+  // Update data/config in place. ECharts preserves interaction state across
+  // setOption calls, including the legend's selected map and active tooltip.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    try {
+      const merged: echarts.EChartsCoreOption = {
+        backgroundColor: bg,
+        ...option,
+      };
+      // Replace graphic elements because the count can change between options;
+      // ordinary option merging would otherwise retain stale text nodes.
+      chart.setOption(merged, { replaceMerge: ["graphic"] });
+    } catch (e) {
+      setRenderError(e instanceof Error ? e.message : String(e));
+    }
+  }, [option, bg, preset]);
 
   const error = loadError ?? renderError;
 

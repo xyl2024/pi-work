@@ -25,6 +25,8 @@ import type {
 
 const RANGES: Range[] = ["today", "7d", "30d", "all"];
 
+const modelLabelKey = (bucket: SummaryBucket): string => bucket.key;
+
 // ── formatters ────────────────────────────────────────────────────────────
 
 function fmtNum(n: number, locale: "en" | "zh" = "en"): string {
@@ -122,14 +124,16 @@ function useChartTheme() {
     void preset;
     if (typeof document === "undefined") {
       return isDark
-        ? { text: "#d4d4d4", axis: "#666", tooltipBg: "rgba(40,40,40,0.92)" }
-        : { text: "#333", axis: "#bbb", tooltipBg: "rgba(255,255,255,0.95)" };
+        ? { text: "#d4d4d4", axis: "#666", tooltipBg: "rgba(40,40,40,0.92)", emptyCell: "#2a2f35", accent: "#60a5fa" }
+        : { text: "#333", axis: "#bbb", tooltipBg: "rgba(255,255,255,0.95)", emptyCell: "#f1f3f5", accent: "#2563eb" };
     }
     const cs = getComputedStyle(document.documentElement);
     const text = cs.getPropertyValue("--text").trim() || (isDark ? "#d4d4d4" : "#333");
     const axis = cs.getPropertyValue("--border").trim() || (isDark ? "#666" : "#ddd");
     const tooltipBg = isDark ? "rgba(40,40,40,0.92)" : "rgba(255,255,255,0.96)";
-    return { text, axis, tooltipBg };
+    const emptyCell = isDark ? "#2a2f35" : "#f1f3f5";
+    const accent = cs.getPropertyValue("--accent").trim() || (isDark ? "#60a5fa" : "#2563eb");
+    return { text, axis, tooltipBg, emptyCell, accent };
   }, [preset, isDark]);
 }
 
@@ -138,6 +142,7 @@ function useChartTheme() {
 interface FetchState {
   time: SummarizeResult | null;
   model: SummarizeResult | null;
+  heatmap: SummarizeResult | null;
 }
 
 export function TokensPanel() {
@@ -150,6 +155,7 @@ export function TokensPanel() {
   const [state, setState] = useState<FetchState>({
     time: null,
     model: null,
+    heatmap: null,
   });
 
   const timeGroupBy: "hour" | "day" = range === "today" ? "hour" : "day";
@@ -164,18 +170,22 @@ export function TokensPanel() {
   const reload = useCallback(async () => {
     try {
       const cwdParam = cwdFilter ? `&cwd=${encodeURIComponent(cwdFilter)}` : "";
-      const [timeRes, modelRes] = await Promise.all([
+      const [timeRes, modelRes, heatmapRes] = await Promise.all([
         fetch(`/api/token-audit/summary?range=${range}&groupBy=${timeGroupBy}${cwdParam}`),
         fetch(`/api/token-audit/summary?range=${range}&groupBy=model${cwdParam}`),
+        // The heatmap always covers the latest 30 days, independent of the
+        // range selected for the trend chart.
+        fetch(`/api/token-audit/summary?range=30d&groupBy=day${cwdParam}`),
       ]);
-      if (!timeRes.ok || !modelRes.ok) {
-        throw new Error(`HTTP ${timeRes.status}/${modelRes.status}`);
+      if (!timeRes.ok || !modelRes.ok || !heatmapRes.ok) {
+        throw new Error(`HTTP ${timeRes.status}/${modelRes.status}/${heatmapRes.status}`);
       }
-      const [time, model] = (await Promise.all([
+      const [time, model, heatmap] = (await Promise.all([
         timeRes.json(),
         modelRes.json(),
-      ])) as [SummarizeResult, SummarizeResult];
-      setState({ time, model });
+        heatmapRes.json(),
+      ])) as [SummarizeResult, SummarizeResult, SummarizeResult];
+      setState({ time, model, heatmap });
     } catch (e) {
       toast.show({ kind: "error", message: `${t("Failed to load token audit")}: ${String(e)}` });
     }
@@ -207,14 +217,17 @@ export function TokensPanel() {
             gap: 12,
           }}
         >
-          <ChartCard title={t("Cost over time")}>
+          <ChartCard>
             <CostOverTimeChart range={range} buckets={state.time?.buckets ?? []} />
           </ChartCard>
-          <ChartCard title={t("Cost by model")}>
+          <ChartCard>
+            <TokenHeatmapChart buckets={state.heatmap?.buckets ?? []} />
+          </ChartCard>
+          <ChartCard>
             <CostByCategoryChart
               buckets={state.model?.buckets ?? []}
               totalCost={state.model?.totals.costTotal ?? 0}
-              labelKey={(b) => b.key}
+              labelKey={modelLabelKey}
               unknownLabel={t("Unknown")}
             />
           </ChartCard>
@@ -365,7 +378,7 @@ function ChartCard({
   title,
   children,
 }: {
-  title: string;
+  title?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -381,7 +394,7 @@ function ChartCard({
         minWidth: 0,
       }}
     >
-      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: 0.2 }}>{title}</div>
+      {title && <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: 0.2 }}>{title}</div>}
       {children}
     </div>
   );
@@ -428,6 +441,70 @@ function padTimeBuckets(range: Range, raw: SummaryBucket[]): { ts: number; b: Su
   });
 }
 
+function TokenHeatmapChart({ buckets }: { buckets: SummaryBucket[] }) {
+  const { t } = useI18n();
+  const theme = useChartTheme();
+  const { formatCost } = useFormatCurrency();
+  const option = useMemo<echarts.EChartsCoreOption>(() => {
+    const now = new Date();
+    const from = new Date(now.getTime() - 29 * DAY_MS);
+    const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const byKey = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+    const data: Array<{ value: [string, number]; calls: number; cost: number }> = [];
+    const cursor = new Date(from);
+    for (let i = 0; i < 30; i += 1) {
+      const date = dayKey(cursor);
+      const bucket = byKey.get(date);
+      const tokens = bucket
+        ? bucket.inputTokens + bucket.outputTokens + bucket.cacheReadTokens + bucket.cacheWriteTokens
+        : 0;
+      data.push({ value: [date, tokens], calls: bucket?.calls ?? 0, cost: bucket?.costTotal ?? 0 });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    const max = Math.max(1, ...data.map((item) => item.value[1]));
+    return {
+      animation: false,
+      tooltip: {
+        formatter: ((p: unknown): string => {
+          const pp = p as { data?: { value?: [string, number]; calls?: number; cost?: number } };
+          const [date, tokens] = pp.data?.value ?? ["", 0];
+          return `${date}<br/>${t("Token count")}: ${fmtNum(tokens)}<br/>` +
+            `${t("Calls")}: ${pp.data?.calls ?? 0} (${t("Total cost")}: ${formatCost(pp.data?.cost ?? 0)})`;
+        }) as never,
+        backgroundColor: theme.tooltipBg,
+        borderColor: theme.axis,
+        textStyle: { color: theme.text, fontSize: 11 },
+      },
+      visualMap: {
+        min: 0,
+        max,
+        calculable: false,
+        orient: "horizontal",
+        left: "center",
+        bottom: -8,
+        itemWidth: 10,
+        itemHeight: 90,
+        textStyle: { color: theme.text, fontSize: 10 },
+        inRange: { color: [theme.emptyCell, theme.accent] },
+      },
+      calendar: {
+        range: [dayKey(from), dayKey(now)],
+        top: 38,
+        left: 30,
+        right: 12,
+        cellSize: [12, 16],
+        splitLine: { show: false },
+        itemStyle: { color: theme.emptyCell, borderWidth: 2, borderColor: theme.tooltipBg },
+        yearLabel: { show: false },
+        monthLabel: { color: theme.text, fontSize: 10 },
+        dayLabel: { color: theme.text, fontSize: 9 },
+      },
+      series: [{ type: "heatmap", coordinateSystem: "calendar", data }],
+    };
+  }, [buckets, formatCost, t, theme]);
+  return <EchartsChart option={option} height={190} ariaLabel={t("Token heatmap")} />;
+}
+
 function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryBucket[] }) {
   const { t } = useI18n();
   const theme = useChartTheme();
@@ -437,9 +514,10 @@ function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryB
     const xs = series.map((p) => (range === "today" ? fmtHour(p.ts) : fmtMonthDay(p.ts)));
     const costs = series.map((p) => +p.b.costTotal.toFixed(4));
     const calls = series.map((p) => p.b.calls);
+    const tokens = series.map((p) => p.b.inputTokens + p.b.outputTokens + p.b.cacheReadTokens + p.b.cacheWriteTokens);
     return {
       animation: false,
-      grid: { left: 50, right: 50, top: 18, bottom: 22 },
+      grid: { left: 24, right: 24, top: 18, bottom: 22 },
       tooltip: { trigger: "axis", backgroundColor: theme.tooltipBg, borderColor: theme.axis, textStyle: { color: theme.text, fontSize: 11 } },
       xAxis: {
         type: "category",
@@ -450,16 +528,22 @@ function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryB
       yAxis: [
         {
           type: "value",
-          name: t("Cost"),
-          nameTextStyle: { color: theme.text, fontSize: 10 },
-          axisLabel: { color: theme.text, fontSize: 10, formatter: (v: number) => formatCost(v) },
+          name: "",
+          axisLabel: { show: false },
           splitLine: { lineStyle: { color: theme.axis, type: "dashed", opacity: 0.4 } },
         },
         {
           type: "value",
-          name: t("Calls"),
-          nameTextStyle: { color: theme.text, fontSize: 10 },
-          axisLabel: { color: theme.text, fontSize: 10 },
+          name: "",
+          axisLabel: { show: false },
+          splitLine: { show: false },
+        },
+        {
+          type: "value",
+          name: "",
+          position: "right",
+          offset: 36,
+          axisLabel: { show: false },
           splitLine: { show: false },
         },
       ],
@@ -483,10 +567,21 @@ function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryB
           barWidth: "40%",
           itemStyle: { color: PALETTE[1], opacity: 0.55 },
         },
+        {
+          name: t("Token count"),
+          type: "line",
+          yAxisIndex: 2,
+          data: tokens,
+          smooth: true,
+          symbol: "circle",
+          symbolSize: 4,
+          lineStyle: { width: 2 },
+          color: PALETTE[2],
+        },
       ],
     };
   }, [series, theme, t, range, formatCost]);
-  return <EchartsChart option={option} height={220} ariaLabel={t("Cost over time")} />;
+  return <EchartsChart option={option} height={220} ariaLabel={t("Trend")} />;
 }
 
 function CostByCategoryChart({
@@ -527,8 +622,8 @@ function CostByCategoryChart({
       legend: {
         type: "scroll",
         orient: "vertical",
-        right: 4,
-        top: "middle",
+        left: 4,
+        top: 4,
         textStyle: { color: theme.text, fontSize: 10 },
         itemWidth: 10,
         itemHeight: 10,
@@ -538,7 +633,7 @@ function CostByCategoryChart({
         {
           type: "pie",
           radius: ["52%", "78%"],
-          center: ["38%", "50%"],
+          center: ["74%", "58%"],
           avoidLabelOverlap: true,
           itemStyle: { borderColor: theme.tooltipBg, borderWidth: 2 },
           label: { show: false },
@@ -549,15 +644,9 @@ function CostByCategoryChart({
       graphic: [
         {
           type: "text",
-          left: "38%",
-          top: "46%",
-          style: { text: formatCost(totalCost), fill: theme.text, fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "center" },
-        },
-        {
-          type: "text",
-          left: "38%",
-          top: "60%",
-          style: { text: t("Total cost"), fill: theme.text, fontSize: 10, textAlign: "center" },
+          left: "4%",
+          top: "86%",
+          style: { text: `${t("Total cost")}: ${formatCost(totalCost)}`, fill: theme.text, fontSize: 11, fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "left" },
         },
       ],
     };
