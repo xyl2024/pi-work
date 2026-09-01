@@ -16,9 +16,15 @@ const STREAMING_VIEWPORT_MAX_HEIGHT = 360;
 interface Props {
   tabId: string;
   children: ReactNode;
+  /** Outer page-level chat scroll container. Synced to the bottom as this
+   *  viewport grows with content, unless the user has scrolled up. */
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  /** True while the user has intentionally scrolled up from the bottom of the
+   *  conversation — while set, the outer container is left where it is. */
+  userScrollingUpRef?: React.RefObject<boolean>;
 }
 
-export function StreamingMessageViewport({ tabId, children }: Props) {
+export function StreamingMessageViewport({ tabId, children, scrollContainerRef, userScrollingUpRef }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const { streamingMessage } = useStreamingMessage(tabId);
 
@@ -36,9 +42,20 @@ export function StreamingMessageViewport({ tabId, children }: Props) {
   // Both cases keep the newest live content visible once the viewport starts
   // scrolling.
   useEffect(() => {
-    const frame = window.requestAnimationFrame(scrollToBottom);
+    const frame = window.requestAnimationFrame(() => {
+      scrollToBottom();
+      // While this viewport grows (content below the max-height cap), the
+      // outer conversation scrollport's total height grows with it. ChatWindow
+      // only auto-scrolls the outer container on stream start/end, not per
+      // frame, so we sync it here so the newest live output stays pinned at
+      // the bottom — unless the user has scrolled up to read earlier content.
+      const outer = scrollContainerRef?.current;
+      if (outer && !userScrollingUpRef?.current) {
+        outer.scrollTo({ top: outer.scrollHeight, behavior: "instant" });
+      }
+    });
     return () => window.cancelAnimationFrame(frame);
-  }, [children, scrollToBottom, streamingMessage]);
+  }, [children, scrollToBottom, streamingMessage, scrollContainerRef, userScrollingUpRef]);
 
   return (
     <div

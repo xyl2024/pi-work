@@ -1559,7 +1559,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   {rendered}
                   {liveTurnActive && (
                     <>
-                      <StreamingMessageViewport tabId={streamingKey}>
+                      <StreamingMessageViewport
+                        tabId={streamingKey}
+                        scrollContainerRef={scrollContainerRef}
+                        userScrollingUpRef={userScrolledUpRef}
+                      >
                         {streamingRendered}
                         <StreamingBubble
                           tabId={streamingKey}
