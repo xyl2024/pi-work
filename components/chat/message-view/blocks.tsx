@@ -144,6 +144,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const { t } = useI18n();
   const { isDark } = useTheme();
   const isBash = block.toolName === "bash";
+  const isFileMutation = block.toolName === "write" || block.toolName === "edit";
   const isCollapsedByDefault = block.toolName === "read" || block.toolName === "find" || block.toolName === "grep";
   const timeout = isBash && (typeof block.input.timeout === "number" || typeof block.input.timeout === "string")
     ? String(block.input.timeout)
@@ -278,6 +279,8 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         <div ref={contentRef} style={{ overflow: "hidden" }}>
           {expanded && isBash ? (
             <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} cwd={cwd} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+          ) : expanded && isFileMutation ? (
+            <DiffToolCallContent toolName={block.toolName} input={block.input} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
           ) : expanded && (
             <>
               <pre
@@ -307,6 +310,81 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   );
 }
 
+interface DiffLine {
+  kind: "added" | "removed";
+  text: string;
+}
+
+function buildDiffLines(toolName: string, input: Record<string, unknown>): DiffLine[] {
+  if (toolName === "write") {
+    const content = typeof input.content === "string" ? input.content : "";
+    return content.split("\n").map((text) => ({ kind: "added", text: text.replace(/\r$/, "") }));
+  }
+
+  const edits = Array.isArray(input.edits)
+    ? input.edits
+    : [{ oldText: input.oldText, newText: input.newText }];
+  const lines: DiffLine[] = [];
+  for (const edit of edits) {
+    if (!edit || typeof edit !== "object") continue;
+    const item = edit as Record<string, unknown>;
+    const oldText = typeof item.oldText === "string" ? item.oldText : "";
+    const newText = typeof item.newText === "string" ? item.newText : "";
+    for (const text of oldText.split("\n")) lines.push({ kind: "removed", text: text.replace(/\r$/, "") });
+    for (const text of newText.split("\n")) lines.push({ kind: "added", text: text.replace(/\r$/, "") });
+  }
+  return lines;
+}
+
+function DiffToolCallContent({ toolName, input, resultText, resultIsEmpty, isError, isDark }: {
+  toolName: string;
+  input: Record<string, unknown>;
+  resultText: string | null;
+  resultIsEmpty: boolean;
+  isError: boolean;
+  isDark: boolean;
+}) {
+  const { t } = useI18n();
+  const lines = buildDiffLines(toolName, input);
+  return (
+    <div
+      data-scroll-inset
+      style={{
+        overflow: "hidden",
+        background: isDark ? "#1e1e1e" : "#fafafa",
+        borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+        fontFamily: "var(--font-mono)",
+        fontSize: 12,
+        lineHeight: 1.5,
+      }}
+    >
+      <div style={{ overflowX: "auto", padding: 0 }}>
+        {lines.length > 0 ? lines.map((line, index) => (
+          <div
+            key={`${line.kind}-${index}`}
+            style={{
+              display: "flex",
+              minWidth: "max-content",
+              padding: "1px 10px",
+              color: line.kind === "added" ? (isDark ? "#b7f7c0" : "#166534") : (isDark ? "#ffc1c1" : "#991b1b"),
+              background: line.kind === "added"
+                ? (isDark ? "rgba(46,160,67,0.22)" : "rgba(34,197,94,0.13)")
+                : (isDark ? "rgba(248,81,73,0.22)" : "rgba(248,113,113,0.14)"),
+              whiteSpace: "pre",
+            }}
+          >
+            <span style={{ width: 16, flexShrink: 0, userSelect: "none" }}>{line.kind === "added" ? "+" : "-"}</span>
+            <span>{line.text || " "}</span>
+          </div>
+        )) : (
+          <div style={{ padding: "4px 10px", color: "var(--text-dim)" }}>{t("Empty")}</div>
+        )}
+      </div>
+      {resultText !== null && <PairedResult text={resultText} isEmpty={resultIsEmpty} isError={isError} />}
+    </div>
+  );
+}
+
 function BashToolCallContent({ command, cwd, resultText, resultIsEmpty, isError, isDark }: {
   command: string;
   cwd?: string | null;
@@ -316,7 +394,8 @@ function BashToolCallContent({ command, cwd, resultText, resultIsEmpty, isError,
   isDark: boolean;
 }) {
   const { t } = useI18n();
-  const prompt = cwd ? `${cwd} % ` : "% ";
+  const cwdBase = cwd?.replace(/\\/g, "/").split("/").pop() || "";
+  const prompt = cwdBase ? `${cwdBase} % ` : "% ";
   return (
     <div
       data-scroll-inset
