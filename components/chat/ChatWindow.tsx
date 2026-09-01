@@ -15,7 +15,7 @@ import { getFileName } from "@/lib/shared/file-paths";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
-import { useIsStreaming, useIsStreamingBody, useIsStreamingThinking, useStreamingHasContent } from "@/hooks/useStreamingMessage";
+import { useIsStreaming, useIsStreamingBody, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent } from "@/hooks/useStreamingMessage";
 import { SessionLibraryModal } from "../sessions/session-library/SessionLibraryModal";
 import { SessionLibraryOpenButton } from "../sessions/SessionLibraryOpenButton";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
@@ -295,6 +295,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const streamingStoreIsStreaming = useIsStreaming(streamingKey);
   const streamingStoreIsThinking = useIsStreamingThinking(streamingKey);
   const streamingStoreIsBody = useIsStreamingBody(streamingKey);
+  const streamingStoreIsToolCall = useIsStreamingToolCall(streamingKey);
   // True once streamed content (thinking/body) is on screen, false during
   // the wait-for-first-token gap and between messages. The phase-loading
   // indicator below keys off this instead of `streamState.isStreaming` —
@@ -1572,6 +1573,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           <LoadingState label={t("Thinking...")} variant="dot-pulse" />
                         ) : streamingStoreIsBody ? (
                           <LoadingState label={t("Outputting...")} variant="spark" />
+                        ) : streamingStoreIsToolCall ? (
+                          <LoadingState
+                            label={phaseLabel({ kind: "running_tools", tools: [] }, t)}
+                            variant="rotor"
+                          />
                         ) : agentRunning && !streamingStoreHasContent ? (
                           <LoadingState
                             label={phaseLabel(agentPhase, t)}

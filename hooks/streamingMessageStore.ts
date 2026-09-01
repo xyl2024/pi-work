@@ -41,6 +41,16 @@ export function isStreamingBodyMessage(message: Partial<AgentMessage> | null): b
   const block = message.content[message.content.length - 1];
   return block?.type === "text" && typeof block.text === "string";
 }
+
+/** True while the live assistant is assembling a tool call — its input JSON is
+ *  still streaming in (block.type === "toolCall"). Treated as "executing the
+ *  tool" for the loading indicator so a long argument payload doesn't show a
+ *  blank/thinking loader before the tool actually runs. */
+export function isStreamingToolCallMessage(message: Partial<AgentMessage> | null): boolean {
+  if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return false;
+  const block = message.content[message.content.length - 1];
+  return block?.type === "toolCall";
+}
 function setSnapshot(e: Entry, next: StreamingSnapshot) {
   if (e.snapshot.isStreaming === next.isStreaming && e.snapshot.isThinking === next.isThinking && e.snapshot.hasContent === next.hasContent && e.snapshot.streamingMessage === next.streamingMessage) return;
   e.snapshot = next; emit(e);
