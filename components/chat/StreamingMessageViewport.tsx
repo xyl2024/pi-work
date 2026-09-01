@@ -12,6 +12,7 @@ import { useStreamingMessage } from "@/hooks/useStreamingMessage";
  * scrolls once the live output exceeds it.
  */
 const STREAMING_VIEWPORT_MAX_HEIGHT = 360;
+const BOTTOM_THRESHOLD_PX = 1;
 
 interface Props {
   tabId: string;
@@ -26,14 +27,23 @@ interface Props {
 
 export function StreamingMessageViewport({ tabId, children, scrollContainerRef, userScrollingUpRef }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const autoScrollEnabledRef = useRef(true);
   const { streamingMessage } = useStreamingMessage(tabId);
+
+  const handleScroll = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    autoScrollEnabledRef.current = distanceFromBottom <= BOTTOM_THRESHOLD_PX;
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     const viewport = viewportRef.current;
-    if (!viewport) return;
+    if (!viewport || !autoScrollEnabledRef.current) return;
     // Keep the newest content visible as it grows. No-op (clamped to 0) while
     // the content still fits within the max-height; only scrolls once the
-    // live output exceeds the container.
+    // live output exceeds the container. Scrolling up disables this until the
+    // user returns to the bottom.
     viewport.scrollTo({ top: viewport.scrollHeight, behavior: "instant" });
   }, []);
 
@@ -61,6 +71,7 @@ export function StreamingMessageViewport({ tabId, children, scrollContainerRef, 
     <div
       ref={viewportRef}
       data-streaming-message-viewport
+      onScroll={handleScroll}
       style={{
         boxSizing: "border-box",
         maxHeight: STREAMING_VIEWPORT_MAX_HEIGHT,
