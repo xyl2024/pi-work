@@ -81,7 +81,7 @@ COPY --from=builder /app/next.config.ts    ./
 
 # Install production-only deps.
 #   better-sqlite3 and node-pty are the required native modules here.
-#   `npm ci --ignore-scripts` skips postinstalls for every native dep
+#   `npm install --ignore-scripts` skips postinstalls for every native dep
 #   (canvas, lightningcss, ...), so they sit in node_modules uncompiled.
 #   Then we rebuild ONLY better-sqlite3 and node-pty against THIS image's
 #   Node ABI. canvas is only needed for server-side Excalidraw PNG export,
@@ -89,11 +89,18 @@ COPY --from=builder /app/next.config.ts    ./
 #   canvas. lightningcss is a postcss plugin used only at build time, so
 #   it's irrelevant at runtime.
 #
+#   NOTE: we deliberately use `npm install` instead of `npm ci` here. The
+#   base image ships npm 11, whose `npm ci --omit=dev` recomputes the
+#   production-only ideal tree, re-resolves peer conflicts against the
+#   registry (react@19.2.8 etc.) and then falsely reports our valid
+#   lockfile as out of sync (EUSAGE). `npm install` keeps the locked
+#   versions and just drops dev deps — same result, no false failure.
+#
 #   node-pty ships prebuilt binaries for darwin/win32 only — on Linux we
 #   MUST compile from source against the running Node ABI, otherwise
 #   `instrumentation.ts` → `lib/server/terminal/startup` will fail to
 #   load `./prebuilds/linux-x64/pty.node` at server boot.
-RUN npm ci --omit=dev --ignore-scripts \
+RUN npm install --omit=dev --ignore-scripts \
  && npm rebuild better-sqlite3 node-pty \
  && rm -rf /root/.npm /tmp/*
 
