@@ -27,14 +27,37 @@ interface Props {
 
 export function StreamingMessageViewport({ tabId, children, scrollContainerRef, userScrollingUpRef }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const autoScrollEnabledRef = useRef(true);
+  // Scroll events caused by our own scrollTo can arrive after content grows.
+  // Track user input separately so those delayed events cannot accidentally
+  // disable auto-scroll while tool-call arguments are streaming.
+  const userScrollInteractionRef = useRef(false);
   const { streamingMessage } = useStreamingMessage(tabId);
 
   const handleScroll = useCallback(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
     const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-    autoScrollEnabledRef.current = distanceFromBottom <= BOTTOM_THRESHOLD_PX;
+    if (distanceFromBottom <= BOTTOM_THRESHOLD_PX) {
+      autoScrollEnabledRef.current = true;
+    } else if (userScrollInteractionRef.current) {
+      autoScrollEnabledRef.current = false;
+    }
+  }, []);
+
+  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    userScrollInteractionRef.current = true;
+    if (event.deltaY < 0) autoScrollEnabledRef.current = false;
+  }, []);
+
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const scrollingKeys = ["ArrowUp", "PageUp", "Home", "ArrowDown", "PageDown", "End"];
+    if (!scrollingKeys.includes(event.key)) return;
+    userScrollInteractionRef.current = true;
+    if (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") {
+      autoScrollEnabledRef.current = false;
+    }
   }, []);
 
   const scrollToBottom = useCallback(() => {
@@ -47,31 +70,48 @@ export function StreamingMessageViewport({ tabId, children, scrollContainerRef, 
     viewport.scrollTo({ top: viewport.scrollHeight, behavior: "instant" });
   }, []);
 
+  const syncScrollToBottom = useCallback(() => {
+    scrollToBottom();
+    const outer = scrollContainerRef?.current;
+    if (outer && !userScrollingUpRef?.current) {
+      outer.scrollTo({ top: outer.scrollHeight, behavior: "instant" });
+    }
+  }, [scrollToBottom, scrollContainerRef, userScrollingUpRef]);
+
+  // Some tool-call blocks expand after the React render (for example when a
+  // delayed result changes a collapse-height animation). In that case the
+  // children dependency below fires too early, before the final height exists.
+  // Observe the content so every actual height change keeps the viewport
+  // pinned when the user is still at the bottom.
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      window.requestAnimationFrame(syncScrollToBottom);
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [syncScrollToBottom]);
+
   // `children` changes when a settled intermediate assistant message or a
   // partial tool result arrives; the streaming snapshot changes per frame.
   // Both cases keep the newest live content visible once the viewport starts
   // scrolling.
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      scrollToBottom();
-      // While this viewport grows (content below the max-height cap), the
-      // outer conversation scrollport's total height grows with it. ChatWindow
-      // only auto-scrolls the outer container on stream start/end, not per
-      // frame, so we sync it here so the newest live output stays pinned at
-      // the bottom — unless the user has scrolled up to read earlier content.
-      const outer = scrollContainerRef?.current;
-      if (outer && !userScrollingUpRef?.current) {
-        outer.scrollTo({ top: outer.scrollHeight, behavior: "instant" });
-      }
-    });
+    const frame = window.requestAnimationFrame(syncScrollToBottom);
     return () => window.cancelAnimationFrame(frame);
-  }, [children, scrollToBottom, streamingMessage, scrollContainerRef, userScrollingUpRef]);
+  }, [children, streamingMessage, syncScrollToBottom]);
 
   return (
     <div
       ref={viewportRef}
       data-streaming-message-viewport
       onScroll={handleScroll}
+      onWheel={handleWheel}
+      onKeyDown={handleKeyDown}
+      onTouchStart={() => {
+        userScrollInteractionRef.current = true;
+      }}
       style={{
         boxSizing: "border-box",
         maxHeight: STREAMING_VIEWPORT_MAX_HEIGHT,
@@ -85,7 +125,7 @@ export function StreamingMessageViewport({ tabId, children, scrollContainerRef, 
         background: "transparent",
       }}
     >
-      <div className="streaming-message-viewport-content">{children}</div>
+      <div ref={contentRef} className="streaming-message-viewport-content">{children}</div>
     </div>
   );
 }
