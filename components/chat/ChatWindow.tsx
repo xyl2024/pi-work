@@ -1370,6 +1370,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     turnDuration={turnDurationMap.get(idx)}
                     readFiles={opts.readFiles}
                     onOpenFile={opts.onOpenFile}
+                    cwd={session?.cwd ?? cwd}
                   />
                 );
                 if (currentRefIdx === -1) return view;
@@ -1570,6 +1571,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           toolResults={toolResultsMap}
                           modelNames={modelNames}
                           modelIcons={modelIcons}
+                          cwd={session?.cwd ?? cwd}
                         />
                       </StreamingMessageViewport>
                       <div className="py-2" style={{ height: 40, boxSizing: "border-box" }}>

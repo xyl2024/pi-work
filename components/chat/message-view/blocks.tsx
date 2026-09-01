@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { Tooltip } from "../../ui/Tooltip";
@@ -13,7 +17,7 @@ import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./ut
 import { useCollapseNonce } from "./context";
 import type { AssistantContentBlock, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
 
-export function BlockView({ block, toolResults, isStreaming, isLast, keywords, isSearchMatch, onImageClick }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; isLast?: boolean; keywords?: string[]; isSearchMatch?: boolean; onImageClick?: (src: string) => void }) {
+export function BlockView({ block, toolResults, isStreaming, isLast, keywords, isSearchMatch, onImageClick, cwd }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; isLast?: boolean; keywords?: string[]; isSearchMatch?: boolean; onImageClick?: (src: string) => void; cwd?: string | null }) {
   if (block.type === "text") {
     return <TextBlock block={block as TextContent} keywords={keywords} isSearchMatch={isSearchMatch} isStreaming={isStreaming} onImageClick={onImageClick} />;
   }
@@ -23,7 +27,7 @@ export function BlockView({ block, toolResults, isStreaming, isLast, keywords, i
   if (block.type === "toolCall") {
     const tc = block as ToolCallContent;
     const result = toolResults?.get(tc.toolCallId);
-    return <ToolCallBlock block={tc} result={result} />;
+    return <ToolCallBlock block={tc} result={result} cwd={cwd} />;
   }
   return null;
 }
@@ -136,9 +140,15 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
   );
 }
 
-function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: ToolResultMessage }) {
+function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?: ToolResultMessage; cwd?: string | null }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(true);
+  const { isDark } = useTheme();
+  const isBash = block.toolName === "bash";
+  const isCollapsedByDefault = block.toolName === "read" || block.toolName === "find" || block.toolName === "grep";
+  const timeout = isBash && (typeof block.input.timeout === "number" || typeof block.input.timeout === "string")
+    ? String(block.input.timeout)
+    : null;
+  const [expanded, setExpanded] = useState(!isCollapsedByDefault);
   const collapseNonce = useCollapseNonce();
   useEffect(() => {
     if (collapseNonce > 0) setExpanded(false);
@@ -209,6 +219,11 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
         <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
+        {timeout !== null && (
+          <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, flexShrink: 0 }}>
+            timeout={timeout}s
+          </span>
+        )}
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
           {getToolPreview(block)}
         </span>
@@ -261,7 +276,9 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
 
       <div style={{ height: contentHeight ?? "auto", overflow: "hidden", transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none" }}>
         <div ref={contentRef} style={{ overflow: "hidden" }}>
-          {expanded && (
+          {expanded && isBash ? (
+            <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} cwd={cwd} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+          ) : expanded && (
             <>
               <pre
                 data-scroll-inset
@@ -286,6 +303,62 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function BashToolCallContent({ command, cwd, resultText, resultIsEmpty, isError, isDark }: {
+  command: string;
+  cwd?: string | null;
+  resultText: string | null;
+  resultIsEmpty: boolean;
+  isError: boolean;
+  isDark: boolean;
+}) {
+  const { t } = useI18n();
+  const prompt = cwd ? `${cwd} % ` : "% ";
+  return (
+    <div
+      data-scroll-inset
+      style={{
+        padding: "8px 10px",
+        background: isDark ? "#1e1e1e" : "#f7f7f7",
+        borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+        color: "var(--text-muted)",
+        fontFamily: "var(--font-mono)",
+        fontSize: 12,
+        lineHeight: 1.5,
+        overflowX: "auto",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", minWidth: "max-content" }}>
+        <span style={{ color: isError ? "#f87171" : "#16a34a", whiteSpace: "pre" }}>{prompt}</span>
+        <SyntaxHighlighter
+          language="bash"
+          style={isDark ? vscDarkPlus : vs}
+          PreTag="span"
+          customStyle={{ margin: 0, padding: 0, background: "transparent", fontSize: "inherit", lineHeight: "inherit" }}
+          codeTagProps={{ style: { fontFamily: "inherit", whiteSpace: "pre" } }}
+        >
+          {command}
+        </SyntaxHighlighter>
+      </div>
+      {resultText !== null && (
+        <pre
+          style={{
+            margin: 0,
+            padding: 0,
+            color: isError ? "#f87171" : (resultIsEmpty ? "var(--text-dim)" : "var(--text-muted)"),
+            font: "inherit",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            fontStyle: resultIsEmpty ? "italic" : "normal",
+            opacity: resultIsEmpty ? 0.6 : 1,
+          }}
+        >
+          {resultIsEmpty ? `(${t("No output")})` : resultText}
+        </pre>
+      )}
     </div>
   );
 }

@@ -32,6 +32,8 @@ interface Props {
   readFiles?: ReadFileInfo[];
   /** Open a file in the right-hand panel (threaded from AppShell). */
   onOpenFile?: (filePath: string, fileName: string) => void;
+  /** Working directory used to render bash tool prompts. */
+  cwd?: string | null;
 }
 
 /**
@@ -43,7 +45,7 @@ interface Props {
  * historical re-renders when neither message content nor props move,
  * which is the common case during a streaming turn.
  */
-function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, onOpenFile }: Props) {
+function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, onOpenFile, cwd }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
 
   if (message.role === "user") {
@@ -56,7 +58,7 @@ function MessageViewInner({ message, isStreaming, toolResults, modelNames, model
   if (message.role === "assistant") {
     return (
       <div className={isFocused ? "search-flash" : undefined}>
-        <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} onOpenFile={onOpenFile} />
+        <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} onOpenFile={onOpenFile} cwd={cwd} />
       </div>
     );
   }

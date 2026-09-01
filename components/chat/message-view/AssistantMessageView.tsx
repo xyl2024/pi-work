@@ -30,6 +30,7 @@ interface AssistantMessageViewProps {
   turnDuration?: { startMs: number; endMs?: number; running?: boolean };
   readFiles?: ReadFileInfo[];
   onOpenFile?: (filePath: string, fileName: string) => void;
+  cwd?: string | null;
   sessionId?: string;
   entryId?: string;
 }
@@ -47,6 +48,7 @@ function AssistantMessageViewInner({
   turnDuration,
   readFiles,
   onOpenFile,
+  cwd,
 }: AssistantMessageViewProps) {
   const { t } = useI18n();
   const toast = useToast();
@@ -261,7 +263,7 @@ function AssistantMessageViewInner({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blocks.map((block, index) => (
-          <BlockView key={index} block={block} toolResults={toolResults} isStreaming={isStreaming} isLast={index === blocks.length - 1} keywords={keywords} isSearchMatch={isSearchMatch} onImageClick={lightbox.openAt} />
+          <BlockView key={index} block={block} toolResults={toolResults} isStreaming={isStreaming} isLast={index === blocks.length - 1} keywords={keywords} isSearchMatch={isSearchMatch} onImageClick={lightbox.openAt} cwd={cwd} />
         ))}
       </div>
 

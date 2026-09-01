@@ -18,9 +18,10 @@ interface Props {
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
   toolResults?: Map<string, ToolResultMessage>;
+  cwd?: string | null;
 }
 
-function StreamingBubbleInner({ tabId, modelNames, modelIcons, toolResults }: Props) {
+function StreamingBubbleInner({ tabId, modelNames, modelIcons, toolResults, cwd }: Props) {
   const { isStreaming, streamingMessage } = useStreamingMessage(tabId);
   if (!isStreaming || !streamingMessage) return null;
   return (
@@ -31,6 +32,7 @@ function StreamingBubbleInner({ tabId, modelNames, modelIcons, toolResults }: Pr
         toolResults={toolResults}
         modelNames={modelNames}
         modelIcons={modelIcons}
+        cwd={cwd}
       />
     </div>
   );
