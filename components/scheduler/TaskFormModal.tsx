@@ -39,10 +39,11 @@ import {
   textareaStyle,
 } from "./styles";
 import { CheckIcon, CloseIcon, LightbulbIcon, ToolIcon } from "@/components/ui/icons";
+import { ToolsDropdownPanel, READ_ONLY_TOOLS } from "@/components/chat/ToolsDropdownPanel";
+import { listToolsForCwd } from "@/lib/client/agent-client";
+import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 
 // ── Form state ───────────────────────────────────────────────────
-
-type ToolMode = "all" | "none" | "custom";
 
 interface FormState {
   name: string;
@@ -53,8 +54,7 @@ interface FormState {
   provider: string;
   modelId: string;
   thinkingLevel: string;
-  toolMode: ToolMode;
-  toolNames: string; // comma-separated
+  toolSelection: ToolSelection;
   /** Max lifetime in minutes. Empty / 0 ⇒ use the runner's default (2h). */
   maxLifetimeMinutes: string;
   // Notification
@@ -76,8 +76,7 @@ const EMPTY: FormState = {
   provider: "",
   modelId: "",
   thinkingLevel: "",
-  toolMode: "all",
-  toolNames: "",
+  toolSelection: "all",
   maxLifetimeMinutes: "",
   notifyEnabled: false,
   notifySuccess: true,
@@ -258,6 +257,10 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
   /** Validation errors are suppressed until the user first clicks Save;
    *  flipping this on reveals field red-text and the per-section nav dots. */
   const [submitted, setSubmitted] = useState(false);
+  const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
+  const [toolsLoading, setToolsLoading] = useState(false);
+  const [toolsError, setToolsError] = useState<string | null>(null);
+  const [customExpanded, setCustomExpanded] = useState(false);
 
   // Initial / reset form whenever the open state changes (a different
   // task, or a fresh create). Also refreshes the available WeChat contact
@@ -282,8 +285,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         // Old tasks that stored thinkingLevel="auto" or null have to be re-picked
         // on next edit — "auto" is no longer offered in the dropdown.
         thinkingLevel: task.thinkingLevel && task.thinkingLevel !== "auto" ? task.thinkingLevel : "",
-        toolMode: task.toolNames === null ? "all" : toolNames.length === 0 ? "none" : "custom",
-        toolNames: toolNames.join(", "),
+        toolSelection: task.toolNames === null ? "all" : toolNames,
         maxLifetimeMinutes: formatMaxLifetimeForForm(task.maxLifetimeMs),
         notifyEnabled: !!n && n.channels.length > 0,
         notifySuccess: n?.onSuccess ?? true,
@@ -298,7 +300,22 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
     }
     setSection("basics");
     setSubmitted(false);
+    setCustomExpanded(false);
   }, [open, task, initialCwd]);
+
+  // Keep the scheduler's tool catalog in sync with the selected cwd, using
+  // the same catalog endpoint as the chat tool picker.
+  useEffect(() => {
+    if (!open || !form.cwd.trim()) return;
+    let cancelled = false;
+    setToolsLoading(true);
+    setToolsError(null);
+    listToolsForCwd(form.cwd.trim())
+      .then((tools) => { if (!cancelled) setAvailableTools(tools); })
+      .catch((error) => { if (!cancelled) setToolsError(error instanceof Error ? error.message : "Failed to load tools"); })
+      .finally(() => { if (!cancelled) setToolsLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, form.cwd]);
 
   if (!isVisible) return null;
 
@@ -378,10 +395,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
     }
     setSaving(true);
     try {
-      let toolNames: string[] | null;
-      if (form.toolMode === "all") toolNames = null;
-      else if (form.toolMode === "none") toolNames = [];
-      else toolNames = form.toolNames.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+      const toolNames: string[] | null = form.toolSelection === "all" ? null : form.toolSelection;
 
       // Build the notification payload: null (off) unless enabled + recipient.
       const notification: TaskNotification | null =
@@ -402,7 +416,7 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
         provider: form.provider.trim() || null,
         modelId: form.modelId.trim() || null,
         thinkingLevel: form.thinkingLevel.trim() || null,
-        toolNames: form.toolMode === "custom" && toolNames && toolNames.length > 0 ? toolNames : toolNames ?? null,
+        toolNames: toolNames,
         notification,
         // null = use runner default; otherwise send the parsed ms.
         maxLifetimeMs: form.maxLifetimeMinutes.trim() === "" ? null : maxLifetimeMs,
@@ -537,7 +551,25 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
           {/* Form scroll */}
           <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
             {section === "basics" && (
-              <BasicConfigSection form={form} update={update} meta={meta} errors={{ name: nameError, prompt: promptError, cwd: cwdError, model: modelError, thinking: thinkingError }} />
+              <BasicConfigSection
+                form={form}
+                update={update}
+                meta={meta}
+                errors={{ name: nameError, prompt: promptError, cwd: cwdError, model: modelError, thinking: thinkingError }}
+                availableTools={availableTools}
+                toolsLoading={toolsLoading}
+                toolsError={toolsError}
+                customExpanded={customExpanded}
+                onToggleCustomExpanded={() => setCustomExpanded((value) => !value)}
+                onRetryTools={async () => {
+                  if (!form.cwd.trim()) return;
+                  setToolsLoading(true);
+                  setToolsError(null);
+                  try { setAvailableTools(await listToolsForCwd(form.cwd.trim())); }
+                  catch (error) { setToolsError(error instanceof Error ? error.message : "Failed to load tools"); }
+                  finally { setToolsLoading(false); }
+                }}
+              />
             )}
             {section === "schedule" && (
               <ScheduleSection form={form} update={update} cronError={cronError} maxLifetimeError={maxLifetimeError} />
@@ -574,7 +606,18 @@ export function TaskFormModal({ open, task, initialCwd, meta, onClose, onSaved, 
 
 // ── Sections ─────────────────────────────────────────────────────
 
-function BasicConfigSection({ form, update, meta, errors }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void; meta: ModelMeta | null; errors: { name: string | null; prompt: string | null; cwd: string | null; model: string | null; thinking: string | null } }) {
+function BasicConfigSection({ form, update, meta, errors, availableTools, toolsLoading, toolsError, customExpanded, onToggleCustomExpanded, onRetryTools }: {
+  form: FormState;
+  update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
+  meta: ModelMeta | null;
+  errors: { name: string | null; prompt: string | null; cwd: string | null; model: string | null; thinking: string | null };
+  availableTools: ToolInfo[];
+  toolsLoading: boolean;
+  toolsError: string | null;
+  customExpanded: boolean;
+  onToggleCustomExpanded: () => void;
+  onRetryTools: () => Promise<void>;
+}) {
   const { t } = useI18n();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -611,7 +654,16 @@ function BasicConfigSection({ form, update, meta, errors }: { form: FormState; u
         </Field>
         <ModelSelect form={form} update={update} meta={meta} error={errors.model} />
         <ThinkingSelect form={form} update={update} meta={meta} error={errors.thinking} />
-        <ToolsSelect form={form} update={update} />
+        <ToolsSelect
+          form={form}
+          update={update}
+          availableTools={availableTools}
+          toolsLoading={toolsLoading}
+          toolsError={toolsError}
+          customExpanded={customExpanded}
+          onToggleCustomExpanded={onToggleCustomExpanded}
+          onRetry={onRetryTools}
+        />
       </div>
     </div>
   );
@@ -943,19 +995,28 @@ function ThinkingSelect({ form, update, meta, error }: { form: FormState; update
   );
 }
 
-function ToolsSelect({ form, update }: { form: FormState; update: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
+function ToolsSelect({ form, update, availableTools, toolsLoading, toolsError, customExpanded, onToggleCustomExpanded, onRetry }: {
+  form: FormState;
+  update: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
+  availableTools: ToolInfo[];
+  toolsLoading: boolean;
+  toolsError: string | null;
+  customExpanded: boolean;
+  onToggleCustomExpanded: () => void;
+  onRetry: () => Promise<void>;
+}) {
   const { t } = useI18n();
-  const modes: { id: ToolMode; label: string; desc: string }[] = [
-    { id: "all",    label: t("All tools"),     desc: t("Use all available tools") },
-    { id: "none",   label: t("No tools"),      desc: t("Chat only, no commands") },
-    { id: "custom", label: t("Custom"),        desc: t("Specify a list of tool names") },
-  ];
   const { open, setOpen, rootRef } = useDropdown();
-  const triggerLabel = form.toolMode === "all"
+  const selection = form.toolSelection;
+  const selectedCount = selection === "all" ? availableTools.length : selection.length;
+  const isReadOnly = Array.isArray(selection) && selection.length === READ_ONLY_TOOLS.length && selection.every((name) => READ_ONLY_TOOLS.includes(name as typeof READ_ONLY_TOOLS[number]));
+  const triggerLabel = selection === "all"
     ? t("All tools")
-    : form.toolMode === "none"
+    : selection.length === 0
       ? t("No tools")
-      : form.toolNames.trim() || t("Custom (empty)");
+      : isReadOnly
+        ? t("Read only")
+        : t("Custom selection ({count}/{total})", { count: selectedCount, total: availableTools.length });
 
   return (
     <Field label={t("Tool set")} hint={t("all: all tools, none: chat only, custom: comma-separated tool names")}>
@@ -978,41 +1039,22 @@ function ToolsSelect({ form, update }: { form: FormState; update: <K extends key
             {triggerLabel}
           </span>
         </button>
-        <AnimatedPopover open={open} style={dropdownPanelStyle} maxHeight={320}>
-          {modes.map((m) => {
-            const active = form.toolMode === m.id;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => {
-                  update("toolMode", m.id);
-                  // Custom keeps the panel open so the user can immediately
-                  // type tool names (mirrors ChatInput's expandable Custom row).
-                  if (m.id !== "custom") setOpen(false);
-                }}
-                style={dropdownOptionStyle(active)}
-              >
-                <CheckOrGap active={active} />
-                <span style={{ flex: 1 }}>{m.label}</span>
-                <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{m.desc}</span>
-              </button>
-            );
-          })}
-          {form.toolMode === "custom" && (
-            <div style={{ padding: "8px 10px", marginTop: 4 }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{t("Comma-separated tool names")}</div>
-              <input
-                value={form.toolNames}
-                onChange={(e) => update("toolNames", e.target.value)}
-                placeholder="bash, file_write, agent_todo"
-                className="scheduler-text-input"
-                style={inputMonoStyle}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
-        </AnimatedPopover>
+        <ToolsDropdownPanel
+          open={open}
+          toolSelection={selection}
+          availableTools={availableTools}
+          toolsLoading={toolsLoading}
+          toolsError={toolsError}
+          customExpanded={customExpanded}
+          onSelectPreset={(preset) => {
+            const next: ToolSelection = preset === "off" ? [] : preset === "full" ? "all" : READ_ONLY_TOOLS.filter((name) => availableTools.some((tool) => tool.name === name));
+            update("toolSelection", next);
+            if (preset !== "read_only") setOpen(false);
+          }}
+          onToggleTool={(next) => update("toolSelection", next)}
+          onToggleCustomExpanded={onToggleCustomExpanded}
+          onRetryEnsureTools={onRetry}
+        />
       </div>
     </Field>
   );
