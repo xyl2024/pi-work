@@ -359,26 +359,31 @@ function DiffToolCallContent({ toolName, input, resultText, resultIsEmpty, isErr
       }}
     >
       <div style={{ overflowX: "auto", padding: 0 }}>
-        {lines.length > 0 ? lines.map((line, index) => (
-          <div
-            key={`${line.kind}-${index}`}
-            style={{
-              display: "flex",
-              minWidth: "max-content",
-              padding: "1px 10px",
-              color: line.kind === "added" ? (isDark ? "#b7f7c0" : "#166534") : (isDark ? "#ffc1c1" : "#991b1b"),
-              background: line.kind === "added"
-                ? (isDark ? "rgba(46,160,67,0.22)" : "rgba(34,197,94,0.13)")
-                : (isDark ? "rgba(248,81,73,0.22)" : "rgba(248,113,113,0.14)"),
-              whiteSpace: "pre",
-            }}
-          >
-            <span style={{ width: 16, flexShrink: 0, userSelect: "none" }}>{line.kind === "added" ? "+" : "-"}</span>
-            <span>{line.text || " "}</span>
-          </div>
-        )) : (
-          <div style={{ padding: "4px 10px", color: "var(--text-dim)" }}>{t("Empty")}</div>
-        )}
+        {/* Keep the diff rows inside an inline-block that grows to the widest
+            line. Without this, each row only paints to the viewport width,
+            so its background disappears when scrolling horizontally. */}
+        <div style={{ display: "inline-block", minWidth: "100%" }}>
+          {lines.length > 0 ? lines.map((line, index) => (
+            <div
+              key={`${line.kind}-${index}`}
+              style={{
+                display: "flex",
+                width: "100%",
+                padding: "1px 10px",
+                color: line.kind === "added" ? (isDark ? "#b7f7c0" : "#166534") : (isDark ? "#ffc1c1" : "#991b1b"),
+                background: line.kind === "added"
+                  ? (isDark ? "rgba(46,160,67,0.22)" : "rgba(34,197,94,0.13)")
+                  : (isDark ? "rgba(248,81,73,0.22)" : "rgba(248,113,113,0.14)"),
+                whiteSpace: "pre",
+              }}
+            >
+              <span style={{ width: 16, flexShrink: 0, userSelect: "none" }}>{line.kind === "added" ? "+" : "-"}</span>
+              <span>{line.text || " "}</span>
+            </div>
+          )) : (
+            <div style={{ padding: "4px 10px", color: "var(--text-dim)" }}>{t("Empty")}</div>
+          )}
+        </div>
       </div>
       {resultText !== null && <PairedResult text={resultText} isEmpty={resultIsEmpty} isError={isError} />}
     </div>
