@@ -1146,7 +1146,8 @@ export async function startRpcSession(
         // Self-management tools: read-only visibility into Pi Work's own live
         // sessions + disk-backed session details. Gated together via
         // ~/.pi-work/tools-market.json (TOOL_MARKET_IDS).
-        ...(enabledTools.has("pi_work_get_active_sessions_id") ||
+        ...(enabledTools.has("pi_work_get_sessions_id") ||
+        enabledTools.has("pi_work_get_active_sessions_id") ||
         enabledTools.has("pi_work_get_session_info_by_id")
           ? buildSessionInfoTools()
           : []),

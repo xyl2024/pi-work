@@ -21,12 +21,13 @@
 
 import { Type } from "typebox";
 import { defineTool } from "@earendil-works/pi-coding-agent";
-import { readSessionDetails } from "@/lib/server/session-reader";
+import { listAllSessionsHeaderOnly, readSessionDetails } from "@/lib/server/session-reader";
 import { getRpcSession, listRunningRpcSessions } from "@/lib/server/session-registry";
 import type { AgentMessage, AssistantMessage, SessionContext } from "@/lib/shared/types";
 
 export const PI_WORK_ACTIVE_SESSIONS_TOOL = "pi_work_get_active_sessions_id";
 export const PI_WORK_SESSION_INFO_TOOL = "pi_work_get_session_info_by_id";
+export const PI_WORK_GET_SESSIONS_TOOL = "pi_work_get_sessions_id";
 
 /** Cap on the amount of message text / compaction summary surfaced to the
  *  model per call, so a busy session can't blow out the tool result. */
@@ -79,7 +80,44 @@ function activeSessionsResult() {
 }
 
 // ============================================================================
-// Tool 2: pi_work_get_session_info_by_id
+// Tool 2: pi_work_get_sessions_id
+// ============================================================================
+
+const GetSessionsParams = Type.Object(
+  {
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50, default: 10, description: "Number of most recently modified sessions to return." })),
+  },
+  { additionalProperties: false },
+);
+
+interface RecentSessionSummary {
+  id: string;
+  name: string;
+  firstUserMessage: string;
+}
+
+interface GetSessionsDetails {
+  sessions: RecentSessionSummary[];
+  limit: number;
+  count: number;
+}
+
+async function recentSessionsResult(limit = 10) {
+  const normalizedLimit = Math.min(Math.max(Math.trunc(limit), 1), 50);
+  const sessions = (await listAllSessionsHeaderOnly()).slice(0, normalizedLimit).map((session) => ({
+    id: session.id,
+    name: session.name ?? "",
+    firstUserMessage: truncate(session.firstMessage ?? ""),
+  }));
+  const details: GetSessionsDetails = { sessions, limit: normalizedLimit, count: sessions.length };
+  const text = sessions.length === 0
+    ? "No sessions found."
+    : `Recent sessions (${sessions.length}):\n${sessions.map((s, i) => `${i + 1}. id=${s.id}\n   name=${s.name || "(unnamed)"}\n   firstUserMessage=${s.firstUserMessage || "(none)"}`).join("\n")}`;
+  return { content: [{ type: "text" as const, text }], details };
+}
+
+// ============================================================================
+// Tool 3: pi_work_get_session_info_by_id
 // ============================================================================
 
 const SessionInfoParams = Type.Object(
@@ -263,6 +301,19 @@ async function sessionInfoResult(sessionId: string) {
 // Tool registration
 // ============================================================================
 
+export const getSessionsTool = defineTool<typeof GetSessionsParams, GetSessionsDetails>({
+  name: PI_WORK_GET_SESSIONS_TOOL,
+  label: "Pi Work Recent Sessions",
+  description: "List the most recently modified Pi Work sessions, returning each session's id, name, and first user message. Results are newest first. Use the limit parameter to request 1-50 sessions.",
+  parameters: GetSessionsParams,
+  executionMode: "sequential",
+  promptSnippet: "List recent Pi Work session ids, names, and first user messages.",
+  promptGuidelines: ["Use this tool when you need to discover recent sessions; results are ordered newest first.", "Use pi_work_get_session_info_by_id when you need more detail for a returned id."],
+  async execute(_toolCallId, params) {
+    return recentSessionsResult(params.limit);
+  },
+});
+
 export const activeSessionsTool = defineTool<typeof ActiveSessionsParams, ActiveSessionsDetails>({
   name: PI_WORK_ACTIVE_SESSIONS_TOOL,
   label: "Pi Work Active Sessions",
@@ -299,5 +350,5 @@ export const sessionInfoTool = defineTool<typeof SessionInfoParams, SessionInfoD
 });
 
 export function buildSessionInfoTools() {
-  return [activeSessionsTool, sessionInfoTool];
+  return [getSessionsTool, activeSessionsTool, sessionInfoTool];
 }
