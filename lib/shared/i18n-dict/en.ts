@@ -2,6 +2,8 @@
 // Most of the catalog uses English source text as its key; these entries keep
 // namespaced keys backwards-compatible without leaking implementation keys.
 export const EN_TRANSLATIONS = {
+  "Set default tools": "Set default tools",
+  "Default tools for this project": "Default tools for this project",
   "platform.wechat": "WeChat",
   "platform.dingtalk": "DingTalk",
   "platform.feishu": "Feishu",

@@ -9,6 +9,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { CollapsiblePanel } from "../ui/CollapsiblePanel";
 import { CwdProjectIcon } from "../files/CwdProjectIcon";
 import { CwdIconPicker } from "../files/CwdIconPicker";
+import { CwdToolsPicker } from "./CwdToolsPicker";
 import { useCwdIcon, setCwdIcon, initCwdIcons } from "@/hooks/cwdIconStore";
 import { useAllPendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 
@@ -241,6 +242,7 @@ function CwdGroup({
   }, []);
   const cwdIcon = useCwdIcon(workspace.cwd);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [toolsPickerOpen, setToolsPickerOpen] = useState(false);
 
   // Forward the header DOM node to the parent so it can scrollIntoView when
   // the active cwd changes (e.g. via picker → list sync).
@@ -626,6 +628,15 @@ function CwdGroup({
             )}
             <CwdMenuRow
               index={1}
+              icon={<span aria-hidden>⚙</span>}
+              label={t("Set default tools")}
+              onClick={() => {
+                setLoadMenuOpen(false);
+                setToolsPickerOpen(true);
+              }}
+            />
+            <CwdMenuRow
+              index={2}
               icon={
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 3v12" />
@@ -645,6 +656,9 @@ function CwdGroup({
           document.body,
         )}
 
+        {toolsPickerOpen && (
+          <CwdToolsPicker cwd={workspace.cwd} open onClose={() => setToolsPickerOpen(false)} />
+        )}
         {iconPickerOpen && (
           <CwdIconPicker
             open

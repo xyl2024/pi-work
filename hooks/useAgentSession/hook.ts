@@ -111,6 +111,30 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // is hidden on existing-session pages (button gated on `isNew` in
   // ChatWindow), so the value for existing sessions is unused.
   const [toolSelection, setToolSelection] = useState<ToolSelection>(() => "all");
+  // Load the cwd preset for a new-session page. A browser event lets the cwd
+  // menu update an already-mounted new-session controller immediately.
+  useEffect(() => {
+    if (!isNew || !newSessionCwd) return;
+    let cancelled = false;
+    const load = () => {
+      fetch(`/api/cwd-tools?cwd=${encodeURIComponent(newSessionCwd)}`)
+        .then((res) => res.json() as Promise<{ selection?: ToolSelection | null }>)
+        .then((data) => {
+          if (!cancelled) setToolSelection(data.selection ?? "all");
+        })
+        .catch(() => { /* keep the default */ });
+    };
+    const onChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ cwd?: string }>).detail;
+      if (!detail?.cwd || detail.cwd === newSessionCwd) load();
+    };
+    load();
+    window.addEventListener("cwd-tools-changed", onChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("cwd-tools-changed", onChanged);
+    };
+  }, [isNew, newSessionCwd]);
   // Catalog of every tool pi registered for this session's cwd. Populated
   // lazily: `ensureAvailableTools` on popover open for new sessions.
   // Sorted alphabetically by name when set.

@@ -15,6 +15,8 @@ export const toolsMarket = {
   "Append System Prompt": "追加系统提示词",
   "No additional system prompt": "不会注入额外系统提示词",
   "Changes apply to new sessions only": "变更仅对新会话生效",
+  "Set default tools": "设置默认工具集",
+  "Default tools for this project": "此项目的默认工具集",
   "codegraph_status": "CodeGraph 索引状态",
   "codegraph_search": "CodeGraph 符号搜索",
   "codegraph_explore": "CodeGraph 代码探索",
