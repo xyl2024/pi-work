@@ -15,7 +15,7 @@ import { getFileName } from "@/lib/shared/file-paths";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
-import { useIsStreamingBody, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent } from "@/hooks/useStreamingMessage";
+import { useIsStreamingBody, useIsStreamingError, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent } from "@/hooks/useStreamingMessage";
 import { SessionLibraryModal } from "../sessions/session-library/SessionLibraryModal";
 import { SessionLibraryOpenButton } from "../sessions/SessionLibraryOpenButton";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
@@ -295,6 +295,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const streamingStoreIsThinking = useIsStreamingThinking(streamingKey);
   const streamingStoreIsBody = useIsStreamingBody(streamingKey);
   const streamingStoreIsToolCall = useIsStreamingToolCall(streamingKey);
+  const streamingStoreIsError = useIsStreamingError(streamingKey);
   // True once streamed content (thinking/body) is on screen, false during
   // the wait-for-first-token gap and between messages. The phase-loading
   // indicator below keys off this instead of `streamState.isStreaming` —
@@ -837,6 +838,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, [isActive, handleScrollToToolCall, tabId]);
 
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
+  // Error assistant messages are already rendered from `messages`; when the
+  // streaming snapshot is intentionally retained for a retry, avoid showing
+  // the same failed call twice.
+  const streamingErrorAlreadyRendered = streamingStoreIsError && messages.some((message) =>
+    message.role === "assistant" && message.stopReason === "error",
+  );
   const isStreamingThinking = streamState.isStreaming && streamingStoreIsThinking;
 
   const availableThinkingLevels = displayModelValue
@@ -1512,13 +1519,15 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                         onResumeAutoScroll={handleStreamingViewportResume}
                       >
                         {streamingRendered}
-                        <StreamingBubble
-                          tabId={streamingKey}
-                          toolResults={toolResultsMap}
-                          modelNames={modelNames}
-                          modelIcons={modelIcons}
-                          cwd={session?.cwd ?? cwd}
-                        />
+                        {!streamingErrorAlreadyRendered && (
+                          <StreamingBubble
+                            tabId={streamingKey}
+                            toolResults={toolResultsMap}
+                            modelNames={modelNames}
+                            modelIcons={modelIcons}
+                            cwd={session?.cwd ?? cwd}
+                          />
+                        )}
                       </StreamingMessageViewport>
                       )}
                       <div className="py-2" style={{ height: 40, boxSizing: "border-box" }}>
@@ -1544,7 +1553,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               );
             })()}
 
-            {!liveTurnActive && (
+            {!liveTurnActive && !streamingErrorAlreadyRendered && (
               <StreamingBubble
                 tabId={streamingKey}
                 toolResults={toolResultsMap}

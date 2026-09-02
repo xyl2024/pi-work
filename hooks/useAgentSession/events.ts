@@ -152,8 +152,11 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         setAgentPhase(null);
         setRetryInfo(null);
         dispatch({ type: "end" });
-        endStreamingStore(controllerId);
         const hadAssistantError = pendingAssistantErrorRef.current !== null;
+        // A failed model call is still part of the active turn. Keep the
+        // final streaming snapshot mounted so the view does not disappear
+        // while the caller decides whether to retry.
+        endStreamingStore(controllerId, hadAssistantError);
         if (pendingAssistantErrorRef.current) {
           setRuntimeError(pendingAssistantErrorRef.current);
           showToast({ kind: "error", message: pendingAssistantErrorRef.current });
@@ -219,11 +222,14 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           onFirstAssistantReady?.();
         }
         dispatch({ type: "reset" });
-        endStreamingStore(controllerId);
-        setAgentPhase({ kind: "waiting_model" });
         if (completed?.role === "assistant" && completed.stopReason === "error") {
           pendingAssistantErrorRef.current = completed.errorMessage ?? "Model call failed";
         }
+        // Do not tear down the live view for a model error. The turn can be
+        // retried, and the user should keep seeing the current assistant
+        // message instead of a blank gap until the next stream starts.
+        endStreamingStore(controllerId, completed?.role === "assistant" && completed.stopReason === "error");
+        setAgentPhase({ kind: "waiting_model" });
         if (completed?.role === "assistant") {
           lastAssistantIsBodyRef.current = isBodyMessage(completed);
           if (sessionIdRef.current) {

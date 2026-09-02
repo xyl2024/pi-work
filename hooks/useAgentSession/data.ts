@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
 import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/shared/types";
 import { pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
-import { endStreaming as endStreamingStore } from "../streamingMessageStore";
+import { endStreaming as endStreamingStore, getStreamingSnapshot } from "../streamingMessageStore";
 import type {
   AgentPhase,
   AgentRuntimeState,
@@ -217,7 +217,9 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
       setCompactingSync(false);
       setAgentPhase(null);
       dispatch({ type: "end" });
-      endStreamingStore(streamingKey);
+      const streamingMessage = getStreamingSnapshot(streamingKey).streamingMessage;
+      const modelCallFailed = streamingMessage?.role === "assistant" && streamingMessage.stopReason === "error";
+      endStreamingStore(streamingKey, modelCallFailed);
     }
   }, [dispatch, setAgentPhase, setAgentRunningSync, setCompactingSync, setContextUsage, setSystemPrompt, streamingKey]);
 

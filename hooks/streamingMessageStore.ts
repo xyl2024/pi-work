@@ -74,5 +74,12 @@ export function startStreaming(key: string) {
   clear(key);
   setSnapshot(e, { isStreaming: true, isThinking: false, hasContent: false, streamingMessage: null });
 }
-export function endStreaming(key: string) { const e = entry(key); e.pending = null; clear(key); if (e.snapshot.isStreaming || e.snapshot.streamingMessage !== null) setSnapshot(e, EMPTY_SNAPSHOT); }
+export function endStreaming(key: string, preserveError = false) {
+  const e = entry(key);
+  e.pending = null;
+  clear(key);
+  const message = e.snapshot.streamingMessage;
+  if (preserveError && message?.role === "assistant" && message.stopReason === "error") return;
+  if (e.snapshot.isStreaming || e.snapshot.streamingMessage !== null) setSnapshot(e, EMPTY_SNAPSHOT);
+}
 export function __resetStreamingStoreForTests() { for (const key of entries.keys()) { clear(key); } entries.clear(); }

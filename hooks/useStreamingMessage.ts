@@ -36,6 +36,17 @@ export function useStreamingHasContent(key: string): boolean {
   );
 }
 
+export function useIsStreamingError(key: string): boolean {
+  return useSyncExternalStore(
+    (listener) => subscribeStreaming(key, listener),
+    () => {
+      const message = getStreamingSnapshot(key).streamingMessage;
+      return message?.role === "assistant" && message.stopReason === "error";
+    },
+    () => false,
+  );
+}
+
 export function useIsStreamingToolCall(key: string): boolean {
   return useSyncExternalStore(
     (listener) => subscribeStreaming(key, listener),
