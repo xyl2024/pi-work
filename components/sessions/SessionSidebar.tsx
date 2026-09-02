@@ -601,11 +601,19 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           </div>
           <div style={{ display: "flex", gap: 6 }}>
             {onNewSession && (() => {
-              const canNew = !!selectedCwdProp;
+              const canNew = true;
               return (
                 <Tooltip content={t("New session")}>
                   <button
-                    onClick={() => { onNewSession(); }}
+                    onClick={() => {
+                      // Always create in the default cwd (~/.pi-work/workspace/pi-cwd-default).
+                      void fetch("/api/default-cwd", { method: "POST" })
+                        .then((res) => (res.ok ? res.json() : null))
+                        .then((data: { cwd?: string } | null) => {
+                          if (data?.cwd) onNewSession(data.cwd);
+                        })
+                        .catch(() => {});
+                    }}
                     disabled={!canNew}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center",
