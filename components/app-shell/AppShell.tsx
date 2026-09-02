@@ -1991,7 +1991,7 @@ export function AppShell() {
             border: "none",
             borderRadius: 6,
             background: "transparent",
-            color: "var(--accent)",
+            color: terminalOpen ? "var(--accent)" : "inherit",
             padding: "2px 0",
             margin: 0,
             font: "inherit",
