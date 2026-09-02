@@ -6,15 +6,13 @@
 // dev-mode HMR doesn't reopen the handle, WAL journaling, and idempotent
 // additive migrations.
 //
-// Two tables:
+// One table:
 //   - trending_cache: one JSON blob per (lang, since) key — the trending
 //     list is fetched as a block and always read back as a block.
-//   - readme_cache: rendered-doc-ready README markdown per repo, plus the
-//     default branch (needed to rewrite relative image/link paths).
 //
 // The cache is on-disk by design (the panel was spec'd to survive restarts
-// and serve offline); TTLs and stale-fallback semantics live in
-// `service.ts`.
+// and serve offline); the once-per-day scrape rule and stale-fallback
+// semantics live in `service.ts`.
 
 import Database from "better-sqlite3";
 import { mkdirSync } from "fs";
@@ -41,12 +39,6 @@ const SCHEMA = `
     PRIMARY KEY (lang, since)
   );
 
-  CREATE TABLE IF NOT EXISTS readme_cache (
-    full_name  TEXT PRIMARY KEY,
-    markdown   TEXT NOT NULL,
-    branch     TEXT NOT NULL,
-    fetched_at INTEGER NOT NULL
-  );
 `;
 
 /** Additive, idempotent migrations for DBs seeded before a column shipped. */
@@ -82,13 +74,6 @@ export interface TrendingCacheRow {
   fetched_at: number;
 }
 
-export interface ReadmeCacheRow {
-  full_name: string;
-  markdown: string;
-  branch: string;
-  fetched_at: number;
-}
-
 export function readTrendingCache(
   lang: string,
   since: string,
@@ -113,30 +98,4 @@ export function writeTrendingCache(
        ON CONFLICT (lang, since) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at`,
     )
     .run(lang, since, data, fetchedAt);
-}
-
-export function readReadmeCache(fullName: string): ReadmeCacheRow | undefined {
-  return getGithubTrendingDb()
-    .prepare(
-      "SELECT full_name, markdown, branch, fetched_at FROM readme_cache WHERE full_name = ?",
-    )
-    .get(fullName) as ReadmeCacheRow | undefined;
-}
-
-export function writeReadmeCache(
-  fullName: string,
-  markdown: string,
-  branch: string,
-  fetchedAt: number,
-): void {
-  getGithubTrendingDb()
-    .prepare(
-      `INSERT INTO readme_cache (full_name, markdown, branch, fetched_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT (full_name) DO UPDATE SET
-         markdown = excluded.markdown,
-         branch = excluded.branch,
-         fetched_at = excluded.fetched_at`,
-    )
-    .run(fullName, markdown, branch, fetchedAt);
 }

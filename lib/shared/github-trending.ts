@@ -76,24 +76,15 @@ export interface TrendingResponse {
   since: TrendingSince;
 }
 
-/** Shape of the README API response. `branch` is the repo's default branch
- *  (used to rewrite relative image/link paths). */
-export interface ReadmeResponse {
-  fullName: string;
-  markdown: string;
-  branch: string;
-  stale: boolean;
-  fetchedAt: number;
-}
-
-/** Build the clone command for the row-level copy button. */
+/** Build the clone URL for a repo. */
 export function cloneUrl(fullName: string): string {
   return `https://github.com/${fullName}.git`;
 }
 
-/** Build the repo's canonical GitHub page. */
-export function repoUrl(fullName: string): string {
-  return `https://github.com/${fullName}`;
+/** Build the "clone & study" agent prompt copied by the row copy button:
+ *  “克隆并研究一下这个 github 仓库：{clone_url}”. */
+export function clonePrompt(fullName: string): string {
+  return `克隆并研究一下这个 github 仓库：${cloneUrl(fullName)}`;
 }
 
 /** Human label for a language slug (official English name, untranslated). */

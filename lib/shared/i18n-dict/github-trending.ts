@@ -1,4 +1,4 @@
-// GitHub Trending right-panel: toolbar, rows, README detail, status states.
+// GitHub Trending right-panel: toolbar, rows, status states.
 //
 // Notes:
 //   - "Today" / "Refresh" / "Retry" / "Language" / "Loading..." /
@@ -18,10 +18,8 @@ export const githubTrending = {
   "This month": "本月",
   "No trending repos": "暂无热门仓库",
   "Failed to load trending": "加载热门仓库失败",
-  "Failed to load README": "加载 README 失败",
   "Cached data · last fetched {t}": "缓存数据 · 上次抓取 {t}",
-  "Back to trending": "返回热门列表",
-  "Copy clone URL": "复制克隆地址",
-  "Clone URL copied": "已复制克隆地址",
+  "Copy prompt": "复制提示词",
+  "Prompt copied": "提示词已复制",
   "Open on GitHub": "在 GitHub 打开",
 } as const;

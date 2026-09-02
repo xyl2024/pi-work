@@ -10,8 +10,7 @@
 //   - period delta: `span.d-inline-block.float-sm-right` ("1,234 stars
 //     today").
 //
-// GitHub has no rate limit on the trending HTML page itself (the REST API
-// quota is only consumed by the README endpoint in readme.ts).
+// GitHub has no rate limit on the trending HTML page itself.
 
 import { load, type CheerioAPI } from "cheerio";
 import type { Element } from "domhandler";
