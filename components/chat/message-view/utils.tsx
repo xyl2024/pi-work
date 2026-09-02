@@ -136,6 +136,13 @@ export function TurnDuration({ startMs, endMs, running }: { startMs: number; end
   return <span>{formatDuration(ms)}</span>;
 }
 
+const PREVIEW_PART_LIMIT = 80;
+const PREVIEW_TOTAL_LIMIT = 160;
+
+function previewPart(value: unknown): string {
+  return String(value).slice(0, PREVIEW_PART_LIMIT);
+}
+
 export function getToolPreview(block: { input?: unknown; toolName?: string }): string {
   const input = block.input;
   if (!input || typeof input !== "object") return "";
@@ -143,14 +150,73 @@ export function getToolPreview(block: { input?: unknown; toolName?: string }): s
   if (keys.length === 0) return "";
 
   const record = input as Record<string, unknown>;
-  if ("command" in record) return String(record.command).slice(0, 120);
-  if ("path" in record) return String(record.path).slice(0, 120);
-  if ("file_path" in record) return String(record.file_path).slice(0, 120);
-  if ("pattern" in record) return String(record.pattern).slice(0, 120);
-  if ("query" in record) return String(record.query).slice(0, 120);
+  const str = (v: unknown): string => (typeof v === "string" && v.length > 0 ? v : "");
 
-  const first = record[keys[0]];
-  return String(first).slice(0, 120);
+  let parts: string[];
+  switch (block.toolName) {
+    case "find":
+    case "grep": {
+      parts = [str(record.path), str(record.pattern)];
+      break;
+    }
+    case "agent_todo": {
+      parts = [str(record.action), str(record.subject)];
+      break;
+    }
+    case "codegraph_status": {
+      parts = [str(record.path)];
+      break;
+    }
+    case "codegraph_search": {
+      parts = [str(record.query), str(record.kind)];
+      break;
+    }
+    case "codegraph_explore": {
+      parts = [str(record.query)];
+      break;
+    }
+    case "codegraph_callers":
+    case "codegraph_callees":
+    case "codegraph_impact": {
+      parts = [str(record.symbol)];
+      break;
+    }
+    case "codegraph_node": {
+      parts = [str(record.symbol) || str(record.file)];
+      break;
+    }
+    case "codegraph_files": {
+      parts = [str(record.pattern) || str(record.filter)];
+      break;
+    }
+    case "codegraph_build": {
+      parts = [str(record.mode)];
+      break;
+    }
+    case "read":
+    case "write":
+    case "edit":
+    case "ls": {
+      parts = [str(record.path)];
+      break;
+    }
+    case "bash": {
+      parts = [str(record.command)];
+      break;
+    }
+    default: {
+      // Fallback: first meaningful key, then any other key at all.
+      const fallbackKey =
+        ["command", "path", "file_path", "pattern", "query", "symbol", "action", "url", "name"].find((k) => k in record) ?? keys[0];
+      parts = [String(record[fallbackKey])];
+    }
+  }
+
+  return parts
+    .filter((p) => p.length > 0)
+    .map(previewPart)
+    .join(" · ")
+    .slice(0, PREVIEW_TOTAL_LIMIT);
 }
 
 export function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } }) {
