@@ -26,11 +26,15 @@ interface Props {
   /** Clears the outer "scroll to bottom" affordance when the user reaches the
    *  bottom from inside this nested viewport. */
   onResumeAutoScroll?: () => void;
+  /** Called only when this viewport's own box grows, so the outer chat can
+   * follow that layout change without following every streamed token. */
+  onHeightIncrease?: (heightDelta: number) => void;
 }
 
-export function StreamingMessageViewport({ tabId, children, userScrollingUpRef, onResumeAutoScroll }: Props) {
+export function StreamingMessageViewport({ tabId, children, userScrollingUpRef, onResumeAutoScroll, onHeightIncrease }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const previousViewportHeightRef = useRef<number | null>(null);
   // User intent is handled by wheel/touch/keyboard handlers before the browser
   // emits scroll events. Do not infer it from onScroll: content growth from a
   // streaming tool call can also produce a delayed scroll event.
@@ -142,15 +146,33 @@ export function StreamingMessageViewport({ tabId, children, userScrollingUpRef, 
   // children dependency below fires too early, before the final height exists.
   // Observe the content so every actual height change keeps the viewport
   // pinned when the user is still at the bottom.
+  const handleResize = useCallback((entries: ResizeObserverEntry[]) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    // The outer chat only needs to react while this box is growing. Changes to
+    // the content after the max height do not change the outer layout and are
+    // already handled by the nested viewport's own follow logic.
+    if (entries.some((entry) => entry.target === viewport)) {
+      const height = viewport.offsetHeight;
+      const previousHeight = previousViewportHeightRef.current ?? 0;
+      const heightDelta = height - previousHeight;
+      previousViewportHeightRef.current = height;
+      if (heightDelta > 0) onHeightIncrease?.(heightDelta);
+    }
+
+    scheduleScrollToBottom();
+  }, [onHeightIncrease, scheduleScrollToBottom]);
+
   useEffect(() => {
     const content = contentRef.current;
     const viewport = viewportRef.current;
     if (!content || !viewport || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(scheduleScrollToBottom);
+    const observer = new ResizeObserver(handleResize);
     observer.observe(content);
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [scheduleScrollToBottom]);
+  }, [handleResize]);
 
   // `children` changes when a settled intermediate assistant message or a
   // partial tool result arrives; the streaming snapshot changes per frame.

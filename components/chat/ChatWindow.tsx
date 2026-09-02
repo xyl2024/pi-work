@@ -489,6 +489,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, [isActive, snapshot, runningSummary]);
 
   // ── Scroll position: user scroll-up pauses streaming follow ──
+  const CHAT_BOTTOM_THRESHOLD_PX = 100;
   const [showToBottom, setShowToBottom] = useState(false);
   const userScrolledUpRef = useRef(false);
 
@@ -513,6 +514,25 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const handleStreamingViewportResume = useCallback(() => {
     setShowToBottom(false);
   }, []);
+
+  // The live viewport grows in the normal chat flow until it reaches its own
+  // max height. If the outer chat was near its bottom before that growth, keep
+  // the whole live viewport in view. This is deliberately driven by the
+  // viewport's box resize, not by every streaming snapshot/token.
+  const handleStreamingViewportHeightIncrease = useCallback((heightDelta: number) => {
+    const container = scrollContainerRef.current;
+    if (!container || heightDelta <= 0 || userScrolledUpRef.current) return;
+
+    // ResizeObserver runs after the layout change, so subtract the viewport's
+    // growth to recover the outer distance from bottom before the resize.
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const distanceBeforeResize = distanceFromBottom - heightDelta;
+    if (distanceBeforeResize > CHAT_BOTTOM_THRESHOLD_PX) return;
+
+    userScrolledUpRef.current = false;
+    setShowToBottom(false);
+    container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
+  }, [scrollContainerRef]);
 
   // ── In-session search state ──
   const [searchVisible, setSearchVisible] = useState(false);
@@ -542,7 +562,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     const el = scrollContainerRef.current;
     if (!el) return;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const nearBottom = dist < 100;
+    const nearBottom = dist < CHAT_BOTTOM_THRESHOLD_PX;
     userScrolledUpRef.current = !nearBottom;
     setShowToBottom(!nearBottom);
   }, [scrollContainerRef]);
@@ -1517,6 +1537,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                         tabId={streamingKey}
                         userScrollingUpRef={userScrolledUpRef}
                         onResumeAutoScroll={handleStreamingViewportResume}
+                        onHeightIncrease={handleStreamingViewportHeightIncrease}
                       >
                         {streamingRendered}
                         {!streamingErrorAlreadyRendered && (
