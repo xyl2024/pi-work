@@ -226,7 +226,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           </span>
         )}
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-          {getToolPreview(block)}
+          {isBash ? "" : getToolPreview(block)}
         </span>
         {isShowFile && showFilePaths && (
           <Tooltip content={t("Open in session library")}>
@@ -401,38 +401,39 @@ function BashToolCallContent({ command, cwd, resultText, resultIsEmpty, isError,
   const { t } = useI18n();
   const cwdBase = cwd?.replace(/\\/g, "/").split("/").pop() || "";
   const prompt = cwdBase ? `${cwdBase} % ` : "% ";
+  const terminalBg = isDark ? "#1e1e1e" : "#f7f7f7";
+  const fg = isDark ? "#d4d4d4" : "#24292e";
+  const dimFg = isDark ? "#9ca3af" : "#6b7280";
   return (
     <div
       data-scroll-inset
       style={{
         padding: "8px 10px",
-        background: isDark ? "#1e1e1e" : "#f7f7f7",
-        borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
-        color: "var(--text-muted)",
+        background: terminalBg,
+        color: fg,
         fontFamily: "var(--font-mono)",
         fontSize: 12,
         lineHeight: 1.5,
         overflowX: "auto",
+        whiteSpace: "pre",
       }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", minWidth: "max-content" }}>
-        <span style={{ color: isError ? "#f87171" : "#16a34a", whiteSpace: "pre" }}>{prompt}</span>
-        <SyntaxHighlighter
-          language="bash"
-          style={isDark ? vscDarkPlus : vs}
-          PreTag="span"
-          customStyle={{ margin: 0, padding: 0, background: "transparent", fontSize: "inherit", lineHeight: "inherit" }}
-          codeTagProps={{ style: { fontFamily: "inherit", whiteSpace: "pre" } }}
-        >
-          {command}
-        </SyntaxHighlighter>
-      </div>
+      <span style={{ color: isError ? "#f87171" : "#16a34a" }}>{prompt}</span>
+      <SyntaxHighlighter
+        language="bash"
+        style={isDark ? vscDarkPlus : vs}
+        PreTag="span"
+        customStyle={{ margin: 0, padding: 0, background: terminalBg, fontSize: "inherit", lineHeight: "inherit", display: "inline", border: "none" }}
+        codeTagProps={{ style: { background: terminalBg, fontFamily: "inherit", whiteSpace: "pre", border: "none" } }}
+      >
+        {command}
+      </SyntaxHighlighter>
       {resultText !== null && (
         <pre
           style={{
             margin: 0,
             padding: 0,
-            color: isError ? "#f87171" : (resultIsEmpty ? "var(--text-dim)" : "var(--text-muted)"),
+            color: isError ? "#f87171" : (resultIsEmpty ? dimFg : fg),
             font: "inherit",
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
