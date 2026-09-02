@@ -808,6 +808,19 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // new message and should retain the ordinary chat layout.
   const liveTurnActive = agentRunning && agentPhase?.kind !== "compacting" && lastUserIdx !== -1;
 
+  // Once the current turn's streaming output has begun, keep the streaming
+  // message viewport visible for the whole turn. `streamingStoreHasContent`
+  // dips back to false between sub-messages (waiting for the model again), so
+  // gate on a latched flag instead — reset when the live turn ends.
+  const [streamingStartedThisTurn, setStreamingStartedThisTurn] = useState(false);
+  useEffect(() => {
+    if (!liveTurnActive) {
+      setStreamingStartedThisTurn(false);
+    } else if (streamingStoreHasContent) {
+      setStreamingStartedThisTurn(true);
+    }
+  }, [liveTurnActive, streamingStoreHasContent]);
+
   // When the live viewport is removed, its contents return to the ordinary
   // chat flow. Re-pin the page-level scrollport so the completed answer is not
   // left below the old fixed viewport height.
@@ -1560,6 +1573,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   {rendered}
                   {liveTurnActive && (
                     <>
+                      {streamingStartedThisTurn && (
                       <StreamingMessageViewport
                         tabId={streamingKey}
                         scrollContainerRef={scrollContainerRef}
@@ -1574,6 +1588,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           cwd={session?.cwd ?? cwd}
                         />
                       </StreamingMessageViewport>
+                      )}
                       <div className="py-2" style={{ height: 40, boxSizing: "border-box" }}>
                         {isStreamingThinking ? (
                           <LoadingState label={t("Thinking...")} variant="dot-pulse" />
