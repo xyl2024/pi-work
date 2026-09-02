@@ -13,6 +13,7 @@ import type {
 import { countToolCallsByName } from "@/lib/shared/message-display";
 import { getFileName } from "@/lib/shared/file-paths";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
+import { ReadFileChips } from "./ReadFileChips";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
 import { useIsStreamingBody, useIsStreamingError, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent } from "@/hooks/useStreamingMessage";
@@ -1366,6 +1367,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               // process portion of the final assistant are collapsed by default.
               const rendered: React.ReactNode[] = [];
               const streamingRendered: React.ReactNode[] = [];
+              // Read files of the in-progress turn: while the streaming message
+              // viewport is up, these render below it (above the loading row)
+              // instead of the final assistant footer.
+              let streamingTurnReadFiles: ReadFileInfo[] = [];
               // Divider before the message at `idx` if that message is the
               // first displayed message after a compaction point.
               const maybeDivider = (idx: number): React.ReactNode => {
@@ -1478,6 +1483,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   agentPhase?.kind !== "compacting" &&
                   userIdx === lastUserIdx &&
                   lastUserIdx !== -1;
+                if (isCurrentTurnInProgress) streamingTurnReadFiles = readFiles;
 
                 const processChildren = (
                   <Fragment>
@@ -1519,7 +1525,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 (isCurrentTurnInProgress ? streamingRendered : rendered).push(
                   renderOne(finalAssistantIdx, {
                     keySuffix: "answer",
-                    readFiles,
+                    // While this turn is streaming, the read-file chips move
+                    // below the streaming viewport — not the footer here.
+                    readFiles: isCurrentTurnInProgress ? undefined : readFiles,
                     onOpenFile: handleOpenFileFromLibrary,
                     inStreamingViewport: isCurrentTurnInProgress,
                   }),
@@ -1550,6 +1558,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           />
                         )}
                       </StreamingMessageViewport>
+                      )}
+                      {streamingStartedThisTurn && streamingTurnReadFiles.length > 0 && (
+                        <div className="px-4 pb-1">
+                          <ReadFileChips files={streamingTurnReadFiles} onOpenFile={handleOpenFileFromLibrary} />
+                        </div>
                       )}
                       <div className="py-2" style={{ height: 40, boxSizing: "border-box" }}>
                         {isStreamingThinking ? (
