@@ -47,13 +47,12 @@ function TextBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }
 
 function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageClick }: { block: ThinkingContent; keywords?: string[]; isSearchMatch?: boolean; isStreaming?: boolean; onImageClick?: (src: string) => void }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const userExpandedRef = useRef(false);
   const previousSearchMatchRef = useRef(isSearchMatch);
   useEffect(() => {
-    // Keep the new default-expanded state on first mount. When a search
-    // highlight goes away, preserve the existing behavior of folding an
-    // untouched thinking block back up.
+    // Thinking blocks start collapsed. When a search highlight goes away,
+    // fold an untouched thinking block back up.
     if (previousSearchMatchRef.current && !isSearchMatch && !userExpandedRef.current) {
       setExpanded(false);
     }
@@ -145,7 +144,10 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const { isDark } = useTheme();
   const isBash = block.toolName === "bash";
   const isFileMutation = block.toolName === "write" || block.toolName === "edit";
-  const isCollapsedByDefault = block.toolName === "read" || block.toolName === "find" || block.toolName === "grep";
+  // Only the specialized renderers (bash / diff for edit & write) stay
+  // expanded by default; every other tool call block collapses by default.
+  const isSpecialized = isBash || isFileMutation;
+  const isCollapsedByDefault = !isSpecialized;
   const timeout = isBash && (typeof block.input.timeout === "number" || typeof block.input.timeout === "string")
     ? String(block.input.timeout)
     : null;
@@ -182,41 +184,32 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
     openSessionLibrary({ focusToolCallId: block.toolCallId });
   };
 
-  return (
+  const header = (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={() => setExpanded((value) => !value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setExpanded((value) => !value);
+        }
+      }}
       style={{
-        borderRadius: 7,
-        overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        width: "100%",
+        padding: "6px 10px",
+        background: "none",
+        border: "none",
+        color: "var(--text-muted)",
+        cursor: "pointer",
         fontSize: 12,
-        border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
-        background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+        textAlign: "left",
+        minWidth: 0,
       }}
     >
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setExpanded((value) => !value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setExpanded((value) => !value);
-          }
-        }}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          width: "100%",
-          padding: "6px 10px",
-          background: "none",
-          border: "none",
-          color: "var(--text-muted)",
-          cursor: "pointer",
-          fontSize: 12,
-          textAlign: "left",
-          minWidth: 0,
-        }}
-      >
         <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
@@ -226,7 +219,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           </span>
         )}
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
-          {isBash ? "" : getToolPreview(block)}
+          {getToolPreview(block)}
         </span>
         {isShowFile && showFilePaths && (
           <Tooltip content={t("Open in session library")}>
@@ -273,13 +266,43 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
+    </div>
+  );
+
+  if (isBash) {
+    // Bash blocks render their terminal-like content directly: no collapse,
+    // no header. The long output is capped inside BashToolCallContent with a
+    // click-to-expand mask instead.
+    return (
+      <div
+        style={{
+          borderRadius: 7,
+          overflow: "hidden",
+          fontSize: 12,
+          border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
+          background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+        }}
+      >
+        <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} timeout={timeout} cwd={cwd} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        borderRadius: 7,
+        overflow: "hidden",
+        fontSize: 12,
+        border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
+        background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+      }}
+    >
+      {header}
 
       <div style={{ height: contentHeight ?? "auto", overflow: "hidden", transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none" }}>
         <div ref={contentRef} style={{ overflow: "hidden" }}>
-          {expanded && isBash ? (
-            <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} cwd={cwd} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
-          ) : expanded && isFileMutation ? (
+          {expanded && isFileMutation ? (
             <DiffToolCallContent toolName={block.toolName} input={block.input} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
           ) : expanded && (
             <>
@@ -390,8 +413,11 @@ function DiffToolCallContent({ toolName, input, resultText, resultIsEmpty, isErr
   );
 }
 
-function BashToolCallContent({ command, cwd, resultText, resultIsEmpty, isError, isDark }: {
+const BASH_DETAIL_MAX_HEIGHT = 200;
+
+function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty, isError, isDark }: {
   command: string;
+  timeout: string | null;
   cwd?: string | null;
   resultText: string | null;
   resultIsEmpty: boolean;
@@ -399,6 +425,9 @@ function BashToolCallContent({ command, cwd, resultText, resultIsEmpty, isError,
   isDark: boolean;
 }) {
   const { t } = useI18n();
+  const [expandedAll, setExpandedAll] = useState(false);
+  const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
+  const showMask = contentHeight !== null && contentHeight > BASH_DETAIL_MAX_HEIGHT && !expandedAll;
   const cwdBase = cwd?.replace(/\\/g, "/").split("/").pop() || "";
   const prompt = cwdBase ? `${cwdBase} % ` : "% ";
   const terminalBg = isDark ? "#1e1e1e" : "#f7f7f7";
@@ -406,6 +435,15 @@ function BashToolCallContent({ command, cwd, resultText, resultIsEmpty, isError,
   const dimFg = isDark ? "#9ca3af" : "#6b7280";
   return (
     <div
+      style={{
+        position: "relative",
+        height: expandedAll ? (contentHeight === null ? "auto" : contentHeight) : (contentHeight === null ? "auto" : Math.min(contentHeight, BASH_DETAIL_MAX_HEIGHT)),
+        overflow: "hidden",
+        transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
+      }}
+    >
+    <div
+      ref={contentRef}
       data-scroll-inset
       style={{
         padding: "8px 10px",
@@ -418,6 +456,9 @@ function BashToolCallContent({ command, cwd, resultText, resultIsEmpty, isError,
         whiteSpace: "pre",
       }}
     >
+      {timeout !== null && (
+        <div style={{ color: dimFg }}>(timeout={timeout}s)</div>
+      )}
       <span style={{ color: isError ? "#f87171" : "#16a34a" }}>{prompt}</span>
       <SyntaxHighlighter
         language="bash"
@@ -444,6 +485,42 @@ function BashToolCallContent({ command, cwd, resultText, resultIsEmpty, isError,
           {resultIsEmpty ? `(${t("No output")})` : resultText}
         </pre>
       )}
+    </div>
+
+    {!expandedAll && showMask && (
+      <button
+        onClick={() => setExpandedAll(true)}
+        aria-label={t("Expand")}
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 48,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          border: "none",
+          padding: 0,
+          background: `linear-gradient(to bottom, rgba(0,0,0,0), ${terminalBg})`,
+        }}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+    )}
     </div>
   );
 }
