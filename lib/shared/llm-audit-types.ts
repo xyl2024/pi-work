@@ -6,7 +6,7 @@
  * `@earendil-works/pi-coding-agent` into the client bundle.
  */
 
-export type LlmAuditSource = "user" | "scheduled" | "direct" | "btw" | "unknown";
+export type LlmAuditSource = "user" | "scheduled" | "subagent" | "direct" | "btw" | "unknown";
 
 /** One row = one actual HTTP request to an LLM provider (incl. retries). */
 export interface ProviderCall {

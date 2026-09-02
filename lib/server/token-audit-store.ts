@@ -63,7 +63,7 @@ function rowToCall(r: Row): TokenCall {
     ts: r.ts,
     sessionId: r.session_id,
     messageId: r.message_id,
-    source: (r.source === "scheduled" ? "scheduled" : "user") as Source,
+    source: (r.source === "scheduled" || r.source === "subagent" ? r.source : "user") as Source,
     provider: r.provider,
     modelId: r.model_id,
     api: r.api,

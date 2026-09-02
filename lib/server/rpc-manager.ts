@@ -18,6 +18,7 @@ import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-
 import { getRegistry } from "./session-registry";
 import { buildSessionInfoTools } from "./self-tools/session-tools";
 import { buildCodeGraphTools } from "./codegraph-tool";
+import { spawnSubagentTool } from "./subagent-tool";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
 import { buildWebAccessTools } from "./web-access/tools";
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
@@ -867,17 +868,53 @@ function getLocks(): Map<string, Promise<{ session: AgentSessionWrapper; realSes
 
 export { getRpcSession, listRunningRpcSessions } from "./session-registry";
 
+/** Remove generic Pi sections while preserving tool-generated tools/guidelines. */
+function stripDefaultSystemPromptSections(prompt: string): string {
+  return prompt
+    .replace(
+      /^You are an expert coding assistant operating inside pi, a coding agent harness\. You help users by reading files, executing commands, editing code, and writing new files\.\s*/,
+      "",
+    )
+    .replace(
+      /\nIn addition to the tools above, you may have access to other custom tools depending on the project\./,
+      "",
+    )
+    .replace(
+      /\n\nPi documentation \(read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI\):[\s\S]*?(?=\n\n<project_context>|\n\nCurrent working directory:|\nCurrent working directory:)/,
+      "",
+    )
+    .trim();
+}
+
 /**
  * Get or create an AgentSession for the given session.
  * For new sessions (sessionFile === ""), pi generates its own id.
  * Pass toolNames to pre-configure active tools (empty array = all tools disabled, "all" = every available tool).
  */
+type RpcThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export interface StartRpcSessionOptions {
+  /** Use a specific model for a newly-created session. */
+  model?: { provider: string; modelId: string };
+  /** Use a specific thinking level for a newly-created session. */
+  thinkingLevel?: RpcThinkingLevel;
+  /** Restrict the tool registry exposed to this session. */
+  allowedToolNames?: string[];
+  /** Prefix the generated system prompt for specialized sessions. */
+  systemPromptPrefix?: string;
+  /** Remove Pi's generic documentation / harness sections from the prompt. */
+  stripDefaultSystemPromptSections?: boolean;
+  /** Persist the parent session id in a newly-created session header. */
+  parentSessionId?: string;
+}
+
 export async function startRpcSession(
   sessionId: string,
   sessionFile: string,
   cwd: string,
   toolNames: ToolSelection = "all",
-  source: "user" | "scheduled" = "user"
+  source: "user" | "scheduled" | "subagent" = "user",
+  options: StartRpcSessionOptions = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
   const registry = getRegistry();
   const locks = getLocks();
@@ -917,10 +954,20 @@ export async function startRpcSession(
         modelsPath: path.join(agentDir, "models.json"),
       }),
     );
+    const requestedModel = options.model
+      ? modelRuntime.getModel(options.model.provider, options.model.modelId)
+      : undefined;
+    if (options.model && !requestedModel) {
+      throw new Error(`Model not found: ${options.model.provider}/${options.model.modelId}`);
+    }
 
     const sessionManager = sessionFile
       ? SessionManager.open(sessionFile, undefined)
-      : SessionManager.create(cwd, undefined);
+      : SessionManager.create(
+          cwd,
+          undefined,
+          options.parentSessionId ? { parentSession: options.parentSessionId } : undefined,
+        );
     const isNewSession = !sessionFile;
 
     // Inline extension that mirrors every outgoing provider request and
@@ -930,7 +977,7 @@ export async function startRpcSession(
     let capturedSessionId: string | null = null;
     // Source of this session (user-driven tab vs scheduler-fired task).
     // Captured once at construction so token-audit rows can attribute cost.
-    const capturedSource: "user" | "scheduled" = source;
+    const capturedSource: "user" | "scheduled" | "subagent" = source;
     // Forward reference — the tool_call handler runs inside the agent's
     // extension context but needs to call back into the wrapper to surface
     // permission requests and resolve them. Set immediately after the
@@ -957,7 +1004,8 @@ export async function startRpcSession(
     try {
       const cfg = readConfig();
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
-      if (!cfg.append_system.enabled) {
+      // Specialized subagents intentionally do not inherit APPEND_SYSTEM.md.
+      if (options.systemPromptPrefix || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }
     } catch {
@@ -978,17 +1026,34 @@ export async function startRpcSession(
       // (joined with "\n\n" and appended at the very end of the system
       // prompt), but live in code instead of a configurable file. Gated here
       // once per session so a mid-session toggle doesn't change the prompt.
-      appendSystemPromptOverride: (baseAppend) =>
-        enabledTools.has("agent_todo")
+      appendSystemPromptOverride: (baseAppend) => {
+        if (options.systemPromptPrefix) return [];
+        return enabledTools.has("agent_todo")
           ? [...baseAppend, AGENT_TODO_SYSTEM_PROMPT_BLOCK]
-          : baseAppend,
-      // Keep installed Skills discoverable and explicitly invokable, while
-      // omitting the ones disabled in Pi Work from the model prompt.
+          : baseAppend;
+      },
+      // Codebase explorers receive no Skills section. Other sessions retain
+      // the existing per-cwd disabled-skill filtering behavior.
+      noSkills: Boolean(options.systemPromptPrefix),
       skillsOverride: (base) => ({
         ...base,
-        skills: base.skills.filter((skill) => !disabledSkillPaths.has(skill.filePath)),
+        skills: options.systemPromptPrefix
+          ? []
+          : base.skills.filter((skill) => !disabledSkillPaths.has(skill.filePath)),
       }),
       extensionFactories: [
+        ...(options.systemPromptPrefix
+          ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
+              pi.on("before_agent_start", (event) => {
+                const generatedPrompt = options.stripDefaultSystemPromptSections
+                  ? stripDefaultSystemPromptSections(event.systemPrompt)
+                  : event.systemPrompt;
+                return {
+                  systemPrompt: `${options.systemPromptPrefix}\n\n${generatedPrompt}`,
+                };
+              });
+            }]
+          : []),
         (pi) => {
           pi.on("tool_call", async (event) => {
             // CodeGraph index construction: mode=sync is lightweight and runs
@@ -1110,6 +1175,8 @@ export async function startRpcSession(
       sessionManager,
       modelRuntime,
       resourceLoader,
+      ...(requestedModel ? { model: requestedModel } : {}),
+      ...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
       // Per-session customTools: user_todos_list / user_todo_description are
       // gated by ~/.pi-work/todo-tools.json (see todo-tools-config); the two
       // agent-side tools (show_media, agent_todo) are gated by
@@ -1130,6 +1197,10 @@ export async function startRpcSession(
         ...(readConfig().web_access.enabled && (enabledTools.has("web_search") || enabledTools.has("fetch_content"))
           ? buildWebAccessTools().filter((tool) => enabledTools.has(tool.name as ToolMarketId))
           : []),
+        // Core orchestration tool. It is controlled by the tool market for
+        // normal sessions; child profiles exclude it through allowedToolNames,
+        // so subagents cannot recursively spawn more subagents in the MVP.
+        ...(enabledTools.has("spawn_subagent") ? [spawnSubagentTool] : []),
         ...(enabledTools.has("ask_user_questions")
           ? buildAskUserQuestionsTool({
               // Read the wrapper lazily at execute time. By the time the
@@ -1160,8 +1231,14 @@ export async function startRpcSession(
         // MCP ToolHandler in-process (see lib/server/codegraph-tool.ts). All
         // eight are gated by the same ~/.pi-work/tools-market.json entry list;
         // enabling any one registers the whole family (they share the SDK pool).
-        ...(CODEGRAPH_TOOL_IDS.some((id) => enabledTools.has(id)) ? buildCodeGraphTools() : []),
+        ...((options.allowedToolNames?.some((id) => CODEGRAPH_TOOL_IDS.includes(id as typeof CODEGRAPH_TOOL_IDS[number])) || CODEGRAPH_TOOL_IDS.some((id) => enabledTools.has(id)))
+          ? buildCodeGraphTools()
+          : []),
       ],
+      // The SDK's public option is `tools`; it becomes the hard allowlist
+      // passed to AgentSession.allowedToolNames. This is intentionally used
+      // for specialized sessions rather than relying only on active tools.
+      ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
     });
     capturedSessionId = inner.sessionId as string;
 

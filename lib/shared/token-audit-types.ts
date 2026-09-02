@@ -8,7 +8,7 @@
 
 export type Range = "today" | "7d" | "30d" | "all";
 export type GroupBy = "none" | "session" | "model" | "day" | "hour";
-export type Source = "user" | "scheduled";
+export type Source = "user" | "scheduled" | "subagent";
 
 export interface TokenCall {
   id: number;

@@ -191,7 +191,7 @@ interface BuildToolOptions {
   requestUserInput?: RequestUserInputFn;
   /** Whether this session was started by the scheduler. Scheduled runs
    *  short-circuit immediately because no human is available. */
-  source: "user" | "scheduled";
+  source: "user" | "scheduled" | "subagent";
 }
 
 function makeTool({ requestUserInput, source }: BuildToolOptions) {
