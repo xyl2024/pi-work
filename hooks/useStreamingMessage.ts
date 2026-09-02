@@ -1,8 +1,9 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { getStreamingServerSnapshot, getStreamingSnapshot, isStreamingBodyMessage, isStreamingToolCallMessage, subscribeStreaming } from "./streamingMessageStore";
+import { getStreamingServerSnapshot, getStreamingSnapshot, isStreamingBodyMessage, isStreamingToolCallMessage, streamingToolCallBlock, subscribeStreaming } from "./streamingMessageStore";
 import type { StreamingSnapshot } from "./streamingMessageStore";
+import type { ToolCallContent } from "@/lib/shared/types";
 
 export function useStreamingMessage(key: string): StreamingSnapshot {
   return useSyncExternalStore(
@@ -55,6 +56,21 @@ export function useIsStreamingToolCall(key: string): boolean {
       return snapshot.isStreaming && isStreamingToolCallMessage(snapshot.streamingMessage);
     },
     () => false,
+  );
+}
+
+/** The live assistant's last toolCall block (name + args) while a tool call
+ *  is being streamed or executed. Narrow selector so per-arg-token updates do
+ *  not re-render subscribers — the block object identity only changes when a
+ *  new block takes over. */
+export function useStreamingToolCall(key: string): ToolCallContent | null {
+  return useSyncExternalStore(
+    (listener) => subscribeStreaming(key, listener),
+    () => {
+      const snapshot = getStreamingSnapshot(key);
+      return snapshot.isStreaming ? streamingToolCallBlock(snapshot.streamingMessage) : null;
+    },
+    () => null,
   );
 }
 

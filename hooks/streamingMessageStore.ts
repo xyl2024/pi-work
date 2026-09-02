@@ -1,6 +1,6 @@
 "use client";
 
-import type { AgentMessage } from "@/lib/shared/types";
+import type { AgentMessage, ToolCallContent } from "@/lib/shared/types";
 
 export interface StreamingSnapshot {
   isStreaming: boolean;
@@ -47,9 +47,15 @@ export function isStreamingBodyMessage(message: Partial<AgentMessage> | null): b
  *  tool" for the loading indicator so a long argument payload doesn't show a
  *  blank/thinking loader before the tool actually runs. */
 export function isStreamingToolCallMessage(message: Partial<AgentMessage> | null): boolean {
-  if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return false;
+  return streamingToolCallBlock(message) !== null;
+}
+
+/** The live assistant's last toolCall block while one is being streamed or
+ *  executed, so the loading label can show the tool name and args. */
+export function streamingToolCallBlock(message: Partial<AgentMessage> | null): ToolCallContent | null {
+  if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return null;
   const block = message.content[message.content.length - 1];
-  return block?.type === "toolCall";
+  return block?.type === "toolCall" ? block : null;
 }
 function setSnapshot(e: Entry, next: StreamingSnapshot) {
   if (e.snapshot.isStreaming === next.isStreaming && e.snapshot.isThinking === next.isThinking && e.snapshot.hasContent === next.hasContent && e.snapshot.streamingMessage === next.streamingMessage) return;

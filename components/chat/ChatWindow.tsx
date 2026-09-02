@@ -16,7 +16,7 @@ import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { ReadFileChips } from "./ReadFileChips";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
-import { useIsStreamingBody, useIsStreamingError, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent } from "@/hooks/useStreamingMessage";
+import { useIsStreamingBody, useIsStreamingError, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent, useStreamingToolCall } from "@/hooks/useStreamingMessage";
 import { SessionLibraryModal } from "../sessions/session-library/SessionLibraryModal";
 import { SessionLibraryOpenButton } from "../sessions/SessionLibraryOpenButton";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
@@ -296,6 +296,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const streamingStoreIsThinking = useIsStreamingThinking(streamingKey);
   const streamingStoreIsBody = useIsStreamingBody(streamingKey);
   const streamingStoreIsToolCall = useIsStreamingToolCall(streamingKey);
+  // The live toolCall block (name + args) so the loading label can show what
+  // is actually running instead of a generic "running tool" placeholder.
+  const streamingToolCall = useStreamingToolCall(streamingKey);
   const streamingStoreIsError = useIsStreamingError(streamingKey);
   // True once streamed content (thinking/body) is on screen, false during
   // the wait-for-first-token gap and between messages. The phase-loading
@@ -1571,7 +1574,17 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           <LoadingState label={t("Outputting...")} variant="spark" />
                         ) : streamingStoreIsToolCall ? (
                           <LoadingState
-                            label={phaseLabel({ kind: "running_tools", tools: [] }, t)}
+                            label={phaseLabel(
+                              agentPhase?.kind === "running_tools" && agentPhase.tools.length > 0
+                                ? agentPhase
+                                : {
+                                    kind: "running_tools",
+                                    tools: streamingToolCall
+                                      ? [{ id: streamingToolCall.toolCallId, name: streamingToolCall.toolName, args: streamingToolCall.input }]
+                                      : [],
+                                  },
+                              t,
+                            )}
                             variant="rotor"
                           />
                         ) : agentRunning && !streamingStoreHasContent ? (
