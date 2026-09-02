@@ -3,13 +3,39 @@ import type { AgentPhase } from "@/hooks/useAgentSession";
 import { joinFilePath } from "@/lib/shared/file-paths";
 import { splitFinalAssistantBlocks } from "@/lib/shared/message-display";
 
-export function phaseLabel(phase: AgentPhase, t: (key: string) => string): string {
+/** Common tool-arg keys that carry a file path. */
+const FILE_PATH_ARG_KEYS = ["path", "file_path", "filePath", "notebook_path", "notebookPath"] as const;
+
+function extractFileBasename(args: Record<string, unknown> | undefined): string | null {
+  if (!args) return null;
+  for (const key of FILE_PATH_ARG_KEYS) {
+    const value = args[key];
+    if (typeof value === "string" && value.length > 0) {
+      const basename = value.split(/[\\/]/).pop();
+      if (basename) return basename;
+    }
+  }
+  return null;
+}
+
+function singleToolLabel(tool: { name: string; args?: Record<string, unknown> }, t: (key: string, params?: Record<string, string | number>) => string): string {
+  const name = tool.name;
+  if (name === "bash") return t("Running bash command...");
+  const file = extractFileBasename(tool.args);
+  if (name === "edit" || name === "write") return file ? t("Editing file {name}", { name: file }) : t("Running tool {name}", { name });
+  if (name === "read" || name === "grep") return file ? t("Reading file {name}", { name: file }) : t("Running tool {name}", { name });
+  return t("Running tool {name}", { name });
+}
+
+export function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<string, string | number>) => string): string {
   if (phase?.kind === "running_tools") {
-    const names = phase.tools.map((tool) => tool.name);
-    if (names.length === 0) return t("Running tool...");
-    if (names.length === 1) return `${t("Running")} ${names[0]}...`;
-    if (names.length <= 3) return `${t("Running")} ${names.join(", ")}...`;
-    return `${t("Running")} ${names.slice(0, 2).join(", ")} (+${names.length - 2})...`;
+    const tools = phase.tools;
+    if (tools.length === 0) return t("Running tool...");
+    // Show the most recently started tool; mention the rest as a count.
+    const latest = tools[tools.length - 1];
+    const label = singleToolLabel(latest, t);
+    if (tools.length > 1) return `${label} (+${tools.length - 1})`;
+    return label;
   }
   if (phase?.kind === "waiting_model") return t("Waiting for model...");
   if (phase?.kind === "compacting") return t("Compacting context...");

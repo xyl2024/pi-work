@@ -49,7 +49,7 @@ export interface AgentRuntimeState {
 
 export type AgentPhase =
   | { kind: "waiting_model" }
-  | { kind: "running_tools"; tools: { id: string; name: string }[] }
+  | { kind: "running_tools"; tools: { id: string; name: string; args?: Record<string, unknown> }[] }
   | { kind: "compacting" }
   | null;
 

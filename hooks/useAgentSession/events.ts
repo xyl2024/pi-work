@@ -268,7 +268,13 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         });
         setAgentPhase((previous) => {
           const tools = previous?.kind === "running_tools" ? [...previous.tools] : [];
-          if (!tools.some((tool) => tool.id === id)) tools.push({ id, name });
+          if (!tools.some((tool) => tool.id === id)) {
+            tools.push({
+              id,
+              name,
+              args: args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : undefined,
+            });
+          }
           return { kind: "running_tools", tools };
         });
         break;
