@@ -1563,7 +1563,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                       </StreamingMessageViewport>
                       )}
                       {streamingStartedThisTurn && streamingTurnReadFiles.length > 0 && (
-                        <div className="px-4 pb-1">
+                        <div className="pb-1">
                           <ReadFileChips files={streamingTurnReadFiles} onOpenFile={handleOpenFileFromLibrary} />
                         </div>
                       )}
