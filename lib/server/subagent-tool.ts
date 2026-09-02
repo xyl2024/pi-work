@@ -170,6 +170,7 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
   promptSnippet: "Launch a specialized subagent for a focused task.",
   promptGuidelines: [
     "For independent tasks that are parallelizable and have a well-defined scope, dispatch the tasks to subagents using `spawn_subagent`. Examples include codebase exploration, research and information gathering, and code review.",
+    "When you need to explore the codebase, prioritize using the spawn_subagent tool to dispatch a codebase_explorer subagent for exploration, rather than doing it yourself.",
   ],
   async execute(_toolCallId, params, signal, _onUpdate, ctx) {
     const description = params.description.trim();
