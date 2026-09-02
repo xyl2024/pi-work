@@ -18,6 +18,7 @@ import { RetrySection } from "./sections/RetrySection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 import { TodoTagsSection } from "./sections/TodoTagsSection";
 import { ToastTestSection } from "./sections/ToastTestSection";
+import { WebAccessSection } from "./sections/WebAccessSection";
 
 /**
  * Settings modal shell. Holds the global `config` state machine and the
@@ -278,6 +279,9 @@ export function SettingsModal({
 
             {/* 10: UI Sounds */}
             <SoundSettingsSection config={config} apply={apply} />
+
+            {/* 11: Web Access */}
+            <WebAccessSection config={config} apply={apply} />
 
             {/* 12: Manage tags */}
             <TodoTagsSection />

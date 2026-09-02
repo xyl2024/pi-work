@@ -1,0 +1,9 @@
+Pi Work Web Access includes code adapted from pi-web-access:
+https://github.com/nicobailon/pi-web-access
+
+Copyright (c) Nico Bailon
+Licensed under the MIT License.
+
+The adapted portions are the Tavily request/response mapping and the basic
+HTTP URL extraction pipeline (SSRF validation, bounded fetch, Readability,
+and Turndown conversion).

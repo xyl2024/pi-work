@@ -11,6 +11,7 @@ import {
   type PiWorkConfig,
   type UiSoundEventId,
   type UiSoundsConfig,
+  type WebAccessConfig,
 } from "../shared/config-types";
 import { DEFAULT_UI_SOUND_EVENTS } from "../shared/ui-sounds-defaults";
 import {
@@ -80,6 +81,10 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   },
   cwd_icons: {},
   disabled_skills: {},
+  web_access: {
+    enabled: true,
+    tavily: {},
+  },
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -221,6 +226,20 @@ function parseCwdIcons(raw: unknown): Record<string, string> {
   return out;
 }
 
+function parseWebAccess(raw: unknown): WebAccessConfig {
+  const defaults = DEFAULT_CONFIG.web_access;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { enabled: defaults.enabled, tavily: {} };
+  const obj = raw as Record<string, unknown>;
+  const tavilyRaw = obj.tavily;
+  const tavily = tavilyRaw && typeof tavilyRaw === "object" && !Array.isArray(tavilyRaw)
+    ? (tavilyRaw as Record<string, unknown>)
+    : {};
+  const apiKey = typeof tavily.api_key === "string" && tavily.api_key.trim().length > 0
+    ? tavily.api_key.trim()
+    : undefined;
+  return { enabled: obj.enabled !== false, tavily: apiKey ? { api_key: apiKey } : {} };
+}
+
 function parseDisabledSkills(raw: unknown): Record<string, string[]> {
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, string[]> = {};
@@ -275,6 +294,7 @@ export function readConfig(): PiWorkConfig {
       ui_sounds: parseUiSounds(cfg.ui_sounds),
       cwd_icons: parseCwdIcons(cfg.cwd_icons),
       disabled_skills: parseDisabledSkills(cfg.disabled_skills),
+      web_access: parseWebAccess(cfg.web_access),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });

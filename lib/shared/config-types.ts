@@ -31,6 +31,15 @@ export interface AppendSystemConfig {
   enabled: boolean;
 }
 
+export interface WebAccessConfig {
+  enabled: boolean;
+  tavily: {
+    api_key?: string;
+    /** Browser-only masked status; never persisted by the server parser. */
+    has_api_key?: boolean;
+  };
+}
+
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   right_side_bar: RightSideBarConfig;
@@ -41,6 +50,7 @@ export interface PiWorkConfig {
   cwd_icons: Record<string, string>;
   /** Per-cwd Skill files excluded from the model prompt (resources are untouched). */
   disabled_skills: Record<string, string[]>;
+  web_access: WebAccessConfig;
 }
 
 /**

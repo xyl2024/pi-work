@@ -2,6 +2,7 @@ import { createAgentSession, DefaultResourceLoader, isToolCallEventType, ModelRu
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import type { ToolSelection } from "../shared/types";
+import type { ToolMarketId } from "../shared/tools-market";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
 import path from "node:path";
@@ -18,6 +19,7 @@ import { getRegistry } from "./session-registry";
 import { buildSessionInfoTools } from "./self-tools/session-tools";
 import { buildCodeGraphTools } from "./codegraph-tool";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
+import { buildWebAccessTools } from "./web-access/tools";
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
@@ -1125,6 +1127,9 @@ export async function startRpcSession(
           ? buildShowFileTool()
           : []),
         ...(enabledTools.has("agent_todo") ? buildAgentTodoTool() : []),
+        ...(readConfig().web_access.enabled && (enabledTools.has("web_search") || enabledTools.has("fetch_content"))
+          ? buildWebAccessTools().filter((tool) => enabledTools.has(tool.name as ToolMarketId))
+          : []),
         ...(enabledTools.has("ask_user_questions")
           ? buildAskUserQuestionsTool({
               // Read the wrapper lazily at execute time. By the time the

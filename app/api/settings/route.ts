@@ -62,6 +62,18 @@ function validateFileViewer(
   );
 }
 
+function validateWebAccess(raw: unknown): { ok: true } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: "web_access must be an object" };
+  const obj = raw as Record<string, unknown>;
+  if (obj.enabled !== undefined && typeof obj.enabled !== "boolean") return { ok: false, error: "web_access.enabled must be a boolean" };
+  if (obj.tavily !== undefined && (!obj.tavily || typeof obj.tavily !== "object" || Array.isArray(obj.tavily))) return { ok: false, error: "web_access.tavily must be an object" };
+  const tavily = (obj.tavily ?? {}) as Record<string, unknown>;
+  if (tavily.api_key !== undefined && typeof tavily.api_key !== "string") return { ok: false, error: "web_access.tavily.api_key must be a string" };
+  if (tavily.clear_api_key !== undefined && typeof tavily.clear_api_key !== "boolean") return { ok: false, error: "web_access.tavily.clear_api_key must be a boolean" };
+  return { ok: true };
+}
+
 function validateUiSounds(
   raw: unknown,
 ): { ok: true } | { ok: false; error: string } {
@@ -106,7 +118,13 @@ export async function GET() {
   try {
     const config = readConfig();
     log.info("settings read", { durationMs: elapsedMs(startedAt) });
-    return NextResponse.json(config);
+    return NextResponse.json({
+      ...config,
+      web_access: {
+        ...config.web_access,
+        tavily: { has_api_key: Boolean(config.web_access.tavily.api_key) },
+      },
+    });
   } catch (error) {
     log.error("settings read failed", { error, durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ error: String(error) }, { status: 500 });
@@ -130,6 +148,9 @@ export async function PUT(req: Request) {
       );
     }
 
+    const webAccessCheck = validateWebAccess(body.web_access);
+    if (!webAccessCheck.ok) return NextResponse.json({ error: webAccessCheck.error }, { status: 400 });
+
     const uiSoundsCheck = validateUiSounds(body.ui_sounds);
     if (!uiSoundsCheck.ok) {
       log.warn("settings rejected: invalid ui_sounds", {
@@ -148,6 +169,16 @@ export async function PUT(req: Request) {
     // missing fields from being misread, and we don't want to rely on
     // it during a write that explicitly validates.
     const onDisk = readConfig();
+    const incomingWeb = body.web_access as (Partial<PiWorkConfig["web_access"]> & { tavily?: { api_key?: unknown; clear_api_key?: unknown } }) | undefined;
+    const incomingTavily = incomingWeb?.tavily;
+    const nextWebAccess = {
+      ...onDisk.web_access,
+      ...(incomingWeb?.enabled === undefined ? {} : { enabled: incomingWeb.enabled }),
+      tavily: { ...onDisk.web_access.tavily },
+    };
+    if (incomingTavily?.clear_api_key === true) delete nextWebAccess.tavily.api_key;
+    else if (typeof incomingTavily?.api_key === "string" && incomingTavily.api_key.trim()) nextWebAccess.tavily.api_key = incomingTavily.api_key.trim();
+
     const next: PiWorkConfig = {
       ...onDisk,
       ...body,
@@ -156,6 +187,7 @@ export async function PUT(req: Request) {
       file_viewer: body.file_viewer ?? onDisk.file_viewer,
       ui_sounds: body.ui_sounds ?? onDisk.ui_sounds,
       disabled_skills: body.disabled_skills ?? onDisk.disabled_skills,
+      web_access: nextWebAccess,
     };
 
     writeConfig(next);
