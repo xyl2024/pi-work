@@ -152,6 +152,7 @@ export function TokensPanel() {
   const [range, setRange] = useState<Range>("7d");
   const [cwdFilter, setCwdFilter] = useState<string | null>(null);
   const [cwds, setCwds] = useState<string[]>([]);
+  const [categoryMetric, setCategoryMetric] = useState<CategoryMetric>("cost");
   const [state, setState] = useState<FetchState>({
     time: null,
     model: null,
@@ -223,10 +224,11 @@ export function TokensPanel() {
           <ChartCard>
             <TokenHeatmapChart buckets={state.heatmap?.buckets ?? []} />
           </ChartCard>
-          <ChartCard>
+          <ChartCard headerRight={<CostMetricToggle metric={categoryMetric} onChange={setCategoryMetric} />}>
             <CostByCategoryChart
               buckets={state.model?.buckets ?? []}
               totalCost={state.model?.totals.costTotal ?? 0}
+              metric={categoryMetric}
               labelKey={modelLabelKey}
               unknownLabel={t("Unknown")}
             />
@@ -376,9 +378,11 @@ function KpiCard({
 
 function ChartCard({
   title,
+  headerRight,
   children,
 }: {
   title?: string;
+  headerRight?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -394,7 +398,12 @@ function ChartCard({
         minWidth: 0,
       }}
     >
-      {title && <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: 0.2 }}>{title}</div>}
+      {(title || headerRight) && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: title ? undefined : 20 }}>
+          {title ? <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", letterSpacing: 0.2 }}>{title}</div> : <span />}
+          {headerRight}
+        </div>
+      )}
       {children}
     </div>
   );
@@ -584,40 +593,75 @@ function CostOverTimeChart({ range, buckets }: { range: Range; buckets: SummaryB
   return <EchartsChart option={option} height={220} ariaLabel={t("Trend")} />;
 }
 
+type CategoryMetric = "cost" | "tokens";
+
+const bucketTokens = (b: SummaryBucket): number =>
+  b.inputTokens + b.outputTokens + b.cacheReadTokens + b.cacheWriteTokens;
+
+function CostMetricToggle({ metric, onChange }: { metric: CategoryMetric; onChange: (m: CategoryMetric) => void }) {
+  const { t } = useI18n();
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      <ChipButton active={metric === "cost"} onClick={() => onChange("cost")} label={t("Cost")} />
+      <ChipButton active={metric === "tokens"} onClick={() => onChange("tokens")} label={t("Token count")} />
+    </div>
+  );
+}
+
 function CostByCategoryChart({
   buckets,
   totalCost,
+  metric,
   labelKey,
   unknownLabel,
 }: {
   buckets: SummaryBucket[];
   totalCost: number;
+  metric: CategoryMetric;
   labelKey: (b: SummaryBucket) => string;
   unknownLabel: string;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const theme = useChartTheme();
   const { formatCost } = useFormatCurrency();
+  const totalTokens = useMemo(() => buckets.reduce((s, b) => s + bucketTokens(b), 0), [buckets]);
   const option = useMemo<echarts.EChartsCoreOption>(() => {
     if (buckets.length === 0) {
-      return emptyDonut(theme, totalCost, formatCost);
+      return emptyDonut(
+        theme,
+        metric === "cost" ? formatCost(totalCost) : fmtNum(0, locale),
+        metric === "cost" ? t("Total cost") : t("Total tokens"),
+      );
     }
     const top = buckets.slice(0, 6);
     const rest = buckets.slice(6);
     const restCost = rest.reduce((s, b) => s + b.costTotal, 0);
+    const restTokens = rest.reduce((s, b) => s + bucketTokens(b), 0);
     const data = top.map((b, i) => ({
       name: shortLabel(labelKey(b)),
-      value: +b.costTotal.toFixed(4),
+      value: metric === "cost" ? +b.costTotal.toFixed(4) : bucketTokens(b),
+      cost: b.costTotal,
+      tokens: bucketTokens(b),
       itemStyle: { color: paletteColor(i) },
     }));
     if (rest.length > 0) {
-      data.push({ name: unknownLabel, value: +restCost.toFixed(4), itemStyle: { color: "#888" } });
+      data.push({
+        name: unknownLabel,
+        value: metric === "cost" ? +restCost.toFixed(4) : restTokens,
+        cost: restCost,
+        tokens: restTokens,
+        itemStyle: { color: "#888" },
+      });
     }
     return {
       animation: false,
       tooltip: { trigger: "item", backgroundColor: theme.tooltipBg, borderColor: theme.axis, textStyle: { color: theme.text, fontSize: 11 }, formatter: ((p: unknown): string => {
-          const pp = p as { marker?: string; name?: string; value?: number; percent?: number };
-          return `${pp.marker ?? ""} ${pp.name ?? ""}<br/>${formatCost(pp.value ?? 0)} (${pp.percent ?? 0}%)`;
+          const pp = p as { marker?: string; name?: string; value?: number; percent?: number; data?: { cost?: number; tokens?: number } };
+          const costLine = `${t("Total cost")}: ${formatCost(pp.data?.cost ?? 0)}`;
+          const tokenLine = `${t("Token count")}: ${fmtNum(pp.data?.tokens ?? 0, locale)}`;
+          const primary = metric === "cost" ? costLine : tokenLine;
+          const secondary = metric === "cost" ? tokenLine : costLine;
+          return `${pp.marker ?? ""} ${pp.name ?? ""}<br/>${primary} (${pp.percent ?? 0}%)<br/><span style="opacity:0.7">${secondary}</span>`;
         }) as never },
       legend: {
         type: "scroll",
@@ -633,7 +677,7 @@ function CostByCategoryChart({
         {
           type: "pie",
           radius: ["52%", "78%"],
-          center: ["74%", "58%"],
+          center: ["70%", "58%"],
           avoidLabelOverlap: true,
           itemStyle: { borderColor: theme.tooltipBg, borderWidth: 2 },
           label: { show: false },
@@ -646,11 +690,21 @@ function CostByCategoryChart({
           type: "text",
           left: "4%",
           top: "86%",
-          style: { text: `${t("Total cost")}: ${formatCost(totalCost)}`, fill: theme.text, fontSize: 11, fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "left" },
+          style: {
+            text:
+              metric === "cost"
+                ? `${t("Total cost")}: ${formatCost(totalCost)}`
+                : `${t("Total tokens")}: ${fmtNum(totalTokens, locale)}`,
+            fill: theme.text,
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: "var(--font-mono)",
+            textAlign: "left",
+          },
         },
       ],
     };
-  }, [buckets, totalCost, theme, labelKey, t, unknownLabel, formatCost]);
+  }, [buckets, totalCost, totalTokens, metric, theme, labelKey, t, unknownLabel, formatCost, locale]);
   return <EchartsChart option={option} height={260} ariaLabel={t("Cost by category")} />;
 }
 
@@ -690,7 +744,7 @@ function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 1) + "…";
 }
 
-function emptyDonut(theme: ReturnType<typeof useChartTheme>, totalCost: number, formatCost: (usd: number) => string): echarts.EChartsCoreOption {
+function emptyDonut(theme: ReturnType<typeof useChartTheme>, valueText: string, labelText: string): echarts.EChartsCoreOption {
   return {
     animation: false,
     series: [
@@ -704,8 +758,8 @@ function emptyDonut(theme: ReturnType<typeof useChartTheme>, totalCost: number, 
       },
     ],
     graphic: [
-      { type: "text", left: "38%", top: "46%", style: { text: formatCost(totalCost), fill: theme.text, fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "center" } },
-      { type: "text", left: "38%", top: "60%", style: { text: "—", fill: theme.text, fontSize: 10, textAlign: "center" } },
+      { type: "text", left: "38%", top: "46%", style: { text: valueText, fill: theme.text, fontSize: 14, fontWeight: 600, fontFamily: "var(--font-mono)", textAlign: "center" } },
+      { type: "text", left: "38%", top: "60%", style: { text: labelText, fill: theme.text, fontSize: 10, textAlign: "center" } },
     ],
   };
 }
