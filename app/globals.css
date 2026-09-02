@@ -1556,3 +1556,14 @@ li.todo-task-item[data-checked="true"] > div {
   from { transform: translateY(4px) scale(0.97); opacity: 0; }
   to   { transform: translateY(0)   scale(1);    opacity: 1; }
 }
+
+/* ChatWindow: while the live streaming message viewport is shown, hide the
+ * outer conversation scrollbar but keep it scrollable. Defined last so it
+ * overrides the [data-scroll-wide] preset above. */
+[data-streaming-hide-scroll] {
+  scrollbar-width: none;
+}
+[data-streaming-hide-scroll]::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
