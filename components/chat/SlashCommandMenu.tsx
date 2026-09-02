@@ -5,7 +5,7 @@ import type { SlashResource } from "@/lib/shared/slash-commands";
 
 /**
  * Upward-anchored list of slash commands that match the current query.
- * Pure presentational — keyboard navigation (↑↓ switch, ←→ page, Space
+ * Pure presentational — keyboard navigation (↑↓ switch, ←→ page, Enter
  * to pick) is handled inside the parent's `handleKeyDown` so this
  * component only renders the visible page.
  *
@@ -79,7 +79,7 @@ export function SlashCommandMenu({
         );
       })}
       <div style={{ padding: "6px 10px", fontSize: 11, color: "var(--text-dim)", textAlign: "right" }}>
-        {t("↑↓ switch, ←→ page")}
+        {t("↑↓ switch, ←→ page, Enter to pick")}
       </div>
     </>
   );

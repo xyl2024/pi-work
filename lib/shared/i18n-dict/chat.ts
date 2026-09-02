@@ -24,7 +24,7 @@ export const chat = {
   "Send": "发送",
   "Stop": "停止",
   "Upload image": "上传图片",
-  "↑↓ switch, ←→ page": "↑↓切换，←→翻页",
+  "↑↓ switch, ←→ page, Enter to pick": "↑↓切换，←→翻页，回车确认",
   // /model slash command modal
   "Switch model": "切换模型",
   "Search models...": "搜索模型...",

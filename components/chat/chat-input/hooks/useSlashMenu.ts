@@ -41,7 +41,7 @@ export interface UseSlashMenuResult {
    *  directly; for prompt templates, records it as the selected resource
    *  so `formatSlashContent` runs at send time. */
   selectSlashResource: (item: SlashResource) => void;
-  /** Handle arrow / space / escape keys while the slash menu is open.
+  /** Handle arrow / enter / escape keys while the slash menu is open.
    *  Returns `true` if the event was consumed (the parent should early-return). */
   handleSlashKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => boolean;
 }
@@ -184,7 +184,7 @@ export function useSlashMenu({
         setSlashActiveIndex(0);
         return true;
       }
-      if ((e.key === " " || e.code === "Space") && !e.shiftKey && !e.nativeEvent.isComposing) {
+      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         selectSlashResource(visibleSlashResources[slashActiveIndex] ?? visibleSlashResources[0]);
         return true;
