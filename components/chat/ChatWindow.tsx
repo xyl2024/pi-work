@@ -15,7 +15,7 @@ import { getFileName } from "@/lib/shared/file-paths";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
-import { useIsStreaming, useIsStreamingBody, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent } from "@/hooks/useStreamingMessage";
+import { useIsStreamingBody, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent } from "@/hooks/useStreamingMessage";
 import { SessionLibraryModal } from "../sessions/session-library/SessionLibraryModal";
 import { SessionLibraryOpenButton } from "../sessions/SessionLibraryOpenButton";
 import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
@@ -177,7 +177,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     agentTodoRefreshKey,
     isNew,
     messagesEndRef, scrollContainerRef,
-    lastUserMsgRef, userJustSentRef,
+    lastUserMsgRef,
     handleSend, handleAbort, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     handleCompact,
@@ -292,7 +292,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // not re-render ChatWindowContent's tree (ChatInput, historical
   // MessageViews, panels, ...). The streaming bubble is rendered by
   // StreamingBubble, which subscribes on its own.
-  const streamingStoreIsStreaming = useIsStreaming(streamingKey);
   const streamingStoreIsThinking = useIsStreamingThinking(streamingKey);
   const streamingStoreIsBody = useIsStreamingBody(streamingKey);
   const streamingStoreIsToolCall = useIsStreamingToolCall(streamingKey);
@@ -436,20 +435,17 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, [currentSessionId, activeLeafId, locale, isExporting, showToast, t]);
 
   // Scroll-to-bottom helper, hoisted before handleCompactClick so the compact
-  // path can call it. Sets userScrolledUpRef=false to re-engage sticky-bottom
-  // tracking and guards the next 500ms of scroll events as programmatic.
+  // path can call it. This is an explicit user action, not streaming follow.
   const handleToBottom = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     userScrolledUpRef.current = false;
     setShowToBottom(false);
-    isProgrammaticScrollRef.current = true;
     // scrollHeight, not messagesEndRef.scrollIntoView: the latter aligns to
     // the scrollport edges and leaves the container's bottom padding visible
     // as a gap. Setting scrollTop directly to scrollHeight scrolls to the
     // absolute bottom regardless of padding/layout.
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    setTimeout(() => { isProgrammaticScrollRef.current = false; }, 500);
   }, [scrollContainerRef]);
 
   // ── Manual compaction lifecycle lives in useAgentSession (see
@@ -491,17 +487,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     setToolCallStatsState({ snapshot, runningSummary });
   }, [isActive, snapshot, runningSummary]);
 
-  // ── Scroll-to-bottom: auto-track during streaming, pause on user scroll-up ──
+  // ── Scroll position: user scroll-up pauses streaming follow ──
   const [showToBottom, setShowToBottom] = useState(false);
   const userScrolledUpRef = useRef(false);
-  const isProgrammaticScrollRef = useRef(false);
 
-  // Detect user-initiated scroll intent via wheel/touch events. We can't rely
-  // on the scroll event alone: during fast streaming each chunk re-arms
-  // isProgrammaticScrollRef for ~150ms, so the guard in handleScroll eats the
-  // user's own scroll event and userScrolledUpRef never flips. wheel/touchmove
-  // are not produced by scrollIntoView, so they capture intent before the
-  // scroll happens and reliably disengage sticky-bottom mode.
+  // Detect user-initiated scroll intent via wheel/touch events. This captures
+  // intent before the scroll event and reliably disengages streaming follow.
   const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     // Only treat upward scroll (deltaY < 0) as "user wants to disengage".
     // Scrolling down at the bottom is a no-op; don't surface the button or
@@ -516,6 +507,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     // Touch has no direction; assume the user is actively scrolling.
     userScrolledUpRef.current = true;
     setShowToBottom(true);
+  }, []);
+
+  const handleStreamingViewportResume = useCallback(() => {
+    setShowToBottom(false);
   }, []);
 
   // ── In-session search state ──
@@ -543,7 +538,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, []);
 
   const handleScroll = useCallback(() => {
-    if (isProgrammaticScrollRef.current) return;
     const el = scrollContainerRef.current;
     if (!el) return;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -646,55 +640,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     return () => clearTimeout(timer);
   }, [pendingJumpEntryId, entryIds, messages, scrollContainerRef]);
 
-  // ── Auto-scroll to bottom during streaming ──
-  const prevStreamingRef = useRef(false);
-  useEffect(() => {
-    // Streaming just started. isStreaming flickers false→true at *every*
-    // assistant-message boundary (between turns, including the one right
-    // after a tool call), so an unconditional reset would yank a user
-    // who's reading the previous response back to the bottom whenever a
-    // new message begins. Only re-engage sticky-bottom when the user
-    // actually asked for a response (userJustSentRef) or was already at
-    // the bottom (e.g. session resume / auto-retry with no handleSend).
-    if (streamState.isStreaming && !prevStreamingRef.current) {
-      const el = scrollContainerRef.current;
-      const dist = el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0;
-      if (userJustSentRef.current || dist < 100) {
-        userScrolledUpRef.current = false;
-        setShowToBottom(false);
-      }
-      userJustSentRef.current = false;
-    }
-    prevStreamingRef.current = streamState.isStreaming;
-
-    // Auto-scroll on every streaming update (unless user paused)
-    if (streamState.isStreaming && !userScrolledUpRef.current) {
-      const el = scrollContainerRef.current;
-      if (el) {
-        isProgrammaticScrollRef.current = true;
-        // Clear the button synchronously so the user doesn't see it for the
-        // 150ms while the programmatic-scroll guard is up — handleScroll is
-        // gated by that flag and won't recompute showToBottom until later.
-        setShowToBottom(false);
-        // scrollTop = scrollHeight scrolls to the absolute bottom of the
-        // scrollable area (browser clamps to scrollHeight - clientHeight).
-        // messagesEndRef.scrollIntoView aligns to the scrollport and leaves a
-        // gap equal to the container's bottom padding.
-        el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
-        setTimeout(() => { isProgrammaticScrollRef.current = false; }, 150);
-      }
-    }
-  }, [streamingStoreIsStreaming, streamState.isStreaming, scrollContainerRef, userJustSentRef]);
-
-  // ── Auto-scroll to the truncation point as replay advances ──
-  useEffect(() => {
-    if (!replayOpen) return;
-    if (userScrolledUpRef.current) return;
-    isProgrammaticScrollRef.current = true;
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    const timer = setTimeout(() => { isProgrammaticScrollRef.current = false; }, 200);
-    return () => clearTimeout(timer);
-  }, [replayIndex, replayOpen, messagesEndRef]);
+  // Streaming output is followed by StreamingMessageViewport. ChatWindow
+  // intentionally does not move the page-level scrollport while content grows;
+  // this keeps a user's outer scroll position stable after they scroll up.
 
   const onDrop = useCallback((files: File[]) => {
     chatInputRef?.current?.addImages(files);
@@ -820,22 +768,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       setStreamingStartedThisTurn(true);
     }
   }, [liveTurnActive, streamingStoreHasContent]);
-
-  // When the live viewport is removed, its contents return to the ordinary
-  // chat flow. Re-pin the page-level scrollport so the completed answer is not
-  // left below the old fixed viewport height.
-  const previousLiveTurnRef = useRef(false);
-  useEffect(() => {
-    if (previousLiveTurnRef.current && !liveTurnActive && !userScrolledUpRef.current) {
-      const frame = window.requestAnimationFrame(() => {
-        const container = scrollContainerRef.current;
-        if (container) container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
-      });
-      previousLiveTurnRef.current = liveTurnActive;
-      return () => window.cancelAnimationFrame(frame);
-    }
-    previousLiveTurnRef.current = liveTurnActive;
-  }, [liveTurnActive, scrollContainerRef]);
 
   let lastAnchorIdx = -1;
   for (let i = renderMessages.length - 1; i >= 0; i--) {
@@ -1576,8 +1508,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                       {streamingStartedThisTurn && (
                       <StreamingMessageViewport
                         tabId={streamingKey}
-                        scrollContainerRef={scrollContainerRef}
                         userScrollingUpRef={userScrolledUpRef}
+                        onResumeAutoScroll={handleStreamingViewportResume}
                       >
                         {streamingRendered}
                         <StreamingBubble

@@ -12,71 +12,130 @@ import { useStreamingMessage } from "@/hooks/useStreamingMessage";
  * scrolls once the live output exceeds it.
  */
 const STREAMING_VIEWPORT_MAX_HEIGHT = 500;
-const BOTTOM_THRESHOLD_PX = 1;
+// Use the same forgiving recovery range as the outer chat scrollport. A
+// streaming tool can grow while the user is scrolling down, so requiring an
+// exact pixel-perfect bottom often makes recovery practically impossible.
+const BOTTOM_THRESHOLD_PX = 100;
 
 interface Props {
   tabId: string;
   children: ReactNode;
-  /** Outer page-level chat scroll container. Synced to the bottom as this
-   *  viewport grows with content, unless the user has scrolled up. */
-  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
-  /** True while the user has intentionally scrolled up from the bottom of the
-   *  conversation — while set, the outer container is left where it is. */
-  userScrollingUpRef?: React.RefObject<boolean>;
+  /** Shared pause state for both the outer chat scrollport and this nested
+   *  viewport. Reaching either scrollport's bottom resumes following. */
+  userScrollingUpRef: React.RefObject<boolean>;
+  /** Clears the outer "scroll to bottom" affordance when the user reaches the
+   *  bottom from inside this nested viewport. */
+  onResumeAutoScroll?: () => void;
 }
 
-export function StreamingMessageViewport({ tabId, children, scrollContainerRef, userScrollingUpRef }: Props) {
+export function StreamingMessageViewport({ tabId, children, userScrollingUpRef, onResumeAutoScroll }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const autoScrollEnabledRef = useRef(true);
-  // Scroll events caused by our own scrollTo can arrive after content grows.
-  // Track user input separately so those delayed events cannot accidentally
-  // disable auto-scroll while tool-call arguments are streaming.
-  const userScrollInteractionRef = useRef(false);
+  // User intent is handled by wheel/touch/keyboard handlers before the browser
+  // emits scroll events. Do not infer it from onScroll: content growth from a
+  // streaming tool call can also produce a delayed scroll event.
   const { streamingMessage } = useStreamingMessage(tabId);
+  const scrollbarDragRef = useRef(false);
 
   const handleScroll = useCallback(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
     const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-    if (distanceFromBottom <= BOTTOM_THRESHOLD_PX) {
-      autoScrollEnabledRef.current = true;
-    } else if (userScrollInteractionRef.current) {
-      autoScrollEnabledRef.current = false;
+    if (distanceFromBottom <= BOTTOM_THRESHOLD_PX && userScrollingUpRef.current) {
+      // Reaching the bottom is the explicit opt-in to resume following. This
+      // must clear the shared pause state too: when the pointer is over this
+      // nested viewport, the outer onScroll handler does not receive the event.
+      userScrollingUpRef.current = false;
+      scrollbarDragRef.current = false;
+      onResumeAutoScroll?.();
+    } else if (scrollbarDragRef.current) {
+      // Scrollbar dragging does not consistently produce wheel events.
+      userScrollingUpRef.current = true;
+    }
+  }, [onResumeAutoScroll, userScrollingUpRef]);
+
+  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const scrollbarWidth = viewport.offsetWidth - viewport.clientWidth;
+    if (scrollbarWidth > 0 && event.clientX >= viewport.getBoundingClientRect().right - scrollbarWidth) {
+      scrollbarDragRef.current = true;
     }
   }, []);
 
-  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
-    userScrollInteractionRef.current = true;
-    if (event.deltaY < 0) autoScrollEnabledRef.current = false;
+  const handlePointerUp = useCallback(() => {
+    scrollbarDragRef.current = false;
   }, []);
+
+  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    if (event.deltaY < 0) {
+      // Any upward user intent pauses following immediately.
+      userScrollingUpRef.current = true;
+      return;
+    }
+    if (event.deltaY > 0 && userScrollingUpRef.current) {
+      // Resume slightly before the exact bottom. While a tool is emitting
+      // arguments, the bottom itself keeps moving, so waiting for an exact
+      // zero distance can leave the user permanently just behind it.
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      if (distanceFromBottom <= BOTTOM_THRESHOLD_PX) {
+        userScrollingUpRef.current = false;
+        onResumeAutoScroll?.();
+      }
+    }
+  }, [onResumeAutoScroll, userScrollingUpRef]);
+
+  const handleTouchMove = useCallback(() => {
+    userScrollingUpRef.current = true;
+  }, [userScrollingUpRef]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     const scrollingKeys = ["ArrowUp", "PageUp", "Home", "ArrowDown", "PageDown", "End"];
     if (!scrollingKeys.includes(event.key)) return;
-    userScrollInteractionRef.current = true;
     if (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") {
-      autoScrollEnabledRef.current = false;
+      userScrollingUpRef.current = true;
+      return;
     }
-  }, []);
+    if (userScrollingUpRef.current) {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      if (distanceFromBottom <= BOTTOM_THRESHOLD_PX) {
+        userScrollingUpRef.current = false;
+        onResumeAutoScroll?.();
+      }
+    }
+  }, [onResumeAutoScroll, userScrollingUpRef]);
 
   const scrollToBottom = useCallback(() => {
     const viewport = viewportRef.current;
-    if (!viewport || !autoScrollEnabledRef.current) return;
+    if (!viewport || userScrollingUpRef.current) return;
     // Keep the newest content visible as it grows. No-op (clamped to 0) while
     // the content still fits within the max-height; only scrolls once the
     // live output exceeds the container. Scrolling up disables this until the
     // user returns to the bottom.
     viewport.scrollTo({ top: viewport.scrollHeight, behavior: "instant" });
-  }, []);
+  }, [userScrollingUpRef]);
 
   const syncScrollToBottom = useCallback(() => {
+    // The page-level chat scrollport is intentionally not touched here. Only
+    // the live message viewport follows; the outer scroll position remains
+    // under the user's control.
     scrollToBottom();
-    const outer = scrollContainerRef?.current;
-    if (outer && !userScrollingUpRef?.current) {
-      outer.scrollTo({ top: outer.scrollHeight, behavior: "instant" });
-    }
-  }, [scrollToBottom, scrollContainerRef, userScrollingUpRef]);
+  }, [scrollToBottom]);
+
+  // Tool-call rows can grow in several layout passes: first the tool-call row,
+  // then streamed JSON arguments, then an expanded result/collapse animation.
+  // Waiting two frames lets all of those DOM measurements settle before we pin
+  // the scrollport, instead of pinning to an intermediate scrollHeight.
+  const scheduleScrollToBottom = useCallback(() => {
+    const firstFrame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(syncScrollToBottom);
+    });
+    return firstFrame;
+  }, [syncScrollToBottom]);
 
   // Some tool-call blocks expand after the React render (for example when a
   // delayed result changes a collapse-height animation). In that case the
@@ -85,22 +144,22 @@ export function StreamingMessageViewport({ tabId, children, scrollContainerRef, 
   // pinned when the user is still at the bottom.
   useEffect(() => {
     const content = contentRef.current;
-    if (!content || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      window.requestAnimationFrame(syncScrollToBottom);
-    });
+    const viewport = viewportRef.current;
+    if (!content || !viewport || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(scheduleScrollToBottom);
     observer.observe(content);
+    observer.observe(viewport);
     return () => observer.disconnect();
-  }, [syncScrollToBottom]);
+  }, [scheduleScrollToBottom]);
 
   // `children` changes when a settled intermediate assistant message or a
   // partial tool result arrives; the streaming snapshot changes per frame.
   // Both cases keep the newest live content visible once the viewport starts
   // scrolling.
   useEffect(() => {
-    const frame = window.requestAnimationFrame(syncScrollToBottom);
+    const frame = scheduleScrollToBottom();
     return () => window.cancelAnimationFrame(frame);
-  }, [children, streamingMessage, syncScrollToBottom]);
+  }, [children, streamingMessage, scheduleScrollToBottom]);
 
   return (
     <div
@@ -109,9 +168,10 @@ export function StreamingMessageViewport({ tabId, children, scrollContainerRef, 
       onScroll={handleScroll}
       onWheel={handleWheel}
       onKeyDown={handleKeyDown}
-      onTouchStart={() => {
-        userScrollInteractionRef.current = true;
-      }}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onTouchMove={handleTouchMove}
       style={{
         boxSizing: "border-box",
         maxHeight: STREAMING_VIEWPORT_MAX_HEIGHT,
