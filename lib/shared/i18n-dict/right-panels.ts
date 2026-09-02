@@ -169,6 +169,7 @@ export const rightPanels = {
   "Total calls": "总调用",
   "All sources": "全部来源",
   "BTW": "BTW",
+  "Subagent": "子代理",
   "User": "用户",
   "Direct": "直接调用",
   "Unknown": "未知",

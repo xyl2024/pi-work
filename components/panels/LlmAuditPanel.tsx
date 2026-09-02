@@ -25,7 +25,7 @@ import type { ProviderCall } from "@/lib/shared/llm-audit-types";
 const PAGE_LIMIT = 10;
 
 type StatusFilter = "" | "ok" | "error";
-type SourceFilter = "" | "user" | "scheduled" | "direct" | "btw" | "unknown";
+type SourceFilter = "" | "user" | "scheduled" | "subagent" | "direct" | "btw" | "unknown";
 
 // ── formatters ────────────────────────────────────────────────────────────
 
@@ -396,6 +396,7 @@ function Toolbar({
           ["btw", t("BTW")],
           ["user", t("User")],
           ["scheduled", t("Scheduled")],
+          ["subagent", t("Subagent")],
           ["direct", t("Direct")],
           ["unknown", t("Unknown")],
         ] as Array<[SourceFilter, string]>).map(([value, label]) => (

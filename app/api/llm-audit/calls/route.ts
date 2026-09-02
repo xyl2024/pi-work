@@ -30,9 +30,10 @@ export async function GET(req: Request) {
     const status = statusParam === "ok" || statusParam === "error" ? statusParam : null;
     const modelId = url.searchParams.get("modelId");
     const sourceParam = url.searchParams.get("source");
-    const source = sourceParam === "user" || sourceParam === "scheduled" || sourceParam === "direct" || sourceParam === "btw" || sourceParam === "unknown"
-      ? sourceParam
-      : null;
+    const source =
+      sourceParam === "user" || sourceParam === "scheduled" || sourceParam === "subagent" || sourceParam === "direct" || sourceParam === "btw" || sourceParam === "unknown"
+        ? sourceParam
+        : null;
     const fromRaw = url.searchParams.get("from");
     const toRaw = url.searchParams.get("to");
     const from = fromRaw && Number.isFinite(Number(fromRaw)) ? Number(fromRaw) : null;

@@ -159,7 +159,7 @@ function rowToCall(r: Row): ProviderCall {
 }
 
 function normalizeSource(s: string | null): LlmAuditSource {
-  if (s === "user" || s === "scheduled" || s === "direct" || s === "btw") return s;
+  if (s === "user" || s === "scheduled" || s === "subagent" || s === "direct" || s === "btw") return s;
   return "unknown";
 }
 
