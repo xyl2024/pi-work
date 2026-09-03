@@ -1543,24 +1543,24 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   {rendered}
                   {liveTurnActive && (
                     <>
-                      {streamingStartedThisTurn && (
-                      <StreamingMessageViewport
-                        tabId={streamingKey}
-                        userScrollingUpRef={userScrolledUpRef}
-                        onResumeAutoScroll={handleStreamingViewportResume}
-                        onHeightIncrease={handleStreamingViewportHeightIncrease}
-                      >
-                        {streamingRendered}
-                        {!streamingErrorAlreadyRendered && (
-                          <StreamingBubble
-                            tabId={streamingKey}
-                            toolResults={toolResultsMap}
-                            modelNames={modelNames}
-                            modelIcons={modelIcons}
-                            cwd={session?.cwd ?? cwd}
-                          />
-                        )}
-                      </StreamingMessageViewport>
+                      {(streamingStartedThisTurn || agentPhase !== null || streamingStoreHasContent) && (
+                        <StreamingMessageViewport
+                          tabId={streamingKey}
+                          userScrollingUpRef={userScrolledUpRef}
+                          onResumeAutoScroll={handleStreamingViewportResume}
+                          onHeightIncrease={handleStreamingViewportHeightIncrease}
+                        >
+                          {streamingRendered}
+                          {!streamingErrorAlreadyRendered && (
+                            <StreamingBubble
+                              tabId={streamingKey}
+                              toolResults={toolResultsMap}
+                              modelNames={modelNames}
+                              modelIcons={modelIcons}
+                              cwd={session?.cwd ?? cwd}
+                            />
+                          )}
+                        </StreamingMessageViewport>
                       )}
                       {streamingStartedThisTurn && streamingTurnReadFiles.length > 0 && (
                         <div className="pb-1">
