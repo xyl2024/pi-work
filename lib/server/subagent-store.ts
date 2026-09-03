@@ -119,6 +119,13 @@ export function failSubagentTask(taskId: string, error: string, status: "failed"
   `).run(status, error, Date.now(), taskId);
 }
 
+export function listSubagentChildSessionIds(): string[] {
+  const rows = getSubagentDb().prepare(
+    "SELECT child_session_id FROM subagent_tasks WHERE child_session_id IS NOT NULL",
+  ).all() as Array<{ child_session_id: string | null }>;
+  return rows.flatMap((row) => row.child_session_id ? [row.child_session_id] : []);
+}
+
 export function getSubagentTask(taskId: string): SubagentTask | null {
   const row = getSubagentDb().prepare(
     "SELECT * FROM subagent_tasks WHERE task_id = ?",

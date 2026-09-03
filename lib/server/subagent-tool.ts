@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import type { AgentSessionWrapper } from "./rpc-manager";
 import { readSessionDetails } from "./session-reader";
+import { readConfig } from "./config";
 import { writeSessionName } from "./session-names";
 import {
   completeSubagentTask,
@@ -113,7 +114,10 @@ function waitForAgentEnd(
     };
 
     const unsubscribe = session.onEvent((event) => {
-      if (event.type === "agent_end") finish();
+      // agent_end marks one attempt. A retryable attempt emits agent_end
+      // before the session has actually finished; agent_settled is the
+      // terminal event for the complete prompt lifecycle.
+      if (event.type === "agent_settled") finish();
       else if (event.type === "prompt_failed") {
         finish(new Error(typeof event.error === "string" ? event.error : "Subagent prompt failed"));
       }
@@ -190,6 +194,7 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
       const { getRpcSession, startRpcSession } = await import("./rpc-manager");
       const parent = getRpcSession(parentSessionId);
       const parentModel = parent?.inner.model;
+      const subagentConfig = readConfig();
       if (!parentModel) {
         throw new Error("The main agent has no active model to inherit");
       }
@@ -201,11 +206,11 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
         [...CODEBASE_EXPLORER_TOOLS],
         "subagent",
         {
-          model: {
+          model: subagentConfig.subagent.model ?? {
             provider: parentModel.provider,
             modelId: parentModel.id,
           },
-          thinkingLevel: "off",
+          thinkingLevel: subagentConfig.subagent.thinking_level,
           allowedToolNames: [...CODEBASE_EXPLORER_TOOLS],
           systemPromptPrefix: getCodebaseExplorerSystemPrompt(ctx.cwd),
           stripDefaultSystemPromptSections: true,

@@ -9,6 +9,8 @@ import {
   type DangerousPatternRule,
   type DangerousPatternsConfig,
   type PiWorkConfig,
+  type SubagentConfig,
+  type SubagentThinkingLevel,
   type UiSoundEventId,
   type UiSoundsConfig,
   type WebAccessConfig,
@@ -64,6 +66,20 @@ const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = {
   session_bound_alignment: "bottom",
 };
 
+const DEFAULT_SUBAGENT: SubagentConfig = { thinking_level: "off" };
+const SUBAGENT_THINKING_LEVELS: readonly SubagentThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+function parseSubagent(raw: unknown): SubagentConfig {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_SUBAGENT };
+  const obj = raw as Record<string, unknown>;
+  const model = obj.model && typeof obj.model === "object" ? obj.model as Record<string, unknown> : null;
+  const configuredModel = model && typeof model.provider === "string" && typeof model.modelId === "string"
+    ? { provider: model.provider, modelId: model.modelId } : undefined;
+  const thinking_level = typeof obj.thinking_level === "string" && SUBAGENT_THINKING_LEVELS.includes(obj.thinking_level as SubagentThinkingLevel)
+    ? obj.thinking_level as SubagentThinkingLevel : DEFAULT_SUBAGENT.thinking_level;
+  return { thinking_level, ...(configuredModel ? { model: configuredModel } : {}) };
+}
+
 const DEFAULT_CONFIG: PiWorkConfig = {
   dangerous_patterns: DEFAULT_DANGEROUS_PATTERNS,
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
@@ -85,6 +101,7 @@ const DEFAULT_CONFIG: PiWorkConfig = {
     enabled: true,
     tavily: {},
   },
+  subagent: { ...DEFAULT_SUBAGENT },
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -295,6 +312,7 @@ export function readConfig(): PiWorkConfig {
       cwd_icons: parseCwdIcons(cfg.cwd_icons),
       disabled_skills: parseDisabledSkills(cfg.disabled_skills),
       web_access: parseWebAccess(cfg.web_access),
+      subagent: parseSubagent(cfg.subagent),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });

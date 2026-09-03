@@ -4,6 +4,7 @@ import {
   searchSessionsPaged,
 } from "@/lib/server/session-reader";
 import { getRpcSession } from "@/lib/server/rpc-manager";
+import { listSubagentChildSessionIds } from "@/lib/server/subagent-store";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import type { SessionInfo } from "@/lib/shared/types";
 
@@ -86,7 +87,11 @@ export async function GET(request: Request) {
     // (vs. full EOF scan via SessionManager.listAll) — much cheaper on hosts
     // with many large sessions. See listAllSessionsHeaderOnly for the
     // field-precision trade-offs vs. the full scan.
-    const all = await listAllSessionsHeaderOnly();
+    const allSessions = await listAllSessionsHeaderOnly();
+    // The child_session_id relation is the authoritative marker. Do this
+    // before pagination so hidden subagents never consume a visible slot.
+    const subagentIds = new Set(listSubagentChildSessionIds());
+    const all = allSessions.filter((session) => !subagentIds.has(session.id));
     const recent = recentCwds(all, 5);
 
     // Search branch: paged search runs only when the caller passed both

@@ -318,6 +318,10 @@ export class AgentSessionWrapper {
         this._running = true;
         break;
       case "agent_end":
+        // A retryable attempt ends before the overall agent run settles.
+        if (event.willRetry !== true) this._running = false;
+        break;
+      case "agent_settled":
       case "compaction_end":
       case "auto_compaction_end":
         this._running = false;

@@ -204,6 +204,10 @@ export function getToolPreview(block: { input?: unknown; toolName?: string }): s
       parts = [str(record.command)];
       break;
     }
+    case "spawn_subagent": {
+      parts = [str(record.subagent_type), str(record.description)];
+      break;
+    }
     default: {
       // Fallback: first meaningful key, then any other key at all.
       const fallbackKey =

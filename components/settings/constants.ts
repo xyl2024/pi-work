@@ -39,6 +39,7 @@ export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-toast-test",    labelKey: "Toast Test" },
   { id: "settings-section-file-preview",  labelKey: "File preview limits" },
   { id: "settings-section-retry",         labelKey: "Agent retry" },
+  { id: "settings-section-subagent",      labelKey: "Subagent settings" },
   { id: "settings-section-ui-sounds",     labelKey: "UI Sounds" },
   { id: "settings-section-web-access",     labelKey: "Web Access" },
   { id: "settings-section-todo-tags",        labelKey: "Manage tags" },

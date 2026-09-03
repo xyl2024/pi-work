@@ -15,6 +15,7 @@ import { AppendSystemSection } from "./sections/AppendSystemSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
+import { SubagentSection } from "./sections/SubagentSection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 import { TodoTagsSection } from "./sections/TodoTagsSection";
 import { ToastTestSection } from "./sections/ToastTestSection";
@@ -277,7 +278,10 @@ export function SettingsModal({
             {/* 9: Agent retry */}
             <RetrySection />
 
-            {/* 10: UI Sounds */}
+            {/* 10: Subagent */}
+            <SubagentSection config={config} apply={apply} />
+
+            {/* 11: UI Sounds */}
             <SoundSettingsSection config={config} apply={apply} />
 
             {/* 11: Web Access */}

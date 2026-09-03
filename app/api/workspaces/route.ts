@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { listRunningRpcSessions } from "@/lib/server/rpc-manager";
+import { listSubagentChildSessionIds } from "@/lib/server/subagent-store";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import type { WorkspacesResponse, Workspace } from "@/lib/shared/types";
 
@@ -57,7 +58,9 @@ export async function GET(request: Request) {
     // instead of streaming to EOF — same SessionInfo[] shape, same sort
     // guarantees. See the header at reader.ts:listAllSessionsHeaderOnly
     // for the field-precision trade-offs vs. the full scan.
-    const all = await listAllSessionsHeaderOnly();
+    const allSessions = await listAllSessionsHeaderOnly();
+    const subagentIds = new Set(listSubagentChildSessionIds());
+    const all = allSessions.filter((session) => !subagentIds.has(session.id));
 
     // Group by cwd, picking the most-recently-modified session as the
     // aggregate "lastUsed" + tooltip source. Empty cwd strings are skipped
