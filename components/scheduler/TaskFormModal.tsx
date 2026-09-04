@@ -40,7 +40,7 @@ import {
   textareaStyle,
 } from "./styles";
 import { CheckIcon, CloseIcon, LightbulbIcon, ToolIcon } from "@/components/ui/icons";
-import { ToolsDropdownPanel, matchNamedToolPreset, TOOL_PRESET_LABELS, TOOL_PRESET_PATTERNS } from "@/components/chat/ToolsDropdownPanel";
+import { ToolsPickerModal, matchNamedToolPreset, TOOL_PRESET_LABELS, TOOL_PRESET_PATTERNS } from "@/components/chat/ToolsPickerModal";
 import { listToolsForCwd } from "@/lib/client/agent-client";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import { expandToolPatterns } from "@/lib/shared/tool-selection";
@@ -194,14 +194,6 @@ function dropdownOptionStyle(active: boolean): CSSProperties {
 function useDropdown() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
   return { open, setOpen, rootRef };
 }
 
@@ -1029,7 +1021,7 @@ function ToolsSelect({ form, update, availableTools, toolsLoading, toolsError, c
             {triggerLabel}
           </span>
         </button>
-        <ToolsDropdownPanel
+        <ToolsPickerModal
           open={open}
           toolSelection={selection}
           availableTools={availableTools}
@@ -1049,6 +1041,7 @@ function ToolsSelect({ form, update, availableTools, toolsLoading, toolsError, c
           onToggleTool={(next) => update("toolSelection", next)}
           onToggleCustomExpanded={onToggleCustomExpanded}
           onRetryEnsureTools={onRetry}
+          onClose={() => setOpen(false)}
         />
       </div>
     </Field>

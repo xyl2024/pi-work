@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 export interface UseToolsDropdownResult {
   /** Whether the tools preset dropdown is open. */
@@ -34,17 +34,9 @@ export function useToolsDropdown(): UseToolsDropdownResult {
   const [customExpanded, setCustomExpanded] = useState(false);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdowns on outside click. The model picker manages its own
-  // outside-click dismissal internally (see ModelPicker).
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (toolDropdownRef.current && !toolDropdownRef.current.contains(e.target as Node)) {
-        setToolDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  // The picker is a portal-backed modal, so its backdrop owns outside-click
+  // dismissal. A document mousedown handler would see modal interactions as
+  // outside the toolbar ref and close the modal before the click is handled.
 
   const toggleCustomExpanded = useCallback((onFirstExpand?: () => void) => {
     setCustomExpanded((v) => {

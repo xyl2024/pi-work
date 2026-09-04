@@ -6,7 +6,7 @@ import { ContextUsageBar } from "../ContextUsageBar";
 import { CwdPicker } from "../../sessions/CwdPicker";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
 import { ModelPickerModal } from "../ModelPickerModal";
-import { ToolsDropdownPanel, matchNamedToolPreset, TOOL_PRESET_PATTERNS, TOOL_PRESET_TRIGGER_LABELS } from "../ToolsDropdownPanel";
+import { ToolsPickerModal, matchNamedToolPreset, TOOL_PRESET_PATTERNS, TOOL_PRESET_TRIGGER_LABELS } from "../ToolsPickerModal";
 import { ThinkingPicker, THINKING_LEVEL_COLOR, type ThinkingLevel } from "../ThinkingPicker";
 import { MoreMenu } from "../MoreMenu";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
@@ -53,7 +53,7 @@ export interface BottomToolbarProps {
   availableTools: ToolInfo[];
   toolsLoading: boolean;
   toolsError: string | null;
-  /** Tools popover DOM ref — wired by useToolsDropdown in the parent. */
+  /** Compatibility ref retained for the parent; the picker itself is a modal. */
   toolDropdownRef: RefObject<HTMLDivElement | null>;
   toolDropdownOpen: boolean;
   setToolDropdownOpen: (open: boolean) => void;
@@ -89,7 +89,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
     contextUsage, sessionStats,
     thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
     toolSelection, availableTools, toolsLoading, toolsError,
-    toolDropdownRef, toolDropdownOpen, setToolDropdownOpen,
+    toolDropdownRef,
     onToolSelectionChange, onEnsureAvailableTools,
     customExpanded, toggleCustomExpanded,
     onAbort,
@@ -98,6 +98,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
   // Model selection now goes through the same `/model` modal as the slash
   // command — the toolbar button is just a trigger that opens it.
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  const [toolsPickerOpen, setToolsPickerOpen] = useState(false);
 
   // Hide the trigger entirely when no models are available (matches the
   // old ModelPicker's gating), and resolve the display name for it.
@@ -318,17 +319,17 @@ export function BottomToolbar(props: BottomToolbarProps) {
             thinkingLevelMap={thinkingLevelMap}
           />
         )}
-        {!isStreaming && onToolSelectionChange && (
-          <div ref={toolDropdownRef} style={{ position: "relative" }}>
+        {!isStreaming && (
+          <div ref={toolDropdownRef}>
             <button
               type="button"
-              onClick={() => setToolDropdownOpen(!toolDropdownOpen)}
+              onClick={() => setToolsPickerOpen(true)}
               aria-label={t("Tools")}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "0 10px", height: 32,
                 maxWidth: 220, overflow: "hidden",
-                background: toolDropdownOpen ? "var(--bg-hover)" : "none",
+                background: toolsPickerOpen ? "var(--bg-hover)" : "none",
                 border: "none", borderRadius: 9,
                 color: "var(--text-muted)",
                 cursor: "pointer",
@@ -336,12 +337,12 @@ export function BottomToolbar(props: BottomToolbarProps) {
                 transition: "background 0.12s, color 0.12s",
               }}
               onMouseEnter={(e) => {
-                if (toolDropdownOpen) return;
+                if (toolsPickerOpen) return;
                 e.currentTarget.style.background = "var(--bg-hover)";
                 e.currentTarget.style.color = "var(--text)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = toolDropdownOpen ? "var(--bg-hover)" : "none";
+                e.currentTarget.style.background = toolsPickerOpen ? "var(--bg-hover)" : "none";
                 e.currentTarget.style.color = "var(--text-muted)";
               }}
             >
@@ -352,8 +353,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
                 {toolsTriggerLabel}
               </span>
             </button>
-            <ToolsDropdownPanel
-              open={toolDropdownOpen}
+            <ToolsPickerModal
+              open={toolsPickerOpen}
               toolSelection={toolSelection}
               availableTools={availableTools}
               toolsLoading={toolsLoading}
@@ -370,11 +371,12 @@ export function BottomToolbar(props: BottomToolbarProps) {
                   : preset === "full" ? "all"
                   : [...TOOL_PRESET_PATTERNS[preset]];
                 handleToolSelectionChangeLocal(next);
-                setToolDropdownOpen(false);
+                setToolsPickerOpen(false);
               }}
               onToggleTool={handleToolSelectionChangeLocal}
               onRetryEnsureTools={onEnsureAvailableTools}
               onToggleCustomExpanded={toggleCustomExpanded}
+              onClose={() => setToolsPickerOpen(false)}
             />
           </div>
         )}
