@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { listSubagentTasks } from "@/lib/server/subagent-store";
+import { readSubagentSessionStats } from "@/lib/server/sessions/reader";
 import { createLogger } from "@/lib/server/logger";
-import type { SubagentTaskSummary } from "@/lib/shared/types";
 
 const log = createLogger("api/sessions/[id]/subagents");
 
@@ -11,7 +11,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: RouteContext) {
   const { id } = await params;
   try {
-    const tasks: SubagentTaskSummary[] = listSubagentTasks(id).map((task) => ({
+    const base = listSubagentTasks(id).map((task) => ({
       taskId: task.taskId,
       childSessionId: task.childSessionId,
       subagentType: task.subagentType,
@@ -21,6 +21,17 @@ export async function GET(_request: Request, { params }: RouteContext) {
       startedAt: task.startedAt,
       finishedAt: task.finishedAt,
     }));
+    const tasks = await Promise.all(
+      base.map(async (task) => {
+        const stats = task.childSessionId ? await readSubagentSessionStats(task.childSessionId) : null;
+        return {
+          ...task,
+          assistantCount: stats?.assistantCount ?? null,
+          readCount: stats?.readCount ?? null,
+          model: stats?.model ?? null,
+        };
+      }),
+    );
     return NextResponse.json(
       { tasks },
       { headers: { "Cache-Control": "no-store" } },

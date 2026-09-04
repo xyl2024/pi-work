@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type {
   AgentMessage,
+  AssistantMessage,
   CompactionEntry,
   CompactionPoint,
   SessionContext,
@@ -657,4 +658,78 @@ export async function readSessionDetails(sessionId: string) {
     leafId,
     context,
   };
+}
+
+// ============================================================================
+// Subagent session stats
+//
+// Lightweight per-child aggregate (assistant messages, read-tool file count,
+// model id) used by /api/sessions/[id]/subagents. Polling re-runs this for
+// every child of a parent session, so results are cached per JSONL mtime —
+// an unchanged file is never re-parsed.
+// ============================================================================
+
+export interface SubagentSessionStats {
+  assistantCount: number;
+  readCount: number;
+  model: string | null;
+}
+
+declare global {
+  var __piSubagentStatsCache: Map<string, { mtimeMs: number; stats: SubagentSessionStats }> | undefined;
+}
+
+function getSubagentStatsCache(): Map<string, { mtimeMs: number; stats: SubagentSessionStats }> {
+  globalThis.__piSubagentStatsCache ??= new Map();
+  return globalThis.__piSubagentStatsCache;
+}
+
+/** Aggregate assistant/read/model stats for one child session. */
+export async function readSubagentSessionStats(sessionId: string): Promise<SubagentSessionStats | null> {
+  const filePath = await resolveSessionPath(sessionId);
+  if (!filePath) return null;
+  let mtimeMs = 0;
+  try {
+    mtimeMs = statSync(filePath).mtimeMs;
+  } catch {
+    return null;
+  }
+
+  const cache = getSubagentStatsCache();
+  const cached = cache.get(sessionId);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.stats;
+
+  let stats: SubagentSessionStats = { assistantCount: 0, readCount: 0, model: null };
+  try {
+    const sm = SessionManager.open(filePath);
+    const entries = sm.getEntries() as never;
+    const leafId = fallbackSessionLeafId(sm, sm.getLeafId());
+    const context = buildSessionContext(entries, leafId);
+
+    let assistantCount = 0;
+    const readPaths = new Set<string>();
+    let readCalls = 0;
+    let model: string | null = null;
+    for (const message of context.messages) {
+      if (message.role !== "assistant") continue;
+      assistantCount += 1;
+      const assistant = message as AssistantMessage;
+      if (assistant.model) model = assistant.model;
+      for (const block of (normalizeToolCalls(message) as AssistantMessage).content) {
+        if (block.type !== "toolCall" || block.toolName !== "read") continue;
+        const path = block.input?.path;
+        if (typeof path === "string" && path) {
+          readPaths.add(path);
+        } else {
+          readCalls += 1;
+        }
+      }
+    }
+    stats = { assistantCount, readCount: readPaths.size + readCalls, model };
+  } catch {
+    // Unreadable / mid-write JSONL: fall through with zeroed stats.
+  }
+
+  cache.set(sessionId, { mtimeMs, stats });
+  return stats;
 }

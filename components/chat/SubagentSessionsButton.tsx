@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
-import { Tooltip } from "@/components/ui/Tooltip";
 import type { SubagentTaskStatus, SubagentTaskSummary } from "@/lib/shared/types";
 
 interface Props {
@@ -78,7 +77,9 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
 
   // Load exactly once when this session becomes active. Subsequent loads are
   // driven by refreshKey, which the parent session increments for relevant
-  // spawn_subagent SSE events; there is deliberately no fixed polling loop.
+  // spawn_subagent SSE events. While any child is still creating/running we
+  // also poll so the per-child stats (messages / files read / model) stay
+  // fresh; the poll stops once every task reaches a terminal state.
   // Refreshes also run while the popover is closed so its badge already
   // reflects background subagent activity.
   useEffect(() => {
@@ -99,6 +100,18 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
       if (parentSessionId) void loadTasks();
     }
   }, [loadTasks, parentSessionId, refreshKey]);
+
+  const hasActiveTask = tasks.some(
+    (task) => task.status === "creating" || task.status === "running",
+  );
+
+  useEffect(() => {
+    if (!parentSessionId || !hasActiveTask) return;
+    const timer = setInterval(() => {
+      void loadTasks();
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, [hasActiveTask, loadTasks, parentSessionId]);
 
   useEffect(() => () => {
     if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
@@ -134,48 +147,46 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
       }}
       onBlur={handleBlur}
     >
-      <Tooltip content={label}>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => setOpen((value) => !value)}
-          aria-label={label}
-          aria-expanded={open}
-          className="flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100"
-          style={{
-            background: "var(--bg-panel)",
-            borderColor: "var(--border)",
-            color: disabled ? "var(--text-dim)" : "var(--text-muted)",
-            opacity: disabled ? 0.45 : 1,
-          }}
-        >
-          <Bot size={16} strokeWidth={1.8} aria-hidden="true" />
-          {tasks.length > 0 && (
-            <span
-              aria-hidden="true"
-              style={{
-                position: "absolute",
-                transform: "translate(14px, -14px)",
-                minWidth: 18,
-                height: 18,
-                padding: "0 5px",
-                borderRadius: 9,
-                background: "var(--accent)",
-                color: "var(--bg)",
-                fontSize: 10,
-                fontWeight: 700,
-                fontFamily: "var(--font-mono)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 0 0 2px var(--bg-panel)",
-              }}
-            >
-              {tasks.length > 99 ? "99+" : tasks.length}
-            </span>
-          )}
-        </button>
-      </Tooltip>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((value) => !value)}
+        aria-label={label}
+        aria-expanded={open}
+        className="flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100"
+        style={{
+          background: "var(--bg-panel)",
+          borderColor: "var(--border)",
+          color: disabled ? "var(--text-dim)" : "var(--text-muted)",
+          opacity: disabled ? 0.45 : 1,
+        }}
+      >
+        <Bot size={16} strokeWidth={1.8} aria-hidden="true" />
+        {tasks.length > 0 && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              transform: "translate(14px, -14px)",
+              minWidth: 18,
+              height: 18,
+              padding: "0 5px",
+              borderRadius: 9,
+              background: "var(--accent)",
+              color: "var(--bg)",
+              fontSize: 10,
+              fontWeight: 700,
+              fontFamily: "var(--font-mono)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 0 0 2px var(--bg-panel)",
+            }}
+          >
+            {tasks.length > 99 ? "99+" : tasks.length}
+          </span>
+        )}
+      </button>
 
       {open && !disabled && (
         <div
@@ -218,6 +229,10 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
             tasks.map((task) => {
               const canOpen = Boolean(task.childSessionId);
               const statusColor = STATUS_COLORS[task.status];
+              const hasStats = task.assistantCount != null && task.readCount != null;
+              const stats = hasStats
+                ? `${t("{count} messages", { count: task.assistantCount as number })} · ${t("read {count} files", { count: task.readCount as number })}`
+                : null;
               return (
                 <button
                   key={task.taskId}
@@ -226,7 +241,6 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                   onClick={() => {
                     if (task.childSessionId) handleOpenSession(task.childSessionId);
                   }}
-                  title={canOpen ? t("Open subagent session") : t(STATUS_KEYS[task.status])}
                   style={{
                     display: "flex",
                     alignItems: "flex-start",
@@ -269,6 +283,37 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                     <span style={{ display: "block", marginTop: 2, color: statusColor, fontSize: 10, lineHeight: 1.3 }}>
                       {t(STATUS_KEYS[task.status])}
                     </span>
+                    {stats && (
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginTop: 3,
+                          color: "var(--text-dim)",
+                          fontSize: 10,
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        {task.model && (
+                          <span
+                            style={{
+                              flexShrink: 0,
+                              maxWidth: 110,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontFamily: "var(--font-mono)",
+                            }}
+                          >
+                            {task.model}
+                          </span>
+                        )}
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {stats}
+                        </span>
+                      </span>
+                    )}
                   </span>
                 </button>
               );

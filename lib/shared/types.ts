@@ -249,6 +249,12 @@ export interface SubagentTaskSummary {
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;
+  /** Assistant message count in the child session (null when unreadable). */
+  assistantCount?: number | null;
+  /** Distinct files read via the read tool in the child session (null when unreadable). */
+  readCount?: number | null;
+  /** Model id reported by the child session's assistant messages. */
+  model?: string | null;
 }
 
 export interface SessionContext {
