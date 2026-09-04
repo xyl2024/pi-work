@@ -40,7 +40,6 @@ import { PromptsConfig } from "../settings/PromptsConfig";
 import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerModal } from "../scheduler";
-import { WorkflowsModal } from "../workflow";
 import { ChannelsModal } from "../channels/ChannelsModal";
 import { ToolsMarketModal } from "../tools-market/ToolsMarketModal";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
@@ -471,7 +470,6 @@ export function AppShell() {
   const [promptsConfigOpen, setPromptsConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
-  const [workflowOpen, setWorkflowOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [toolsMarketOpen, setToolsMarketOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
@@ -504,7 +502,6 @@ export function AppShell() {
     setPromptsConfigOpen(false);
     setSettingsConfigOpen(false);
     setSchedulerOpen(false);
-    setWorkflowOpen(false);
     setChannelsOpen(false);
     setInboxOpen(false);
     setPaletteOpen(true);
@@ -1817,7 +1814,6 @@ export function AppShell() {
       onOpenSkills={() => setSkillsConfigOpen(true)}
       onOpenPrompts={() => setPromptsConfigOpen(true)}
       onOpenScheduler={() => setSchedulerOpen(true)}
-      onOpenWorkflows={() => setWorkflowOpen(true)}
       onOpenChannels={() => setChannelsOpen(true)}
       onOpenToolMarket={() => setToolsMarketOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
@@ -2099,13 +2095,6 @@ export function AppShell() {
       <SchedulerModal
         open={schedulerOpen}
         onClose={() => setSchedulerOpen(false)}
-        onOpenSession={handleOpenScheduledSession}
-      />
-    )}
-    {workflowOpen && (
-      <WorkflowsModal
-        open={workflowOpen}
-        onClose={() => setWorkflowOpen(false)}
         onOpenSession={handleOpenScheduledSession}
       />
     )}

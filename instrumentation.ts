@@ -27,7 +27,6 @@ export async function register(): Promise<void> {
 
   await safeBootstrap("wechat",    () => import("@/lib/server/wechat/startup"));
   await safeBootstrap("scheduler", () => import("@/lib/server/scheduler/startup"));
-  await safeBootstrap("workflow",  () => import("@/lib/server/workflow/startup"));
   await safeBootstrap("rss",       () => import("@/lib/server/rss/startup"));
   await safeBootstrap("terminal",  () => import("@/lib/server/terminal/startup"));
 }

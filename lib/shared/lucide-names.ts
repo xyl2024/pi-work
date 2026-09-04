@@ -155,7 +155,6 @@ export const CWD_ICON_NAMES = [
   "Percent",
   "Calculator",
   "Scale",
-  "Workflow",
   "Waypoints",
   "Split",
   "Combine",
