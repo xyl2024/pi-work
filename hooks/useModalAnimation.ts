@@ -129,6 +129,13 @@ export function useModalAnimation({
   useEffect(() => {
     if (isOpen) {
       if (phaseRef.current === "closed" || phaseRef.current === "leaving") {
+        // Reopening while a close is still in flight: cancel the pending
+        // close timer, otherwise it fires mid-reopen and yanks the modal
+        // closed again (stray onClose + vanished modal).
+        if (closeTimerRef.current !== null) {
+          clearTimeout(closeTimerRef.current);
+          closeTimerRef.current = null;
+        }
         setPhase("entering");
         const raf = requestAnimationFrame(() => {
           // Guard: if the modal was already closed again before the rAF
@@ -146,8 +153,19 @@ export function useModalAnimation({
       return undefined;
     }
 
-    // !isOpen
-    if (phaseRef.current === "open" || phaseRef.current === "entering") {
+    // !isOpen — drive the close from any live phase (open / entering /
+    // leaving). Re-scheduling on "leaving" is deliberate: if this effect
+    // re-runs while a close is already animating (e.g. the parent flipped
+    // `open` again mid-close), the previous run's cleanup clears the timer,
+    // and without a re-schedule here the phase would strand at "leaving"
+    // forever — leaving an invisible fullscreen backdrop that swallows
+    // every click on the page. Always keeping one timer alive guarantees
+    // the phase terminates at "closed".
+    if (
+      phaseRef.current === "open" ||
+      phaseRef.current === "entering" ||
+      phaseRef.current === "leaving"
+    ) {
       setPhase("leaving");
       if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
       closeTimerRef.current = window.setTimeout(() => {
@@ -172,9 +190,12 @@ export function useModalAnimation({
   }, []);
 
   const requestClose = useCallback(() => {
-    // Only act from "open" — repeats while animating are no-ops, and
-    // before "open" the panel isn't interactive yet anyway.
-    if (phaseRef.current !== "open") return;
+    // Act from "open" AND "entering" — the latter matters because a click
+    // can land on the backdrop within the first animation frame window;
+    // no-op'ing there would strand an invisible backdrop that swallows
+    // clicks and can never be dismissed. Repeats while already leaving
+    // are no-ops.
+    if (phaseRef.current !== "open" && phaseRef.current !== "entering") return;
     if (shouldConfirm) {
       const result = shouldConfirm();
       if (result === false) return;
