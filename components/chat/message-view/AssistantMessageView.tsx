@@ -10,6 +10,7 @@ import { copyText } from "@/lib/client/clipboard";
 import { Tooltip } from "../../ui/Tooltip";
 import { MorphToggleIcon } from "../../ui/MorphToggleIcon";
 import { extractImageGallery, type ImageItem } from "@/components/renderers/ImageLightbox";
+import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { ReadFileChips } from "../ReadFileChips";
 import { COPY, CHECK, THUMBS_UP, HEART } from "@/lib/client/icon-paths";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
@@ -29,6 +30,8 @@ interface AssistantMessageViewProps {
   afterContent?: React.ReactNode;
   turnDuration?: { startMs: number; endMs?: number; running?: boolean };
   readFiles?: ReadFileInfo[];
+  /** Turn-level aggregate added/deleted line counts (footer chip). */
+  turnDiffStats?: ToolDiffStats | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
   cwd?: string | null;
   sessionId?: string;
@@ -47,6 +50,7 @@ function AssistantMessageViewInner({
   afterContent,
   turnDuration,
   readFiles,
+  turnDiffStats,
   onOpenFile,
   cwd,
 }: AssistantMessageViewProps) {
@@ -364,8 +368,8 @@ function AssistantMessageViewInner({
             <TurnDuration startMs={turnDuration.startMs} endMs={turnDuration.endMs} running={!!turnDuration.running} />
           </span>
         )}
-        {readFiles && readFiles.length > 0 && onOpenFile && (
-          <ReadFileChips files={readFiles} onOpenFile={onOpenFile} />
+        {((readFiles && readFiles.length > 0) || turnDiffStats) && onOpenFile && (
+          <ReadFileChips files={readFiles ?? []} diffStats={turnDiffStats} onOpenFile={onOpenFile} />
         )}
         {!isStreaming && (message.usage || time) && (
           <span style={{

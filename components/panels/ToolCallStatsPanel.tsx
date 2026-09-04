@@ -5,7 +5,7 @@ import type * as echarts from "echarts";
 import { useI18n } from "@/hooks/useI18n";
 import { EchartsChart } from "@/components/renderers/EchartsChart";
 import { Tooltip } from "@/components/ui/Tooltip";
-import type { ToolCallStatsSnapshot, BashRecord, PerToolStat } from "@/hooks/useToolCallStats";
+import type { ToolCallStatsSnapshot, BashRecord, FileEditRecord, PerToolStat } from "@/hooks/useToolCallStats";
 
 // ── Props ──
 
@@ -22,12 +22,13 @@ const COLOR_ERR = "#f87171";
 const COLOR_ACCENT = "#3b82f6";
 const PIE_TOP_N = 6;
 const BASH_PREVIEW_LIMIT = 20;
+const FILE_EDIT_PREVIEW_LIMIT = 20;
 
 // ── Component ──
 
 export function ToolCallStatsPanel({ snapshot, onScrollToToolCall }: Props) {
   const { t } = useI18n();
-  const { toolStats, bashRecords, totalCount, runningCount } = snapshot;
+  const { toolStats, bashRecords, fileEdits, totalCount, runningCount } = snapshot;
 
   // ── Derived ──
   const toolEntries = useMemo<{ name: string; stat: PerToolStat }[]>(() => {
@@ -158,6 +159,22 @@ export function ToolCallStatsPanel({ snapshot, onScrollToToolCall }: Props) {
   const visibleBash = showAllBash ? recentBash : recentBash.slice(0, BASH_PREVIEW_LIMIT);
   const bashHiddenCount = Math.max(0, recentBash.length - BASH_PREVIEW_LIMIT);
 
+  // ── File edits (edit / write line counts) ──
+  const recentEdits = useMemo(() => [...fileEdits].reverse(), [fileEdits]);
+  const [showAllEdits, setShowAllEdits] = useState(false);
+  const visibleEdits = showAllEdits ? recentEdits : recentEdits.slice(0, FILE_EDIT_PREVIEW_LIMIT);
+  const editsHiddenCount = Math.max(0, recentEdits.length - FILE_EDIT_PREVIEW_LIMIT);
+  const editTotals = useMemo(() => {
+    let additions = 0;
+    let deletions = 0;
+    for (const r of fileEdits) {
+      if (r.isError) continue;
+      additions += r.additions ?? 0;
+      deletions += r.deletions ?? 0;
+    }
+    return { additions, deletions };
+  }, [fileEdits]);
+
   // ── Render ──
 
   return (
@@ -274,6 +291,23 @@ export function ToolCallStatsPanel({ snapshot, onScrollToToolCall }: Props) {
             <div style={{ fontSize: 12, color: "var(--text-dim)", textAlign: "center", padding: "12px 0" }}>
               {t("No bash commands yet")}
             </div>
+          </Section>
+        )}
+
+        {/* ── File changes (edit / write) ── */}
+        {fileEdits.length > 0 && (
+          <Section title={t("File Changes")}>
+            <div style={{ display: "flex", gap: 12, fontSize: 11, fontFamily: "var(--font-mono)", marginBottom: 4 }}>
+              <span style={{ color: COLOR_OK }}>+{editTotals.additions}</span>
+              <span style={{ color: COLOR_ERR }}>-{editTotals.deletions}</span>
+            </div>
+            <FileEditList
+              records={visibleEdits}
+              hiddenCount={editsHiddenCount}
+              showAll={showAllEdits}
+              onToggleShowAll={() => setShowAllEdits((v) => !v)}
+              onScrollToToolCall={onScrollToToolCall}
+            />
           </Section>
         )}
       </div>
@@ -433,6 +467,118 @@ function BashCommandRow({ record, onClick }: { record: BashRecord; onClick?: (to
             <div style={{ fontSize: 10, color: "var(--text-dim)", borderTop: "1px solid var(--border)", paddingTop: 4, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
               {errorLine}
             </div>
+          )}
+        </div>
+      }
+    >
+      {row}
+    </Tooltip>
+  );
+}
+
+// ── File edit records (edit / write) ──
+
+function FileEditList({
+  records,
+  hiddenCount,
+  showAll,
+  onToggleShowAll,
+  onScrollToToolCall,
+}: {
+  records: FileEditRecord[];
+  hiddenCount: number;
+  showAll: boolean;
+  onToggleShowAll: () => void;
+  onScrollToToolCall?: (toolCallId: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div>
+      {hiddenCount > 0 && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 2 }}>
+          <button
+            onClick={onToggleShowAll}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "var(--accent)",
+              cursor: "pointer",
+              fontSize: 11,
+              padding: 0,
+              fontWeight: 500,
+            }}
+          >
+            {showAll ? t("Show less") : t("Show all ({n})").replace("{n}", String(records.length + hiddenCount))}
+          </button>
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {records.map((r) => (
+          <FileEditRow key={r.toolCallId} record={r} onClick={onScrollToToolCall} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FileEditRow({ record, onClick }: { record: FileEditRecord; onClick?: (toolCallId: string) => void }) {
+  const { t } = useI18n();
+  const statusColor = record.isError ? COLOR_ERR : COLOR_OK;
+  const statusSymbol = record.isError ? "✗" : "✓";
+  const name = record.path.split("/").filter(Boolean).pop() || record.path || "(unknown)";
+  const countsKnown = !record.isError && record.additions !== null && record.deletions !== null;
+
+  const row = (
+    <div
+      onClick={() => onClick?.(record.toolCallId)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "4px 6px",
+        borderRadius: 3,
+        cursor: onClick ? "pointer" : undefined,
+        fontSize: 11,
+        fontFamily: "var(--font-mono)",
+      }}
+      onMouseEnter={(e) => { if (onClick) (e.currentTarget as HTMLElement).style.background = "var(--bg-subtle)"; }}
+      onMouseLeave={(e) => { if (onClick) (e.currentTarget as HTMLElement).style.background = ""; }}
+    >
+      <span style={{ color: statusColor, flexShrink: 0, fontWeight: 600 }}>{statusSymbol}</span>
+      <span style={{ color: "var(--text-dim)", flexShrink: 0, fontSize: 10 }}>{record.toolName}</span>
+      <span style={{ color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+        {name}
+      </span>
+      {countsKnown ? (
+        <span style={{ flexShrink: 0, fontSize: 10 }}>
+          <span style={{ color: COLOR_OK }}>+{record.additions}</span>
+          {(record.deletions ?? 0) > 0 && <span style={{ color: COLOR_ERR, marginLeft: 4 }}>-{record.deletions}</span>}
+        </span>
+      ) : (
+        <span style={{ color: "var(--text-dim)", flexShrink: 0, fontSize: 10 }}>{record.isError ? t("failed") : "—"}</span>
+      )}
+    </div>
+  );
+
+  return (
+    <Tooltip
+      side="left"
+      align="center"
+      content={
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 360 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+            {record.path || "(unknown path)"}
+          </div>
+          {countsKnown ? (
+            <div style={{ fontSize: 10 }}>
+              <span style={{ color: COLOR_OK }}>+{record.additions}</span>
+              <span style={{ color: COLOR_ERR, marginLeft: 6 }}>-{record.deletions}</span>
+              <span style={{ color: "var(--text-dim)", marginLeft: 8 }}>
+                {record.toolName === "write" ? t("lines written (deletions not tracked)") : t("lines changed")}
+              </span>
+            </div>
+          ) : (
+            <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{record.isError ? t("failed") : "—"}</div>
           )}
         </div>
       }

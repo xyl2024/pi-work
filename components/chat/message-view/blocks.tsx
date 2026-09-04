@@ -12,6 +12,7 @@ import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { Tooltip } from "../../ui/Tooltip";
 import { openSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
+import { extractEditDiffStats, extractWriteDiffStats } from "@/lib/shared/tool-diff-stats";
 import { useShowFileResults } from "@/hooks/showFileResultsStore";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
 import { useCollapseNonce } from "./context";
@@ -165,6 +166,17 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
   const isError = result?.isError ?? false;
 
+  // Added/deleted line counts derived purely from the tool's own data:
+  // edit → result details' diff payload (persisted in the session JSONL);
+  // write → the input content. Never from git. Null while streaming.
+  const diffStats = useMemo(() => {
+    if (!isFileMutation) return null;
+    if (isError) return null;
+    return block.toolName === "edit"
+      ? extractEditDiffStats(result?.details)
+      : extractWriteDiffStats(block.input);
+  }, [isFileMutation, isError, block, result]);
+
   const isShowFile = isShowFileToolName(block.toolName);
   const showFilePaths: string[] | null = (() => {
     if (!isShowFile || !block.input) return null;
@@ -221,6 +233,12 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
           {getToolPreview(block)}
         </span>
+        {diffStats && (
+          <span style={{ flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 11 }}>
+            <span style={{ color: "#16a34a" }}>+{diffStats.additions}</span>
+            {diffStats.deletions > 0 && <span style={{ color: "#f87171", marginLeft: 3 }}>-{diffStats.deletions}</span>}
+          </span>
+        )}
         {isShowFile && showFilePaths && (
           <Tooltip content={t("Open in session library")}>
             <button

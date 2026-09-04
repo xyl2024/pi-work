@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useReducer, useEffect, useRef } from "react";
 import type { AgentMessage, ToolCallContent, ToolResultMessage, AssistantMessage } from "@/lib/shared/types";
+import { extractEditDiffStats, extractWriteDiffStats, extractMutatingPath } from "@/lib/shared/tool-diff-stats";
 import { useToolCallStatsRegister } from "./ToolCallStatsContext";
 import type { ToolCallStatsEvent } from "./ToolCallStatsContext";
 
@@ -32,9 +33,24 @@ export interface BashRecord {
   timestamp: number;
 }
 
+/** One edit / write tool call with its added/deleted line counts, derived
+ *  purely from the tool's own data (edit: result details diff; write: input
+ *  content) — never from git. Counts are null until the tool finishes (live)
+ *  or when the result carried no diff info (e.g. pre-existing sessions). */
+export interface FileEditRecord {
+  toolCallId: string;
+  toolName: "edit" | "write";
+  path: string;
+  additions: number | null;
+  deletions: number | null;
+  isError: boolean;
+  timestamp: number;
+}
+
 export interface ToolCallStatsSnapshot {
   toolStats: Map<string, PerToolStat>;
   bashRecords: BashRecord[];
+  fileEdits: FileEditRecord[];
   totalCount: number;
   runningCount: number;
 }
@@ -72,6 +88,7 @@ function extractBashCommand(args: Record<string, unknown> | undefined): string {
 interface StatsState {
   toolStats: Map<string, PerToolStat>;
   bashRecords: BashRecord[];
+  fileEdits: FileEditRecord[];
   running: Map<string, { toolName: string; args?: Record<string, unknown> }>;
 }
 
@@ -89,8 +106,9 @@ type StatsAction =
       isError: boolean;
       timestamp: number;
       resultText?: string;
+      resultDetails?: unknown;
     }
-  | { type: "reset"; toolStats: Map<string, PerToolStat>; bashRecords: BashRecord[] };
+  | { type: "reset"; toolStats: Map<string, PerToolStat>; bashRecords: BashRecord[]; fileEdits: FileEditRecord[] };
 
 function statsReducer(state: StatsState, action: StatsAction): StatsState {
   switch (action.type) {
@@ -119,7 +137,21 @@ function statsReducer(state: StatsState, action: StatsAction): StatsState {
         };
         nextBash = [...state.bashRecords, record];
       }
-      return { toolStats: nextStats, bashRecords: nextBash, running: nextRunning };
+
+      let nextFileEdits = state.fileEdits;
+      if (action.toolName === "edit" || action.toolName === "write") {
+        const record: FileEditRecord = {
+          toolCallId: action.toolCallId,
+          toolName: action.toolName,
+          path: extractMutatingPath(action.args),
+          additions: null,
+          deletions: null,
+          isError: false,
+          timestamp: action.timestamp,
+        };
+        nextFileEdits = [...state.fileEdits, record];
+      }
+      return { toolStats: nextStats, bashRecords: nextBash, fileEdits: nextFileEdits, running: nextRunning };
     }
     case "tool_end": {
       const runningEntry = state.running.get(action.toolCallId);
@@ -147,10 +179,29 @@ function statsReducer(state: StatsState, action: StatsAction): StatsState {
             : r,
         );
       }
-      return { toolStats: nextStats, bashRecords: nextBash, running: nextRunning };
+
+      let nextFileEdits = state.fileEdits;
+      if (runningEntry.toolName === "edit" || runningEntry.toolName === "write") {
+        // edit: counts come from the result details' diff payload; write: from
+        // the tool input content captured at start. No git involved.
+        const stats = runningEntry.toolName === "edit"
+          ? extractEditDiffStats(action.resultDetails)
+          : extractWriteDiffStats(runningEntry.args);
+        nextFileEdits = state.fileEdits.map((r) =>
+          r.toolCallId === action.toolCallId
+            ? {
+                ...r,
+                isError,
+                additions: isError ? null : stats?.additions ?? null,
+                deletions: isError ? null : stats?.deletions ?? null,
+              }
+            : r,
+        );
+      }
+      return { toolStats: nextStats, bashRecords: nextBash, fileEdits: nextFileEdits, running: nextRunning };
     }
     case "reset":
-      return { toolStats: action.toolStats, bashRecords: action.bashRecords, running: new Map() };
+      return { toolStats: action.toolStats, bashRecords: action.bashRecords, fileEdits: action.fileEdits, running: new Map() };
     default:
       return state;
   }
@@ -161,11 +212,13 @@ function statsReducer(state: StatsState, action: StatsAction): StatsState {
 interface BuiltStats {
   toolStats: Map<string, PerToolStat>;
   bashRecords: BashRecord[];
+  fileEdits: FileEditRecord[];
 }
 
 function buildStatsFromMessages(messages: AgentMessage[]): BuiltStats {
   const toolStats = new Map<string, PerToolStat>();
   const bashRecords: BashRecord[] = [];
+  const fileEdits: FileEditRecord[] = [];
   const resultsById = new Map<string, ToolResultMessage>();
   for (const msg of messages) {
     if (msg.role === "toolResult") {
@@ -216,10 +269,27 @@ function buildStatsFromMessages(messages: AgentMessage[]): BuiltStats {
           timestamp: assistantTs,
         });
       }
+
+      if (toolName === "edit" || toolName === "write") {
+        // edit: pi persists the tool result's `details` (diff payload) in the
+        // session JSONL, so counts survive reloads. write: derived from input.
+        const stats = toolName === "edit"
+          ? extractEditDiffStats(result?.details)
+          : extractWriteDiffStats(tc.input);
+        fileEdits.push({
+          toolCallId: tc.toolCallId,
+          toolName,
+          path: extractMutatingPath(tc.input),
+          additions: isError ? null : stats?.additions ?? null,
+          deletions: isError ? null : stats?.deletions ?? null,
+          isError,
+          timestamp: assistantTs,
+        });
+      }
     }
   }
 
-  return { toolStats, bashRecords };
+  return { toolStats, bashRecords, fileEdits };
 }
 
 // ── Hook ──
@@ -233,7 +303,7 @@ export interface UseToolCallStatsReturn {
 export function useToolCallStats(messages: AgentMessage[]): UseToolCallStatsReturn {
   const [state, dispatch] = useReducer(statsReducer, null, () => {
     const init = buildStatsFromMessages(messages);
-    return { toolStats: init.toolStats, bashRecords: init.bashRecords, running: new Map() };
+    return { toolStats: init.toolStats, bashRecords: init.bashRecords, fileEdits: init.fileEdits, running: new Map() };
   });
 
   const [isDrawerOpen, setDrawerOpen] = useState(false);
@@ -258,10 +328,11 @@ export function useToolCallStats(messages: AgentMessage[]): UseToolCallStatsRetu
           isError: event.isError,
           timestamp: event.timestamp,
           resultText: event.resultText,
+          resultDetails: event.resultDetails,
         });
         break;
       case "reset":
-        dispatch({ type: "reset", toolStats: new Map(), bashRecords: [] });
+        dispatch({ type: "reset", toolStats: new Map(), bashRecords: [], fileEdits: [] });
         break;
     }
   }, []);
@@ -276,7 +347,7 @@ export function useToolCallStats(messages: AgentMessage[]): UseToolCallStatsRetu
     if (messages.length !== prevMessagesLenRef.current) {
       prevMessagesLenRef.current = messages.length;
       const init = buildStatsFromMessages(messages);
-      dispatch({ type: "reset", toolStats: init.toolStats, bashRecords: init.bashRecords });
+      dispatch({ type: "reset", toolStats: init.toolStats, bashRecords: init.bashRecords, fileEdits: init.fileEdits });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length]);
@@ -285,6 +356,7 @@ export function useToolCallStats(messages: AgentMessage[]): UseToolCallStatsRetu
   const snapshot: ToolCallStatsSnapshot = {
     toolStats: state.toolStats,
     bashRecords: state.bashRecords,
+    fileEdits: state.fileEdits,
     totalCount: state.toolStats.size > 0
       ? Array.from(state.toolStats.values()).reduce((s, v) => s + v.count, 0)
       : state.bashRecords.length,

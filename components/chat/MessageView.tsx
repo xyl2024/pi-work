@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import type { AgentMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared/types";
+import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { UserMessageView } from "./message-view/UserMessageView";
 import { AssistantMessageView } from "./message-view/AssistantMessageView";
 import { CollapseNonceProvider, useCollapseNonce } from "./message-view/context";
@@ -30,6 +31,8 @@ interface Props {
   turnDuration?: { startMs: number; endMs?: number; running?: boolean };
   /** Files surfaced by this turn's `read` tool calls (footer chips). */
   readFiles?: ReadFileInfo[];
+  /** Turn-level aggregate added/deleted line counts (footer chip). */
+  turnDiffStats?: ToolDiffStats | null;
   /** Open a file in the right-hand panel (threaded from AppShell). */
   onOpenFile?: (filePath: string, fileName: string) => void;
   /** Working directory used to render bash tool prompts. */
@@ -45,7 +48,7 @@ interface Props {
  * historical re-renders when neither message content nor props move,
  * which is the common case during a streaming turn.
  */
-function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, onOpenFile, cwd }: Props) {
+function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, turnDiffStats, onOpenFile, cwd }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
 
   if (message.role === "user") {
@@ -58,7 +61,7 @@ function MessageViewInner({ message, isStreaming, toolResults, modelNames, model
   if (message.role === "assistant") {
     return (
       <div className={isFocused ? "search-flash" : undefined}>
-        <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} onOpenFile={onOpenFile} cwd={cwd} />
+        <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} turnDiffStats={turnDiffStats} onOpenFile={onOpenFile} cwd={cwd} />
       </div>
     );
   }

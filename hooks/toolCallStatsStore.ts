@@ -23,6 +23,7 @@ export interface ToolCallStatsView {
 const EMPTY_SNAPSHOT: ToolCallStatsSnapshot = {
   toolStats: new Map(),
   bashRecords: [],
+  fileEdits: [],
   totalCount: 0,
   runningCount: 0,
 };

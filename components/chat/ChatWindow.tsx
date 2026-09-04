@@ -12,6 +12,7 @@ import type {
 } from "@/lib/shared/types";
 import { countToolCallsByName } from "@/lib/shared/message-display";
 import { getFileName } from "@/lib/shared/file-paths";
+import { extractEditDiffStats, extractWriteDiffStats, sumDiffStats, type ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { ReadFileChips } from "./ReadFileChips";
 import { StreamingBubble } from "./StreamingBubble";
@@ -1304,6 +1305,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   inStreamingViewport?: boolean;
                   afterContent?: React.ReactNode;
                   readFiles?: ReadFileInfo[];
+                  turnDiffStats?: ToolDiffStats | null;
                   onOpenFile?: (filePath: string, fileName: string) => void;
                 } = {},
               ): React.ReactNode => {
@@ -1349,6 +1351,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     afterContent={opts.afterContent}
                     turnDuration={turnDurationMap.get(idx)}
                     readFiles={opts.readFiles}
+                    turnDiffStats={opts.turnDiffStats}
                     onOpenFile={opts.onOpenFile}
                     cwd={session?.cwd ?? cwd}
                   />
@@ -1378,6 +1381,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
               // viewport is up, these render below it (above the loading row)
               // instead of the final assistant footer.
               let streamingTurnReadFiles: ReadFileInfo[] = [];
+              let streamingTurnDiffStats: ToolDiffStats | null = null;
               // Divider before the message at `idx` if that message is the
               // first displayed message after a compaction point.
               const maybeDivider = (idx: number): React.ReactNode => {
@@ -1451,6 +1455,31 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   return out;
                 })();
 
+                // Turn-level aggregate added/deleted line counts across this
+                // turn's edit/write tool calls. Derived purely from the tools'
+                // own data (edit: result details' diff payload; write: input
+                // content) — never from git. Errored calls are skipped.
+                const turnDiffStats: ToolDiffStats | null = (() => {
+                  const parts: Array<ToolDiffStats | null | undefined> = [];
+                  for (let i = userIdx + 1; i < endIdx; i++) {
+                    const m = renderMessages[i];
+                    if (m.role !== "assistant") continue;
+                    for (const block of (m as AssistantMessage).content ?? []) {
+                      if (block.type !== "toolCall") continue;
+                      const tc = block as ToolCallContent;
+                      if (tc.toolName !== "edit" && tc.toolName !== "write") continue;
+                      const result = toolResultsMap.get(tc.toolCallId);
+                      if (result?.isError) continue;
+                      parts.push(
+                        tc.toolName === "edit"
+                          ? extractEditDiffStats(result?.details)
+                          : extractWriteDiffStats(tc.input),
+                      );
+                    }
+                  }
+                  return sumDiffStats(parts);
+                })();
+
                 // Anchor message (user)
                 rendered.push(renderOne(userIdx));
 
@@ -1490,7 +1519,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   agentPhase?.kind !== "compacting" &&
                   userIdx === lastUserIdx &&
                   lastUserIdx !== -1;
-                if (isCurrentTurnInProgress) streamingTurnReadFiles = readFiles;
+                if (isCurrentTurnInProgress) {
+                  streamingTurnReadFiles = readFiles;
+                  streamingTurnDiffStats = turnDiffStats;
+                }
 
                 const processChildren = (
                   <Fragment>
@@ -1535,6 +1567,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     // While this turn is streaming, the read-file chips move
                     // below the streaming viewport — not the footer here.
                     readFiles: isCurrentTurnInProgress ? undefined : readFiles,
+                    turnDiffStats: isCurrentTurnInProgress ? undefined : turnDiffStats,
                     onOpenFile: handleOpenFileFromLibrary,
                     inStreamingViewport: isCurrentTurnInProgress,
                   }),
@@ -1566,9 +1599,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           )}
                         </StreamingMessageViewport>
                       )}
-                      {streamingStartedThisTurn && streamingTurnReadFiles.length > 0 && (
+                      {streamingStartedThisTurn && (streamingTurnReadFiles.length > 0 || streamingTurnDiffStats) && (
                         <div className="pb-1">
-                          <ReadFileChips files={streamingTurnReadFiles} onOpenFile={handleOpenFileFromLibrary} />
+                          <ReadFileChips files={streamingTurnReadFiles} diffStats={streamingTurnDiffStats} onOpenFile={handleOpenFileFromLibrary} />
                         </div>
                       )}
                       <div className="py-2" style={{ height: 40, boxSizing: "border-box" }}>

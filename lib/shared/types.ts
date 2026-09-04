@@ -78,6 +78,9 @@ export interface ToolResultMessage {
   toolCallId: string;
   toolName?: string;
   content: (TextContent | ImageContent)[];
+  /** Tool-specific details payload (e.g. edit's `{ diff, patch,
+   *  firstChangedLine }`). Persisted by pi in the session JSONL. */
+  details?: unknown;
   isError?: boolean;
   timestamp?: number;
 }

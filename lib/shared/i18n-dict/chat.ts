@@ -197,6 +197,10 @@ export const chat = {
   "Show all files": "显示全部文件",
   "Files read this turn:": "本轮已读文件：",
   "No bash commands yet": "暂无 Bash 命令",
+  "File Changes": "文件改动",
+  "Lines changed this turn": "本轮文件变更行数",
+  "lines changed": "行变更",
+  "lines written (deletions not tracked)": "写入行数（不追踪删除行）",
 
   // Activity / context panel
   "Context": "上下文",

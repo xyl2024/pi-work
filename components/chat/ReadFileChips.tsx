@@ -8,6 +8,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { normalizeFilePathSlashes } from "@/lib/shared/file-paths";
 import type { ReadFileInfo } from "@/lib/shared/types";
+import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 
 const MAX_VISIBLE = 2;
 const BUBBLE_WIDTH = 264;
@@ -17,6 +18,10 @@ const CHIP_MAX_WIDTH = 150;
 
 interface Props {
   files: ReadFileInfo[];
+  /** Turn-level aggregate added/deleted line counts from edit/write tool
+   *  calls (derived from the tools' own data, no git). Rendered as a chip to
+   *  the right of the read-file chips when non-null. */
+  diffStats?: ToolDiffStats | null;
   onOpenFile: (filePath: string, fileName: string) => void;
 }
 
@@ -24,7 +29,7 @@ interface Props {
  *  Shows at most {@link MAX_VISIBLE} chips, then a "..." that smoothly expands
  *  a bubble (down by default, up only when space below is tight) with the full
  *  list. Every chip/list row opens the file in the right-hand panel. */
-export function ReadFileChips({ files, onOpenFile }: Props) {
+export function ReadFileChips({ files, diffStats, onOpenFile }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [direction, setDirection] = useState<"down" | "up">("down");
@@ -130,7 +135,34 @@ export function ReadFileChips({ files, onOpenFile }: Props) {
           <FileListBubble files={files} open={open} maxHeight={bubbleMaxHeight} direction={direction} onOpen={openFile} />
         </div>
       )}
+      {diffStats && (diffStats.additions > 0 || diffStats.deletions > 0) && <DiffStatChip stats={diffStats} />}
     </div>
+  );
+}
+
+/** Turn-level aggregate changed-lines label: [+N] [-M] as plain text.
+ *  No icon, no pill background — just inline colored counts.
+ *  Non-interactive; Tooltip explains what the numbers mean. */
+function DiffStatChip({ stats }: { stats: ToolDiffStats }) {
+  const { t } = useI18n();
+  return (
+    <Tooltip content={t("Lines changed this turn")}>
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          fontSize: 11,
+          fontFamily: "var(--font-mono)",
+          lineHeight: 1,
+          flexShrink: 0,
+          whiteSpace: "nowrap",
+        }}
+      >
+        <span style={{ color: "#16a34a" }}>+{stats.additions}</span>
+        {stats.deletions > 0 && <span style={{ color: "#f87171" }}>-{stats.deletions}</span>}
+      </span>
+    </Tooltip>
   );
 }
 
