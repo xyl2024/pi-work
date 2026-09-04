@@ -14,11 +14,12 @@
  * error message.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/icons";
+import { ModelPickerModal } from "@/components/chat/ModelPickerModal";
 import { CwdPicker } from "@/components/sessions/CwdPicker";
 import { AnimatedPopover } from "@/components/ui/AnimatedPopover";
 import { Cron } from "croner";
@@ -828,21 +829,27 @@ function ModelSelect({ form, update, meta, error }: { form: FormState; update: <
   const modelIcons = meta?.modelIcons;
   const isUnselected = !form.provider || !form.modelId;
   const current = options.find((o) => o.provider === form.provider && o.id === form.modelId);
-  const groups: { provider: string; options: typeof options }[] = [];
-  for (const opt of options) {
-    const g = groups.find((x) => x.provider === opt.provider);
-    if (g) g.options.push(opt);
-    else groups.push({ provider: opt.provider, options: [opt] });
-  }
-  const { open, setOpen, rootRef } = useDropdown();
+  // Stable identity across parent re-renders — TaskFormModal re-renders
+  // often (toasts, meta loads, form tweaks), and a fresh object literal
+  // here would churn ModelPickerModal's memoized deps every time.
+  const pickerModel = useMemo(
+    () => (isUnselected ? null : { provider: form.provider, modelId: form.modelId }),
+    [isUnselected, form.provider, form.modelId],
+  );
+  // Plain local flag — the picker is a body-portal modal that owns its own
+  // outside-click/Esc dismissal. A document-level mousedown handler (like
+  // useDropdown's) would see clicks on the modal's rows/backdrop as
+  // "outside the trigger" and close the modal mid-interaction, swallowing
+  // the row click.
+  const [open, setOpen] = useState(false);
   const triggerIconId = resolveProviderIcon(current?.provider, current?.id, modelIcons);
 
   return (
     <Field label={t("Model")} hint={t("Scheduler field required")} error={error}>
-      <div ref={rootRef} style={{ position: "relative" }}>
+      <div style={{ position: "relative" }}>
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setOpen(true)}
           style={pillTriggerStyle(open)}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = "var(--bg-hover)";
@@ -864,63 +871,41 @@ function ModelSelect({ form, update, meta, error }: { form: FormState; update: <
               : current?.name ?? `${form.provider}/${form.modelId}`}
           </span>
         </button>
-        <AnimatedPopover open={open} style={dropdownPanelStyle} maxHeight={320}>
-          {groups.length > 0 && (
-            <div>
-              {groups.map((g) => (
-                <div key={g.provider}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    <ProviderIcon id={resolveProviderIcon(g.provider, undefined, modelIcons) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
-                    <span>{g.provider}</span>
-                  </div>
-                  {g.options.map((opt) => {
-                    const active = opt.provider === form.provider && opt.id === form.modelId;
-                    return (
-                      <button
-                        key={`${opt.provider}:${opt.id}`}
-                        type="button"
-                        onClick={() => {
-                          update("provider", opt.provider);
-                          update("modelId", opt.id);
-                          // Sync the thinking level to whatever the freshly
-                          // selected model actually supports. Scheduled
-                          // tasks have to run with an explicit level (no
-                          // "auto"), so when the user picks a new model
-                          // and their previous level isn't supported we
-                          // jump to the closest valid one — otherwise the
-                          // task would persist a level that the run-time
-                          // set_thinking_level call would silently clamp,
-                          // leaving the saved task out of sync with what
-                          // the agent actually uses. An empty string
-                          // (user hasn't picked yet) is left alone — the
-                          // form's submit-time validation owns that case.
-                          const nextKey = `${opt.provider}:${opt.id}`;
-                          const nextAvailable = meta?.thinkingLevels[nextKey] ?? null;
-                          const currentLevel = form.thinkingLevel;
-                          if (currentLevel && (THINKING_LEVEL_ORDER as readonly string[]).includes(currentLevel)) {
-                            const nextLevel = pickClosestAvailableThinkingLevel(
-                              currentLevel as (typeof THINKING_LEVEL_ORDER)[number],
-                              nextAvailable,
-                            );
-                            if (nextLevel !== currentLevel) {
-                              update("thinkingLevel", nextLevel);
-                            }
-                          }
-                          setOpen(false);
-                        }}
-                        style={dropdownOptionStyle(active)}
-                      >
-                        <CheckOrGap active={active} />
-                        <ProviderIcon id={resolveProviderIcon(opt.provider, opt.id, modelIcons) ?? ""} size={11} fallback={<ProviderGearIcon size={10} />} />
-                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{opt.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-        </AnimatedPopover>
+        {/* Same `/model` picker modal as the chat input: grid layout +
+            keyboard navigation, replacing the former vertical dropdown. */}
+        <ModelPickerModal
+          open={open}
+          model={pickerModel}
+          modelIcons={modelIcons}
+          modelList={options}
+          onModelChange={(provider, modelId) => {
+            update("provider", provider);
+            update("modelId", modelId);
+            // Sync the thinking level to whatever the freshly selected
+            // model actually supports. Scheduled tasks have to run with
+            // an explicit level (no "auto"), so when the user picks a
+            // new model and their previous level isn't supported we jump
+            // to the closest valid one — otherwise the task would persist
+            // a level that the run-time set_thinking_level call would
+            // silently clamp, leaving the saved task out of sync with
+            // what the agent actually uses. An empty string (user hasn't
+            // picked yet) is left alone — the form's submit-time
+            // validation owns that case.
+            const nextKey = `${provider}:${modelId}`;
+            const nextAvailable = meta?.thinkingLevels[nextKey] ?? null;
+            const currentLevel = form.thinkingLevel;
+            if (currentLevel && (THINKING_LEVEL_ORDER as readonly string[]).includes(currentLevel)) {
+              const nextLevel = pickClosestAvailableThinkingLevel(
+                currentLevel as (typeof THINKING_LEVEL_ORDER)[number],
+                nextAvailable,
+              );
+              if (nextLevel !== currentLevel) {
+                update("thinkingLevel", nextLevel);
+              }
+            }
+          }}
+          onClose={() => setOpen(false)}
+        />
       </div>
     </Field>
   );

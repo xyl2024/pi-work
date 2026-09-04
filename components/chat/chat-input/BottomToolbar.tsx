@@ -1,10 +1,11 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import { Tooltip } from "../../ui/Tooltip";
 import { ContextUsageBar } from "../ContextUsageBar";
 import { CwdPicker } from "../../sessions/CwdPicker";
-import { ModelPicker } from "../ModelPicker";
+import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
+import { ModelPickerModal } from "../ModelPickerModal";
 import { ToolsDropdownPanel, matchNamedToolPreset, TOOL_PRESET_PATTERNS, TOOL_PRESET_TRIGGER_LABELS } from "../ToolsDropdownPanel";
 import { ThinkingPicker, THINKING_LEVEL_COLOR, type ThinkingLevel } from "../ThinkingPicker";
 import { MoreMenu } from "../MoreMenu";
@@ -94,8 +95,20 @@ export function BottomToolbar(props: BottomToolbarProps) {
     onAbort,
   } = props;
 
+  // Model selection now goes through the same `/model` modal as the slash
+  // command — the toolbar button is just a trigger that opens it.
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
+
+  // Hide the trigger entirely when no models are available (matches the
+  // old ModelPicker's gating), and resolve the display name for it.
+  const modelOptionsEmpty = (modelList?.length ?? 0) === 0 && Object.keys(modelNames ?? {}).length === 0;
+  const currentModelName = model
+    ? (modelList?.find((m) => m.id === model.modelId && m.provider === model.provider)?.name
+       ?? modelNames?.[model.modelId]
+       ?? model.modelId)
+    : null;
+
   // Current thinking level's display label for the streaming badge —
-  // mirrors the same computation inside ThinkingPicker so the user sees
   // the same mapped value the picker button shows.
   const currentThinkingLevel: ThinkingLevel = (thinkingLevel ?? "off") as ThinkingLevel;
   const currentThinkingMapped = thinkingLevelMap
@@ -196,14 +209,56 @@ export function BottomToolbar(props: BottomToolbarProps) {
             </button>
           </Tooltip>
         )}
-        {/* Model selector — visible always, disabled during streaming */}
-        <ModelPicker
+        {/* Model selector — visible always, disabled during streaming.
+            Opens the `/model` picker modal (grid + keyboard navigation)
+            instead of an inline dropdown. Hidden when no models exist. */}
+        {!modelOptionsEmpty && (
+          <button
+            type="button"
+            onClick={() => setModelPickerOpen(true)}
+            disabled={isStreaming}
+            aria-label={t("Switch model")}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "8px 12px",
+              height: 32,
+              maxWidth: 220, overflow: "hidden",
+              background: "none",
+              border: "none",
+              borderRadius: 9,
+              color: "var(--text-muted)",
+              cursor: isStreaming ? "not-allowed" : "pointer",
+              fontSize: 12,
+              opacity: isStreaming ? 0.5 : 1,
+              transition: "background 0.12s, color 0.12s",
+            }}
+            onMouseEnter={(e) => {
+              if (isStreaming) return;
+              e.currentTarget.style.background = "var(--bg-hover)";
+              e.currentTarget.style.color = "var(--text)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "none";
+              e.currentTarget.style.color = "var(--text-muted)";
+            }}
+          >
+            <ProviderIcon
+              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons) ?? ""}
+              size={12}
+              fallback={<ProviderGearIcon size={11} />}
+            />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentModelName}</span>
+          </button>
+        )}
+        <ModelPickerModal
+          open={modelPickerOpen}
           model={model ?? null}
           modelNames={modelNames}
           modelIcons={modelIcons}
           modelList={modelList}
-          onModelChange={onModelChange ?? (() => {})}
           disabled={isStreaming}
+          onModelChange={onModelChange}
+          onClose={() => setModelPickerOpen(false)}
         />
 
         {/* CWD picker — always visible (new-session flow picks the project;

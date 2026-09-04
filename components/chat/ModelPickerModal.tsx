@@ -20,9 +20,13 @@ interface ModelOption {
  * interplay with the active model, but rendered as a centered portal modal
  * with a filter box and full keyboard navigation:
  *
- *   - Type to filter models by name / model id / provider.
- *   - ↑ / ↓ move the active row, Enter confirms, Esc closes.
- *   - Mouse: click a row to pick it, click the backdrop or × to close.
+ *   - Opens (and re-filters) with the currently-active model highlighted
+ *     instead of the first row, when present in the list.
+ *   - Models render as a grid of cards grouped by provider.
+ *   - ← / → move one card, ↑ / ↓ move a full grid row; Enter confirms,
+ *     Esc closes.
+ *   - Mouse: hover moves the active card, click to pick; click the
+ *     backdrop or × to close.
  *
  * Selecting the currently-active model just closes the modal (no-op),
  * matching ModelPicker's click behaviour. While `disabled` (agent mid-
@@ -79,6 +83,21 @@ export function ModelPickerModal({
     [model],
   );
 
+  // Number of cards per grid row at the active index — derived from the
+  // DOM (cards sharing the same offsetTop) so it stays correct across
+  // resizes, filtering and provider-group boundaries.
+  const columnCount = useCallback((index: number): number => {
+    const el = rowRefs.current[index];
+    const grid = el?.parentElement;
+    if (!el || !grid) return 1;
+    const top = el.offsetTop;
+    let count = 0;
+    for (const child of Array.from(grid.children)) {
+      if (Math.abs((child as HTMLElement).offsetTop - top) < 2) count++;
+    }
+    return Math.max(1, count);
+  }, []);
+
   // Filter on open: empty query → everything, otherwise match provider /
   // model id / display name (case-insensitive).
   const filtered = useMemo(() => {
@@ -103,15 +122,35 @@ export function ModelPickerModal({
     return out;
   }, [filtered]);
 
-  // Fresh modal per open: reset the filter and the active row, focus the
-  // search input (mirrors Cmd+K palette / CwdSessionsModal).
+  // Fresh modal per open: reset the filter and focus the
+  // search input (mirrors Cmd+K palette / CwdSessionsModal). The active
+  // row is set by the "enter at current model" effect below.
   useEffect(() => {
     if (!open) return;
     setQuery("");
-    setActiveIndex(0);
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [open]);
+
+  // Enter the list at the currently-selected model rather than the first
+  // row — on open and whenever the filter changes the list. Fall back to
+  // the first row only when the current model isn't among the results.
+  // Guarded by a "navigation key" (open + query): this effect must NOT
+  // re-run on unrelated parent re-renders, which recreate the `model` prop
+  // (and thus `isActive`) every time — otherwise keyboard/mouse navigation
+  // would visibly snap back to the current model while the user browses.
+  const navKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      navKeyRef.current = null;
+      return;
+    }
+    const key = `q:${query}`;
+    if (navKeyRef.current === key) return;
+    navKeyRef.current = key;
+    const idx = filtered.findIndex(isActive);
+    setActiveIndex(idx >= 0 ? idx : 0);
+  }, [open, query, filtered, isActive]);
 
   // Stay in range when the list shrinks (typing / opening with few models).
   useEffect(() => {
@@ -147,10 +186,14 @@ export function ModelPickerModal({
         return;
       }
       if (filtered.length === 0) return;
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
         setActiveIndex((i) => {
-          const step = e.key === "ArrowDown" ? 1 : -1;
+          // ← / → move one card; ↑ / ↓ move a full grid row (column count
+          // read from the rendered grid so it adapts to the panel width).
+          if (e.key === "ArrowLeft") return (i - 1 + filtered.length) % filtered.length;
+          if (e.key === "ArrowRight") return (i + 1) % filtered.length;
+          const step = (e.key === "ArrowDown" ? 1 : -1) * columnCount(i);
           return (i + step + filtered.length) % filtered.length;
         });
         return;
@@ -171,7 +214,7 @@ export function ModelPickerModal({
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isVisible, filtered, activeIndex, selectOption, requestClose]);
+  }, [isVisible, filtered, activeIndex, selectOption, requestClose, columnCount]);
 
   // Portal target — mount after first client render to avoid SSR mismatch.
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
@@ -196,7 +239,7 @@ export function ModelPickerModal({
       <div
         style={{
           ...panelStyle,
-          width: "min(480px, calc(100vw - 32px))",
+          width: "min(680px, calc(100vw - 32px))",
           maxHeight: "min(560px, calc(100vh - 64px))",
           display: "flex",
           flexDirection: "column",
@@ -241,7 +284,7 @@ export function ModelPickerModal({
             <input
               ref={inputRef}
               value={query}
-              onChange={(e) => { setQuery(e.target.value); setActiveIndex(0); }}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder={t("Search models...")}
               spellCheck={false}
               style={{
@@ -253,7 +296,7 @@ export function ModelPickerModal({
             />
             {query && (
               <button
-                onClick={() => { setQuery(""); setActiveIndex(0); inputRef.current?.focus(); }}
+                onClick={() => { setQuery(""); inputRef.current?.focus(); }}
                 aria-label={t("Clear")}
                 style={{ background: "none", border: "none", padding: 2, color: "var(--text-dim)", cursor: "pointer", display: "flex" }}
               >
@@ -298,6 +341,12 @@ export function ModelPickerModal({
                       <span>{group.provider}</span>
                     </div>
                   )}
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+                    gap: 4,
+                    padding: "2px 4px 6px",
+                  }}>
                   {group.options.map((opt) => {
                     const idx = filtered.indexOf(opt);
                     const active = idx === activeIndex;
@@ -308,22 +357,16 @@ export function ModelPickerModal({
                         ref={(el) => { rowRefs.current[idx] = el; }}
                         onClick={() => selectOption(opt)}
                         disabled={disabled}
+                        onMouseEnter={() => { if (!disabled) setActiveIndex(idx); }}
                         style={{
                           width: "100%",
                           display: "flex", alignItems: "center", gap: 8,
                           padding: "7px 10px", textAlign: "left",
                           background: active ? "var(--bg-selected)" : "none",
-                          border: "none", borderRadius: 7,
+                          border: `1px solid ${currentRow ? "var(--accent)" : "transparent"}`,
+                          borderRadius: 7,
                           cursor: disabled ? "not-allowed" : "pointer",
                           opacity: disabled ? 0.55 : 1,
-                        }}
-                        onMouseEnter={(e) => {
-                          if (disabled || active) return;
-                          e.currentTarget.style.background = "var(--bg-hover)";
-                        }}
-                        onMouseLeave={(e) => {
-                          if (disabled || active) return;
-                          e.currentTarget.style.background = "none";
                         }}
                       >
                         <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 18, flexShrink: 0 }}>
@@ -349,6 +392,7 @@ export function ModelPickerModal({
                       </button>
                     );
                   })}
+                  </div>
                 </div>
               ))}
             </>
@@ -360,7 +404,7 @@ export function ModelPickerModal({
           {disabled ? (
             <span>{t("Model locked while agent is running")}</span>
           ) : (
-            <span>{t("↑↓ select · Enter confirm · Esc close")}</span>
+            <span>{t("↑↓←→ select · Enter confirm · Esc close")}</span>
           )}
           {filtered.length > 0 && (
             <span style={{ fontFamily: "var(--font-mono)" }}>{filtered.length} {t("models")}</span>

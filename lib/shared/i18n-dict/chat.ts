@@ -30,7 +30,7 @@ export const chat = {
   "Search models...": "搜索模型...",
   "Current model": "当前模型",
   "Model locked while agent is running": "Agent 运行中，暂不能切换模型",
-  "↑↓ select · Enter confirm · Esc close": "↑↓ 选择 · Enter 确认 · Esc 关闭",
+  "↑↓←→ select · Enter confirm · Esc close": "方向键选择 · Enter 确认 · Esc 关闭",
   "Change thinking level": "切换推理强度",
   "Change tool preset": "切换工具预设",
   "Export": "导出",
