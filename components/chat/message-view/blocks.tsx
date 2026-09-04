@@ -470,20 +470,45 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
         {command}
       </SyntaxHighlighter>
       {resultText !== null && (
-        <pre
-          style={{
-            margin: 0,
-            padding: 0,
-            color: isError ? "#f87171" : (resultIsEmpty ? dimFg : fg),
-            font: "inherit",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            fontStyle: resultIsEmpty ? "italic" : "normal",
-            opacity: resultIsEmpty ? 0.6 : 1,
-          }}
-        >
-          {resultIsEmpty ? `(${t("No output")})` : resultText}
-        </pre>
+        resultIsEmpty ? (
+          <pre
+            style={{
+              margin: 0,
+              padding: 0,
+              color: isError ? "#f87171" : dimFg,
+              font: "inherit",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              fontStyle: "italic",
+              opacity: 0.6,
+            }}
+          >
+            {`(${t("No output")})`}
+          </pre>
+        ) : isError ? (
+          <pre
+            style={{
+              margin: 0,
+              padding: 0,
+              color: "#f87171",
+              font: "inherit",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {resultText}
+          </pre>
+        ) : (
+          <SyntaxHighlighter
+            language="bash"
+            style={isDark ? vscDarkPlus : vs}
+            PreTag="pre"
+            customStyle={{ margin: 0, padding: 0, background: terminalBg, fontSize: "inherit", lineHeight: "inherit", border: "none", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+            codeTagProps={{ style: { background: terminalBg, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "none" } }}
+          >
+            {resultText}
+          </SyntaxHighlighter>
+        )
       )}
     </div>
 
