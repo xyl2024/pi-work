@@ -1076,7 +1076,14 @@ export async function startRpcSession(
       // once per session so a mid-session toggle doesn't change the prompt.
       appendSystemPromptOverride: (baseAppend) => {
         if (options.systemPromptPrefix) return [];
-        return enabledTools.has("agent_todo")
+        // Gate on the tools-market enablement AND the session's actual tool
+        // selection: if `agent_todo` is excluded from this session (per-session
+        // tool picker, cwd default, or allowedToolNames), its append block
+        // must not leak into the system prompt.
+        const sessionHasAgentTodo =
+          (!options.allowedToolNames || options.allowedToolNames.includes("agent_todo")) &&
+          (effectiveToolNames === "all" || effectiveToolNames.includes("agent_todo"));
+        return enabledTools.has("agent_todo") && sessionHasAgentTodo
           ? [...baseAppend, AGENT_TODO_SYSTEM_PROMPT_BLOCK]
           : baseAppend;
       },

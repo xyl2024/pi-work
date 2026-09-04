@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useI18n } from "@/hooks/useI18n";
-import { useToast } from "@/components/ui/Toast";
-import { TogglePill } from "@/components/ui/TogglePill";
 import { TOOL_MARKET_DEFINITIONS, type ToolMarketDefinition } from "@/lib/shared/tools-market";
 
 const codeStyle: React.CSSProperties = {
@@ -16,14 +14,11 @@ const codeStyle: React.CSSProperties = {
 
 export function ToolsMarketModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n();
-  const toast = useToast();
   const { requestClose, backdropStyle, panelStyle, isVisible } = useModalAnimation({ isOpen: open, onClose });
-  const [enabled, setEnabled] = useState<string[]>([]);
   const [selected, setSelected] = useState<ToolMarketDefinition | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -31,9 +26,8 @@ export function ToolsMarketModal({ open, onClose }: { open: boolean; onClose: ()
     try {
       const response = await fetch("/api/tools-market");
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json() as { enabled: string[]; tools?: ToolMarketDefinition[] };
+      const data = await response.json() as { tools?: ToolMarketDefinition[] };
       const definitions = data.tools ?? TOOL_MARKET_DEFINITIONS;
-      setEnabled(data.enabled ?? []);
       setSelected(definitions[0] ?? null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -46,21 +40,6 @@ export function ToolsMarketModal({ open, onClose }: { open: boolean; onClose: ()
     (category === "all" || tool.category === category) &&
     `${tool.name} ${tool.id} ${tool.description}`.toLowerCase().includes(query.toLowerCase()),
   ), [category, query]);
-
-  const toggle = async (id: string) => {
-    if (saving) return;
-    const previous = enabled;
-    const next = enabled.includes(id) ? enabled.filter((item) => item !== id) : [...enabled, id];
-    setEnabled(next); setSaving(id);
-    try {
-      const response = await fetch("/api/tools-market", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: next }) });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      toast.show({ kind: "success", message: t("Saved") });
-    } catch (cause) {
-      setEnabled(previous);
-      toast.show({ kind: "error", message: cause instanceof Error ? cause.message : String(cause) });
-    } finally { setSaving(null); }
-  };
 
   if (!isVisible) return null;
   return (
@@ -77,10 +56,8 @@ export function ToolsMarketModal({ open, onClose }: { open: boolean; onClose: ()
           <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
             <div style={{ width: 240, borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
               <div style={{ padding: "8px 10px" }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search")} style={{ width: "100%", boxSizing: "border-box", padding: "7px 8px", border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--text)" }} /></div>
-              <div style={{ padding: "0 10px 8px" }}><select value={category} onChange={(event) => setCategory(event.target.value)} style={{ width: "100%", padding: 7, border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--text)" }}><option value="all">{t("All")}</option><option value="agent">{t("Agent tools")}</option><option value="user_todo">{t("User Todo tools")}</option></select></div>
+              <div style={{ padding: "0 10px 8px" }}><select value={category} onChange={(event) => setCategory(event.target.value)} style={{ width: "100%", padding: 7, border: "1px solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--text)" }}><option value="all">{t("All")}</option><option value="coding">{t("Coding tools")}</option><option value="web">{t("Web search tools")}</option><option value="platform">{t("Pi Work platform tools")}</option></select></div>
               <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "0 6px 8px" }}>{loading ? <div style={{ padding: 10, fontSize: 12, color: "var(--text-muted)" }}>{t("Loading...")}</div> : tools.map((tool) => {
-                const isEnabled = enabled.includes(tool.id);
-                const isSaving = saving === tool.id;
                 return (
                   <div
                     key={tool.id}
@@ -106,18 +83,11 @@ export function ToolsMarketModal({ open, onClose }: { open: boolean; onClose: ()
                       <div style={{ fontSize: 13, fontWeight: selected?.id === tool.id ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t(tool.name)}</div>
                       <code style={{ fontSize: 10, color: "var(--text-dim)" }}>{tool.id}</code>
                     </button>
-                    <TogglePill
-                      on={isEnabled}
-                      onChange={() => void toggle(tool.id)}
-                      disabled={isSaving}
-                      size="sm"
-                      label={`${tool.name} (${tool.id})`}
-                    />
                   </div>
                 );
               })}</div>
             </div>
-            {selected && <ToolDetail tool={selected} enabled={enabled.includes(selected.id)} saving={saving === selected.id} onToggle={() => void toggle(selected.id)} />}
+            {selected && <ToolDetail tool={selected} />}
           </div>
         )}
       </div>
@@ -125,10 +95,10 @@ export function ToolsMarketModal({ open, onClose }: { open: boolean; onClose: ()
   );
 }
 
-function ToolDetail({ tool, enabled, saving, onToggle }: { tool: ToolMarketDefinition; enabled: boolean; saving: boolean; onToggle: () => void }) {
+function ToolDetail({ tool }: { tool: ToolMarketDefinition }) {
   const { t } = useI18n();
   return <div data-scroll-wide style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: 20 }}>
-    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}><div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t(tool.name)}</div><code style={{ fontSize: 11, color: "var(--text-muted)" }}>{tool.id}</code></div><TogglePill on={enabled} onChange={onToggle} disabled={saving} size="md" label={`${tool.name} (${tool.id})`} /></div>
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}><div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 5 }}>{t("Description")}</div><div style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}>{t(tool.description)}</div><div style={{ marginTop: 6, fontSize: 11, color: "var(--text-dim)" }}>{t("Changes apply to new sessions only")}</div></div>{tool.promptSnippet && <div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 7 }}>{t("Prompt Snippet")}</div><pre style={codeStyle}>{tool.promptSnippet}</pre></div>}<div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 7 }}>{t("System Prompt Guidelines")}</div>{tool.promptGuidelines.length > 0 ? <ul style={{ margin: 0, paddingLeft: 20, color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6 }}>{tool.promptGuidelines.map((guideline) => <li key={guideline}>{guideline}</li>)}</ul> : <div style={{ fontSize: 13, color: "var(--text-dim)" }}>{t("No tool-specific guidelines")}</div>}<div style={{ marginTop: 5, fontSize: 11, color: "var(--text-dim)" }}>{t("Injected into the system prompt Guidelines section when the tool is active")}</div></div><div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 7 }}>{t("Input Schema")}</div><pre style={codeStyle}>{JSON.stringify(tool.parameters, null, 2)}</pre></div><details><summary style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, cursor: "pointer" }}>{t("Output Schema")}</summary><pre style={{ ...codeStyle, marginTop: 7 }}>{JSON.stringify(tool.returns, null, 2)}</pre></details><details><summary style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, cursor: "pointer" }}>{t("Append System Prompt")}</summary><pre style={{ ...codeStyle, marginTop: 7 }}>{tool.systemPrompt ?? t("No additional system prompt")}</pre></details></div>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}><div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{t(tool.name)}</div><code style={{ fontSize: 11, color: "var(--text-muted)" }}>{tool.id}</code></div></div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}><div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 5 }}>{t("Description")}</div><div style={{ padding: 12, border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text-muted)", fontSize: 14, lineHeight: 1.6 }}>{t(tool.description)}</div></div>{tool.promptSnippet && <div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 7 }}>{t("Prompt Snippet")}</div><pre style={codeStyle}>{tool.promptSnippet}</pre></div>}{tool.promptGuidelines.length > 0 && <div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 7 }}>{t("System Prompt Guidelines")}</div><pre style={codeStyle}>{tool.promptGuidelines.join("\n")}</pre></div>}{tool.systemPrompt && <div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 7 }}>{t("Append System Prompt")}</div><pre style={codeStyle}>{tool.systemPrompt}</pre></div>}<div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 7 }}>{t("Input Schema")}</div><pre style={codeStyle}>{JSON.stringify(tool.parameters, null, 2)}</pre></div><div><div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500, marginBottom: 7 }}>{t("Output Schema")}</div><pre style={codeStyle}>{JSON.stringify(tool.returns, null, 2)}</pre></div></div>
   </div>;
 }
