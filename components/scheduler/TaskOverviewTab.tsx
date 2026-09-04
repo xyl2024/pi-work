@@ -14,15 +14,19 @@ import { CronHumanizer } from "./CronHumanizer";
 import { useNow } from "./useNow";
 import { computeStats, formatDuration, formatRelative } from "./utils";
 import type { ScheduledTask, TaskRun } from "./types";
+import { ThinkingBadge } from "./TaskConfigTab";
+import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/icons";
 
 interface Props {
   task: ScheduledTask;
   runs: TaskRun[];
   /** channelId → { name, status } for wechat channels (passed from TaskDetail). */
   channelMeta?: Record<string, { name: string; status: string }> | null;
+  /** "<provider>:<modelId>" → provider id map, for model icons. */
+  modelIcons?: Record<string, string>;
 }
 
-export function TaskOverviewTab({ task, runs, channelMeta }: Props) {
+export function TaskOverviewTab({ task, runs, channelMeta, modelIcons }: Props) {
   const { t, locale } = useI18n();
   const stats = computeStats(runs);
   const now = useNow(30_000);
@@ -115,14 +119,26 @@ export function TaskOverviewTab({ task, runs, channelMeta }: Props) {
       <section>
         <SectionTitle>{t("Execution config")}</SectionTitle>
         <dl style={dlStyle}>
-          <Row label="Provider">
-            {task.provider ? <code style={monoStyle}>{task.provider}</code> : <Missing>{t("Not set")}</Missing>}
+          <Row label={t("Provider")}>
+            {task.provider ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <ProviderIcon id={resolveProviderIcon(task.provider, undefined, modelIcons) ?? ""} size={14} fallback={<ProviderGearIcon size={14} />} />
+                <code style={monoStyle}>{task.provider}</code>
+              </span>
+            ) : <Missing>{t("Not set")}</Missing>}
           </Row>
           <Row label={t("Model")}>
-            {task.modelId ? <code style={monoStyle}>{task.modelId}</code> : <Missing>{t("Not set")}</Missing>}
+            {task.modelId ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <ProviderIcon id={resolveProviderIcon(task.provider, task.modelId, modelIcons) ?? ""} size={14} fallback={<ProviderGearIcon size={14} />} />
+                <code style={monoStyle}>{task.modelId}</code>
+              </span>
+            ) : <Missing>{t("Not set")}</Missing>}
           </Row>
           <Row label={t("Thinking level")}>
-            {task.thinkingLevel && task.thinkingLevel !== "auto" ? task.thinkingLevel : <Missing>{t("Not set")}</Missing>}
+            {task.thinkingLevel && task.thinkingLevel !== "auto"
+              ? <ThinkingBadge level={task.thinkingLevel} />
+              : <Missing>{t("Not set")}</Missing>}
           </Row>
           <Row label={t("Tools")}>
             {task.toolNames === null

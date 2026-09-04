@@ -197,7 +197,7 @@ const THINKING_COLORS: Record<string, string> = {
   max: "#b91c1c",
 };
 
-function ThinkingBadge({ level }: { level: string }) {
+export function ThinkingBadge({ level }: { level: string }) {
   const color = THINKING_COLORS[level] ?? "var(--accent)";
   return (
     <span

@@ -237,7 +237,7 @@ export function TaskDetail({
 
       {/* Tab body */}
       <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
-        {tab === "overview" && <TaskOverviewTab task={task} runs={runs} channelMeta={channelMeta} />}
+        {tab === "overview" && <TaskOverviewTab task={task} runs={runs} channelMeta={channelMeta} modelIcons={modelIcons} />}
         {tab === "runs" && (
           <TaskRunsTab
             runs={runs}
