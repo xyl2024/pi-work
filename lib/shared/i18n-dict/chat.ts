@@ -195,7 +195,7 @@ export const chat = {
   "Recent commands": "最近命令",
   "Command prefix": "命令前缀",
   "Show all files": "显示全部文件",
-  "Files read this turn:": "本轮已读文件：",
+  "Files read or changed this turn:": "本轮已读/已处理文件：",
   "No bash commands yet": "暂无 Bash 命令",
   "File Changes": "文件改动",
   "Lines changed this turn": "本轮文件变更行数",

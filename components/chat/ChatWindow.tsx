@@ -1427,13 +1427,15 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   continue;
                 }
 
-                // Turn-level `read` files: collect every read tool call across
-                // this turn's assistant messages, dedupe by resolved path, and
-                // drop errored results (read of a nonexistent path). Surfaced
-                // as footer chips on the final assistant message.
+                // Turn-level files: collect every read / edit / write tool call
+                // across this turn's assistant messages, dedupe by resolved path,
+                // and drop errored results (read of a nonexistent path, failed
+                // edit). Edit/write files carry their per-file added/deleted line
+                // counts (from the tools' own data, no git). Surfaced as footer
+                // chips on the final assistant message.
                 const turnCwd = session?.cwd ?? cwd ?? null;
                 const readFiles: ReadFileInfo[] = (() => {
-                  const seen = new Set<string>();
+                  const byPath = new Map<string, ReadFileInfo>();
                   const out: ReadFileInfo[] = [];
                   for (let i = userIdx + 1; i < endIdx; i++) {
                     const m = renderMessages[i];
@@ -1441,15 +1443,31 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     for (const block of (m as AssistantMessage).content ?? []) {
                       if (block.type !== "toolCall") continue;
                       const tc = block as ToolCallContent;
-                      if (tc.toolName !== "read") continue;
+                      const isRead = tc.toolName === "read";
+                      const isMutate = tc.toolName === "edit" || tc.toolName === "write";
+                      if (!isRead && !isMutate) continue;
                       const result = toolResultsMap.get(tc.toolCallId);
                       if (result?.isError) continue;
                       const raw = tc.input?.path;
                       if (typeof raw !== "string" || !raw.trim()) continue;
                       const resolved = resolveReadPath(raw.trim(), turnCwd);
-                      if (!resolved || seen.has(resolved)) continue;
-                      seen.add(resolved);
-                      out.push({ path: resolved, name: getFileName(resolved) });
+                      if (!resolved) continue;
+                      let diffStats: ToolDiffStats | null | undefined;
+                      if (isMutate) {
+                        diffStats = tc.toolName === "edit"
+                          ? extractEditDiffStats(result?.details)
+                          : extractWriteDiffStats(tc.input);
+                      }
+                      const existing = byPath.get(resolved);
+                      if (existing) {
+                        // Same file read and edited within the turn — merge:
+                        // the chip stays read-first, stats attach when they land.
+                        if (diffStats && !existing.diffStats) existing.diffStats = diffStats;
+                        continue;
+                      }
+                      const entry: ReadFileInfo = { path: resolved, name: getFileName(resolved), diffStats };
+                      byPath.set(resolved, entry);
+                      out.push(entry);
                     }
                   }
                   return out;

@@ -1,5 +1,7 @@
 // Types mirrored from pi-mono coding-agent session-manager
 
+import type { ToolDiffStats } from "./tool-diff-stats";
+
 interface SessionEntryBase {
   type: string;
   id: string;
@@ -34,12 +36,16 @@ export interface ToolCallContent {
   input: Record<string, unknown>;
 }
 
-/** One file surfaced by a turn's `read` tool calls (footer chips). */
+/** One file surfaced by a turn's `read`/edit/write tool calls (footer chips). */
 export interface ReadFileInfo {
   /** Absolute path (resolved from the tool input against the session cwd). */
   path: string;
   /** Basename shown on the chip. */
   name: string;
+  /** For files this turn's edit/write calls touched: their added/deleted
+   *  line counts (derived from the tools' own data, no git). Absent for
+   *  read-only files. */
+  diffStats?: ToolDiffStats | null;
 }
 
 export type AssistantContentBlock = TextContent | ImageContent | ThinkingContent | ToolCallContent;

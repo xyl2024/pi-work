@@ -25,10 +25,11 @@ interface Props {
   onOpenFile: (filePath: string, fileName: string) => void;
 }
 
-/** Turn-level `read` file chips, rendered in the assistant message footer row.
- *  Shows at most {@link MAX_VISIBLE} chips, then a "..." that smoothly expands
- *  a bubble (down by default, up only when space below is tight) with the full
- *  list. Every chip/list row opens the file in the right-hand panel. */
+/** Turn-level read / edit / write file chips, rendered in the assistant
+ *  message footer row. Shows at most {@link MAX_VISIBLE} chips, then a "..."
+ *  that smoothly expands a bubble (down by default, up only when space below
+ *  is tight) with the full list. Every chip/list row opens the file in the
+ *  right-hand panel. Edit/write-touched files additionally show +N/-M. */
 export function ReadFileChips({ files, diffStats, onOpenFile }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -224,8 +225,21 @@ function Chip({ file, onClick }: { file: ReadFileInfo; onClick: () => void }) {
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
           {chipLabel(file)}
         </span>
+        <FileDiffStats stats={file.diffStats} />
       </button>
     </Tooltip>
+  );
+}
+
+/** Per-file [+N] [-M] shown inside a chip for files this turn's edit/write
+ *  calls touched. Renders nothing for read-only files. */
+function FileDiffStats({ stats }: { stats?: ToolDiffStats | null }) {
+  if (!stats || (stats.additions <= 0 && stats.deletions <= 0)) return null;
+  return (
+    <span style={{ flexShrink: 0 }}>
+      <span style={{ color: "#16a34a" }}>+{stats.additions}</span>
+      {stats.deletions > 0 && <span style={{ color: "#f87171", marginLeft: 3 }}>-{stats.deletions}</span>}
+    </span>
   );
 }
 
@@ -292,7 +306,7 @@ function FileListBubble({ files, open, maxHeight, direction, onOpen }: {
             whiteSpace: "nowrap",
           }}
         >
-          {t("Files read this turn:")}
+          {t("Files read or changed this turn:")}
         </div>
         {files.map((f) => (
           <Tooltip key={f.path} content={f.path}>
@@ -322,6 +336,7 @@ function FileListBubble({ files, open, maxHeight, direction, onOpen }: {
               <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {chipLabel(f)}
               </span>
+              <FileDiffStats stats={f.diffStats} />
             </button>
           </Tooltip>
         ))}
