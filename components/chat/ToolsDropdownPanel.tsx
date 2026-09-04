@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { AnimatedPopover } from "../ui/AnimatedPopover";
 import { Tooltip } from "../ui/Tooltip";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
+import { expandToolPatterns } from "@/lib/shared/tool-selection";
 
 /**
  * "Read only" quick preset — the canonical tool names pi's built-in
@@ -19,10 +20,64 @@ import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 export const READ_ONLY_TOOLS = ["find", "ls", "grep", "read"] as const;
 
 /**
- * Popover panel for the Tools button. 3-row layout (Off / Full / Read only)
- * plus a Custom ▶ row that expands into a per-tool checklist with auto-apply.
- * Off and Full are 1-click presets that fire `onSelectPreset` and the caller
- * then closes the parent popover. The Custom row's expand state is owned
+ * Named quick presets that map to a fixed list of tool names / prefix
+ * patterns. `*`-suffixed entries (e.g. `codegraph_*`) are prefix patterns
+ * resolved against the session's tool registry — either server-side when
+ * the selection is applied (rpc-manager) or client-side against
+ * `availableTools` (see `expandToolPatterns`). Unknown names are silently
+ * ignored by pi's `setActiveToolsByName`, so a missing tool just degrades
+ * the preset to its intersection rather than failing outright.
+ */
+export const TOOL_PRESET_PATTERNS = {
+  read_only: READ_ONLY_TOOLS,
+  minimal: ["bash", "read", "write", "edit", "ls", "find", "grep"],
+  code: ["bash", "read", "write", "edit", "ls", "find", "grep", "agent_todo", "spawn_subagent", "codegraph_*"],
+  assistant: ["bash", "read", "write", "edit", "ls", "find", "grep", "pi_work_*", "show_media", "web_search", "fetch_content", "ask_user_questions"],
+} as const satisfies Record<string, readonly string[]>;
+
+export type NamedToolPresetId = keyof typeof TOOL_PRESET_PATTERNS;
+export type ToolPresetId = "off" | "full" | NamedToolPresetId;
+
+/** i18n keys for each named preset's row/trigger label. */
+export const TOOL_PRESET_LABELS: Record<NamedToolPresetId, string> = {
+  read_only: "Read only",
+  minimal: "Minimal",
+  code: "Coding",
+  assistant: "Assistant",
+};
+
+/** i18n keys describing each named preset's tool set. */
+export const TOOL_PRESET_DESCRIPTIONS: Record<NamedToolPresetId, string> = {
+  read_only: "Find, ls, grep, read",
+  minimal: "Pi's default tools",
+  code: "Codegraph, todo list, and subagent capabilities",
+  assistant: "Pi Work platform control capabilities",
+};
+
+/** i18n keys for the BottomToolbar trigger label of each named preset. */
+export const TOOL_PRESET_TRIGGER_LABELS: Record<NamedToolPresetId, string> = {
+  read_only: "Tools · Read only",
+  minimal: "Tools · Minimal",
+  code: "Tools · Coding",
+  assistant: "Tools · Assistant",
+};
+
+/** Which named preset (if any) does this selection exactly match? */
+export function matchNamedToolPreset(selection: ToolSelection): NamedToolPresetId | null {
+  if (!Array.isArray(selection)) return null;
+  for (const [id, patterns] of Object.entries(TOOL_PRESET_PATTERNS)) {
+    if (selection.length === patterns.length && selection.every((name) => (patterns as readonly string[]).includes(name))) {
+      return id as NamedToolPresetId;
+    }
+  }
+  return null;
+}
+
+/**
+ * Popover panel for the Tools button. Preset rows (Off / Full / Read only /
+ * Minimal / Coding / Assistant) plus a Custom ▶ row that expands into a
+ * per-tool checklist with auto-apply. Presets fire `onSelectPreset` and the
+ * caller then closes the parent popover. The Custom row's expand state is owned
  * by the parent (`customExpanded`) so toggling tools inside doesn't dismiss
  * the panel between clicks.
  */
@@ -46,27 +101,32 @@ export function ToolsDropdownPanel({
   toolsError: string | null;
   customExpanded: boolean;
   panelRef?: Ref<HTMLDivElement>;
-  onSelectPreset: (preset: "off" | "full" | "read_only") => void;
+  onSelectPreset: (preset: ToolPresetId) => void;
   onToggleTool: (selection: ToolSelection) => void;
   onToggleCustomExpanded: () => void;
   onRetryEnsureTools?: () => Promise<void>;
 }) {
   const { t } = useI18n();
   const allNames = useMemo(() => availableTools.map((tool) => tool.name), [availableTools]);
+  // Checklist state: expand `*` patterns against the catalog so the per-tool
+  // boxes reflect what a named pattern preset (e.g. Coding's `codegraph_*`)
+  // actually enables. Toggling from this state collapses back to concrete
+  // names, which the backend applies as-is.
   const selectedSet = useMemo(() => {
     if (toolSelection === "all") return new Set(allNames);
-    return new Set(Array.isArray(toolSelection) ? toolSelection : []);
+    return new Set(expandToolPatterns(Array.isArray(toolSelection) ? toolSelection : [], allNames));
   }, [toolSelection, allNames]);
   const isOff = Array.isArray(toolSelection) && toolSelection.length === 0;
   const isAll = toolSelection === "all";
-  // "Read only" is a named quick preset — a fixed subset of file-inspection
-  // tools. Detect it here so the row can highlight without colliding with
-  // the generic Custom row (which would also match the partial-array state).
-  const isReadOnly = Array.isArray(toolSelection)
-    && toolSelection.length === READ_ONLY_TOOLS.length
-    && toolSelection.every((name) => (READ_ONLY_TOOLS as readonly string[]).includes(name));
+  // "Read only" and the Minimal/Coding/Assistant presets are named quick
+  // presets — fixed subsets (possibly with `*` prefix patterns) matched
+  // exactly against the stored selection, so their row can highlight without
+  // colliding with the generic Custom row (which would also match the
+  // partial-array state).
+  const namedPreset = matchNamedToolPreset(toolSelection);
+  const isReadOnly = namedPreset === "read_only";
   // Generic Custom is "any partial selection that isn't a named preset".
-  const isCustom = !isOff && !isAll && !isReadOnly;
+  const isCustom = !isOff && !isAll && namedPreset === null;
 
   // Compute the next selection for one toggle click. Normalises full →
   // "all" sentinel so a future tool addition auto-includes; leaves the
@@ -113,7 +173,10 @@ export function ToolsDropdownPanel({
     >
       <PresetRow label={t("Off")} description={t("No tools, chat only")} isActive={isOff} onClick={() => onSelectPreset("off")} />
       <PresetRow label={t("Full")} description={t("All available tools")} isActive={isAll} onClick={() => onSelectPreset("full")} />
-      <PresetRow label={t("Read only")} description={t("Find, ls, grep, read")} isActive={isReadOnly} onClick={() => onSelectPreset("read_only")} />
+      <PresetRow label={t("Read only")} description={t(TOOL_PRESET_DESCRIPTIONS.read_only)} isActive={isReadOnly} onClick={() => onSelectPreset("read_only")} />
+      <PresetRow label={t("Minimal")} description={t(TOOL_PRESET_DESCRIPTIONS.minimal)} isActive={namedPreset === "minimal"} onClick={() => onSelectPreset("minimal")} />
+      <PresetRow label={t("Coding")} description={t(TOOL_PRESET_DESCRIPTIONS.code)} isActive={namedPreset === "code"} onClick={() => onSelectPreset("code")} />
+      <PresetRow label={t("Assistant")} description={t(TOOL_PRESET_DESCRIPTIONS.assistant)} isActive={namedPreset === "assistant"} onClick={() => onSelectPreset("assistant")} />
       <button
         onClick={onToggleCustomExpanded}
         style={{
@@ -263,7 +326,10 @@ function PresetRow({ label, description, isActive, onClick }: {
         ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
         : <span style={{ width: 10, flexShrink: 0 }} />}
       <span style={{ flex: 1 }}>{label}</span>
-      <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 8 }}>{description}</span>
+      <span title={description} style={{
+        fontSize: 11, color: "var(--text-dim)", marginLeft: 8,
+        maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>{description}</span>
     </button>
   );
 }

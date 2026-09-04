@@ -5,7 +5,7 @@ import { Tooltip } from "../../ui/Tooltip";
 import { ContextUsageBar } from "../ContextUsageBar";
 import { CwdPicker } from "../../sessions/CwdPicker";
 import { ModelPicker } from "../ModelPicker";
-import { ToolsDropdownPanel, READ_ONLY_TOOLS } from "../ToolsDropdownPanel";
+import { ToolsDropdownPanel, matchNamedToolPreset, TOOL_PRESET_PATTERNS, TOOL_PRESET_TRIGGER_LABELS } from "../ToolsDropdownPanel";
 import { ThinkingPicker, THINKING_LEVEL_COLOR, type ThinkingLevel } from "../ThinkingPicker";
 import { MoreMenu } from "../MoreMenu";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
@@ -105,19 +105,18 @@ export function BottomToolbar(props: BottomToolbarProps) {
     ? currentThinkingMapped
     : currentThinkingLevel;
 
-  // Tools trigger button label. "Tools · Off" when no tools, "Tools · Read only"
-  // when the Read-only quick preset is active, "Tools · Custom (N)" when a
-  // partial subset is active, plain "Tools" for Full (the default). Drives
-  // discoverability: the user can tell at a glance which mode they're in
-  // without opening the popover.
-  const isReadOnlySelection = Array.isArray(toolSelection)
-    && toolSelection.length === READ_ONLY_TOOLS.length
-    && toolSelection.every((name) => (READ_ONLY_TOOLS as readonly string[]).includes(name));
+  // Tools trigger button label. "Tools · Off" when no tools, the named
+  // preset's label ("Tools · Read only" / "Tools · Minimal" / …) when one of
+  // the quick presets is active, "Tools · Custom (N)" when a partial subset
+  // is active, plain "Tools" for Full (the default). Drives discoverability:
+  // the user can tell at a glance which mode they're in without opening the
+  // popover.
+  const namedPreset = matchNamedToolPreset(toolSelection);
   const toolsTriggerLabel = Array.isArray(toolSelection)
     ? toolSelection.length === 0
       ? t("Tools · Off")
-      : isReadOnlySelection
-        ? t("Tools · Read only")
+      : namedPreset
+        ? t(TOOL_PRESET_TRIGGER_LABELS[namedPreset])
         : t("Tools · Custom ({count})", { count: toolSelection.length })
     : t("Tools");
 
@@ -307,13 +306,14 @@ export function BottomToolbar(props: BottomToolbarProps) {
               customExpanded={customExpanded}
               onSelectPreset={(preset) => {
                 // Each preset maps to a fixed ToolSelection:
-                //   off       → []           (no tools, system prompt cleared)
-                //   full      → "all"        (sentinel so future tools auto-include)
-                //   read_only → the named subset (backend ignores missing names)
+                //   off       → []                    (no tools, system prompt cleared)
+                //   full      → "all"                 (sentinel so future tools auto-include)
+                //   named     → its names/patterns    (`*` patterns are expanded
+                //                                        server-side when applied)
                 const next: ToolSelection =
                   preset === "off" ? []
                   : preset === "full" ? "all"
-                  : [...READ_ONLY_TOOLS];
+                  : [...TOOL_PRESET_PATTERNS[preset]];
                 handleToolSelectionChangeLocal(next);
                 setToolDropdownOpen(false);
               }}

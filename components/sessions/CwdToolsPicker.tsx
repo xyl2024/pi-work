@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { ToolSelection } from "@/lib/shared/types";
+import { expandToolPatterns } from "@/lib/shared/tool-selection";
+import { TOOL_PRESET_PATTERNS, TOOL_PRESET_LABELS, TOOL_PRESET_DESCRIPTIONS, type NamedToolPresetId } from "@/components/chat/ToolsDropdownPanel";
 import { useI18n } from "@/hooks/useI18n";
 
 export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: boolean; onClose: () => void }) {
@@ -24,7 +26,19 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
   }, [cwd, open]);
 
   if (!open) return null;
-  const selected = selection === "all" ? new Set(tools.map((tool) => tool.name)) : new Set(selection);
+  // `selection` may contain trailing-`*` prefix patterns when a named preset
+  // is active (they are stored raw so the chat tools picker can recognise the
+  // preset); expand them against the catalog for the checkbox display.
+  const toolNames = tools.map((tool) => tool.name);
+  const selected = selection === "all"
+    ? new Set(toolNames)
+    : new Set(expandToolPatterns(Array.isArray(selection) ? selection : [], toolNames));
+  // Named presets are stored raw (patterns included) — the server expands
+  // them when a session starts, and the chat tools picker matches the raw
+  // list to highlight the preset.
+  const applyPreset = (id: NamedToolPresetId) => {
+    setSelection([...TOOL_PRESET_PATTERNS[id]]);
+  };
   const save = async () => {
     setSaving(true);
     try {
@@ -41,13 +55,20 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
         <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>{t("Default tools for this project")}</h3>
         <p style={{ margin: "0 0 14px", color: "var(--text-muted)", fontSize: 11, wordBreak: "break-all" }}>{cwd}</p>
         {loading ? <div style={{ color: "var(--text-muted)", fontSize: 12 }}>{t("Loading...")}</div> : <>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <button onClick={() => setSelection("all")} style={{ flex: 1 }}>{t("All tools")}</button>
             <button onClick={() => setSelection([])} style={{ flex: 1 }}>{t("Off")}</button>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {(Object.keys(TOOL_PRESET_PATTERNS) as NamedToolPresetId[]).map((id) => (
+              <button key={id} onClick={() => applyPreset(id)} style={{ flex: 1 }} title={t(TOOL_PRESET_DESCRIPTIONS[id])}>{t(TOOL_PRESET_LABELS[id])}</button>
+            ))}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             {tools.map((tool) => <label key={tool.name} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
               <input type="checkbox" checked={selected.has(tool.name)} onChange={() => {
+                // Toggling a single tool collapses pattern entries back to
+                // concrete names (same behaviour as the chat tools picker).
                 const next = new Set(selected);
                 if (next.has(tool.name)) next.delete(tool.name); else next.add(tool.name);
                 setSelection(Array.from(next));

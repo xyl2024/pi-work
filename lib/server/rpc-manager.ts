@@ -2,6 +2,7 @@ import { createAgentSession, DefaultResourceLoader, isToolCallEventType, ModelRu
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ToolInfo } from "./pi-types";
 import type { ToolSelection } from "../shared/types";
+import { expandToolSelection } from "../shared/tool-selection";
 import type { ToolMarketId } from "../shared/tools-market";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
@@ -771,7 +772,12 @@ export class AgentSessionWrapper {
         if (toolNames === "all") {
           this.inner.setActiveToolsByName(this.inner.getAllTools().map((t) => t.name));
         } else if (Array.isArray(toolNames)) {
-          this.inner.setActiveToolsByName(toolNames);
+          // Entries may carry trailing-`*` prefix patterns (e.g. "codegraph_*");
+          // resolve them against the live registry before applying. The raw
+          // selection (patterns included) is what gets persisted below, so a
+          // restart re-expands against the then-current registry.
+          const allNames = this.inner.getAllTools().map((t) => t.name);
+          this.inner.setActiveToolsByName(expandToolSelection(toolNames, allNames) as string[]);
         }
         // Mirror to the sidecar so the selection survives a server restart.
         // Best-effort: a failed write must not fail the tool switch.
@@ -1296,14 +1302,20 @@ export async function startRpcSession(
     if (effectiveToolNames === "all") {
       inner.setActiveToolsByName(inner.getAllTools().map((t: ToolInfo) => t.name));
     } else if (Array.isArray(effectiveToolNames)) {
-      inner.setActiveToolsByName(effectiveToolNames);
-    }
+      // Resolve trailing-`*` prefix patterns (e.g. "pi_work_*") against the
+      // registry pi built for this session before applying.
+      const expanded = expandToolSelection(
+        effectiveToolNames,
+        inner.getAllTools().map((t: ToolInfo) => t.name),
+      ) as string[];
+      inner.setActiveToolsByName(expanded);
 
-    // When all tools are disabled, clear the system prompt entirely.
-    // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
-    // the only way to truly clear it is to call agent.setSystemPrompt directly.
-    if (Array.isArray(effectiveToolNames) && effectiveToolNames.length === 0) {
-      inner.agent.state.systemPrompt = "";
+      // When all tools are disabled, clear the system prompt entirely.
+      // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
+      // the only way to truly clear it is to call agent.setSystemPrompt directly.
+      if (expanded.length === 0) {
+        inner.agent.state.systemPrompt = "";
+      }
     }
 
     const wrapper = new AgentSessionWrapper(inner, source, cwd);
