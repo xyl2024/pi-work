@@ -4,6 +4,8 @@ import { normalizeToolCalls } from "@/lib/shared/normalize";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
 import { AGENT_TODO_TOOL_NAME } from "@/lib/shared/agent-todo-tool/types";
+import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "@/lib/shared/celebrate-tool-types";
+import { triggerCelebration } from "@/lib/client/celebrate-store";
 import { notifyMutated } from "@/lib/client/git-status-store";
 import { playUiSoundEvent } from "@/lib/client/ui-sounds";
 import { setGrokbotConfig } from "@/lib/client/grokbot-store";
@@ -33,6 +35,10 @@ function getSpawnSubagentToolCallIds(message: unknown): string[] {
 }
 
 const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
+// `celebrate` triggers a one-shot frontend animation; SSE reconnects can
+// replay tool_execution_end events, so remember handled ids (module-level:
+// toolCallIds are globally unique across sessions).
+const seenCelebrateToolEndIds = new Set<string>();
 const BOT_BASELINE_STATE = "searching";
 const BOT_REVERT_MS = 8000;
 
@@ -366,6 +372,11 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         if (toolName && isShowFileToolName(toolName) && result?.details) {
           const files = (result.details as { files?: unknown }).files;
           if (Array.isArray(files)) setShowFileResult(id, files as Parameters<typeof setShowFileResult>[1]);
+        }
+        if (toolName === CELEBRATE_TOOL_NAME && id && !seenCelebrateToolEndIds.has(id)) {
+          seenCelebrateToolEndIds.add(id);
+          const details = result?.details as CelebrateDetails | undefined;
+          triggerCelebration(details);
         }
         let resultText: string | undefined;
         if (result && Array.isArray(result.content)) {

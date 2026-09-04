@@ -21,6 +21,7 @@ import {
 import { readCwdToolSelection } from "./cwd-tools-config";
 import { buildAgentTodoTool, AGENT_TODO_SYSTEM_PROMPT_BLOCK } from "./agent-todo-tool/tool";
 import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-questions-tool";
+import { celebrateTool } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
 import { buildSessionInfoTools } from "./self-tools/session-tools";
 import { buildCodeGraphTools } from "./codegraph-tool";
@@ -1266,6 +1267,7 @@ export async function startRpcSession(
               source: capturedSource,
             })
           : []),
+        ...(enabledTools.has("pi_work_celebrate") ? [celebrateTool] : []),
         // Self-management tools: read-only visibility into Pi Work's own live
         // sessions + disk-backed session details. Gated together via
         // ~/.pi-work/tools-market.json (TOOL_MARKET_IDS).

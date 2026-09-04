@@ -6,6 +6,7 @@ import { ConfirmProvider } from "@/components/ui/ConfirmDialog";
 import { ContextMenuProvider } from "@/components/ui/ContextMenu";
 import { TodoProvider } from "@/hooks/useTodos";
 import { PermissionProvider } from "@/hooks/usePendingPermissions";
+import { CelebrationOverlay } from "@/components/effects/CelebrationOverlay";
 
 export default function Home() {
   return (
@@ -17,6 +18,7 @@ export default function Home() {
               <ContextMenuProvider>
                 <TodoProvider>
                   <AppShell />
+                  <CelebrationOverlay />
                 </TodoProvider>
               </ContextMenuProvider>
             </PermissionProvider>

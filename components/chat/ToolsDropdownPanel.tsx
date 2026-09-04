@@ -31,7 +31,7 @@ export const READ_ONLY_TOOLS = ["find", "ls", "grep", "read"] as const;
 export const TOOL_PRESET_PATTERNS = {
   read_only: READ_ONLY_TOOLS,
   minimal: ["bash", "read", "write", "edit", "ls", "find", "grep"],
-  code: ["bash", "read", "write", "edit", "ls", "find", "grep", "agent_todo", "spawn_subagent", "codegraph_*"],
+  code: ["bash", "read", "write", "edit", "ls", "find", "grep", "agent_todo", "spawn_subagent", "codegraph_*", "pi_work_celebrate"],
   assistant: ["bash", "read", "write", "edit", "ls", "find", "grep", "pi_work_*", "show_media", "web_search", "fetch_content", "ask_user_questions"],
 } as const satisfies Record<string, readonly string[]>;
 
