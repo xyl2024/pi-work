@@ -121,15 +121,20 @@ export function useSlashMenu({
     (item: SlashResource) => {
       if (item.source === "action") {
         onSlashAction?.(item.command);
-        setValue("");
-        setCursorPosition(0);
+        const ta = textareaRef.current;
+        const cursor = ta?.selectionStart ?? cursorPosition;
+        const query = getSlashQuery(value, cursor);
+        // Strip just the typed `/token`, keeping any surrounding text.
+        const nextValue = query ? value.slice(0, query.start) + value.slice(cursor) : "";
+        setValue(nextValue);
+        setCursorPosition(query ? query.start : 0);
         setSlashMenuOpen(false);
         setSlashActiveIndex(0);
         setSlashPage(0);
         setSelectedSlashResource(null);
-        if (textareaRef.current) {
-          textareaRef.current.style.height = "auto";
-          textareaRef.current.focus();
+        if (ta) {
+          ta.style.height = "auto";
+          ta.focus();
         }
         return;
       }

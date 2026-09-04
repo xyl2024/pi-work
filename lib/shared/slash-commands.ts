@@ -23,15 +23,23 @@ export interface SlashResource {
 /**
  * Returns the active `/query` token at the cursor position, or `null`
  * when the cursor isn't positioned inside a slash-token prefix. Used by
- * the chat input to decide whether to open the slash menu.
+ * the chat input to decide whether to open the slash menu. The token may
+ * appear anywhere in the buffer — including mid-word like `abc/def` —
+ * as long as the `/` is immediately before the cursor and the token
+ * itself contains no whitespace. The only exception is `://` (URL
+ * protocol separators), which never opens the menu.
  */
 export function getSlashQuery(value: string, cursor: number): { start: number; query: string } | null {
-  if (cursor === 0 || value[0] !== "/") return null;
+  if (cursor === 0) return null;
   const beforeCursor = value.slice(0, cursor);
-  const match = beforeCursor.match(/^\/([^\s/]*)$/);
+  const match = beforeCursor.match(/\/([^\s/]*)$/);
   if (!match) return null;
+  const start = match.index!;
+  // Skip URL protocol separators like "https://" so pasted links don't
+  // pop the menu open.
+  if (start >= 2 && value.slice(start - 2, start + 1) === "://") return null;
   return {
-    start: 0,
+    start,
     query: match[1],
   };
 }
