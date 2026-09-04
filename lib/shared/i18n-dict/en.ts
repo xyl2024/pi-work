@@ -4,6 +4,13 @@
 export const EN_TRANSLATIONS = {
   "Set default tools": "Set default tools",
   "Default tools for this project": "Default tools for this project",
+  "SubAgent": "SubAgent",
+  "Subagent sessions": "Subagent sessions",
+  "No subagent sessions": "No subagent sessions",
+  "Failed to load subagent sessions": "Failed to load subagent sessions",
+  "Open subagent session": "Open subagent session",
+  "Creating": "Creating",
+  "Cancelled": "Cancelled",
   "platform.wechat": "WeChat",
   "platform.dingtalk": "DingTalk",
   "platform.feishu": "Feishu",

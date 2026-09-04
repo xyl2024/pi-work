@@ -99,6 +99,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [agentRunning, setAgentRunning] = useState(false);
   const [, setIsCompacting] = useState(false);
   const [agentTodoRefreshKey, setAgentTodoRefreshKey] = useState(0);
+  const [subagentRefreshKey, setSubagentRefreshKey] = useState(0);
+  const subagentRefreshTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const scheduledSubagentRefreshIdsRef = useRef<Set<string>>(new Set());
+  const seenSubagentToolCallIdsRef = useRef<Set<string>>(new Set());
+  const seenSubagentToolStartIdsRef = useRef<Set<string>>(new Set());
+  const seenSubagentToolEndIdsRef = useRef<Set<string>>(new Set());
+  const scheduleSubagentRefresh = useCallback((toolCallId: string) => {
+    if (scheduledSubagentRefreshIdsRef.current.has(toolCallId)) return;
+    scheduledSubagentRefreshIdsRef.current.add(toolCallId);
+    const timer = setTimeout(() => {
+      subagentRefreshTimersRef.current.delete(toolCallId);
+      setSubagentRefreshKey((key) => key + 1);
+    }, 30_000);
+    subagentRefreshTimersRef.current.set(toolCallId, timer);
+  }, []);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<{ id: string; name: string; provider: string }[]>([]);
@@ -387,6 +402,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setActiveLeafId,
     setInFlightToolResults,
     setAgentTodoRefreshKey,
+    setSubagentRefreshKey,
+    scheduleSubagentRefresh,
+    seenSubagentToolCallIds: seenSubagentToolCallIdsRef.current,
+    seenSubagentToolStartIds: seenSubagentToolStartIdsRef.current,
+    seenSubagentToolEndIds: seenSubagentToolEndIdsRef.current,
     setContextUsage,
     setThinkingLevel,
     compactInFlightRef,
@@ -699,6 +719,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // Load session on mount
   useEffect(() => {
     disposedRef.current = false;
+    seenSubagentToolCallIdsRef.current.clear();
+    seenSubagentToolStartIdsRef.current.clear();
+    seenSubagentToolEndIdsRef.current.clear();
+    for (const timer of subagentRefreshTimersRef.current.values()) clearTimeout(timer);
+    subagentRefreshTimersRef.current.clear();
+    scheduledSubagentRefreshIdsRef.current.clear();
     if (session) {
       sessionIdRef.current = session.id;
       loadSession(session.id, true, true).then(async (agentState) => {
@@ -870,6 +896,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       clearTimeout(botRevertTimerRef.current);
       botRevertTimerRef.current = null;
     }
+    for (const timer of subagentRefreshTimersRef.current.values()) clearTimeout(timer);
+    subagentRefreshTimersRef.current.clear();
+    scheduledSubagentRefreshIdsRef.current.clear();
   }, []);
 
   return {
@@ -882,6 +911,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     currentModel, displayModel, sessionStats,
     agentPhase,
     agentTodoRefreshKey,
+    subagentRefreshKey,
     isNew,
     currentSessionId,
     userMessageHistory,

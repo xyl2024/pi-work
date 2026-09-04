@@ -277,6 +277,8 @@ interface WorkspaceChatTabProps {
   onNewSessionRequest: (cwdOverride?: string) => void;
   /** `/btw` slash action handler (open BTW panel + focus its input). */
   onOpenBtw: () => void;
+  /** Open an existing session in a workspace tab. */
+  onOpenSession: (sessionId: string) => void;
   onCwdChange: (cwd: string) => void;
   onRenameCompleted: () => void;
   onSessionNameChange: (tabId: string, name: string) => void;
@@ -298,6 +300,7 @@ function WorkspaceChatTabView({
   onScrollComplete,
   onNewSessionRequest,
   onOpenBtw,
+  onOpenSession,
   onCwdChange,
   onRenameCompleted,
   onSessionNameChange,
@@ -336,6 +339,7 @@ function WorkspaceChatTabView({
         onScrollComplete={onScrollComplete}
         onNewSessionRequest={onNewSessionRequest}
         onOpenBtw={onOpenBtw}
+        onOpenSession={onOpenSession}
         cwd={tab.session?.cwd ?? tab.cwd}
         onCwdChange={onCwdChange}
         onRenameCompleted={onRenameCompleted}
@@ -1670,6 +1674,7 @@ export function AppShell() {
               })}
               onNewSessionRequest={handleSlashNew}
               onOpenBtw={handleSlashOpenBtw}
+              onOpenSession={handleOpenScheduledSession}
               onCwdChange={handleCwdPicked}
               onRenameCompleted={handleSessionRenameCompleted}
               onSessionNameChange={handleSessionNameChange}

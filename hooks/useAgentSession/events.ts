@@ -19,6 +19,19 @@ import {
 import { bashCommandTouchesGit, isBodyMessage, sameCompletedMessage } from "./utils";
 import type { AgentEvent, AgentPhase, AgentRuntimeState, StateSetter, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
 
+function getSpawnSubagentToolCallIds(message: unknown): string[] {
+  if (!message || typeof message !== "object") return [];
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((block) => {
+    if (!block || typeof block !== "object") return [];
+    const value = block as { type?: unknown; toolName?: unknown; toolCallId?: unknown };
+    return value.type === "toolCall" && value.toolName === "spawn_subagent" && typeof value.toolCallId === "string"
+      ? [value.toolCallId]
+      : [];
+  });
+}
+
 const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
 const BOT_BASELINE_STATE = "searching";
 const BOT_REVERT_MS = 8000;
@@ -66,6 +79,11 @@ type AgentSessionEventsOptions = {
   setActiveLeafId: StateSetter<string | null>;
   setInFlightToolResults: StateSetter<Map<string, ToolResultMessage>>;
   setAgentTodoRefreshKey: StateSetter<number>;
+  setSubagentRefreshKey: StateSetter<number>;
+  scheduleSubagentRefresh: (toolCallId: string) => void;
+  seenSubagentToolCallIds: Set<string>;
+  seenSubagentToolStartIds: Set<string>;
+  seenSubagentToolEndIds: Set<string>;
   setContextUsage: StateSetter<{ percent: number | null; contextWindow: number; tokens: number | null } | null>;
   setThinkingLevel: StateSetter<ThinkingLevelOption>;
   compactInFlightRef: { current: boolean };
@@ -107,6 +125,11 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     setActiveLeafId,
     setInFlightToolResults,
     setAgentTodoRefreshKey,
+    setSubagentRefreshKey,
+    scheduleSubagentRefresh,
+    seenSubagentToolCallIds,
+    seenSubagentToolStartIds,
+    seenSubagentToolEndIds,
     setContextUsage,
     setThinkingLevel,
     compactInFlightRef,
@@ -191,6 +214,12 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
       case "message_start":
       case "message_update": {
         const message = event.message as Partial<AgentMessage> | undefined;
+        for (const toolCallId of getSpawnSubagentToolCallIds(message)) {
+          if (seenSubagentToolCallIds.has(toolCallId)) continue;
+          seenSubagentToolCallIds.add(toolCallId);
+          setSubagentRefreshKey((key) => key + 1);
+          scheduleSubagentRefresh(toolCallId);
+        }
         if (message && message.role !== "user") {
           const normalized = normalizeToolCalls(message as AgentMessage);
           // Both flags flip to true here. We never publish the actual
@@ -207,6 +236,12 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
       }
       case "message_end": {
         const completed = event.message as AgentMessage | undefined;
+        for (const toolCallId of getSpawnSubagentToolCallIds(completed)) {
+          if (seenSubagentToolCallIds.has(toolCallId)) continue;
+          seenSubagentToolCallIds.add(toolCallId);
+          setSubagentRefreshKey((key) => key + 1);
+          scheduleSubagentRefresh(toolCallId);
+        }
         if (completed && completed.role !== "user") {
           const normalized = normalizeToolCalls(completed);
           // Force-flush any pending streaming message before clearing the
@@ -253,6 +288,11 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         const args = event.args;
         toolCallNameRef.current.set(id, name);
         toolCallArgsRef.current.set(id, args);
+        if (name === "spawn_subagent" && id && !seenSubagentToolStartIds.has(id)) {
+          seenSubagentToolStartIds.add(id);
+          setSubagentRefreshKey((key) => key + 1);
+          scheduleSubagentRefresh(id);
+        }
         statsEmitRef.current?.({
           type: "tool_start",
           toolCallId: id,
@@ -302,7 +342,12 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         const isError = event.isError === true;
         if (isError) fireDiscreteBot("suspicious");
         const result = event.result as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
-        const toolName = toolCallNameRef.current.get(id);
+        const toolName = toolCallNameRef.current.get(id) ?? (typeof event.toolName === "string" ? event.toolName : undefined);
+        if (toolName === "spawn_subagent" && id && !seenSubagentToolEndIds.has(id)) {
+          seenSubagentToolEndIds.add(id);
+          setSubagentRefreshKey((key) => key + 1);
+          scheduleSubagentRefresh(id);
+        }
         if (toolName === AGENT_TODO_TOOL_NAME) setAgentTodoRefreshKey((key) => key + 1);
         const gitCwd = session?.cwd ?? newSessionCwd;
         if (toolName && WORKTREE_MUTATING_TOOL_NAMES.has(toolName) && gitCwd) notifyMutated(gitCwd);
@@ -456,6 +501,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     setAgentPhase,
     setAgentRunningSync,
     setAgentTodoRefreshKey,
+    setSubagentRefreshKey,
     setCompactingSync,
     setContextUsage,
     setInFlightToolResults,
@@ -464,6 +510,10 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     setRetryInfo,
     setRuntimeError,
     setThinkingLevel,
+    scheduleSubagentRefresh,
+    seenSubagentToolCallIds,
+    seenSubagentToolEndIds,
+    seenSubagentToolStartIds,
     showToast,
     statsEmitRef,
     t,

@@ -26,6 +26,7 @@ import { ModelPickerModal } from "./ModelPickerModal";
 import { Tooltip } from "../ui/Tooltip";
 import { usePendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 import { AgentTodoPanel } from "../todos/AgentTodoPanel";
+import { SubagentSessionsButton } from "./SubagentSessionsButton";
 import { AskUserQuestionsPanel } from "./AskUserQuestionsPanel";
 import { ReplayBar } from "./ReplayBar";
 import LoadingState from "../ui/LoadingState";
@@ -71,6 +72,8 @@ interface Props {
    *  Wired by AppShell so the main-chat slash menu can jump straight into
    *  a BTW question. */
   onOpenBtw?: () => void;
+  /** Open a persisted child session in the workspace tab bar. */
+  onOpenSession: (sessionId: string) => void;
   /** Current cwd of the chat context — shown by ChatInput's CwdPicker (the
    *  active session's cwd, or the new-session pick while no session is selected). */
   cwd?: string | null;
@@ -102,7 +105,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenBtw, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenBtw, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
   const streamingKey = tabId ?? session?.id ?? "default";
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -176,6 +179,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     displayModel: displayModelValue,
     agentPhase,
     agentTodoRefreshKey,
+    subagentRefreshKey,
     isNew,
     messagesEndRef, scrollContainerRef,
     lastUserMsgRef,
@@ -1677,6 +1681,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           <SessionLibraryOpenButton
             count={sessionLibraryEntries.length}
             sessionId={currentSessionId}
+          />
+          <SubagentSessionsButton
+            parentSessionId={session?.id ?? currentSessionId}
+            refreshKey={subagentRefreshKey}
+            onOpenSession={onOpenSession}
           />
           <Tooltip content={t("Collapse all")}>
             <button

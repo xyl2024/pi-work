@@ -228,6 +228,20 @@ export interface SessionInfo {
   running: boolean;
 }
 
+export type SubagentTaskStatus = "creating" | "running" | "completed" | "failed" | "cancelled";
+
+/** Browser-safe summary returned by the parent session's subagent endpoint. */
+export interface SubagentTaskSummary {
+  taskId: string;
+  childSessionId: string | null;
+  subagentType: string;
+  description: string;
+  status: SubagentTaskStatus;
+  createdAt: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+}
+
 export interface SessionContext {
   messages: AgentMessage[];
   entryIds: string[]; // parallel to messages — the session entry id for each message
