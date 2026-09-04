@@ -7,6 +7,18 @@ import { useToast } from "@/components/ui/Toast";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { SettingsSection } from "../SettingsSection";
 
+const SUPPORTED_AVATAR_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/bmp",
+  "image/svg+xml",
+  "image/x-icon",
+  "image/avif",
+];
+const AVATAR_ACCEPT = SUPPORTED_AVATAR_TYPES.join(",");
+
 /**
  * Section 0: Profile (avatar + display name). Owns its own loading /
  * saving / saved-ok state machine and a local `originalUsername`
@@ -97,8 +109,8 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file
     if (!file) return;
-    if (file.type !== "image/png") {
-      toast.show({ kind: "error", message: t("Only PNG images are supported") });
+    if (!SUPPORTED_AVATAR_TYPES.includes(file.type)) {
+      toast.show({ kind: "error", message: t("Unsupported image type") });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -200,7 +212,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/png"
+            accept={AVATAR_ACCEPT}
             onChange={handleAvatarFileChange}
             style={{ display: "none" }}
           />
@@ -225,7 +237,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
             {t("Upload avatar")}
           </button>
           <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
-            {t("PNG only · up to 5MB")}
+            {t("Common image types · up to 5MB")}
           </span>
           {hasAvatar && !avatarRemoved && (
             <button

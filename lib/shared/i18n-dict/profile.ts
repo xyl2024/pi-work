@@ -19,4 +19,5 @@ export const profile = {
   "Avatar and display name shown at the bottom of the sidebar.": "设置侧边栏底部显示的头像和显示名。",
   "Your display name": "你的显示名",
   "PNG only · up to 5MB": "仅 PNG · 最大 5MB",
+  "Common image types · up to 5MB": "PNG / JPG / GIF / WebP / BMP / SVG / ICO / AVIF · 最大 5MB",
 } as const;

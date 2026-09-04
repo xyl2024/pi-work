@@ -159,6 +159,7 @@ export const common = {
   "Directory not empty": "目录非空",
   "Only PNG images are supported": "仅支持 PNG 格式",
   "File too large (max 5MB)": "文件过大（最大 5MB）",
+  "Unsupported image type": "不支持的图片格式",
   "Filter": "过滤",
   "Status": "状态",
   "Sort": "排序",

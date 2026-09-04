@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { avatarExists, getAvatarPath, removeAvatar, writeAvatar } from "@/lib/server/profile-store";
+import { getAvatar, removeAvatar, writeAvatar, SUPPORTED_AVATAR_MIMES } from "@/lib/server/profile-store";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
-import { readFileSync } from "fs";
 
 const log = createLogger("api/profile/avatar");
 
@@ -9,20 +8,20 @@ const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
 
 export const dynamic = "force-dynamic";
 
-// GET /api/profile/avatar  →  image/png bytes, or 404 if no avatar
+// GET /api/profile/avatar  →  avatar image bytes, or 404 if no avatar
 export async function GET() {
   const startedAt = Date.now();
   try {
-    if (!avatarExists()) {
+    const avatar = getAvatar();
+    if (!avatar) {
       return NextResponse.json({ error: "not found" }, { status: 404 });
     }
-    const buffer = readFileSync(getAvatarPath());
-    log.info("avatar served", { size: buffer.length, durationMs: elapsedMs(startedAt) });
+    log.info("avatar served", { size: avatar.buffer.length, mime: avatar.mime, durationMs: elapsedMs(startedAt) });
     // No caching — the profile block uses ?k=<refreshKey> as cache-buster,
     // and we want a fresh upload to be visible immediately.
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(avatar.buffer), {
       headers: {
-        "Content-Type": "image/png",
+        "Content-Type": avatar.mime,
         "Cache-Control": "no-cache, must-revalidate",
       },
     });
@@ -32,7 +31,7 @@ export async function GET() {
   }
 }
 
-// POST /api/profile/avatar  multipart/form-data "file"  (image/png only)
+// POST /api/profile/avatar  multipart/form-data "file"  (common image types)
 export async function POST(req: Request) {
   const startedAt = Date.now();
   try {
@@ -41,8 +40,11 @@ export async function POST(req: Request) {
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "file field is required" }, { status: 400 });
     }
-    if (file.type !== "image/png") {
-      return NextResponse.json({ error: "only image/png is supported" }, { status: 400 });
+    if (!(SUPPORTED_AVATAR_MIMES as readonly string[]).includes(file.type)) {
+      return NextResponse.json(
+        { error: `unsupported image type: ${file.type || "unknown"}` },
+        { status: 400 },
+      );
     }
     if (file.size === 0) {
       return NextResponse.json({ error: "file is empty" }, { status: 400 });
@@ -55,7 +57,7 @@ export async function POST(req: Request) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    writeAvatar(buffer);
+    writeAvatar(buffer, file.type);
     log.info("avatar uploaded", {
       size: buffer.length,
       mime: file.type,
