@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import type { ToolSelection } from "@/lib/shared/types";
-import { expandToolPatterns } from "@/lib/shared/tool-selection";
+import {
+  buildToolChecklistRows,
+  expandToolPatterns,
+  isToolChecklistRowChecked,
+  toggleSelectionEntry,
+} from "@/lib/shared/tool-selection";
 import { TOOL_PRESET_PATTERNS, TOOL_PRESET_LABELS, TOOL_PRESET_DESCRIPTIONS, type NamedToolPresetId } from "@/components/chat/ToolsDropdownPanel";
 import { useI18n } from "@/hooks/useI18n";
 
@@ -30,9 +35,15 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
   // is active (they are stored raw so the chat tools picker can recognise the
   // preset); expand them against the catalog for the checkbox display.
   const toolNames = tools.map((tool) => tool.name);
+  const raw = selection === "all" ? [...toolNames] : Array.isArray(selection) ? [...selection] : [];
   const selected = selection === "all"
     ? new Set(toolNames)
-    : new Set(expandToolPatterns(Array.isArray(selection) ? selection : [], toolNames));
+    : new Set(expandToolPatterns(raw, toolNames));
+  // Checklist rows: members of a bound group (TOOL_GROUPS, e.g.
+  // `codegraph_*`) collapse into a single row so the family is shown — and
+  // toggled — as one switch, mirroring the chat tools picker. (Plain
+  // computation, not useMemo: this runs after the early `open` return.)
+  const rows = buildToolChecklistRows(tools, (count) => t("Bound tool family — toggled together ({count} tools)", { count }));
   // Named presets are stored raw (patterns included) — the server expands
   // them when a session starts, and the chat tools picker matches the raw
   // list to highlight the preset.
@@ -65,16 +76,20 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
             ))}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-            {tools.map((tool) => <label key={tool.name} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-              <input type="checkbox" checked={selected.has(tool.name)} onChange={() => {
-                // Toggling a single tool collapses pattern entries back to
-                // concrete names (same behaviour as the chat tools picker).
-                const next = new Set(selected);
-                if (next.has(tool.name)) next.delete(tool.name); else next.add(tool.name);
-                setSelection(Array.from(next));
-              }} />
-              <span>{tool.name}</span>
-            </label>)}
+            {rows.map((row) => (
+              <label key={row.key} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }} title={row.description ?? undefined}>
+                <input type="checkbox" checked={isToolChecklistRowChecked(row, selected, toolNames)} onChange={(e) => {
+                  // Shared toggle semantics: a standalone tool flips a single
+                  // name; a bound-group toggle rewrites the whole family (the
+                  // `*` pattern), same behaviour as the chat tools picker.
+                  setSelection(toggleSelectionEntry(raw, row.name, e.target.checked, toolNames));
+                }} />
+                <span style={row.group ? { fontFamily: "var(--font-mono)" } : undefined}>{row.name}</span>
+                {row.group && row.memberCount > 0 && (
+                  <span style={{ color: "var(--text-dim)", fontSize: 11, marginLeft: "auto" }}>×{row.memberCount}</span>
+                )}
+              </label>
+            ))}
           </div>
         </>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>

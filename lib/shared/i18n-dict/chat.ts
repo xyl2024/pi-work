@@ -60,6 +60,7 @@ export const chat = {
   "Tools · Custom ({count})": "工具 · 自定义 ({count})",
   "Custom selection": "自定义工具",
   "Custom selection ({count}/{total})": "自定义工具 ({count}/{total})",
+  "Bound tool family — toggled together ({count} tools)": "绑定工具组——整组开关（{count} 个工具）",
   "Full": "全部",
   "Read only": "只读",
   "Minimal": "极简",

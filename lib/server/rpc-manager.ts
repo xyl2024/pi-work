@@ -31,9 +31,7 @@ import {
 } from "./self-tools/session-tools";
 import {
   buildCodeGraphTools,
-  CODEGRAPH_STATUS_SYSTEM_PROMPT_BLOCK,
-  CODEGRAPH_EXPLORE_SYSTEM_PROMPT_BLOCK,
-  CODEGRAPH_BUILD_SYSTEM_PROMPT_BLOCK,
+  CODEGRAPH_SYSTEM_PROMPT_BLOCK,
 } from "./codegraph-tool";
 import { spawnSubagentTool, SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK } from "./subagent-tool";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
@@ -1095,7 +1093,14 @@ export async function startRpcSession(
         const sessionHasTool = (name: string): boolean =>
           enabledTools.has(name as ToolMarketId) &&
           (!options.allowedToolNames || options.allowedToolNames.includes(name)) &&
-          (effectiveToolNames === "all" || effectiveToolNames.includes(name));
+          (effectiveToolNames === "all" ||
+            // The stored selection may carry trailing-`*` prefix patterns
+            // (bound groups like "codegraph_*" from the tool picker, or named
+            // presets like the Assistant's "pi_work_*"); expand them here,
+            // matching expandToolSelection applied to the live registry below.
+            effectiveToolNames.some((entry) =>
+              entry === name || (entry.endsWith("*") && name.startsWith(entry.slice(0, -1))),
+            ));
         const blocks: string[] = [];
         if (sessionHasTool("agent_todo")) blocks.push(AGENT_TODO_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
@@ -1108,15 +1113,16 @@ export async function startRpcSession(
         if (sessionHasTool("pi_work_get_active_sessions_id")) blocks.push(ACTIVE_SESSIONS_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("pi_work_get_session_info_by_id")) blocks.push(SESSION_INFO_SYSTEM_PROMPT_BLOCK);
         // CodeGraph tools are registered as a whole family when ANY codegraph
-        // id is enabled (same condition as the customTools entry below); gate
-        // the family first, then fall through to the per-tool check.
+        // id is enabled (same condition as the customTools entry below). The
+        // family shares ONE append block: its tools are bound together in the
+        // UI (TOOL_GROUPS) and the guidance is only meaningful as a set, so
+        // gate on the family being loaded AND at least one family tool being
+        // active in this session (also covers legacy partial selections).
         const codegraphFamilyLoaded =
           options.allowedToolNames?.some((id) => CODEGRAPH_TOOL_IDS.includes(id as (typeof CODEGRAPH_TOOL_IDS)[number])) ||
           CODEGRAPH_TOOL_IDS.some((id) => enabledTools.has(id));
-        if (codegraphFamilyLoaded) {
-          if (sessionHasTool("codegraph_status")) blocks.push(CODEGRAPH_STATUS_SYSTEM_PROMPT_BLOCK);
-          if (sessionHasTool("codegraph_explore")) blocks.push(CODEGRAPH_EXPLORE_SYSTEM_PROMPT_BLOCK);
-          if (sessionHasTool("codegraph_build")) blocks.push(CODEGRAPH_BUILD_SYSTEM_PROMPT_BLOCK);
+        if (codegraphFamilyLoaded && CODEGRAPH_TOOL_IDS.some((id) => sessionHasTool(id))) {
+          blocks.push(CODEGRAPH_SYSTEM_PROMPT_BLOCK);
         }
         return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
       },

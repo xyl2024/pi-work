@@ -5,7 +5,12 @@ import { useI18n } from "@/hooks/useI18n";
 import { AnimatedPopover } from "../ui/AnimatedPopover";
 import { Tooltip } from "../ui/Tooltip";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
-import { expandToolPatterns } from "@/lib/shared/tool-selection";
+import {
+  buildToolChecklistRows,
+  expandToolPatterns,
+  isToolChecklistRowChecked,
+  toggleSelectionEntry,
+} from "@/lib/shared/tool-selection";
 
 /**
  * "Read only" quick preset — the canonical tool names pi's built-in
@@ -116,6 +121,14 @@ export function ToolsDropdownPanel({
     if (toolSelection === "all") return new Set(allNames);
     return new Set(expandToolPatterns(Array.isArray(toolSelection) ? toolSelection : [], allNames));
   }, [toolSelection, allNames]);
+  // Checklist rows: members of a bound group (see TOOL_GROUPS in
+  // lib/shared/tool-selection) collapse into a single row keyed by the
+  // group's `*` pattern, so the family is shown — and toggled — as one
+  // switch instead of one checkbox per tool.
+  const rows = useMemo(
+    () => buildToolChecklistRows(availableTools, (count) => t("Bound tool family — toggled together ({count} tools)", { count })),
+    [availableTools, t],
+  );
   const isOff = Array.isArray(toolSelection) && toolSelection.length === 0;
   const isAll = toolSelection === "all";
   // "Read only" and the Minimal/Coding/Assistant presets are named quick
@@ -128,21 +141,25 @@ export function ToolsDropdownPanel({
   // Generic Custom is "any partial selection that isn't a named preset".
   const isCustom = !isOff && !isAll && namedPreset === null;
 
-  // Compute the next selection for one toggle click. Normalises full →
-  // "all" sentinel so a future tool addition auto-includes; leaves the
-  // empty array as `[]` (matches Off's wire shape).
+  // Compute the next selection for one toggle click. The shared
+  // `toggleSelectionEntry` flips a standalone name or rewrites a whole bound
+  // family (pattern semantics, always all-on/all-off). The stored selection
+  // "all" is materialized first so a group-off yields a partial selection
+  // instead of the empty (Off) array. Normalises full → "all" sentinel so a
+  // future tool addition auto-includes; leaves the empty array as `[]`
+  // (matches Off's wire shape).
   const toggleTool = useCallback(
     (name: string, willBeChecked: boolean) => {
-      const next = new Set(selectedSet);
-      if (willBeChecked) next.add(name);
-      else next.delete(name);
+      const raw = toolSelection === "all" ? [...allNames] : Array.isArray(toolSelection) ? [...toolSelection] : [];
+      const next = toggleSelectionEntry(raw, name, willBeChecked, allNames);
+      const expanded = expandToolPatterns(next, allNames);
       const newSelection: ToolSelection =
-        next.size === allNames.length && allNames.length > 0
+        expanded.length === allNames.length && allNames.length > 0
           ? "all"
-          : Array.from(next);
+          : next;
       onToggleTool(newSelection);
     },
-    [selectedSet, allNames, onToggleTool],
+    [toolSelection, allNames, onToggleTool],
   );
 
   // Viewport-aware cap so the panel doesn't grow taller than the space
@@ -239,10 +256,10 @@ export function ToolsDropdownPanel({
           )}
           {!toolsLoading && !toolsError && availableTools.length > 0 && (
             <div>
-              {availableTools.map((tool) => {
-                const isChecked = selectedSet.has(tool.name);
+              {rows.map((row) => {
+                const isChecked = isToolChecklistRowChecked(row, selectedSet, allNames);
                 return (
-                  <Tooltip key={tool.name} content={tool.description} side="left">
+                  <Tooltip key={row.key} content={row.description} side="left">
                     <label
                       style={{
                         display: "flex", alignItems: "center", gap: 8,
@@ -270,12 +287,12 @@ export function ToolsDropdownPanel({
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        onChange={(e) => toggleTool(tool.name, e.target.checked)}
-                        aria-label={tool.name}
+                        onChange={(e) => toggleTool(row.name, e.target.checked)}
+                        aria-label={row.name}
                         style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
                       />
                       <span style={{ fontFamily: "var(--font-mono)", color: "var(--text)", flexShrink: 0 }}>
-                        {tool.name}
+                        {row.name}
                       </span>
                       <span style={{
                         fontSize: 11,
@@ -286,7 +303,7 @@ export function ToolsDropdownPanel({
                         minWidth: 0,
                         flex: 1,
                       }}>
-                        {tool.description}
+                        {row.description}
                       </span>
                     </label>
                   </Tooltip>
