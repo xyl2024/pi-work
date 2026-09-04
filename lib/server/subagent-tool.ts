@@ -65,6 +65,52 @@ interface SpawnSubagentDetails {
   error?: string;
 }
 
+/** Terminal state of the child agent run, observed from its event stream. */
+interface SubagentTerminalState {
+  /** `stopReason` of the last assistant message, or null when none arrived. */
+  stopReason: string | null;
+  /** `errorMessage` of the last assistant message (populated on error stops). */
+  errorMessage: string | null;
+  /** Whether any assistant message was produced at all. */
+  sawAssistant: boolean;
+}
+
+/**
+ * A side condition under which the tool must stop the child agent and settle
+ * with an explanatory reason (parent stopped, parent stopped via abort, ...).
+ */
+interface SubagentStopSource {
+  signal: AbortSignal;
+  reason: string;
+}
+
+const EMPTY_TERMINAL: SubagentTerminalState = {
+  stopReason: null,
+  errorMessage: null,
+  sawAssistant: false,
+};
+
+/**
+ * Human-readable explanation for an abnormal child-agent terminal state, or
+ * null when the child finished normally. Abnormal = aborted externally,
+ * provider error, output truncated at the token limit, or no response at all.
+ */
+function describeAbnormalTerminal(state: SubagentTerminalState): string | null {
+  if (state.stopReason === "error") {
+    return `Subagent run failed: ${state.errorMessage ?? "model/provider error"}`;
+  }
+  if (state.stopReason === "aborted") {
+    return "Subagent was aborted before it finished (the subagent session was stopped externally)";
+  }
+  if (state.stopReason === "length") {
+    return "Subagent stopped after hitting the model's output token limit";
+  }
+  if (!state.sawAssistant) {
+    return "Subagent stopped without producing any response";
+  }
+  return null;
+}
+
 function resultEnvelope(details: SpawnSubagentDetails) {
   const status = details.status === "completed" ? "completed" : details.status;
   const text = details.status === "completed"
@@ -94,48 +140,74 @@ function truncateResult(text: string): string {
   return `${text.slice(0, MAX_RESULT_LENGTH)}\n… [truncated ${text.length - MAX_RESULT_LENGTH} chars]`;
 }
 
+/**
+ * Wait for the child agent run to settle, tracking its terminal state so the
+ * caller can tell a normal finish from an abnormal stop (and explain why).
+ *
+ * Resolves with the child's terminal state on `agent_settled`; rejects with an
+ * explanatory `Error` on prompt failure, runtime-limit overrun, or when any of
+ * the given stop sources fires (each source aborts the child first so the
+ * child session always stops together with its stop condition).
+ */
 function waitForAgentEnd(
   session: AgentSessionWrapper,
-  signal: AbortSignal | undefined,
-): Promise<void> {
+  stopSources: SubagentStopSource[],
+): Promise<SubagentTerminalState> {
   return new Promise((resolve, reject) => {
     let settled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    let removeAbort: (() => void) | null = null;
+    const cleanups: Array<() => void> = [];
+    const terminal: SubagentTerminalState = { ...EMPTY_TERMINAL };
 
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
-      removeAbort?.();
-      unsubscribe();
+      for (const cleanup of cleanups) cleanup();
       if (error) reject(error);
-      else resolve();
+      else resolve(terminal);
     };
 
-    const unsubscribe = session.onEvent((event) => {
-      // agent_end marks one attempt. A retryable attempt emits agent_end
-      // before the session has actually finished; agent_settled is the
-      // terminal event for the complete prompt lifecycle.
-      if (event.type === "agent_settled") finish();
-      else if (event.type === "prompt_failed") {
-        finish(new Error(typeof event.error === "string" ? event.error : "Subagent prompt failed"));
-      }
-    });
+    // Best-effort: tell the child to abort, then settle with the reason. The
+    // child's abort completes asynchronously; its JSONL will still record the
+    // aborted terminal message.
+    const stop = (reason: string) => {
+      void session.send({ type: "abort" }).catch(() => undefined);
+      finish(new Error(reason));
+    };
+
+    cleanups.push(
+      session.onEvent((event) => {
+        // agent_end marks one attempt. A retryable attempt emits agent_end
+        // before the session has actually finished; agent_settled is the
+        // terminal event for the complete prompt lifecycle.
+        if (event.type === "agent_settled") {
+          finish();
+        } else if (event.type === "message_end") {
+          // Track the LAST assistant message's stopReason/errorMessage: it is
+          // the run's terminal outcome. Intermediate retries may emit error
+          // stops that later recover — only the last one counts.
+          const msg = (event as { message?: { role?: unknown; stopReason?: unknown; errorMessage?: unknown } }).message;
+          if (msg && msg.role === "assistant") {
+            terminal.stopReason = typeof msg.stopReason === "string" ? msg.stopReason : null;
+            terminal.errorMessage = typeof msg.errorMessage === "string" ? msg.errorMessage : null;
+            terminal.sawAssistant = true;
+          }
+        } else if (event.type === "prompt_failed") {
+          finish(new Error(typeof event.error === "string" ? event.error : "Subagent prompt failed"));
+        }
+      }),
+    );
 
     timer = setTimeout(() => {
-      void session.send({ type: "abort" }).catch(() => undefined);
-      finish(new Error(`Subagent exceeded the ${MAX_RUNTIME_MS / 60_000}-minute runtime limit`));
+      stop(`Subagent exceeded the ${MAX_RUNTIME_MS / 60_000}-minute runtime limit`);
     }, MAX_RUNTIME_MS);
 
-    if (signal) {
-      const onAbort = () => {
-        void session.send({ type: "abort" }).catch(() => undefined);
-        finish(new Error("Subagent cancelled"));
-      };
-      signal.addEventListener("abort", onAbort, { once: true });
-      removeAbort = () => signal.removeEventListener("abort", onAbort);
-      if (signal.aborted) onAbort();
+    for (const source of stopSources) {
+      const onAbort = () => stop(source.reason);
+      source.signal.addEventListener("abort", onAbort, { once: true });
+      cleanups.push(() => source.signal.removeEventListener("abort", onAbort));
+      if (source.signal.aborted) stop(source.reason);
     }
   });
 }
@@ -201,14 +273,30 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
       prompt,
     });
 
+    // Side conditions that must stop the child together with their trigger.
+    // parentStop: the parent wrapper was destroyed (session deleted, idle
+    // reap, process-exit cleanup). childGone: the child wrapper itself was
+    // destroyed externally (e.g. the subagent session was deleted from the
+    // UI while it was running). The tool's own AbortSignal (parent agent
+    // aborted) is added as a third source below.
+    const parentStop = new AbortController();
+    const childGone = new AbortController();
+    let offParentDestroy: (() => void) | null = null;
+    let offChildDestroy: (() => void) | null = null;
+
     try {
       const { getRpcSession, startRpcSession } = await import("./rpc-manager");
       const parent = getRpcSession(parentSessionId);
+      if (parent && !parent.isAlive()) {
+        throw new Error("Parent session has already stopped");
+      }
       const parentModel = parent?.inner.model;
       const subagentConfig = readConfig();
       if (!parentModel) {
         throw new Error("The main agent has no active model to inherit");
       }
+      // Stop the child whenever the parent wrapper is destroyed.
+      offParentDestroy = parent?.onDestroy(() => parentStop.abort());
 
       const { session, realSessionId } = await startRpcSession(
         `__subagent__${taskId}`,
@@ -229,16 +317,51 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
         },
       );
 
+      // Stop waiting (and abort the child) if the child wrapper is destroyed
+      // externally while the tool is still waiting on it.
+      offChildDestroy = session.onDestroy(() => childGone.abort());
+
       markSubagentRunning(task.taskId, realSessionId);
       const displayName = `[Subagent] ${description}`;
       session.inner.sessionManager.appendSessionInfo(displayName);
       writeSessionName(realSessionId, displayName);
 
       await session.send({ type: "prompt", message: prompt });
-      await waitForAgentEnd(session, signal);
+      const stopSources: SubagentStopSource[] = [
+        {
+          signal: parentStop.signal,
+          reason: "Subagent stopped because the parent session was stopped",
+        },
+        {
+          signal: childGone.signal,
+          reason: "Subagent stopped because the subagent session was closed",
+        },
+      ];
+      if (signal) {
+        stopSources.push({ signal, reason: "Subagent cancelled" });
+      }
+      const terminal = await waitForAgentEnd(session, stopSources);
 
       const details = await readSessionDetails(realSessionId);
       const result = getLastAssistantText(details);
+
+      // An abnormal terminal state (external abort, provider error, output
+      // truncated at the token limit, or no response at all) must NOT be
+      // reported as completed — surface the stop reason instead.
+      const abnormalReason = describeAbnormalTerminal(terminal);
+      if (abnormalReason) {
+        const status = terminal.stopReason === "aborted" ? "cancelled" : "failed";
+        const errorText = result ? `${abnormalReason}\n\nLast partial output:\n${result}` : abnormalReason;
+        failSubagentTask(task.taskId, abnormalReason, status);
+        return resultEnvelope({
+          taskId,
+          sessionId: realSessionId,
+          status,
+          description,
+          error: errorText,
+        });
+      }
+
       completeSubagentTask(task.taskId, result);
 
       // Persist a small non-context entry in the child session so its purpose
@@ -259,7 +382,7 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const cancelled = message === "Subagent cancelled";
+      const cancelled = message === "Subagent cancelled" || message.startsWith("Subagent stopped");
       failSubagentTask(task.taskId, message, cancelled ? "cancelled" : "failed");
       return resultEnvelope({
         taskId,
@@ -268,6 +391,9 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
         description,
         error: message,
       });
+    } finally {
+      offParentDestroy?.();
+      offChildDestroy?.();
     }
   },
 });
