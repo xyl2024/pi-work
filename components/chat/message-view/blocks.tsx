@@ -381,7 +381,7 @@ function DiffToolCallContent({ toolName, input, resultText, resultIsEmpty, isErr
         lineHeight: 1.5,
       }}
     >
-      <div style={{ overflowX: "auto", padding: 0 }}>
+      <div className="no-scrollbar" style={{ overflowX: "auto", padding: 0, scrollbarWidth: "none" }}>
         {/* Keep the diff rows inside an inline-block that grows to the widest
             line. Without this, each row only paints to the viewport width,
             so its background disappears when scrolling horizontally. */}

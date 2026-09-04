@@ -1567,3 +1567,13 @@ li.todo-task-item[data-checked="true"] > div {
   width: 0;
   height: 0;
 }
+
+/* Hide horizontal scrollbar of edit/write diff tool-call blocks while
+ * keeping the content scrollable. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
