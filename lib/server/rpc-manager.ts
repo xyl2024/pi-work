@@ -13,6 +13,11 @@ import type { LlmAuditSource } from "../shared/llm-audit-types";
 import { buildTodoTools } from "./user-todo/tools";
 import { buildShowFileTool } from "./show-file-tool";
 import { writeSessionName, deleteSessionName } from "./session-names";
+import {
+  readSessionToolSelection,
+  writeSessionToolSelection,
+} from "./session-tools-config";
+import { readCwdToolSelection } from "./cwd-tools-config";
 import { buildAgentTodoTool, AGENT_TODO_SYSTEM_PROMPT_BLOCK } from "./agent-todo-tool/tool";
 import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-questions-tool";
 import { getRegistry } from "./session-registry";
@@ -768,6 +773,11 @@ export class AgentSessionWrapper {
         } else if (Array.isArray(toolNames)) {
           this.inner.setActiveToolsByName(toolNames);
         }
+        // Mirror to the sidecar so the selection survives a server restart.
+        // Best-effort: a failed write must not fail the tool switch.
+        if (!writeSessionToolSelection(this.sessionId, toolNames)) {
+          log.warn("failed to persist session tool selection", { sessionId: this.sessionId });
+        }
         return null;
       }
 
@@ -894,6 +904,11 @@ function stripDefaultSystemPromptSections(prompt: string): string {
  * Get or create an AgentSession for the given session.
  * For new sessions (sessionFile === ""), pi generates its own id.
  * Pass toolNames to pre-configure active tools (empty array = all tools disabled, "all" = every available tool).
+ * Omit toolNames to auto-resolve: existing sessions restore their persisted
+ * per-session selection (~/.pi-work/session-tools/, falling back to the cwd
+ * default in ~/.pi-work/cwd-tools.json, then "all"); new sessions use the
+ * cwd default, then "all". The resolved selection is mirrored to the
+ * per-session sidecar so restarts are cache-stable.
  */
 type RpcThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -916,10 +931,32 @@ export async function startRpcSession(
   sessionId: string,
   sessionFile: string,
   cwd: string,
-  toolNames: ToolSelection = "all",
+  toolNames?: ToolSelection,
   source: "user" | "scheduled" | "subagent" = "user",
   options: StartRpcSessionOptions = {},
 ): Promise<{ session: AgentSessionWrapper; realSessionId: string }> {
+  // Resolve the effective tool selection before the IIFE so it is stable.
+  // `undefined` means "caller did not specify": for an existing session file
+  // (e.g. after a server restart) restore the selection persisted for this
+  // session — falling back to the cwd default for legacy sessions, and to
+  // "all" only when nothing is recorded. An explicit argument ("all" or an
+  // array) is honored as-is. Without the restore, a restarted server would
+  // re-open every old conversation with the full tool registry, changing the
+  // system prompt and tool block and killing the prompt cache hit rate.
+  const effectiveToolNames: ToolSelection =
+    toolNames !== undefined
+      ? toolNames
+      : sessionFile
+        ? readSessionToolSelection(sessionId) ?? readCwdToolSelection(cwd) ?? "all"
+        : readCwdToolSelection(cwd) ?? "all";
+  if (toolNames === undefined) {
+    log.info("tool selection resolved for session start", {
+      sessionId,
+      sessionFile: sessionFile || undefined,
+      requested: "unspecified",
+      effectiveCount: effectiveToolNames === "all" ? "all" : effectiveToolNames.length,
+    });
+  }
   const registry = getRegistry();
   const locks = getLocks();
   const startedAt = Date.now();
@@ -941,7 +978,7 @@ export async function startRpcSession(
       sessionId,
       sessionFile: sessionFile || undefined,
       cwd,
-      requestedToolCount: toolNames === "all" ? "all" : toolNames?.length,
+      requestedToolCount: effectiveToolNames === "all" ? "all" : effectiveToolNames?.length,
     });
     const { SessionManager, getAgentDir } = await import("@earendil-works/pi-coding-agent");
     const agentDir = getAgentDir();
@@ -1256,16 +1293,16 @@ export async function startRpcSession(
     // Keep pi's full tool registry available so later switches to "all" can include
     // extension/custom tools, then set the active subset before the first prompt.
     // If "all" was requested, activate everything pi registered at runtime.
-    if (toolNames === "all") {
+    if (effectiveToolNames === "all") {
       inner.setActiveToolsByName(inner.getAllTools().map((t: ToolInfo) => t.name));
-    } else if (Array.isArray(toolNames)) {
-      inner.setActiveToolsByName(toolNames);
+    } else if (Array.isArray(effectiveToolNames)) {
+      inner.setActiveToolsByName(effectiveToolNames);
     }
 
     // When all tools are disabled, clear the system prompt entirely.
     // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
     // the only way to truly clear it is to call agent.setSystemPrompt directly.
-    if (Array.isArray(toolNames) && toolNames.length === 0) {
+    if (Array.isArray(effectiveToolNames) && effectiveToolNames.length === 0) {
       inner.agent.state.systemPrompt = "";
     }
 
@@ -1277,6 +1314,10 @@ export async function startRpcSession(
     const realSessionId = inner.sessionId as string;
     const realSessionFile = inner.sessionFile as string | undefined;
     if (realSessionFile) cacheSessionPath(realSessionId, realSessionFile);
+    // Mirror the live selection to the sidecar so a server restart can
+    // restore exactly this set when re-opening the session (per-session
+    // selection has no home inside pi's session JSONL).
+    writeSessionToolSelection(realSessionId, effectiveToolNames);
 
     wrapper.onDestroy(() => {
       registry.delete(realSessionId);
