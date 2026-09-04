@@ -4,16 +4,14 @@ import { useSyncExternalStore } from "react";
 import type { WorkspacesResponse } from "@/lib/shared/types";
 
 /**
- * App-wide recent-cwd list, following the same module-scoped
+ * App-wide cwd list, following the same module-scoped
  * `useSyncExternalStore` pattern as sessionUiStore / toolCallStatsStore.
  *
- * The list is fetched exactly once per page load (see `initCwdList`) so the
- * CwdPicker dropdown is populated before it is ever opened and never
- * refetches on open or on ChatWindow remounts. AppShell also reads the first
- * entry to pre-pick the most recently used cwd on first entry.
+ * The full list is fetched exactly once per page load (see `initCwdList`)
+ * so the CwdPicker dropdown is populated before it is ever opened and
+ * never refetches on open or on ChatWindow remounts. AppShell also reads
+ * the first entry to pre-pick the most recently used cwd on first entry.
  */
-
-export const RECENT_CWD_LIMIT = 5;
 
 interface CwdListState {
   /** Recently used cwds, most recent first. null = not fetched yet. */
@@ -58,7 +56,7 @@ export function useCwdList(): CwdListState {
 export function initCwdList() {
   if (fetching || fetched) return;
   fetching = true;
-  fetch(`/api/workspaces?limit=${RECENT_CWD_LIMIT}`)
+  fetch("/api/workspaces?limit=all")
     .then((r) => r.json() as Promise<WorkspacesResponse>)
     .then((ws) => {
       state = { cwds: ws.workspaces.map((w) => w.cwd) };

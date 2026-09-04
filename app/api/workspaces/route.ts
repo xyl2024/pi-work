@@ -32,8 +32,9 @@ function decodeCursor(raw: string): Cursor | null {
  * GET /api/workspaces
  *
  * Query params:
- *   - `limit`  page size; defaults to 5. The response always includes
- *              `nextCursor` when more rows are available.
+ *   - `limit`  page size; defaults to 5. Pass `all` to return every row.
+ *              The response always includes `nextCursor` when more rows
+ *              are available.
  *   - `cursor` base64url-encoded `{lastUsed, cwd}` from the previous page.
  *              The next page starts strictly AFTER this point (both fields
  *              must be strictly less, ordered by lastUsed desc then cwd asc).
@@ -48,7 +49,11 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limitRaw = url.searchParams.get("limit");
   const cursorRaw = url.searchParams.get("cursor");
-  const limit = limitRaw ? Math.max(1, parseInt(limitRaw, 10) || 0) : 5;
+  const limit = limitRaw === "all"
+    ? Number.POSITIVE_INFINITY
+    : limitRaw
+      ? Math.max(1, parseInt(limitRaw, 10) || 0)
+      : 5;
   const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
 
   log.debug("list workspaces requested", { limit, hasCursor: !!cursor });
@@ -124,7 +129,7 @@ export async function GET(request: Request) {
       if (idx >= 0) startIdx = idx + 1;
     }
 
-    const page = rows.slice(startIdx, startIdx + limit);
+    const page = rows.slice(startIdx, limit === Number.POSITIVE_INFINITY ? undefined : startIdx + limit);
     const hasMore = startIdx + limit < rows.length;
     const nextCursor = hasMore && page.length > 0
       ? encodeCursor({ lastUsed: page[page.length - 1].lastUsed, cwd: page[page.length - 1].cwd })

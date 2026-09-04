@@ -104,6 +104,22 @@ function CwdPickerModal({ open, cwd, cwds, onCwdChange, onDefaultCwd, onSelectFo
   const inputRef = useRef<HTMLInputElement | null>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  // Number of cards per grid row at the active index — derived from the
+  // DOM (cards sharing the same offsetTop) so it stays correct across
+  // resizes, filtering and group boundaries (same trick as
+  // ModelPickerModal).
+  const columnCount = useCallback((index: number): number => {
+    const el = rowRefs.current[index];
+    const grid = el?.parentElement;
+    if (!el || !grid) return 1;
+    const top = el.offsetTop;
+    let count = 0;
+    for (const child of Array.from(grid.children)) {
+      if (Math.abs((child as HTMLElement).offsetTop - top) < 2) count++;
+    }
+    return Math.max(1, count);
+  }, []);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? cwds.filter((item) => `${basenameOf(item)} ${item}`.toLowerCase().includes(q)) : cwds;
@@ -130,7 +146,14 @@ function CwdPickerModal({ open, cwd, cwds, onCwdChange, onDefaultCwd, onSelectFo
       if (phase !== "open" || filtered.length === 0) return;
       if (event.key === "ArrowDown" || event.key === "ArrowRight" || event.key === "ArrowUp" || event.key === "ArrowLeft") {
         event.preventDefault();
-        setActiveIndex((index) => (index + (event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1) + filtered.length) % filtered.length);
+        setActiveIndex((index) => {
+          // ← / → move one card; ↑ / ↓ move a full grid row (column count
+          // read from the rendered grid so it adapts to the panel width).
+          if (event.key === "ArrowLeft") return (index - 1 + filtered.length) % filtered.length;
+          if (event.key === "ArrowRight") return (index + 1) % filtered.length;
+          const step = (event.key === "ArrowDown" ? 1 : -1) * columnCount(index);
+          return (index + step + filtered.length) % filtered.length;
+        });
       } else if (event.key === "Enter") {
         const item = filtered[activeIndex];
         if (item) { event.preventDefault(); onCwdChange(item); requestClose(); }
@@ -138,7 +161,7 @@ function CwdPickerModal({ open, cwd, cwds, onCwdChange, onDefaultCwd, onSelectFo
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isVisible, phase, filtered, activeIndex, onCwdChange, requestClose]);
+  }, [isVisible, phase, filtered, activeIndex, onCwdChange, requestClose, columnCount]);
 
   if (!isVisible || !portalEl) return null;
   return createPortal(
@@ -147,10 +170,31 @@ function CwdPickerModal({ open, cwd, cwds, onCwdChange, onDefaultCwd, onSelectFo
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 10px" }}><span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t("Change project")}</span><button type="button" onClick={requestClose} aria-label={t("Close")} style={{ background: "none", border: 0, color: "var(--text-dim)", cursor: "pointer", fontSize: 18 }}>×</button></div>
         <div style={{ padding: "0 14px 10px" }}><div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 8px" }}><span style={{ color: "var(--text-dim)" }}>⌕</span><input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search projects...")} spellCheck={false} style={{ flex: 1, minWidth: 0, background: "none", border: 0, outline: 0, color: "var(--text)", fontSize: 13, padding: "8px 2px" }} /></div></div>
         <div style={{ flex: 1, minHeight: 80, overflowY: "auto", padding: "0 8px 8px" }} data-hide-v-scrollbar>
-          {filtered.length === 0 ? <div style={{ padding: 24, textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>{cwds.length ? t("No matches") : t("No projects yet")}</div> : filtered.map((item, index) => <button key={item} ref={(el) => { rowRefs.current[index] = el; }} type="button" onClick={() => { onCwdChange(item); requestClose(); }} onMouseEnter={() => setActiveIndex(index)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 10px", textAlign: "left", background: index === activeIndex || item === cwd ? "var(--bg-selected)" : "none", border: `1px solid ${index === activeIndex ? "var(--accent)" : "transparent"}`, borderRadius: 7, color: "var(--text)", cursor: "pointer" }}><span style={{ color: "var(--accent)", display: "flex" }}><CwdProjectIcon cwd={item} size={14} /></span><span style={{ flex: 1, minWidth: 0 }}><span style={{ display: "block", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{basenameOf(item)}</span><span style={{ display: "block", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item}</span></span>{item === cwd && <span style={{ color: "var(--accent)", fontSize: 12 }}>✓</span>}</button>)}
+          {filtered.length === 0 ? (
+            <div style={{ padding: 24, textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>{cwds.length ? t("No matches") : t("No projects yet")}</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 4, padding: "2px 4px 6px" }}>
+              {filtered.map((item, index) => {
+                const isCurrent = item === cwd;
+                return (
+                  <button key={item} ref={(el) => { rowRefs.current[index] = el; }} type="button" onClick={() => { onCwdChange(item); requestClose(); }} onMouseEnter={() => setActiveIndex(index)} title={item} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 10px", textAlign: "left", background: index === activeIndex ? "var(--bg-selected)" : "none", border: `1px solid ${isCurrent ? "var(--accent)" : "transparent"}`, borderRadius: 7, color: "var(--text)", cursor: "pointer" }}>
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 16, flexShrink: 0, color: "var(--accent)" }}>
+                      {isCurrent
+                        ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        : <CwdProjectIcon cwd={item} size={14} />}
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 13, color: index === activeIndex ? "var(--text)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{basenameOf(item)}</span>
+                      <span style={{ display: "block", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: 8, padding: "8px 14px", borderTop: "1px solid var(--border)" }}><button type="button" onClick={() => void onDefaultCwd()} style={{ flex: 1, padding: "7px 8px", background: "none", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}>{t("Use default directory")}</button><button type="button" onClick={onSelectFolder} style={{ flex: 1, padding: "7px 8px", background: "none", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}>{t("Select folder...")}</button></div>
-        <div style={{ padding: "0 14px 8px", color: "var(--text-dim)", fontSize: 11 }}>{t("↑↓ select · Enter confirm · Esc close")}</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px", borderTop: "1px solid var(--border)", fontSize: 11, color: "var(--text-dim)" }}><span>{t("↑↓←→ select · Enter confirm · Esc close")}</span>{filtered.length > 0 && <span style={{ fontFamily: "var(--font-mono)" }}>{filtered.length} {t("projects")}</span>}</div>
       </div>
     </div>, portalEl,
   );

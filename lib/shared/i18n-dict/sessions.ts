@@ -6,6 +6,7 @@ export const sessions = {
   // Multi-cwd sidebar
   "Loading projects...": "正在加载项目...",
   "No projects yet": "暂无项目",
+  "projects": "个项目",
   "Load more projects": "加载更多项目",
   "End of projects": "已到末尾",
   "Load more sessions": "加载更多会话",
