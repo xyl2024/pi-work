@@ -301,6 +301,33 @@ async function sessionInfoResult(sessionId: string) {
 // Tool registration
 // ============================================================================
 
+/*
+ * Hardcoded, whole-block system-prompt contributions for the three
+ * self-tools. Appended at the very end of the system prompt via
+ * `appendSystemPromptOverride`, each gated on its tool being enabled AND
+ * part of the session's tool set (same pattern as `agent_todo`). Replaces
+ * the flat `promptGuidelines` arrays that used to live on the tool
+ * definitions.
+ */
+export const RECENT_SESSIONS_SYSTEM_PROMPT_BLOCK = `\
+## Tool pi_work_get_sessions_id guidelines
+- Use this tool when you need to discover recent sessions; results are ordered newest first.
+- Use pi_work_get_session_info_by_id when you need more detail for a returned id.
+`;
+
+export const ACTIVE_SESSIONS_SYSTEM_PROMPT_BLOCK = `\
+## Tool pi_work_get_active_sessions_id guidelines
+- Call pi_work_get_active_sessions_id to enumerate sessions currently loaded in Pi Work, then use pi_work_get_session_info_by_id with a returned session id for detail.
+- The result is a snapshot; a session that isn't in memory won't be listed.
+`;
+
+export const SESSION_INFO_SYSTEM_PROMPT_BLOCK = `\
+## Tool pi_work_get_session_info_by_id guidelines
+- Get an id first with pi_work_get_active_sessions_id.
+- This tool is read-only; it never modifies the session.
+- Token usage is aggregated per-message from the disk JSONL; context window is not reported because it is not stored on disk.
+`;
+
 export const getSessionsTool = defineTool<typeof GetSessionsParams, GetSessionsDetails>({
   name: PI_WORK_GET_SESSIONS_TOOL,
   label: "Pi Work Recent Sessions",
@@ -308,7 +335,8 @@ export const getSessionsTool = defineTool<typeof GetSessionsParams, GetSessionsD
   parameters: GetSessionsParams,
   executionMode: "sequential",
   promptSnippet: "List recent Pi Work session ids, names, and first user messages.",
-  promptGuidelines: ["Use this tool when you need to discover recent sessions; results are ordered newest first.", "Use pi_work_get_session_info_by_id when you need more detail for a returned id."],
+  // Guidelines moved to RECENT_SESSIONS_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params) {
     return recentSessionsResult(params.limit);
   },
@@ -322,10 +350,8 @@ export const activeSessionsTool = defineTool<typeof ActiveSessionsParams, Active
   parameters: ActiveSessionsParams,
   executionMode: "sequential",
   promptSnippet: "List active Pi Work session ids.",
-  promptGuidelines: [
-    "Call pi_work_get_active_sessions_id to enumerate sessions currently loaded in Pi Work, then use pi_work_get_session_info_by_id with a returned session id for detail.",
-    "The result is a snapshot; a session that isn't in memory won't be listed.",
-  ],
+  // Guidelines moved to ACTIVE_SESSIONS_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute() {
     return activeSessionsResult();
   },
@@ -339,11 +365,8 @@ export const sessionInfoTool = defineTool<typeof SessionInfoParams, SessionInfoD
   parameters: SessionInfoParams,
   executionMode: "sequential",
   promptSnippet: "Read details for one Pi Work session.",
-  promptGuidelines: [
-    "Get an id first with pi_work_get_active_sessions_id.",
-    "This tool is read-only; it never modifies the session.",
-    "Token usage is aggregated per-message from the disk JSONL; context window is not reported because it is not stored on disk.",
-  ],
+  // Guidelines moved to SESSION_INFO_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params) {
     return sessionInfoResult(params.sessionId);
   },

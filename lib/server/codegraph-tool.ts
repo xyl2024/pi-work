@@ -233,6 +233,38 @@ const buildParams = Type.Object({
   path: PathParam,
 });
 
+/* ───────────────────── system-prompt append blocks ───────────────────── */
+
+/*
+ * Hardcoded, whole-block system-prompt contributions for the three
+ * codegraph tools that carry usage guidance. Appended at the very end of
+ * the system prompt via `appendSystemPromptOverride`, each gated on the
+ * codegraph family being loaded AND the tool being part of the session's
+ * tool set (same pattern as `agent_todo`). Replaces the flat
+ * `promptGuidelines` arrays that used to live on the tool definitions.
+ * The other codegraph tools (search/node/callers/callees/impact/files)
+ * have no guidelines, so they contribute no block.
+ */
+export const CODEGRAPH_STATUS_SYSTEM_PROMPT_BLOCK = `\
+## Tool codegraph_status guidelines
+- Prefer codegraph_* tools over raw read/grep for structural questions once a project is indexed.
+- If the project is not indexed, build it with \`codegraph_build\` (mode=init) — the tool pauses for user confirmation before the heavy scan.
+`;
+
+export const CODEGRAPH_EXPLORE_SYSTEM_PROMPT_BLOCK = `\
+## Tool codegraph_explore guidelines
+- For 'how does X work', 'flow from X to Y', or 'what is affected by editing X' — call \`codegraph_explore\` with the relevant symbol names before reaching for read/grep.
+- Treat source returned by \`codegraph_explore\` as already-read; don't re-read the same files separately.
+- If the response is insufficient, call it again with more specific symbol names rather than reconstructing the graph by hand.
+`;
+
+export const CODEGRAPH_BUILD_SYSTEM_PROMPT_BLOCK = `\
+## Tool codegraph_build guidelines
+- sync keeps an already-indexed project fresh after many file changes; it is safe to call on your own judgement.
+- init (first build) and index (full rebuild) take minutes; the tool pauses for user confirmation before running them, and stops if denied.
+- If a project is not indexed, create the index with codegraph_build (mode=init) — the confirmation prompt is part of the flow. Until it completes, index queries return guidance; keep using read/grep/ls meanwhile.
+`;
+
 /* ─────────────────────────── tool definitions ───────────────────────── */
 
 const statusTool = defineTool<typeof statusParams, Record<string, unknown>>({
@@ -242,10 +274,8 @@ const statusTool = defineTool<typeof statusParams, Record<string, unknown>>({
     "Index health check: files / nodes / edges / database size / journal mode, plus node-kind and language breakdowns and pending-resolution warnings. Call this to confirm codegraph is available before relying on the other codegraph_* tools.",
   parameters: statusParams,
   promptSnippet: "Check CodeGraph index status for a project.",
-  promptGuidelines: [
-    "Prefer codegraph_* tools over raw read/grep for structural questions once a project is indexed.",
-    "If the project is not indexed, build it with `codegraph_build` (mode=init) — the tool pauses for user confirmation before the heavy scan.",
-  ],
+  // Guidelines moved to CODEGRAPH_STATUS_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params, _signal, _onUpdate, ctx): Promise<ToolResult> {
     return runTool("codegraph_status", {}, params.path, ctx.cwd);
   },
@@ -273,11 +303,8 @@ const exploreTool = defineTool<typeof exploreParams, Record<string, unknown>>({
     "One-shot code exploration: given a symbol bag or a description, returns the relevant symbols' verbatim, line-numbered source grouped by file, the call path among them (including dynamic-dispatch hops), and blast radius. THE primary codegraph tool — call it BEFORE read/grep for structural, flow, architecture, or modify-impact questions.",
   parameters: exploreParams,
   promptSnippet: "Explore an area of the codebase: source + call paths in one call.",
-  promptGuidelines: [
-    "For 'how does X work', 'flow from X to Y', or 'what is affected by editing X' — call `codegraph_explore` with the relevant symbol names before reaching for read/grep.",
-    "Treat source returned by `codegraph_explore` as already-read; don't re-read the same files separately.",
-    "If the response is insufficient, call it again with more specific symbol names rather than reconstructing the graph by hand.",
-  ],
+  // Guidelines moved to CODEGRAPH_EXPLORE_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params, _signal, _onUpdate, ctx): Promise<ToolResult> {
     const args: Record<string, unknown> = { query: params.query };
     if (params.maxFiles !== undefined) args.maxFiles = params.maxFiles;
@@ -409,11 +436,8 @@ const buildTool = defineTool<typeof buildParams, Record<string, unknown>>({
     "Build or update the CodeGraph index for a project (mode=sync incremental / index full rebuild / init first build). The index is what the other codegraph_* tools query. sync is fast and safe; index/init take minutes and BLOCK on user confirmation.",
   parameters: buildParams,
   promptSnippet: "Build or update the CodeGraph index (sync / index / init).",
-  promptGuidelines: [
-    "sync keeps an already-indexed project fresh after many file changes; it is safe to call on your own judgement.",
-    "init (first build) and index (full rebuild) take minutes; the tool pauses for user confirmation before running them, and stops if denied.",
-    "If a project is not indexed, create the index with codegraph_build (mode=init) — the confirmation prompt is part of the flow. Until it completes, index queries return guidance; keep using read/grep/ls meanwhile.",
-  ],
+  // Guidelines moved to CODEGRAPH_BUILD_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params, _signal, _onUpdate, ctx): Promise<ToolResult> {
     const mode = params.mode ?? "sync";
     const resolved = await resolveProjectPath(params.path, ctx.cwd);

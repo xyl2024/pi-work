@@ -41,6 +41,18 @@ function domains(filters: string[] | undefined): { include_domains?: string[]; e
   return { ...(include.length ? { include_domains: include } : {}), ...(exclude.length ? { exclude_domains: exclude } : {}) };
 }
 
+/**
+ * Hardcoded, whole-block system-prompt contribution for `web_search`.
+ * Appended at the very end of the system prompt via
+ * `appendSystemPromptOverride`, gated on the tool being enabled AND part of
+ * the session's tool set (same pattern as `agent_todo`). Replaces the flat
+ * `promptGuidelines` array that used to live on the tool definition.
+ */
+export const WEB_SEARCH_SYSTEM_PROMPT_BLOCK = `\
+## Tool web_search guidelines
+- Use web_search for current facts, documentation, news, or information outside the workspace.
+`;
+
 export const webSearchTool = defineTool<typeof SearchParams, Record<string, unknown>>({
   name: "web_search",
   label: "Web Search",
@@ -48,7 +60,8 @@ export const webSearchTool = defineTool<typeof SearchParams, Record<string, unkn
   parameters: SearchParams,
   executionMode: "sequential",
   promptSnippet: "Search the web when current or external information is needed.",
-  promptGuidelines: ["Use web_search for current facts, documentation, news, or information outside the workspace."],
+  // Guidelines moved to WEB_SEARCH_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params, signal) {
     const apiKey = requireTavilyKey();
     const count = Math.max(1, Math.min(20, Math.floor(params.numResults ?? 5)));
@@ -79,6 +92,15 @@ export const webSearchTool = defineTool<typeof SearchParams, Record<string, unkn
   },
 });
 
+/**
+ * Hardcoded, whole-block system-prompt contribution for `fetch_content`.
+ * Same channel/gating as `WEB_SEARCH_SYSTEM_PROMPT_BLOCK` above.
+ */
+export const FETCH_CONTENT_SYSTEM_PROMPT_BLOCK = `\
+## Tool fetch_content guidelines
+- Use fetch_content after web_search when source details are needed; use raw mode for APIs or exact text.
+`;
+
 export const fetchContentTool = defineTool<typeof FetchParams, Awaited<ReturnType<typeof fetchContent>>>({
   name: "fetch_content",
   label: "Fetch Content",
@@ -86,7 +108,8 @@ export const fetchContentTool = defineTool<typeof FetchParams, Awaited<ReturnTyp
   parameters: FetchParams,
   executionMode: "sequential",
   promptSnippet: "Fetch a web page when you need its full content.",
-  promptGuidelines: ["Use fetch_content after web_search when source details are needed; use raw mode for APIs or exact text."],
+  // Guidelines moved to FETCH_CONTENT_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params, signal) {
     try {
       const result = await fetchContent(params.url, params.mode ?? "readable", signal);

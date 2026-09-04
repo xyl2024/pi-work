@@ -12,7 +12,7 @@ import { recordCall } from "./token-audit-store";
 import { getAuditModelRuntime, installLlmFetchAudit, runWithLlmAuditContext } from "./llm-audit";
 import type { LlmAuditSource } from "../shared/llm-audit-types";
 import { buildTodoTools } from "./user-todo/tools";
-import { buildShowFileTool } from "./show-file-tool";
+import { buildShowFileTool, SHOW_MEDIA_SYSTEM_PROMPT_BLOCK } from "./show-file-tool";
 import { writeSessionName, deleteSessionName } from "./session-names";
 import {
   readSessionToolSelection,
@@ -20,14 +20,24 @@ import {
 } from "./session-tools-config";
 import { readCwdToolSelection } from "./cwd-tools-config";
 import { buildAgentTodoTool, AGENT_TODO_SYSTEM_PROMPT_BLOCK } from "./agent-todo-tool/tool";
-import { buildAskUserQuestionsTool, type UserInputResolution } from "./ask-user-questions-tool";
-import { celebrateTool } from "./celebrate-tool";
+import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK, type UserInputResolution } from "./ask-user-questions-tool";
+import { celebrateTool, CELEBRATE_SYSTEM_PROMPT_BLOCK } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
-import { buildSessionInfoTools } from "./self-tools/session-tools";
-import { buildCodeGraphTools } from "./codegraph-tool";
-import { spawnSubagentTool } from "./subagent-tool";
+import {
+  buildSessionInfoTools,
+  RECENT_SESSIONS_SYSTEM_PROMPT_BLOCK,
+  ACTIVE_SESSIONS_SYSTEM_PROMPT_BLOCK,
+  SESSION_INFO_SYSTEM_PROMPT_BLOCK,
+} from "./self-tools/session-tools";
+import {
+  buildCodeGraphTools,
+  CODEGRAPH_STATUS_SYSTEM_PROMPT_BLOCK,
+  CODEGRAPH_EXPLORE_SYSTEM_PROMPT_BLOCK,
+  CODEGRAPH_BUILD_SYSTEM_PROMPT_BLOCK,
+} from "./codegraph-tool";
+import { spawnSubagentTool, SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK } from "./subagent-tool";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
-import { buildWebAccessTools } from "./web-access/tools";
+import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
@@ -1076,16 +1086,39 @@ export async function startRpcSession(
       // once per session so a mid-session toggle doesn't change the prompt.
       appendSystemPromptOverride: (baseAppend) => {
         if (options.systemPromptPrefix) return [];
-        // Gate on the tools-market enablement AND the session's actual tool
-        // selection: if `agent_todo` is excluded from this session (per-session
-        // tool picker, cwd default, or allowedToolNames), its append block
-        // must not leak into the system prompt.
-        const sessionHasAgentTodo =
-          (!options.allowedToolNames || options.allowedToolNames.includes("agent_todo")) &&
-          (effectiveToolNames === "all" || effectiveToolNames.includes("agent_todo"));
-        return enabledTools.has("agent_todo") && sessionHasAgentTodo
-          ? [...baseAppend, AGENT_TODO_SYSTEM_PROMPT_BLOCK]
-          : baseAppend;
+        // Whole-block system-prompt contributions from enabled custom /
+        // tool-market tools. Gate each block on the tools-market enablement
+        // AND the session's actual tool selection: if a tool is excluded
+        // from this session (per-session tool picker, cwd default, or
+        // allowedToolNames), its append block must not leak into the
+        // system prompt.
+        const sessionHasTool = (name: string): boolean =>
+          enabledTools.has(name as ToolMarketId) &&
+          (!options.allowedToolNames || options.allowedToolNames.includes(name)) &&
+          (effectiveToolNames === "all" || effectiveToolNames.includes(name));
+        const blocks: string[] = [];
+        if (sessionHasTool("agent_todo")) blocks.push(AGENT_TODO_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("spawn_subagent")) blocks.push(SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("show_media")) blocks.push(SHOW_MEDIA_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("pi_work_celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("web_search")) blocks.push(WEB_SEARCH_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("fetch_content")) blocks.push(FETCH_CONTENT_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("pi_work_get_sessions_id")) blocks.push(RECENT_SESSIONS_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("pi_work_get_active_sessions_id")) blocks.push(ACTIVE_SESSIONS_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("pi_work_get_session_info_by_id")) blocks.push(SESSION_INFO_SYSTEM_PROMPT_BLOCK);
+        // CodeGraph tools are registered as a whole family when ANY codegraph
+        // id is enabled (same condition as the customTools entry below); gate
+        // the family first, then fall through to the per-tool check.
+        const codegraphFamilyLoaded =
+          options.allowedToolNames?.some((id) => CODEGRAPH_TOOL_IDS.includes(id as (typeof CODEGRAPH_TOOL_IDS)[number])) ||
+          CODEGRAPH_TOOL_IDS.some((id) => enabledTools.has(id));
+        if (codegraphFamilyLoaded) {
+          if (sessionHasTool("codegraph_status")) blocks.push(CODEGRAPH_STATUS_SYSTEM_PROMPT_BLOCK);
+          if (sessionHasTool("codegraph_explore")) blocks.push(CODEGRAPH_EXPLORE_SYSTEM_PROMPT_BLOCK);
+          if (sessionHasTool("codegraph_build")) blocks.push(CODEGRAPH_BUILD_SYSTEM_PROMPT_BLOCK);
+        }
+        return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
       },
       // Codebase explorers receive no Skills section. Other sessions retain
       // the existing per-cwd disabled-skill filtering behavior.

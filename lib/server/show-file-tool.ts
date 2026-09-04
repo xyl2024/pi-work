@@ -146,6 +146,19 @@ function processOne(absPath: string): ShowFileEntry {
   };
 }
 
+/**
+ * Hardcoded, whole-block system-prompt contribution for `show_media`.
+ * Appended at the very end of the system prompt via
+ * `appendSystemPromptOverride`, gated on the tool being enabled AND part of
+ * the session's tool set (same pattern as `agent_todo`). Replaces the flat
+ * `promptGuidelines` array that used to live on the tool definition.
+ */
+export const SHOW_MEDIA_SYSTEM_PROMPT_BLOCK = `\
+## Tool show_media guidelines
+- When your work output includes audio, video, or images, use the show_media tool to present them to the user interface.
+- show_media accepts up to 5 paths per call (image / video / audio only). Batch related artifacts into a single call when they belong together.
+`;
+
 export const showFileTool = defineTool<typeof ShowFileParams, ShowFileDetails>({
   name: SHOW_FILE_TOOL_NAME,
   label: "Show Media",
@@ -154,10 +167,8 @@ export const showFileTool = defineTool<typeof ShowFileParams, ShowFileDetails>({
   parameters: ShowFileParams,
   executionMode: "sequential",
   promptSnippet: "Render images, video, and audio files inline in the chat UI.",
-  promptGuidelines: [
-    "When your work output includes audio, video, or images, use the `show_media` tool to present them to the user interface.",
-    "`show_media` accepts up to 5 paths per call (image / video / audio only). Batch related artifacts into a single call when they belong together.",
-  ],
+  // Guidelines moved to SHOW_MEDIA_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
     const rawPaths = params.paths;
 

@@ -165,6 +165,19 @@ Your task is to explore the codebase and ultimately arrive at a conclusion based
 Your current working directory is ${cwd}`;
 }
 
+/**
+ * Hardcoded, whole-block system-prompt contribution for `spawn_subagent`.
+ * Appended at the very end of the system prompt via
+ * `appendSystemPromptOverride`, gated on the tool being enabled AND part of
+ * the session's tool set (same pattern as `agent_todo`). Replaces the flat
+ * `promptGuidelines` array that used to live on the tool definition.
+ */
+export const SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK = `\
+## Tool spawn_subagent guidelines
+- For independent tasks that are parallelizable and have a well-defined scope, dispatch the tasks to subagents using \`spawn_subagent\`. Examples include codebase exploration, research and information gathering, and code review.
+- When you need to explore the codebase, prioritize using the spawn_subagent tool to dispatch a codebase_explorer subagent for exploration, rather than doing it yourself.
+`;
+
 export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSubagentDetails>({
   name: SPAWN_SUBAGENT_TOOL_NAME,
   label: "Spawn Subagent",
@@ -172,10 +185,8 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
   parameters: SpawnSubagentParams,
   executionMode: "sequential",
   promptSnippet: "Launch a specialized subagent for a focused task.",
-  promptGuidelines: [
-    "For independent tasks that are parallelizable and have a well-defined scope, dispatch the tasks to subagents using `spawn_subagent`. Examples include codebase exploration, research and information gathering, and code review.",
-    "When you need to explore the codebase, prioritize using the spawn_subagent tool to dispatch a codebase_explorer subagent for exploration, rather than doing it yourself.",
-  ],
+  // Guidelines moved to SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK — injected via
+  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params, signal, _onUpdate, ctx) {
     const description = params.description.trim();
     const prompt = params.prompt.trim();

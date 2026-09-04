@@ -194,6 +194,26 @@ interface BuildToolOptions {
   source: "user" | "scheduled" | "subagent";
 }
 
+/**
+ * Hardcoded, whole-block system-prompt contribution for `ask_user_questions`.
+ * Appended at the very end of the system prompt — the same channel
+ * `DefaultResourceLoader` uses for `APPEND_SYSTEM.md`, but this block is
+ * built into the codebase (no user-configurable file). It is emitted only
+ * when the tool is enabled and actually part of the session's tool set
+ * (same gating as `agent_todo`). Mirrors the user-requested guidelines
+ * text; `promptGuidelines` was removed in favor of this append block.
+ */
+export const ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK = `\
+## Tool ask_user_questions guidelines
+- Use ask_user_questions when you need a decision from the user before continuing.
+- Each call can carry 1-5 questions; group related decisions in one call.
+- Each question must have 2-4 options.
+- Set multiSelect true when multiple options are valid.
+- Questions are required by default; use required false for optional questions.
+- An Other option is appended automatically; do not add one yourself.
+- Do not call this tool from a scheduled task or when no user is available.
+`;
+
 function makeTool({ requestUserInput, source }: BuildToolOptions) {
   return defineTool<typeof AskUserQuestionsParamsSchema, AskUserQuestionsDetails>({
     name: ASK_USER_QUESTIONS_TOOL_NAME,
@@ -203,15 +223,8 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
     parameters: AskUserQuestionsParamsSchema,
     executionMode: "sequential",
     promptSnippet: "Ask the user structured multiple-choice questions.",
-    promptGuidelines: [
-      "Use `ask_user_questions` when you need a decision from the user before continuing. Prefer this over plain prose questions when the choices can be enumerated.",
-      "Each call can carry 1-5 questions. Group related decisions in one call so the user answers them in a single round-trip.",
-      "Each question must have 2-4 options. The `header` field is a short (1-12 char) chip label used to reference that question in the answer summary; the `question` field is the long-form prompt shown to the user.",
-      "Set `multiSelect: true` when the user may legitimately pick more than one option (e.g. \"which features to include\"). Leave false for exclusive choices.",
-      "Questions are required by default (the user must answer to submit). Set `required: false` for open-ended optional questions the user may skip.",
-      "A free-text \"Other\" option is always appended to every question automatically — the user can always type a custom answer. Do not add an `Other` option yourself.",
-      "Do NOT call this tool from a scheduled task or any context where no user is available — it will return an error. Provide the necessary context to the model directly instead.",
-    ],
+    // Guidelines moved to ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK — injected
+    // via appendSystemPromptOverride, gated on the tool being loaded.
     async execute(toolCallId, params, signal, _onUpdate, _ctx) { // eslint-disable-line @typescript-eslint/no-unused-vars -- intentionally unused SDK params
       // `_onUpdate` and `_ctx` are part of the SDK execute() protocol
       // signature but unused here (this tool blocks on user input
