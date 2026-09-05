@@ -6,6 +6,8 @@ export const terminal = {
   "Hide terminal": "隐藏终端",
   "New terminal": "新建终端",
   "Close terminal": "关闭终端",
+  "Split tab": "拆分选项卡",
+  "Unsplit tab": "取消拆分",
   "Restart": "重启",
   "Maximize terminal": "最大化终端",
   "Restore terminal": "还原终端",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -10,6 +10,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { useToast } from "@/components/ui/Toast";
 import { copyText } from "@/lib/client/clipboard";
 import { ICONS } from "@/components/ui/icons";
+import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 
 const CWD_KEY = "pi-terminal-cwd";
 
@@ -30,7 +31,16 @@ interface TabInfo {
   cwd: string;
   /** user-chosen display name; falls back to cwd when unset/empty. */
   title?: string;
+  /**
+   * Stable pane keys, left → right. Length 1 = single terminal; length 2 =
+   * split view (`panes[0]` is always the original shell). Keys are identity,
+   * not index, so closing one pane never remounts the survivor's pty.
+   */
+  panes: string[];
 }
+
+/** Minimum width of either split pane, in px (clamps divider dragging). */
+const MIN_PANE_WIDTH = 120;
 
 function terminalBasename(cwd: string): string {
   const normalized = cwd.replace(/[\\/]+$/, "");
@@ -66,7 +76,16 @@ const smallButtonStyle: React.CSSProperties = {
  * WS (tab close / unmount) makes the server kill the pty; restart re-sends
  * `start` over the same connection.
  */
-function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
+function TerminalInstance({
+  cwd,
+  active,
+  focused = false,
+}: {
+  cwd: string;
+  active: boolean;
+  /** In split view only the focused pane owns keyboard focus. */
+  focused?: boolean;
+}) {
   const { t } = useI18n();
   const toast = useToast();
   // `t` changes identity on locale switch — keep a ref so the WS effect
@@ -75,6 +94,12 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
   useEffect(() => {
     tRef.current = t;
   }, [t]);
+  // Same pattern as tRef: the WS effect must not re-run (and tear down the
+  // pty) when focus moves between split panes.
+  const focusedRef = useRef(focused);
+  useEffect(() => {
+    focusedRef.current = focused;
+  }, [focused]);
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -157,7 +182,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
       );
       return false;
     });
-    if (active) term.focus();
+    if (focusedRef.current) term.focus();
     try {
       fit.fit();
     } catch {
@@ -295,6 +320,7 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
 
   // When the tab becomes visible again (switch back, panel reopen), re-fit —
   // display:none / zero-height containers leave xterm with stale dimensions.
+  // Focus is handled separately: in split view only the focused pane wins.
   useEffect(() => {
     if (!active) return;
     try {
@@ -302,8 +328,12 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
     } catch {
       // ignore
     }
-    termRef.current?.focus();
   }, [active]);
+
+  useEffect(() => {
+    if (!active || !focused) return;
+    termRef.current?.focus();
+  }, [active, focused]);
 
   const handleRestart = useCallback(() => {
     const ws = wsRef.current;
@@ -369,10 +399,15 @@ function TerminalInstance({ cwd, active }: { cwd: string; active: boolean }) {
  */
 export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onToggleFullscreen }: TerminalPanelProps) {
   const { t } = useI18n();
+  const cm = useContextMenu();
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const nextIdRef = useRef(1);
   const openedRef = useRef(false);
+  /** Split ratio (left pane width fraction) per tab id; absent → 50/50. Not persisted. */
+  const [splitRatio, setSplitRatio] = useState<Record<number, number>>({});
+  /** Which split pane has keyboard focus, per tab id; absent → the original (left) pane. */
+  const [focusedPane, setFocusedPane] = useState<Record<number, string>>({});
 
   const createTerminal = useCallback((cwd: string) => {
     const id = nextIdRef.current++;
@@ -381,7 +416,7 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
     } catch {
       // ignore
     }
-    setTabs((prev) => [...prev, { id, cwd, title: terminalBasename(cwd) }]);
+    setTabs((prev) => [...prev, { id, cwd, title: terminalBasename(cwd), panes: [`${id}`] }]);
     setActiveId(id);
   }, []);
 
@@ -396,6 +431,70 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
   const closeTerminal = useCallback((id: number) => {
     setTabs((prev) => prev.filter((tab) => tab.id !== id));
   }, []);
+
+  // ── Split view (right-click a tab → “Split tab”) ──────────────────
+
+  /** Split a single-pane tab: spawns a fresh shell (same cwd) on the right. */
+  const splitTerminal = useCallback((tabId: number) => {
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId || tab.panes.length !== 1) return tab;
+        // Tab ids never repeat, so `${id}-b` is a stable unique pane key.
+        return { ...tab, panes: [tab.panes[0], `${tabId}-b`] };
+      }),
+    );
+    setSplitRatio((prev) => {
+      if (prev[tabId] === undefined) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next; // fresh split starts at 50/50 again
+    });
+    setFocusedPane((prev) => ({ ...prev, [tabId]: `${tabId}-b` }));
+  }, []);
+
+  /** Close one pane of a split tab; the survivor keeps its pty and goes full-width. */
+  const closePane = useCallback((tabId: number, paneKey: string) => {
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId || tab.panes.length !== 2) return tab;
+        return { ...tab, panes: tab.panes.filter((key) => key !== paneKey) };
+      }),
+    );
+    setSplitRatio((prev) => {
+      if (prev[tabId] === undefined) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+  }, []);
+
+  /** Drag the split divider; clamps both panes to MIN_PANE_WIDTH px. */
+  const startSplitDrag = useCallback(
+    (tabId: number, startRatio: number, e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const wrapper = e.currentTarget.parentElement;
+      if (!wrapper) return;
+      const width = wrapper.getBoundingClientRect().width;
+      if (width < MIN_PANE_WIDTH * 2) return;
+      const startX = e.clientX;
+      const min = MIN_PANE_WIDTH / width;
+      const onMove = (ev: PointerEvent) => {
+        const next = Math.min(1 - min, Math.max(min, startRatio + (ev.clientX - startX) / width));
+        setSplitRatio((prev) => ({ ...prev, [tabId]: next }));
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "col-resize";
+    },
+    [],
+  );
 
   // ── Tab rename (double-click a tab) ─────────────────────────────────
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -488,6 +587,27 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
             <Tooltip key={tab.id} content={tab.cwd}>
             <div
               onClick={() => setActiveId(tab.id)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                const items: ContextMenuItem[] =
+                  tab.panes.length === 1
+                    ? [
+                        {
+                          key: "split",
+                          label: t("Split tab"),
+                          onSelect: () => splitTerminal(tab.id),
+                        },
+                      ]
+                    : [
+                        {
+                          key: "unsplit",
+                          label: t("Unsplit tab"),
+                          // “Unsplit” always keeps the original (left) shell.
+                          onSelect: () => closePane(tab.id, tab.panes[1]),
+                        },
+                      ];
+                cm.open({ x: e.clientX, y: e.clientY, items, triggerElement: e.currentTarget as HTMLElement });
+              }}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 startRename(tab);
@@ -647,16 +767,63 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
       </div>
       </div>
 
-      {/* Terminal bodies — inactive tabs stay mounted so their processes keep running */}
+      {/* Terminal bodies — inactive tabs stay mounted so their processes keep running.
+          A split tab renders its two panes left/right with a draggable divider. */}
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-        {tabs.map((tab) => (
-          <div
-            key={tab.id}
-            style={{ position: "absolute", inset: 0, display: tab.id === activeId ? "block" : "none" }}
-          >
-            <TerminalInstance cwd={tab.cwd} active={tab.id === activeId} />
-          </div>
-        ))}
+        {tabs.map((tab) => {
+          const active = tab.id === activeId;
+          const split = tab.panes.length === 2;
+          const ratio = split ? (splitRatio[tab.id] ?? 0.5) : 1;
+          const focusedKey = focusedPane[tab.id] ?? tab.panes[0];
+          return (
+            <div
+              key={tab.id}
+              style={{
+                position: "absolute",
+                inset: 0,
+                display: active ? "flex" : "none",
+                flexDirection: "row",
+                minWidth: 0,
+              }}
+            >
+              {tab.panes.map((paneKey, index) => (
+                <Fragment key={paneKey}>
+                  {index === 1 && (
+                    <div
+                      role="separator"
+                      aria-orientation="vertical"
+                      onPointerDown={(e) => startSplitDrag(tab.id, ratio, e)}
+                      className="w-[3px] shrink-0 cursor-col-resize bg-[var(--border)] transition-colors hover:bg-[var(--text-muted)]"
+                    />
+                  )}
+                  <div
+                    onMouseDown={() => {
+                      if (focusedKey !== paneKey) setFocusedPane((prev) => ({ ...prev, [tab.id]: paneKey }));
+                    }}
+                    style={{ flex: split && index === 0 ? `0 0 ${ratio * 100}%` : "1 1 0%" }}
+                    className={split ? "group relative flex min-w-0 flex-col" : "relative flex min-w-0 flex-col"}
+                  >
+                    <TerminalInstance cwd={tab.cwd} active={active} focused={focusedKey === paneKey} />
+                    {split && (
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          closePane(tab.id, paneKey);
+                        }}
+                        aria-label={t("Close terminal")}
+                        style={{ background: "var(--bg)" }}
+                        className="absolute right-1.5 top-1 z-10 flex h-5 w-5 items-center justify-center rounded text-[13px] leading-none text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-[var(--bg-selected)] hover:text-[var(--text)] group-hover:opacity-100"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </Fragment>
+              ))}
+            </div>
+          );
+        })}
         {tabs.length === 0 && (
           <div
             style={{
