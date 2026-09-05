@@ -108,8 +108,11 @@ export function hasPromptArgPlaceholder(content: string): boolean {
  * Builds the message body sent to the agent for a slash command:
  *   - `prompt` → template expanded with parsed args (plus raw args
  *     appended when the template has no placeholders).
- *   - `skill` → either the raw args (so the agent can read them) or
- *     a `Use this skill: <name>` line that names the skill directly.
+ *   - `skill` → the native `/skill:<name>` command with trailing args.
+ *     pi's AgentSession (prompt / steer / followUp) expands it server-side
+ *     into the canonical `<skill name=… location=…>` block (frontmatter
+ *     stripped, references resolved against the skill's baseDir), exactly
+ *     like the pi TUI — do NOT splice the raw SKILL.md content here.
  *   - `action` is handled inline by the caller (`selectSlashResource`).
  */
 export function formatSlashContent(item: SlashResource, argsString = "", appendUnusedArgs = false): string {
@@ -123,10 +126,8 @@ export function formatSlashContent(item: SlashResource, argsString = "", appendU
     return expanded;
   }
 
-  const name = item.name.replace(/"/g, "&quot;");
-  const skillReference = `Use this skill: ${name}`;
   const args = argsString.trim();
-  return args ? `${args}\n\n${skillReference}` : skillReference;
+  return args ? `/skill:${item.name} ${args}` : `/skill:${item.name}`;
 }
 
 /**

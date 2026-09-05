@@ -28,7 +28,14 @@ export async function GET(req: Request) {
     return NextResponse.json({
       skills: skills.map((skill) => ({
         ...skill,
-        disableModelInvocation: disabled.has(skill.filePath),
+        // The SKILL.md frontmatter (`disable-model-invocation: true`) is
+        // authoritative in pi: such a skill is NEVER rendered into the system
+        // prompt's <available_skills> (it is only invocable via /skill:name),
+        // no matter what Pi Work's per-cwd config says. Merge both sources so
+        // the UI shows the effective state, and expose `frontmatterDisabled`
+        // so the UI can explain why the toggle is locked.
+        disableModelInvocation: skill.disableModelInvocation || disabled.has(skill.filePath),
+        frontmatterDisabled: skill.disableModelInvocation === true,
       })),
       diagnostics,
     });
@@ -52,8 +59,19 @@ export async function PATCH(req: Request) {
     }
 
     const { skills } = await loadSkills(cwd);
-    if (!skills.some((skill) => skill.filePath === filePath)) {
+    const loaderSkill = skills.find((skill) => skill.filePath === filePath);
+    if (!loaderSkill) {
       return NextResponse.json({ error: "skill is not loaded for this cwd" }, { status: 404 });
+    }
+
+    // A skill disabled by its SKILL.md frontmatter (disable-model-invocation:
+    // true) is authoritative in pi and cannot be re-enabled from Pi Work's
+    // per-cwd config — only editing the SKILL.md frontmatter can.
+    if (!disableModelInvocation && loaderSkill.disableModelInvocation) {
+      return NextResponse.json(
+        { error: "Disabled by SKILL.md frontmatter (disable-model-invocation: true); edit the frontmatter to enable it." },
+        { status: 409 },
+      );
     }
 
     const config = readConfig();

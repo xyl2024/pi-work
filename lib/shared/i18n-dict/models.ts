@@ -95,6 +95,11 @@ export const models = {
   "Visible in model prompt - click to disable": "在模型提示词中可见 - 点击禁用",
   "Hidden from model prompt - click to enable": "对模型提示词隐藏 - 点击启用",
 
+  // Skills locked by SKILL.md frontmatter (disable-model-invocation: true)
+  "Locked": "已锁定",
+  "Locked by SKILL.md frontmatter (disable-model-invocation)": "已由 SKILL.md frontmatter（disable-model-invocation）锁定",
+  "This skill sets disable-model-invocation: true in its frontmatter, so pi never lists it in the system prompt. It can still be invoked explicitly via /skill:name.": "该技能在 frontmatter 中声明了 disable-model-invocation: true，pi 不会将其列入系统提示词，只能通过 /skill:name 手动调用。",
+
   // Models saved
   "Models saved": "模型配置已保存",
   "Failed to save models": "模型配置失败",

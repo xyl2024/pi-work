@@ -32,6 +32,9 @@ export function SkillDetail({
   const { t } = useI18n();
   const { isDark } = useTheme();
   const label = sourceLabel(skill);
+  // SKILL.md frontmatter `disable-model-invocation: true` — pi excludes the
+  // skill from the system prompt and Pi Work's toggle cannot override it.
+  const frontmatterLocked = skill.frontmatterDisabled === true;
 
   // ── Detail data fetching ──
   const [detail, setDetail] = useState<SkillDetailData | null>(null);
@@ -167,9 +170,14 @@ export function SkillDetail({
           type="button"
           role="switch"
           aria-checked={!skill.disableModelInvocation}
-          title={skill.disableModelInvocation ? t("Enable") : t("Disable")}
-          disabled={toggleLoading}
+          title={
+            frontmatterLocked
+              ? t("Locked by SKILL.md frontmatter (disable-model-invocation)")
+              : skill.disableModelInvocation ? t("Enable") : t("Disable")
+          }
+          disabled={toggleLoading || frontmatterLocked}
           onClick={async () => {
+            if (frontmatterLocked) return;
             setToggleLoading(true);
             setDetailError(null);
             try {
@@ -186,15 +194,35 @@ export function SkillDetail({
             padding: "3px 8px",
             background: skill.disableModelInvocation ? "var(--bg)" : "var(--accent)",
             color: skill.disableModelInvocation ? "var(--text-muted)" : "white",
-            cursor: toggleLoading ? "wait" : "pointer",
-            opacity: toggleLoading ? 0.6 : 1,
+            cursor: toggleLoading || frontmatterLocked ? "wait" : "pointer",
+            opacity: toggleLoading || frontmatterLocked ? 0.6 : 1,
             fontSize: 11,
             flexShrink: 0,
           }}
         >
-          {toggleLoading ? t("Loading...") : skill.disableModelInvocation ? t("Off") : t("On")}
+          {toggleLoading
+            ? t("Loading...")
+            : frontmatterLocked
+              ? t("Locked")
+              : skill.disableModelInvocation ? t("Off") : t("On")}
         </button>
       </div>
+
+      {frontmatterLocked && (
+        <div
+          style={{
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: "var(--text-muted)",
+            background: "var(--bg-selected)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            padding: "8px 10px",
+          }}
+        >
+          {t("This skill sets disable-model-invocation: true in its frontmatter, so pi never lists it in the system prompt. It can still be invoked explicitly via /skill:name.")}
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
         <span

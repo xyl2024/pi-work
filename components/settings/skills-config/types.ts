@@ -13,6 +13,9 @@ export interface Skill {
   filePath: string;
   baseDir: string;
   disableModelInvocation: boolean;
+  /** Set when SKILL.md frontmatter has `disable-model-invocation: true` —
+   *  pi never lists the skill in the system prompt and the toggle is locked. */
+  frontmatterDisabled?: boolean;
   sourceInfo: {
     source?: string;
     scope?: string;
