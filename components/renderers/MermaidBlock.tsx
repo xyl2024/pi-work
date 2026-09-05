@@ -201,7 +201,7 @@ export function MermaidBlock({ code, isStreaming }: Props) {
         fontSize: 12.5,
         lineHeight: 1.6,
         color: "var(--text)",
-        fontFamily: "var(--font-mono)",
+        fontFamily: "var(--font-mono-stack)",
         whiteSpace: "pre",
         background: "var(--bg)",
         overflow: "auto",

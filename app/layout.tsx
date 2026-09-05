@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
-import { Noto_Sans_Mono } from "next/font/google";
+import { Inter, Noto_Sans_Mono } from "next/font/google";
 import "./globals.css";
 import "generative-loaders/styles.css";
+
+const inter = Inter({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 const notoSansMono = Noto_Sans_Mono({
   subsets: ["latin", "cyrillic"],
@@ -22,7 +28,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={notoSansMono.variable}
+      className={`${inter.variable} ${notoSansMono.variable}`}
       suppressHydrationWarning
     >
       <head>

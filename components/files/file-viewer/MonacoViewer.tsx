@@ -183,7 +183,7 @@ export function MonacoViewer({
 			minimap: { enabled: minimapEnabled, scale: 1 },
 			wordWrap: wrapLines ? "on" : "off",
 			fontSize: 13,
-			fontFamily: "var(--font-mono)",
+			fontFamily: "var(--font-mono-stack)",
 			lineNumbers: "on",
 			scrollBeyondLastLine: false,
 			automaticLayout: true,

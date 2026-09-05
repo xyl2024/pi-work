@@ -231,7 +231,7 @@ export function EchartsBlock({ code, isStreaming }: Props) {
         justifyContent: "center",
         color: "var(--text-dim)",
         fontSize: 12,
-        fontFamily: "var(--font-mono)",
+        fontFamily: "var(--font-mono-stack)",
         background: "var(--bg)",
       }}
     >
@@ -245,7 +245,7 @@ export function EchartsBlock({ code, isStreaming }: Props) {
         fontSize: 12.5,
         lineHeight: 1.6,
         color: "var(--text)",
-        fontFamily: "var(--font-mono)",
+        fontFamily: "var(--font-mono-stack)",
         whiteSpace: "pre",
         background: "var(--bg)",
         overflow: "auto",
@@ -393,7 +393,7 @@ function Header({
           transform: "translateX(-50%)",
           fontSize: 11,
           color: "var(--text-muted)",
-          fontFamily: "var(--font-sans)",
+          fontFamily: "var(--font-ui-stack)",
           pointerEvents: "none",
           maxWidth: "calc(100% - 200px)",
           overflow: "hidden",

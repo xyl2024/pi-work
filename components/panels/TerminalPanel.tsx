@@ -55,7 +55,7 @@ function readTheme() {
     foreground: v("--text", "#e6edf3"),
     cursor: v("--accent", "#4f9cf9"),
     selectionBackground: v("--bg-selected", "#264f78"),
-    fontFamily: v("--font-mono", "monospace"),
+    fontFamily: v("--font-mono-stack", "monospace"),
   };
 }
 

@@ -33,7 +33,10 @@
   --color-assistant-bg: var(--assistant-bg);
   --color-tool-bg: var(--tool-bg);
   --color-bg-subtle: var(--bg-subtle);
-  --font-mono-font: var(--font-mono);
+  --font-ui: var(--font-ui-stack);
+  --font-sans: var(--font-ui-stack);
+  --font-mono: var(--font-mono-stack);
+  --font-display: var(--font-display-stack);
 }
 
 /* ── Preset: light ──────────────────────────────────────── */
@@ -317,8 +320,15 @@ body {
 }
 
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'Consolas', var(--font-noto-mono), 'JetBrains Mono', 'Fira Code', ui-monospace, 'PingFang SC', 'Microsoft YaHei', monospace;
+  /* Font roles: components consume these stable variables rather than
+     depending on a platform-specific font stack. */
+  --font-ui-stack: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono-stack: var(--font-noto-mono), "JetBrains Mono", "Cascadia Code", Consolas,
+    ui-monospace, "Noto Sans Mono CJK SC", "PingFang SC", "Microsoft YaHei", monospace;
+  --font-display-stack: var(--font-ui-stack);
+  --font-sans: var(--font-ui-stack);
+  --font-mono: var(--font-mono-stack);
 }
 
 pre, code {

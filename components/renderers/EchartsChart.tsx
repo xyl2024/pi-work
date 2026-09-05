@@ -118,7 +118,7 @@ export function EchartsChart({ option, height, ariaLabel }: Props) {
             padding: "4px 8px",
             borderTop: "1px solid var(--border)",
             background: "var(--bg-panel)",
-            fontFamily: "var(--font-mono)",
+            fontFamily: "var(--font-mono-stack)",
           }}
         >
           {t("Failed to render ECharts chart")} — {error}
