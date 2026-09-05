@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../../ui/Toast";
 import { ProviderIcon, ProviderGearIcon } from "../../ui/ProviderIcon";
 import { SectionTitle, SecretTextInput, Field, inputStyle } from "./form-fields";
+import { filterCatalogModels, type CatalogModelEntry } from "./catalog-search";
 import type { ApiKeyProvider, OAuthProvider, RuntimeCatalog, RuntimeCatalogProvider, RuntimeModelInfo } from "./types";
 import { getDisplayedThinkingLevels } from "./utils";
 
@@ -225,6 +226,160 @@ export function ModelCatalogPicker({
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * First step of the "add custom model" flow: type a model name, full-text
+ * search the runtime catalog, pick a result with ↑/↓ + Enter to fill the
+ * model entry, or skip to continue with an empty form.
+ */
+export function AddModelNameStep({
+  onSelect,
+  onSkip,
+  onClose,
+}: {
+  onSelect: (model: RuntimeModelInfo) => void;
+  onSkip: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const toast = useToast();
+  const [entries, setEntries] = useState<CatalogModelEntry[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rowRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 30);
+    let cancelled = false;
+    fetch("/api/models", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+      .then((data: { catalog?: RuntimeCatalog }) => {
+        if (cancelled) return;
+        setEntries((data.catalog?.providers ?? []).flatMap((provider) =>
+          provider.models.map((model) => ({ model, providerName: provider.name })),
+        ));
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        const message = e instanceof Error && e.message ? e.message : t("Failed to load model catalog");
+        setError(message);
+        toast.show({ kind: "error", message });
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [t, toast]);
+
+  const visible = useMemo(() => filterCatalogModels(entries, search).slice(0, 200), [entries, search]);
+
+  useEffect(() => { setHighlight(0); }, [search]);
+
+  const activeIndex = Math.min(highlight, Math.max(0, visible.length - 1));
+
+  useEffect(() => {
+    rowRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, visible.length]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (visible.length > 0) setHighlight((h) => Math.min(h + 1, visible.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const picked = visible[activeIndex];
+      if (picked) onSelect(picked.model);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 1300, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ width: 560, maxWidth: "calc(100vw - 32px)", height: "min(64vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              ref={inputRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={t("Search model name...")}
+              style={{ flex: 1, background: "none", border: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
+            />
+          </div>
+          <div style={{ marginTop: 5, color: "var(--text-dim)", fontSize: 10 }}>
+            {loading
+              ? t("Loading catalog...")
+              : error
+                ? error
+                : search.trim()
+                  ? t("{n} matching models", { n: visible.length })
+                  : t("Type a model name to search the catalog")}
+          </div>
+        </div>
+
+        <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 10 }}>
+          {loading ? null : error ? null : visible.length === 0 ? (
+            <div style={{ padding: "20px 0", color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
+              {search.trim() ? t("No matching models") : t("Type a model name to search the catalog")}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {visible.map(({ model }, index) => {
+                const active = index === activeIndex;
+                return (
+                  <button
+                    key={`${model.provider}:${model.id}`}
+                    ref={(el) => { rowRefs.current[index] = el; }}
+                    onClick={() => onSelect(model)}
+                    onMouseEnter={() => setHighlight(index)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "8px 10px",
+                      background: active ? "var(--bg-hover)" : "var(--bg)",
+                      border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                      borderRadius: 6, color: "var(--text)", cursor: "pointer", textAlign: "left",
+                    }}
+                  >
+                    <ProviderIcon id={model.provider} size={18} fallback={<ProviderGearIcon size={14} />} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600 }}>{model.name}</span>
+                      <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{model.provider} / {model.id}</span>
+                    </span>
+                    {model.reasoning && (
+                      <span style={{ fontSize: 9, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 14px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+          <span style={{ color: "var(--text-dim)", fontSize: 10 }}>{t("↑↓ to navigate · Enter to select · Esc to cancel")}</span>
+          <button
+            onClick={onSkip}
+            style={{ padding: "4px 10px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, flexShrink: 0 }}
+          >
+            {t("Skip and fill in manually")}
+          </button>
         </div>
       </div>
     </div>

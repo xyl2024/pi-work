@@ -9,8 +9,9 @@ import { ProviderIcon, ProviderGearIcon, hasProviderIcon } from "../ui/ProviderI
 import { ProviderDetail } from "./models-config/ProviderDetail";
 import { ModelDetail } from "./models-config/ModelDetail";
 import { OAuthDetail } from "./models-config/OAuthDetail";
-import { RuntimeModelCatalog, ApiKeyDetail, AddProviderPicker } from "./models-config/runtime";
-import type { ApiKeyProvider, ModelsJson, OAuthProvider, Selection, ModelEntry, ProviderEntry } from "./models-config/types";
+import { RuntimeModelCatalog, ApiKeyDetail, AddProviderPicker, AddModelNameStep } from "./models-config/runtime";
+import { cloneModelFromCatalog } from "./models-config/utils";
+import type { ApiKeyProvider, ModelsJson, OAuthProvider, Selection, ModelEntry, ProviderEntry, RuntimeModelInfo } from "./models-config/types";
 
 export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
@@ -29,6 +30,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [nameSearchProvider, setNameSearchProvider] = useState<string | null>(null);
 
   const loadOAuthProviders = useCallback(() => {
     fetch("/api/auth/providers")
@@ -104,6 +106,19 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     setConfig((prev) => {
       const provider = prev.providers?.[providerName] ?? {};
       const models = [...(provider.models ?? []), { id: "" }];
+      return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
+    });
+    setConfig((prev) => {
+      const index = (prev.providers?.[providerName]?.models?.length ?? 1) - 1;
+      setSelection({ type: "model", providerName, index });
+      return prev;
+    });
+  }, []);
+
+  const addModelFromCatalog = useCallback((providerName: string, source: RuntimeModelInfo) => {
+    setConfig((prev) => {
+      const provider = prev.providers?.[providerName] ?? {};
+      const models = [...(provider.models ?? []), cloneModelFromCatalog(source)];
       return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
     });
     setConfig((prev) => {
@@ -343,7 +358,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                         })}
 
                         <div
-                          onClick={(e) => { e.stopPropagation(); addModel(providerName); }}
+                          onClick={(e) => { e.stopPropagation(); setNameSearchProvider(providerName); }}
                           style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px 4px 26px", borderRadius: 5, cursor: "pointer", color: "var(--text-dim)" }}
                           onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                           onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
@@ -422,6 +437,13 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
           onAddCustom={addCustomProvider}
           onClose={() => setPickerOpen(false)}
+        />
+      )}
+      {nameSearchProvider && (
+        <AddModelNameStep
+          onSelect={(model) => { addModelFromCatalog(nameSearchProvider, model); setNameSearchProvider(null); }}
+          onSkip={() => { addModel(nameSearchProvider); setNameSearchProvider(null); }}
+          onClose={() => setNameSearchProvider(null)}
         />
       )}
     </>
