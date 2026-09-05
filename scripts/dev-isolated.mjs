@@ -72,6 +72,10 @@ const env = {
   PI_CODING_AGENT_DIR: agentDir,
   PI_WORK_TERMINAL_PORT: String(termPort),
   PI_WORK_PUBLIC_BASE_URL: baseUrl,
+  // Build into our own dist dir: a production server may be serving from
+  // this checkout's .next/ — dev must never write into it (next.config.ts
+  // honors NEXT_DIST_DIR).
+  NEXT_DIST_DIR: ".next-isolated",
 };
 
 console.log("── pi-work isolated dev ──────────────────────────────────────");
@@ -80,7 +84,8 @@ console.log(`  ws     terminal port  ${termPort}   (prod default is 30142)`);
 console.log(`  data   ${dataDir}`);
 console.log(`  agent  ${agentDir}`);
 console.log("──────────────────────────────────────────────────────────────");
-console.log("This instance is fully isolated from the production data root.");
+console.log("This instance is fully isolated from the production data root");
+console.log("and builds into .next-isolated (never touches the shared .next).");
 console.log("Fresh agent dirs have no auth/models — log in / pick a model,");
 console.log("or seed with:  cp -r ~/.pi/agent ~/.pi-dev/agent");
 

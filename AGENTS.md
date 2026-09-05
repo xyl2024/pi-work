@@ -17,7 +17,8 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 
 - `app/`：Next.js App Router 入口。`app/page.tsx` 是主页面，`app/layout.tsx` 和 `app/globals.css` 提供全局布局与样式；`app/api/**/route.ts` 是 API 适配层。API 路由应保持在 `app/api`，业务逻辑放到 `lib/server`。
 - `components/`：React UI，按产品功能拆分（见下）。`hooks/`：客户端 hooks、会话控制和模块级状态。`lib/`：客户端、服务端及共享业务逻辑（见下）。
-- `scripts/`：迁移、恢复、部署、字体处理和手工 smoke test；`agent-skills/`：项目维护的 Agent skill；`bin/`：CLI 启动入口（`pi-work.js`）；`public/`：静态资源。
+- `scripts/`：迁移、恢复、部署、字体处理和手工 smoke test（遗留的 `test-*.ts` 仅作历史参考，后续迁移到 `tests/` 框架）；`agent-skills/`：项目维护的 Agent skill；`bin/`：CLI 启动入口（`pi-work.js`）；`public/`：静态资源。
+- `tests/`：自动化测试（Vitest + Playwright，见“自动化测试”）；`vitest.config.ts` 与 `playwright.config.ts` 是两层测试的配置入口。
 - `instrumentation.ts`：Node.js 服务启动入口，负责引导微信监控、Scheduler、RSS 刷新循环和终端 WebSocket 服务；改动这些后台服务的启动/停止逻辑时要特别检查幂等性、退出清理和开发模式热重载。
 - 顶层配置：`next.config.ts`、`tailwind.config.ts`、`postcss.config.mjs`、`tsconfig.json`、`eslint.config.mjs`、`.npmrc`（`production=false`，见“常用命令与验证”）、`Dockerfile` + `docker-compose.yml`、`electron-shell/`（可选 Electron 外壳，非核心 Web 应用）。
 
@@ -71,7 +72,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 - pi 会话/配置默认位于 `~/.pi/agent/`；Pi Work 配置位于 `~/.pi-work/config.yaml`。
 - Todo、Scheduler、RSS、Inbox、Token 审计、LLM 审计等功能各自使用 `~/.pi-work/` 下的 SQLite 数据库，并支持对应的 `PI_WORK_*_DB` 环境变量覆盖。
 - 自定义工具、Append System、文件预览限制和右侧面板等配置通常在新 Agent session 创建时读取；修改设置后不要假定已有 session 会自动更新。
-- `PI_CODING_AGENT_DIR` 可覆盖 pi 数据目录；不要在测试中直接污染真实用户目录，优先使用临时目录或项目已有的测试脚本。
+- `PI_CODING_AGENT_DIR` 可覆盖 pi 数据目录；不要在测试中直接污染真实用户目录，测试一律走 `tests/` 框架的隔离实例（见“自动化测试”）。
 - 新增环境隔离：所有 Pi Work 数据默认位于 `~/.pi-work/`，可用 `PI_WORK_DATA_DIR` 整体覆盖（各 `PI_WORK_*_DB` 单项覆盖优先级更高）；生产与开发多实例并存时，用 `npm run dev:isolated`（`scripts/dev-isolated.mjs`）启动完全隔离的开发实例（独立数据根、pi 数据目录与端口）。
 
 ## 开发约定
@@ -123,6 +124,21 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 | 国际化 | `useI18n`、`t`、`lib/shared/i18n-dict/` |
 | 左下角快捷菜单 / 快捷菜单 / 头像快捷菜单 | `ProfileBlock`、`menuOpen`、`openMenu`（`components/settings/ProfileBlock.tsx`） |
 
+## 自动化测试
+
+所有新增测试必须走现有测试框架（详见 `tests/README.md`），不要再新增 `scripts/test-*.ts` 风格的一次性脚本；旧脚本仅作历史参考，需要时改写为新框架的测试。
+
+| 层 | 框架 | 位置 | 运行 |
+|---|---|---|---|
+| 接口 / 单元 | Vitest | `tests/unit/**/*.test.ts` | `npm test`（`test:watch` 连续模式） |
+| UI (E2E) | Playwright | `tests/e2e/*.spec.ts` | `npm run test:e2e`（需先 `npm run dev:isolated`） |
+
+- **目标实例**：两层测试都只针对隔离实例（`npm run dev:isolated`，端口 30143，数据根 `~/.pi-work-dev`），绝不指向生产实例或真实 `~/.pi` / `~/.pi-work` 数据。
+- **接口测试自动起服务**：`tests/global-setup.ts` 先探测 `TEST_BASE_URL`（默认 30143），已在运行则复用，否则自动启动并在结束后停掉。
+- **生产模式冒烟**：`PI_WORK_TEST_PROD=1 npm test` 会先 `next build --webpack` 再用 `next start` 跑同一隔离数据。
+- **构建产物隔离**：`next.config.ts` 支持 `NEXT_DIST_DIR`——测试构建到 `.next-test/`，`dev:isolated` 构建到 `.next-isolated/`；任何测试/隔离实例都不得写入生产实例正在使用的共享 `.next/`。
+- 新测试分别参考 `tests/unit/api-smoke.test.ts` 和 `tests/e2e/home.spec.ts` 的写法；测试数据只能落在隔离数据根或临时目录。
+
 ## 常用命令与验证
 
 仓库根 `.npmrc` 设 `production=false`：即使 shell 带 `NODE_ENV=production`，`npm install` 也会安装 devDependencies（否则缺 typescript/tailwindcss/eslint 等会导致 `next build` 因 `@/` 路径别名未注册而失败）。
@@ -130,11 +146,14 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 ```bash
 npm install
 npm run dev                         # Next.js 开发服务器，端口 30141
-npm run dev:isolated                # 隔离开发实例（web 30143 / ws 30144，独立数据根，见 scripts/dev-isolated.mjs）
+npm run dev:isolated                # 隔离开发实例（web 30143 / ws 30144，独立数据根与构建目录，见 scripts/dev-isolated.mjs）
+npm test                            # 接口/单元测试（Vitest，自动检测/启动隔离实例）
+npm run test:e2e                    # UI 测试（Playwright，需先启动 dev:isolated）
+PI_WORK_TEST_PROD=1 npm test        # 生产模式冒烟（next build --webpack + next start，隔离数据与构建目录）
 node_modules/.bin/tsc --noEmit
 node_modules/.bin/eslint <修改的文件>
 npm run lint
 npm run build                       # 需要生产构建验证时运行
 ```
 
-日常开发循环不要运行 `next build`，它会污染 `.next/`，还可能影响正在运行的开发服务器。完成修改后至少运行与改动范围匹配的 TypeScript 检查或 ESLint；涉及会话、流式事件、权限、文件操作、后台任务或集成时补充手动 smoke test，并在最终说明已验证和未验证的部分。
+日常开发循环不要运行 `next build`，它会覆盖共享的 `.next/`，可能影响正在运行的生产/开发服务器（生产模式测试 `PI_WORK_TEST_PROD=1` 除外，它构建到独立的 `.next-test/`）。完成修改后至少运行与改动范围匹配的 TypeScript 检查或 ESLint；涉及会话、流式事件、权限、文件操作、后台任务或集成时补充手动 smoke test，并在最终说明已验证和未验证的部分。回归验证优先用“自动化测试”章节的框架跑测试，而不是手工脚本。

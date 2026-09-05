@@ -10,6 +10,11 @@ try {
 } catch { /* package not found, use default */ }
 
 const nextConfig: NextConfig = {
+  // NEXT_DIST_DIR lets test/dev instances (tests/global-setup.ts,
+  // scripts/dev-isolated.mjs) build into their own directory so they can
+  // never clobber the .next/ artifacts a production server is serving from
+  // this same checkout. Default stays .next for normal runs.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   serverExternalPackages: [
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-ai",

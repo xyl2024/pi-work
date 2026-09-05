@@ -46,6 +46,9 @@
     "postinstall": "find node_modules -path '*/pdfjs-dist/build/pdf.worker.min.mjs' -not -path '*/legacy/*' | head -1 | xargs -I{} cp {} public/pdf.worker.min.mjs",
     "start": "next start -p 30141",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "copy-excalidraw-fonts": "node scripts/copy-excalidraw-fonts.mjs",
     "release": "npm version patch --no-git-tag-version && npm run build && npm publish --access public"
   },
@@ -113,6 +116,8 @@
     "turndown": "^7.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@rolldown/binding-linux-x64-gnu": "^1.2.7",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/js-yaml": "^4.0.9",
@@ -126,6 +131,7 @@
     "postcss": "^8",
     "subset-font": "^2.5.0",
     "tailwindcss": "^4.2.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.0"
   }
 }
