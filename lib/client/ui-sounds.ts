@@ -5,11 +5,11 @@
  * and delay/reverb effects. Keeping the player here means generated sounds can be
  * added by pasting a recipe without adding audio files or a runtime package.
  *
- * Eight named recipes ship with the product. The user picks which one plays
+ * Nine named recipes ship with the product. The user picks which one plays
  * for each event through the Settings UI; see
  * `lib/shared/config-types.ts#UiSoundsConfig` and the SoundSettingsSection.
  *
- * The eight recipes live in `ui-sounds-presets/` so each recipe can be edited
+ * The nine recipes live in `ui-sounds-presets/` so each recipe can be edited
  * and shared in isolation. This module owns the player, the named registry,
  * and the event dispatcher; presets only export typed `SoundPatch` data.
  */
@@ -23,6 +23,7 @@ import { INK } from "./ui-sounds-presets/ink";
 import { FIREFLY } from "./ui-sounds-presets/firefly";
 import { WEIGHTLESS } from "./ui-sounds-presets/weightless";
 import { SEA_BREEZE } from "./ui-sounds-presets/sea-breeze";
+import { CELEBRATION } from "./ui-sounds-presets/celebration";
 
 const SILENCE = 0.0001;
 const MIN_SOUND_GAP_MS = 70;
@@ -87,7 +88,7 @@ interface SoundLayer {
 export type SoundPatch = SoundLayer | { layers: SoundLayer[] };
 
 /**
- * Stable IDs for the eight built-in sounds. The Settings UI renders these
+ * Stable IDs for the built-in sounds. The Settings UI renders these
  * names through i18n so they can be renamed without code changes.
  *
  * Names are kept as lowercase identifiers with hyphens so they read well as
@@ -102,6 +103,7 @@ export const SOUND_IDS = [
   "firefly",
   "weightless",
   "sea-breeze",
+  "celebration",
 ] as const;
 
 export type SoundId = (typeof SOUND_IDS)[number];
@@ -477,14 +479,24 @@ export function playSound(patch: SoundPatch, options?: { volume?: number }): voi
   }
 }
 
-/** Play one of the eight built-in named sounds. Unknown ids are silent. */
+/** Play one of the built-in named sounds. Unknown ids are silent. */
 export function playNamedSound(id: string, options?: { volume?: number }): void {
   if (typeof id !== "string") return;
   const patch = (NAMED_SOUND_PATCHES as Record<string, SoundPatch | undefined>)[id];
   if (patch) playSound(patch, options);
 }
 
-/* ── The eight built-in recipes. ──
+/**
+ * Play a raw recipe as a sound effect, honoring the global sounds toggle and
+ * master volume but bypassing the per-event mapping. Used by visuals that
+ * trigger their own synced SFX (e.g. the celebration overlay).
+ */
+export function playUiSoundEffect(patch: SoundPatch): void {
+  if (!currentUiSounds || !currentUiSounds.enabled) return;
+  playSound(patch);
+}
+
+/* ── The built-in recipes. ──
  *
  * See the import block at the top of the file for the per-recipe modules.
  * This map is the single registry consulted by `playNamedSound`.
@@ -499,6 +511,7 @@ export const NAMED_SOUND_PATCHES: Record<SoundId, SoundPatch> = {
   firefly: FIREFLY,
   weightless: WEIGHTLESS,
   "sea-breeze": SEA_BREEZE,
+  celebration: CELEBRATION,
 };
 
 /* ── Event dispatcher (reads ui_sounds from the settings snapshot). ──── */

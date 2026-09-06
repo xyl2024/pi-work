@@ -2,8 +2,7 @@
 
 /**
  * CelebrationOverlay — full-screen, pointer-transparent canvas that plays the
- * `celebrate` tool's animation (fireworks / confetti rain / party cannons /
- * grand finale).
+ * `celebrate` tool's animation (confetti rain / party cannons / grand finale).
  *
  * Mounted once from `app/page.tsx`, portalled to <body> above every modal.
  * It subscribes to `lib/client/celebrate-store.ts`; each trigger spawns
@@ -15,6 +14,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { subscribeCelebration } from "@/lib/client/celebrate-store";
+import { playUiSoundEffect, playUiSoundEvent } from "@/lib/client/ui-sounds";
+import { CANNON_BOOM } from "@/lib/client/celebrate-sounds";
 import { CELEBRATE_DEFAULT_DURATION_MS, CELEBRATE_MAX_DURATION_MS, type CelebrateDetails } from "@/lib/shared/celebrate-tool-types";
 
 const PALETTE = ["#ff5e5b", "#ffb400", "#00c2a8", "#4d8dff", "#c05cff", "#ff7ac8", "#7ae582", "#ffd23f", "#ff9f43"];
@@ -29,30 +30,14 @@ interface Confetti {
   color: string; alpha: number; decay: number;
   gravity: number; drag: number;
 }
-interface Rocket {
-  kind: "rocket";
-  x: number; y: number; vx: number; vy: number; targetY: number;
-  px: number; py: number;
-  color: string;
-}
-interface Spark {
-  kind: "spark";
-  x: number; y: number; vx: number; vy: number;
-  color: string; alpha: number; decay: number;
-  twinkle: boolean; twinklePhase: number;
-  gravity: number; drag: number;
-}
-
-type Particle = Confetti | Rocket | Spark;
+type Particle = Confetti;
 
 const CONFETTI_GRAVITY = 0.055;
 const CONFETTI_DRAG = 0.992;
-const SPARK_GRAVITY = 0.05;
-const SPARK_DRAG = 0.985;
 const CANNON_GRAVITY = 0.16;
 const CANNON_DRAG = 0.988;
 
-const CONCRETE_CELEBRATION_STYLES = ["fireworks", "confetti", "cannon", "grand"] as const;
+const CONCRETE_CELEBRATION_STYLES = ["confetti", "cannon", "grand"] as const;
 
 function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
@@ -70,7 +55,6 @@ export function CelebrationOverlay() {
   const particlesRef = useRef<Particle[]>([]);
   const rafRef = useRef<number | null>(null);
   const spawnAccRef = useRef(0);
-  const rocketAccRef = useRef(0);
   const endAtRef = useRef(0);
   const activeStyleRef = useRef<CelebrateDetails["resolvedStyle"] | null>(null);
 
@@ -96,14 +80,17 @@ export function CelebrationOverlay() {
     endAtRef.current = endAt;
 
     const style = details.resolvedStyle ?? pick(CONCRETE_CELEBRATION_STYLES);
+    // Optional user-mapped sound (default silent; the style-synced SFX below
+    // are the built-in audio for the show). Rapid re-triggers are deduped by
+    // the player's min-gap, and autoplay policy is honored like other
+    // UI-sound events (silent until the first user gesture unlocks audio).
+    playUiSoundEvent("celebrate");
+    // One cannon boom kicks off every show, regardless of visual style.
+    playUiSoundEffect(CANNON_BOOM);
     // Layer the new celebration on top of a running one instead of clearing it.
     activeStyleRef.current = style;
 
     switch (style) {
-      case "fireworks":
-        rocketAccRef.current = 0;
-        spawnRockets(2, w, h);
-        break;
       case "confetti":
         spawnConfetti(Math.round(Math.min(180, w / 8)), w);
         break;
@@ -111,8 +98,6 @@ export function CelebrationOverlay() {
         spawnCannonBurst(w, h, 90);
         break;
       case "grand":
-        rocketAccRef.current = 0;
-        spawnRockets(2, w, h);
         spawnConfetti(Math.round(Math.min(140, w / 10)), w);
         spawnCannonBurst(w, h, 70);
         break;
@@ -121,50 +106,6 @@ export function CelebrationOverlay() {
   }
 
   // ── spawners ────────────────────────────────────────────────────────────
-
-  function spawnRockets(count: number, w: number, h: number): void {
-    for (let i = 0; i < count; i++) {
-      const x = rand(w * 0.15, w * 0.85);
-      particlesRef.current.push({
-        kind: "rocket",
-        x,
-        y: h + 10,
-        px: x,
-        py: h + 10,
-        vx: rand(-1.2, 1.2),
-        vy: rand(-(h / 110), -(h / 75)),
-        targetY: rand(h * 0.16, h * 0.42),
-        color: pick(PALETTE),
-      });
-    }
-  }
-
-  function explode(rocket: Rocket, w: number): void {
-    const count = Math.round(rand(55, 85) * Math.min(1.3, Math.max(0.7, w / 1400)));
-    const baseHue = Math.random() * 360;
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + rand(-0.06, 0.06);
-      const speed = rand(1.5, 7);
-      // Mostly burst color, with a sprinkle of the palette for confetti-ish sparkle.
-      const color = Math.random() < 0.78
-        ? `hsl(${(baseHue + rand(-14, 14) + 360) % 360} 95% ${rand(55, 70)}%)`
-        : pick(PALETTE);
-      particlesRef.current.push({
-        kind: "spark",
-        x: rocket.x,
-        y: rocket.y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        color,
-        alpha: 1,
-        decay: rand(0.008, 0.02),
-        twinkle: Math.random() < 0.3,
-        twinklePhase: rand(0, Math.PI * 2),
-        gravity: SPARK_GRAVITY,
-        drag: SPARK_DRAG,
-      });
-    }
-  }
 
   function spawnConfetti(count: number, w: number): void {
     for (let i = 0; i < count; i++) {
@@ -257,13 +198,6 @@ export function CelebrationOverlay() {
           spawnCannonBurst(w, h, 2);
         }
       }
-      if (style === "fireworks" || style === "grand") {
-        rocketAccRef.current += style === "grand" ? 0.012 : 0.02;
-        while (rocketAccRef.current >= 1) {
-          rocketAccRef.current -= 1;
-          spawnRockets(1, w, h);
-        }
-      }
     }
 
     ctx.clearRect(0, 0, w, h);
@@ -290,43 +224,6 @@ export function CelebrationOverlay() {
           ctx.fillStyle = p.color;
           ctx.fillRect(-p.w / 2, (-p.h / 2) * Math.max(0.15, scaleY), p.w, p.h * Math.max(0.15, scaleY));
           ctx.restore();
-        }
-      } else if (p.kind === "rocket") {
-        p.px = p.x;
-        p.py = p.y;
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.08;
-        const reached = p.y <= p.targetY || p.vy >= -1.5;
-        if (!reached) {
-          particles[nextIdx++] = p;
-          const grad = ctx.createLinearGradient(p.px, p.py, p.x, p.y);
-          grad.addColorStop(0, "rgba(255,255,255,0)");
-          grad.addColorStop(1, p.color);
-          ctx.strokeStyle = grad;
-          ctx.lineWidth = 2.2;
-          ctx.beginPath();
-          ctx.moveTo(p.px, p.py);
-          ctx.lineTo(p.x, p.y);
-          ctx.stroke();
-        } else {
-          explode(p, w);
-        }
-      } else {
-        // spark
-        p.vx *= p.drag;
-        p.vy = p.vy * p.drag + p.gravity;
-        p.x += p.vx;
-        p.y += p.vy;
-        p.alpha -= p.decay;
-        const tw = p.twinkle ? 0.55 + 0.45 * Math.abs(Math.sin((p.twinklePhase += 0.35))) : 1;
-        if (p.alpha > 0.02) {
-          particles[nextIdx++] = p;
-          ctx.globalAlpha = Math.max(0, p.alpha) * tw;
-          ctx.fillStyle = p.color;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 1.9, 0, Math.PI * 2);
-          ctx.fill();
         }
       }
     }

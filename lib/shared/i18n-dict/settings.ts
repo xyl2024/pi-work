@@ -100,7 +100,7 @@ export const settings = {
 
   // UI sounds
   "UI Sounds": "界面音效",
-  "Pick one of the eight built-in recipes for each event, or choose None to stay silent. A master volume scales every event.": "为每个事件选择一种内置音效，或选择 None 静音。主音量调节影响所有事件。",
+  "Pick one of the built-in recipes for each event, or choose None to stay silent. A master volume scales every event.": "为每个事件选择一种内置音效，或选择 None 静音。主音量调节影响所有事件。",
   "Restore sound defaults": "恢复音效默认",
   "Sound defaults restored": "音效默认已恢复",
   "Master volume": "主音量",
@@ -114,6 +114,7 @@ export const settings = {
   "Event: agent failure": "事件：Agent 最终失败",
   "Event: inbox new message": "事件：收件箱新消息",
   "Event: RSS new article": "事件：RSS 新文章",
+  "Event: celebration": "事件：庆祝动画",
   "morning-light": "晨曦",
   "lonely-shadow": "孤影",
   "tipsy": "微醺",
@@ -122,4 +123,5 @@ export const settings = {
   "firefly": "萤火",
   "weightless": "失重",
   "sea-breeze": "海风",
+  "celebration": "欢庆",
 } as const;

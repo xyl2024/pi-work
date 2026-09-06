@@ -35,6 +35,7 @@ const EVENT_LABEL_KEYS: Record<UiSoundEventId, string> = {
   agent_failure: "Event: agent failure",
   inbox_new: "Event: inbox new message",
   rss_new: "Event: RSS new article",
+  celebrate: "Event: celebration",
 };
 
 export function SoundSettingsSection({
@@ -96,7 +97,7 @@ export function SoundSettingsSection({
         {t("UI Sounds")}
       </h3>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
-        {t("Pick one of the eight built-in recipes for each event, or choose None to stay silent. A master volume scales every event.")}
+        {t("Pick one of the built-in recipes for each event, or choose None to stay silent. A master volume scales every event.")}
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>

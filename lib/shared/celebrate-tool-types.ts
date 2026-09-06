@@ -10,7 +10,7 @@
 
 export const CELEBRATE_TOOL_NAME = "pi_work_celebrate";
 
-export type CelebrationStyle = "auto" | "fireworks" | "confetti" | "cannon" | "grand";
+export type CelebrationStyle = "auto" | "confetti" | "cannon" | "grand";
 
 /** Default animation length, and the hard cap accepted from the model. */
 export const CELEBRATE_DEFAULT_DURATION_MS = 5000;
@@ -20,6 +20,6 @@ export const CELEBRATE_MAX_DURATION_MS = 15000;
 export interface CelebrateDetails {
   style: CelebrationStyle;
   /** Resolved concrete effect when the model asked for "auto". */
-  resolvedStyle: "fireworks" | "confetti" | "cannon" | "grand";
+  resolvedStyle: "confetti" | "cannon" | "grand";
   durationMs: number;
 }

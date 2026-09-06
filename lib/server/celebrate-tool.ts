@@ -2,7 +2,7 @@
  * `celebrate` — a pure-frontend fun tool.
  *
  * The agent calls it to make the Pi Work UI play a celebration animation
- * (fireworks / confetti / party cannons). The tool itself does nothing on the server: it validates the
+ * (confetti rain / party cannons, or both). The tool itself does nothing on the server: it validates the
  * parameters, attaches structured `details` to the result, and returns
  * immediately. The animation fires when the SSE `tool_execution_end` event
  * reaches the browser (see hooks/useAgentSession/events.ts →
@@ -22,16 +22,16 @@ import {
   type CelebrateDetails,
 } from "@/lib/shared/celebrate-tool-types";
 
-const CONCRETE_STYLES = ["fireworks", "confetti", "cannon", "grand"] as const;
+const CONCRETE_STYLES = ["confetti", "cannon", "grand"] as const;
 
 const CelebrateParams = Type.Object(
   {
     style: Type.Optional(
       Type.Union(
-        ["auto", "fireworks", "confetti", "cannon", "grand"].map((s) => Type.Literal(s)),
+        ["auto", "confetti", "cannon", "grand"].map((s) => Type.Literal(s)),
         {
           description:
-            "Which effect to play. 'fireworks' = rockets bursting in the sky, 'confetti' = confetti rain from the top, 'cannon' = party cannons firing from the bottom corners, 'grand' = all of them at once, 'auto' (default) = pick one at random.",
+            "Which effect to play. 'confetti' = confetti rain from the top, 'cannon' = party cannons firing from the bottom corners, 'grand' = confetti and cannons at once, 'auto' (default) = pick one at random.",
         },
       ),
     ),
@@ -68,10 +68,10 @@ export const celebrateTool = defineTool<typeof CelebrateParams, CelebrateDetails
   name: CELEBRATE_TOOL_NAME,
   label: "Celebrate 🎉",
   description:
-    "Play a celebration animation in the Pi Work UI: fireworks, confetti rain, party cannons, or all at once. Purely visual — call it and keep going; it does not block your work.",
+    "Play a celebration animation in the Pi Work UI: confetti rain, party cannons, or both at once. Purely visual — call it and keep going; it does not block your work.",
   parameters: CelebrateParams,
   executionMode: "sequential",
-  promptSnippet: "Play a fireworks/confetti celebration animation in the UI.",
+  promptSnippet: "Play a confetti/cannon celebration animation in the UI.",
   // Guidelines moved to CELEBRATE_SYSTEM_PROMPT_BLOCK — injected via
   // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params) {

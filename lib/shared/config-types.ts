@@ -73,6 +73,7 @@ export const UI_SOUND_EVENT_IDS = [
   "agent_failure",
   "inbox_new",
   "rss_new",
+  "celebrate",
 ] as const;
 
 export type UiSoundEventId = (typeof UI_SOUND_EVENT_IDS)[number];
