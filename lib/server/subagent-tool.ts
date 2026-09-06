@@ -59,7 +59,8 @@ const SpawnSubagentParams = Type.Object({
 interface SpawnSubagentDetails {
   taskId: string;
   sessionId: string | null;
-  status: "completed" | "failed" | "cancelled";
+  /** "running" is only ever seen on in-flight onUpdate partials (never persisted). */
+  status: "running" | "completed" | "failed" | "cancelled";
   description: string;
   result?: string;
   error?: string;
@@ -259,7 +260,7 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
   promptSnippet: "Launch a specialized subagent for a focused task.",
   // Guidelines moved to SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK — injected via
   // appendSystemPromptOverride, gated on the tool being loaded.
-  async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+  async execute(_toolCallId, params, signal, onUpdate, ctx) {
     const description = params.description.trim();
     const prompt = params.prompt.trim();
     const taskId = `subagent:${randomUUID()}`;
@@ -322,6 +323,17 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
       offChildDestroy = session.onDestroy(() => childGone.abort());
 
       markSubagentRunning(task.taskId, realSessionId);
+      // Publish the taskId/child-sessionId to the parent session's event
+      // stream (tool_execution_update → in-flight tool result details) so the
+      // UI's spawn_subagent ToolCallBlock can start polling child activity
+      // before the tool itself finishes.
+      onUpdate?.({
+        // Content stays empty — the parent UI renders its own live panel while
+        // details.status === "running", and any text here would be mistaken
+        // for the final result.
+        content: [],
+        details: { taskId, sessionId: realSessionId, status: "running" as const, description },
+      });
       const displayName = `[Subagent] ${description}`;
       session.inner.sessionManager.appendSessionInfo(displayName);
       writeSessionName(realSessionId, displayName);

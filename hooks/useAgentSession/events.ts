@@ -327,18 +327,27 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
       }
       case "tool_execution_update": {
         const id = event.toolCallId as string;
-        const partial = event.partialResult as { content?: Array<{ type?: string; text?: string }> } | undefined;
-        if (!id || !partial || !Array.isArray(partial.content)) break;
+        const partial = event.partialResult as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
+        if (!id || !partial) break;
         const content: TextContent[] = [];
-        for (const block of partial.content) {
-          if (block?.type === "text" && typeof block.text === "string") content.push({ type: "text", text: block.text });
+        if (Array.isArray(partial.content)) {
+          for (const block of partial.content) {
+            if (block?.type === "text" && typeof block.text === "string") content.push({ type: "text", text: block.text });
+          }
         }
-        if (content.length === 0) break;
+        // Details (e.g. spawn_subagent's running taskId/child sessionId) are
+        // merged alongside the streaming content so in-flight blocks can
+        // react to them before the final result arrives.
+        if (content.length === 0 && partial.details === undefined) break;
         setInFlightToolResults((previous) => {
           const existing = previous.get(id);
           if (!existing) return previous;
           const next = new Map(previous);
-          next.set(id, { ...existing, content });
+          next.set(id, {
+            ...existing,
+            ...(content.length > 0 ? { content } : {}),
+            ...(partial.details !== undefined ? { details: partial.details } : {}),
+          });
           return next;
         });
         break;

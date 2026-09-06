@@ -733,3 +733,127 @@ export async function readSubagentSessionStats(sessionId: string): Promise<Subag
   cache.set(sessionId, { mtimeMs, stats });
   return stats;
 }
+
+// ============================================================================
+// Subagent live info (stats + recent tool-call activity)
+//
+// Used by /api/subagents/[sessionId]/activity: polled every few seconds by
+// the parent session's spawn_subagent ToolCallBlock while the child runs.
+// Same mtime-cache pattern as readSubagentSessionStats — an unchanged JSONL
+// is never re-parsed.
+// ============================================================================
+
+/** One recent tool call in the child session, for the live activity feed. */
+export type { SubagentActivityItem, SubagentLiveInfo } from "@/lib/shared/types";
+import type { SubagentActivityItem } from "@/lib/shared/types";
+
+/** Raw aggregate computed from the child session JSONL (before the route
+ *  attaches task metadata to form the shared SubagentLiveInfo). */
+export interface SubagentLiveSnapshot {
+  assistantCount: number;
+  readCount: number;
+  model: string | null;
+  /** Recent tool calls in chronological order (oldest first). */
+  activities: SubagentActivityItem[];
+}
+
+interface SubagentLiveCacheEntry {
+  mtimeMs: number;
+  info: SubagentLiveSnapshot;
+}
+
+declare global {
+  var __piSubagentLiveCache: Map<string, SubagentLiveCacheEntry> | undefined;
+}
+
+function getSubagentLiveCache(): Map<string, SubagentLiveCacheEntry> {
+  globalThis.__piSubagentLiveCache ??= new Map();
+  return globalThis.__piSubagentLiveCache;
+}
+
+const ACTIVITY_SUMMARY_KEYS = [
+  "path", "pattern", "query", "symbol", "command", "action", "url", "name",
+  "file", "description", "mode", "filter", "subject", "taskId",
+] as const;
+
+const ACTIVITY_SUMMARY_MAX = 120;
+
+/** Short single-line preview of a tool call's input, mirroring the UI's tool preview. */
+function summarizeToolInput(input: unknown): string {
+  if (!input || typeof input !== "object") return "";
+  const record = input as Record<string, unknown>;
+  for (const key of ACTIVITY_SUMMARY_KEYS) {
+    const value = record[key];
+    if (typeof value === "string" && value) {
+      const oneLine = value.replace(/\s+/g, " ").trim();
+      return oneLine.length > ACTIVITY_SUMMARY_MAX ? `${oneLine.slice(0, ACTIVITY_SUMMARY_MAX)}…` : oneLine;
+    }
+  }
+  const firstKey = Object.keys(record)[0];
+  if (firstKey === undefined) return "";
+  const oneLine = String(record[firstKey]).replace(/\s+/g, " ").trim();
+  return oneLine.length > ACTIVITY_SUMMARY_MAX ? `${oneLine.slice(0, ACTIVITY_SUMMARY_MAX)}…` : oneLine;
+}
+
+/** Aggregate stats + recent tool-call activity for one child session. */
+export async function readSubagentLiveInfo(sessionId: string, activityLimit = 30): Promise<SubagentLiveSnapshot | null> {
+  const filePath = await resolveSessionPath(sessionId);
+  if (!filePath) return null;
+  let mtimeMs = 0;
+  try {
+    mtimeMs = statSync(filePath).mtimeMs;
+  } catch {
+    return null;
+  }
+
+  const cache = getSubagentLiveCache();
+  const cached = cache.get(sessionId);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.info;
+
+  const empty: SubagentLiveSnapshot = { assistantCount: 0, readCount: 0, model: null, activities: [] };
+  let info: SubagentLiveSnapshot = empty;
+  try {
+    const sm = SessionManager.open(filePath);
+    const entries = sm.getEntries() as never;
+    const leafId = fallbackSessionLeafId(sm, sm.getLeafId());
+    const context = buildSessionContext(entries, leafId);
+
+    let assistantCount = 0;
+    const readPaths = new Set<string>();
+    let readCalls = 0;
+    let model: string | null = null;
+    const activities: SubagentActivityItem[] = [];
+    for (let i = 0; i < context.messages.length; i += 1) {
+      const message = context.messages[i];
+      if (message.role !== "assistant") continue;
+      assistantCount += 1;
+      const assistant = message as AssistantMessage;
+      if (assistant.model) model = assistant.model;
+      const timestamp = context.entryTimestamps?.[i] ?? null;
+      for (const block of (normalizeToolCalls(message) as AssistantMessage).content) {
+        if (block.type !== "toolCall") continue;
+        if (block.toolName === "read") {
+          const path = block.input?.path;
+          if (typeof path === "string" && path) readPaths.add(path);
+          else readCalls += 1;
+        }
+        activities.push({
+          toolName: block.toolName,
+          summary: summarizeToolInput(block.input),
+          timestamp: typeof timestamp === "number" ? timestamp : null,
+        });
+      }
+    }
+    info = {
+      assistantCount,
+      readCount: readPaths.size + readCalls,
+      model,
+      activities: activities.slice(-activityLimit),
+    };
+  } catch {
+    // Unreadable / mid-write JSONL: fall through with the empty snapshot.
+  }
+
+  cache.set(sessionId, { mtimeMs, info });
+  return info;
+}

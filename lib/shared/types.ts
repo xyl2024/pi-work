@@ -257,6 +257,33 @@ export interface SubagentTaskSummary {
   model?: string | null;
 }
 
+/** One recent tool call in a subagent child session, for the live activity feed. */
+export interface SubagentActivityItem {
+  toolName: string;
+  /** Short single-line summary of the tool's input arguments. */
+  summary: string;
+  /** Entry-level persistence timestamp (ms), when available. */
+  timestamp: number | null;
+}
+
+/** Live snapshot of a running subagent child session, served by
+ *  /api/subagents/[sessionId]/activity and polled by the parent session's
+ *  spawn_subagent ToolCallBlock. */
+export interface SubagentLiveInfo {
+  task: {
+    status: SubagentTaskStatus;
+    startedAt: number | null;
+    description: string;
+  } | null;
+  stats: {
+    assistantCount: number | null;
+    readCount: number | null;
+    model: string | null;
+  };
+  /** Recent tool calls in chronological order (oldest first). */
+  activities: SubagentActivityItem[];
+}
+
 export interface SessionContext {
   messages: AgentMessage[];
   entryIds: string[]; // parallel to messages — the session entry id for each message

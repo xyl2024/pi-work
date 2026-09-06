@@ -15,6 +15,7 @@ import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
 import { extractEditDiffStats, extractWriteDiffStats } from "@/lib/shared/tool-diff-stats";
 import { useShowFileResults } from "@/hooks/showFileResultsStore";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
+import { SpawnSubagentLivePanel } from "./SpawnSubagentLivePanel";
 import { useCollapseNonce } from "./context";
 import type { AssistantContentBlock, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
 
@@ -145,9 +146,11 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const { isDark } = useTheme();
   const isBash = block.toolName === "bash";
   const isFileMutation = block.toolName === "write" || block.toolName === "edit";
-  // Only the specialized renderers (bash / diff for edit & write) stay
-  // expanded by default; every other tool call block collapses by default.
-  const isSpecialized = isBash || isFileMutation;
+  const isSpawnSubagent = block.toolName === "spawn_subagent";
+  // Only the specialized renderers (bash / diff for edit & write / the
+  // subagent live panel) stay expanded by default; every other tool call
+  // block collapses by default.
+  const isSpecialized = isBash || isFileMutation || isSpawnSubagent;
   const isCollapsedByDefault = !isSpecialized;
   const timeout = isBash && (typeof block.input.timeout === "number" || typeof block.input.timeout === "string")
     ? String(block.input.timeout)
@@ -195,6 +198,17 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const handleOpenInLibrary = () => {
     openSessionLibrary({ focusToolCallId: block.toolCallId });
   };
+
+  // spawn_subagent: while the child session is still running, the output area
+  // shows the live activity panel (details arrive via in-flight
+  // tool_execution_update partials). Once the final result lands it replaces
+  // the panel entirely.
+  const subDetails = isSpawnSubagent
+    ? ((result?.details ?? null) as { status?: string; sessionId?: string | null } | null)
+    : null;
+  const subagentHasResultText = !!result && result.content.some((item) => item.type === "text" && item.text.trim().length > 0);
+  const subagentTerminal = subDetails?.status === "completed" || subDetails?.status === "failed" || subDetails?.status === "cancelled" || isError;
+  const isSubagentRunning = isSpawnSubagent && !subagentHasResultText && !subagentTerminal;
 
   const header = (
     <div
@@ -281,6 +295,9 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
             </button>
           </Tooltip>
         )}
+        {isSubagentRunning && (
+          <span aria-hidden="true" className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a", flexShrink: 0 }} />
+        )}
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
@@ -342,7 +359,11 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
               >
                 {inputStr}
               </pre>
-              {result && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />}
+              {isSpawnSubagent && isSubagentRunning ? (
+                <SpawnSubagentLivePanel childSessionId={subDetails?.sessionId ?? null} />
+              ) : (
+                result && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />
+              )}
             </>
           )}
         </div>

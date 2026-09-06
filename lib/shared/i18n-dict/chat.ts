@@ -245,4 +245,13 @@ export const chat = {
   "Folder not found": "文件夹不存在",
   "Not a folder": "不是文件夹",
   "Failed to load folder": "加载文件夹失败",
+
+  // Spawn subagent live panel
+  "Subagent running": "子代理运行中",
+  "Waiting for subagent session…": "等待子会话启动…",
+  "{n} messages": "{n} 条消息",
+  "{n} files read": "已读 {n} 个文件",
+  "Model {m}": "模型 {m}",
+  "Elapsed {t}": "已运行 {t}",
+  "No activity yet": "暂无活动",
 } as const;

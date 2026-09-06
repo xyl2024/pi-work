@@ -139,3 +139,10 @@ export function listSubagentTasks(parentSessionId: string): SubagentTask[] {
   ).all(parentSessionId) as Record<string, unknown>[];
   return rows.map(mapRow);
 }
+
+export function getSubagentTaskByChildSessionId(childSessionId: string): SubagentTask | null {
+  const row = getSubagentDb().prepare(
+    "SELECT * FROM subagent_tasks WHERE child_session_id = ? ORDER BY created_at DESC LIMIT 1",
+  ).get(childSessionId) as Record<string, unknown> | undefined;
+  return row ? mapRow(row) : null;
+}
