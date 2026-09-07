@@ -114,6 +114,51 @@ export function useModalAnimation({
   const phaseRef = useRef<ModalPhase>(phase);
   phaseRef.current = phase;
   const closeTimerRef = useRef<number | null>(null);
+  // Pending rAF that flips "entering" → "open". Kept in a ref so the
+  // retry loop (see scheduleOpenFlip) can be cancelled by a later close.
+  const openFlipRafRef = useRef<number | null>(null);
+
+  // Flip "entering" → "open" one frame after the entering styles commit,
+  // so the browser paints the entering styles before the transition starts.
+  //
+  // This is NOT a plain one-shot rAF. The `setPhase("entering")` that the
+  // caller just issued is processed by React's scheduler (a macrotask), and
+  // a busy page — e.g. the sidebar's always-on GrokBot 60fps rAF loop — can
+  // push the browser's next "update the rendering" step (which runs rAF
+  // callbacks) AHEAD of that macrotask. A one-shot rAF would then fire while
+  // `phaseRef.current` is still the pre-commit value, its guard would skip
+  // the flip, and nothing would ever reschedule it: the modal strands at
+  // "entering" as an invisible (opacity 0) fullscreen backdrop that swallows
+  // every click. So the callback retries frame-by-frame until the entering
+  // commit lands; after a generous cap it gives up silently rather than
+  // fighting a close that has already started.
+  const scheduleOpenFlip = useCallback(() => {
+    if (openFlipRafRef.current !== null) cancelAnimationFrame(openFlipRafRef.current);
+    let attempts = 0;
+    const tick = () => {
+      openFlipRafRef.current = null;
+      const current = phaseRef.current;
+      if (current === "entering") {
+        setPhase("open");
+        return;
+      }
+      if (current === "closed" || current === "leaving") {
+        // Entering commit not landed yet (or a close raced in) — retry,
+        // bounded so a stray loop can't outlive a real close.
+        attempts += 1;
+        if (attempts <= 120) openFlipRafRef.current = requestAnimationFrame(tick);
+      }
+      // current === "open": already flipped by an earlier tick.
+    };
+    openFlipRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const cancelOpenFlip = useCallback(() => {
+    if (openFlipRafRef.current !== null) {
+      cancelAnimationFrame(openFlipRafRef.current);
+      openFlipRafRef.current = null;
+    }
+  }, []);
 
   // Sync isOpen → phase across mount, open, and close edges.
   //
@@ -137,24 +182,18 @@ export function useModalAnimation({
           closeTimerRef.current = null;
         }
         setPhase("entering");
-        const raf = requestAnimationFrame(() => {
-          // Guard: if the modal was already closed again before the rAF
-          // fired (rapid open/close click), skip the open transition.
-          if (phaseRef.current === "entering") setPhase("open");
-        });
-        return () => cancelAnimationFrame(raf);
+        scheduleOpenFlip();
+        return;
       }
       if (phaseRef.current === "entering") {
-        const raf = requestAnimationFrame(() => {
-          if (phaseRef.current === "entering") setPhase("open");
-        });
-        return () => cancelAnimationFrame(raf);
+        scheduleOpenFlip();
       }
-      return undefined;
+      return;
     }
 
     // !isOpen — drive the close from any live phase (open / entering /
-    // leaving). Re-scheduling on "leaving" is deliberate: if this effect
+    // leaving). A pending open flip must die with the close, otherwise its
+    // retry could flip the modal back open mid-close. Re-scheduling on "leaving" is deliberate: if this effect
     // re-runs while a close is already animating (e.g. the parent flipped
     // `open` again mid-close), the previous run's cleanup clears the timer,
     // and without a re-schedule here the phase would strand at "leaving"
@@ -180,14 +219,15 @@ export function useModalAnimation({
       };
     }
     return undefined;
-  }, [isOpen, durationMs]);
+  }, [isOpen, durationMs, scheduleOpenFlip, cancelOpenFlip]);
 
-  // Cleanup any pending close timer when the modal unmounts entirely.
+  // Cleanup any pending close timer / open flip when the modal unmounts.
   useEffect(() => {
     return () => {
       if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+      cancelOpenFlip();
     };
-  }, []);
+  }, [cancelOpenFlip]);
 
   const requestClose = useCallback(() => {
     // Act from "open" AND "entering" — the latter matters because a click
