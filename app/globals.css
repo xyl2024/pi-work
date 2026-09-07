@@ -410,8 +410,25 @@ pre, code {
    The chevron is always rendered so users keep the "I can collapse again"
    affordance after expanding. */
 .thinking-collapsed {
+  /* Outer cell of the folded preview. Sits as a flex item next to the
+     chevron; it owns the nowrap/clip so an overflowing flowing line can be
+     trimmed at the cell edge (and right-pinned via [data-follow-end]). */
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
   font-family: inherit;
   color: var(--text-muted);
+}
+.thinking-collapsed-inner {
+  /* Idle state: plain single-line head preview with an ellipsis, exactly
+     like the pre-flow behaviour. */
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
 }
 .thinking-header {
   font-family: inherit;
@@ -438,39 +455,26 @@ pre, code {
   .thinking-chevron svg { transition: none; }
 }
 
-/* Light sweep for an in-progress thinking block (folded view only).
-   Same gradient-clip-on-glyph + horizontal-shift pattern as the agent-todo
-   live effect, with its own keyframes name so the two don't collide across
-   CSS sources. Mirrors the LoadingState label shimmer: a 200%-wide band
-   (dim → text → dim) sweeping back and forth across the glyphs — 1.4s each
-   way, holding 0.6s at each edge (35%/15%/35%/15% of the 4s cycle), so it
-   breathes symmetrically instead of snapping back to the left. base =
-   --text-muted so when the animation stops or the user has
-   prefers-reduced-motion, the letters fall back to the muted color they
-   already had instead of jumping to a new tone. */
-.thinking-live--muted {
-  background-size: 200% 100%;
-  background-repeat: no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-image: linear-gradient(90deg,
-    var(--text-muted) 35%, var(--text) 50%, var(--text-muted) 65%);
-  animation: thinking-live-sweep 4s linear infinite;
+/* Flowing folded preview while the thinking block is the live stream tail
+   (pure CSS, lifted from deepseek-harness ReasoningRow — no JS motion).
+   Switching the folded cell to a flex row that packs its text to the end
+   right-pins the text's right edge to the cell edge; on every commit the
+   text simply grows and the overflow clips out through the left edge at
+   exactly the pace the model writes. Settled/expanded rows keep the idle
+   ellipsized head preview below. */
+.thinking-collapsed[data-follow-end] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
-@keyframes thinking-live-sweep {
-  0%   { background-position: 100% 0; }
-  35%  { background-position: 0% 0; }
-  50%  { background-position: 0% 0; }
-  85%  { background-position: 100% 0; }
-  100% { background-position: 100% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .thinking-live--muted {
-    animation: none;
-    background-image: none;
-    -webkit-text-fill-color: currentColor;
-  }
+.thinking-collapsed[data-follow-end] .thinking-collapsed-inner {
+  display: block;
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  user-select: none;
 }
 
 /* Conversation-tree active branch — flowing dashes while the agent works.

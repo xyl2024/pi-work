@@ -83,6 +83,24 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const text = highlightTextAsHtml(block.thinking, keywords, isSearchMatch);
 
+  // ── "Flowing" folded preview (streaming tail view) ─────────────
+  // While this block is the live tail of a streaming message and stays
+  // folded, show the *newest line* of the thinking text and right-pin it to
+  // the cell edge — a pure-CSS news-ticker effect (flex +
+  // justify-content:flex-end + width:max-content), lifted from deepseek-
+  // harness's ReasoningRow. Each React commit just grows the text and the
+  // browser relayouts once: the overflow clips out through the left edge at
+  // the exact pace the model writes — no rAF/transform/catch-up animation
+  // to stutter or fight the stream. When the stream moves on (or the block
+  // is expanded) the attribute drops and the idle ellipsized head preview
+  // comes back. Clicking still folds/unfolds it.
+  const flowing = Boolean(isStreaming) && !expanded;
+  const streamingLine = useMemo(() => {
+    const newline = block.thinking.lastIndexOf("\n");
+    const tail = newline === -1 ? block.thinking : block.thinking.slice(newline + 1);
+    return tail.trim();
+  }, [block.thinking]);
+
   return (
     <div
       onClick={handleClick}
@@ -124,8 +142,10 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
               {t("Thinking")}
             </span>
           ) : (
-            <span className={`thinking-collapsed${isStreaming && !expanded && block.thinking.trim().length > 0 ? " thinking-live--muted" : ""}`} style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {thinkingPreview}
+            <span className="thinking-collapsed" data-follow-end={flowing || undefined}>
+              <span className="thinking-collapsed-inner">
+                {flowing ? streamingLine : thinkingPreview}
+              </span>
             </span>
           )}
         </div>
