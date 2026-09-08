@@ -9,6 +9,7 @@ const {
   globalShortcut,
   nativeImage,
   ipcMain,
+  shell,
 } = require("electron");
 const path = require("path");
 
@@ -72,6 +73,17 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Open every window.open()/target="_blank" link (including ones fired
+  // from inside the app iframe) in the user's default browser instead of
+  // spawning a new Electron window. Deny non-http(s) URLs (e.g. ws://
+  // terminal links) entirely to avoid them being fed to a shell handler.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && /^https?:|^mailto:/.test(url)) {
+      shell.openExternal(url);
+    }
+    return { action: "deny" };
   });
 
   // Iframe (subframe) load failure → ask the title bar to swap the
