@@ -16,4 +16,7 @@ contextBridge.exposeInMainWorld("piShell", {
   onIframeError: (handler) =>
     ipcRenderer.on("iframe-error", (_e, errorPageUrl) => handler(errorPageUrl)),
   onIframeRetry: (handler) => ipcRenderer.on("iframe-retry", () => handler()),
+  // On Ctrl+R the main process asks us to tell the embedded app to reload
+  // itself in place (keeps the current route instead of resetting to "/").
+  onAppReload: (handler) => ipcRenderer.on("app-reload", () => handler()),
 });

@@ -446,6 +446,21 @@ export function AppShell() {
     }, "*");
   }, [theme.preset]);
 
+  // When running inside the Electron shell iframe, subscribe to the shell's
+  // refresh signal: the shell intercepts Ctrl+R and, instead of reloading the
+  // whole shell (which would bounce the app back to "/"), asks this app to
+  // reload itself in place — so the current route / ?session= stays intact.
+  useEffect(() => {
+    if (window.parent === window) return undefined;
+    const onMessage = (e: MessageEvent) => {
+      if (e.source === window.parent && e.data && e.data.type === "pi-reload") {
+        window.location.reload();
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
   const [initialSessionId] = useState<string | null>(() => searchParams.get("session"));
   const [workspace, dispatchWorkspace] = useReducer(
     sessionWorkspaceReducer,

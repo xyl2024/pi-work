@@ -42,6 +42,16 @@
     });
   }
 
+  // Ctrl+R refresh: the shell asks us to tell the embedded app to reload
+  // itself in place (postMessage pi-reload). Reloading the iframe keeps the
+  // current route/query, unlike a top-level shell reload which would tear the
+  // whole renderer down and bounce the app back to "/".
+  if (window.piShell.onAppReload) {
+    window.piShell.onAppReload(() => {
+      iframe.contentWindow.postMessage({ type: "pi-reload" }, piOrigin);
+    });
+  }
+
   // The error page (a data URL inside the iframe) can't reach the preload
   // directly, so it asks us to retry via postMessage. The Pi Web iframe also
   // sends its resolved theme colors so the shell stays visually consistent.

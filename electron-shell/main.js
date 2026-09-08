@@ -121,9 +121,22 @@ function createWindow() {
     }
   });
 
-  // DevTools: F12 or Ctrl+Shift+I toggles it (no native menu means the
-  // default accelerators are not registered, so wire them up manually).
+  // Ctrl+R / F5: reload the embedded Pi app in place. It eventually flows to
+  // the app via titlebar → pi-reload postMessage, where the app reloads itself
+  // so the current route + query survive. A normal top-level reload would tear
+  // down the whole renderer and bounce the app back to "/". (The custom menu
+  // below carries no Reload role, so this is the only path for Ctrl+R/F5.)
   win.webContents.on("before-input-event", (_event, input) => {
+    const isReload =
+      input.type === "keyDown" &&
+      (input.key === "F5" ||
+        input.key.toLowerCase() === "r" &&
+          (input.control || input.meta));
+    if (isReload) {
+      _event.preventDefault();
+      win.webContents.send("app-reload");
+      return;
+    }
     if (
       input.type === "keyDown" &&
       (input.key === "F12" ||
@@ -204,7 +217,36 @@ if (!gotTheLock) {
     }
   });
 
+  // Replace Electron's default application menu (which binds Ctrl+R / F5 to
+  // its own "Reload" role and Ctrl+Shift+I to DevTools) with a minimal one
+  // that keeps undo/copy/paste and quit working but leaves reload/devtools
+  // wiring to main.js' before-input-event handler so we can intercept Ctrl+R.
+  function installAppMenu() {
+    const editMenu = {
+      label: "编辑",
+      submenu: [
+        { role: "undo", label: "撤销" },
+        { role: "redo", label: "重做" },
+        { type: "separator" },
+        { role: "cut", label: "剪切" },
+        { role: "copy", label: "复制" },
+        { role: "paste", label: "粘贴" },
+        { type: "separator" },
+        { role: "selectAll", label: "全选" },
+      ],
+    };
+    const fileMenu = {
+      label: "文件",
+      submenu: [{ role: "quit", label: "退出" }],
+    };
+    const template = [fileMenu];
+    if (process.platform === "darwin") template.unshift({ label: app.name, role: "appMenu" });
+    template.push(editMenu);
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  }
+
   app.whenReady().then(() => {
+    installAppMenu();
     createWindow();
     createTray();
 
