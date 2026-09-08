@@ -13,10 +13,16 @@
  * PI_WORK_TERMINAL_HOST=127.0.0.1 to restrict to localhost only.
  *
  * Protocol (JSON text frames):
- *   client → server: { type: "start", cwd } | { type: "data", data }
- *                    | { type: "resize", cols, rows } | { type: "kill" }
+ *   client → server: { type: "start", cwd, sessionId? } | { type: "data", data }
+ *                    | { type: "resize", cols, rows } | { type: "kill", sessionId? }
  *   server → client: { type: "data", data } | { type: "exit", code }
  *                    | { type: "error", message }
+ *
+ * Sessions survive WebSocket disconnects: each `start` names a client-chosen
+ * `sessionId`; the server keeps the pty alive (plus a scrollback ring buffer)
+ * in a registry so a page refresh can re-attach by sending `start` with the
+ * same `sessionId` — the buffered output is replayed first. A pty is only
+ * killed by an explicit `kill` message or when it exits on its own.
  */
 
 import { createServer, type Server } from "http";
@@ -47,7 +53,24 @@ interface TerminalRuntime {
   httpServer: Server;
   wss: WebSocketServer;
   info: TerminalServerInfo;
+  /** sessionId → live pty session; survives page refreshes and ws reconnects. */
+  sessions: Map<string, TerminalSession>;
 }
+
+interface TerminalSession {
+  pty: pty.IPty;
+  /** Scrollback replay buffer (joined chunks, capped at MAX_BUFFER_BYTES). */
+  buffer: string[];
+  bufferSize: number;
+  /** Currently attached WebSocket clients (may be 0 while the tab is hidden). */
+  clients: Set<WebSocket>;
+  createdAt: number;
+}
+
+/** Cap on the replayed scrollback per session (bytes of UTF-16 string data). */
+const MAX_BUFFER_BYTES = 512 * 1024;
+/** Cap on simultaneously kept-alive sessions; the oldest is reaped first. */
+const MAX_SESSIONS = 50;
 
 const g = globalThis as unknown as { __piTerminalRuntime?: TerminalRuntime };
 
@@ -75,21 +98,115 @@ function normalizeCwd(cwd: string): { ok: true; path: string } | { ok: false; me
   return { ok: true, path: expanded };
 }
 
+function appendToBuffer(session: TerminalSession, data: string): void {
+  session.buffer.push(data);
+  session.bufferSize += data.length;
+  while (session.bufferSize > MAX_BUFFER_BYTES && session.buffer.length > 1) {
+    const dropped = session.buffer.shift();
+    session.bufferSize -= dropped?.length ?? 0;
+  }
+}
+
+function reapOldestSession(sessions: Map<string, TerminalSession>): void {
+  let oldestKey: string | null = null;
+  let oldestAt = Infinity;
+  for (const [key, session] of sessions) {
+    if (session.createdAt < oldestAt) {
+      oldestAt = session.createdAt;
+      oldestKey = key;
+    }
+  }
+  if (oldestKey) killSession(sessions, oldestKey);
+}
+
+function killSession(sessions: Map<string, TerminalSession>, sessionId: string): void {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  sessions.delete(sessionId);
+  try {
+    session.pty.kill();
+  } catch {
+    // already dead
+  }
+}
+
 function handleConnection(ws: WebSocket): void {
-  let ptyProcess: pty.IPty | null = null;
+  const sessions = g.__piTerminalRuntime?.sessions;
+  /** Sessions this connection currently has attached (for cleanup on close). */
+  const attached = new Set<TerminalSession>();
 
   const send = (obj: Record<string, unknown>): void => {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   };
 
-  const killPty = (): void => {
-    if (!ptyProcess) return;
-    try {
-      ptyProcess.kill();
-    } catch {
-      // already dead
+  const broadcast = (session: TerminalSession, obj: Record<string, unknown>): void => {
+    const payload = JSON.stringify(obj);
+    for (const client of session.clients) {
+      if (client.readyState === WebSocket.OPEN) client.send(payload);
     }
-    ptyProcess = null;
+  };
+
+  const spawnSession = (sessionId: string, cwdPath: string): TerminalSession | null => {
+    if (!sessions) return null;
+    // We explicitly build the pty env from a sanitised copy of
+    // `process.env` rather than passing `{ ...process.env }`:
+    // the launcher (`pi-work-start`) injects `NODE_ENV=production`,
+    // `PORT=14514`, `HOSTNAME`, internal tokens, WSL/Win interop
+    // vars, and a long `PATH` that includes Windows-side bins.
+    // Without this scrub the user opens their terminal and
+    // immediately finds `npm`/`git`/`code` behave as if they're
+    // running inside the Pi Work production server.
+    //
+    // Build the env explicitly so this code path remains safe even
+    // when instrumentation is skipped (e.g. NEXT_RUNTIME !== "nodejs").
+    // `TERM` is forced to `xterm-256color` because that's what the
+    // front-end xterm.js advertises; preserving the host's TERM
+    // can mislead the shell into 16-colour mode.
+    let ptyProcess: pty.IPty;
+    try {
+      const ptyEnv = sanitizeChildEnv(process.env);
+      ptyEnv.TERM = "xterm-256color";
+      ptyProcess = pty.spawn(resolveShell(), [], {
+        name: "xterm-256color",
+        cols: 80,
+        rows: 24,
+        cwd: cwdPath,
+        env: ptyEnv as Record<string, string>,
+      });
+    } catch (err) {
+      send({ type: "error", message: `Failed to start shell: ${String(err)}` });
+      return null;
+    }
+    if (sessions.size >= MAX_SESSIONS) reapOldestSession(sessions);
+    const session: TerminalSession = {
+      pty: ptyProcess,
+      buffer: [],
+      bufferSize: 0,
+      clients: new Set(),
+      createdAt: Date.now(),
+    };
+    sessions.set(sessionId, session);
+    ptyProcess.onData((data) => {
+      appendToBuffer(session, data);
+      broadcast(session, { type: "data", data });
+    });
+    ptyProcess.onExit(({ exitCode }) => {
+      // Session is gone once its shell exits — clear the registry entry.
+      if (sessions.get(sessionId) === session) sessions.delete(sessionId);
+      attached.delete(session);
+      session.clients.clear();
+      send({ type: "exit", code: exitCode });
+    });
+    log.info("pty started", { sessionId, cwd: cwdPath, shell: resolveShell() });
+    return session;
+  };
+
+  const attachSession = (sessionId: string, session: TerminalSession): void => {
+    session.clients.add(ws);
+    attached.add(session);
+    // Replay the scrollback first; the JS event loop guarantees no pty `data`
+    // event interleaves between the replay and the return of this handler.
+    if (session.buffer.length > 0) send({ type: "data", data: session.buffer.join("") });
   };
 
   ws.on("message", (raw) => {
@@ -103,58 +220,47 @@ function handleConnection(ws: WebSocket): void {
     switch (msg.type) {
       case "start": {
         const cwd = typeof msg.cwd === "string" ? msg.cwd : homedir();
+        const sessionId = typeof msg.sessionId === "string" && msg.sessionId ? msg.sessionId : null;
+        if (!sessionId) {
+          send({ type: "error", message: "Missing sessionId" });
+          return;
+        }
+        const existing = sessions?.get(sessionId);
+        if (existing) {
+          // Re-attach: keep the live shell and replay its scrollback. The
+          // client follows up with `resize` to match its current dimensions.
+          attachSession(sessionId, existing);
+          return;
+        }
         const normalized = normalizeCwd(cwd);
         if (!normalized.ok) {
           send({ type: "error", message: normalized.message });
           return;
         }
-        killPty();
-        try {
-          // We explicitly build the pty env from a sanitised copy of
-          // `process.env` rather than passing `{ ...process.env }`:
-          // the launcher (`pi-work-start`) injects `NODE_ENV=production`,
-          // `PORT=14514`, `HOSTNAME`, internal tokens, WSL/Win interop
-          // vars, and a long `PATH` that includes Windows-side bins.
-          // Without this scrub the user opens their terminal and
-          // immediately finds `npm`/`git`/`code` behave as if they're
-          // running inside the Pi Work production server.
-          //
-          // Build the env explicitly so this code path remains safe even
-          // when instrumentation is skipped (e.g. NEXT_RUNTIME !== "nodejs").
-          // `TERM` is forced to `xterm-256color` because that's what the
-          // front-end xterm.js advertises; preserving the host's TERM
-          // can mislead the shell into 16-colour mode.
-          const ptyEnv = sanitizeChildEnv(process.env);
-          ptyEnv.TERM = "xterm-256color";
-          ptyProcess = pty.spawn(resolveShell(), [], {
-            name: "xterm-256color",
-            cols: 80,
-            rows: 24,
-            cwd: normalized.path,
-            env: ptyEnv as Record<string, string>,
-          });
-        } catch (err) {
-          send({ type: "error", message: `Failed to start shell: ${String(err)}` });
-          return;
-        }
-        ptyProcess.onData((data) => send({ type: "data", data }));
-        ptyProcess.onExit(({ exitCode }) => {
-          ptyProcess = null;
-          send({ type: "exit", code: exitCode });
-        });
-        log.info("pty started", { cwd: normalized.path, shell: resolveShell() });
+        const session = spawnSession(sessionId, normalized.path);
+        if (session) attachSession(sessionId, session);
         break;
       }
       case "data": {
-        if (ptyProcess && typeof msg.data === "string") ptyProcess.write(msg.data);
+        const data = msg.data;
+        if (typeof data !== "string") break;
+        // Write to every attached session (in practice exactly one).
+        for (const session of attached) {
+          try {
+            session.pty.write(data);
+          } catch {
+            // shell may be mid-exit — ignore
+          }
+        }
         break;
       }
       case "resize": {
         const cols = Number(msg.cols);
         const rows = Number(msg.rows);
-        if (ptyProcess && Number.isFinite(cols) && Number.isFinite(rows) && cols > 0 && rows > 0) {
+        if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols <= 0 || rows <= 0) break;
+        for (const session of attached) {
           try {
-            ptyProcess.resize(cols, rows);
+            session.pty.resize(cols, rows);
           } catch {
             // shell may be mid-exit — ignore
           }
@@ -162,7 +268,15 @@ function handleConnection(ws: WebSocket): void {
         break;
       }
       case "kill": {
-        killPty();
+        const sessionId = typeof msg.sessionId === "string" ? msg.sessionId : null;
+        if (sessionId) {
+          killSession(sessions ?? new Map(), sessionId);
+        } else {
+          // Legacy/no-id kill: tear down everything this connection attached.
+          if (sessions) for (const session of attached) {
+            for (const [key, value] of sessions) if (value === session) killSession(sessions, key);
+          }
+        }
         break;
       }
       default: {
@@ -171,11 +285,16 @@ function handleConnection(ws: WebSocket): void {
     }
   });
 
+  // Disconnecting does NOT kill the pty — sessions are kept alive so the
+  // frontend can re-attach after a page refresh. Clients send an explicit
+  // `kill` when they really want the shell gone.
   ws.on("close", () => {
-    killPty();
+    for (const session of attached) session.clients.delete(ws);
+    attached.clear();
   });
   ws.on("error", () => {
-    killPty();
+    for (const session of attached) session.clients.delete(ws);
+    attached.clear();
   });
 }
 
@@ -220,7 +339,7 @@ export async function startTerminalServer(): Promise<TerminalServerInfo> {
     });
   });
 
-  const runtime: TerminalRuntime = { httpServer, wss, info: { port: PORT, token } };
+  const runtime: TerminalRuntime = { httpServer, wss, info: { port: PORT, token }, sessions: new Map() };
   g.__piTerminalRuntime = runtime;
   log.info(`terminal server listening on ${HOST}:${PORT}`);
   return runtime.info;

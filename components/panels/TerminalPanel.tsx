@@ -13,6 +13,14 @@ import { ICONS } from "@/components/ui/icons";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 
 const CWD_KEY = "pi-terminal-cwd";
+/** localStorage key persisting the terminal tab bar across page refreshes. */
+const STATE_KEY = "pi-terminal-tabs-state";
+
+/** Generate a stable session id shared by the client and the terminal server. */
+function newSessionId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `s-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export interface TerminalPanelProps {
   /** cwd used when creating a new terminal (active session cwd, fallback chain). */
@@ -37,6 +45,40 @@ interface TabInfo {
    * not index, so closing one pane never remounts the survivor's pty.
    */
   panes: string[];
+  /** pane key → server-side terminal session id; enables re-attach after refresh. */
+  sessionIds: Record<string, string>;
+}
+
+interface PersistedTerminalState {
+  tabs: TabInfo[];
+  activeId: number | null;
+  nextId: number;
+  splitRatio: Record<number, number>;
+  focusedPane: Record<number, string>;
+}
+
+function loadPersistedState(): PersistedTerminalState | null {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedTerminalState;
+    if (!Array.isArray(parsed.tabs) || typeof parsed.nextId !== "number") return null;
+    // Drop any tab whose panes carry no session ids (corrupt / very old data).
+    const tabs = parsed.tabs.filter(
+      (tab) => tab && typeof tab.id === "number" && typeof tab.cwd === "string" && Array.isArray(tab.panes) && tab.panes.length > 0,
+    );
+    // Ensure every pane has a session id — a missing one would otherwise get a
+    // fresh id on each render instead of a stable identity.
+    for (const tab of tabs) {
+      tab.sessionIds = { ...tab.sessionIds };
+      for (const pane of tab.panes) {
+        if (!tab.sessionIds[pane]) tab.sessionIds[pane] = newSessionId();
+      }
+    }
+    return { ...parsed, tabs, activeId: typeof parsed.activeId === "number" ? parsed.activeId : null };
+  } catch {
+    return null;
+  }
 }
 
 /** Minimum width of either split pane, in px (clamps divider dragging). */
@@ -72,19 +114,29 @@ const smallButtonStyle: React.CSSProperties = {
 
 /**
  * One xterm + one WebSocket + one server-side pty. Owns its full lifecycle:
- * fetch the WS info → connect → send `start` with the fixed cwd. Closing the
- * WS (tab close / unmount) makes the server kill the pty; restart re-sends
- * `start` over the same connection.
+ * fetch the WS info → connect → send `start` with the fixed cwd and a stable
+ * `sessionId`. The server keeps the pty (and its scrollback) alive across
+ * disconnects, so reconnecting with the same `sessionId` re-attaches the
+ * existing shell and replays its output; a missing session just spawns fresh.
  */
 function TerminalInstance({
   cwd,
   active,
   focused = false,
+  sessionId,
+  paneKey,
+  killRegistry,
 }: {
   cwd: string;
   active: boolean;
   /** In split view only the focused pane owns keyboard focus. */
   focused?: boolean;
+  /** Stable session id — the same one survives page refreshes. */
+  sessionId: string;
+  /** Identity of this pane within its tab; used for kill registration. */
+  paneKey: string;
+  /** pane key → server-kill sender, so closing a tab can kill its sessions. */
+  killRegistry: React.MutableRefObject<Map<string, () => void>>;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -193,6 +245,11 @@ function TerminalInstance({
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
+    // Capture the map once — the ref object is stable, but exhaustive-deps
+    // prefers using the captured value in the cleanup below.
+    const registry = killRegistry.current;
+    // Refs are stable, but capture the map once so the cleanup below doesn't
+    // touch `current` after re-renders (exhaustive-deps).
 
     // Suppress onerror/onclose after intentional teardown (unmount,
     // disconnect) — otherwise cleanup's ws.close() would flip the instance
@@ -201,10 +258,18 @@ function TerminalInstance({
 
     ws.onopen = () => {
       if (settled) return;
-      ws.send(JSON.stringify({ type: "start", cwd }));
+      // Re-attaching with a known sessionId restores the live shell (with
+      // scrollback replay); an unknown id just spawns a fresh one.
+      ws.send(JSON.stringify({ type: "start", cwd, sessionId }));
       ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
       setPhase("ready");
     };
+    // Register the kill sender so the parent can terminate this pane's shell
+    // when the tab/pane is closed (a plain ws close leaves the session alive).
+    registry.set(paneKey, () => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "kill", sessionId }));
+    });
+     
     ws.onmessage = (ev) => {
       let msg: { type?: string; data?: string; code?: number; message?: string };
       try {
@@ -301,6 +366,7 @@ function TerminalInstance({
 
     return () => {
       settled = true;
+      registry.delete(paneKey);
       dataSub.dispose();
       resizeSub.dispose();
       term.element?.removeEventListener("contextmenu", handleContextMenu);
@@ -316,7 +382,7 @@ function TerminalInstance({
       fitRef.current = null;
       term.dispose();
     };
-  }, [wsUrl, cwd, toast]);
+  }, [wsUrl, cwd, toast, sessionId, paneKey, killRegistry]);
 
   // When the tab becomes visible again (switch back, panel reopen), re-fit —
   // display:none / zero-height containers leave xterm with stale dimensions.
@@ -344,11 +410,11 @@ function TerminalInstance({
     try {
       const term = termRef.current;
       if (term) ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
-      ws.send(JSON.stringify({ type: "start", cwd }));
+      ws.send(JSON.stringify({ type: "start", cwd, sessionId }));
     } catch {
       // ignore
     }
-  }, [cwd]);
+  }, [cwd, sessionId]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -400,23 +466,47 @@ function TerminalInstance({
 export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onToggleFullscreen }: TerminalPanelProps) {
   const { t } = useI18n();
   const cm = useContextMenu();
-  const [tabs, setTabs] = useState<TabInfo[]>([]);
-  const [activeId, setActiveId] = useState<number | null>(null);
-  const nextIdRef = useRef(1);
-  const openedRef = useRef(false);
-  /** Split ratio (left pane width fraction) per tab id; absent → 50/50. Not persisted. */
-  const [splitRatio, setSplitRatio] = useState<Record<number, number>>({});
+  // Lazy one-time restore from localStorage (don't re-read every render).
+  const initialRef = useRef<PersistedTerminalState | null | undefined>(undefined);
+  if (initialRef.current === undefined) initialRef.current = loadPersistedState();
+  const initial = initialRef.current;
+  const [tabs, setTabs] = useState<TabInfo[]>(() => initial?.tabs ?? []);
+  const [activeId, setActiveId] = useState<number | null>(() => initial?.activeId ?? null);
+  const nextIdRef = useRef(initial?.nextId ?? 1);
+  const openedRef = useRef((initial?.tabs.length ?? 0) > 0);
+  /** pane key → kill sender registered by each TerminalInstance. */
+  const killRegistryRef = useRef<Map<string, () => void>>(new Map());
+  /** Split ratio (left pane width fraction) per tab id; absent → 50/50. */
+  const [splitRatio, setSplitRatio] = useState<Record<number, number>>(() => initial?.splitRatio ?? {});
   /** Which split pane has keyboard focus, per tab id; absent → the original (left) pane. */
-  const [focusedPane, setFocusedPane] = useState<Record<number, string>>({});
+  const [focusedPane, setFocusedPane] = useState<Record<number, string>>(() => initial?.focusedPane ?? {});
+
+  // Persist the tab bar so a page refresh restores the same terminals
+  // (each re-attaches to its live server-side session by sessionId).
+  useEffect(() => {
+    try {
+      const state: PersistedTerminalState = {
+        tabs,
+        activeId,
+        nextId: nextIdRef.current,
+        splitRatio,
+        focusedPane,
+      };
+      localStorage.setItem(STATE_KEY, JSON.stringify(state));
+    } catch {
+      // ignore quota/serialization errors
+    }
+  }, [tabs, activeId, splitRatio, focusedPane]);
 
   const createTerminal = useCallback((cwd: string) => {
     const id = nextIdRef.current++;
+    const paneKey = `${id}`;
     try {
       localStorage.setItem(CWD_KEY, cwd);
     } catch {
       // ignore
     }
-    setTabs((prev) => [...prev, { id, cwd, title: terminalBasename(cwd), panes: [`${id}`] }]);
+    setTabs((prev) => [...prev, { id, cwd, title: terminalBasename(cwd), panes: [paneKey], sessionIds: { [paneKey]: newSessionId() } }]);
     setActiveId(id);
   }, []);
 
@@ -429,7 +519,13 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
   }, [open, defaultCwd, createTerminal]);
 
   const closeTerminal = useCallback((id: number) => {
-    setTabs((prev) => prev.filter((tab) => tab.id !== id));
+    setTabs((prev) => {
+      const tab = prev.find((t) => t.id === id);
+      // Kill the shell server-side before dropping the tab — a bare WS close
+      // leaves the session alive by design (for refresh re-attach).
+      if (tab) for (const pane of tab.panes) killRegistryRef.current.get(pane)?.();
+      return prev.filter((tab) => tab.id !== id);
+    });
   }, []);
 
   // ── Split view (right-click a tab → “Split tab”) ──────────────────
@@ -440,7 +536,8 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
       prev.map((tab) => {
         if (tab.id !== tabId || tab.panes.length !== 1) return tab;
         // Tab ids never repeat, so `${id}-b` is a stable unique pane key.
-        return { ...tab, panes: [tab.panes[0], `${tabId}-b`] };
+        const paneKey = `${tabId}-b`;
+        return { ...tab, panes: [tab.panes[0], paneKey], sessionIds: { ...tab.sessionIds, [paneKey]: newSessionId() } };
       }),
     );
     setSplitRatio((prev) => {
@@ -454,10 +551,13 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
 
   /** Close one pane of a split tab; the survivor keeps its pty and goes full-width. */
   const closePane = useCallback((tabId: number, paneKey: string) => {
+    killRegistryRef.current.get(paneKey)?.();
     setTabs((prev) =>
       prev.map((tab) => {
         if (tab.id !== tabId || tab.panes.length !== 2) return tab;
-        return { ...tab, panes: tab.panes.filter((key) => key !== paneKey) };
+        const sessionIds = { ...tab.sessionIds };
+        delete sessionIds[paneKey];
+        return { ...tab, panes: tab.panes.filter((key) => key !== paneKey), sessionIds };
       }),
     );
     setSplitRatio((prev) => {
@@ -803,7 +903,14 @@ export function TerminalPanel({ defaultCwd, open, onClosePanel, fullscreen, onTo
                     style={{ flex: split && index === 0 ? `0 0 ${ratio * 100}%` : "1 1 0%" }}
                     className={split ? "group relative flex min-w-0 flex-col" : "relative flex min-w-0 flex-col"}
                   >
-                    <TerminalInstance cwd={tab.cwd} active={active} focused={focusedKey === paneKey} />
+                    <TerminalInstance
+                      cwd={tab.cwd}
+                      active={active}
+                      focused={focusedKey === paneKey}
+                      sessionId={tab.sessionIds[paneKey] ?? newSessionId()}
+                      paneKey={paneKey}
+                      killRegistry={killRegistryRef}
+                    />
                     {split && (
                       <button
                         onMouseDown={(e) => e.stopPropagation()}
