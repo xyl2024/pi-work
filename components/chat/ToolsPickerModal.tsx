@@ -120,13 +120,23 @@ export function ToolsPickerModal({
       return;
     }
     setQuery("");
-    setActiveIndex(0);
+    // Default focus: the currently active preset (off/full/named); custom selections start at 0.
+    if (toolSelection === "all") setActiveIndex(1);
+    else if (Array.isArray(toolSelection) && toolSelection.length === 0) setActiveIndex(0);
+    else {
+      const named = matchNamedToolPreset(toolSelection);
+      const presetKeys = ["off", "full", ...Object.keys(TOOL_PRESET_PATTERNS)];
+      const idx = named ? presetKeys.indexOf(named) : -1;
+      setActiveIndex(idx >= 0 ? idx : 0);
+    }
     if (!openFetchRef.current && !availableTools.length && !toolsLoading) {
       openFetchRef.current = true;
       void onRetryEnsureTools?.();
     }
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
+    // toolSelection is intentionally read-only here: re-running on change would reset keyboard focus mid-session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, availableTools.length, toolsLoading, onRetryEnsureTools]);
   useEffect(() => {
     if (!isVisible) return;
