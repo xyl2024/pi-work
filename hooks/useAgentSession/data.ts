@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
 import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/shared/types";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
@@ -47,6 +47,32 @@ type UseAgentSessionDataOptions = {
   refreshAgentRuntimeStateRef: RuntimeStateRef;
 };
 
+type RunningToolHint = { id: string; name: string; args?: Record<string, unknown> }[];
+
+/** Tool calls issued since the last user prompt that have no toolResult yet
+ *  — i.e. the calls a re-attached session is (or was) executing. Used to
+ *  seed the loading indicator with "running tool X" instead of "waiting for
+ *  model" when the UI attaches to an already-running turn. */
+function derivePendingToolCalls(messages: AgentMessage[]): RunningToolHint {
+  const lastUserIdx = messages.findLastIndex((m) => m.role === "user");
+  if (lastUserIdx === -1) return [];
+  const pending: RunningToolHint = [];
+  for (let i = lastUserIdx; i < messages.length; i++) {
+    const message = messages[i];
+    if (message.role === "assistant" && Array.isArray(message.content)) {
+      for (const block of message.content) {
+        if (block.type === "toolCall") {
+          pending.push({ id: block.toolCallId, name: block.toolName, args: block.input });
+        }
+      }
+    } else if (message.role === "toolResult") {
+      const idx = pending.findIndex((tool) => tool.id === message.toolCallId);
+      if (idx !== -1) pending.splice(idx, 1);
+    }
+  }
+  return pending;
+}
+
 export function useAgentSessionData(options: UseAgentSessionDataOptions) {
   const {
     sessionIdRef,
@@ -78,6 +104,11 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     refreshAgentRuntimeStateRef,
   } = options;
 
+  // Set by loadSession from the freshly loaded message tail; consumed by
+  // applyAgentRuntimeState so a re-attach to a running turn shows the
+  // executing tool instead of "waiting for model".
+  const runningToolsHintRef = useRef<RunningToolHint>([]);
+
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
     try {
       if (showLoading) setLoading(true);
@@ -107,6 +138,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
       setCompactionPoints(d.context.compactionPoints ?? []);
       setCurrentModelOverride(null);
       setError(null);
+      runningToolsHintRef.current = derivePendingToolCalls(d.context.messages);
       // Helper: pick the highest thinking level the current model supports, or
       // fall back to the raw value if it isn't the legacy "auto" sentinel.
       // Older sessions may persist "auto" — a frontend-only sentinel that
@@ -224,11 +256,16 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     } else if (running) {
       setAgentRunningSync(true);
       setCompactingSync(false);
-      setAgentPhase({ kind: "waiting_model" });
+      const hint = runningToolsHintRef.current;
+      // Deliberately not cleared here: the mount backstop re-fetches runtime
+      // state (`refreshAgentRuntimeState`) which calls this again, and should
+      // keep showing the executing tool. Cleared when the turn ends instead.
+      setAgentPhase(hint.length > 0 ? { kind: "running_tools", tools: hint } : { kind: "waiting_model" });
     } else {
       setAgentRunningSync(false);
       setCompactingSync(false);
       setAgentPhase(null);
+      runningToolsHintRef.current = [];
       dispatch({ type: "end" });
       const streamingMessage = getStreamingSnapshot(streamingKey).streamingMessage;
       const modelCallFailed = streamingMessage?.role === "assistant" && streamingMessage.stopReason === "error";
