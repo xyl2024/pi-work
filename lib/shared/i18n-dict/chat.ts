@@ -227,6 +227,7 @@ export const chat = {
   "Available tools": "可用工具",
   "Guidelines": "指南",
   "Pi documentation": "Pi 文档",
+  "Append": "追加",
   "AGENTS.md": "AGENTS.md",
 
   // Auto-name / compact

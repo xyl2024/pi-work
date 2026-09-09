@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef, useEffect, useReducer, memo, type RefObject } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, useReducer, memo, type RefObject, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionUiState, useSessionLeafChange, useSystemPromptRefresh } from "@/hooks/sessionUiStore";
 import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
@@ -223,6 +223,11 @@ const BASE_HEADING_ANCHORS: Array<{ id: string; re: RegExp }> = [
   { id: "pi-docs", re: /Pi documentation/ },
 ];
 
+/** Detect the `<available_skills>…</available_skills>` listing that pi injects
+ *  into its base prompt, so the context panel can offer a dedicated jump
+ *  target and highlight each skill's `<name>` line. */
+const SKILLS_SECTION_RE = /<available_skills>[\s\S]*?<\/available_skills>/;
+
 /** Index just after pi's \"Always read pi .md files…\" line (the end of the
  *  Pi documentation section). `-1` when the pi docs section is absent. */
 function findPiDocsEnd(text: string): number {
@@ -248,6 +253,8 @@ function splitBaseBlocks(text: string): BasePromptBlock[] {
   if (piDocsEnd >= 0 && hasAppendSection(text, piDocsEnd)) {
     marks.push({ index: piDocsEnd, id: "append" });
   }
+  const skillsMatch = SKILLS_SECTION_RE.exec(text);
+  if (skillsMatch) marks.push({ index: skillsMatch.index, id: "skills" });
   marks.sort((a, b) => a.index - b.index);
   const blocks: BasePromptBlock[] = [];
   let cursor = 0;
@@ -260,6 +267,32 @@ function splitBaseBlocks(text: string): BasePromptBlock[] {
   }
   if (cursor < text.length) blocks.push({ anchor: null, text: text.slice(cursor) });
   return blocks;
+}
+
+/** Combined highlighter for the base prompt body: the skill `<name>…</name>`
+ *  tags plus pi's section headings "Available tools:", "Guidelines:" and
+ *  "Pi documentation". Matched runs get an accent text colour; everything
+ *  else is returned verbatim as raw strings so pre-wrap whitespace is kept. */
+const BASE_PROMPT_HIGHLIGHT_RE =
+  /<name>[\s\S]*?<\/name>|Available tools:|Guidelines:|Pi documentation/g;
+
+function highlightBasePrompt(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  let i = 0;
+  BASE_PROMPT_HIGHLIGHT_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = BASE_PROMPT_HIGHLIGHT_RE.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    nodes.push(
+      <span key={`${keyPrefix}-${i++}`} style={{ color: "var(--accent)" }}>
+        {m[0]}
+      </span>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
 }
 
 interface WorkspaceChatTabProps {
@@ -2195,6 +2228,7 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
     if (present.has("guidelines")) items.push({ id: "guidelines", label: t("Guidelines"), color: "var(--text-dim)" });
     if (present.has("pi-docs")) items.push({ id: "pi-docs", label: t("Pi documentation"), color: "var(--text-dim)" });
     if (present.has("append")) items.push({ id: "append", label: t("Append"), color: "var(--text-dim)" });
+    if (present.has("skills")) items.push({ id: "skills", label: t("Skills"), color: "var(--accent)" });
     return items;
   }, [systemPrompt, baseBlocks, t]);
   // Jump menu groups: base prompt sections, per-AGENTS.md instructions, tools.
@@ -2227,7 +2261,6 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
             type="button"
             aria-label={t("Quick jump")}
             aria-expanded={jumpOpen}
-            title={t("Quick jump")}
             style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, border: "1px solid var(--border)", borderRadius: 6, background: jumpOpen ? "var(--bg-hover)" : "var(--bg-panel)", color: "var(--text-muted)", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
@@ -2249,7 +2282,6 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
                         onClick={() => { jumpTo(item.id); cancelJumpClose(); setJumpOpen(false); }}
                         onMouseEnter={() => setHoveredJumpId(item.id)}
                         onMouseLeave={() => setHoveredJumpId(null)}
-                        title={item.label}
                         style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "5px 8px", borderRadius: 5, border: "none", background: hovered ? "var(--bg-hover)" : "transparent", color: "var(--text-muted)", font: "inherit", fontSize: 11, textAlign: "left", cursor: "pointer" }}
                       >
                         <span style={{ width: 8, height: 8, borderRadius: 2, flexShrink: 0, background: item.color }} />
@@ -2287,7 +2319,7 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
                           data-context-anchor={block.anchor ?? undefined}
                           style={block.anchor ? { display: "block", scrollMarginTop: 44 } : undefined}
                         >
-                          {block.text}
+                          {highlightBasePrompt(block.text, `base-${idx}-${bi}`)}
                         </span>
                       ))}
                     </span>
