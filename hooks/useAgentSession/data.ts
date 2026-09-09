@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
 import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/shared/types";
-import { pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
+import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import { endStreaming as endStreamingStore, getStreamingSnapshot } from "../streamingMessageStore";
 import type {
   AgentPhase,
@@ -132,7 +132,20 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
         ? d.context.thinkingLevel
         : null;
       const migrated = migrateLegacyAuto(liveLevel ?? fileLevel ?? undefined);
-      if (migrated !== null) setThinkingLevel(migrated);
+      if (migrated !== null) {
+        // Clamp the migrated value against the current model's advertised
+        // levels: the session file may persist a level the freshly-selected
+        // model doesn't support (pi clamps server-side, so without this the
+        // badge would drift from the agent's actual setting). The live agent
+        // state is already clamped, so this is a no-op for it.
+        const modelKey = d.context.model
+          ? `${d.context.model.provider}:${d.context.model.modelId}`
+          : null;
+        const avail = modelKey ? modelThinkingLevels[modelKey] ?? null : null;
+        setThinkingLevel(avail && avail.length > 0
+          ? pickClosestAvailableThinkingLevel(migrated, avail)
+          : migrated);
+      }
 
       return d.agentState ?? null;
     } catch (e) {

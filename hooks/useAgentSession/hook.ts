@@ -586,6 +586,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // asynchronously, and a prompt arriving in the gap would still
         // see the stale level. Doing it here closes that window.
         await sendAgentCommand(sid, { type: "set_thinking_level", level: nextLevel });
+      } else if (newModelLevels === null) {
+        // Unknown model (not in the thinkingLevels map): we couldn't clamp
+        // locally, so resync the badge from the agent's actual state — pi
+        // has already clamped server-side, and without this the UI would
+        // keep showing a level the model doesn't support.
+        try {
+          const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
+          const st = res.ok ? await res.json() as { state?: { thinkingLevel?: string } } : null;
+          if (typeof st?.state?.thinkingLevel === "string") {
+            setThinkingLevel(st.state.thinkingLevel as ThinkingLevelOption);
+          }
+        } catch {
+          // Best-effort resync; keep the requested level on failure.
+        }
       }
     } catch (e) {
       console.error("Failed to set model:", e);
@@ -594,16 +608,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [isNew, modelThinkingLevels, thinkingLevel, setNewSessionModel, showToast, t]);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
-    setThinkingLevel(level);
+    // Clamp to the current model's advertised levels before applying. When
+    // the model isn't in the thinkingLevels map (unknown / not yet loaded)
+    // we pass the pick through — pi clamps server-side and the runtime-state
+    // resync paths keep the badge honest.
+    const model = isNew ? newSessionModel : currentModel;
+    const modelKey = model ? `${model.provider}:${model.modelId}` : null;
+    const available = modelKey ? modelThinkingLevels[modelKey] ?? null : null;
+    const effective: ThinkingLevelOption = available && available.length > 0
+      ? pickClosestAvailableThinkingLevel(level, available)
+      : level;
+    setThinkingLevel(effective);
     const sid = sessionIdRef.current;
     if (!sid) return;
     try {
-      await sendAgentCommand(sid, { type: "set_thinking_level", level });
+      await sendAgentCommand(sid, { type: "set_thinking_level", level: effective });
     } catch (e) {
       console.error("Failed to set thinking level:", e);
       showToast({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to change thinking level") });
     }
-  }, [showToast, t]);
+  }, [isNew, newSessionModel, currentModel, modelThinkingLevels, showToast, t]);
 
   // Apply a new tool selection. For existing sessions, the change is sent
   // straight to the agent (`set_tools`); for new sessions we only update
