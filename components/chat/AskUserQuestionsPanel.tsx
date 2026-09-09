@@ -9,9 +9,8 @@
  *   1. Tab bar (when count > 1): one tab per question. Each tab shows a
  *      status dot (filled = answered, hollow = not) and the question's
  *      `header` chip text. Required tabs render the header text in the
- *      accent color (instead of a separate red asterisk). ←/→ on the tab
- *      bar switch tabs; Home/End jump to first/last. A collapse button
- *      sits at the right end of the row (see "Collapse" below).
+ *      accent color (instead of a separate red asterisk). ←/→ on the
+ *      tab bar switch tabs; Home/End jump to first/last.
  *   2. Active question card: only the visible tab's question renders
  *      here, with its own internal scroll. The question's long-form text
  *      is shown; the header chip is NOT repeated (it lives on the tab).
@@ -29,9 +28,6 @@
  *   - Question switches are animated (fade-up) and reset the card scroll.
  *   - After Submit, a brief "Answers sent ✓" confirmation shows before
  *     the panel closes.
- *   - The collapse button shrinks the panel to a slim "N questions
- *     pending" bar. The request stays pending — the agent keeps waiting,
- *     the user can expand and answer later (or Cancel).
  *
  * Data flow:
  *   - `askUserQuestionsStore` carries one pending entry per sessionId.
@@ -96,8 +92,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
     submitting,
     submitError,
     sent,
-    minimized,
-    setMinimized,
     setActiveTab,
     canSubmit,
     handleSubmit,
@@ -113,102 +107,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
   const regionLabel = count === 1
     ? t("Ask User Questions")
     : t("{n} questions pending").replace("{n}", String(count));
-
-  const collapseButton = (
-    <button
-      type="button"
-      aria-label={t("Collapse")}
-      onClick={() => setMinimized(true)}
-      className="askq-icon-btn"
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 9l6 6 6-6" />
-      </svg>
-    </button>
-  );
-
-  // Collapsed state: a slim bar that keeps the request pending. Clicking
-  // the bar (or the expand button) restores the full panel with the
-  // user's answers intact.
-  if (minimized) {
-    const barLabel = count === 1
-      ? t("Awaiting your answer")
-      : t("{n} questions pending").replace("{n}", String(count));
-    return (
-      // Outer wrapper is purely a spacing-bearing layer that mirrors
-      // ChatInput's padding container (`padding: 0 16px` here; the full
-      // panel below adds `0 16px 8px`). The actual surface lives inside
-      // so its width tracks the same 820-wide centered column as
-      // ChatInput instead of stretching edge-to-edge — keeps the
-      // collapse bar flush with the input box on any chat-area width.
-      <div
-        className="ask-panel-in"
-        style={{
-          padding: "0 16px 8px",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div
-          role="region"
-          aria-label={regionLabel}
-          onClick={() => setMinimized(false)}
-          style={{
-            maxWidth: 820,
-            margin: "0 auto",
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "0 6px 0 12px",
-            height: 34,
-            background: "var(--bg-panel)",
-            border: "1px solid var(--border)",
-            borderRadius: 10,
-            boxShadow: "0 -4px 14px rgba(0, 0, 0, 0.12)",
-            cursor: "pointer",
-          }}
-        >
-          <span
-            aria-hidden
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: "var(--accent)",
-              animation: "ask-sidebar-pulse 1.6s ease-in-out infinite",
-              flexShrink: 0,
-            }}
-          />
-          <span
-            style={{
-              flex: 1,
-              fontSize: 12,
-              color: "var(--text-muted)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {barLabel}
-          </span>
-          <button
-            type="button"
-            aria-label={t("Expand")}
-            onClick={(e) => {
-              e.stopPropagation();
-              setMinimized(false);
-            }}
-            className="askq-icon-btn"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 15l-6-6-6 6" />
-            </svg>
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     // Outer wrapper is purely spacing — mirrors ChatInput's padding
@@ -351,7 +249,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
               );
             })}
           </div>
-          {collapseButton}
         </div>
       )}
 
@@ -438,9 +335,6 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                   updateSelection(safeTab, label, checked, question.multiSelect)
                 }
                 onOtherTextChange={(text) => updateOtherText(safeTab, text)}
-                // Single-question panel has no tab bar, so the collapse
-                // button lives in the card header row instead.
-                action={count === 1 ? collapseButton : undefined}
               />
             )}
           </div>

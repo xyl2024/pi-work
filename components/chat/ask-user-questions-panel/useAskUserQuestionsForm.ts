@@ -41,9 +41,6 @@ export interface AskUserQuestionsForm {
   submitError: string | null;
   /** True while the "Answers sent" confirmation is showing. */
   sent: boolean;
-  /** Collapsed to a slim bar. The request stays pending. */
-  minimized: boolean;
-  setMinimized: (v: boolean) => void;
   activeTab: number;
   setActiveTab: Dispatch<SetStateAction<number>>;
   canSubmit: boolean;
@@ -85,9 +82,6 @@ export function useAskUserQuestionsForm({
    *  entry stays put during this window (the panel schedules the clear),
    *  so the confirmation survives the round-trip to the server. */
   const [sent, setSent] = useState(false);
-  /** Collapsed to a slim bar. The request stays pending — the agent keeps
-   *  waiting, the user can expand and answer later (or Cancel). */
-  const [minimized, setMinimized] = useState(false);
 
   // ── Refs ──────────────────────────────────────────────────────────────
   // pendingRef / answersRef / otherTextsRef: the auto-advance, auto-submit
@@ -153,7 +147,6 @@ export function useAskUserQuestionsForm({
       setOtherTexts({});
       setActiveTab(0);
       setSubmitError(null);
-      setMinimized(false);
       setSent(false);
       return;
     }
@@ -167,7 +160,6 @@ export function useAskUserQuestionsForm({
     setOtherTexts({});
     setActiveTab(0);
     setSubmitError(null);
-    setMinimized(false);
     setSent(false);
   }, [pending, clearStaleSubmitted]);
 
@@ -397,8 +389,6 @@ export function useAskUserQuestionsForm({
     submitting,
     submitError,
     sent,
-    minimized,
-    setMinimized,
     activeTab,
     setActiveTab,
     canSubmit,
