@@ -1674,7 +1674,7 @@ export function AppShell() {
               registerChatInputRef={registerChatInputRef}
               onAgentEnd={handleAgentEnd}
               onSessionCreated={handleSessionCreated}
-              onSessionInfoLoaded={(_tabId, session) => dispatchWorkspace({ type: "open_session", session })}
+              onSessionInfoLoaded={(_tabId, session) => dispatchWorkspace({ type: "open_session", session, activate: false })}
               onFirstAssistantReady={handleFirstAssistantReady}
               modelsRefreshKey={modelsRefreshKey}
               scrollToEntryId={pendingScrollEntryIds[tab.tabId] ?? null}

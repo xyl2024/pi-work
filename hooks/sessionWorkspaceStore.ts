@@ -26,7 +26,7 @@ export interface SessionWorkspaceState {
 
 export type SessionWorkspaceAction =
   | { type: "ensure_draft"; tabId?: string; cwd?: string | null }
-  | { type: "open_session"; session: SessionInfo; tabId?: string }
+  | { type: "open_session"; session: SessionInfo; tabId?: string; activate?: boolean }
   | { type: "open_session_by_id"; sessionId: string }
   | { type: "activate"; tabId: string }
   | { type: "set_draft_cwd"; tabId: string; cwd: string | null }
@@ -167,10 +167,13 @@ export function sessionWorkspaceReducer(
           cwd: action.session.cwd || existing.cwd,
           status: action.session.running && existing.status === "idle" ? "running" : existing.status,
         };
-        next.activeTabId = existing.tabId;
+        // Only sync data by default. A background session finishing, failing,
+        // or reporting its info must never yank the user to its tab; callers
+        // that represent a real user action opt in via `activate`.
+        if (action.activate !== false) next.activeTabId = existing.tabId;
         return next;
       }
-      return addTab(state, createSessionTab(action.session, action.tabId ?? `session:${action.session.id}`));
+      return addTab(state, createSessionTab(action.session, action.tabId ?? `session:${action.session.id}`), action.activate !== false);
     }
 
     case "activate": {
