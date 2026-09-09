@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
@@ -217,11 +218,12 @@ export function ToolsPickerModal({
             : <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>{filteredRows.map((row, index) => {
               const itemIndex = presets.length + index;
               const checked = isToolChecklistRowChecked(row, selectedSet, allNames);
-              return <label key={row.key} ref={(el) => { itemRefs.current[itemIndex] = el; }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: `1px solid ${activeIndex === itemIndex ? "var(--accent)" : "var(--border)"}`, borderRadius: 7, background: checked ? "var(--bg-selected)" : "var(--bg)", cursor: "pointer", fontSize: 12 }} title={row.description ?? undefined}>
+              const label = <label key={row.key} ref={(el) => { itemRefs.current[itemIndex] = el; }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: `1px solid ${activeIndex === itemIndex ? "var(--accent)" : "var(--border)"}`, borderRadius: 7, background: checked ? "var(--bg-selected)" : "var(--bg)", cursor: "pointer", fontSize: 12 }}>
                 <input type="checkbox" checked={checked} onChange={(e) => toggleTool(row.name, e.target.checked)} style={{ accentColor: "var(--accent)" }} />
                 <span style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.name}</span>
                 {row.group && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>×{row.memberCount}</span>}
               </label>;
+              return row.description ? <Tooltip key={row.key} content={row.description} side="top">{label}</Tooltip> : label;
             })}</div>}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 14px", borderTop: "1px solid var(--border)", color: "var(--text-dim)", fontSize: 11, flexShrink: 0 }}><span>{t("Arrow keys select · Enter confirm · Esc close")}</span><span>{isOff ? t("No tools") : toolSelection === "all" ? t("All tools") : t("Custom")}</span></div>

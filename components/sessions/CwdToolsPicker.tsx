@@ -10,6 +10,7 @@ import {
 } from "@/lib/shared/tool-selection";
 import { TOOL_PRESET_PATTERNS, TOOL_PRESET_LABELS, TOOL_PRESET_DESCRIPTIONS, type NamedToolPresetId } from "@/components/chat/ToolsDropdownPanel";
 import { useI18n } from "@/hooks/useI18n";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: boolean; onClose: () => void }) {
   const { t } = useI18n();
@@ -72,12 +73,15 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             {(Object.keys(TOOL_PRESET_PATTERNS) as NamedToolPresetId[]).map((id) => (
-              <button key={id} onClick={() => applyPreset(id)} style={{ flex: 1 }} title={t(TOOL_PRESET_DESCRIPTIONS[id])}>{t(TOOL_PRESET_LABELS[id])}</button>
+              <Tooltip key={id} content={t(TOOL_PRESET_DESCRIPTIONS[id])} side="top">
+                <button onClick={() => applyPreset(id)} style={{ flex: 1 }}>{t(TOOL_PRESET_LABELS[id])}</button>
+              </Tooltip>
             ))}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-            {rows.map((row) => (
-              <label key={row.key} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }} title={row.description ?? undefined}>
+            {rows.map((row) => {
+              const label = (
+                <label key={row.key} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
                 <input type="checkbox" checked={isToolChecklistRowChecked(row, selected, toolNames)} onChange={(e) => {
                   // Shared toggle semantics: a standalone tool flips a single
                   // name; a bound-group toggle rewrites the whole family (the
@@ -89,7 +93,11 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
                   <span style={{ color: "var(--text-dim)", fontSize: 11, marginLeft: "auto" }}>×{row.memberCount}</span>
                 )}
               </label>
-            ))}
+              );
+              return row.description ? (
+                <Tooltip key={row.key} content={row.description} side="top">{label}</Tooltip>
+              ) : label;
+            })}
           </div>
         </>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
