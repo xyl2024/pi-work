@@ -656,21 +656,6 @@ function CwdGroup({
           document.body,
         )}
 
-        {toolsPickerOpen && (
-          <CwdToolsPicker cwd={workspace.cwd} open onClose={() => setToolsPickerOpen(false)} />
-        )}
-        {iconPickerOpen && (
-          <CwdIconPicker
-            open
-            title={t("Set custom icon")}
-            current={cwdIcon ?? null}
-            onSelect={async (icon) => {
-              const ok = await setCwdIcon(workspace.cwd, icon);
-              if (ok) setIconPickerOpen(false);
-            }}
-            onClose={() => setIconPickerOpen(false)}
-          />
-        )}
       </div>
 
       {/* Body: pinned sessions + recent sessions. The DOM outlives the
@@ -712,6 +697,27 @@ function CwdGroup({
           )}
           </div>
         </div>
+      )}
+
+      {/* Pickers/overlays are siblings of the header (never descendants):
+          they open from the header "…" menu and mount in a portal, but React
+          portal events bubble along the React tree — nesting them under the
+          clickable header would make every click inside the modal hit its
+          onClick and toggle expand/collapse. */}
+      {toolsPickerOpen && (
+        <CwdToolsPicker cwd={workspace.cwd} open onClose={() => setToolsPickerOpen(false)} />
+      )}
+      {iconPickerOpen && (
+        <CwdIconPicker
+          open
+          title={t("Set custom icon")}
+          current={cwdIcon ?? null}
+          onSelect={async (icon) => {
+            const ok = await setCwdIcon(workspace.cwd, icon);
+            if (ok) setIconPickerOpen(false);
+          }}
+          onClose={() => setIconPickerOpen(false)}
+        />
       )}
     </div>
   );

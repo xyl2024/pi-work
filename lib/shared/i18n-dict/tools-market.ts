@@ -18,6 +18,7 @@ export const toolsMarket = {
   "Changes apply to new sessions only": "变更仅对新会话生效",
   "Set default tools": "设置默认工具集",
   "Default tools for this project": "此项目的默认工具集",
+  "No tools available": "此项目下没有可用工具",
   "codegraph_status": "CodeGraph 索引状态",
   "codegraph_search": "CodeGraph 符号搜索",
   "codegraph_explore": "CodeGraph 代码探索",
