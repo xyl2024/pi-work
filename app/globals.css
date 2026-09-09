@@ -1591,3 +1591,76 @@ li.todo-task-item[data-checked="true"] > div {
   width: 0;
   height: 0;
 }
+
+/* ---------------------------------------------------------------------
+ * Tool pickers — ToolsPickerModal (active session) + CwdToolsPicker
+ * (a project's default tool set).
+ *
+ * The presentational React pieces live in components/ui/ToolPicker.tsx,
+ * which supplies only inline layout metrics (padding / radius / gap) and
+ * the hand-drawn checkbox & radio glyphs. All hover / selected / focus
+ * state lives here as scoped classes so that :hover, :active and the
+ * [data-*] driven fills can transition instead of snapping.
+ *
+ * Design choice: the item keeps a static border line whose color never
+ * changes. State is expressed purely through the background wash — hover /
+ * press shift it toward gray, selection tints it with the accent — plus a
+ * soft outer focus glow (a box-shadow, which never recolors the border).
+ * The border stays var(--border) in every state so the picker reads calm
+ * and stable even when many tools are toggled.
+ * ------------------------------------------------------------------- */
+.tool-picker__row,
+.tool-picker__card {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background-color: var(--bg);
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+/* Hover affordance: only the background warms toward a clickable fill;
+   the border color is untouched. */
+.tool-picker__row:hover,
+.tool-picker__card:hover {
+  background-color: var(--bg-hover);
+}
+.tool-picker__row:active,
+.tool-picker__card:active {
+  background-color: var(--bg-selected);
+}
+
+/* Keyboard navigation glow — only while arrow-key navigating. A soft
+   outer accent ring expressed as box-shadow, so it indicates focus without
+   recoloring the static border or adding a fill. The washes below never
+   touch box-shadow, so the glow survives on a checked row / active card. */
+.tool-picker__row[data-focused="true"],
+.tool-picker__card[data-focused="true"] {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* Custom-selection rows deliberately get NO selected background wash: the
+   checked state lives entirely in the drawn ✓ marker at the row's left
+   (ToolCheckbox), so a glance reads only the check — never a color flood.
+   The row keeps its static border and plain var(--bg); hover still warms
+   the background via the :hover rule above for an obvious click target. */
+
+/* Active preset card (Off / Full / named presets above the custom list):
+   keeps a gentle accent wash so the single choice stands apart from the
+   multi-select rows below it. */
+.tool-picker__card[data-active="true"] {
+  background-color: color-mix(in srgb, var(--accent) 12%, var(--bg));
+}
+.tool-picker__card[data-active="true"]:hover {
+  background-color: color-mix(in srgb, var(--accent) 16%, var(--bg));
+}
+
+/* Small scale-in for the checkbox / radio check glyph when it appears. */
+@keyframes tool-picker-check-pop {
+  0%   { transform: scale(0.35); opacity: 0; }
+  55%  { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.tool-picker__check {
+  transform-origin: center;
+  animation: tool-picker-check-pop 0.18s ease-out;
+}

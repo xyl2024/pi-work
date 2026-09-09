@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  forwardRef,
   useCallback,
   useEffect,
   useMemo,
@@ -11,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { ToolCheckRow, ToolPresetCard } from "@/components/ui/ToolPicker";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import type { ToolSelection } from "@/lib/shared/types";
@@ -242,9 +242,9 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
 
             {/* Presets */}
             <div style={{ padding: "0 14px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 7 }}>
                 {presets.map((preset, index) => (
-                  <PresetCard
+                  <ToolPresetCard
                     key={preset.id}
                     ref={(el) => { itemRefs.current[index] = el; }}
                     label={preset.label}
@@ -266,18 +266,22 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
               {filteredRows.length === 0 ? (
                 <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{tools.length ? t("No matches") : t("No tools available")}</div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>
                   {filteredRows.map((row, index) => {
                     const itemIndex = presets.length + index;
                     const checked = isToolChecklistRowChecked(row, selectedSet, allNames);
-                    const label = (
-                      <label key={row.key} ref={(el) => { itemRefs.current[itemIndex] = el; }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: `1px solid ${activeIndex === itemIndex ? "var(--accent)" : "var(--border)"}`, borderRadius: 7, background: checked ? "var(--bg-selected)" : "var(--bg)", cursor: "pointer", fontSize: 12 }}>
-                        <input type="checkbox" checked={checked} onChange={(e) => toggleTool(row.name, e.target.checked)} style={{ accentColor: "var(--accent)" }} />
-                        <span style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.name}</span>
-                        {row.group && row.memberCount > 0 && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>×{row.memberCount}</span>}
-                      </label>
+                    const item = (
+                      <ToolCheckRow
+                        key={row.key}
+                        ref={(el) => { itemRefs.current[itemIndex] = el; }}
+                        name={row.name}
+                        checked={checked}
+                        focused={activeIndex === itemIndex}
+                        memberCount={row.group && row.memberCount > 0 ? row.memberCount : 0}
+                        onChange={(v) => toggleTool(row.name, v)}
+                      />
                     );
-                    return row.description ? <Tooltip key={row.key} content={row.description} side="top">{label}</Tooltip> : label;
+                    return row.description ? <Tooltip key={row.key} content={row.description} side="top">{item}</Tooltip> : item;
                   })}
                 </div>
               )}
@@ -298,15 +302,6 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
     portalEl,
   );
 }
-
-const PresetCard = forwardRef<HTMLButtonElement, { label: string; description: string; active: boolean; focused: boolean; onClick: () => void }>(function PresetCard({ label, description, active, focused, onClick }, ref) {
-  return (
-    <button ref={ref} type="button" onClick={onClick} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, minWidth: 0, minHeight: 58, padding: "8px 9px", textAlign: "left", background: active ? "var(--bg-selected)" : "var(--bg)", border: `1px solid ${focused || active ? "var(--accent)" : "var(--border)"}`, borderRadius: 8, color: active ? "var(--text)" : "var(--text-muted)", cursor: "pointer" }}>
-      <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: active ? 600 : 400 }}>{active ? "✓" : "○"} {label}</span>
-      <span style={{ width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontSize: 10 }}>{description}</span>
-    </button>
-  );
-});
 
 function InlineSpinner() {
   return <span aria-hidden="true" style={{ display: "inline-block", width: 12, height: 12, border: "1.5px solid color-mix(in srgb, var(--text-dim) 40%, transparent)", borderTopColor: "var(--text-muted)", borderRadius: "50%", animation: "spin 0.8s linear infinite", verticalAlign: "middle" }} />;
