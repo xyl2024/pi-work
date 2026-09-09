@@ -131,6 +131,18 @@ export const chat = {
   "This session has no branches (you can click `Start new branch` on any user message to start a new session branch)": "当前会话没有分支（可在任意用户消息处点击“开启新分支”开启新的会话分支）",
 
   // File explorer context menu
+  "New file": "新建文件",
+  "New folder": "新建文件夹",
+  "Upload": "上传",
+  "Upload files": "上传文件",
+  "Upload folder": "上传文件夹",
+  "File created": "文件已创建",
+  "Folder created": "文件夹已创建",
+  "Create failed": "创建失败",
+  "Uploaded {n} file(s)": "已上传 {n} 个文件",
+  "Uploaded {n} file(s), skipped {m} existing": "已上传 {n} 个文件，跳过 {m} 个已存在文件",
+  "All files already exist": "所有文件均已存在，未上传新文件",
+  "Failed to upload {n} file(s)": "{n} 个文件上传失败",
   "Delete file?": "删除文件？",
   "Delete folder?": "删除文件夹？",
   "Copy absolute path": "复制绝对路径",

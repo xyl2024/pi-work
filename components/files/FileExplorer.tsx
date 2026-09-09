@@ -11,6 +11,7 @@ import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { validateFileName } from "@/lib/shared/file-name";
 import { FileGitBadge, gitStatusColor } from "./FileGitBadge";
 import { useGitStatusStore, aggregateFolderStatuses, startTracking, stopTracking } from "@/lib/client/git-status-store";
+import { createEntry, type ExplorerCreateKind } from "@/lib/client/file-explorer-mutations";
 import type { GitDiffFile, GitFileStatus } from "@/lib/shared/git-diff-types";
 
 interface FileEntry {
@@ -43,6 +44,15 @@ interface Props {
    *  to disable its "collapse all" button while the tree is already fully
    *  folded (nothing left to collapse). */
   onExpandedCountChange?: (count: number) => void;
+  /** When set, shows an inline name input above the root list to create a
+   *  file/folder in `cwd`. The parent bumps `seq` for each new request so
+   *  repeated clicks on the same button re-trigger the input; passing
+   *  null hides it. */
+  createIntent?: { kind: ExplorerCreateKind; seq: number } | null;
+  /** Called when the inline create input finishes — `created` is true if
+   *  an entry was actually created. The parent should clear the intent
+   *  (and refresh the tree when created). */
+  onCreateFinished?: (created: boolean) => void;
 }
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
@@ -494,13 +504,57 @@ function TreeNode({
   );
 }
 
-export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted, collapseKey, onExpandedCountChange }: Props) {
+export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted, collapseKey, onExpandedCountChange, createIntent, onCreateFinished }: Props) {
   const { t } = useI18n();
+  const toast = useToast();
   const [roots, setRoots] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const prevCwdRef = useRef<string | null>(null);
+
+  // Inline "new file / new folder" state, driven by the header buttons in
+  // SessionSidebar via the `createIntent` prop. A fresh object identity
+  // (bumped seq) re-opens the input even for the same kind.
+  const [creating, setCreating] = useState<{ kind: ExplorerCreateKind; seq: number } | null>(null);
+  const [createName, setCreateName] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!createIntent) return;
+    setCreating(createIntent);
+    setCreateName("");
+    setCreateError(null);
+  }, [createIntent]);
+
+  const cancelCreate = useCallback(() => {
+    setCreating(null);
+    setCreateError(null);
+    onCreateFinished?.(false);
+  }, [onCreateFinished]);
+
+  const submitCreate = useCallback(async () => {
+    if (!creating) return;
+    const v = validateFileName(createName);
+    if (!v.ok) {
+      setCreateError(v.message);
+      return;
+    }
+    // Optimistic duplicate check against the loaded roots (backend is
+    // authoritative and returns 409 anyway).
+    if (roots.some((r) => r.name === v.name)) {
+      setCreateError(t("Name already exists"));
+      return;
+    }
+    const res = await createEntry(cwd, creating.kind, v.name);
+    if (!res.ok) {
+      setCreateError(res.error || t("Create failed"));
+      return;
+    }
+    toast.show({ kind: "success", message: creating.kind === "folder" ? t("Folder created") : t("File created") });
+    setCreating(null);
+    onCreateFinished?.(true);
+  }, [creating, createName, roots, cwd, t, toast, onCreateFinished]);
 
   // External "collapse all" trigger: a parent bumps `collapseKey` to ask us
   // to clear every expanded folder. We intentionally do NOT re-fetch — the
@@ -562,6 +616,9 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
     // Reset expanded state only when cwd changes, not on refreshKey bumps
     if (cwdChanged) {
       setExpandedPaths(new Set());
+      // A pending create input would now target the new cwd — drop it.
+      setCreating(null);
+      setCreateError(null);
     }
 
     setLoading(cwdChanged);
@@ -599,6 +656,51 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
   return (
     <div>
       <div style={{ padding: "2px 4px" }}>
+        {creating && (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 4, paddingLeft: 8, paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
+            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", height: 20 }}>
+              {creating.kind === "folder"
+                ? <FolderIcon size={14} name={createName} />
+                : getFileIcon(createName || "file", 14)}
+            </span>
+            <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+              <input
+                autoFocus
+                value={createName}
+                placeholder={t("Name")}
+                onChange={(e) => { setCreateName(e.target.value); setCreateError(null); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitCreate();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelCreate();
+                  }
+                }}
+                onBlur={() => {
+                  // Empty name → cancel; anything else → create (same
+                  // commit-on-blur behavior as most desktop explorers).
+                  if (createName.trim() === "") cancelCreate();
+                  else submitCreate();
+                }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  fontSize: 12,
+                  padding: "1px 4px",
+                  border: "1px solid " + (createError ? "#f87171" : "var(--accent)"),
+                  borderRadius: 3,
+                  background: "var(--bg)",
+                  color: "var(--text)",
+                  width: "100%",
+                }}
+              />
+              {createError && (
+                <span style={{ fontSize: 10, color: "#f87171", whiteSpace: "normal" }}>{createError}</span>
+              )}
+            </span>
+          </div>
+        )}
         {roots.map((node) => (
           <TreeNode
             key={node.fullPath}

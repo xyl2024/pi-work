@@ -4,4 +4,5 @@ export {
   handleFilePatch,
   handleFilePost,
   handleFilePut,
+  handleFileUpload,
 } from "./mutations";
