@@ -85,6 +85,9 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
   // Preserve pre-existing behavior: append file loads by default.
   append_system: { enabled: true },
+  // Preserve pre-existing behavior: pi's built-in Pi documentation section
+  // stays in new sessions' system prompts by default.
+  load_pi_docs: true,
   // Preserves pre-feature behavior: same hardcoded limits the route used
   // before the value became user-configurable.
   file_viewer: {
@@ -307,6 +310,7 @@ export function readConfig(): PiWorkConfig {
       dangerous_patterns: parseDangerousPatterns(cfg.dangerous_patterns),
       right_side_bar: parseRightSideBar(cfg.right_side_bar),
       append_system: parseAppendSystem(cfg.append_system),
+      load_pi_docs: typeof cfg.load_pi_docs === "boolean" ? cfg.load_pi_docs : true,
       file_viewer: parseFileViewer(cfg.file_viewer),
       ui_sounds: parseUiSounds(cfg.ui_sounds),
       cwd_icons: parseCwdIcons(cfg.cwd_icons),

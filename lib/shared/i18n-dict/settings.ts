@@ -32,6 +32,12 @@ export const settings = {
   "Append system prompt saved": "追加系统提示词已保存",
   "Failed to save append system prompt": "保存追加系统提示词失败",
 
+  // Pi documentation loader toggle (~/.pi-work/config.yaml → load_pi_docs)
+  "Pi documentation": "Pi 文档",
+  "Load Pi documentation": "加载 Pi 文档",
+  "Loaded — new sessions include pi's built-in Pi documentation hints. Takes effect on new sessions.": "已启用 — 新建会话会包含 pi 内置的 Pi 文档提示。仅对之后新建的会话生效。",
+  "Disabled — new sessions will not include pi's built-in Pi documentation hints. Takes effect on new sessions.": "已禁用 — 新建会话将不包含 pi 内置的 Pi 文档提示。仅对之后新建的会话生效。",
+
   // Right-side button bar visibility
   "Right-side buttons": "右侧按钮",
   "Choose which buttons appear in the right-side bar. Hidden buttons can still be opened from the command palette. Changes apply immediately.": "选择在右侧按钮栏显示的按钮。隐藏的按钮仍可通过命令面板打开，修改会立即生效。",

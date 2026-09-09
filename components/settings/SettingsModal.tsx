@@ -12,6 +12,7 @@ import { useImmediateApply } from "./use-immediate-apply";
 import { AppearanceSection } from "./sections/AppearanceSection";
 import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
+import { PiDocumentationSection } from "./sections/PiDocumentationSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
@@ -256,6 +257,9 @@ export function SettingsModal({
               apply={apply}
               onDirtyChange={setAppendSystemDirty}
             />
+
+            {/* 3: Pi documentation */}
+            <PiDocumentationSection config={config} apply={apply} />
 
             {/* 5: Right-side buttons */}
             <RightBarSection config={config} apply={apply} />

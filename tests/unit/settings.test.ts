@@ -51,6 +51,33 @@ describe("settings api", () => {
     expect(((after.body.ui_sounds ?? {}) as Json).enabled).toBe(nextValue);
   });
 
+  it("applies a reversible load_pi_docs toggle and restores", async () => {
+    const before = await api("/api/settings");
+    expect(before.status).toBe(200);
+    // Defaults to on so existing prompts keep pi's built-in Pi documentation.
+    expect((before.body as Json).load_pi_docs).toBe(true);
+
+    const put = await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ load_pi_docs: false }),
+    });
+    expect(put.status).toBe(200);
+    expect(put.body.success).toBe(true);
+
+    const off = await api("/api/settings");
+    expect(off.status).toBe(200);
+    expect((off.body as Json).load_pi_docs).toBe(false);
+
+    // Restore.
+    const back = await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ load_pi_docs: true }),
+    });
+    expect(back.status).toBe(200);
+    const on = await api("/api/settings");
+    expect((on.body as Json).load_pi_docs).toBe(true);
+  });
+
   it("rejects out-of-range file_viewer limits with 400", async () => {
     // text max is 100 MB — 101 must fail
     const bad = await api("/api/settings", {

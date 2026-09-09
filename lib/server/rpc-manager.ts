@@ -916,6 +916,24 @@ function stripDefaultSystemPromptSections(prompt: string): string {
 }
 
 /**
+ * Remove ONLY pi's built-in "Pi documentation" section from a generated
+ * system prompt, leaving everything else (append blocks, <project_context>,
+ * skills, working directory, …) untouched. Unlike the lookahead-based regex
+ * above, this anchors on the section's literal bullet lines, so it is safe
+ * even when user content (e.g. APPEND_SYSTEM.md) sits right after the docs
+ * block — it never over-consumes following sections.
+ *
+ * Backed by PiWorkConfig.load_pi_docs: when the toggle is off, new sessions
+ * start without the model being pointed at the pi SDK README / docs paths.
+ */
+const PI_DOCUMENTATION_SECTION_RE =
+  /\n\nPi documentation \(read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI\):\n- Main documentation: [^\n]+\n- Additional docs: [^\n]+\n- Examples: [^\n]+\n- When reading pi docs or examples, resolve docs\/\.\.\. under Additional docs and examples\/\.\.\. under Examples, not the current working directory\n- When asked about: [^\n]+\n- When working on pi topics, read the docs and examples, and follow \.md cross-references before implementing\n- Always read pi \.md files completely and follow links to related docs \(e\.g\., tui\.md for TUI API details\)/;
+
+function stripPiDocumentationSection(prompt: string): string {
+  return prompt.replace(PI_DOCUMENTATION_SECTION_RE, "").trimStart();
+}
+
+/**
  * Get or create an AgentSession for the given session.
  * For new sessions (sessionFile === ""), pi generates its own id.
  * Pass toolNames to pre-configure active tools (empty array = all tools disabled, "all" = every available tool).
@@ -1057,9 +1075,15 @@ export async function startRpcSession(
     // start — toggling at runtime only affects sessions started afterward.
     let appendSystemPromptLoaderOption: string[] | undefined;
     let disabledSkillPaths = new Set<string>();
+    // Whether pi's built-in "Pi documentation" section should be loaded into
+    // this session's system prompt (PiWorkConfig.load_pi_docs). When off we
+    // register a before_agent_start extension below that strips only that
+    // block. Read once per session start, like the append toggle above.
+    let loadPiDocs = true;
     try {
       const cfg = readConfig();
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
+      loadPiDocs = cfg.load_pi_docs;
       // Specialized subagents intentionally do not inherit APPEND_SYSTEM.md.
       if (options.systemPromptPrefix || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
@@ -1148,6 +1172,21 @@ export async function startRpcSession(
               });
             }]
           : []),
+        // PiWorkConfig.load_pi_docs toggle: when disabled, strip pi's built-in
+        // "Pi documentation" section from freshly-generated system prompts for
+        // normal (non-subagent) sessions. Prefix sessions are excluded — the
+        // subagent path already handles section removal itself.
+        ...(options.systemPromptPrefix || loadPiDocs
+          ? []
+          : [
+              (pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
+                pi.on("before_agent_start", (event) => {
+                  // Always return the (possibly unchanged) prompt — the regex
+                  // is a no-op pass-through when the block is already absent.
+                  return { systemPrompt: stripPiDocumentationSection(event.systemPrompt) };
+                });
+              },
+            ]),
         (pi) => {
           pi.on("tool_call", async (event) => {
             // CodeGraph index construction: mode=sync is lightweight and runs

@@ -34,6 +34,7 @@ export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-profile",       labelKey: "Profile" },
   { id: "settings-section-appearance",    labelKey: "Appearance" },
   { id: "settings-section-append-system", labelKey: "Append System Prompt" },
+  { id: "settings-section-pi-documentation", labelKey: "Pi documentation" },
   { id: "settings-section-right-bar",     labelKey: "Right-side buttons" },
   { id: "settings-section-inbox-test",    labelKey: "Inbox Test" },
   { id: "settings-section-toast-test",    labelKey: "Toast Test" },
