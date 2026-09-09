@@ -1122,10 +1122,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
   const chatInputElement = (
     <>
-      <AskUserQuestionsPanel
-        sessionId={currentSessionId}
-        onAppear={handleToBottom}
-      />
       <ChatInput
         ref={chatInputRef}
         onSend={handleSend}
@@ -1654,6 +1650,19 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 </>
               );
             })()}
+
+            {/* Ask User Questions form — lives in the message flow, right
+                below the streaming message view (the form can only appear
+                while a turn is in flight, so the viewport above is always
+                present when it shows). The negative horizontal margins cancel
+                this container's `px-4` so the panel's own 16px gutter keeps
+                its 820px surface flush with the message column. */}
+            <div style={{ margin: "0 -16px" }}>
+              <AskUserQuestionsPanel
+                sessionId={currentSessionId}
+                onAppear={handleToBottom}
+              />
+            </div>
 
             {!liveTurnActive && !streamingErrorAlreadyRendered && (
               <StreamingBubble

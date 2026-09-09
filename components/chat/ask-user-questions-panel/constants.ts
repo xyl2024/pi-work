@@ -2,7 +2,7 @@
  *  card with options + a small footer without dominating the chat. The
  *  tab bar at the top and the Submit/Cancel row at the bottom sit inside
  *  this height; only the question card scrolls. */
-export const PANEL_HEIGHT_PX = 280;
+export const PANEL_HEIGHT_PX = 350;
 
 /** Delay before auto-advancing to the next question after a single-select
  *  pick — long enough to register the choice, short enough to feel snappy. */
