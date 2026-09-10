@@ -62,6 +62,7 @@ export function Tooltip({ content, children, side, align, delayDuration = 500, o
               borderRadius: 6,
               fontSize: 12,
               lineHeight: 1.5,
+              whiteSpace: "pre-line",
               fontFamily: "var(--font-sans)",
               boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
               animation: "tooltip-in 200ms ease",

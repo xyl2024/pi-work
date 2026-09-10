@@ -85,7 +85,7 @@ export function ContextUsageBar({ contextUsage, sessionStats }: Props) {
   // cost omitted when 0) so existing muscle memory still works.
   const statsLines = sessionStats
     ? [
-        `${t("Input tokens")}: ${sessionStats.tokens.input.toLocaleString()}`,
+        `${t("Input tokens")}: ${sessionStats.tokens.input.toLocaleString()}（不包含缓存）`,
         `${t("Output tokens")}: ${sessionStats.tokens.output.toLocaleString()}`,
         `${t("Cache hit rate")}: ${((sessionStats.cachedHitRate ?? 0) * 100).toFixed(1)}%`,
         ...(sessionStats.cost !== undefined && sessionStats.cost > 0
