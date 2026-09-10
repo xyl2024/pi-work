@@ -1,5 +1,6 @@
 "use client";
 
+import { type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon, hasProviderIcon } from "@/components/ui/ProviderIcon";
 import { avatarPalette } from "../skills-config/SkillCard";
@@ -8,47 +9,141 @@ import { SectionTitle } from "./form-fields";
 import { getDisplayedThinkingLevels } from "./utils";
 import type { RuntimeModelInfo } from "./types";
 
-/**
- * One runtime model rendered as a card in `RuntimeModelList`, mirroring the
- * SkillsConfig `SkillCard` (round avatar + bold name + muted meta lines).
- *
- * Card anatomy:
- *   ┌──────────────────────────────────────────┐
- *   │ (A)  model-name                 [T]  [⌄] │
- *   │      provider / model-id                 │
- *   │  Context window · Max output · Reasoning │
- *   ├───────────── (click to expand) ──────────┤
- *   │ API / Input / Thinking levels / Cost ... │
- *   └──────────────────────────────────────────┘
- *
- * The provider's brand icon stands in for the skill's initial-letter avatar;
- * providers without a builtin icon fall back to a deterministic pastel
- * initial avatar (same palette as SkillCard).
- */
-export function ModelCard({
-  model,
-  expanded,
-  onToggle,
-}: {
-  model: RuntimeModelInfo;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const { t } = useI18n();
-  const levels = getDisplayedThinkingLevels(model);
-  const hasBrandIcon = hasProviderIcon(model.provider);
-  const palette = avatarPalette(model.provider);
+const TITLE_STYLE = {
+  flex: 1,
+  minWidth: 0,
+  fontSize: 14,
+  fontWeight: 600,
+  color: "var(--text)",
+  fontFamily: "var(--font-mono)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+} as const;
 
+const SUBTITLE_STYLE = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  color: "var(--text-dim)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+} as const;
+
+const SUMMARY_STYLE = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "4px 10px",
+  fontSize: 11.5,
+  color: "var(--text-muted)",
+} as const;
+
+/** Reasoning badge reused by both card variants. */
+export function ReasoningBadge() {
+  return (
+    <span
+      style={{
+        flexShrink: 0,
+        fontSize: 9,
+        padding: "1px 5px",
+        background: "rgba(99,102,241,0.12)",
+        color: "rgba(99,102,241,0.9)",
+        borderRadius: 3,
+        fontWeight: 600,
+      }}
+    >
+      T
+    </span>
+  );
+}
+
+/**
+ * Round avatar shared by the model cards. Renders the provider's brand icon
+ * when one is available, otherwise a deterministic pastel initial avatar
+ * (same palette as `SkillCard`). Mirrors the skill card so both card grids
+ * read as the same kind of object.
+ */
+export function ModelAvatar({ iconId, seed, size = 30 }: { iconId?: string; seed: string; size?: number }) {
+  const resolved = iconId && hasProviderIcon(iconId) ? iconId : undefined;
+  if (resolved) {
+    return (
+      <span
+        style={{
+          flexShrink: 0,
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "var(--bg-hover)",
+          color: "var(--text-muted)",
+        }}
+      >
+        <ProviderIcon id={resolved} size={Math.round(size * 0.6)} />
+      </span>
+    );
+  }
+  const palette = avatarPalette(seed);
+  return (
+    <span
+      style={{
+        flexShrink: 0,
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: palette.bg,
+        color: palette.fg,
+        fontSize: Math.round(size * 0.47),
+        fontWeight: 700,
+      }}
+    >
+      {(seed.trim()[0] ?? "?").toUpperCase()}
+    </span>
+  );
+}
+
+/**
+ * Shared card shell — the SkillCard visual (rounded border, hover lift,
+ * avatar + title header, muted meta lines) that both `ModelCard` (runtime
+ * catalog) and `ModelEntryCard` (custom models) build on.
+ */
+export function ModelCardShell({
+  iconId,
+  seed,
+  title,
+  subtitle,
+  badge,
+  summary,
+  trailing,
+  expanded,
+  onClick,
+  children,
+}: {
+  iconId?: string;
+  seed: string;
+  title: string;
+  subtitle?: string;
+  badge?: ReactNode;
+  summary?: ReactNode;
+  trailing?: ReactNode;
+  expanded?: boolean;
+  onClick: () => void;
+  children?: ReactNode;
+}) {
   return (
     <div
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
-      onClick={onToggle}
+      onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          onToggle();
+          onClick();
         }
       }}
       style={{
@@ -74,58 +169,69 @@ export function ModelCard({
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span
-          style={{
-            flexShrink: 0,
-            width: 30,
-            height: 30,
-            borderRadius: "50%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: hasBrandIcon ? "var(--bg-hover)" : palette.bg,
-            color: hasBrandIcon ? "var(--text-muted)" : palette.fg,
-            fontSize: 14,
-            fontWeight: 700,
-          }}
-        >
-          {hasBrandIcon ? (
-            <ProviderIcon id={model.provider} size={18} />
-          ) : (
-            (model.provider.trim()[0] ?? "?").toUpperCase()
-          )}
-        </span>
-        <TruncatedText
-          text={model.name || model.id}
-          side="bottom"
-          always
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 14,
-            fontWeight: 600,
-            color: "var(--text)",
-            fontFamily: "var(--font-mono)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        />
-        {model.reasoning && (
-          <span
-            style={{
-              flexShrink: 0,
-              fontSize: 9,
-              padding: "1px 5px",
-              background: "rgba(99,102,241,0.12)",
-              color: "rgba(99,102,241,0.9)",
-              borderRadius: 3,
-              fontWeight: 600,
-            }}
-          >
-            T
+        <ModelAvatar iconId={iconId} seed={seed} />
+        <TruncatedText text={title} side="bottom" always style={TITLE_STYLE} />
+        {badge}
+        {trailing}
+      </div>
+
+      {subtitle && <TruncatedText text={subtitle} side="bottom" style={SUBTITLE_STYLE} />}
+
+      {summary && <div style={SUMMARY_STYLE}>{summary}</div>}
+
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One runtime model rendered as a card in `RuntimeModelList`, mirroring the
+ * SkillsConfig `SkillCard` (round avatar + bold name + muted meta lines).
+ *
+ * Card anatomy:
+ *   ┌──────────────────────────────────────────┐
+ *   │ (A)  model-name                 [T]  [⌄] │
+ *   │      provider / model-id                 │
+ *   │  Context window · Max output · Reasoning │
+ *   ├───────────── (click to expand) ──────────┤
+ *   │ API / Input / Thinking levels / Cost ... │
+ *   └──────────────────────────────────────────┘
+ */
+export function ModelCard({
+  model,
+  expanded,
+  onToggle,
+}: {
+  model: RuntimeModelInfo;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useI18n();
+  const levels = getDisplayedThinkingLevels(model);
+
+  return (
+    <ModelCardShell
+      iconId={model.provider}
+      seed={model.provider}
+      title={model.name || model.id}
+      subtitle={`${model.provider} / ${model.id}`}
+      badge={model.reasoning ? <ReasoningBadge /> : undefined}
+      expanded={expanded}
+      onClick={onToggle}
+      summary={
+        <>
+          <span>
+            {t("Context window")}: <b style={{ color: "var(--text)", fontWeight: 600 }}>{model.contextWindow.toLocaleString()}</b>
           </span>
-        )}
+          <span>
+            {t("Max output")}: <b style={{ color: "var(--text)", fontWeight: 600 }}>{model.maxTokens.toLocaleString()}</b>
+          </span>
+          <span>
+            {t("Reasoning")}: <b style={{ color: "var(--text)", fontWeight: 600 }}>{model.reasoning ? t("Supported") : t("Not supported")}</b>
+          </span>
+        </>
+      }
+      trailing={
         <svg
           width="12"
           height="12"
@@ -144,33 +250,8 @@ export function ModelCard({
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>
-      </div>
-
-      <TruncatedText
-        text={`${model.provider} / ${model.id}`}
-        side="bottom"
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      />
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 10px", fontSize: 11.5, color: "var(--text-muted)" }}>
-        <span>
-          {t("Context window")}: <b style={{ color: "var(--text)", fontWeight: 600 }}>{model.contextWindow.toLocaleString()}</b>
-        </span>
-        <span>
-          {t("Max output")}: <b style={{ color: "var(--text)", fontWeight: 600 }}>{model.maxTokens.toLocaleString()}</b>
-        </span>
-        <span>
-          {t("Reasoning")}: <b style={{ color: "var(--text)", fontWeight: 600 }}>{model.reasoning ? t("Supported") : t("Not supported")}</b>
-        </span>
-      </div>
-
+      }
+    >
       {expanded && (
         <div
           onClick={(e) => e.stopPropagation()}
@@ -213,6 +294,6 @@ export function ModelCard({
           </details>
         </div>
       )}
-    </div>
+    </ModelCardShell>
   );
 }

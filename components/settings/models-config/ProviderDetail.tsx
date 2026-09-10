@@ -3,20 +3,23 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { API_OPTIONS } from "./constants";
+import { ModelEntryCard } from "./ModelEntryCard";
 import type { ProviderEntry } from "./types";
 import { Field, TextInput, SecretTextInput, Select, SectionTitle, IconField } from "./form-fields";
 
-export function ProviderDetail({ name, provider, onChange, onRename, onDelete }: {
+export function ProviderDetail({ name, provider, onChange, onRename, onDelete, onSelectModel }: {
   name: string;
   provider: ProviderEntry;
   onChange: (p: ProviderEntry) => void;
   onRename: (n: string) => void;
   onDelete: () => void;
+  onSelectModel: (index: number) => void;
 }) {
   const { t } = useI18n();
   const [editingName, setEditingName] = useState(name);
   useEffect(() => setEditingName(name), [name]);
   const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) => onChange({ ...provider, [k]: v });
+  const models = provider.models ?? [];
 
   useEffect(() => {
     if (!provider.api) onChange({ ...provider, api: "openai-completions" });
@@ -63,6 +66,27 @@ export function ProviderDetail({ name, provider, onChange, onRename, onDelete }:
       <Field label="API">
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
       </Field>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <SectionTitle>{t("Models")}</SectionTitle>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{models.length}</span>
+        </div>
+        {models.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No models")}</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12 }}>
+            {models.map((model, index) => (
+              <ModelEntryCard
+                key={index}
+                model={model}
+                providerIcon={provider.icon}
+                onOpen={() => onSelectModel(index)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

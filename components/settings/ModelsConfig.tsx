@@ -217,6 +217,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           onChange={(next) => updateProvider(selection.name, next)}
           onRename={(nextName) => renameProvider(selection.name, nextName)}
           onDelete={() => deleteProvider(selection.name)}
+          onSelectModel={(index) => setSelection({ type: "model", providerName: selection.name, index })}
         />
       );
     }

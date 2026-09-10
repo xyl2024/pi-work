@@ -59,6 +59,7 @@ export const models = {
   "Headers": "请求头",
   "Compatibility": "兼容性配置",
   "Raw metadata": "原始元数据",
+  "No metadata": "暂无元数据",
   "Edit as JSON": "以 JSON 编辑",
   "Apply raw JSON": "应用原始 JSON",
   "Copy raw JSON": "复制原始 JSON",
