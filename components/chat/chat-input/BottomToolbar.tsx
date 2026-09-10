@@ -263,6 +263,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
           <Tooltip
             content={modelMetaTooltip}
             interactive
+            maxWidth={420}
           >
           <span style={{ display: "inline-flex", alignItems: "center" }}>
           <button
