@@ -39,7 +39,7 @@ interface Props {
   modelNames?: Record<string, string>;
   /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
   modelIcons?: Record<string, string>;
-  modelList?: { id: string; name: string; provider: string }[];
+  modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[];
   onModelChange?: (provider: string, modelId: string) => void;
   /** The user's tool selection state. `[]` ≡ Off, `"all"` ≡ High, partial
    *  array ≡ Custom. Mutually consistent with the wire format of `set_tools`. */

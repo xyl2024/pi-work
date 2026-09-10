@@ -116,7 +116,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
-  const [modelList, setModelList] = useState<{ id: string; name: string; provider: string }[]>([]);
+  const [modelList, setModelList] = useState<{ id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[]>([]);
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [newSessionModel, setNewSessionModelState] = useState<{ provider: string; modelId: string } | null>(null);
@@ -851,7 +851,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   // Load model list
   useEffect(() => {
-    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: { id: string; name: string; provider: string }[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]>; thinkingLevelMaps?: Record<string, Record<string, string | null>>; modelIcons?: Record<string, string> }) => {
+    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]>; thinkingLevelMaps?: Record<string, Record<string, string | null>>; modelIcons?: Record<string, string> }) => {
       setModelNames(d.models);
       if (d.modelIcons) setModelIcons(d.modelIcons);
       if (d.thinkingLevels) setModelThinkingLevels(d.thinkingLevels);

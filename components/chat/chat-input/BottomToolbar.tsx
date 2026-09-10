@@ -33,7 +33,7 @@ export interface BottomToolbarProps {
   modelNames?: Record<string, string>;
   /** "<provider>:<modelId>" → provider id map from /api/models. */
   modelIcons?: Record<string, string>;
-  modelList?: { id: string; name: string; provider: string }[];
+  modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[];
   onModelChange?: (provider: string, modelId: string) => void;
   cwd?: string | null;
   onCwdChange?: (cwd: string) => void;
@@ -108,6 +108,49 @@ export function BottomToolbar(props: BottomToolbarProps) {
        ?? modelNames?.[model.modelId]
        ?? model.modelId)
     : null;
+
+  // Full metadata row for the current model, if the list carries it —
+  // surfaced in the trigger's hover tooltip (context window / max output).
+  const currentModelMeta = model
+    ? modelList?.find((m) => m.id === model.modelId && m.provider === model.provider)
+    : undefined;
+  const formatTokens = (n: number): string =>
+    n >= 1_000_000
+      ? `${(n / 1_000_000).toFixed(1)}M`
+      : n >= 1000
+        ? `${(n / 1000).toFixed(0)}k`
+        : String(n);
+  // Cost is quoted per million tokens — render if/when the catalog carries it.
+  const formatCost = (n: number): string => `$${n.toLocaleString(undefined, { maximumFractionDigits: 3 })}`;
+
+  // Tooltip metadata grid, mirroring the fields shown in the Models settings
+  // page (context window, max output, reasoning/thinking, image input, cost).
+  const modelMetaTooltip = !currentModelMeta ? currentModelName : (
+    <div style={{ display: "grid", gridTemplateColumns: "auto auto", gap: "2px 12px", whiteSpace: "nowrap" }}>
+      <span style={{ gridColumn: "1 / -1", fontWeight: 600, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis" }}>
+        {currentModelMeta.name}
+      </span>
+      <span style={{ color: "var(--text-dim)" }}>{t("Context window")}</span>
+      <span>{currentModelMeta.contextWindow ? `${formatTokens(currentModelMeta.contextWindow)} tokens` : "—"}</span>
+      <span style={{ color: "var(--text-dim)" }}>{t("Max output")}</span>
+      <span>{currentModelMeta.maxTokens ? `${formatTokens(currentModelMeta.maxTokens)} tokens` : "—"}</span>
+      <span style={{ color: "var(--text-dim)" }}>{t("Reasoning / thinking")}</span>
+      <span>{currentModelMeta.reasoning ? t("Yes") : t("No")}</span>
+      <span style={{ color: "var(--text-dim)" }}>{t("Image input")}</span>
+      <span>{currentModelMeta.input?.includes("image") ? t("Yes") : t("No")}</span>
+      {currentModelMeta.cost?.input != null && (
+        <>
+          <span style={{ color: "var(--text-dim)" }}>{t("Cost (per million tokens)")}</span>
+          <span>
+            {t("Input")} {formatCost(currentModelMeta.cost.input)} · {t("Output")} {formatCost(currentModelMeta.cost.output ?? 0)}
+          </span>
+        </>
+      )}
+      <span style={{ gridColumn: "1 / -1", marginTop: 2, fontFamily: "var(--font-mono)", color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {currentModelMeta.provider} · {currentModelMeta.id}
+      </span>
+    </div>
+  );
 
   // Current thinking level's display label for the streaming badge —
   // the same mapped value the picker button shows.
@@ -212,8 +255,16 @@ export function BottomToolbar(props: BottomToolbarProps) {
         )}
         {/* Model selector — visible always, disabled during streaming.
             Opens the `/model` picker modal (grid + keyboard navigation)
-            instead of an inline dropdown. Hidden when no models exist. */}
+            instead of an inline dropdown. Hidden when no models exist.
+            Hovering shows the current model's metadata (context window,
+            max output) from /api/models. The trigger is wrapped in a span
+            so the tooltip still fires while the button is disabled. */}
         {!modelOptionsEmpty && (
+          <Tooltip
+            content={modelMetaTooltip}
+            interactive
+          >
+          <span style={{ display: "inline-flex", alignItems: "center" }}>
           <button
             type="button"
             onClick={() => setModelPickerOpen(true)}
@@ -250,6 +301,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
             />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentModelName}</span>
           </button>
+          </span>
+          </Tooltip>
         )}
         <ModelPickerModal
           open={modelPickerOpen}
