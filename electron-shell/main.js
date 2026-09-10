@@ -181,6 +181,19 @@ function createTray() {
         }
       },
     },
+    {
+      // 重新加载 iframe 指向的 Pi Web 页面。iframe-retry 会让 titlebar 把
+      // iframe.src 重置回 PI_URL，即使当前显示的是错误页也能恢复。
+      label: "重新加载",
+      click: () => {
+        if (win) {
+          win.show();
+          win.focus();
+          console.log("[Pi Shell] Tray reload...");
+          win.webContents.send("iframe-retry");
+        }
+      },
+    },
     { type: "separator" },
     {
       label: "退出",
