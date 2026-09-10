@@ -9,6 +9,7 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { sourceLabel, shortenPath, FILE_GROUP_LABELS } from "./utils";
 import type { Skill, SkillDetailData, SkillDetailFile } from "./types";
 import { SubFileRow } from "./SubFileRow";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 
 /**
  * Right-pane detail view for one skill. Owns:
@@ -166,46 +167,31 @@ export function SkillDetail({
         >
           {displayPath(skill.filePath)}
         </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!skill.disableModelInvocation}
-          title={
-            frontmatterLocked
-              ? t("Locked by SKILL.md frontmatter (disable-model-invocation)")
-              : skill.disableModelInvocation ? t("Enable") : t("Disable")
-          }
-          disabled={toggleLoading || frontmatterLocked}
-          onClick={async () => {
-            if (frontmatterLocked) return;
-            setToggleLoading(true);
-            setDetailError(null);
-            try {
-              await onToggleInvocation(!skill.disableModelInvocation);
-            } catch (error) {
-              setDetailError(String(error));
-            } finally {
-              setToggleLoading(false);
-            }
-          }}
-          style={{
-            border: "1px solid var(--border)",
-            borderRadius: 999,
-            padding: "3px 8px",
-            background: skill.disableModelInvocation ? "var(--bg)" : "var(--accent)",
-            color: skill.disableModelInvocation ? "var(--text-muted)" : "white",
-            cursor: toggleLoading || frontmatterLocked ? "wait" : "pointer",
-            opacity: toggleLoading || frontmatterLocked ? 0.6 : 1,
-            fontSize: 11,
-            flexShrink: 0,
-          }}
-        >
-          {toggleLoading
-            ? t("Loading...")
-            : frontmatterLocked
-              ? t("Locked")
-              : skill.disableModelInvocation ? t("Off") : t("On")}
-        </button>
+        <span title={
+          frontmatterLocked
+            ? t("Locked by SKILL.md frontmatter (disable-model-invocation)")
+            : skill.disableModelInvocation ? t("Enable") : t("Disable")
+        }>
+          <ToggleSwitch
+            on={!skill.disableModelInvocation}
+            disabled={toggleLoading || frontmatterLocked}
+            onChange={(next) => {
+              void (async () => {
+                if (frontmatterLocked) return;
+                setToggleLoading(true);
+                setDetailError(null);
+                try {
+                  await onToggleInvocation(!next);
+                } catch (error) {
+                  setDetailError(String(error));
+                } finally {
+                  setToggleLoading(false);
+                }
+              })();
+            }}
+            label={skill.disableModelInvocation ? t("Enable") : t("Disable")}
+          />
+        </span>
       </div>
 
       {frontmatterLocked && (

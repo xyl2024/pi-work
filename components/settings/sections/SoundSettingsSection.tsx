@@ -2,6 +2,7 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { SettingsSection } from "../SettingsSection";
 import { SOUND_IDS, playNamedSound } from "@/lib/client/ui-sounds";
 import { DEFAULT_UI_SOUND_EVENTS } from "@/lib/shared/ui-sounds-defaults";
@@ -107,24 +108,11 @@ export function SoundSettingsSection({
           <span style={{ fontSize: 13, color: "var(--text)" }}>
             {t("Sounds enabled")}
           </span>
-          <button
-            onClick={() => updateSounds({ enabled: !sounds.enabled })}
-            aria-label={t("UI Sounds")}
-            style={{
-              width: 40, height: 22, borderRadius: 11,
-              background: sounds.enabled ? "var(--accent)" : "var(--bg-hover)",
-              border: "none", cursor: "pointer", position: "relative",
-              transition: "background 0.2s",
-            }}
-          >
-            <span style={{
-              position: "absolute", top: 2,
-              left: sounds.enabled ? 20 : 2,
-              width: 18, height: 18, borderRadius: 9,
-              background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-              transition: "left 0.2s",
-            }} />
-          </button>
+          <ToggleSwitch
+            on={sounds.enabled}
+            onChange={(next) => updateSounds({ enabled: next })}
+            label={t("UI Sounds")}
+          />
         </div>
 
         {/* Master volume */}

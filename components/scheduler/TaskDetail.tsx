@@ -23,7 +23,7 @@ import { TaskOverviewTab } from "./TaskOverviewTab";
 import { TaskRunsTab, type RunFilter } from "./TaskRunsTab";
 import { TaskPromptTab } from "./TaskPromptTab";
 import { TaskConfigTab } from "./TaskConfigTab";
-import { TogglePill } from "@/components/ui/TogglePill";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { apiFetch, isOnceDone } from "./utils";
 import { tabBarStyle, tabItemStyle } from "./styles";
 import type { DetailTab, ScheduledTask, TaskRun } from "./types";
@@ -154,7 +154,7 @@ export function TaskDetail({
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <TogglePill
+          <ToggleSwitch
             on={task.enabled}
             onChange={(next) => void handleToggle(next)}
             size="sm"

@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { SettingsSection } from "../SettingsSection";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
@@ -124,28 +125,16 @@ export function AppendSystemSection({
         <span style={{ fontSize: 13, color: "var(--text)" }}>
           {config.append_system.enabled ? t("Loading on") : t("Loading off")}
         </span>
-        <button
-          onClick={() => {
+        <ToggleSwitch
+          on={config.append_system.enabled}
+          onChange={(next) => {
             void apply((prev) => ({
               ...prev,
-              append_system: { enabled: !prev.append_system.enabled },
+              append_system: { enabled: next },
             }));
           }}
-          style={{
-            width: 40, height: 22, borderRadius: 11,
-            background: config.append_system.enabled ? "var(--accent)" : "var(--bg-hover)",
-            border: "none", cursor: "pointer", position: "relative",
-            transition: "background 0.2s",
-          }}
-        >
-          <span style={{
-            position: "absolute", top: 2,
-            left: config.append_system.enabled ? 20 : 2,
-            width: 18, height: 18, borderRadius: 9,
-            background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-            transition: "left 0.2s",
-          }} />
-        </button>
+          label={t("Loading on")}
+        />
       </div>
       <div style={{
         fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)",
