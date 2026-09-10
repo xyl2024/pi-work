@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useSessionUiState, useSessionLeafChange, useSystemPromptRefresh } from "@/hooks/sessionUiStore";
 import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
 import { SessionSidebar } from "../sessions/SessionSidebar";
+import { SidebarFlipContainer } from "../sessions/SidebarFlipContainer";
+import { SidebarBackPanel } from "../sessions/SidebarBackPanel";
 import { ChatWindow } from "../chat/ChatWindow";
 import { TextSelectionToolbar } from "../chat/text-selection-toolbar";
 import { TranslateBubble } from "../chat/translate-bubble";
@@ -524,6 +526,10 @@ export function AppShell() {
   const [inboxOpen, setInboxOpen] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Whole-sidebar flip card: false = front (Pi Bot / Sessions / Explorer),
+  // true = the reserved back area. Owned here so the flip buttons rendered by
+  // both faces can drive it.
+  const [sidebarFlipped, setSidebarFlipped] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const chatInputRefs = useRef<Map<string, RefObject<ChatInputHandle | null>>>(new Map());
   // Text-selection toolbar scoped to the right side panel card (files /
@@ -1879,7 +1885,12 @@ export function AppShell() {
       onOpenInbox={() => setInboxOpen(true)}
       inboxUnread={inboxUnread}
       profileRefreshKey={profileRefreshKey}
+      onFlip={() => setSidebarFlipped(true)}
     />
+  );
+
+  const sidebarBackContent = (
+    <SidebarBackPanel onFlip={() => setSidebarFlipped(false)} />
   );
 
   return (
@@ -1917,7 +1928,11 @@ export function AppShell() {
           minWidth: sidebarOpen ? leftWidth : 0,
         }}
       >
-        {sidebarContent}
+          <SidebarFlipContainer
+            front={sidebarContent}
+            back={sidebarBackContent}
+            flipped={sidebarFlipped}
+          />
       </div>
 
       {/* Drag handle removed — sidebar width is fixed. */}

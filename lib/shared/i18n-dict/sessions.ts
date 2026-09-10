@@ -15,6 +15,12 @@ export const sessions = {
   "Loading sessions...": "正在加载会话...",
   "End of results": "已加载全部会话",
 
+  // Sidebar flip card
+  "Show front": "显示正面",
+  "Show back": "显示背面",
+  "More": "更多",
+  "Additional sidebar content will live here": "侧边栏的更多内容将放在这里",
+
   // Favorites
   "Favorite session": "收藏会话",
   "Unfavorite session": "取消收藏",
