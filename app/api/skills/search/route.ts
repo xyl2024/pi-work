@@ -2,20 +2,27 @@ import { NextResponse } from "next/server";
 import { runNpx } from "@/lib/server/npx";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { sanitizeChildEnv } from "@/lib/server/env-sanitize";
+import { fetchSkillDescriptions } from "@/lib/server/skills-describe";
 
 export const dynamic = "force-dynamic";
 
 const ANSI_RE = /\x1B\[[0-9;]*m/g;
-const DEFAULT_LIMIT = 50;
-const MIN_LIMIT = 1;
 const MAX_LIMIT = 50;
+const DEFAULT_PAGE_SIZE = 6;
+const MAX_PAGE_SIZE = 50;
 const SEARCH_API_BASE = process.env.SKILLS_API_URL || "https://skills.sh";
+const QUERY_CACHE_TTL_MS = 5 * 60 * 1000;
 const log = createLogger("api/skills/search");
 
 export interface SkillSearchResult {
   package: string;
   installs: string;
   url: string;
+  /** skills.sh page path (`owner/repo/skill`), used to resolve the description. */
+  slug: string;
+  /** Full SKILL.md description, resolved server-side with the search so the
+   *  panel never has to fetch it lazily. Empty when unavailable. */
+  description: string;
 }
 
 interface SkillsApiSkill {
@@ -29,10 +36,24 @@ interface SkillsApiResponse {
   skills?: SkillsApiSkill[];
 }
 
-function parseLimit(value: unknown): number {
+interface CachedQuery {
+  /** Enriched result set for the query, truncated to the requested limit. */
+  results: SkillSearchResult[];
+  expires: number;
+}
+
+const queryCache = new Map<string, CachedQuery>();
+
+function parsePageSize(value: unknown): number {
   const num = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(num)) return DEFAULT_LIMIT;
-  return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, Math.floor(num)));
+  if (!Number.isFinite(num)) return DEFAULT_PAGE_SIZE;
+  return Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(num)));
+}
+
+function parsePage(value: unknown): number {
+  const num = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(num)) return 1;
+  return Math.max(1, Math.floor(num));
 }
 
 function formatInstalls(count?: number): string {
@@ -52,10 +73,13 @@ function parseSearchOutput(raw: string): SkillSearchResult[] {
     const pkgMatch = line.match(/^([\w.\-]+\/[\w.\-@:]+)\s+([\d.,]+[KMB]?\s+installs)$/);
     if (pkgMatch) {
       const urlLine = lines[i + 1]?.trim().replace(/^└\s*/, "");
+      const url = urlLine?.startsWith("https://") ? urlLine : "";
       results.push({
         package: pkgMatch[1],
         installs: pkgMatch[2],
-        url: urlLine?.startsWith("https://") ? urlLine : "",
+        url,
+        slug: url ? url.replace(/^https?:\/\/[^/]+\//, "") : "",
+        description: "",
       });
     }
   }
@@ -80,6 +104,8 @@ async function searchSkillsApi(query: string, limit: number): Promise<SkillSearc
         package: pkg,
         installs: formatInstalls(skill.installs),
         url: slug ? `${SEARCH_API_BASE}/${slug}` : "",
+        slug: slug ?? "",
+        description: "",
       };
     })
     .filter((skill): skill is SkillSearchResult => skill !== null)
@@ -95,56 +121,100 @@ function parseInstallCount(installs: string): number {
   return value * multiplier;
 }
 
-// POST /api/skills/search  body: { query: string, limit?: number }
+/** Upstream skills.sh ignores offset/page/skip, so "load more" is implemented
+ *  by asking for a larger `limit` each time (`pageSize * page`) and slicing the
+ *  tail — deterministic because the ranking is stable. Descriptions are
+ *  resolved for the whole truncated set and the result is cached per
+ *  (source, query, limit) so re-scrolling within a session is free. */
+async function getResults(query: string, limit: number, source: "api" | "npx"): Promise<SkillSearchResult[]> {
+  const cacheKey = `${source}::${query}::${limit}`;
+  const cached = queryCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) return cached.results;
+
+  const base =
+    source === "api"
+      ? await searchSkillsApi(query, limit)
+      : await (async () => {
+          const { stdout, stderr } = await runNpx(["skills", "find", query], {
+            timeout: 20000,
+            env: { ...sanitizeChildEnv(process.env), FORCE_COLOR: "0" },
+          });
+          return parseSearchOutput(stdout + stderr).slice(0, limit);
+        })();
+
+  const descriptions = await fetchSkillDescriptions(base.map((r) => r.slug).filter(Boolean));
+  const results = base.map((r) => ({
+    ...r,
+    description: r.slug ? descriptions[r.slug] ?? "" : "",
+  }));
+
+  queryCache.set(cacheKey, { results, expires: Date.now() + QUERY_CACHE_TTL_MS });
+  return results;
+}
+
+// POST /api/skills/search  body: { query: string, page?: number, pageSize?: number }
+// Returns one page of the result set:
+//   { results, page, pageSize, hasMore }
 export async function POST(req: Request) {
   const startedAt = Date.now();
   try {
-    const { query, limit: rawLimit } = await req.json() as { query?: string; limit?: unknown };
+    const { query, page: rawPage, pageSize: rawPageSize } = await req.json() as {
+      query?: string;
+      page?: unknown;
+      pageSize?: unknown;
+    };
     if (!query?.trim()) {
       log.warn("skill search rejected", { reason: "missing query", durationMs: elapsedMs(startedAt) });
       return NextResponse.json({ error: "query required" }, { status: 400 });
     }
-    const limit = parseLimit(rawLimit);
+    const pageSize = parsePageSize(rawPageSize);
+    const page = parsePage(rawPage);
     const trimmedQuery = query.trim();
-    log.info("skill search requested", { query: trimmedQuery, limit });
+    // Each page asks upstream for one more page worth of results.
+    const upstreamLimit = Math.min(MAX_LIMIT, page * pageSize);
+
+    const respond = (all: SkillSearchResult[], source: "api" | "npx") => {
+      const start = (page - 1) * pageSize;
+      const results = all.slice(start, start + pageSize);
+      // `all.length === upstreamLimit` means upstream filled the request, so
+      // there may be more; a short response means the well is dry.
+      const hasMore = all.length >= upstreamLimit && results.length > 0;
+      log.info("skill search completed", {
+        query: trimmedQuery,
+        page,
+        pageSize,
+        upstreamLimit,
+        fetched: all.length,
+        returned: results.length,
+        hasMore,
+        source,
+        durationMs: elapsedMs(startedAt),
+      });
+      return NextResponse.json({ results, page, pageSize, hasMore });
+    };
+
+    log.info("skill search requested", { query: trimmedQuery, page, pageSize, upstreamLimit });
 
     try {
-      const results = await searchSkillsApi(trimmedQuery, limit);
-      log.info("skill search completed", {
-        query: trimmedQuery,
-        limit,
-        resultCount: results.length,
-        source: "api",
-        durationMs: elapsedMs(startedAt),
-      });
-      return NextResponse.json({ results });
+      const all = await getResults(trimmedQuery, upstreamLimit, "api");
+      return respond(all, "api");
     } catch (error) {
       log.warn("skill search api failed; falling back to npx", { query: trimmedQuery, error });
-      const { stdout, stderr } = await runNpx(["skills", "find", trimmedQuery], {
-        timeout: 20000,
-        env: { ...sanitizeChildEnv(process.env), FORCE_COLOR: "0" },
-      });
-
-      const results = parseSearchOutput(stdout + stderr).slice(0, limit);
-      log.info("skill search completed", {
-        query: trimmedQuery,
-        limit,
-        resultCount: results.length,
-        source: "npx",
-        durationMs: elapsedMs(startedAt),
-      });
-      return NextResponse.json({ results });
+      const all = await getResults(trimmedQuery, upstreamLimit, "npx");
+      return respond(all, "npx");
     }
   } catch (e: unknown) {
     const err = e as { stdout?: string; stderr?: string; message?: string };
     const raw = (err.stdout ?? "") + (err.stderr ?? "");
-    const results = raw ? parseSearchOutput(raw) : [];
-    if (results.length > 0) {
+    const recovered = raw ? parseSearchOutput(raw) : [];
+    if (recovered.length > 0) {
       log.warn("skill search recovered results from failed command", {
-        resultCount: results.length,
+        resultCount: recovered.length,
         durationMs: elapsedMs(startedAt),
       });
-      return NextResponse.json({ results });
+      const withDescriptions = await fetchSkillDescriptions(recovered.map((r) => r.slug).filter(Boolean));
+      const all = recovered.map((r) => ({ ...r, description: r.slug ? withDescriptions[r.slug] ?? "" : "" }));
+      return NextResponse.json({ results: all, page: 1, pageSize: all.length, hasMore: false });
     }
     log.error("skill search failed", { error: err.message ?? String(e), durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ error: err.message ?? String(e) }, { status: 500 });

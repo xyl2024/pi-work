@@ -7,6 +7,7 @@ import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
 import { SessionSidebar } from "../sessions/SessionSidebar";
 import { ChatWindow } from "../chat/ChatWindow";
 import { TextSelectionToolbar } from "../chat/text-selection-toolbar";
+import { TranslateBubble } from "../chat/translate-bubble";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { SessionTabBar } from "../sessions/SessionTabBar";
 import { FileViewer } from "../files/FileViewer";
@@ -2172,6 +2173,10 @@ export function AppShell() {
       onQuote={handleRightPanelQuote}
       onHide={rightPanelSelection.hide}
     />
+    {/* Single global translate bubble — mounted here (not inside ChatWindow)
+        so it also works over fullscreen modals such as SkillsConfig. It is
+        position:fixed + z-index 8000, above the modal backdrop (1000). */}
+    <TranslateBubble />
     </>
   );
 }

@@ -36,17 +36,27 @@ const Icon = {
   ),
 };
 
+/** Toolbar actions. `translate` renders the to-zh / to-en pair, `quote`
+ *  the blockquote button, `copy` the copy button. */
+export type TextSelectionAction = "translate" | "quote" | "copy";
+
+const DEFAULT_ACTIONS: TextSelectionAction[] = ["translate", "quote", "copy"];
+
 interface Props {
   state: TextSelectionState;
   /** Called with the selected text when the user clicks Quote. The
    *  parent is responsible for inserting it into the chat input as a
-   *  markdown blockquote. */
-  onQuote: (text: string) => void;
+   *  markdown blockquote. Required only when `actions` includes `quote`. */
+  onQuote?: (text: string) => void;
   /** Dismiss the toolbar after an action completes. The toolbar calls
    *  this on every button press so a successful Quote / Copy /
    *  Translate gesture doesn't leave the toolbar hovering over the
    *  chat after the user's intent is already fulfilled. */
   onHide: () => void;
+  /** Which actions to render. Defaults to all of them — non-chat hosts
+   *  (e.g. the skills detail page) pass `["translate", "copy"]` to drop
+   *  the chat-specific Quote button. */
+  actions?: TextSelectionAction[];
 }
 
 /**
@@ -64,7 +74,7 @@ interface Props {
  * instance (mounted at the chat root) renders the floating
  * popover. This keeps the toolbar a pure intent-publisher.
  */
-export function TextSelectionToolbar({ state, onQuote, onHide }: Props) {
+export function TextSelectionToolbar({ state, onQuote, onHide, actions = DEFAULT_ACTIONS }: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const ref = useRef<HTMLDivElement | null>(null);
@@ -133,7 +143,7 @@ export function TextSelectionToolbar({ state, onQuote, onHide }: Props) {
   }, [state.text, state.rect, onHide]);
 
   const handleQuote = useCallback(() => {
-    if (!state.text) return;
+    if (!state.text || !onQuote) return;
     onQuote(state.text);
     onHide();
   }, [state.text, onQuote, onHide]);
@@ -141,12 +151,27 @@ export function TextSelectionToolbar({ state, onQuote, onHide }: Props) {
   // Memo the button list so the same JSX isn't re-created on every
   // render — the buttons themselves are stable across selections
   // apart from their onClick targets.
-  const buttons = useMemo(() => [
-    { key: "to-zh", label: t("toChinese"), icon: Icon.Translate, onClick: () => openBubble("zh") },
-    { key: "to-en", label: t("toEnglish"), icon: Icon.Translate, onClick: () => openBubble("en") },
-    { key: "quote", label: t("Quote"), icon: Icon.Quote, onClick: handleQuote },
-    { key: "copy", label: copied ? t("Copied") : t("Copy"), icon: Icon.Copy, onClick: handleCopy },
-  ], [t, openBubble, handleQuote, handleCopy, copied]);
+  const buttons = useMemo(() => {
+    const list: {
+      key: string;
+      label: string;
+      icon: React.ReactNode;
+      onClick: () => void;
+    }[] = [];
+    if (actions.includes("translate")) {
+      list.push(
+        { key: "to-zh", label: t("toChinese"), icon: Icon.Translate, onClick: () => openBubble("zh") },
+        { key: "to-en", label: t("toEnglish"), icon: Icon.Translate, onClick: () => openBubble("en") },
+      );
+    }
+    if (actions.includes("quote") && onQuote) {
+      list.push({ key: "quote", label: t("Quote"), icon: Icon.Quote, onClick: handleQuote });
+    }
+    if (actions.includes("copy")) {
+      list.push({ key: "copy", label: copied ? t("Copied") : t("Copy"), icon: Icon.Copy, onClick: handleCopy });
+    }
+    return list;
+  }, [actions, t, openBubble, onQuote, handleQuote, handleCopy, copied]);
 
   if (!state.visible) return null;
 

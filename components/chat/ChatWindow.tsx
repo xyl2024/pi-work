@@ -50,7 +50,6 @@ import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 import { NewSessionNotifyPicker } from "./chat-window/NewSessionNotifyPicker";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
-import { TranslateBubble } from "./translate-bubble";
 
 interface Props {
   /** Stable owner token for active-session imperative bridges. */
@@ -1190,7 +1189,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         onQuote={handleQuoteSelection}
         onHide={selection.hide}
       />
-      <TranslateBubble />
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[rgba(37,99,235,0.06)] backdrop-blur-[1px]">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

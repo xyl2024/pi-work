@@ -58,6 +58,14 @@ export function sourceLabel(skill: Skill): string {
   return "path";
 }
 
+/** Strip a leading YAML frontmatter block (`--- ... ---`) from a markdown
+ *  document — the skill's name/description frontmatter is surfaced separately
+ *  in the detail page's Metadata section, so the rendered body stays clean. */
+export function stripFrontmatter(md: string): string {
+  const match = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/.exec(md);
+  return match ? md.slice(match[0].length) : md;
+}
+
 // ── File section grouping labels ──
 
 export const FILE_GROUP_LABELS: Record<string, string> = {

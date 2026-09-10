@@ -91,24 +91,39 @@ export function SubFileRow({
           fontFamily: "var(--font-mono)",
           color: "var(--text)",
         }}
-        onMouseEnter={(e) => {
-          if (file.isText)
-            e.currentTarget.style.background = "var(--bg-hover)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "none";
-        }}
       >
-        {/* Expand/collapse arrow */}
-        {file.isText && (
-          <span
-            style={{
-              flexShrink: 0,
-              width: 12,
-              color: "var(--text-dim)",
-            }}
-          />
-        )}
+        {/* Expand/collapse chevron — points down when expanded, right when
+            collapsed (rotates -90deg); matches the sidebar cwd fold arrow.
+            Kept as a hidden placeholder for non-previewable files so names
+            stay aligned. */}
+        <span
+          aria-hidden
+          style={{
+            flexShrink: 0,
+            width: 12,
+            height: 16,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--text-dim)",
+            transition: "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+            transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
+            visibility: file.isText ? undefined : "hidden",
+          }}
+        >
+          <svg
+            width="9"
+            height="9"
+            viewBox="0 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="2 4 5 7 8 4" />
+          </svg>
+        </span>
         <span style={{ flexShrink: 0 }} />
         <span
           style={{
@@ -153,7 +168,6 @@ export function SubFileRow({
                 margin: 0,
                 padding: 10,
                 borderRadius: 4,
-                border: "1px solid var(--border)",
                 background: "var(--bg)",
                 fontSize: 11,
                 lineHeight: 1.5,
