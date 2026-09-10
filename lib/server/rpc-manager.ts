@@ -39,6 +39,7 @@ import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYST
 import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
+import { matchSelfKillCommand } from "./self-protection";
 import { createPiWorkBashTool } from "./pi-bash-tool";
 import { notify } from "./notifications";
 import { readSessionNotify } from "./session-notify";
@@ -1212,6 +1213,17 @@ export async function startRpcSession(
 
             if (!isToolCallEventType("bash", event)) return;
             const command = event.input.command;
+            // Self-protection (hard, code-level): commands that would kill
+            // this very server are blocked unconditionally — no permission
+            // prompt, no per-session allowance, not user-configurable.
+            const selfKill = matchSelfKillCommand(command);
+            if (selfKill) {
+              log.warn("self-protection blocked bash command", { command, reason: selfKill.reason });
+              return {
+                block: true,
+                reason: "The bash command was blocked. Don't try it again and tell the user what you want to do.",
+              };
+            }
             const match = matchDangerousPattern(command);
             if (!match) return;
             const w = wrapperRef.current;
