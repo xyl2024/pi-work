@@ -269,11 +269,15 @@ export function getAuditModelRuntime(runtime: ModelRuntime): ModelRuntime {
   return globalThis.__piLlmAuditModelRuntime;
 }
 
-/** Reload models.json in the shared runtime after an in-process config write. */
-export async function refreshAuditModelRuntime(): Promise<boolean> {
+/**
+ * Reload models.json (and the persisted model catalog) in the shared runtime
+ * after an in-process config write or a catalog refresh. When `providers` is
+ * given, only those providers are recomposed and re-read from the store.
+ */
+export async function refreshAuditModelRuntime(options: { providers?: string[] } = {}): Promise<boolean> {
   const runtime = globalThis.__piLlmAuditModelRuntime;
   if (!runtime) return false;
-  await runtime.refresh({ allowNetwork: false });
+  await runtime.refresh({ allowNetwork: false, providers: options.providers });
   collectProviderHosts(runtime);
   return true;
 }

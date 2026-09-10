@@ -1,6 +1,7 @@
 import { ModelRuntime, SettingsManager, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { refreshAuditModelRuntime } from "@/lib/server/llm-audit";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -99,7 +100,10 @@ async function readModelIcons(): Promise<Record<string, string>> {
 
 export async function GET(req: Request) {
   const startedAt = Date.now();
-  const refreshCatalog = new URL(req.url).searchParams.get("refresh") === "true";
+  const params = new URL(req.url).searchParams;
+  const refreshCatalog = params.get("refresh") === "true";
+  // Optional provider scope for a per-provider "refresh models" action.
+  const refreshProvider = params.get("provider")?.trim() || undefined;
   const nameMap = new Map<string, string>();
   let modelList: RuntimeModelInfo[] = [];
   let catalog: {
@@ -123,7 +127,20 @@ export async function GET(req: Request) {
     const agentDir = getAgentDir();
     const runtime = await ModelRuntime.create();
     if (refreshCatalog) {
-      await runtime.refresh({ allowNetwork: true, force: true });
+      await runtime.refresh({
+        allowNetwork: true,
+        force: true,
+        ...(refreshProvider ? { providers: [refreshProvider] } : {}),
+      });
+      // The refresh above persisted the catalog into ~/.pi/agent/models-store.json.
+      // Mirror it into the process-wide session runtime so a freshly fetched model
+      // becomes selectable without restarting the server. Best-effort: a sync
+      // failure must not discard the freshly fetched catalog from this response.
+      try {
+        await refreshAuditModelRuntime(refreshProvider ? { providers: [refreshProvider] } : {});
+      } catch (error) {
+        log.warn("shared model runtime sync failed", { error, refreshProvider });
+      }
     }
     const available = await runtime.getAvailable();
     modelList = available.map(serializeModel);
@@ -171,6 +188,7 @@ export async function GET(req: Request) {
       defaultProvider: defaultModel?.provider,
       defaultModelId: defaultModel?.modelId,
       refreshCatalog,
+      refreshProvider,
       durationMs: elapsedMs(startedAt),
     });
   } catch (error) {
