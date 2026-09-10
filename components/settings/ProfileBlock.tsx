@@ -376,7 +376,7 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
                 <path d="M8 7h8" />
                 <path d="M8 11h6" />
               </svg>
-              <span>{t("Prompts")}</span>
+              <span>{t("Prompt Templates")}</span>
             </button>
           )}
           {onOpenScheduler && (

@@ -99,7 +99,7 @@ export const models = {
 
   // Common action labels reused inside the models modal
   "Add Skill": "添加技能",
-  "Select a prompt": "选择一个提示词",
+  "Select a prompt template": "选择一个提示词模板",
   "Select a skill": "选择一个技能",
   "Search skills hint": "搜索 skills.sh，为你的 Agent 发现并安装技能。",
   "Visible in model prompt - click to disable": "在模型提示词中可见 - 点击禁用",

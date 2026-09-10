@@ -86,7 +86,7 @@ function PromptDetail({
           <>
             <button
               onClick={onEdit}
-              title={t("Edit Prompt")}
+              title={t("Edit Prompt Template")}
               style={{
                 background: "none",
                 border: "1px solid var(--border)",
@@ -110,7 +110,7 @@ function PromptDetail({
             </button>
             <button
               onClick={onDelete}
-              title={t("Delete prompt")}
+              title={t("Delete prompt template")}
               style={{
                 background: "none",
                 border: "1px solid var(--border)",
@@ -255,7 +255,7 @@ function PromptEditorPanel({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>
-        {isEditing ? t("Edit Prompt") : t("New Prompt")}
+        {isEditing ? t("Edit Prompt Template") : t("New Prompt Template")}
       </div>
 
       {!isEditing && (
@@ -491,8 +491,8 @@ export function PromptsConfig({
 
   const deletePrompt = useCallback(async (prompt: PromptTemplate) => {
     const ok = await confirm({
-      title: t("Delete prompt?"),
-      description: t("This will delete the prompt file: {path}").replace("{path}", prompt.filePath),
+      title: t("Delete prompt template?"),
+      description: t("This will delete the prompt template file: {path}").replace("{path}", prompt.filePath),
       confirmLabel: t("Delete"),
       cancelLabel: t("Cancel"),
       destructive: true,
@@ -550,7 +550,7 @@ export function PromptsConfig({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("Prompts")}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("Prompt Templates")}</span>
             <code
               style={{
                 fontSize: 11,
@@ -597,7 +597,7 @@ export function PromptsConfig({
               ) : error ? (
                 <div style={{ padding: "10px 8px", fontSize: 11, color: "#f87171" }}>{error}</div>
               ) : prompts.length === 0 ? (
-                <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--text-dim)" }}>{t("No prompts found")}</div>
+                <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--text-dim)" }}>{t("No prompt templates found")}</div>
               ) : (
                 (() => {
                   const groups: { label: string; prompts: typeof prompts }[] = [];
@@ -707,7 +707,7 @@ export function PromptsConfig({
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-                {t("New Prompt")}
+                {t("New Prompt Template")}
               </div>
             </div>
           </div>
@@ -744,7 +744,7 @@ export function PromptsConfig({
                   fontSize: 13,
                 }}
               >
-                {t("Select a prompt")}
+                {t("Select a prompt template")}
               </div>
             )}
           </div>

@@ -208,7 +208,7 @@ export const common = {
   "No description": "无描述",
   "No matches": "无匹配项",
   "No sessions found": "未找到会话",
-  "No prompts found": "未找到提示词",
+  "No prompt templates found": "未找到提示词模板",
   "No skills found": "未找到技能",
   "No providers match": "没有匹配的提供商",
   "No models available": "没有可用模型",

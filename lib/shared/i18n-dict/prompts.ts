@@ -3,9 +3,9 @@
 // because they're co-located with the SkillsConfig panel chrome.
 
 export const prompts = {
-  "New Prompt": "新建提示词",
-  "Edit Prompt": "编辑提示词",
-  "Delete prompt": "删除提示词",
-  "Delete prompt?": "删除提示词？",
-  "This will delete the prompt file: {path}": "这将删除提示词文件：{path}",
+  "New Prompt Template": "新建提示词模板",
+  "Edit Prompt Template": "编辑提示词模板",
+  "Delete prompt template": "删除提示词模板",
+  "Delete prompt template?": "删除提示词模板？",
+  "This will delete the prompt template file: {path}": "这将删除提示词模板文件：{path}",
 } as const;
