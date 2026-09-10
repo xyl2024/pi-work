@@ -6,8 +6,8 @@ import { useToast } from "../../ui/Toast";
 import { ProviderIcon, ProviderGearIcon } from "../../ui/ProviderIcon";
 import { SectionTitle, SecretTextInput, Field, inputStyle } from "./form-fields";
 import { filterCatalogModels, type CatalogModelEntry } from "./catalog-search";
+import { ModelCard } from "./ModelCard";
 import type { ApiKeyProvider, OAuthProvider, RuntimeCatalog, RuntimeCatalogProvider, RuntimeModelInfo } from "./types";
-import { getDisplayedThinkingLevels } from "./utils";
 
 export function RuntimeModelCatalog() {
   const { t } = useI18n();
@@ -392,6 +392,7 @@ export function RuntimeModelList({ providerId, configured }: { providerId: strin
   const [models, setModels] = useState<RuntimeModelInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const loadModels = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -441,54 +442,23 @@ export function RuntimeModelList({ providerId, configured }: { providerId: strin
         <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("Loading models...")}</div>
       ) : models.length === 0 ? (
         <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No available models")}</div>
-      ) : models.map((model) => (
-        <details key={model.id} style={{ border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)" }}>
-          <summary style={{ cursor: "pointer", padding: "8px 10px", color: "var(--text)", fontSize: 12 }}>
-            <span style={{ fontWeight: 600 }}>{model.name}</span>
-            <span style={{ marginLeft: 8, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11 }}>{model.id}</span>
-          </summary>
-          <div style={{ padding: "0 10px 10px", display: "flex", flexDirection: "column", gap: 7 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, fontSize: 11 }}>
-              <span style={{ color: "var(--text-muted)" }}>{t("API")}: <b style={{ color: "var(--text)" }}>{model.api}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Context window")}: <b style={{ color: "var(--text)" }}>{model.contextWindow.toLocaleString()}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Max output")}: <b style={{ color: "var(--text)" }}>{model.maxTokens.toLocaleString()}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Input")}: <b style={{ color: "var(--text)" }}>{model.input.join(", ")}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Reasoning")}: <b style={{ color: "var(--text)" }}>{model.reasoning ? t("Supported") : t("Not supported")}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Thinking levels")}: <b style={{ color: "var(--text)" }}>{getDisplayedThinkingLevels(model).join(", ") || t("Provider default")}</b></span>
-            </div>
-            <div>
-              <SectionTitle>{t("Cost (per million tokens)")}</SectionTitle>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 6, fontSize: 10 }}>
-                {(["input", "output", "cacheRead", "cacheWrite"] as const).map((key) => (
-                  <div key={key} style={{ padding: "6px 7px", borderRadius: 4, background: "var(--bg)", color: "var(--text-muted)" }}>
-                    <div>{key}</div>
-                    <b style={{ display: "block", marginTop: 3, color: "var(--text)" }}>{model.cost?.[key] ?? "—"}</b>
-                  </div>
-                ))}
-              </div>
-              {model.cost?.tiers && model.cost.tiers.length > 0 && (
-                <div style={{ marginTop: 7, fontSize: 10, color: "var(--text-muted)" }}>
-                  <div style={{ marginBottom: 4 }}>{t("Cost tiers")}</div>
-                  <pre style={{ margin: 0, padding: 7, maxHeight: 120, overflow: "auto", borderRadius: 4, background: "var(--bg)", color: "var(--text-muted)", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {JSON.stringify(model.cost.tiers, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, fontSize: 11 }}>
-              <span style={{ color: "var(--text-muted)", wordBreak: "break-all" }}>{t("Base URL")}: <b style={{ color: "var(--text)" }}>{model.baseUrl || "—"}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Headers")}: <b style={{ color: "var(--text)" }}>{Object.keys(model.headers ?? {}).length || 0}</b></span>
-              <span style={{ color: "var(--text-muted)" }}>{t("Compatibility")}: <b style={{ color: "var(--text)" }}>{Object.keys(model.compat ?? {}).length || 0}</b></span>
-            </div>
-            <details>
-              <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 10 }}>{t("Raw metadata")}</summary>
-              <pre style={{ margin: "6px 0 0", padding: 8, maxHeight: 220, overflow: "auto", borderRadius: 4, background: "var(--bg)", color: "var(--text-muted)", fontSize: 10, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {JSON.stringify({ headers: model.headers, compat: model.compat, thinkingLevelMap: model.thinkingLevelMap }, null, 2)}
-              </pre>
-            </details>
-          </div>
-        </details>
-      ))}
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12 }}>
+          {models.map((model) => (
+            <ModelCard
+              key={model.id}
+              model={model}
+              expanded={expanded.has(model.id)}
+              onToggle={() => setExpanded((prev) => {
+                const next = new Set(prev);
+                if (next.has(model.id)) next.delete(model.id);
+                else next.add(model.id);
+                return next;
+              })}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
