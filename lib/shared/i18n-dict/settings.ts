@@ -120,6 +120,7 @@ export const settings = {
   "Event: agent failure": "事件：Agent 最终失败",
   "Event: inbox new message": "事件：收件箱新消息",
   "Event: RSS new article": "事件：RSS 新文章",
+  "Event: ask user questions": "事件：向用户提问",
   "Event: celebration": "事件：庆祝动画",
   "morning-light": "晨曦",
   "lonely-shadow": "孤影",

@@ -10,7 +10,7 @@ import { notifyMutated } from "@/lib/client/git-status-store";
 import { playUiSoundEvent } from "@/lib/client/ui-sounds";
 import { setGrokbotConfig } from "@/lib/client/grokbot-store";
 import { setShowFileResult } from "../showFileResultsStore";
-import { setPendingAskUserQuestions } from "../askUserQuestionsStore";
+import { setPendingAskUserQuestions, getPendingAskUserQuestions } from "../askUserQuestionsStore";
 import type { AskUserQuestion } from "@/lib/shared/ask-user-questions-tool-types";
 import {
   scheduleStreamingUpdate,
@@ -459,7 +459,12 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           }
         }
         if (validQuestions.length === 0) break;
+        // Fire the notification sound only for a genuinely new request. On SSE
+        // reconnect the server re-emits every pending request; those share the
+        // same toolCallId, so skip the sound to avoid replaying it.
+        const hadSameRequest = getPendingAskUserQuestions(sid)?.toolCallId === toolCallId;
         setPendingAskUserQuestions(sid, { toolCallId, questions: validQuestions, ts: typeof event.ts === "number" ? event.ts : Date.now() });
+        if (!hadSameRequest) playUiSoundEvent("ask_user_questions");
         break;
       }
       case "compaction_start":

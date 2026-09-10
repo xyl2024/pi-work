@@ -78,6 +78,7 @@ export const UI_SOUND_EVENT_IDS = [
   "agent_failure",
   "inbox_new",
   "rss_new",
+  "ask_user_questions",
   "celebrate",
 ] as const;
 

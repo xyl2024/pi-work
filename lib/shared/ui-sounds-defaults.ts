@@ -17,6 +17,7 @@ export const DEFAULT_UI_SOUND_EVENTS: Record<UiSoundEventId, string> = {
   agent_failure: "sea-breeze",
   inbox_new: "tipsy",
   rss_new: "weightless",
+  ask_user_questions: "weightless",
   // The celebration overlay plays its own cannon-boom SFX (see
   // lib/client/celebrate-sounds.ts), so this event defaults to
   // silent; users can map an extra named sound here if they want a fanfare.
