@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
 import { CloseIcon, CopyIcon } from "@/components/ui/icons/primitives";
+import { copyText } from "@/lib/client/clipboard";
 import { relativeTime } from "@/components/rss/relativeTime";
 import {
   HOT_TRENDING_LANGUAGES,
@@ -290,7 +291,7 @@ export function GitHubTrendingPanel(): ReactElement {
 
   const handleCopyPrompt = async (repo: TrendingRepo) => {
     try {
-      await navigator.clipboard.writeText(clonePrompt(repo.fullName));
+      await copyText(clonePrompt(repo.fullName));
       toast.show({ kind: "success", message: t("Prompt copied") });
     } catch {
       toast.show({ kind: "error", message: t("Failed to copy") });

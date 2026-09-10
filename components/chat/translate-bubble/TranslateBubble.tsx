@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { MorphToggleIcon } from "@/components/ui/MorphToggleIcon";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
+import { copyText } from "@/lib/client/clipboard";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useTranslationStream } from "@/hooks/useTranslationStream";
@@ -239,7 +240,7 @@ export function TranslateBubble() {
   const handleCopy = useCallback(async () => {
     if (!output) return;
     try {
-      await navigator.clipboard.writeText(output);
+      await copyText(output);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
       toast.show({ kind: "success", message: t("Copied") });

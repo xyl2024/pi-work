@@ -6,6 +6,7 @@ import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
+import { copyText } from "@/lib/client/clipboard";
 import { AnimatedPopover } from "../ui/AnimatedPopover";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../ui/ProviderIcon";
 import {
@@ -217,7 +218,7 @@ export function TranslatePanel() {
   const handleCopy = useCallback(async () => {
     if (!output) return;
     try {
-      await navigator.clipboard.writeText(output);
+      await copyText(output);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
       toast.show({ kind: "success", message: t("Copied") });

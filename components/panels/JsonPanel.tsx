@@ -8,6 +8,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { IconButton } from "../ui/IconButton";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { CHECK, MINIFY, ESCAPE_DOC } from "@/lib/client/icon-paths";
+import { copyText } from "@/lib/client/clipboard";
 import { parseJsonTolerant, escapeJsonString } from "@/lib/shared/json-parser";
 import {
   JsonTreeView,
@@ -301,7 +302,7 @@ export function JsonPanel() {
   const handleCopyMinify = useCallback(async () => {
     if (parsed === null) return;
     try {
-      await navigator.clipboard.writeText(JSON.stringify(parsed));
+      await copyText(JSON.stringify(parsed));
       flashCopied(setCopiedMinify);
       toast.show({ kind: "success", message: t("Copied") });
     } catch {
@@ -312,7 +313,7 @@ export function JsonPanel() {
   const handleCopyMinifyEscape = useCallback(async () => {
     if (parsed === null) return;
     try {
-      await navigator.clipboard.writeText(escapeJsonString(parsed));
+      await copyText(escapeJsonString(parsed));
       flashCopied(setCopiedMinifyEscape);
       toast.show({ kind: "success", message: t("Copied") });
     } catch {

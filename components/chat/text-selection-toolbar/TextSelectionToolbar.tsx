@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import type { TextSelectionState } from "@/hooks/useTextSelection";
 import { openTranslateBubble } from "@/hooks/translateBubbleStore";
+import { copyText } from "@/lib/client/clipboard";
 
 /** Small icon — keeps the toolbar footprint compact so it doesn't
  *  dominate the user's selection. */
@@ -100,7 +101,7 @@ export function TextSelectionToolbar({ state, onQuote, onHide }: Props) {
   const handleCopy = useCallback(async () => {
     if (!state.text) return;
     try {
-      await navigator.clipboard.writeText(state.text);
+      await copyText(state.text);
       setCopied(true);
       toast.show({ kind: "success", message: t("Copied") });
       setTimeout(() => setCopied(false), 1500);

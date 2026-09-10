@@ -12,6 +12,7 @@ import { validateFileName } from "@/lib/shared/file-name";
 import { FileGitBadge, gitStatusColor } from "./FileGitBadge";
 import { useGitStatusStore, aggregateFolderStatuses, startTracking, stopTracking } from "@/lib/client/git-status-store";
 import { createEntry, type ExplorerCreateKind } from "@/lib/client/file-explorer-mutations";
+import { copyText as copyToClipboard } from "@/lib/client/clipboard";
 import type { GitDiffFile, GitFileStatus } from "@/lib/shared/git-diff-types";
 
 interface FileEntry {
@@ -231,16 +232,9 @@ function TreeNode({
   // ---- context menu ----
   const copyText = useCallback(async (text: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyToClipboard(text);
     } catch {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand("copy"); } catch { /* ignore */ }
-      document.body.removeChild(ta);
+      // Both the Clipboard API and the execCommand fallback failed.
     }
     toast.show({ kind: "success", message: t("Copied") });
   }, [toast, t]);

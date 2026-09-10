@@ -12,6 +12,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import type { ScheduledTask } from "./types";
 import { CheckIcon, CopyIcon } from "@/components/ui/icons";
+import { copyText } from "@/lib/client/clipboard";
 
 interface Props {
   task: ScheduledTask;
@@ -24,7 +25,7 @@ export function TaskPromptTab({ task }: Props) {
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(task.prompt);
+      await copyText(task.prompt);
       setCopied(true);
       toast.show({ kind: "success", message: t("Copied") });
       setTimeout(() => setCopied(false), 1500);

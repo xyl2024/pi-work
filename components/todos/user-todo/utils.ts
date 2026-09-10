@@ -1,6 +1,7 @@
 "use client";
 
 import type { Tag, Todo, Priority } from "@/hooks/useTodos";
+import { copyText } from "@/lib/client/clipboard";
 import type { Filters, StatusFilter, DeadlineFilter, DeadlineTone } from "./types";
 
 // Persists the user's filter preference across tab close/reopen and page reload.
@@ -272,7 +273,9 @@ export async function copyDescriptionAsRichText(html: string): Promise<void> {
     await navigator.clipboard.write([item]);
     return;
   }
-  await navigator.clipboard.writeText(plainText);
+  // Non-secure origins have no Clipboard API at all; fall back to the
+  // execCommand-based helper, which also works over plain HTTP.
+  await copyText(plainText);
 }
 
 export function startOfDay(ts: number): number {

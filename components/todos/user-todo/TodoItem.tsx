@@ -18,7 +18,8 @@ import { PriorityChip } from "./PriorityChip";
 import { DeadlineControl } from "./DeadlineControl";
 import { TodoDescriptionView } from "./TodoDescriptionView";
 import { EditTagsModal } from "./EditTagsModal";
-import { descriptionToPlainText, copyDescriptionAsRichText } from "./utils";
+import { copyDescriptionAsRichText, descriptionToPlainText } from "./utils";
+import { copyText } from "@/lib/client/clipboard";
 
 export function TodoItem({
   todo,
@@ -170,7 +171,7 @@ export function TodoItem({
         onSelect: async () => {
           try {
             const text = descriptionToPlainText(todo.description ?? "");
-            await navigator.clipboard.writeText(text);
+            await copyText(text);
             toast.show({ kind: "success", message: t("Copied") });
           } catch {
             toast.show({ kind: "error", message: t("Copy failed") });
