@@ -243,6 +243,9 @@ export async function handleFilePost(request: NextRequest, segments: string[]) {
     if (op === "upload") {
       return await handleFileUpload(request, segments);
     }
+    if (op === "duplicate") {
+      return await handleFileDuplicate(segments);
+    }
     if (op !== "mkdir" && op !== "create") {
       return jsonError("Invalid POST type", 400);
     }
@@ -311,11 +314,61 @@ export async function handleFilePost(request: NextRequest, segments: string[]) {
   }
 }
 
-export async function handleFileDelete(segments: string[]) {
+/** Pick a non-existing "<name> copy[ n]<ext>" path inside `dir` for a
+ *  duplicate of `filename`. */
+function uniqueCopyPath(dir: string, filename: string): string {
+  const parsed = path.parse(filename);
+  let candidate = path.join(dir, `${parsed.name} copy${parsed.ext}`);
+  let n = 2;
+  while (fs.existsSync(candidate) && n <= 1000) {
+    candidate = path.join(dir, `${parsed.name} copy ${n}${parsed.ext}`);
+    n += 1;
+  }
+  return candidate;
+}
+
+/** Duplicate a single file next to itself (`?type=duplicate`). Directories
+ *  are intentionally rejected — use create/upload for those. */
+export async function handleFileDuplicate(segments: string[]) {
+  const startedAt = Date.now();
+  try {
+    const sourcePath = filePathFromSegments(segments);
+    const allowedRoots = await getAllowedRoots();
+    if (!isPathAllowed(sourcePath, allowedRoots)) {
+      log.warn("file duplicate denied", { path: sourcePath, durationMs: elapsedMs(startedAt) });
+      return jsonError("Access denied", 403);
+    }
+
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(sourcePath);
+    } catch {
+      return jsonError("Not found", 404);
+    }
+    if (!stat.isFile()) {
+      return jsonError("Not a file", 400);
+    }
+
+    const dir = path.dirname(sourcePath);
+    const newPath = uniqueCopyPath(dir, path.basename(sourcePath));
+    if (!isPathAllowed(newPath, allowedRoots)) {
+      return jsonError("Access denied", 403);
+    }
+
+    fs.copyFileSync(sourcePath, newPath);
+    log.info("file duplicated", { from: sourcePath, to: newPath, durationMs: elapsedMs(startedAt) });
+    return jsonOk({ path: newPath, oldPath: sourcePath });
+  } catch (error) {
+    log.error("file duplicate failed", { error, durationMs: elapsedMs(startedAt) });
+    return jsonError(String(error), 500);
+  }
+}
+
+export async function handleFileDelete(segments: string[], options: { recursive?: boolean } = {}) {
   const startedAt = Date.now();
   try {
     const targetPath = filePathFromSegments(segments);
-    log.debug("file delete received", { path: targetPath });
+    log.debug("file delete received", { path: targetPath, recursive: options.recursive === true });
 
     const allowedRoots = await getAllowedRoots();
     if (!isPathAllowed(targetPath, allowedRoots)) {
@@ -331,17 +384,31 @@ export async function handleFileDelete(segments: string[]) {
     }
 
     if (stat.isDirectory()) {
-      const names = fs.readdirSync(targetPath);
-      if (names.length > 0) {
-        return jsonError("Directory not empty", 400);
+      // Never allow removing an allowed root itself — that would wipe the
+      // whole workspace, and the UI only ever deletes children of a cwd.
+      const resolvedTarget = path.resolve(targetPath);
+      for (const root of allowedRoots) {
+        if (path.resolve(root) === resolvedTarget) {
+          log.warn("file delete denied (root)", { path: targetPath, durationMs: elapsedMs(startedAt) });
+          return jsonError("Access denied", 403);
+        }
       }
-      fs.rmdirSync(targetPath);
+
+      if (options.recursive === true) {
+        fs.rmSync(targetPath, { recursive: true, force: false });
+      } else {
+        const names = fs.readdirSync(targetPath);
+        if (names.length > 0) {
+          return jsonError("Directory not empty", 400);
+        }
+        fs.rmdirSync(targetPath);
+      }
     } else {
       fs.unlinkSync(targetPath);
     }
 
     invalidateAllowedRootsCache();
-    log.info("file deleted", { path: targetPath, isDir: stat.isDirectory(), durationMs: elapsedMs(startedAt) });
+    log.info("file deleted", { path: targetPath, isDir: stat.isDirectory(), recursive: options.recursive === true, durationMs: elapsedMs(startedAt) });
     return jsonOk({ path: targetPath });
   } catch (error) {
     log.error("file delete failed", { error, durationMs: elapsedMs(startedAt) });
@@ -356,14 +423,18 @@ export async function handleFilePatch(request: NextRequest, segments: string[]) 
     const op = request.nextUrl.searchParams.get("type") ?? "rename";
     log.debug("file patch received", { op, path: oldPath });
 
-    if (op !== "rename") {
+    if (op !== "rename" && op !== "move") {
       return jsonError("Invalid PATCH type", 400);
     }
 
     const allowedRoots = await getAllowedRoots();
     if (!isPathAllowed(oldPath, allowedRoots)) {
-      log.warn("file rename denied", { path: oldPath, durationMs: elapsedMs(startedAt) });
+      log.warn("file patch denied", { op, path: oldPath, durationMs: elapsedMs(startedAt) });
       return jsonError("Access denied", 403);
+    }
+
+    if (op === "move") {
+      return handleFileMove(request, oldPath, allowedRoots, startedAt);
     }
 
     let body: { newName?: string };
@@ -409,4 +480,73 @@ export async function handleFilePatch(request: NextRequest, segments: string[]) 
     log.error("file rename failed", { error, durationMs: elapsedMs(startedAt) });
     return jsonError(String(error), 500);
   }
+}
+
+/**
+ * Move `oldPath` into the directory in the request's `destDir` body field.
+ * Used by the explorer's drag-and-drop. Keeps the basename; refuses
+ * overwrites, cross-root destinations, and moving a directory into its own
+ * subtree. Called from `handleFilePatch` with `?type=move`.
+ */
+async function handleFileMove(
+  request: NextRequest,
+  oldPath: string,
+  allowedRoots: Set<string>,
+  startedAt: number,
+): Promise<NextResponse> {
+  let body: { destDir?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError("Invalid JSON body", 400);
+  }
+  if (typeof body.destDir !== "string" || body.destDir.length === 0) {
+    return jsonError("Missing 'destDir' field", 400);
+  }
+  const destDir = body.destDir;
+
+  if (!isPathAllowed(destDir, allowedRoots)) {
+    log.warn("file move denied", { path: oldPath, destDir, durationMs: elapsedMs(startedAt) });
+    return jsonError("Access denied", 403);
+  }
+
+  if (!fs.existsSync(oldPath)) {
+    return jsonError("Not found", 404);
+  }
+
+  let destStat: fs.Stats;
+  try {
+    destStat = fs.statSync(destDir);
+  } catch {
+    return jsonError("Destination not found", 404);
+  }
+  if (!destStat.isDirectory()) {
+    return jsonError("Destination is not a directory", 400);
+  }
+
+  const name = path.basename(oldPath);
+  const newPath = path.join(destDir, name);
+  if (path.resolve(newPath) === path.resolve(oldPath)) {
+    // Already in the target directory — treat as a successful no-op.
+    return jsonOk({ path: oldPath, oldPath });
+  }
+  if (!isPathAllowed(newPath, allowedRoots)) {
+    return jsonError("Access denied", 403);
+  }
+
+  // Refuse moving a directory into itself or one of its descendants.
+  if (fs.statSync(oldPath).isDirectory()) {
+    const rel = path.relative(oldPath, destDir);
+    if (rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel))) {
+      return jsonError("Cannot move a folder into itself", 400);
+    }
+  }
+
+  if (fs.existsSync(newPath)) {
+    return jsonError("Already exists", 409);
+  }
+
+  fs.renameSync(oldPath, newPath);
+  log.info("file moved", { from: oldPath, to: newPath, durationMs: elapsedMs(startedAt) });
+  return jsonOk({ path: newPath, oldPath });
 }

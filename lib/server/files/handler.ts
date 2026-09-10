@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import JSZip from "jszip";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { filePathFromSegments } from "@/lib/server/file-access";
 import { readConfig } from "@/lib/server/config";
@@ -152,6 +153,52 @@ export function jsonOk(data: Record<string, unknown>, status = 200): NextRespons
   return NextResponse.json({ ok: true, ...data }, { status });
 }
 
+/** Upper bounds for in-memory directory zipping on download. Beyond these
+ *  the request is rejected rather than risking an OOM in the Next server. */
+const DOWNLOAD_ZIP_MAX_BYTES = 100 * 1024 * 1024;
+const DOWNLOAD_ZIP_MAX_FILES = 10000;
+
+/** RFC 5987 Content-Disposition with an ASCII fallback for non-ASCII names. */
+function contentDisposition(filename: string): string {
+  const fallback = filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+/** Zip a directory tree in memory (JSZip). Skips IGNORED_NAMES/IGNORED_SUFFIXES
+ *  and symlinks (avoiding cycles / escaping the tree), and throws when the
+ *  tree exceeds the size/file caps. */
+async function buildDirectoryZip(dirPath: string): Promise<ArrayBuffer> {
+  const zip = new JSZip();
+  let totalBytes = 0;
+  let fileCount = 0;
+  const walk = (dir: string, rel: string) => {
+    for (const name of fs.readdirSync(dir)) {
+      if (IGNORED_NAMES.has(name) || IGNORED_SUFFIXES.some((s) => name.endsWith(s))) continue;
+      const full = path.join(dir, name);
+      const relPath = rel ? `${rel}/${name}` : name;
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(full);
+      } catch {
+        continue;
+      }
+      if (st.isSymbolicLink()) continue;
+      if (st.isDirectory()) {
+        walk(full, relPath);
+      } else if (st.isFile()) {
+        fileCount += 1;
+        totalBytes += st.size;
+        if (fileCount > DOWNLOAD_ZIP_MAX_FILES || totalBytes > DOWNLOAD_ZIP_MAX_BYTES) {
+          throw new Error("TOO_LARGE");
+        }
+        zip.file(relPath, fs.readFileSync(full));
+      }
+    }
+  };
+  walk(dirPath, "");
+  return zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE", compressionOptions: { level: 6 } });
+}
+
 function createFileBodyStream(filePath: string, range?: { start: number; end: number }): ReadableStream<Uint8Array> {
   const fileStream = fs.createReadStream(filePath, range);
   let closed = false;
@@ -271,6 +318,46 @@ export async function handleFilesGet(request: NextRequest, segments: string[]): 
     } catch {
       log.warn("file request not found", { type, path: filePath, durationMs: elapsedMs(startedAt) });
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (type === "download") {
+      const base = path.basename(filePath) || "download";
+      if (stat.isDirectory()) {
+        try {
+          const zip = await buildDirectoryZip(filePath);
+          log.info("directory download zipped", {
+            path: filePath,
+            bytes: zip.byteLength,
+            durationMs: elapsedMs(startedAt),
+          });
+          return new Response(zip, {
+            headers: {
+              "Content-Type": "application/zip",
+              "Content-Disposition": contentDisposition(`${base}.zip`),
+              "Content-Length": String(zip.byteLength),
+              "Cache-Control": "no-cache",
+            },
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message === "TOO_LARGE") {
+            log.warn("directory download rejected", { path: filePath, reason: "too large", durationMs: elapsedMs(startedAt) });
+            return jsonError("Directory too large to download", 413);
+          }
+          throw error;
+        }
+      }
+      if (!stat.isFile()) {
+        return jsonError("Not a file", 400);
+      }
+      log.info("file download streamed", { path: filePath, size: stat.size, durationMs: elapsedMs(startedAt) });
+      return new Response(createFileBodyStream(filePath), {
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Disposition": contentDisposition(base),
+          "Content-Length": String(stat.size),
+          "Cache-Control": "no-cache",
+        },
+      });
     }
 
     if (type === "read") {

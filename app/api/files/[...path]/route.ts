@@ -26,8 +26,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
   return handleFilePost(request, await getSegments(context));
 }
 
-export async function DELETE(_request: NextRequest, context: RouteContext) {
-  return handleFileDelete(await getSegments(context));
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  const recursive = request.nextUrl.searchParams.get("recursive") === "true";
+  return handleFileDelete(await getSegments(context), { recursive });
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {

@@ -132,7 +132,7 @@ function ConfirmDialogView({
       >
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{options.title}</div>
         {options.description && (
-          <div style={{ fontSize: 12, color: "var(--text-muted)", wordBreak: "break-all" }}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", wordBreak: "break-all", whiteSpace: "pre-line" }}>
             {options.description}
           </div>
         )}

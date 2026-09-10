@@ -1298,8 +1298,18 @@ export function AppShell() {
   }, [fileTabs, t, cm, handleCloseFileTab, handleCloseLeftTabs, handleCloseRightTabs, handleCloseOtherTabs]);
 
   const handleFileDeleted = useCallback((filePath: string) => {
-    handleCloseFileTab(`file:${filePath}`);
-  }, [handleCloseFileTab]);
+    // The deleted path may be a directory — close every open file tab at or
+    // under it, not just an exact match.
+    const prefixSlash = filePath + "/";
+    const prefixBackslash = filePath + "\\";
+    for (const tab of fileTabs) {
+      if (tab.kind !== "file") continue;
+      const p = tab.filePath;
+      if (p === filePath || p.startsWith(prefixSlash) || p.startsWith(prefixBackslash)) {
+        handleCloseFileTab(tab.id);
+      }
+    }
+  }, [fileTabs, handleCloseFileTab]);
 
   // Show chat after the initial URL restore is done (or immediately when no
   // session parameter was supplied). A draft tab exists even before a cwd is

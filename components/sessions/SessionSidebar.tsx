@@ -14,8 +14,6 @@ import { CHECK, CHEVRONS_UP } from "@/lib/client/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
 import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "../ui/SidebarSection";
-import { pickFiles, uploadFilesToDir, type ExplorerCreateKind } from "@/lib/client/file-explorer-mutations";
-import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { GrokBotStage } from "../grokbot/GrokBotStage";
 import { GrokBotLab } from "../grokbot/GrokBotLab";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
@@ -55,86 +53,6 @@ interface Props {
 }
 
 const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
-
-// ── Explorer header icon buttons ──────────────────────────────────────
-// Plain 26×26 icon-only buttons for the Explorer section header (new
-// file / new folder / uploads), matching the hand-rolled collapse button
-// style: borderless, dim → muted hover, 5px radius.
-
-function ExplorerActionButton({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Tooltip content={label}>
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        aria-label={label}
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: 26, height: 26, padding: 0, marginRight: 4,
-          background: "none", border: "none",
-          color: "var(--text-dim)",
-          opacity: disabled ? 0.45 : 1,
-          cursor: disabled ? "default" : "pointer",
-          borderRadius: 5,
-          flexShrink: 0,
-          transition: "color 0.3s, background 0.3s, opacity 0.3s",
-        }}
-        onMouseEnter={(e) => {
-          if (disabled) return;
-          e.currentTarget.style.color = "var(--text-muted)";
-          e.currentTarget.style.background = "var(--bg-hover)";
-        }}
-        onMouseLeave={(e) => {
-          if (disabled) return;
-          e.currentTarget.style.color = "var(--text-dim)";
-          e.currentTarget.style.background = "none";
-        }}
-      >
-        {children}
-      </button>
-    </Tooltip>
-  );
-}
-
-/** Lucide "file-plus". */
-const FILE_PLUS_ICON = (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
-    <polyline points="14 2 14 8 20 8" />
-    <line x1="12" y1="18" x2="12" y2="12" />
-    <line x1="9" y1="15" x2="15" y2="15" />
-  </svg>
-);
-
-/** Lucide "folder-plus". */
-const FOLDER_PLUS_ICON = (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-    <line x1="12" y1="10" x2="12" y2="16" />
-    <line x1="9" y1="13" x2="15" y2="13" />
-  </svg>
-);
-
-/** Lucide "upload". */
-const UPLOAD_ICON = (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <polyline points="17 8 12 3 7 8" />
-    <line x1="12" y1="3" x2="12" y2="15" />
-  </svg>
-);
-
 
 function useScramble(target: string, running: boolean): string {
   const [display, setDisplay] = useState(target);
@@ -232,7 +150,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
-  const uploadMenu = useContextMenu();
   const [labOpen, setLabOpen] = useState(false);
   // Cwd whose paged-search modal is currently open. Null when no modal
   // is showing. The "View more sessions" affordance on each cwd group
@@ -287,56 +204,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     if (explorerCollapseTimerRef.current) clearTimeout(explorerCollapseTimerRef.current);
     explorerCollapseTimerRef.current = setTimeout(() => setExplorerCollapseDone(false), 700);
   }, []);
-
-  // Inline "new file / new folder" intent handed to FileExplorer. Bumping
-  // a seq counter (instead of storing just the kind) means clicking the
-  // same button twice in a row re-opens the input.
-  const [createIntent, setCreateIntent] = useState<{ kind: ExplorerCreateKind; seq: number } | null>(null);
-  const createSeqRef = useRef(0);
-
-  const startExplorerCreate = useCallback((kind: ExplorerCreateKind) => {
-    setExplorerOpen(true);
-    createSeqRef.current += 1;
-    setCreateIntent({ kind, seq: createSeqRef.current });
-  }, []);
-
-  const handleCreateFinished = useCallback((created: boolean) => {
-    setCreateIntent(null);
-    if (created) triggerExplorerRefresh();
-  }, [triggerExplorerRefresh]);
-
-  // Upload picked files (or a whole folder tree) into the active cwd root.
-  // Existing files are never overwritten — the server reports them as
-  // skipped and we surface that in the toast.
-  const [uploading, setUploading] = useState(false);
-  const handleExplorerUpload = useCallback(async (directory: boolean) => {
-    const dir = selectedCwdProp;
-    if (!dir || uploading) return;
-    const files = await pickFiles({ directory });
-    if (files.length === 0) return;
-    setUploading(true);
-    try {
-      const res = await uploadFilesToDir(dir, files);
-      if (res.uploaded > 0) {
-        toast.show({
-          kind: "success",
-          message: res.skipped > 0
-            ? t("Uploaded {n} file(s), skipped {m} existing", { n: res.uploaded, m: res.skipped })
-            : t("Uploaded {n} file(s)", { n: res.uploaded }),
-        });
-      } else if (res.skipped > 0) {
-        toast.show({ kind: "info", message: t("All files already exist") });
-      }
-      if (res.failed.length > 0) {
-        toast.show({ kind: "error", message: t("Failed to upload {n} file(s)", { n: res.failed.length }) });
-      }
-      if (res.uploaded > 0) triggerExplorerRefresh();
-    } catch (e) {
-      toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Network error") });
-    } finally {
-      setUploading(false);
-    }
-  }, [selectedCwdProp, uploading, toast, t, triggerExplorerRefresh]);
 
   // Persist expand state to localStorage. Stored as a flat object
   // { [cwd]: boolean } — last-writer-wins on the cwd key.
@@ -867,31 +734,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           onToggle={() => setExplorerOpen((v) => !v)}
           actions={
             <>
-              <ExplorerActionButton
-                label={t("New file")}
-                onClick={() => startExplorerCreate("file")}
-              >
-                {FILE_PLUS_ICON}
-              </ExplorerActionButton>
-              <ExplorerActionButton
-                label={t("New folder")}
-                onClick={() => startExplorerCreate("folder")}
-              >
-                {FOLDER_PLUS_ICON}
-              </ExplorerActionButton>
-              <ExplorerActionButton
-                label={t("Upload")}
-                onClick={(e) => {
-                  const items: ContextMenuItem[] = [
-                    { key: "upload_files", label: t("Upload files"), onSelect: () => { void handleExplorerUpload(false); } },
-                    { key: "upload_folder", label: t("Upload folder"), onSelect: () => { void handleExplorerUpload(true); } },
-                  ];
-                  uploadMenu.open({ x: e.clientX, y: e.clientY, items, triggerElement: e.currentTarget });
-                }}
-                disabled={uploading}
-              >
-                {UPLOAD_ICON}
-              </ExplorerActionButton>
               <Tooltip content={t("Collapse all")}>
               <button
                 onClick={triggerCollapseAll}
@@ -931,8 +773,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             onFileDeleted={onFileDeleted}
             collapseKey={explorerCollapseKey}
             onExpandedCountChange={setExplorerExpandedCount}
-            createIntent={createIntent}
-            onCreateFinished={handleCreateFinished}
           />
         </SidebarSection>
       )}

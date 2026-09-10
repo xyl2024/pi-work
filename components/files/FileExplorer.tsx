@@ -11,9 +11,14 @@ import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { validateFileName } from "@/lib/shared/file-name";
 import { FileGitBadge, gitStatusColor } from "./FileGitBadge";
 import { useGitStatusStore, aggregateFolderStatuses, startTracking, stopTracking } from "@/lib/client/git-status-store";
-import { createEntry, type ExplorerCreateKind } from "@/lib/client/file-explorer-mutations";
+import { createEntry, duplicateEntry, moveEntry, pickFiles, uploadFilesToDir, type ExplorerCreateKind } from "@/lib/client/file-explorer-mutations";
 import { copyText as copyToClipboard } from "@/lib/client/clipboard";
 import type { GitDiffFile, GitFileStatus } from "@/lib/shared/git-diff-types";
+
+/** Drag-and-drop MIME used to move entries between folders. A custom type
+ *  (rather than `text/plain`) lets us ignore OS file drops and other
+ *  unrelated drags during dragover. */
+const DRAG_MIME = "application/x-pi-file-path";
 
 interface FileEntry {
   name: string;
@@ -45,15 +50,6 @@ interface Props {
    *  to disable its "collapse all" button while the tree is already fully
    *  folded (nothing left to collapse). */
   onExpandedCountChange?: (count: number) => void;
-  /** When set, shows an inline name input above the root list to create a
-   *  file/folder in `cwd`. The parent bumps `seq` for each new request so
-   *  repeated clicks on the same button re-trigger the input; passing
-   *  null hides it. */
-  createIntent?: { kind: ExplorerCreateKind; seq: number } | null;
-  /** Called when the inline create input finishes — `created` is true if
-   *  an entry was actually created. The parent should clear the intent
-   *  (and refresh the tree when created). */
-  onCreateFinished?: (created: boolean) => void;
 }
 
 async function fetchEntries(dirPath: string): Promise<FileNode[]> {
@@ -69,6 +65,18 @@ async function fetchEntries(dirPath: string): Promise<FileNode[]> {
     children: e.isDir ? [] : undefined,
     loaded: !e.isDir,
   }));
+}
+
+/** Trigger a browser download for a file or directory. Directories are
+ *  zipped server-side (see the `type=download` branch of the files GET). */
+function triggerDownload(fullPath: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = `/api/files/${encodeFilePathForApi(fullPath)}?type=download`;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 // ── Git status helpers ─────────────────────────────────────────────────────
@@ -179,6 +187,13 @@ function TreeNode({
   const [renameValue, setRenameValue] = useState(node.name);
   const [renameError, setRenameError] = useState<string | null>(null);
   const [flashHighlight, setFlashHighlight] = useState(false);
+  // Inline "new file / new folder" input shown as the first child of a
+  // directory when triggered from its context menu.
+  const [creating, setCreating] = useState<ExplorerCreateKind | null>(null);
+  const [createName, setCreateName] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   // Resolve this node's git status. File lookups hit `gitFilesByPath`
   // (O(1)); folder lookups hit `gitAggregate` (O(1)). Either can be
@@ -242,13 +257,18 @@ function TreeNode({
   const onDelete = useCallback(async () => {
     const ok = await confirm({
       title: node.isDir ? t("Delete folder?") : t("Delete file?"),
-      description: node.name,
+      description: node.isDir
+        ? `${node.name}\n${t("This folder and all its contents will be permanently deleted")}`
+        : node.name,
       confirmLabel: t("Delete"),
       destructive: true,
     });
     if (!ok) return;
     try {
-      const res = await fetch(`/api/files/${encodeFilePathForApi(node.fullPath)}`, { method: "DELETE" });
+      const url = node.isDir
+        ? `/api/files/${encodeFilePathForApi(node.fullPath)}?recursive=true`
+        : `/api/files/${encodeFilePathForApi(node.fullPath)}`;
+      const res = await fetch(url, { method: "DELETE" });
       if (!res.ok) {
         const { error } = await res.json().catch(() => ({ error: "" }));
         toast.show({ kind: "error", message: error || t("Delete failed") });
@@ -262,11 +282,118 @@ function TreeNode({
     }
   }, [node, confirm, t, toast, onFileDeleted, onFileMutated]);
 
+  // ---- new file / folder / upload (directory context menu) ----
+  const startCreate = useCallback((kind: ExplorerCreateKind) => {
+    onToggleExpanded(node.fullPath, true);
+    if (!loaded) void loadChildren();
+    setCreateName("");
+    setCreateError(null);
+    setCreating(kind);
+  }, [node.fullPath, onToggleExpanded, loaded, loadChildren]);
+
+  const submitCreate = useCallback(async () => {
+    if (!creating) return;
+    const v = validateFileName(createName);
+    if (!v.ok) {
+      setCreateError(v.message);
+      return;
+    }
+    if (children.some((c) => c.name === v.name)) {
+      setCreateError(t("Name already exists"));
+      return;
+    }
+    const res = await createEntry(node.fullPath, creating, v.name);
+    if (!res.ok) {
+      setCreateError(res.error || t("Create failed"));
+      return;
+    }
+    toast.show({ kind: "success", message: creating === "folder" ? t("Folder created") : t("File created") });
+    setCreating(null);
+    setCreateError(null);
+    await loadChildren(true);
+    onFileMutated?.();
+  }, [creating, createName, children, node.fullPath, t, toast, loadChildren, onFileMutated]);
+
+  const handleUpload = useCallback(async (directory: boolean) => {
+    if (uploading) return;
+    const files = await pickFiles({ directory });
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      const res = await uploadFilesToDir(node.fullPath, files);
+      if (res.uploaded > 0) {
+        toast.show({
+          kind: "success",
+          message: res.skipped > 0
+            ? t("Uploaded {n} file(s), skipped {m} existing", { n: res.uploaded, m: res.skipped })
+            : t("Uploaded {n} file(s)", { n: res.uploaded }),
+        });
+      } else if (res.skipped > 0) {
+        toast.show({ kind: "info", message: t("All files already exist") });
+      }
+      if (res.failed.length > 0) {
+        toast.show({ kind: "error", message: t("Failed to upload {n} file(s)", { n: res.failed.length }) });
+      }
+      if (res.uploaded > 0) {
+        await loadChildren(true);
+        onFileMutated?.();
+      }
+    } catch (e) {
+      toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Network error") });
+    } finally {
+      setUploading(false);
+    }
+  }, [uploading, node.fullPath, toast, t, loadChildren, onFileMutated]);
+
+  // Duplicate a file next to itself (files only).
+  const onDuplicate = useCallback(async () => {
+    const res = await duplicateEntry(node.fullPath);
+    if (!res.ok) {
+      toast.show({ kind: "error", message: res.error || t("Duplicate failed") });
+      return;
+    }
+    toast.show({ kind: "success", message: t("Duplicated") });
+    onFileMutated?.();
+  }, [node.fullPath, toast, t, onFileMutated]);
+
+  // Drop a dragged entry onto this directory row to move it here.
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (!node.isDir) return;
+    const source = e.dataTransfer.getData(DRAG_MIME) || e.dataTransfer.getData("text/plain");
+    if (!source) return;
+    const destDir = node.fullPath;
+    if (source === destDir) return;
+    // Refuse moving a directory into itself / its own subtree.
+    if (destDir.startsWith(source + "/")) {
+      toast.show({ kind: "error", message: t("Cannot move a folder into itself") });
+      return;
+    }
+    // Already directly inside this directory — nothing to do.
+    if (source.slice(0, source.lastIndexOf("/")) === destDir) return;
+    const res = await moveEntry(source, destDir);
+    if (!res.ok) {
+      toast.show({ kind: "error", message: res.error || t("Move failed") });
+      return;
+    }
+    toast.show({ kind: "success", message: t("Moved") });
+    onFileMutated?.();
+  }, [node, toast, t, onFileMutated]);
+
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const rel = getRelativeFilePath(node.fullPath, cwd);
     const items: ContextMenuItem[] = [
+      ...(node.isDir
+        ? [
+            { key: "new_file", label: t("New file"), onSelect: () => startCreate("file") },
+            { key: "new_folder", label: t("New folder"), onSelect: () => startCreate("folder") },
+            { key: "upload_files", label: t("Upload files"), onSelect: () => { void handleUpload(false); } },
+            { key: "upload_folder", label: t("Upload folder"), onSelect: () => { void handleUpload(true); } },
+          ]
+        : []),
       {
         key: "open",
         label: t("Open"),
@@ -275,13 +402,15 @@ function TreeNode({
       },
       { key: "copy_abs", label: t("Copy absolute path"), onSelect: () => copyText(node.fullPath) },
       { key: "copy_rel", label: t("Copy relative path"), onSelect: () => copyText(rel) },
-      { key: "copy_at", label: t("Copy as @-mention"), onSelect: () => copyText("`" + rel + "`") },
+      { key: "download", label: t("Download"), onSelect: () => triggerDownload(node.fullPath, node.isDir ? `${node.name}.zip` : node.name) },
+      ...(node.isDir
+        ? []
+        : [{ key: "duplicate", label: t("Duplicate"), onSelect: () => { void onDuplicate(); } }]),
       { key: "rename", label: t("Rename"), onSelect: () => { setRenameValue(node.name); setRenameError(null); setRenaming(true); } },
-      { key: "sep2", separatorBefore: true, label: "", onSelect: () => {} },
       { key: "delete", label: t("Delete"), destructive: true, onSelect: () => { onDelete(); } },
     ];
     cm.open({ x: e.clientX, y: e.clientY, items, triggerElement: e.currentTarget as HTMLElement });
-  }, [node, cwd, t, copyText, onOpenFile, onDelete, cm]);
+  }, [node, cwd, t, copyText, onOpenFile, onDelete, cm, startCreate, handleUpload, onDuplicate]);
 
   // ---- rename submit ----
   const submitRename = useCallback(async () => {
@@ -325,6 +454,32 @@ function TreeNode({
   return (
     <div>
       <div
+        draggable={!renaming}
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData(DRAG_MIME, node.fullPath);
+          e.dataTransfer.setData("text/plain", node.fullPath);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragOver={(e) => {
+          // Only internal drags count; stop bubbling so file rows don't
+          // trigger the root (move-to-cwd) drop zone underneath.
+          if (!e.dataTransfer.types.includes(DRAG_MIME)) return;
+          e.stopPropagation();
+          if (!node.isDir) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (!dragOver) setDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+          setDragOver(false);
+        }}
+        onDrop={(e) => {
+          e.stopPropagation();
+          if (!node.isDir || !e.dataTransfer.types.includes(DRAG_MIME)) return;
+          void handleDrop(e);
+        }}
         onClick={renaming ? undefined : handleClick}
         onContextMenu={handleContextMenu}
         onMouseEnter={() => setHovered(true)}
@@ -338,11 +493,15 @@ function TreeNode({
           paddingRight: 8,
           height: 24,
           cursor: renaming ? "default" : "pointer",
-          background: flashHighlight
+          background: dragOver
             ? "var(--bg-selected)"
-            : hovered
-              ? "var(--bg-hover)"
-              : "transparent",
+            : flashHighlight
+              ? "var(--bg-selected)"
+              : hovered
+                ? "var(--bg-hover)"
+                : "transparent",
+          outline: dragOver ? "1px dashed var(--accent)" : "none",
+          outlineOffset: -1,
           borderRadius: 4,
           userSelect: "none",
           transition: "background 0.3s",
@@ -470,6 +629,54 @@ function TreeNode({
       </div>
       {node.isDir && open && (
         <div>
+          {creating && (
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4, paddingLeft: 8 + (depth + 1) * 14, paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
+              <span style={{ flexShrink: 0, display: "flex", alignItems: "center", height: 20 }}>
+                {creating === "folder"
+                  ? <FolderIcon size={14} name={createName} />
+                  : getFileIcon(createName || "file", 14)}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                <input
+                  autoFocus
+                  value={createName}
+                  placeholder={t("Name")}
+                  onChange={(e) => { setCreateName(e.target.value); setCreateError(null); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void submitCreate();
+                    } else if (e.key === "Escape") {
+                      e.preventDefault();
+                      setCreating(null);
+                      setCreateError(null);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (createName.trim() === "") {
+                      setCreating(null);
+                      setCreateError(null);
+                    } else {
+                      void submitCreate();
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    fontSize: 12,
+                    padding: "1px 4px",
+                    border: "1px solid " + (createError ? "#f87171" : "var(--accent)"),
+                    borderRadius: 3,
+                    background: "var(--bg)",
+                    color: "var(--text)",
+                    width: "100%",
+                  }}
+                />
+                {createError && (
+                  <span style={{ fontSize: 10, color: "#f87171", whiteSpace: "normal" }}>{createError}</span>
+                )}
+              </span>
+            </div>
+          )}
           {children.map((child) => (
             <TreeNode
               key={child.fullPath}
@@ -498,57 +705,31 @@ function TreeNode({
   );
 }
 
-export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted, collapseKey, onExpandedCountChange, createIntent, onCreateFinished }: Props) {
+export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileMutated, onFileDeleted, collapseKey, onExpandedCountChange }: Props) {
   const { t } = useI18n();
   const toast = useToast();
   const [roots, setRoots] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [rootDragOver, setRootDragOver] = useState(false);
   const prevCwdRef = useRef<string | null>(null);
 
-  // Inline "new file / new folder" state, driven by the header buttons in
-  // SessionSidebar via the `createIntent` prop. A fresh object identity
-  // (bumped seq) re-opens the input even for the same kind.
-  const [creating, setCreating] = useState<{ kind: ExplorerCreateKind; seq: number } | null>(null);
-  const [createName, setCreateName] = useState("");
-  const [createError, setCreateError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!createIntent) return;
-    setCreating(createIntent);
-    setCreateName("");
-    setCreateError(null);
-  }, [createIntent]);
-
-  const cancelCreate = useCallback(() => {
-    setCreating(null);
-    setCreateError(null);
-    onCreateFinished?.(false);
-  }, [onCreateFinished]);
-
-  const submitCreate = useCallback(async () => {
-    if (!creating) return;
-    const v = validateFileName(createName);
-    if (!v.ok) {
-      setCreateError(v.message);
-      return;
-    }
-    // Optimistic duplicate check against the loaded roots (backend is
-    // authoritative and returns 409 anyway).
-    if (roots.some((r) => r.name === v.name)) {
-      setCreateError(t("Name already exists"));
-      return;
-    }
-    const res = await createEntry(cwd, creating.kind, v.name);
+  // Drop on empty space → move the dragged entry to the cwd root.
+  const handleRootDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    setRootDragOver(false);
+    const source = e.dataTransfer.getData(DRAG_MIME) || e.dataTransfer.getData("text/plain");
+    if (!source || source === cwd) return;
+    if (source.slice(0, source.lastIndexOf("/")) === cwd) return;
+    const res = await moveEntry(source, cwd);
     if (!res.ok) {
-      setCreateError(res.error || t("Create failed"));
+      toast.show({ kind: "error", message: res.error || t("Move failed") });
       return;
     }
-    toast.show({ kind: "success", message: creating.kind === "folder" ? t("Folder created") : t("File created") });
-    setCreating(null);
-    onCreateFinished?.(true);
-  }, [creating, createName, roots, cwd, t, toast, onCreateFinished]);
+    toast.show({ kind: "success", message: t("Moved") });
+    onFileMutated?.();
+  }, [cwd, toast, t, onFileMutated]);
 
   // External "collapse all" trigger: a parent bumps `collapseKey` to ask us
   // to clear every expanded folder. We intentionally do NOT re-fetch — the
@@ -610,9 +791,6 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
     // Reset expanded state only when cwd changes, not on refreshKey bumps
     if (cwdChanged) {
       setExpandedPaths(new Set());
-      // A pending create input would now target the new cwd — drop it.
-      setCreating(null);
-      setCreateError(null);
     }
 
     setLoading(cwdChanged);
@@ -648,53 +826,26 @@ export function FileExplorer({ cwd, onOpenFile, refreshKey, onAtMention, onFileM
   }
 
   return (
-    <div>
+    <div
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(DRAG_MIME)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (!rootDragOver) setRootDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setRootDragOver(false);
+      }}
+      onDrop={(e) => { void handleRootDrop(e); }}
+      style={{
+        minHeight: "100%",
+        outline: rootDragOver ? "1px dashed var(--accent)" : "none",
+        outlineOffset: -2,
+        background: rootDragOver ? "var(--bg-hover)" : "transparent",
+      }}
+    >
       <div style={{ padding: "2px 4px" }}>
-        {creating && (
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 4, paddingLeft: 8, paddingRight: 8, paddingTop: 2, paddingBottom: 2 }}>
-            <span style={{ flexShrink: 0, display: "flex", alignItems: "center", height: 20 }}>
-              {creating.kind === "folder"
-                ? <FolderIcon size={14} name={createName} />
-                : getFileIcon(createName || "file", 14)}
-            </span>
-            <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-              <input
-                autoFocus
-                value={createName}
-                placeholder={t("Name")}
-                onChange={(e) => { setCreateName(e.target.value); setCreateError(null); }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    submitCreate();
-                  } else if (e.key === "Escape") {
-                    e.preventDefault();
-                    cancelCreate();
-                  }
-                }}
-                onBlur={() => {
-                  // Empty name → cancel; anything else → create (same
-                  // commit-on-blur behavior as most desktop explorers).
-                  if (createName.trim() === "") cancelCreate();
-                  else submitCreate();
-                }}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  fontSize: 12,
-                  padding: "1px 4px",
-                  border: "1px solid " + (createError ? "#f87171" : "var(--accent)"),
-                  borderRadius: 3,
-                  background: "var(--bg)",
-                  color: "var(--text)",
-                  width: "100%",
-                }}
-              />
-              {createError && (
-                <span style={{ fontSize: 10, color: "#f87171", whiteSpace: "normal" }}>{createError}</span>
-              )}
-            </span>
-          </div>
-        )}
         {roots.map((node) => (
           <TreeNode
             key={node.fullPath}

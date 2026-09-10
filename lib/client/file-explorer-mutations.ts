@@ -48,6 +48,44 @@ export async function createEntry(
   }
 }
 
+/** Move a file or directory into `destDir` (keeping its name). Used by the
+ *  explorer's drag-and-drop. Returns the server error verbatim on failure
+ *  (e.g. "Already exists", "Cannot move a folder into itself"). */
+export async function moveEntry(sourcePath: string, destDir: string): Promise<CreateResult> {
+  try {
+    const encoded = encodeFilePathForApi(sourcePath);
+    const res = await fetch(`/api/files/${encoded}?type=move`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ destDir }),
+    });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "" }));
+      return { ok: false, error: error || `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/** Duplicate a file next to itself (`?type=duplicate`). The server picks a
+ *  non-existing "<name> copy[ n]<ext>" name. Files only — directories are
+ *  rejected by the API. */
+export async function duplicateEntry(sourcePath: string): Promise<CreateResult> {
+  try {
+    const encoded = encodeFilePathForApi(sourcePath);
+    const res = await fetch(`/api/files/${encoded}?type=duplicate`, { method: "POST" });
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: "" }));
+      return { ok: false, error: error || `HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
 export interface UploadOutcome {
   uploaded: number;
   skipped: number;

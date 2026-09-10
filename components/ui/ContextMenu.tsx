@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export interface ContextMenuItem {
@@ -185,15 +185,36 @@ export function useContextMenu(): ContextMenuContextValue {
 
 function ContextMenuView({ state, onItem }: { state: ContextMenuState; onItem: () => void }) {
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     setPortalEl(document.body);
   }, []);
+
+  // The provider clamps the initial position using a rough estimate
+  // (fixed item height + width). Real menus vary a lot in height once
+  // labels wrap / separators / font metrics are involved, so re-clamp
+  // against the measured box before paint. Without this the bottom
+  // items (often "Delete") can spill past the viewport edge.
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const rect = el.getBoundingClientRect();
+    let x = state.x;
+    let y = state.y;
+    if (x + rect.width > vw - EDGE_PADDING) x = vw - rect.width - EDGE_PADDING;
+    if (y + rect.height > vh - EDGE_PADDING) y = vh - rect.height - EDGE_PADDING;
+    el.style.left = `${Math.max(EDGE_PADDING, x)}px`;
+    el.style.top = `${Math.max(EDGE_PADDING, y)}px`;
+  }, [portalEl, state.id, state.x, state.y]);
 
   if (!portalEl) return null;
 
   return createPortal(
     <div
       data-pi-context-menu
+      ref={menuRef}
       role="menu"
       style={{
         position: "fixed",
@@ -201,6 +222,8 @@ function ContextMenuView({ state, onItem }: { state: ContextMenuState; onItem: (
         top: state.y,
         zIndex: 10001,
         minWidth: 180,
+        maxHeight: "calc(100vh - 16px)",
+        overflowY: "auto",
         background: "var(--bg-panel)",
         border: "1px solid var(--border)",
         borderRadius: 6,
