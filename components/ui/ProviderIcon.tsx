@@ -26,6 +26,11 @@ import CohereColorIcon from "@lobehub/icons/es/Cohere/components/Color";
 import PerplexityColorIcon from "@lobehub/icons/es/Perplexity/components/Color";
 import TogetherColorIcon from "@lobehub/icons/es/Together/components/Color";
 import GrokIcon from "@lobehub/icons/es/Grok/components/Mono";
+import OpenCodeIcon from "@lobehub/icons/es/OpenCode/components/Mono";
+import NvidiaColorIcon from "@lobehub/icons/es/Nvidia/components/Color";
+import BasetenIcon from "@lobehub/icons/es/Baseten/components/Mono";
+import AntGroupColorIcon from "@lobehub/icons/es/AntGroup/components/Color";
+import XiaomiMiMoIcon from "@lobehub/icons/es/XiaomiMiMo/components/Mono";
 
 type IconComponent = React.ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
 
@@ -63,6 +68,21 @@ const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }>
   "perplexity":             { Icon: PerplexityColorIcon,  hasColor: true },
   "together":               { Icon: TogetherColorIcon,    hasColor: true },
   "grok":                   { Icon: GrokIcon,             hasColor: false },
+  // pi builtin providers discovered through runtime catalogs (opencode API,
+  // NVIDIA NIM, token plans, ...) — keep in sync with pi-ai's models.generated.js
+  "opencode":               { Icon: OpenCodeIcon,         hasColor: false },
+  "opencode-go":            { Icon: OpenCodeIcon,         hasColor: false },
+  "nvidia":                 { Icon: NvidiaColorIcon,      hasColor: true },
+  "baseten":                { Icon: BasetenIcon,          hasColor: false },
+  "ant-ling":               { Icon: AntGroupColorIcon,    hasColor: true },
+  "xiaomi":                 { Icon: XiaomiMiMoIcon,       hasColor: false },
+  "xiaomi-token-plan-ams":  { Icon: XiaomiMiMoIcon,       hasColor: false },
+  "xiaomi-token-plan-cn":   { Icon: XiaomiMiMoIcon,       hasColor: false },
+  "xiaomi-token-plan-sgp":  { Icon: XiaomiMiMoIcon,       hasColor: false },
+  "qwen-token-plan":        { Icon: QwenColorIcon,        hasColor: true },
+  "qwen-token-plan-cn":     { Icon: QwenColorIcon,        hasColor: true },
+  "qwen-token-plan-individual": { Icon: QwenColorIcon,    hasColor: true },
+  "zai-coding-cn":          { Icon: ZhipuColorIcon,       hasColor: true },
 };
 
 export function hasProviderIcon(providerId: string | null | undefined): boolean {
