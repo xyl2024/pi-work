@@ -66,7 +66,7 @@ export const CELEBRATE_SYSTEM_PROMPT_BLOCK = `\
 
 export const celebrateTool = defineTool<typeof CelebrateParams, CelebrateDetails>({
   name: CELEBRATE_TOOL_NAME,
-  label: "Celebrate 🎉",
+  label: "Celebrate",
   description:
     "Play a celebration animation in the Pi Work UI: confetti rain, party cannons, or both at once. Purely visual — call it and keep going; it does not block your work.",
   parameters: CelebrateParams,

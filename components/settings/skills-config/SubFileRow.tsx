@@ -106,25 +106,10 @@ export function SubFileRow({
               flexShrink: 0,
               width: 12,
               color: "var(--text-dim)",
-              transition: "transform 0.12s",
-              transform: expanded ? "rotate(90deg)" : "none",
             }}
-          >
-            ▶
-          </span>
+          />
         )}
-        {/* Icon based on file type */}
-        <span style={{ flexShrink: 0, color: "var(--text-dim)" }}>
-          {file.name.endsWith(".sh") || file.name.endsWith(".js")
-            ? "⚙"
-            : file.name.endsWith(".md")
-              ? "📄"
-              : file.name.endsWith(".json")
-                ? "📋"
-                : file.name.endsWith(".yaml") || file.name.endsWith(".yml")
-                  ? "⚙"
-                  : "📄"}
-        </span>
+        <span style={{ flexShrink: 0 }} />
         <span
           style={{
             flex: 1,

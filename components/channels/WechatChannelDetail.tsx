@@ -355,11 +355,11 @@ export function WechatChannelDetail({
   let healthMeta: string | null = null;
   if (channel.status === "connected") {
     if (h?.backingOff) {
-      runtimeStatus = `⚠ ${t("channels.healthBackoff", { n: h.consecutiveFailures, s: retryIn(h.retryInMs) })}`;
+      runtimeStatus = t("channels.healthBackoff", { n: h.consecutiveFailures, s: retryIn(h.retryInMs) });
     } else if (h?.alive) {
-      runtimeStatus = `● ${t("channels.statusLive")}`;
+      runtimeStatus = t("channels.statusLive");
     } else {
-      runtimeStatus = `○ ${t("channels.healthNoHeartbeat")}`;
+      runtimeStatus = t("channels.healthNoHeartbeat");
     }
     if (h?.lastPollAt) {
       healthMeta = `${t("channels.healthLastPoll")} ${t("channels.healthAgo", { s: fmtAgo(h.lastPollAt) })}`;
@@ -459,7 +459,7 @@ export function WechatChannelDetail({
                 cursor: "pointer",
               }}
             >
-              ✎ {t("channels.rename")}
+              {t("channels.rename")}
             </button>
           </>
         )}

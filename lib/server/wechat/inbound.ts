@@ -215,7 +215,7 @@ async function handleInboundImpl(msg: InboundMessage, messageKey: string): Promi
       fromUserId: msg.fromUserId,
       error: errorStr,
     });
-    await safeReplyIfActive(account, msg, `❌ 处理失败：${errorStr.slice(0, 200)}`);
+    await safeReplyIfActive(account, msg, `处理失败：${errorStr.slice(0, 200)}`);
   }
 }
 
@@ -232,13 +232,13 @@ async function processMessage(
   if (!channel.workspaceId) {
     log.warn("inbound dropped — channel has no workspace", { channelId, fromUserId: msg.fromUserId });
     pushActivity(channelId, { kind: "workspace_missing", fromUserId: msg.fromUserId });
-    await safeReplyIfActive(account, msg, "❌ 当前未设置 workspace，请到 pi-work 频道面板里选一个。");
+    await safeReplyIfActive(account, msg, "当前未设置 workspace，请到 pi-work 频道面板里选一个。");
     return;
   }
   if (!workspaceUsable(channel.workspaceId)) {
     log.warn("inbound paused — workspace unusable", { channelId, workspaceId: channel.workspaceId });
     pushActivity(channelId, { kind: "workspace_unusable", fromUserId: msg.fromUserId, detail: channel.workspaceId });
-    await safeReplyIfActive(account, msg, "❌ 当前 workspace 不可用，请在频道面板重新选择。");
+    await safeReplyIfActive(account, msg, "当前 workspace 不可用，请在频道面板重新选择。");
     return;
   }
 
@@ -247,7 +247,7 @@ async function processMessage(
     logSessionEvent({ kind: "command", fromUserId: msg.fromUserId, command: "/new" });
     updateChannel(channelId, { currentSessionId: null });
     pushActivity(channelId, { kind: "session_reset", fromUserId: msg.fromUserId });
-    await safeReplyIfActive(account, msg, "✅ 已重置，下条消息开始新会话。");
+    await safeReplyIfActive(account, msg, "已重置，下条消息开始新会话。");
     return;
   }
 
@@ -302,7 +302,7 @@ async function processMessage(
       fromUserId: msg.fromUserId,
       detail: err instanceof Error ? err.message : String(err),
     });
-    await safeReplyIfActive(account, msg, `❌ 处理失败：${String(err).slice(0, 200)}`);
+    await safeReplyIfActive(account, msg, `处理失败：${String(err).slice(0, 200)}`);
   }
 }
 

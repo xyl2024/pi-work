@@ -77,8 +77,7 @@ export function ChannelActivityFeed({ channelId }: { channelId: string }) {
           padding: 0, cursor: "pointer", textAlign: "left", color: "var(--text)", fontSize: 13, fontWeight: 600,
         }}
       >
-        <span style={{ display: "inline-block", transition: "transform .15s", transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}>▾</span>
-        <span>📡 {t("channels.act.title")}</span>
+        <span>{t("channels.act.title")}</span>
       </button>
 
       {open && (

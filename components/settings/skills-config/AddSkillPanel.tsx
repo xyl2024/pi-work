@@ -317,7 +317,7 @@ export function AddSkillPanel({
                   }}
                 >
                   {isInstalled
-                    ? `✓ ${t("Installed")}`
+                    ? t("Installed")
                     : isInstalling
                       ? t("Installing...")
                       : t("Install")}

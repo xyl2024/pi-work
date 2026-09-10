@@ -30,7 +30,7 @@ export const toolsMarket = {
   "Agent Todo": "Agent 待办",
   "Show Media": "显示媒体",
   "Spawn Subagent": "指派子代理",
-  "Celebrate 🎉": "庆祝 🎉",
+  "Celebrate": "庆祝",
   "Web Search": "联网搜索",
   "Fetch Content": "获取网页内容",
   "Ask User Questions": "询问用户",

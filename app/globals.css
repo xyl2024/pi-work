@@ -496,6 +496,14 @@ pre, code {
   }
 }
 
+/* Hide native disclosure triangles on <summary> elements */
+summary {
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+
 /* Process details summary row — hover brightens the text */
 .process-summary {
   color: var(--text-muted);

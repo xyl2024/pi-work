@@ -51,19 +51,18 @@ export const GROKBOT_SHAPES: GrokShapeDef[] = [
 export interface GrokToggleDef {
   id: string;
   name: string;
-  icon: string;
 }
 export const GROKBOT_PARTS: GrokToggleDef[] = [
-  { id: "hands", name: "双手", icon: "⌁" },
-  { id: "feet", name: "双脚", icon: "⌄" },
-  { id: "tail", name: "尾巴", icon: "〜" },
-  { id: "antenna", name: "天线", icon: "⌃" },
+  { id: "hands", name: "双手" },
+  { id: "feet", name: "双脚" },
+  { id: "tail", name: "尾巴" },
+  { id: "antenna", name: "天线" },
 ];
 export const GROKBOT_ACCESSORIES: GrokToggleDef[] = [
-  { id: "straw-hat", name: "草帽", icon: "◒" },
-  { id: "glasses", name: "眼镜", icon: "◎" },
-  { id: "bowtie", name: "蝴蝶结", icon: "⋈" },
-  { id: "cape", name: "披风", icon: "◢" },
+  { id: "straw-hat", name: "草帽" },
+  { id: "glasses", name: "眼镜" },
+  { id: "bowtie", name: "蝴蝶结" },
+  { id: "cape", name: "披风" },
 ];
 
 // ── Display names (zh) for states / groups ──

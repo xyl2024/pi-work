@@ -361,7 +361,7 @@ export function GrokBotLab({ onClose }: Props) {
                       background: config.parts.includes(p.id) ? "var(--bg-hover)" : "transparent",
                     }}
                   >
-                    {p.icon} {p.name}
+                    {p.name}
                   </button>
                 ))}
               </div>
@@ -383,7 +383,7 @@ export function GrokBotLab({ onClose }: Props) {
                       background: config.accessories.includes(a.id) ? "var(--bg-hover)" : "transparent",
                     }}
                   >
-                    {a.icon} {a.name}
+                    {a.name}
                   </button>
                 ))}
               </div>
