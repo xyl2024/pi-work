@@ -10,7 +10,9 @@ import { CollapsiblePanel } from "../ui/CollapsiblePanel";
 import { CwdProjectIcon } from "../files/CwdProjectIcon";
 import { CwdIconPicker } from "../files/CwdIconPicker";
 import { CwdToolsPicker } from "./CwdToolsPicker";
+import { CwdAliasDialog } from "./CwdAliasDialog";
 import { useCwdIcon, setCwdIcon, initCwdIcons } from "@/hooks/cwdIconStore";
+import { useCwdAlias, setCwdAlias, initCwdAliases } from "@/hooks/cwdAliasStore";
 import { useAllPendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 
 /**
@@ -236,12 +238,16 @@ function CwdGroup({
   const { t } = useI18n();
   const headerRef = useRef<HTMLDivElement | null>(null);
 
-  // Per-cwd custom icon (loaded lazily via the app-wide store).
+  // Per-cwd custom icon + display alias (loaded lazily via the app-wide
+  // stores).
   useEffect(() => {
     initCwdIcons();
+    initCwdAliases();
   }, []);
   const cwdIcon = useCwdIcon(workspace.cwd);
+  const cwdAlias = useCwdAlias(workspace.cwd);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [aliasDialogOpen, setAliasDialogOpen] = useState(false);
   const [toolsPickerOpen, setToolsPickerOpen] = useState(false);
 
   // Forward the header DOM node to the parent so it can scrollIntoView when
@@ -463,8 +469,10 @@ function CwdGroup({
           <CwdProjectIcon cwd={workspace.cwd} size={14} />
         </span>
 
-        {/* Path — basename, then the fold/unfold chevron immediately after
-            (not right-aligned), then the running dot. */}
+        {/* Path — display alias when set (falls back to the basename),
+            then the fold/unfold chevron immediately after (not
+            right-aligned), then the running dot. Hovering shows the
+            absolute cwd path as a tooltip. */}
         <span
           style={{
             flex: 1, minWidth: 0,
@@ -475,12 +483,14 @@ function CwdGroup({
             fontWeight: 500,
           }}
         >
-          <span style={{
-            flex: "0 1 auto", minWidth: 0,
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {basenameOf(workspace.cwd)}
-          </span>
+          <Tooltip content={workspace.cwd} maxWidth={480}>
+            <span style={{
+              flex: "0 1 auto", minWidth: 0,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {cwdAlias ?? basenameOf(workspace.cwd)}
+            </span>
+          </Tooltip>
 
           {/* Fold/unfold chevron — sits right after the basename. Points
               down when expanded, right when collapsed (rotates -90deg). */}
@@ -637,6 +647,17 @@ function CwdGroup({
             />
             <CwdMenuRow
               index={2}
+              icon={<span aria-hidden>✎</span>}
+              label={t("Set project alias")}
+              onClick={() => {
+                setLoadMenuOpen(false);
+                // Flush any pending menu-close timer before opening the modal.
+                cancelMenuClose();
+                setAliasDialogOpen(true);
+              }}
+            />
+            <CwdMenuRow
+              index={3}
               icon={
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 3v12" />
@@ -717,6 +738,15 @@ function CwdGroup({
             if (ok) setIconPickerOpen(false);
           }}
           onClose={() => setIconPickerOpen(false)}
+        />
+      )}
+      {aliasDialogOpen && (
+        <CwdAliasDialog
+          open
+          cwd={workspace.cwd}
+          current={cwdAlias ?? null}
+          onSave={(alias) => setCwdAlias(workspace.cwd, alias)}
+          onClose={() => setAliasDialogOpen(false)}
         />
       )}
     </div>

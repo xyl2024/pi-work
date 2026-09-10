@@ -10,6 +10,7 @@ import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { Tooltip } from "../ui/Tooltip";
 import { CwdProjectIcon } from "../files/CwdProjectIcon";
 import { CwdFolderDialog } from "./CwdFolderDialog";
+import { useCwdAlias, useCwdAliases, initCwdAliases } from "@/hooks/cwdAliasStore";
 
 interface CwdPickerProps {
   cwd: string | null;
@@ -29,12 +30,15 @@ function basenameOf(cwd: string): string {
 export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, fill = false }: CwdPickerProps) {
   const { t } = useI18n();
   const { cwds } = useCwdList();
+  const { map: aliasMap } = useCwdAliases();
+  const cwdAlias = useCwdAlias(cwd);
   const [open, setOpen] = useState(false);
   const [folderOpen, setFolderOpen] = useState(false);
 
   useEffect(() => {
     initCwdList();
     initCwdIcons();
+    initCwdAliases();
   }, []);
 
   const handlePick = useCallback((next: string) => {
@@ -51,8 +55,11 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
     } catch { /* keep the modal open so the user can retry */ }
   }, [handlePick]);
 
-  const buttonLabel = cwd ? basenameOf(cwd) : t("Select project...");
-  const buttonTitle = cwd ? t("Change project") : t("Pick a project");
+  // Show the user-set alias when present; fall back to the basename.
+  const buttonLabel = cwd ? (cwdAlias ?? basenameOf(cwd)) : t("Select project...");
+  // Hovering an aliased cwd reveals its absolute path; unaliased cwds keep
+  // the generic action hint.
+  const buttonTitle = cwd ? (cwdAlias ? cwd : t("Change project")) : t("Pick a project");
 
   return (
     <>
@@ -76,6 +83,7 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
         open
         cwd={cwd}
         cwds={cwds ?? []}
+        aliasMap={aliasMap}
         onCwdChange={handlePick}
         onDefaultCwd={handleDefault}
         onSelectFolder={() => { setOpen(false); setFolderOpen(true); }}
@@ -86,10 +94,11 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
   );
 }
 
-function CwdPickerModal({ open, cwd, cwds, onCwdChange, onDefaultCwd, onSelectFolder, onClose }: {
+function CwdPickerModal({ open, cwd, cwds, aliasMap, onCwdChange, onDefaultCwd, onSelectFolder, onClose }: {
   open: boolean;
   cwd: string | null;
   cwds: string[];
+  aliasMap: Record<string, string> | null;
   onCwdChange: (cwd: string) => void;
   onDefaultCwd: () => Promise<void>;
   onSelectFolder: () => void;
@@ -122,8 +131,11 @@ function CwdPickerModal({ open, cwd, cwds, onCwdChange, onDefaultCwd, onSelectFo
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return q ? cwds.filter((item) => `${basenameOf(item)} ${item}`.toLowerCase().includes(q)) : cwds;
-  }, [cwds, query]);
+    // Match against the alias (when set) in addition to basename + path.
+    return q
+      ? cwds.filter((item) => `${aliasMap?.[item] ?? ""} ${basenameOf(item)} ${item}`.toLowerCase().includes(q))
+      : cwds;
+  }, [cwds, aliasMap, query]);
 
   useEffect(() => { setPortalEl(document.body); }, []);
   useEffect(() => {
@@ -184,7 +196,7 @@ function CwdPickerModal({ open, cwd, cwds, onCwdChange, onDefaultCwd, onSelectFo
                         : <CwdProjectIcon cwd={item} size={14} />}
                     </span>
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", fontSize: 13, color: index === activeIndex ? "var(--text)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{basenameOf(item)}</span>
+                      <span style={{ display: "block", fontSize: 13, color: index === activeIndex ? "var(--text)" : "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{aliasMap?.[item] ?? basenameOf(item)}</span>
                       <span style={{ display: "block", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item}</span>
                     </span>
                   </button>

@@ -99,6 +99,7 @@ const DEFAULT_CONFIG: PiWorkConfig = {
     events: { ...DEFAULT_UI_SOUND_EVENTS },
   },
   cwd_icons: {},
+  cwd_aliases: {},
   disabled_skills: {},
   web_access: {
     enabled: true,
@@ -246,6 +247,16 @@ function parseCwdIcons(raw: unknown): Record<string, string> {
   return out;
 }
 
+function parseCwdAliases(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  const obj = raw as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [cwd, alias] of Object.entries(obj)) {
+    if (typeof alias === "string" && alias.trim().length > 0) out[cwd] = alias;
+  }
+  return out;
+}
+
 function parseWebAccess(raw: unknown): WebAccessConfig {
   const defaults = DEFAULT_CONFIG.web_access;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { enabled: defaults.enabled, tavily: {} };
@@ -314,6 +325,7 @@ export function readConfig(): PiWorkConfig {
       file_viewer: parseFileViewer(cfg.file_viewer),
       ui_sounds: parseUiSounds(cfg.ui_sounds),
       cwd_icons: parseCwdIcons(cfg.cwd_icons),
+      cwd_aliases: parseCwdAliases(cfg.cwd_aliases),
       disabled_skills: parseDisabledSkills(cfg.disabled_skills),
       web_access: parseWebAccess(cfg.web_access),
       subagent: parseSubagent(cfg.subagent),

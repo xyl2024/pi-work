@@ -41,4 +41,9 @@ export const sessions = {
   "Icons": "图标",
   "Emoji": "表情",
   "No icons match": "没有匹配的图标",
+
+  // Per-cwd display alias
+  "Set project alias": "设置项目别名",
+  "Leave empty to clear the alias": "留空则清除别名",
+  "Clear alias": "清除别名",
 } as const;
