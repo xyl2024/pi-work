@@ -42,11 +42,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (state === "login") {
-    return (
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <LoginForm />
-      </div>
-    );
+    return <LoginForm />;
   }
 
   return <>{children}</>;

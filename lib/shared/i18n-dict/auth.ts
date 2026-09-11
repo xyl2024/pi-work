@@ -1,8 +1,12 @@
 // Login / logout authentication gate vocabulary.
 
 export const auth = {
+  "Welcome back": "欢迎回来",
+  "Show password": "显示密码",
+  "Hide password": "隐藏密码",
   "Sign in": "登录",
-  "Signing in...": "正在登录...",
+  "Signing in…": "正在登录…",
+  "Skip to content": "跳到主要内容",
   "Username": "用户名",
   "Password": "密码",
   "Invalid username or password": "用户名或密码错误",
