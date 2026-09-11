@@ -160,6 +160,13 @@ function ResultCard({
 }
 
 const PAGE_SIZE = 6;
+
+/** Events sent by the streaming /api/skills/install endpoint. */
+interface InstallEvent {
+  type: "log" | "done" | "error";
+  line?: string;
+  message?: string;
+}
 // Reveal the next page when the list is scrolled within this many px of the
 // bottom, so the new cards are already there by the time the user arrives.
 const SCROLL_THRESHOLD_PX = 240;
@@ -174,7 +181,9 @@ const SCROLL_THRESHOLD_PX = 240;
  *     Upstream skills.sh has no offset, so "page N" is served by asking for
  *     `6 × N` results and taking the tail — this panel shows 6 cards and pulls
  *     the next page on scroll.
- *   • POST /api/skills/install { package, scope, cwd } → { success, error? }
+ *   • POST /api/skills/install { package, scope, cwd } → SSE stream of
+ *     `data: {type:"log", line}` progress events, ending with one `done` or
+ *     `error` event. Lines are shown live in an install log panel.
  *
  * Self-contained state machine: search / paging / install. The parent gets
  * a fire-and-forget `onInstalled()` callback so it can refresh the skill list.
@@ -198,10 +207,12 @@ export function AddSkillPanel({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [installing, setInstalling] = useState<string | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
+  const [installLogs, setInstallLogs] = useState<string[]>([]);
   const [installedPkgs, setInstalledPkgs] = useState<Set<string>>(new Set());
   const [scope, setScope] = useState<"global" | "project">("global");
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
   // Guards against a stale response from a previous query overwriting the
   // current one (fast consecutive searches).
   const requestSeqRef = useRef(0);
@@ -209,6 +220,12 @@ export function AddSkillPanel({
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Keep the install progress log pinned to the newest line.
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [installLogs]);
 
   const fetchPage = useCallback(async (q: string, nextPage: number) => {
     const res = await fetch("/api/skills/search", {
@@ -283,28 +300,57 @@ export function AddSkillPanel({
     }
   }, [hasMore, loadingMore, searching, loadMore]);
 
+  // Installs `pkg` via the streaming endpoint, rendering each progress event
+  // in `installLogs` as it arrives (SSE over a POST body — read manually).
   const install = useCallback(
     async (pkg: string) => {
       setInstalling(pkg);
       setInstallError(null);
+      setInstallLogs([]);
       try {
         const res = await fetch("/api/skills/install", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ package: pkg, scope, cwd }),
         });
-        const d = (await res.json()) as { success?: boolean; error?: string };
-        if (!res.ok || d.error) {
-          setInstallError(d.error ?? `HTTP ${res.status}`);
-          toast.show({ kind: "error", message: d.error ?? `HTTP ${res.status}` });
-          return;
+        if (!res.ok || !res.body) {
+          const d = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(d.error ?? `HTTP ${res.status}`);
         }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let done = false;
+        while (true) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() ?? "";
+          for (const chunk of chunks) {
+            const line = chunk.trim();
+            if (!line.startsWith("data:")) continue;
+            const ev = JSON.parse(line.slice(5).trim()) as InstallEvent;
+            if (ev.type === "log" && ev.line) {
+              const text = ev.line;
+              setInstallLogs((prev) => [...prev, text]);
+            } else if (ev.type === "done") {
+              done = true;
+            } else if (ev.type === "error") {
+              throw new Error(ev.message || "Install failed");
+            }
+          }
+        }
+
+        if (!done) throw new Error("Install stream ended without a result");
         setInstalledPkgs((prev) => new Set(prev).add(pkg));
         onInstalled();
         toast.show({ kind: "success", message: t("Skill installed") });
       } catch (e) {
-        setInstallError(String(e));
-        toast.show({ kind: "error", message: String(e) });
+        const message = e instanceof Error ? e.message : String(e);
+        setInstallError(message);
+        toast.show({ kind: "error", message });
       } finally {
         setInstalling(null);
       }
@@ -425,6 +471,75 @@ export function AddSkillPanel({
             style={{ fontSize: 12, color: "#f87171", wordBreak: "break-word" }}
           >
             {installError}
+          </div>
+        )}
+
+        {/* Live install progress: log lines streamed from the install CLI. */}
+        {installing && (
+          <div
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "7px 10px",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--text)",
+                borderBottom: installLogs.length
+                  ? "1px solid var(--border)"
+                  : "none",
+              }}
+            >
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  border: "2px solid var(--accent)",
+                  borderTopColor: "transparent",
+                  animation: "spin 1s linear infinite",
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {installing} · {t("Installing...")}
+              </span>
+            </div>
+            {installLogs.length > 0 && (
+              <div
+                ref={logRef}
+                data-scroll-wide
+                style={{
+                  maxHeight: 140,
+                  overflowY: "auto",
+                  padding: "8px 10px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                  lineHeight: 1.7,
+                  color: "var(--text-muted)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                }}
+              >
+                {installLogs.map((line, i) => (
+                  <div key={`${i}:${line}`}>{line}</div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

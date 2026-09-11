@@ -1,4 +1,5 @@
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
+import { createInterface } from "readline";
 import { promisify } from "util";
 import { existsSync } from "fs";
 import { dirname, join } from "path";
@@ -58,5 +59,67 @@ export async function runNpx(args: string[], opts: RunNpxOptions = {}): Promise<
     timeout: opts.timeout,
     cwd: opts.cwd,
     env: opts.env,
+  });
+}
+
+export interface RunNpxStreamOptions extends RunNpxOptions {
+  /** Called for each completed stdout/stderr line as it is produced. */
+  onLine: (line: string) => void;
+}
+
+/**
+ * Spawn-based variant of `runNpx` that streams completed output lines to
+ * `onLine` while the process runs, so callers can surface live progress.
+ * Returns the full stdout/stderr (ANSI codes included) once the child exits.
+ * Rejects on spawn errors or, when `timeout` is set, kills the child and
+ * rejects after the deadline.
+ */
+export async function runNpxStream(args: string[], opts: RunNpxStreamOptions): Promise<RunNpxResult> {
+  const npxCli = findNpxCli();
+  const { command, commandArgs } = npxCli
+    ? { command: execPath, commandArgs: [npxCli, ...args] }
+    : { command: "npx", commandArgs: args };
+
+  return new Promise<RunNpxResult>((resolve, reject) => {
+    const child = spawn(command, commandArgs, {
+      cwd: opts.cwd,
+      env: opts.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const timer = opts.timeout
+      ? setTimeout(() => {
+          child.kill("SIGTERM");
+        }, opts.timeout)
+      : null;
+
+    const wire = (stream: NodeJS.ReadableStream, sink: (chunk: string) => void) => {
+      createInterface({ input: stream }).on("line", (line: string) => {
+        sink(line + "\n");
+        opts.onLine(line);
+      });
+    };
+    wire(child.stdout!, (chunk) => (stdout += chunk));
+    wire(child.stderr!, (chunk) => (stderr += chunk));
+
+    const finish = (error: Error | null) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (error) {
+        const err = error as Error & { stdout?: string; stderr?: string };
+        err.stdout = stdout;
+        err.stderr = stderr;
+        reject(err);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    };
+
+    child.on("error", finish);
+    child.on("close", () => finish(null));
   });
 }
