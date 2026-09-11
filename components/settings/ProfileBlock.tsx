@@ -308,7 +308,7 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
             // Acrylic (frosted glass): semi-transparent panel tint over a
             // backdrop blur. Matches the AgentTodoPanel popover so the two
             // sidebar popovers feel like the same material.
-            background: "color-mix(in srgb, var(--bg-panel) 32%, transparent)",
+            background: "color-mix(in srgb, var(--bg-panel) 92%, transparent)",
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",
             // Edge matches the surrounding sidebar/chat/right-panel cards

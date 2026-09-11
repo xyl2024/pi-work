@@ -332,7 +332,7 @@ export const AgentTodoPanel = memo(function AgentTodoPanel({
             flexDirection: "column",
             overflow: "hidden",
             padding: "10px 6px",
-            background: "color-mix(in srgb, var(--bg-panel) 32%, transparent)",
+            background: "color-mix(in srgb, var(--bg-panel) 92%, transparent)",
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",
             border: "1px solid var(--border)",
