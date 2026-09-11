@@ -14,6 +14,7 @@ import {
   Languages,
   LetterText,
   PanelRight,
+  FolderOpen,
   Pencil,
   Star,
   Store,
@@ -59,6 +60,7 @@ const JsonPanelIcon = () => <Braces size={16} />;
 const TokensPanelIcon = () => <ChartSpline size={16} />;
 const GitDiffPanelIcon = () => <GitGraph size={16} />;
 const LlmAuditPanelIcon = () => <ChartColumn size={16} />;
+const CwdPickerIcon = () => <FolderOpen size={16} />;
 const ToolMarketIcon = () => <Store size={16} />;
 const EnglishLanguageIcon = () => <LetterText size={16} />;
 const ChineseLanguageIcon = () => <Languages size={16} />;
@@ -111,6 +113,7 @@ export interface CommandContext {
 
   // Modal openers
   openSettings: () => void;
+  openCwdPicker: () => void;
   openModels: () => void;
   openSkills: () => void;
   openPrompts: () => void;
@@ -154,6 +157,15 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     keywords: ["session", "chat", "new", "create", "新建", "会话"],
     icon: <PlusIcon />,
     run: () => ctx.newSession(),
+  });
+
+  cmds.push({
+    id: "session.change_project",
+    title: t("Change project"),
+    group: "Session",
+    keywords: ["cwd", "project", "directory", "folder", "switch", "切换", "项目", "目录", "工作目录"],
+    icon: <CwdPickerIcon />,
+    run: () => ctx.openCwdPicker(),
   });
 
   cmds.push({

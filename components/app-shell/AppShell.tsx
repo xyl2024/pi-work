@@ -49,6 +49,7 @@ import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
 import { CommandPalette } from "./CommandPalette";
 import { InboxModal } from "../inbox/InboxModal";
+import { CwdPicker } from "../sessions/CwdPicker";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisableDefaultTab } from "@/hooks/useDisableDefaultTab";
@@ -520,6 +521,7 @@ export function AppShell() {
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [promptsConfigOpen, setPromptsConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
+  const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [toolsMarketOpen, setToolsMarketOpen] = useState(false);
@@ -1552,6 +1554,7 @@ export function AppShell() {
     setLocale,
     newSession: handleSlashNew,
     openSettings: () => setSettingsConfigOpen(true),
+    openCwdPicker: () => setCwdPickerOpen(true),
     openModels: () => setModelsConfigOpen(true),
     openSkills: () => setSkillsConfigOpen(true),
     openPrompts: () => setPromptsConfigOpen(true),
@@ -1574,6 +1577,7 @@ export function AppShell() {
     hasCwd: !!(selectedSession?.cwd ?? newSessionCwd),
   }), [
     theme.setPreset, setLocale, handleSlashNew,
+    setCwdPickerOpen,
     handleOpenTodoTab, handleOpenFavoritesTab, handleOpenCanvasTab,
     handleOpenTranslateTab, handleOpenToolCallsTab, handleOpenJsonTab,
     handleOpenTokensTab, handleOpenGitDiffTab, handleOpenLlmAuditTab,
@@ -2174,6 +2178,13 @@ export function AppShell() {
       <PromptsConfig cwd={(selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setPromptsConfigOpen(false)} />
     )}
     {settingsConfigOpen && <SettingsModal onClose={() => setSettingsConfigOpen(false)} onProfileSaved={() => setProfileRefreshKey((k) => k + 1)} />}
+    <CwdPicker
+      cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+      onCwdChange={handleCwdPicked}
+      openSignal={cwdPickerOpen}
+      onOpenSignalHandled={() => setCwdPickerOpen(false)}
+      hideTrigger
+    />
     {schedulerOpen && (
       <SchedulerModal
         open={schedulerOpen}

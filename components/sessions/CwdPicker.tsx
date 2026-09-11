@@ -18,6 +18,12 @@ interface CwdPickerProps {
   disabled?: boolean;
   maxWidth?: number;
   fill?: boolean;
+  /** Flip to true to open the picker programmatically (e.g. command palette);
+   *  call onOpenSignalHandled() once consumed. */
+  openSignal?: boolean;
+  onOpenSignalHandled?: () => void;
+  /** Render only the modal (no trigger button) — for purely programmatic use. */
+  hideTrigger?: boolean;
   dropdownDirection?: "up" | "down";
 }
 
@@ -27,7 +33,7 @@ function basenameOf(cwd: string): string {
   return parts[parts.length - 1] ?? cwd;
 }
 
-export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, fill = false }: CwdPickerProps) {
+export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, fill = false, openSignal, onOpenSignalHandled, hideTrigger = false }: CwdPickerProps) {
   const { t } = useI18n();
   const { cwds } = useCwdList();
   const { map: aliasMap } = useCwdAliases();
@@ -40,6 +46,15 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
     initCwdIcons();
     initCwdAliases();
   }, []);
+
+  // Programmatic open (command palette): consume the signal once so the
+  // next identical signal (open → close without picking) still works.
+  useEffect(() => {
+    if (openSignal) {
+      if (!disabled) setOpen(true);
+      onOpenSignalHandled?.();
+    }
+  }, [openSignal, disabled, onOpenSignalHandled]);
 
   const handlePick = useCallback((next: string) => {
     onCwdChange(next);
@@ -63,7 +78,7 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
 
   return (
     <>
-      <Tooltip content={buttonTitle}>
+      {!hideTrigger && <Tooltip content={buttonTitle}>
         <button
           type="button"
           onClick={() => { if (!disabled) setOpen(true); }}
@@ -78,7 +93,7 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
           <span style={{ display: "flex", flexShrink: 0, color: "var(--accent)" }}><CwdProjectIcon cwd={cwd} size={14} /></span>
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, fontFamily: "var(--font-mono)" }}>{buttonLabel}</span>
         </button>
-      </Tooltip>
+      </Tooltip>}
       {open && <CwdPickerModal
         open
         cwd={cwd}
