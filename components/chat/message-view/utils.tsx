@@ -159,10 +159,6 @@ export function getToolPreview(block: { input?: unknown; toolName?: string }): s
       parts = [str(record.path), str(record.pattern)];
       break;
     }
-    case "agent_todo": {
-      parts = [str(record.action), str(record.subject)];
-      break;
-    }
     case "codegraph_status": {
       parts = [str(record.path)];
       break;

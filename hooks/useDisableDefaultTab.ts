@@ -8,8 +8,7 @@ import { useEffect } from "react";
  *
  * The interceptor runs in the capture phase, before any element-level
  * `onKeyDown` handler. Components that want to give Tab a custom meaning
- * (e.g. ChatInput's Tab-to-cycle-thinking-level, CreateTodoInput's
- * Tab-to-pick-suggestion) keep working because:
+ * (e.g. ChatInput's Tab-to-cycle-thinking-level) keep working because:
  *
  *   - preventDefault only blocks the default action; it does not stop the
  *     event from continuing to bubble, so their `onKeyDown` still runs.
@@ -25,8 +24,7 @@ import { useEffect } from "react";
  * here. The product already lets every focusable element be reached with
  * the mouse or activated with Enter/Space (for <button> / <a>); Tab is
  * reserved for places that re-purpose it as a control surface (see
- * components/chat/ChatInput.tsx handleThinkingTabKeyDown,
- * components/todos/user-todo/CreateTodoInput.tsx Tag dropdown handler).
+ * components/chat/ChatInput.tsx handleThinkingTabKeyDown).
  */
 export function useDisableDefaultTab(): void {
   useEffect(() => {

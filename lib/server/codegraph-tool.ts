@@ -240,7 +240,7 @@ const buildParams = Type.Object({
  * family. Appended at the very end of the system prompt via
  * `appendSystemPromptOverride`, gated on the codegraph family being loaded
  * AND at least one family tool being part of the session's tool set (same
- * pattern as `agent_todo`).
+ * pattern as ask_user_questions).
  *
  * The family shares ONE block instead of per-tool blocks because its tools
  * are bound together in the UI (TOOL_GROUPS: toggled on/off as a group) and

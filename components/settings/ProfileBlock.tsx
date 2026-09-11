@@ -309,8 +309,7 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
             right: 10,
             zIndex: 100,
             // Acrylic (frosted glass): semi-transparent panel tint over a
-            // backdrop blur. Matches the AgentTodoPanel popover so the two
-            // sidebar popovers feel like the same material.
+            // backdrop blur. Standard sidebar popover material.
             background: "color-mix(in srgb, var(--bg-panel) 92%, transparent)",
             backdropFilter: "blur(12px)",
             WebkitBackdropFilter: "blur(12px)",

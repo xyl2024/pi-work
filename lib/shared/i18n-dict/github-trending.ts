@@ -3,10 +3,9 @@
 // Notes:
 //   - "Today" / "Refresh" / "Retry" / "Language" / "Loading..." /
 //     "Failed to copy" already exist in common/settings; not re-declared.
-//   - "This week" / "This month" exist in todos.ts ("本周内"/"本月内");
-//     re-declared here with the trending-page's intended sense ("本周"/"本月").
-//     The spread order (this module merges late) lets these win app-wide —
-//     the todo filter label difference is immaterial.
+//   - "This week" / "This month" are re-declared here ("本周"/"本月") with
+//     the trending-page's intended sense. The spread order (this module
+//     merges late) lets these win app-wide.
 //   - The period-stars text ("1,234 stars today") stays in the upstream
 //     English per design — it is fetched data, not UI chrome.
 

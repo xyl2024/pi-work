@@ -75,7 +75,6 @@ export const PanelToggleIcon = (props: IconProps) => <Icon {...props}><rect x="3
 export const ExpandLeftIcon = (props: IconProps) => <Icon {...props}><polyline points="13 7 18 12 13 17" /><polyline points="6 7 11 12 6 17" /></Icon>;
 export const MaximizeIcon = (props: IconProps) => <Icon {...props}><polyline points="8 3 3 3 3 8" /><polyline points="16 3 21 3 21 8" /><polyline points="8 21 3 21 3 16" /><polyline points="16 21 21 21 21 16" /><line x1="3" y1="3" x2="8" y2="8" /><line x1="21" y1="3" x2="16" y2="8" /><line x1="3" y1="21" x2="8" y2="16" /><line x1="21" y1="21" x2="16" y2="16" /></Icon>;
 export const MinimizeIcon = (props: IconProps) => <Icon {...props}><polyline points="8 3 8 8 3 8" /><polyline points="16 3 16 8 21 8" /><polyline points="8 21 8 16 3 16" /><polyline points="16 21 16 16 21 16" /></Icon>;
-export const TodoCheckIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="3" width="18" height="18" rx="2" /><polyline points="8 12 11 15 17 9" /></Icon>;
 export const DownloadIcon = (props: IconProps) => <Icon {...props}><path d="M12 3v11" /><polyline points="7 10 12 15 17 10" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></Icon>;
 export const NotificationIcon = (props: IconProps) => <Icon {...props}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></Icon>;
 export const CompressIcon = (props: IconProps) => <Icon {...props}><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="15" y2="12" /><line x1="4" y1="17" x2="10" y2="17" /></Icon>;

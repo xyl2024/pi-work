@@ -14,15 +14,6 @@ import { useTextSelection } from "@/hooks/useTextSelection";
 import { SessionTabBar } from "../sessions/SessionTabBar";
 import { FileViewer } from "../files/FileViewer";
 import { TabBar, type Tab } from "../ui/TabBar";
-import { TodoPanel } from "../todos/user-todo/TodoPanel";
-
-// Right panel content re-renders only when its inputs change. TodoPanel has
-// no props, so memoizing it keeps AppShell's per-state-change re-renders
-// (e.g. collapsing the panel) from re-rendering the whole todo list — that
-// synchronous re-render on every click was the main source of the janky
-// collapse/expand animation (the ~200ms main-thread block ate the transition
-// frames).
-const MemoTodoPanel = memo(TodoPanel);
 import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
 import { ToolCallStatsPanel } from "../panels/ToolCallStatsPanel";
@@ -65,7 +56,6 @@ import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
 import {
-  TODO_TAB_ID,
   FAVORITES_TAB_ID,
   TRANSLATE_TAB_ID,
   TOOL_CALLS_TAB_ID,
@@ -962,19 +952,7 @@ export function AppShell() {
     ensureRightPanelOpen();
   }, [ensureRightPanelOpen]);
 
-  // Open the todos tab. If it's already in the tab strip, just activate it;
-  // if not, insert it at the leftmost position and activate it. Mirrors
-  // handleOpenFile so existing file tabs are never displaced.
-  const handleOpenTodoTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((t) => t.kind === "todo")) return prev;
-      return [{ kind: "todo", id: TODO_TAB_ID, label: t("Todos") }, ...prev];
-    });
-    setActiveFileTabId(TODO_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the favorites tab — same pattern as todos / file tabs.
+  // Open the favorites tab — same pattern as file tabs.
   const handleOpenFavoritesTab = useCallback(() => {
     setFileTabs((prev) => {
       if (prev.some((t) => t.kind === "favorites")) return prev;
@@ -984,7 +962,7 @@ export function AppShell() {
     ensureRightPanelOpen();
   }, [t, ensureRightPanelOpen]);
 
-  // Open the translate tab — same pattern as todos / favorites.
+  // Open the translate tab — same pattern as favorites.
   const handleOpenTranslateTab = useCallback(() => {
     setFileTabs((prev) => {
       if (prev.some((t) => t.kind === "translate")) return prev;
@@ -1012,7 +990,7 @@ export function AppShell() {
     ensureRightPanelOpen();
   }, [activeFileTabId, rightPanelState, t, ensureRightPanelOpen]);
 
-  // Open the JSON formatter tab — same pattern as todos / favorites / translate.
+  // Open the JSON formatter tab — same pattern as favorites / translate.
   const handleOpenJsonTab = useCallback(() => {
     setFileTabs((prev) => {
       if (prev.some((tab) => tab.kind === "json")) return prev;
@@ -1468,7 +1446,6 @@ export function AppShell() {
     toggleRightPanelTab: handleToggleRightPanelTab,
     setRightPanelState,
     openTab: {
-      todo: handleOpenTodoTab,
       canvas: handleOpenCanvasTab,
       translate: handleOpenTranslateTab,
       json: handleOpenJsonTab,
@@ -1561,7 +1538,6 @@ export function AppShell() {
     openScheduler: () => setSchedulerOpen(true),
     openChannels: () => setChannelsOpen(true),
     openToolMarket: () => setToolsMarketOpen(true),
-    openTodosTab: handleOpenTodoTab,
     openFavoritesTab: handleOpenFavoritesTab,
     openCanvasTab: handleOpenCanvasTab,
     openTranslateTab: handleOpenTranslateTab,
@@ -1578,7 +1554,7 @@ export function AppShell() {
   }), [
     theme.setPreset, setLocale, handleSlashNew,
     setCwdPickerOpen,
-    handleOpenTodoTab, handleOpenFavoritesTab, handleOpenCanvasTab,
+    handleOpenFavoritesTab, handleOpenCanvasTab,
     handleOpenTranslateTab, handleOpenToolCallsTab, handleOpenJsonTab,
     handleOpenTokensTab, handleOpenGitDiffTab, handleOpenLlmAuditTab,
     agentControls,
@@ -1801,9 +1777,7 @@ export function AppShell() {
           Pulled into a fragment-level child so the surrounding column
           handles flex / overflow without an extra wrapper div. */}
       <div ref={rightPanelRef} style={{ flex: 1, overflow: "hidden" }}>
-        {activeFileTab?.kind === "todo" ? (
-          <MemoTodoPanel />
-        ) : activeFileTab?.kind === "favorites" ? (
+        {activeFileTab?.kind === "favorites" ? (
           <CollectionPanel
             favoriteIds={favoriteIds}
             onSelectSession={handleSelectSession}
@@ -2411,7 +2385,7 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
 }
 
 // ── Tool-calls vertical button ────────────────────────────────────────────
-// Mirrors the style of the other right-bar buttons (todos / favorites /
+// Mirrors the style of the other right-bar buttons (favorites /
 // translate) and overlays a tiny live badge for the running / total count.
 // Tool-calls button rendering now lives in the rightBar descriptor
 // registry (see components/rightBar/desc.tsx) — `ToolCallsVerticalButton`

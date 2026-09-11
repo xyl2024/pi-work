@@ -54,7 +54,7 @@ function pickRandomStyle(): (typeof CONCRETE_STYLES)[number] {
  * Hardcoded, whole-block system-prompt contribution for `pi_work_celebrate`.
  * Appended at the very end of the system prompt via
  * `appendSystemPromptOverride`, gated on the tool being enabled AND part of
- * the session's tool set (same pattern as `agent_todo`). Replaces the flat
+ * the session's tool set. Replaces the flat
  * `promptGuidelines` array that used to live on the tool definition.
  */
 export const CELEBRATE_SYSTEM_PROMPT_BLOCK = `\

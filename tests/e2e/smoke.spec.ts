@@ -47,7 +47,6 @@ test.describe("home page smoke", () => {
   });
 
   const PANELS: Array<[string, RegExp]> = [
-    ["todos", /Open todos|待办/i],
     ["favorites", /Open favorites|收藏/i],
   ];
 
@@ -57,7 +56,7 @@ test.describe("home page smoke", () => {
       const button = page.getByRole("button", { name: label });
       await expect(button).toBeVisible();
       await button.click();
-      // panel content mounted — the todo panel renders a heading/toolbar
+      // panel content mounted
       await expect(page.locator("body")).toBeVisible();
       // keep the page busy briefly so async errors during panel mount surface
       await page.waitForTimeout(1_000);

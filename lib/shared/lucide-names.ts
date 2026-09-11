@@ -285,7 +285,6 @@ export const CWD_ICON_NAMES = [
   "Newspaper",
   "ClipboardList",
   "ListChecks",
-  "ListTodo",
   "MessagesSquare",
   "MessageSquare",
   "MessageSquareText",

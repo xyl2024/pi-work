@@ -7,7 +7,6 @@ import {
 } from "fs";
 import { join } from "path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { deleteAgentTodoFile } from "@/lib/server/agent-todo-tool/store";
 import {
   deleteSessionName,
   writeSessionName,
@@ -164,7 +163,6 @@ export async function deleteSession(
   invalidateSessionListCache();
   deleteSessionName(sessionId);
   deleteSessionToolSelection(sessionId);
-  deleteAgentTodoFile(sessionId);
   deleteSessionNotify(sessionId);
 
   return { filePath, reparentedChildren };

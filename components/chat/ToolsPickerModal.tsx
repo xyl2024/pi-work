@@ -20,7 +20,7 @@ export const READ_ONLY_TOOLS = ["find", "ls", "grep", "read"] as const;
 export const TOOL_PRESET_PATTERNS = {
   read_only: READ_ONLY_TOOLS,
   minimal: ["bash", "read", "write", "edit", "ls", "find", "grep"],
-  code: ["bash", "read", "write", "edit", "ls", "find", "grep", "agent_todo", "spawn_subagent", "codegraph_*", "pi_work_celebrate", "ask_user_questions"],
+  code: ["bash", "read", "write", "edit", "ls", "find", "grep", "spawn_subagent", "codegraph_*", "pi_work_celebrate", "ask_user_questions"],
   assistant: ["bash", "read", "write", "edit", "ls", "find", "grep", "pi_work_*", "show_media", "web_search", "fetch_content", "ask_user_questions"],
 } as const satisfies Record<string, readonly string[]>;
 
@@ -33,7 +33,7 @@ export const TOOL_PRESET_LABELS: Record<NamedToolPresetId, string> = {
 
 export const TOOL_PRESET_DESCRIPTIONS: Record<NamedToolPresetId, string> = {
   read_only: "Find, ls, grep, read", minimal: "Pi's default tools",
-  code: "Codegraph, todo list, and subagent capabilities",
+  code: "Codegraph and subagent capabilities",
   assistant: "Pi Work platform control capabilities",
 };
 

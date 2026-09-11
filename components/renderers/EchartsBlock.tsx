@@ -77,7 +77,7 @@ interface Props {
 
 /**
  * Renders an `echarts` fenced code block as a canvas chart. Used by
- * MessageView, FileViewer, ShowFileRenderer, and TodoDescriptionView to detect
+ * MessageView, FileViewer, and ShowFileRenderer to detect
  * ```echarts blocks and replace react-markdown's default `pre > code` fallback
  * with an actual ECharts chart. The block body is JS that evaluates to an
  * ECharts `option` object — either a bare expression (`{ ... }`, `[...]`,

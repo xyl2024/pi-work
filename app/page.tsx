@@ -5,7 +5,6 @@ import { I18nProvider } from "@/hooks/useI18n";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmDialog";
 import { ContextMenuProvider } from "@/components/ui/ContextMenu";
-import { TodoProvider } from "@/hooks/useTodos";
 import { PermissionProvider } from "@/hooks/usePendingPermissions";
 import { CelebrationOverlay } from "@/components/effects/CelebrationOverlay";
 
@@ -17,12 +16,10 @@ export default function Home() {
           <ConfirmProvider>
             <PermissionProvider>
               <ContextMenuProvider>
-                <TodoProvider>
-                  <AuthGate>
-                    <AppShell />
-                    <CelebrationOverlay />
-                  </AuthGate>
-                </TodoProvider>
+                <AuthGate>
+                  <AppShell />
+                  <CelebrationOverlay />
+                </AuthGate>
               </ContextMenuProvider>
             </PermissionProvider>
           </ConfirmProvider>

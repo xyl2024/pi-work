@@ -7,7 +7,6 @@ import type { Locale } from "@/hooks/useI18n";
 import { ICONS } from "@/components/ui/icons";
 import {
   Braces,
-  CalendarCheck,
   ChartColumn,
   ChartSpline,
   GitGraph,
@@ -51,7 +50,6 @@ const ClockIcon = ICONS.clock;
 
 // Keep right-panel command icons identical to the right-bar descriptors.
 const RightPanelIcon = () => <PanelRight size={16} />;
-const TodosPanelIcon = () => <CalendarCheck size={16} />;
 const CanvasPanelIcon = () => <Pencil size={16} />;
 const FavoritesPanelIcon = () => <Star size={16} />;
 const TranslatePanelIcon = () => <Languages size={16} />;
@@ -122,7 +120,6 @@ export interface CommandContext {
   openToolMarket: () => void;
 
   // Right-panel tabs
-  openTodosTab: () => void;
   openFavoritesTab: () => void;
   openCanvasTab: () => void;
   openTranslateTab: () => void;
@@ -217,15 +214,7 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     shortcut: "⌘⌥B",
     run: () => ctx.toggleRightPanel(),
   });
-  // ── Panel (7) ──
-  cmds.push({
-    id: "panel.todo",
-    title: t("Open todos"),
-    group: "Panel",
-    keywords: ["todo", "task", "待办", "任务"],
-    icon: <TodosPanelIcon />,
-    run: () => ctx.openTodosTab(),
-  });
+  // ── Panel (6) ──
   cmds.push({
     id: "panel.canvas",
     title: t("Open canvas"),

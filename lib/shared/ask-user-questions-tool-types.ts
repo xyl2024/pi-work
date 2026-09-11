@@ -85,7 +85,7 @@ export interface AskUserQuestionAnswer {
   otherText: string | null;
 }
 
-/** Result envelope returned to the model. Mirrors `agent_todo`'s shape. */
+/** Result envelope returned to the model. Deferred state-style shape. */
 export interface AskUserQuestionsDetails {
   /** Per-question answers, same order as `questions[]`. */
   answers: AskUserQuestionAnswer[];

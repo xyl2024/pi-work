@@ -18,7 +18,6 @@ import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
 import { SubagentSection } from "./sections/SubagentSection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
-import { TodoTagsSection } from "./sections/TodoTagsSection";
 import { ToastTestSection } from "./sections/ToastTestSection";
 import { WebAccessSection } from "./sections/WebAccessSection";
 
@@ -40,7 +39,6 @@ import { WebAccessSection } from "./sections/WebAccessSection";
  *   8  Agent retry         (independent state machine; lives in
  *                          ~/.pi/agent/settings.json, not config.yaml)
  *   9  UI Sounds           (immediate-apply master volume + per-event recipes)
- *   11 Manage tags         (uses useTodos(); rename / delete / recolor)
  */
 export function SettingsModal({
   onClose,
@@ -291,8 +289,6 @@ export function SettingsModal({
             {/* 11: Web Access */}
             <WebAccessSection config={config} apply={apply} />
 
-            {/* 12: Manage tags */}
-            <TodoTagsSection />
           </div>
         </div>
       </div>

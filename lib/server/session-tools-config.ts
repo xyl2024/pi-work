@@ -21,7 +21,7 @@
 //
 // Why ~/.pi-work/, not ~/.pi/agent/sidecars/:
 //   - ~/.pi/ belongs to the SDK; the sidecar is Pi Work-specific metadata
-//   - ~/.pi-work/ already houses session-names/, todos.db, config.yaml, etc.
+//   - ~/.pi-work/ already houses session-names/, config.yaml, etc.
 // ============================================================================
 
 import {

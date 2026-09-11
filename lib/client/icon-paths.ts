@@ -77,15 +77,6 @@ export const REFRESH =
 export const CHEVRONS_UP =
   "M 17 11 L 12 6 L 7 11 M 17 18 L 12 13 L 7 18";
 
-/** Empty checkbox outline on the 10×10 grid. Companion to CHECKBOX_CHECKED
- *  for the TodoPanel row. Source: <rect x="1.5" y="1.5" width="8" height="8"/> */
-export const EMPTY_CHECKBOX = "M 1.5 1.5 H 9.5 V 9.5 H 1.5 Z";
-
-/** Checked checkbox: outline + checkmark, both on the 10×10 grid. Source:
- *    <rect x="1.5" y="1.5" width="8" height="8"/>
- *    <polyline points="2 5 4.5 7.5 8.5 2.5"/> */
-export const CHECKBOX_CHECKED = "M 1.5 1.5 H 9.5 V 9.5 H 1.5 Z M 2 5 L 4.5 7.5 L 8.5 2.5";
-
 /** "Copy minify" icon: two diagonal arrows compressing. Source (4 subpaths):
  *    <polyline points="4 14 10 14 10 20"/>
  *    <polyline points="20 10 14 10 14 4"/>

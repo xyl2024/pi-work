@@ -13,10 +13,9 @@ export interface DangerousPatternsConfig {
 }
 
 /** Names of custom tools registered when a Pi session starts. */
-export type AgentCustomToolName = "agent_todo" | "show_media" | "show_file" | "ask_user_questions";
+export type AgentCustomToolName = "show_media" | "show_file" | "ask_user_questions";
 
 export const AGENT_CUSTOM_TOOL_NAMES: readonly AgentCustomToolName[] = [
-  "agent_todo",
   "show_media",
   // Legacy alias — accepted when parsing older config.yaml files.
   "show_file",

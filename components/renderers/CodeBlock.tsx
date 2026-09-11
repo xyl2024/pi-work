@@ -21,8 +21,8 @@ interface Props {
  * Shared syntax-highlighted code block with language label and copy button.
  * The header bar is hidden by default — the language label + copy button
  * appear as a floating overlay when the block is hovered. Used by MessageView,
- * FileViewer (markdown preview), and TodoDescriptionView so the todo panel
- * renders code blocks the same way as the file viewer.
+ * FileViewer (markdown preview) so the viewer renders code blocks
+ * the same way as the chat.
  */
 export function CodeBlock({ code, lang }: Props) {
   const { isDark } = useTheme();

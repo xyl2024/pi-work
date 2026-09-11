@@ -12,7 +12,7 @@
  *   - live set + running state: lib/server/session-registry.ts
  *   - disk session detail:      lib/server/session-reader.ts (readSessionDetails)
  *
- * These tools are intentionally READ-ONLY, mirroring the `user_todos_*`
+ * These tools are intentionally READ-ONLY, mirroring other custom
  * philosophy: the agent can inspect Pi Work sessions but never mutate them.
  * They are gated via ~/.pi-work/tools-market.json and only exist inside
  * pi-work sessions (registered in rpc-manager.ts). Because they read server
@@ -305,7 +305,7 @@ async function sessionInfoResult(sessionId: string) {
  * Hardcoded, whole-block system-prompt contributions for the three
  * self-tools. Appended at the very end of the system prompt via
  * `appendSystemPromptOverride`, each gated on its tool being enabled AND
- * part of the session's tool set (same pattern as `agent_todo`). Replaces
+ * part of the session's tool set. Replaces
  * the flat `promptGuidelines` arrays that used to live on the tool
  * definitions.
  */

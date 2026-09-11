@@ -26,7 +26,7 @@ const SVG_TAG_RE = /<svg[\s>]/i;
 
 /**
  * Renders a `svg` fenced code block as an inline SVG image. Used wherever
- * MessageView, TodoDescriptionView, FileViewer, or ShowFileRenderer detect
+ * MessageView, FileViewer, or ShowFileRenderer detect
  * ```svg blocks inside markdown and want to replace react-markdown's
  * default `pre > code` fallback with an actual image.
  *

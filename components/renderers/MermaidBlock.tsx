@@ -39,7 +39,7 @@ interface Props {
 
 /**
  * Renders a `mermaid` fenced code block as an SVG diagram. Used by
- * MessageView, TodoPanel, and FileViewer to detect ```mermaid blocks
+ * MessageView, and FileViewer to detect ```mermaid blocks
  * inside markdown and replace react-markdown's default `pre > code`
  * fallback with an actual diagram.
  */

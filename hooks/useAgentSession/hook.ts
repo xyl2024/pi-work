@@ -98,7 +98,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
   const [agentRunning, setAgentRunning] = useState(false);
   const [, setIsCompacting] = useState(false);
-  const [agentTodoRefreshKey, setAgentTodoRefreshKey] = useState(0);
   const [subagentRefreshKey, setSubagentRefreshKey] = useState(0);
   const subagentRefreshTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const scheduledSubagentRefreshIdsRef = useRef<Set<string>>(new Set());
@@ -401,7 +400,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setLiveTree,
     setActiveLeafId,
     setInFlightToolResults,
-    setAgentTodoRefreshKey,
     setSubagentRefreshKey,
     scheduleSubagentRefresh,
     seenSubagentToolCallIds: seenSubagentToolCallIdsRef.current,
@@ -934,7 +932,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     retryInfo, contextUsage, systemPrompt,
     currentModel, displayModel, sessionStats,
     agentPhase,
-    agentTodoRefreshKey,
     subagentRefreshKey,
     isNew,
     currentSessionId,

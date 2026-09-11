@@ -56,18 +56,8 @@ export const settings = {
   // Custom tools enable/disable
   "Custom Tools": "自定义工具",
   "Enable or disable custom pi tools. Changes apply to sessions started after this point; running sessions keep their original tool set.": "启用或禁用自定义 pi 工具。修改只对之后启动的会话生效；已运行的会话保持原有工具集。",
-  "Agent Todo": "Agent Todo（智能体任务列表）",
   "Show Media": "Show Media（内联展示多媒体文件）",
   "Ask User Questions": "Ask User Questions（向用户提问）",
-
-  // Agent Todo tools
-  "Todo agent tools": "待办 Agent 工具",
-  "Choose which todo tools the pi agent can use. Changes apply to new sessions only — running sessions keep their current tool set.": "选择 Pi Agent 可以使用的待办工具。变更仅对新会话生效——当前会话仍使用原有工具集。",
-  "Pi agent tools": "Pi Agent 工具",
-  "Agent tools settings": "设置暴露给 Pi Agent 的待办工具",
-  "Tool: user_todos_list": "查看待办",
-  "Tool: user_todo_description": "查看待办详情",
-  "Applies to new sessions": "将在新会话中生效",
 
   // File preview size limits (Settings modal + file viewer 413)
   "File preview limits": "文件预览大小",

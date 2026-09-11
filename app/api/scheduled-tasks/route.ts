@@ -1,10 +1,8 @@
 /**
  * /api/scheduled-tasks — CRUD on scheduled tasks.
  *
- * Mirrors app/api/todos/route.ts: a single route file with GET, POST,
- * PATCH, DELETE. Each mutation calls `reschedule()` so the loop picks up
- * changes immediately. PATCH uses body id (todos use query for DELETE;
- * we mirror that for symmetry).
+ * A single route file with GET, POST, PATCH, DELETE. Each mutation calls
+ * `reschedule()` so the loop picks up changes immediately.
  */
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";

@@ -416,7 +416,6 @@ export interface WorkspacesResponse {
 // Single source of truth for the global tab IDs the right button bar toggles.
 // AppShell and SettingsModal both consume these.
 
-export const TODO_TAB_ID = "todo:global";
 export const FAVORITES_TAB_ID = "favorites:global";
 export const TRANSLATE_TAB_ID = "translate:global";
 export const TOOL_CALLS_TAB_ID = "toolCalls:global";
@@ -444,7 +443,6 @@ export const GITHUB_TRENDING_TAB_ID = "githubTrending:global";
 import type { RightBarButtonId } from "./right-bar";
 type TabKindForAutoClose =
   | "file"
-  | "todo"
   | "canvas"
   | "translate"
   | "toolCalls"
@@ -461,7 +459,6 @@ type TabKindForAutoClose =
 export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<
   Record<TabKindForAutoClose, RightBarButtonId>
 > = {
-  todo: "todos",
   canvas: "canvas",
   translate: "translate",
   json: "json",

@@ -9,7 +9,6 @@ import type { FileViewerKind } from "@/lib/shared/file-viewer-limits";
 // ~/.pi-work/config.yaml. Toggling here writes the full PiWorkConfig back
 // via /api/settings — same immediate-apply pattern as Right-side buttons.
 export const CUSTOM_TOOLS_UI: Array<{ id: AgentCustomToolName; labelKey: string }> = [
-  { id: "agent_todo", labelKey: "Agent Todo" },
   { id: "show_media", labelKey: "Show Media" },
   { id: "ask_user_questions", labelKey: "Ask User Questions" },
 ];
@@ -43,5 +42,4 @@ export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
   { id: "settings-section-subagent",      labelKey: "Subagent settings" },
   { id: "settings-section-ui-sounds",     labelKey: "UI Sounds" },
   { id: "settings-section-web-access",     labelKey: "Web Access" },
-  { id: "settings-section-todo-tags",        labelKey: "Manage tags" },
 ];

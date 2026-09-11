@@ -4,6 +4,5 @@ export {
   PanelToggleIcon,
   RssIcon,
   StarIconWithFill,
-  TodoCheckIcon,
   LlmAuditGlyphIcon as LlmAuditIcon,
 } from "@/components/ui/icons";

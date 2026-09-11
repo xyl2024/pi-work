@@ -1,13 +1,11 @@
 /**
  * DOMPurify configuration for RSS article HTML.
  *
- * Distinct from `lib/description-sanitize.ts` on purpose:
+ * Distinct from other sanitize helpers on purpose:
  *   - RSS feeds need a much wider tag set: <iframe>, <figure>, <picture>,
  *     <source>, <video>, <audio>, and <pre>/<code> blocks are common.
  *   - The feed content is third-party (untrusted) — the JavaScript-URL
  *     scheme must be blocked explicitly via ALLOWED_URI_REGEXP.
- *   - There's no Tiptap round-trip and no per-todo color picker, so the
- *     `style` widening hook from description-sanitize is unnecessary here.
  *
  * Sanitization runs at *render* time (in the reader view), not at storage
  * time. The store keeps the raw HTML so future tooling (search, diff,

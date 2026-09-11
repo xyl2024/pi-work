@@ -26,7 +26,6 @@ import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ModelPickerModal } from "./ModelPickerModal";
 import { Tooltip } from "../ui/Tooltip";
 import { usePendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
-import { AgentTodoPanel } from "../todos/AgentTodoPanel";
 import { SubagentSessionsButton } from "./SubagentSessionsButton";
 import { AskUserQuestionsPanel } from "./AskUserQuestionsPanel";
 import { ReplayBar } from "./ReplayBar";
@@ -178,7 +177,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     retryInfo,
     displayModel: displayModelValue,
     agentPhase,
-    agentTodoRefreshKey,
     subagentRefreshKey,
     isNew,
     messagesEndRef, scrollContainerRef,
@@ -380,7 +378,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
   // ── AskUserQuestions: when the panel is pending for the active session
   //    we hide the bottom-right button stack — otherwise the row of
-  //    launchers (AgentTodoPanel, Session Library, Collapse all, Scroll
+  //    launchers (Session Library, Collapse all, Scroll
   //    to bottom) sits *behind* the question panel and looks like dead
   //    UI, since the panel takes over the chat area's focused interaction
   //    surface. Same `usePendingAskUserQuestions` store hook as the panel
@@ -398,8 +396,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   );
 
   // Export the current session as a single-file HTML download. Mirrors the
-  // fetch → blob → object-URL → <a download> pattern in hooks/useTodos.tsx
-  // (which exports a todo as a zip).
   const handleExport = useCallback(async () => {
     if (!currentSessionId || isExporting) return;
     setIsExporting(true);
@@ -841,8 +837,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   }, [messages]);
 
   // Scroll a tool call into view by its toolCallId. Shared between the stats
-  // drawer (click on a tool name) and the agent-todo panel (click on a
-  // completed task that maps back to a toolCallId).
+  // drawer (click on a tool name).
   const handleScrollToToolCall = useCallback((toolCallId: string) => {
     const idx = toolCallToVisibleIdx.get(toolCallId);
     if (idx === undefined) return;
@@ -1725,14 +1720,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           className="pointer-events-none absolute bottom-4 z-10 flex items-end gap-2"
           style={{ right: "max(16px, calc((100% - 820px) / 2))" }}
         >
-          {/* Agent Todo launcher (first position). Renders nothing
-              itself when there's no plan — the panel hides entirely so
-              the chat area stays clean. Click opens a popover anchored
-              above-left of this button. */}
-          <AgentTodoPanel
-            sessionId={session?.id ?? currentSessionId}
-            refreshKey={agentTodoRefreshKey}
-          />
           {/* Session Library launcher (Q10A: second position). Always
               visible — empty state is shown inside the modal. Unread
               badge appears when entries land while the modal is closed. */}

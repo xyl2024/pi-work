@@ -30,12 +30,9 @@ import type { RightBarButtonId, RightSideBarConfig } from "../shared/right-bar";
 import { resolveSessionBoundAlignment } from "../shared/right-bar";
 
 // ── Custom tools enabled by `customTools` on createAgentSession ───────────
-// Names match the tool names registered in lib/rpc-manager.ts. The two
-// built-in user-side todo tools (`user_todos_list`, `user_todo_description`)
-// live in lib/todo-tools-config.ts and are NOT listed here — they are gated
-// by ~/.pi-work/todo-tools.json for historical reasons. Adding a new tool
-// to `customTools` in rpc-manager.ts requires adding it here too, or the
-// validator will silently drop it (fail-open default still applies, but
+// Names match the tool names registered in lib/rpc-manager.ts. Adding a new
+// tool to `customTools` in rpc-manager.ts requires adding it here too, or
+// the validator will silently drop it (fail-open default still applies, but
 // the user setting is lost).
 
 // ── APPEND_SYSTEM.md loader toggle ───────────────────────────────────────
@@ -49,7 +46,6 @@ const DEFAULT_DANGEROUS_PATTERNS: DangerousPatternsConfig = {
 };
 
 const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = {
-  todos: true,
   canvas: true,
   translate: true,
   json: true,

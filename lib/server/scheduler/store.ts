@@ -1,7 +1,7 @@
 /**
  * CRUD on top of the scheduler DB.
  *
- * Mirrors lib/todo-store.ts: validation helpers + typed error class +
+ * Validation helpers + typed error class +
  * pure CRUD functions. All validation happens before any DB write so the
  * route layer can blindly trust input shape.
  *

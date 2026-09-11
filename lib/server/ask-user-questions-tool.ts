@@ -200,7 +200,7 @@ interface BuildToolOptions {
  * `DefaultResourceLoader` uses for `APPEND_SYSTEM.md`, but this block is
  * built into the codebase (no user-configurable file). It is emitted only
  * when the tool is enabled and actually part of the session's tool set
- * (same gating as `agent_todo`). Mirrors the user-requested guidelines
+ * Mirrors the user-requested guidelines
  * text; `promptGuidelines` was removed in favor of this append block.
  */
 export const ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK = `\

@@ -22,7 +22,6 @@ import type { LayoutMode } from "@/hooks/layoutModeStore";
 import type { RightBarButtonId } from "@/lib/shared/right-bar";
 import { CountBadge } from "@/components/ui/CountBadge";
 import {
-  TODO_TAB_ID,
   BTW_TAB_ID,
   FAVORITES_TAB_ID,
   TRANSLATE_TAB_ID,
@@ -41,7 +40,6 @@ import type { Tab } from "@/components/ui/TabBar";
 import {
   Bot,
   Braces,
-  CalendarCheck,
   ChartColumn,
   ChartSpline,
   GitBranch,
@@ -60,7 +58,6 @@ import GithubIcon from "@lobehub/icons/es/Github/components/Mono";
 // Tab.kind value surfaces as a type error in the descriptor registry.
 export type RightBarTabKind = Extract<
   Tab["kind"],
-  | "todo"
   | "canvas"
   | "translate"
   | "toolCalls"
@@ -111,7 +108,6 @@ export interface RightBarCtx {
   toggleRightPanelTab: (tabId: string, openTab: () => void) => void;
   setRightPanelState: (s: "closed" | "normal" | "expanded") => void;
   openTab: {
-    todo: () => void;
     canvas: () => void;
     translate: () => void;
     json: () => void;
@@ -185,17 +181,6 @@ const panelToggleDescriptor: RightBarDescriptor = {
 // Configurable: panel buttons. Their default order in the Settings list
 // is the order they appear here — DESC defaults to this ordering when
 // `cfg.order` is undefined.
-
-const todosDescriptor: RightBarDescriptor = {
-  id: "todos",
-  kind: "configurable",
-  labelKey: "Open todos",
-  isActive: (ctx) => ctx.activeTabKind === "todo",
-  // Calendar-check branding, shared with the tab-bar icon (both use
-  // lucide-react's CalendarCheck).
-  content: () => <CalendarCheck size={16} />,
-  onClick: (ctx) => ctx.toggleRightPanelTab(TODO_TAB_ID, ctx.openTab.todo),
-};
 
 const canvasDescriptor: RightBarDescriptor = {
   id: "canvas",
@@ -405,7 +390,6 @@ export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   // 'configurable' group — order here is the implicit default order used
   // when the user hasn't customized `cfg.order`.
   contextDescriptor,
-  todosDescriptor,
   canvasDescriptor,
   translateDescriptor,
   jsonDescriptor,

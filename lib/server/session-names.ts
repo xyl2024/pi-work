@@ -21,7 +21,7 @@
 //
 // Why ~/.pi-work/, not ~/.pi/agent/sidecars/:
 //   - ~/.pi/ belongs to the SDK; sidecar is a Pi Work-specific metadata
-//   - ~/.pi-work/ already houses todos.db, config.yaml, etc., so the path
+//   - ~/.pi-work/ already houses config.yaml etc., so the path
 //     mirrors the project's existing data root
 // ============================================================================
 

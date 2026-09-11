@@ -11,8 +11,7 @@ export interface ImageItem {
 
 // Extract every image reference from a markdown document. Pass an optional
 // resolveSrc to rewrite raw src values (e.g. relative paths → /api/files/...);
-// otherwise src is used as-is (e.g. for todo descriptions where the src is
-// already an absolute /api/todo-images/... URL).
+// otherwise src is used as-is.
 export function extractImageGallery(
   content: string,
   resolveSrc: (raw: string) => string = (s) => s,
@@ -26,9 +25,7 @@ export function extractImageGallery(
   return out;
 }
 
-// Extract every image reference from an HTML string. Used by the Tiptap-based
-// todo description view; the original `extractImageGallery` stays for the
-// markdown file viewer / ShowFileRenderer which still render raw markdown.
+// Extract every image reference from an HTML string. Used by RSS reader view.
 // Returns an empty list in SSR environments (no DOMParser) so the import is
 // safe in React Server Components, even though this code is "use client".
 export function extractImagesFromHtml(content: string): ImageItem[] {
@@ -50,7 +47,7 @@ export function extractImagesFromHtml(content: string): ImageItem[] {
 // Custom <img> for ReactMarkdown. Calls onImageClick with the resolved src.
 // maxWidth caps the rendered width relative to the container; defaults to
 // filling it (100%). Pass a smaller value (e.g. "50%") to shrink inline
-// previews in dense layouts like the todo panel.
+// previews in dense layouts.
 export function MarkdownImage({ src, alt, resolveSrc, onImageClick, maxWidth = "100%" }: {
   src?: string | Blob;
   alt?: string;

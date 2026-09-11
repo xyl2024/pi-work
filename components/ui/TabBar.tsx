@@ -6,7 +6,6 @@ import { ICONS } from "@/components/ui/icons";
 import {
   Bot,
   Braces,
-  CalendarCheck,
   ChartColumn,
   ChartSpline,
   GitBranch,
@@ -24,7 +23,6 @@ import { Tooltip } from "./Tooltip";
 
 export type Tab =
   | { kind: "file"; id: string; label: string; filePath: string }
-  | { kind: "todo"; id: string; label: string }
   | { kind: "favorites"; id: string; label: string }
   | { kind: "translate"; id: string; label: string }
   | { kind: "toolCalls"; id: string; label: string }
@@ -114,9 +112,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
           const tooltipContent =
             tab.kind === "file" ? tab.filePath : displayLabel;
           const icon =
-            tab.kind === "todo" ? (
-              <CalendarCheck size={13} />
-            ) : tab.kind === "favorites" ? (
+            tab.kind === "favorites" ? (
               <Star size={13} fill={isActive ? "var(--accent)" : "none"} />
             ) : tab.kind === "translate" ? (
               <Languages size={13} />

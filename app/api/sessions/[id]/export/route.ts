@@ -19,8 +19,7 @@ import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]/export");
 
-// Same shape as `slugifyTitle` in app/api/todos/[id]/export/route.ts,
-// widened so CJK + accented titles round-trip without losing meaning.
+// Slugify, widened so CJK + accented titles round-trip without losing meaning.
 function slugifyTitle(title: string, fallbackId: string): string {
   const cleaned = title
     .replace(/[^\p{L}\p{N}一-鿿]+/gu, "-")

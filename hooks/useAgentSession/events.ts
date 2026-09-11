@@ -3,7 +3,6 @@ import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResul
 import { normalizeToolCalls } from "@/lib/shared/normalize";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
-import { AGENT_TODO_TOOL_NAME } from "@/lib/shared/agent-todo-tool/types";
 import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "@/lib/shared/celebrate-tool-types";
 import { triggerCelebration } from "@/lib/client/celebrate-store";
 import { notifyMutated } from "@/lib/client/git-status-store";
@@ -84,7 +83,6 @@ type AgentSessionEventsOptions = {
   setLiveTree: StateSetter<SessionTreeNode[] | null>;
   setActiveLeafId: StateSetter<string | null>;
   setInFlightToolResults: StateSetter<Map<string, ToolResultMessage>>;
-  setAgentTodoRefreshKey: StateSetter<number>;
   setSubagentRefreshKey: StateSetter<number>;
   scheduleSubagentRefresh: (toolCallId: string) => void;
   seenSubagentToolCallIds: Set<string>;
@@ -130,7 +128,6 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     setLiveTree,
     setActiveLeafId,
     setInFlightToolResults,
-    setAgentTodoRefreshKey,
     setSubagentRefreshKey,
     scheduleSubagentRefresh,
     seenSubagentToolCallIds,
@@ -363,7 +360,6 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           setSubagentRefreshKey((key) => key + 1);
           scheduleSubagentRefresh(id);
         }
-        if (toolName === AGENT_TODO_TOOL_NAME) setAgentTodoRefreshKey((key) => key + 1);
         const gitCwd = session?.cwd ?? newSessionCwd;
         if (toolName && WORKTREE_MUTATING_TOOL_NAMES.has(toolName) && gitCwd) notifyMutated(gitCwd);
         // bash can also mutate the worktree when the command runs a git
@@ -525,7 +521,6 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     setActiveLeafId,
     setAgentPhase,
     setAgentRunningSync,
-    setAgentTodoRefreshKey,
     setSubagentRefreshKey,
     setCompactingSync,
     setContextUsage,

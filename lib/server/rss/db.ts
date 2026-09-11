@@ -1,7 +1,7 @@
 /**
  * SQLite-backed storage for the RSS panel.
  *
- * Independent of the todos / scheduler DBs so each feature can
+ * Independent of the scheduler DB so each feature can
  * be backed up / restored on its own schedule. Same singleton-via-globalThis
  * pattern as `lib/scheduler/db.ts` so Next.js dev-mode HMR doesn't open
  * a fresh handle on every reload.

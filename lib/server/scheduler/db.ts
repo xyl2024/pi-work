@@ -3,7 +3,7 @@
  *
  * Mirrors the singleton pattern in lib/db.ts: `better-sqlite3` is imported
  * only here, the handle is cached on `globalThis` so Next.js dev-mode HMR
- * doesn't reopen it on every reload. Separate file from todos.db because
+ * doesn't reopen it on every reload. Separate file from other DBs because
  * the schemas are unrelated and the lifecycle (delete with cascade) should
  * not entangle the two domains.
  *

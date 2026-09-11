@@ -45,7 +45,7 @@ function domains(filters: string[] | undefined): { include_domains?: string[]; e
  * Hardcoded, whole-block system-prompt contribution for `web_search`.
  * Appended at the very end of the system prompt via
  * `appendSystemPromptOverride`, gated on the tool being enabled AND part of
- * the session's tool set (same pattern as `agent_todo`). Replaces the flat
+ * the session's tool set. Replaces the flat
  * `promptGuidelines` array that used to live on the tool definition.
  */
 export const WEB_SEARCH_SYSTEM_PROMPT_BLOCK = `\

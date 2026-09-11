@@ -11,7 +11,6 @@ import path from "node:path";
 import { recordCall } from "./token-audit-store";
 import { getAuditModelRuntime, installLlmFetchAudit, runWithLlmAuditContext } from "./llm-audit";
 import type { LlmAuditSource } from "../shared/llm-audit-types";
-import { buildTodoTools } from "./user-todo/tools";
 import { buildShowFileTool, SHOW_MEDIA_SYSTEM_PROMPT_BLOCK } from "./show-file-tool";
 import { writeSessionName, deleteSessionName } from "./session-names";
 import {
@@ -19,7 +18,6 @@ import {
   writeSessionToolSelection,
 } from "./session-tools-config";
 import { readCwdToolSelection } from "./cwd-tools-config";
-import { buildAgentTodoTool, AGENT_TODO_SYSTEM_PROMPT_BLOCK } from "./agent-todo-tool/tool";
 import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK, type UserInputResolution } from "./ask-user-questions-tool";
 import { celebrateTool, CELEBRATE_SYSTEM_PROMPT_BLOCK } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
@@ -1127,7 +1125,6 @@ export async function startRpcSession(
               entry === name || (entry.endsWith("*") && name.startsWith(entry.slice(0, -1))),
             ));
         const blocks: string[] = [];
-        if (sessionHasTool("agent_todo")) blocks.push(AGENT_TODO_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("spawn_subagent")) blocks.push(SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("show_media")) blocks.push(SHOW_MEDIA_SYSTEM_PROMPT_BLOCK);
@@ -1322,10 +1319,8 @@ export async function startRpcSession(
       resourceLoader,
       ...(requestedModel ? { model: requestedModel } : {}),
       ...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
-      // Per-session customTools: user_todos_list / user_todo_description are
-      // gated by ~/.pi-work/todo-tools.json (see todo-tools-config); the two
-      // agent-side tools (show_media, agent_todo) are gated by
-      // ~/.pi-work/config.yaml → custom_tools.enabled. Read at startRpcSession
+      // Per-session customTools: gated by ~/.pi-work/config.yaml →
+      // custom_tools.enabled. Read at startRpcSession
       // time only — already-running sessions keep their original tool set.
       // `show_file` is accepted as a legacy alias of `show_media` so users
       // with an existing config.yaml entry don't lose access after the
@@ -1334,11 +1329,9 @@ export async function startRpcSession(
         // Override the SDK built-in bash definition. Its hook runs after
         // session PI_* variables are injected and does not mutate process.env.
         createPiWorkBashTool(cwd),
-        ...buildTodoTools(["user_todos_list", "user_todo_description"].filter((name) => enabledTools.has(name as "user_todos_list" | "user_todo_description"))),
         ...(enabledTools.has("show_media")
           ? buildShowFileTool()
           : []),
-        ...(enabledTools.has("agent_todo") ? buildAgentTodoTool() : []),
         ...(readConfig().web_access.enabled && (enabledTools.has("web_search") || enabledTools.has("fetch_content"))
           ? buildWebAccessTools().filter((tool) => enabledTools.has(tool.name as ToolMarketId))
           : []),

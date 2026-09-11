@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { SessionInfo } from "@/lib/shared/types";
 import {
   createSessionWorkspaceState,
   sessionWorkspaceReducer,
-  type SessionInfo,
   type SessionWorkspaceState,
 } from "@/hooks/sessionWorkspaceStore";
 
