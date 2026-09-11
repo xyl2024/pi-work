@@ -17,8 +17,6 @@ import { TabBar, type Tab } from "../ui/TabBar";
 import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
 import { ToolCallStatsPanel } from "../panels/ToolCallStatsPanel";
-import { JsonPanel } from "../panels/JsonPanel";
-import { CanvasPanel } from "../panels/CanvasPanel";
 import { RssPanel } from "../rss/RssPanel";
 import { GitHubTrendingPanel } from "../panels/github-trending/GitHubTrendingPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
@@ -59,8 +57,6 @@ import {
   FAVORITES_TAB_ID,
   TRANSLATE_TAB_ID,
   TOOL_CALLS_TAB_ID,
-  JSON_TAB_ID,
-  CANVAS_TAB_ID,
   RSS_TAB_ID,
   TOKENS_TAB_ID,
   GIT_DIFF_TAB_ID,
@@ -613,9 +609,8 @@ export function AppShell() {
   // only the "closed → normal" transition is forced. The user's expanded
   // choice survives opening a file or switching to a different tab, so
   // clicking another tab/file from an expanded panel doesn't snap the
-  // chat back. The expand toggle in the tab bar (and the canvas descriptor,
-  // which always forces "expanded") remain the only ways to collapse the
-  // panel down. Used by every `handleOpenXxxTab` /
+  // chat back. The expand toggle in the tab bar remains the only other way
+  // to collapse the panel down. Used by every `handleOpenXxxTab` /
   // `handleOpenFile` below.
   const ensureRightPanelOpen = useCallback(() => {
     setRightPanelState((v) => (v === "closed" ? "normal" : v));
@@ -990,16 +985,6 @@ export function AppShell() {
     ensureRightPanelOpen();
   }, [activeFileTabId, rightPanelState, t, ensureRightPanelOpen]);
 
-  // Open the JSON formatter tab — same pattern as favorites / translate.
-  const handleOpenJsonTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "json")) return prev;
-      return [{ kind: "json", id: JSON_TAB_ID, label: t("JSON") }, ...prev];
-    });
-    setActiveFileTabId(JSON_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
   // Global keyboard shortcuts.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1037,19 +1022,14 @@ export function AppShell() {
         }
         return;
       }
-      // Space — focus chat input when not already focused. Skip when focus
-      // is inside the canvas panel: Excalidraw uses Space as its pan-tool
-      // gesture, and stealing focus would break that.
+      // Space — focus chat input when not already focused.
       if (
         e.key === " " &&
         !e.ctrlKey && !e.metaKey && !e.altKey &&
         !paletteOpen &&
         getActiveChatInput()
       ) {
-        if (
-          !isEditable &&
-          !(active instanceof HTMLElement && active.closest("[data-pi-canvas-panel]"))
-        ) {
+        if (!isEditable) {
           e.preventDefault();
           getActiveChatInput()?.focus();
         }
@@ -1059,17 +1039,7 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", handler);
   }, [paletteOpen, openPalette, getActiveChatInput]);
 
-  // Open the canvas tab — single global whiteboard, persisted in localStorage.
-  const handleOpenCanvasTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "canvas")) return prev;
-      return [{ kind: "canvas", id: CANVAS_TAB_ID, label: t("Canvas") }, ...prev];
-    });
-    setActiveFileTabId(CANVAS_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the RSS panel — same pattern as translate / http / json.
+  // Open the RSS panel — same pattern as translate.
   const handleOpenRssTab = useCallback(() => {
     setFileTabs((prev) => {
       if (prev.some((tab) => tab.kind === "rss")) return prev;
@@ -1210,7 +1180,7 @@ export function AppShell() {
     openTab();
   }, [activeFileTabId, rightPanelState]);
 
-  // GitPanel widens the right panel ("expanded", same state Canvas uses)
+  // GitPanel widens the right panel to "expanded"
   // when the user switches it into Log view, so the commit history gets
   // the full column. Stable callback: the GitPanel effect keys on it.
   const handleExpandGitPanel = useCallback(() => {
@@ -1446,9 +1416,7 @@ export function AppShell() {
     toggleRightPanelTab: handleToggleRightPanelTab,
     setRightPanelState,
     openTab: {
-      canvas: handleOpenCanvasTab,
       translate: handleOpenTranslateTab,
-      json: handleOpenJsonTab,
       rss: handleOpenRssTab,
       gitDiff: handleOpenGitDiffTab,
       favorites: handleOpenFavoritesTab,
@@ -1539,10 +1507,8 @@ export function AppShell() {
     openChannels: () => setChannelsOpen(true),
     openToolMarket: () => setToolsMarketOpen(true),
     openFavoritesTab: handleOpenFavoritesTab,
-    openCanvasTab: handleOpenCanvasTab,
     openTranslateTab: handleOpenTranslateTab,
     openToolCallsTab: handleOpenToolCallsTab,
-    openJsonTab: handleOpenJsonTab,
     openTokensTab: handleOpenTokensTab,
     openGitDiffTab: handleOpenGitDiffTab,
     openLlmAuditTab: handleOpenLlmAuditTab,
@@ -1554,8 +1520,8 @@ export function AppShell() {
   }), [
     theme.setPreset, setLocale, handleSlashNew,
     setCwdPickerOpen,
-    handleOpenFavoritesTab, handleOpenCanvasTab,
-    handleOpenTranslateTab, handleOpenToolCallsTab, handleOpenJsonTab,
+    handleOpenFavoritesTab,
+    handleOpenTranslateTab, handleOpenToolCallsTab,
     handleOpenTokensTab, handleOpenGitDiffTab, handleOpenLlmAuditTab,
     agentControls,
     selectedSession, newSessionCwd,
@@ -1739,7 +1705,7 @@ export function AppShell() {
   );
 
   // Panel card — the right-side workspace that hosts file viewers,
-  // tool lists, canvas, RSS, BTW, etc. Built once; the layout mode
+  // tool lists, RSS, BTW, etc. Built once; the layout mode
   // decides whether it sits next to (Agentic) or instead of (Classic)
   // the chat card. The same expand / collapse right-panel state is
   // used in both modes: expanding still pushes the *other* center
@@ -1787,16 +1753,12 @@ export function AppShell() {
           <TranslatePanel />
         ) : activeFileTab?.kind === "toolCalls" ? (
           <ToolCallStatsTabBody />
-        ) : activeFileTab?.kind === "json" ? (
-          <JsonPanel />
         ) : activeFileTab?.kind === "file" ? (
           <FileViewer
             filePath={activeFileTab.filePath}
             cwd={selectedSession?.cwd ?? newSessionCwd ?? undefined}
             rightPanelState={rightPanelState}
           />
-        ) : activeFileTab?.kind === "canvas" ? (
-          <CanvasPanel />
         ) : activeFileTab?.kind === "rss" ? (
           <RssPanel />
         ) : activeFileTab?.kind === "githubTrending" ? (

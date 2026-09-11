@@ -98,7 +98,7 @@ export function GitPanel({ cwd, openRefreshToken = 0, onExpandPanel, isPanelExpa
     if (mode === "log" && cwd && branches === null) void loadBranches();
   }, [mode, cwd, branches, loadBranches]);
 
-  // Switching to the Log view widens the panel, mirroring CanvasPanel.
+  // Switching to the Log view widens the panel.
   // Fires only on the diff→log transition (mode starts as "diff"), so
   // session switches while already in Log mode don't re-expand.
   useEffect(() => {

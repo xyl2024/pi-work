@@ -419,8 +419,6 @@ export interface WorkspacesResponse {
 export const FAVORITES_TAB_ID = "favorites:global";
 export const TRANSLATE_TAB_ID = "translate:global";
 export const TOOL_CALLS_TAB_ID = "toolCalls:global";
-export const JSON_TAB_ID = "json:global";
-export const CANVAS_TAB_ID = "canvas:global";
 export const RSS_TAB_ID = "rss:global";
 export const TOKENS_TAB_ID = "tokens:global";
 export const GIT_DIFF_TAB_ID = "gitDiff:global";
@@ -443,10 +441,8 @@ export const GITHUB_TRENDING_TAB_ID = "githubTrending:global";
 import type { RightBarButtonId } from "./right-bar";
 type TabKindForAutoClose =
   | "file"
-  | "canvas"
   | "translate"
   | "toolCalls"
-  | "json"
   | "rss"
   | "favorites"
   | "tokens"
@@ -459,10 +455,7 @@ type TabKindForAutoClose =
 export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<
   Record<TabKindForAutoClose, RightBarButtonId>
 > = {
-  canvas: "canvas",
   translate: "translate",
-  json: "json",
-  rss: "rss",
   favorites: "favorites",
   tokens: "tokens",
   toolCalls: "toolCalls",

@@ -5,14 +5,12 @@ import { getFileIcon } from "@/components/ui/icons";
 import { ICONS } from "@/components/ui/icons";
 import {
   Bot,
-  Braces,
   ChartColumn,
   ChartSpline,
   GitBranch,
   GitGraph,
   Languages,
   MessageSquareMore,
-  Pencil,
   Rss,
   Star,
   Wrench,
@@ -26,8 +24,6 @@ export type Tab =
   | { kind: "favorites"; id: string; label: string }
   | { kind: "translate"; id: string; label: string }
   | { kind: "toolCalls"; id: string; label: string }
-  | { kind: "json"; id: string; label: string }
-  | { kind: "canvas"; id: string; label: string }
   | { kind: "rss"; id: string; label: string }
   | { kind: "tokens"; id: string; label: string }
   | { kind: "gitDiff"; id: string; label: string }
@@ -118,10 +114,6 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               <Languages size={13} />
             ) : tab.kind === "toolCalls" ? (
               <Wrench size={13} />
-            ) : tab.kind === "json" ? (
-              <Braces size={13} />
-            ) : tab.kind === "canvas" ? (
-              <Pencil size={13} />
             ) : tab.kind === "rss" ? (
               <Rss size={13} />
             ) : tab.kind === "tokens" ? (

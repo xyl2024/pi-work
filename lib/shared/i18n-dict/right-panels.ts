@@ -111,27 +111,7 @@ export const rightPanels = {
   "Loaded {name}": "已加载 {name}",
   "Saved and loaded {name}": "已保存并加载 {name}",
 
-  // JSON formatter panel
-  "JSON": "JSON",
-  "Paste JSON here…": "在此粘贴 JSON…",
-  "Format": "格式化",
-  "Minify": "压缩",
-  "Minify & escape": "压缩并转义",
-  "Copy minify": "复制并压缩",
-  "Copy minify & escape": "复制并转义",
-  "Tree view": "树形视图",
   "Scroll to bottom": "回到底部",
-  "Parse error: {error}": "解析错误：{error}",
-  "Ignored prefix: {prefix}": "已忽略前缀：{prefix}",
-  "Ignored suffix: {suffix}": "已忽略后缀：{suffix}",
-  "Match {n} of {total}": "第 {n} 个，共 {total} 个",
-
-  // Canvas
-  "Canvas": "画布",
-  "Open canvas": "打开画布",
-  "Hide canvas": "隐藏画布",
-  "Canvas save failed — localStorage may be full": "画布保存失败 — localStorage 可能已满",
-  "Canvas image save failed — recent images may not reload": "画布图片保存失败 — 最近粘贴的图片可能无法在重新加载后显示",
 
   // Token audit
   "Token audit": "Token 用量",

@@ -26,8 +26,6 @@ import {
   FAVORITES_TAB_ID,
   TRANSLATE_TAB_ID,
   TOOL_CALLS_TAB_ID,
-  JSON_TAB_ID,
-  CANVAS_TAB_ID,
   RSS_TAB_ID,
   TOKENS_TAB_ID,
   GIT_DIFF_TAB_ID,
@@ -39,7 +37,6 @@ import {
 import type { Tab } from "@/components/ui/TabBar";
 import {
   Bot,
-  Braces,
   ChartColumn,
   ChartSpline,
   GitBranch,
@@ -47,7 +44,6 @@ import {
   Languages,
   MessageSquareMore,
   PanelRight,
-  Pencil,
   Rss,
   Star,
   Wrench,
@@ -58,10 +54,7 @@ import GithubIcon from "@lobehub/icons/es/Github/components/Mono";
 // Tab.kind value surfaces as a type error in the descriptor registry.
 export type RightBarTabKind = Extract<
   Tab["kind"],
-  | "canvas"
   | "translate"
-  | "toolCalls"
-  | "json"
   | "rss"
   | "favorites"
   | "tokens"
@@ -76,9 +69,9 @@ export type RightBarTabKind = Extract<
 export interface RightBarCtx {
   // ── observed state ──
   rightPanelState: "closed" | "normal" | "expanded";
-  /** Agentic / Classic layout. Descriptors like canvas and token audit
+  /** Agentic / Classic layout. Descriptors like token audit
    *  use it to decide whether opening them should auto-expand the panel
-   *  (Agentic: the panel hosts the file/canvas card, so it takes the
+   *  (Agentic: the panel takes the
    *  full column; Classic: the panel sits next to the chat, so expanding
    *  would hide it). */
   layoutMode: LayoutMode;
@@ -108,9 +101,7 @@ export interface RightBarCtx {
   toggleRightPanelTab: (tabId: string, openTab: () => void) => void;
   setRightPanelState: (s: "closed" | "normal" | "expanded") => void;
   openTab: {
-    canvas: () => void;
     translate: () => void;
-    json: () => void;
     rss: () => void;
     gitDiff: () => void;
     favorites: () => void;
@@ -182,28 +173,6 @@ const panelToggleDescriptor: RightBarDescriptor = {
 // is the order they appear here — DESC defaults to this ordering when
 // `cfg.order` is undefined.
 
-const canvasDescriptor: RightBarDescriptor = {
-  id: "canvas",
-  kind: "configurable",
-  labelKey: "Open canvas",
-  isActive: (ctx) => ctx.activeTabKind === "canvas",
-  content: () => <Pencil size={16} />,
-  // Opening from the right-bar button auto-expands the panel in Agentic
-  // mode — there the panel hosts the file/canvas card, so the canvas
-  // gets the full column. In Classic mode the panel card sits next to
-  // the chat, so it opens at normal width — forcing expanded there would
-  // hide the chat behind it. Toggling an already-open canvas still
-  // closes the panel (no expand).
-  onClick: (ctx) => {
-    const wasOpen =
-      ctx.activeTabKind === "canvas" && ctx.rightPanelState !== "closed";
-    ctx.toggleRightPanelTab(CANVAS_TAB_ID, ctx.openTab.canvas);
-    if (!wasOpen && ctx.layoutMode === "agentic") {
-      ctx.setRightPanelState("expanded");
-    }
-  },
-};
-
 const translateDescriptor: RightBarDescriptor = {
   id: "translate",
   kind: "configurable",
@@ -212,15 +181,6 @@ const translateDescriptor: RightBarDescriptor = {
   content: () => <Languages size={16} />,
   onClick: (ctx) =>
     ctx.toggleRightPanelTab(TRANSLATE_TAB_ID, ctx.openTab.translate),
-};
-
-const jsonDescriptor: RightBarDescriptor = {
-  id: "json",
-  kind: "configurable",
-  labelKey: "JSON",
-  isActive: (ctx) => ctx.activeTabKind === "json",
-  content: () => <Braces size={16} />,
-  onClick: (ctx) => ctx.toggleRightPanelTab(JSON_TAB_ID, ctx.openTab.json),
 };
 
 const rssDescriptor: RightBarDescriptor = {
@@ -390,9 +350,7 @@ export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   // 'configurable' group — order here is the implicit default order used
   // when the user hasn't customized `cfg.order`.
   contextDescriptor,
-  canvasDescriptor,
   translateDescriptor,
-  jsonDescriptor,
   rssDescriptor,
   githubTrendingDescriptor,
   gitDiffDescriptor,

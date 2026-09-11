@@ -13,9 +13,7 @@
 // registry's default order.
 
 export type RightBarButtonId =
-  | "canvas"
   | "translate"
-  | "json"
   | "rss"
   | "favorites"
   | "tokens"

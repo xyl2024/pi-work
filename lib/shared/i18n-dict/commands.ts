@@ -25,7 +25,6 @@ export const commands = {
   "Toggle right panel": "切换右面板",
   "Open tool calls": "打开工具调用",
   "Open HTTP debug": "打开 HTTP 调试",
-  "Open JSON formatter": "打开 JSON 格式化",
   "Open models config": "打开模型配置",
   "Open settings": "打开设置",
   "Open channels": "打开频道",
