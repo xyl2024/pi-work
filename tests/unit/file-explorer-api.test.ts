@@ -10,12 +10,23 @@
  */
 import { describe, expect, it } from "vitest";
 import { TEST_BASE_URL } from "../config";
-import { uniqueId } from "./helpers";
+import { getAuthCookie, uniqueId } from "./helpers";
 
 const enc = (p: string) => p.split("/").filter(Boolean).map(encodeURIComponent).join("/");
 
+/** fetch with the auth session cookie attached. */
+async function authedFetch(path: string, init?: RequestInit) {
+  return fetch(`${TEST_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      ...(init?.headers as Record<string, string> | undefined),
+      cookie: `pi-work-auth=${await getAuthCookie()}`,
+    },
+  });
+}
+
 async function createEntry(cwd: string, type: "create" | "mkdir", name: string) {
-  return fetch(`${TEST_BASE_URL}/api/files/${enc(cwd)}?type=${type}`, {
+  return authedFetch(`/api/files/${enc(cwd)}?type=${type}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ name }),
@@ -23,14 +34,14 @@ async function createEntry(cwd: string, type: "create" | "mkdir", name: string) 
 }
 
 async function listEntries(dir: string): Promise<{ name: string; isDir: boolean }[]> {
-  const res = await fetch(`${TEST_BASE_URL}/api/files/${enc(dir)}?type=list`);
+  const res = await authedFetch(`/api/files/${enc(dir)}?type=list`);
   expect(res.status).toBe(200);
   const data = (await res.json()) as { entries?: { name: string; isDir: boolean }[] };
   return data.entries ?? [];
 }
 
 async function deleteEntry(dir: string, name: string) {
-  await fetch(`${TEST_BASE_URL}/api/files/${enc(dir)}/${encodeURIComponent(name)}`, {
+  await authedFetch(`/api/files/${enc(dir)}/${encodeURIComponent(name)}`, {
     method: "DELETE",
   });
 }
@@ -38,7 +49,7 @@ async function deleteEntry(dir: string, name: string) {
 describe("file explorer create/upload api", () => {
   it("creates a file and a folder, uploads files (incl. nested), skips existing, rejects traversal", async () => {
     // Obtain an allowed workspace root (creates pi-cwd-default).
-    const cwdRes = await fetch(`${TEST_BASE_URL}/api/default-cwd`, { method: "POST" });
+    const cwdRes = await authedFetch(`/api/default-cwd`, { method: "POST" });
     expect(cwdRes.status).toBe(200);
     const { cwd } = (await cwdRes.json()) as { cwd: string };
     expect(cwd).toBeTruthy();
@@ -77,7 +88,7 @@ describe("file explorer create/upload api", () => {
       form.append("path", `${dirName}/b.txt`);
       form.append("file", new Blob(["evil"]), "evil.txt");
       form.append("path", "../evil.txt");
-      const uploadRes = await fetch(`${TEST_BASE_URL}/api/files/${enc(scratchDir)}?type=upload`, {
+      const uploadRes = await authedFetch(`/api/files/${enc(scratchDir)}?type=upload`, {
         method: "POST",
         body: form,
       });
@@ -104,7 +115,7 @@ describe("file explorer create/upload api", () => {
       const form2 = new FormData();
       form2.append("file", new Blob(["overwritten?"]), "a.txt");
       form2.append("path", "a.txt");
-      const reRes = await fetch(`${TEST_BASE_URL}/api/files/${enc(scratchDir)}?type=upload`, {
+      const reRes = await authedFetch(`/api/files/${enc(scratchDir)}?type=upload`, {
         method: "POST",
         body: form2,
       });
@@ -114,16 +125,16 @@ describe("file explorer create/upload api", () => {
       expect(reData.skipped).toBe(1);
 
       // Original content preserved.
-      const readRes = await fetch(
-        `${TEST_BASE_URL}/api/files/${enc(scratchDir)}/a.txt?type=read`,
+      const readRes = await authedFetch(
+        `/api/files/${enc(scratchDir)}/a.txt?type=read`,
       );
       expect(readRes.status).toBe(200);
       const readData = (await readRes.json()) as { content: string };
       expect(readData.content).toBe("hello");
 
       // -- upload into a non-directory → 400 --
-      const badUpload = await fetch(
-        `${TEST_BASE_URL}/api/files/${enc(scratchDir)}/a.txt?type=upload`,
+      const badUpload = await authedFetch(
+        `/api/files/${enc(scratchDir)}/a.txt?type=upload`,
         { method: "POST", body: new FormData() },
       );
       expect(badUpload.status).toBe(400);

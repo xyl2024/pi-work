@@ -10,15 +10,52 @@ import { TEST_BASE_URL } from "../config";
 
 export type Json = Record<string, unknown>;
 
+// ── Auth ──────────────────────────────────────────────────────────
+// The web UI requires a session cookie (admin/admin by default). Login once
+// per process and reuse the Set-Cookie on every subsequent request.
+let authCookie: string | null = null;
+
+/** Login to the isolated instance (once) and return the auth cookie value. */
+export async function getAuthCookie(): Promise<string> {
+  if (authCookie) return authCookie;
+  const res = await fetch(`${TEST_BASE_URL}/api/auth/session/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: "admin", password: "admin" }),
+  });
+  if (res.status !== 200) {
+    throw new Error(`test login failed with HTTP ${res.status}`);
+  }
+  const setCookie = res.headers.get("set-cookie") ?? "";
+  const start = setCookie.indexOf("=");
+  authCookie = start === -1 ? "" : setCookie.slice(start + 1, setCookie.indexOf(";") === -1 ? undefined : setCookie.indexOf(";"));
+  if (!authCookie) throw new Error("test login did not set a cookie");
+  return authCookie;
+}
+
+/** RequestInit with the auth cookie attached; spread before custom headers. */
+export async function authedInit(init?: RequestInit): Promise<RequestInit> {
+  return {
+    ...init,
+    headers: { ...(init?.headers as Record<string, string> | undefined), cookie: `pi-work-auth=${await getAuthCookie()}` },
+  };
+}
+
 /** Fetch an API path, returning the parsed JSON body regardless of status. */
 export async function api(
   path: string,
   init?: RequestInit,
 ): Promise<{ status: number; body: Json; res: Response }> {
-  const res = await fetch(`${TEST_BASE_URL}${path}`, {
-    headers: { "content-type": "application/json" },
-    ...init,
-  });
+  const { headers, ...rest } = await authedInit(init);
+  const res = await fetch(`${TEST_BASE_URL}${path}`,
+    {
+      ...rest,
+      headers: {
+        "content-type": "application/json",
+        ...(headers as Record<string, string>),
+        ...(init?.headers as Record<string, string> | undefined),
+      },
+    });
   const body = (await res.json().catch(() => ({}))) as Json;
   return { status: res.status, body, res };
 }

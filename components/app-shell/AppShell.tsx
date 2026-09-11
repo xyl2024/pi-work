@@ -772,6 +772,14 @@ export function AppShell() {
     closeTopPanel();
   }, [closeTopPanel]);
 
+  // Sign out: clears the auth cookie server-side then hard-navigates; the
+  // login screen (rendered by the proxy redirect) appears immediately.
+  const handleLogout = useCallback(() => {
+    void fetch("/api/auth/session/logout", { method: "POST" })
+      .catch(() => undefined)
+      .finally(() => { window.location.href = "/login"; });
+  }, []);
+
   // Called when /new slash command is triggered. Pass a `cwdOverride` to
   // pick a non-active cwd (e.g. the per-cwd "+" button in the sidebar)
   // — otherwise we reuse the currently selected session's cwd, falling
@@ -1883,6 +1891,7 @@ export function AppShell() {
       onOpenToolMarket={() => setToolsMarketOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onOpenInbox={() => setInboxOpen(true)}
+      onLogout={handleLogout}
       inboxUnread={inboxUnread}
       profileRefreshKey={profileRefreshKey}
       onFlip={() => setSidebarFlipped(true)}

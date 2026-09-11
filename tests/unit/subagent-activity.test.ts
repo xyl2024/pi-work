@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import os from "node:os";
 import { TEST_BASE_URL, ISOLATED_DATA_DIR } from "../config";
-import { api, uniqueId } from "./helpers";
+import { api, authedInit, uniqueId } from "./helpers";
 
 /**
  * GET /api/subagents/[sessionId]/activity — live snapshot of a subagent child
@@ -41,7 +41,7 @@ describe("GET /api/subagents/[sessionId]/activity", () => {
   it("returns task metadata and null stats for a registered child with no readable session", async () => {
     const childSessionId = randomChildSessionId();
     seedSubagentTask(childSessionId);
-    const res = await fetch(`${TEST_BASE_URL}/api/subagents/${encodeURIComponent(childSessionId)}/activity`);
+    const res = await fetch(`${TEST_BASE_URL}/api/subagents/${encodeURIComponent(childSessionId)}/activity`, await authedInit());
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toContain("no-store");
     const body = (await res.json()) as {

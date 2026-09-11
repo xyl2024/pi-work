@@ -22,6 +22,9 @@ interface Props {
   onOpenInbox?: () => void;
   inboxUnread?: number;
   refreshKey?: number;
+  /** Sign-out entry (POST /api/auth/session/logout + reload). Rendered only
+   *  when provided. */
+  onLogout?: () => void;
 }
 
 interface ProfileResponse {
@@ -44,7 +47,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, onOpenInbox, inboxUnread, refreshKey }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, onOpenInbox, inboxUnread, refreshKey, onLogout }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -138,7 +141,7 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenPrompts || onOpenScheduler || onOpenChannels || onOpenToolMarket);
+  const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenPrompts || onOpenScheduler || onOpenChannels || onOpenToolMarket || onLogout);
 
   return (
     <div
@@ -415,6 +418,22 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
                 <path d="M12 22.08V12" />
               </svg>
               <span>{t("Channels")}</span>
+            </button>
+          )}
+          {onLogout && (
+            <button
+              role="menuitem"
+              onClick={() => { setMenuOpen(false); onLogout(); }}
+              style={itemBaseStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              <span>{t("Log out")}</span>
             </button>
           )}
         </div>

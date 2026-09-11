@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
+import { AuthGate } from "@/components/auth/AuthGate";
 import { I18nProvider } from "@/hooks/useI18n";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmDialog";
@@ -17,8 +18,10 @@ export default function Home() {
             <PermissionProvider>
               <ContextMenuProvider>
                 <TodoProvider>
-                  <AppShell />
-                  <CelebrationOverlay />
+                  <AuthGate>
+                    <AppShell />
+                    <CelebrationOverlay />
+                  </AuthGate>
                 </TodoProvider>
               </ContextMenuProvider>
             </PermissionProvider>

@@ -14,6 +14,7 @@
 // keep working unchanged.
 
 import { askUserQuestions } from "./ask-user-questions";
+import { auth } from "./auth";
 import { EN_TRANSLATIONS } from "./en";
 import { chat } from "./chat";
 import { channels } from "./channels";
@@ -47,6 +48,7 @@ export type Locale = "en" | "zh";
 export { EN_TRANSLATIONS };
 
 export const ZH_TRANSLATIONS = {
+  ...auth,
   ...common,
   ...chat,
   ...channels,

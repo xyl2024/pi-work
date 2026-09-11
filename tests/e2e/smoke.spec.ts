@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { login } from "./helpers";
 
 /**
  * UI smoke: the app shell loads and the key global panels open without
@@ -28,6 +29,9 @@ function watchErrors(page: Page): void {
 
 test.describe("home page smoke", () => {
   test.beforeEach(({ page }) => watchErrors(page));
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+  });
   test.afterEach(() => {
     // Surface collected errors per test; keep the message readable.
     if (ERRORS.length > 0) {
@@ -38,7 +42,6 @@ test.describe("home page smoke", () => {
   test("app shell loads with the right bar", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle(/Pi Work/i);
-    await expect(page.locator("body")).toBeVisible();
     // right-bar column renders its buttons
     await expect(page.getByRole("button").filter({ has: page.locator("[aria-label]") }).first()).toBeVisible();
   });
