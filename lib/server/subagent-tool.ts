@@ -249,6 +249,7 @@ export const SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK = `\
 ## Tool spawn_subagent guidelines
 - For independent tasks that are parallelizable and have a well-defined scope, dispatch the tasks to subagents using \`spawn_subagent\`. Examples include codebase exploration, research and information gathering, and code review.
 - When you need to explore the codebase, prioritize using the spawn_subagent tool to dispatch a codebase_explorer subagent for exploration, rather than doing it yourself.
+- When using codebase_explorer, assign it the purely code exploration and reporting task, without requiring it to give any suggestions—it is only a code retriever.
 `;
 
 export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSubagentDetails>({
