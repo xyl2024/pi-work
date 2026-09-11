@@ -1225,7 +1225,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         <>
           <div className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-4">
             <div className="mb-8 flex flex-col items-center" style={{ fontFamily: "var(--font-mono)" }}>
-              <span style={{ fontSize: 26, color: "var(--text)", fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.2 }}>P<span style={{ color: "var(--accent)" }}>i</span> W<span style={{ color: "var(--accent)" }}>o</span>rk</span>
+              <span style={{ fontSize: 26, color: "var(--text)", fontWeight: 700, letterSpacing: "-0.01em", lineHeight: 1.2 }}>Pi Work</span>
               <span style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
                 web <span style={{ color: "var(--text)" }}>v{process.env.NEXT_PUBLIC_APP_VERSION ?? "0.0.0"}</span>
                 <span style={{ margin: "0 6px", opacity: 0.5 }}>·</span>

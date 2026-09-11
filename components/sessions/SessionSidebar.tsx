@@ -140,7 +140,7 @@ function PiAgentTitle() {
       }}
     >
       {display === "Pi Work" ? (
-        <>P<span style={{ color: "var(--accent)" }}>i</span> W<span style={{ color: "var(--accent)" }}>o</span>rk</>
+        <>{display}</>
       ) : display}
     </button>
   );
