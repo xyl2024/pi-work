@@ -44,10 +44,11 @@ export interface UseSlashMenuResult {
   /** Handle arrow / enter / escape keys while the slash menu is open.
    *  Returns `true` if the event was consumed (the parent should early-return). */
   handleSlashKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => boolean;
-  /** Sync the menu open/close state after a text edit. The menu only
-   *  appears when the caret sits right after a freshly typed `/`; while
-   *  it is open, further edits keep it up as long as a slash token is
-   *  still active at the caret (filtering), otherwise it closes. */
+  /** Sync the menu open/close state after a text edit or caret move
+   *  (typing also fires `select`). The menu only appears when the caret
+   *  sits right after a freshly typed `/`; while it is open, further
+   *  edits / caret moves keep it up as long as a slash token is still
+   *  active at the caret (filtering), otherwise it closes. */
   syncSlashMenuForEdit: (value: string, cursor: number) => void;
 }
 
@@ -168,9 +169,9 @@ export function useSlashMenu({
     [cursorPosition, value, onSlashAction, textareaRef, setValue, setCursorPosition],
   );
 
-  /** Re-evaluate the menu after a user edit: open only when a `/` was
-   *  just typed at the caret; keep open (filtering) while the caret is
-   *  still at the end of the same slash token; close otherwise. */
+  /** Re-evaluate the menu after a user edit or caret move: open only when
+   *  a `/` was just typed at the caret; keep open (filtering) while the
+   *  caret is still at the end of the same slash token; close otherwise. */
   const syncSlashMenuForEdit = useCallback(
     (v: string, cursor: number) => {
       setSlashMenuOpen((prev) => {

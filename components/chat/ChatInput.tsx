@@ -8,7 +8,7 @@ import { SlashCommandHint } from "./SlashCommandHint";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { PromptPreview } from "./PromptPreview";
 import { CollapsiblePanel } from "../ui/CollapsiblePanel";
-import { findDirectSlashResource, formatSlashContent, getSlashQuery, type SlashResource } from "@/lib/shared/slash-commands";
+import { findDirectSlashResource, formatSlashContent, type SlashResource } from "@/lib/shared/slash-commands";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import { useImageAttachments } from "./chat-input/hooks/useImageAttachments";
 import { useInputHistory } from "./chat-input/hooks/useInputHistory";
@@ -501,17 +501,21 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onSelect={(e) => {
               const pos = e.currentTarget.selectionStart ?? value.length;
               setCursorPosition(pos);
-              setSlashMenuOpen(
-                // After clicking outside/inside, keep the menu only while a
-                // slash token is active at the caret (including a fresh `/`).
-                getSlashQuery(e.currentTarget.value, pos) != null &&
-                  e.currentTarget.value.slice(0, pos).endsWith("/"),
-              );
+              // Typing a character also fires `select` (caret moved), so
+              // reuse the edit rule: only a caret right after `/` opens the
+              // menu; while open, it stays up for filtering as long as a
+              // slash token is still active at the caret. A bare tighten
+              // here (endsWith("/")) would kill filtering after the first
+              // typed character.
+              syncSlashMenuForEdit(e.currentTarget.value, pos);
             }}
             onFocus={(e) => {
               const pos = e.currentTarget.selectionStart ?? e.currentTarget.value.length;
               setCursorPosition(pos);
-              setSlashMenuOpen(Boolean(getSlashQuery(e.currentTarget.value, pos)));
+              // Same rule as edits/caret moves: only a caret right after a
+              // `/` opens the menu; an open menu keeps filtering while a
+              // slash token is still active at the caret.
+              syncSlashMenuForEdit(e.currentTarget.value, pos);
             }}
             rows={1}
             disabled={disabled}
