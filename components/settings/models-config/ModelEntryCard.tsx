@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { ModelCardShell, ReasoningBadge } from "./ModelCard";
+import { ModelCardShell } from "./ModelCard";
 import type { ModelEntry } from "./types";
 
 /**
@@ -64,7 +64,7 @@ export function ModelEntryCard({
       seed={seed}
       title={title}
       subtitle={subtitle}
-      badge={model.reasoning ? <ReasoningBadge /> : undefined}
+      badge={undefined}
       onClick={onOpen}
       summary={
         stats.length > 0 ? (

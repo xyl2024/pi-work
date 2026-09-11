@@ -351,9 +351,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                               <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: model.id ? "var(--text-muted)" : "var(--text-dim)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {model.id || t("new model")}
                               </span>
-                              {model.reasoning && (
-                                <span style={{ fontSize: 9, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
-                              )}
+
                             </div>
                           );
                         })}

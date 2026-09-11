@@ -215,7 +215,7 @@ export function ModelCard({
       seed={model.provider}
       title={model.name || model.id}
       subtitle={`${model.provider} / ${model.id}`}
-      badge={model.reasoning ? <ReasoningBadge /> : undefined}
+      badge={undefined}
       expanded={expanded}
       onClick={onToggle}
       summary={
