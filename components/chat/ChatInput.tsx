@@ -8,7 +8,7 @@ import { SlashCommandHint } from "./SlashCommandHint";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { PromptPreview } from "./PromptPreview";
 import { CollapsiblePanel } from "../ui/CollapsiblePanel";
-import { findDirectSlashResource, formatSlashContent, type SlashResource } from "@/lib/shared/slash-commands";
+import { findDirectSlashResource, formatSlashContent, getSlashQuery, type SlashResource } from "@/lib/shared/slash-commands";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import { useImageAttachments } from "./chat-input/hooks/useImageAttachments";
 import { useInputHistory } from "./chat-input/hooks/useInputHistory";
@@ -153,6 +153,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     setSelectedSlashResource,
     selectSlashResource,
     handleSlashKeyDown,
+    syncSlashMenuForEdit,
   } = useSlashMenu({
     slashResourceKey,
     slashResources,
@@ -485,7 +486,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               setValue(e.target.value);
               const pos = e.target.selectionStart ?? e.target.value.length;
               setCursorPosition(pos);
-              setSlashMenuOpen(Boolean(slashQuery));
+              // Menu appears only right after typing `/`; once open it
+              // keeps filtering while a slash token is active at the caret.
+              syncSlashMenuForEdit(e.target.value, pos);
               // E2: any user edit exits the history index so the next
               // ArrowUp is treated as a fresh recall, not a continuation.
               if (isInHistoryMode) {
@@ -498,12 +501,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onSelect={(e) => {
               const pos = e.currentTarget.selectionStart ?? value.length;
               setCursorPosition(pos);
-              setSlashMenuOpen(Boolean(slashQuery));
+              setSlashMenuOpen(
+                // After clicking outside/inside, keep the menu only while a
+                // slash token is active at the caret (including a fresh `/`).
+                getSlashQuery(e.currentTarget.value, pos) != null &&
+                  e.currentTarget.value.slice(0, pos).endsWith("/"),
+              );
             }}
             onFocus={(e) => {
-              const pos = e.currentTarget.selectionStart ?? value.length;
+              const pos = e.currentTarget.selectionStart ?? e.currentTarget.value.length;
               setCursorPosition(pos);
-              setSlashMenuOpen(Boolean(slashQuery));
+              setSlashMenuOpen(Boolean(getSlashQuery(e.currentTarget.value, pos)));
             }}
             rows={1}
             disabled={disabled}

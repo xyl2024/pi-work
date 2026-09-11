@@ -44,6 +44,11 @@ export interface UseSlashMenuResult {
   /** Handle arrow / enter / escape keys while the slash menu is open.
    *  Returns `true` if the event was consumed (the parent should early-return). */
   handleSlashKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => boolean;
+  /** Sync the menu open/close state after a text edit. The menu only
+   *  appears when the caret sits right after a freshly typed `/`; while
+   *  it is open, further edits keep it up as long as a slash token is
+   *  still active at the caret (filtering), otherwise it closes. */
+  syncSlashMenuForEdit: (value: string, cursor: number) => void;
 }
 
 /**
@@ -163,6 +168,20 @@ export function useSlashMenu({
     [cursorPosition, value, onSlashAction, textareaRef, setValue, setCursorPosition],
   );
 
+  /** Re-evaluate the menu after a user edit: open only when a `/` was
+   *  just typed at the caret; keep open (filtering) while the caret is
+   *  still at the end of the same slash token; close otherwise. */
+  const syncSlashMenuForEdit = useCallback(
+    (v: string, cursor: number) => {
+      setSlashMenuOpen((prev) => {
+        if (cursor > 0 && v.slice(0, cursor).endsWith("/")) return true;
+        const token = getSlashQuery(v, cursor);
+        return Boolean(prev && token);
+      });
+    },
+    [],
+  );
+
   const handleSlashKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
       if (!slashMenuOpen || !slashQuery || visibleSlashResources.length === 0) return false;
@@ -179,13 +198,15 @@ export function useSlashMenu({
       }
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        setSlashPage((page) => Math.min(page + 1, slashPageCount - 1));
+        // Wrap around: right past the last page lands on the first page.
+        setSlashPage((page) => (page >= slashPageCount - 1 ? 0 : page + 1));
         setSlashActiveIndex(0);
         return true;
       }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
-        setSlashPage((page) => Math.max(page - 1, 0));
+        // Wrap around: left past the first page lands on the last page.
+        setSlashPage((page) => (page <= 0 ? slashPageCount - 1 : page - 1));
         setSlashActiveIndex(0);
         return true;
       }
@@ -213,5 +234,6 @@ export function useSlashMenu({
     setSelectedSlashResource,
     selectSlashResource,
     handleSlashKeyDown,
+    syncSlashMenuForEdit,
   };
 }
