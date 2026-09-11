@@ -42,10 +42,20 @@ export const dynamic = "force-dynamic";
 
 interface JsonlEntry {
   type?: string;
-  message?: { role?: string; content?: unknown };
+  message?: {
+    role?: string;
+    content?: unknown;
+    provider?: string;
+    model?: string;
+  };
 }
 
-function extractFirstUserText(filePath: string): string {
+function extractFirstUserText(
+  filePath: string,
+): { text: string; provider: string | null; modelId: string | null } {
+  let text = "";
+  let provider: string | null = null;
+  let modelId: string | null = null;
   const raw = readFileSync(filePath, "utf8");
   // Split by newline and tolerate CRLF. Skip empty lines silently.
   for (const line of raw.split(/\r?\n/)) {
@@ -57,12 +67,20 @@ function extractFirstUserText(filePath: string): string {
     } catch {
       continue;
     }
-    if (entry.type !== "message") continue;
     const message = entry.message;
-    if (!message || message.role !== "user") continue;
-    const content = message.content;
-    if (typeof content === "string") return content;
-    if (Array.isArray(content)) {
+    // Track the latest assistant message's model so auto-name calls the SAME
+    // model the session is actually using (falling back to the global default
+    // only when no assistant turn exists yet).
+    if (message && message.role === "assistant") {
+      const m = message as { provider?: unknown; model?: unknown };
+      if (typeof m.provider === "string" && m.provider) provider = m.provider;
+      if (typeof m.model === "string" && m.model) modelId = m.model;
+    }
+    if (text || entry.type !== "message") continue;
+    if (message && message.role !== "user") continue;
+    const content = message?.content;
+    if (typeof content === "string") text = content;
+    else if (Array.isArray(content)) {
       for (const block of content) {
         if (
           block &&
@@ -70,14 +88,15 @@ function extractFirstUserText(filePath: string): string {
           (block as { type?: unknown }).type === "text" &&
           typeof (block as { text?: unknown }).text === "string"
         ) {
-          return (block as { text: string }).text;
+          text = (block as { text: string }).text;
+          break;
         }
       }
     }
     // user message exists but is not in a usable shape — keep looking.
     continue;
   }
-  return "";
+  return { text, provider, modelId };
 }
 
 // Strip a layer of wrapping ASCII / Chinese quotes / backticks that some models
@@ -107,7 +126,8 @@ export async function POST(
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    const firstUserText = extractFirstUserText(filePath).trim();
+    const { text: firstUserTextRaw, provider, modelId } = extractFirstUserText(filePath);
+    const firstUserText = firstUserTextRaw.trim();
     if (!firstUserText) {
       log.warn("auto-name no usable user message", {
         id,
@@ -140,6 +160,10 @@ export async function POST(
             systemPrompt: AUTO_NAME_SYSTEM_PROMPT,
             thinkingLevel: "off",
             timeoutMs: 50_000,
+            // Prefer the model this session is actually using (from the latest
+            // assistant entry) over the global default; resolveDirectModel
+            // falls back to the default when provider/modelId are missing.
+            ...(provider && modelId ? { provider, modelId } : {}),
           }),
       );
     } catch (error) {
