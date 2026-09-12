@@ -23,6 +23,7 @@ import { common } from "./common";
 import { fileViewer } from "./file-viewer";
 import { githubTrending } from "./github-trending";
 import { grokbot } from "./grokbot";
+import { kanban } from "./kanban";
 import { inbox } from "./inbox";
 import { media } from "./media";
 import { models } from "./models";
@@ -56,6 +57,7 @@ export const ZH_TRANSLATIONS = {
   ...githubTrending,
   ...grokbot,
   ...inbox,
+  ...kanban,
   ...media,
   ...models,
   ...permissions,

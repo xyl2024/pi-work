@@ -33,6 +33,7 @@ import {
   LLM_AUDIT_TAB_ID,
   CONTEXT_TAB_ID,
   GITHUB_TRENDING_TAB_ID,
+  KANBAN_TAB_ID,
 } from "@/lib/shared/types";
 import type { Tab } from "@/components/ui/TabBar";
 import {
@@ -45,6 +46,7 @@ import {
   MessageSquareMore,
   PanelRight,
   Rss,
+  SquareKanban,
   Star,
   Wrench,
 } from "lucide-react";
@@ -64,6 +66,7 @@ export type RightBarTabKind = Extract<
   | "context"
   | "btw"
   | "githubTrending"
+  | "kanban"
 >;
 
 export interface RightBarCtx {
@@ -112,6 +115,7 @@ export interface RightBarCtx {
     context: () => void;
     btw: () => void;
     githubTrending: () => void;
+    kanban: () => void;
   };
 }
 
@@ -344,6 +348,19 @@ const conversationTreeDescriptor: RightBarDescriptor = {
     ),
 };
 
+// Kanban: global board (spans all cwds), not session-bound. Clicking it opens
+// the right panel in the expanded state so the four columns have room, while
+// a second click collapses the panel like any other toggle button.
+const kanbanDescriptor: RightBarDescriptor = {
+  id: "kanban",
+  kind: "configurable",
+  labelKey: "Kanban",
+  isActive: (ctx) => ctx.activeTabKind === "kanban",
+  content: () => <SquareKanban size={16} />,
+  onClick: (ctx) =>
+    ctx.toggleRightPanelTab(KANBAN_TAB_ID, ctx.openTab.kanban),
+};
+
 export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   // 'fixed' group
   panelToggleDescriptor,
@@ -360,6 +377,7 @@ export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   toolCallsDescriptor,
   conversationTreeDescriptor,
   btwDescriptor,
+  kanbanDescriptor,
 ] as const;
 
 // Tab.kind → RightBarButtonId reverse lookup lives in `lib/types.ts` as a

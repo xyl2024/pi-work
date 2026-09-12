@@ -19,6 +19,7 @@ import { TranslatePanel } from "../panels/TranslatePanel";
 import { ToolCallStatsPanel } from "../panels/ToolCallStatsPanel";
 import { RssPanel } from "../rss/RssPanel";
 import { GitHubTrendingPanel } from "../panels/github-trending/GitHubTrendingPanel";
+import { KanbanPanel } from "../kanban/KanbanPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
@@ -65,6 +66,7 @@ import {
   CONTEXT_TAB_ID,
   BTW_TAB_ID,
   GITHUB_TRENDING_TAB_ID,
+  KANBAN_TAB_ID,
   RIGHT_BAR_ID_FOR_TAB_KIND,
 } from "@/lib/shared/types";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
@@ -1062,6 +1064,26 @@ export function AppShell() {
     ensureRightPanelOpen();
   }, [t, ensureRightPanelOpen]);
 
+  // Open the Kanban panel. Unlike the other toggles, this one opens the right
+  // panel in the expanded state because the four-column board needs width.
+  const handleOpenKanbanTab = useCallback(() => {
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "kanban")) return prev;
+      return [{ kind: "kanban", id: KANBAN_TAB_ID, label: t("Kanban") }, ...prev];
+    });
+    setActiveFileTabId(KANBAN_TAB_ID);
+    setRightPanelState("expanded");
+  }, [t]);
+
+  // Kanban "Open session" jumps to the workspace session AND steps the right
+  // panel down from expanded to normal (still open, but no longer full-width)
+  // so the chat gets more room. Kept separate from handleOpenScheduledSession
+  // (scheduler modal / command palette), which does not touch the right panel.
+  const handleOpenKanbanSession = useCallback((sessionId: string) => {
+    dispatchWorkspace({ type: "open_session_by_id", sessionId });
+    setRightPanelState((v) => (v === "expanded" ? "normal" : v));
+  }, []);
+
   // Open the Token-audit panel.
   const handleOpenTokensTab = useCallback(() => {
     setFileTabs((prev) => {
@@ -1427,6 +1449,7 @@ export function AppShell() {
       context: handleOpenContextTab,
       btw: handleOpenBtwTab,
       githubTrending: handleOpenGithubTrendingTab,
+      kanban: handleOpenKanbanTab,
     },
   };
 
@@ -1794,6 +1817,14 @@ export function AppShell() {
             isStreaming={isStreaming}
             agentRunning={agentRunning}
             onCardClick={(card) => handleConversationTreeCardClick(card.id)}
+          />
+        ) : activeFileTab?.kind === "kanban" ? (
+          <KanbanPanel
+            defaultCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+            defaultModel={currentModel}
+            defaultThinkingLevel={thinkingLevel}
+            defaultTools={tools}
+            onOpenSession={handleOpenKanbanSession}
           />
         ) : (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>

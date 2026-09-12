@@ -12,6 +12,7 @@ import {
   Languages,
   MessageSquareMore,
   Rss,
+  SquareKanban,
   Star,
   Wrench,
 } from "lucide-react";
@@ -31,7 +32,8 @@ export type Tab =
   | { kind: "llmAudit"; id: string; label: string }
   | { kind: "context"; id: string; label: string }
   | { kind: "btw"; id: string; label: string }
-  | { kind: "githubTrending"; id: string; label: string };
+  | { kind: "githubTrending"; id: string; label: string }
+  | { kind: "kanban"; id: string; label: string };
 
 interface Props {
   tabs: Tab[];
@@ -130,6 +132,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               <MessageSquareMore size={13} />
             ) : tab.kind === "githubTrending" ? (
               <GithubIcon size={13} />
+            ) : tab.kind === "kanban" ? (
+              <SquareKanban size={13} />
             ) : (
               getFileIcon(tab.label, 13)
             );
