@@ -659,34 +659,6 @@ function KanbanCard({
             {task.taskName}
           </button>
         )}
-        {/* status-specific footer (buttons) — stays visible even collapsed. */}
-        {task.status === "backlog" && (
-          <div style={{ display: "flex", gap: 4, marginLeft: "auto", flexShrink: 0 }}>
-            <TooltipButton
-              tip={t("Start executing this task")}
-              onClick={(e) => {
-                e.stopPropagation();
-                onRun();
-              }}
-              style={{
-                ...actionButton,
-                background: "var(--accent)",
-                color: "var(--on-accent, #fff)",
-                borderColor: "transparent",
-                fontWeight: 600,
-              }}
-            >
-              <Play size={11} />
-              {t("Run")}
-            </TooltipButton>
-            <TooltipButton tip={t("Edit")} onClick={() => onEdit()} style={actionButton}>
-              <Pencil size={11} />
-            </TooltipButton>
-            <TooltipButton tip={t("Delete")} onClick={() => onDelete()} style={actionButton}>
-              <Trash2 size={11} />
-            </TooltipButton>
-          </div>
-        )}
       </div>
 
       {/* Run / stop / done / open-session footer toggles by status. For the
@@ -864,6 +836,31 @@ function KanbanCard({
         </div>
       </div>
       </>
+      )}
+
+      {task.status === "backlog" && (
+        <div style={{ display: "flex", gap: 4, marginTop: 2, alignItems: "center" }}>
+          <TooltipButton
+            tip={t("Start executing this task")}
+            onClick={() => onRun()}
+            style={{
+              ...actionButton,
+              background: "var(--accent)",
+              color: "var(--on-accent, #fff)",
+              borderColor: "transparent",
+              fontWeight: 600,
+            }}
+          >
+            <Play size={11} />
+            {t("Run")}
+          </TooltipButton>
+          <TooltipButton tip={t("Edit")} onClick={() => onEdit()} style={actionButton}>
+            <Pencil size={11} />
+          </TooltipButton>
+          <TooltipButton tip={t("Delete")} onClick={() => onDelete()} style={actionButton}>
+            <Trash2 size={11} />
+          </TooltipButton>
+        </div>
       )}
 
       {task.status === "in_progress" && (
