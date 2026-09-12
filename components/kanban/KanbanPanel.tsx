@@ -157,6 +157,11 @@ export function KanbanPanel(props: KanbanPanelProps) {
       const list = map.get(task.status);
       if (list) list.push(task);
     }
+    // 每一列内的卡片按创建时间倒序排列（最新任务在顶部）。
+    for (const s of KANBAN_STATUS_ORDER) {
+      const list = map.get(s);
+      if (list) list.sort((a, b) => b.createdAt - a.createdAt);
+    }
     return map;
   }, [kanban.tasks, query, cwdAliases]);
 
