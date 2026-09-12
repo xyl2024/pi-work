@@ -65,4 +65,5 @@ export const kanban = {
   "Ended": "结束",
   "Task name hint": "简短描述，例如：重构登录模块",
   "Leave empty to auto-derive from the prompt": "留空则从提示词自动生成任务名称",
+  "Filter by name, prompt or cwd…": "按任务名/提示词/cwd 过滤…",
 } as const;

@@ -18,12 +18,12 @@ import type { CSSProperties, ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { useKanban } from "@/hooks/useKanban";
-import { useCwdAlias } from "@/hooks/cwdAliasStore";
+import { useCwdAlias, useCwdAliases } from "@/hooks/cwdAliasStore";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
 import { KanbanTaskModal } from "./KanbanTaskModal";
-import { Play, ExternalLink, Plus, Pencil, Trash2, Loader2, CircleStop, Wrench, Folder, Clock } from "lucide-react";
+import { Play, ExternalLink, Plus, Pencil, Trash2, Loader2, CircleStop, Wrench, Folder, Clock, Search, X } from "lucide-react";
 import type { KanbanStatus, KanbanTask } from "@/lib/shared/kanban-types";
 import { KANBAN_STATUS_ORDER } from "@/lib/shared/kanban-types";
 import type { ToolInfo } from "@/lib/shared/types";
@@ -34,6 +34,9 @@ interface KanbanPanelProps {
   defaultThinkingLevel: string;
   defaultTools: ToolInfo[];
   onOpenSession: (sessionId: string) => void;
+  /** True when the right panel is full-width (expanded). The header row with
+   *  counts / cwd filter / New task is only shown in the expanded state. */
+  expanded: boolean;
 }
 
 type ColumnMeta = {
@@ -83,6 +86,25 @@ function basename(cwd: string): string {
   return parts.length > 0 ? parts[parts.length - 1] : cwd;
 }
 
+/** Whether a task passes the text filter. Matches the task name, user prompt,
+ *  and cwd (full path, basename, or user-set alias) — all as case-insensitive
+ *  substrings. */
+function matchesTaskFilter(
+  task: KanbanTask,
+  filter: string,
+  aliases: Record<string, string> | null,
+): boolean {
+  const q = filter.trim().toLowerCase();
+  if (!q) return true;
+  if (task.taskName && task.taskName.toLowerCase().includes(q)) return true;
+  if (task.prompt.toLowerCase().includes(q)) return true;
+  if (task.cwd.toLowerCase().includes(q)) return true;
+  if (basename(task.cwd).toLowerCase().includes(q)) return true;
+  const alias = aliases?.[task.cwd];
+  if (alias && alias.toLowerCase().includes(q)) return true;
+  return false;
+}
+
 export function KanbanPanel(props: KanbanPanelProps) {
   const { t } = useI18n();
   const toast = useToast();
@@ -93,6 +115,8 @@ export function KanbanPanel(props: KanbanPanelProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<KanbanStatus | null>(null);
   const dragIdRef = useRef<string | null>(null);
+  const [query, setQuery] = useState("");
+  const cwdAliases = useCwdAliases();
 
   // Provider icon map (<provider>:<modelId> → icon id) so cards can paint the
   // right model brand glyph. Loaded once per mount.
@@ -129,8 +153,20 @@ export function KanbanPanel(props: KanbanPanelProps) {
     const map = new Map<KanbanStatus, KanbanTask[]>();
     for (const s of KANBAN_STATUS_ORDER) map.set(s, []);
     for (const task of kanban.tasks ?? []) {
+      if (!matchesTaskFilter(task, query, cwdAliases.map)) continue;
       const list = map.get(task.status);
       if (list) list.push(task);
+    }
+    return map;
+  }, [kanban.tasks, query, cwdAliases]);
+
+  // Global per-column tallies (unaffected by the filter) so the header
+  // keeps showing the true board state while the columns are narrowed.
+  const totalByStatus = useMemo(() => {
+    const map = new Map<KanbanStatus, number>();
+    for (const s of KANBAN_STATUS_ORDER) map.set(s, 0);
+    for (const task of kanban.tasks ?? []) {
+      map.set(task.status, (map.get(task.status) ?? 0) + 1);
     }
     return map;
   }, [kanban.tasks]);
@@ -237,7 +273,8 @@ export function KanbanPanel(props: KanbanPanelProps) {
         minHeight: 0,
       }}
     >
-      {/* Top status bar */}
+      {/* Top status bar — only rendered when the panel is expanded. */}
+      {props.expanded && (
       <div
         style={{
           display: "flex",
@@ -247,15 +284,65 @@ export function KanbanPanel(props: KanbanPanelProps) {
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "var(--text-muted)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 12, color: "var(--text-muted)", flexShrink: 0 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6" }} />
-            {t("{count} in progress", { count: byStatus.get("in_progress")?.length ?? 0 })}
+            {t("{count} in progress", { count: totalByStatus.get("in_progress") ?? 0 })}
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />
-            {t("{count} to review", { count: byStatus.get("review_test")?.length ?? 0 })}
+            {t("{count} to review", { count: totalByStatus.get("review_test") ?? 0 })}
           </span>
+        </div>
+        {/* text filter — narrows columns by task name / prompt / cwd. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flex: "1 1 auto",
+            minWidth: 0,
+            maxWidth: 260,
+            background: "var(--bg)",
+            border: "1px solid var(--border)",
+            borderRadius: 8,
+            padding: "5px 8px",
+          }}
+        >
+          <Search size={12} style={{ color: "var(--text-dim)", flexShrink: 0 }} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("Filter by name, prompt or cwd…")}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "var(--text)",
+              fontSize: 12,
+              fontFamily: "inherit",
+            }}
+          />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              aria-label={t("Clear")}
+              type="button"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                border: "none",
+                background: "transparent",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              <X size={11} />
+            </button>
+          )}
         </div>
         <div style={{ marginLeft: "auto" }}>
           <button
@@ -282,6 +369,7 @@ export function KanbanPanel(props: KanbanPanelProps) {
           </button>
         </div>
       </div>
+      )}
 
       {/* Board — columns stay side-by-side, each stacked vertically. Columns
           have a comfortable min-width; when the panel is too narrow the board
@@ -540,7 +628,7 @@ function KanbanCard({
       {/* Main content: for review_test / done show both the user prompt and
           the final assistant message; otherwise just the prompt. */}
       {showResult ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
           <div>
             <span
               style={{
@@ -555,23 +643,26 @@ function KanbanCard({
             >
               {t("User prompt")}
             </span>
-            <div
-              style={{
-                fontSize: 12,
-                lineHeight: 1.45,
-                color: "var(--text)",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {task.prompt}
-            </div>
+            <Tooltip content={task.prompt} side="top" delayDuration={0} maxWidth={360}>
+              <div
+                style={{
+                  fontSize: 12,
+                  lineHeight: 1.45,
+                  color: "var(--text)",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {task.prompt}
+              </div>
+            </Tooltip>
           </div>
-          <div>
+          {/* Divider between the prompt and the finished result. */}
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 6, paddingTop: 6 }}>
             <span
               style={{
                 display: "block",
@@ -585,39 +676,48 @@ function KanbanCard({
             >
               {task.error ? t("Error") : t("Result")}
             </span>
-            <div
-              style={{
-                fontSize: 12,
-                lineHeight: 1.45,
-                color: task.error ? "var(--error)" : "var(--text)",
-                display: "-webkit-box",
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
+            <Tooltip
+              content={resultText ?? t("No result")}
+              side="top"
+              delayDuration={0}
+              maxWidth={360}
             >
-              {resultText ?? t("No result")}
-            </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  lineHeight: 1.45,
+                  color: task.error ? "var(--error)" : "var(--text)",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {resultText ?? t("No result")}
+              </div>
+            </Tooltip>
           </div>
         </div>
       ) : (
-        <div
-          style={{
-            fontSize: 12,
-            lineHeight: 1.45,
-            color: "var(--text)",
-            display: "-webkit-box",
-            WebkitLineClamp: 4,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-        >
-          {task.prompt}
-        </div>
+        <Tooltip content={task.prompt} side="top" delayDuration={0} maxWidth={360}>
+          <div
+            style={{
+              fontSize: 12,
+              lineHeight: 1.45,
+              color: "var(--text)",
+              display: "-webkit-box",
+              WebkitLineClamp: 4,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {task.prompt}
+          </div>
+        </Tooltip>
       )}
 
       {/* Richer meta: model + thinking, tool set, cwd, timestamps. */}

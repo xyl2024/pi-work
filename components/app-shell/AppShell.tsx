@@ -1825,6 +1825,7 @@ export function AppShell() {
             defaultThinkingLevel={thinkingLevel}
             defaultTools={tools}
             onOpenSession={handleOpenKanbanSession}
+            expanded={rightPanelState === "expanded"}
           />
         ) : (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
