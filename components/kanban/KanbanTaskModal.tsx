@@ -154,6 +154,9 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
   // True once the user explicitly picked a model — the default-model fallback
   // effect must never overwrite an explicit choice made after open.
   const modelPickedRef = useRef(false);
+  // True once the user explicitly changed the tool set — the cwd-default
+  // effect must never overwrite an explicit choice the user already made.
+  const toolsPickedRef = useRef(false);
 
   // Load model catalog once, when the modal first opens.
   useEffect(() => {
@@ -212,6 +215,7 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
     setModelOpen(false);
     setToolsOpen(false);
     modelPickedRef.current = false;
+    toolsPickedRef.current = false;
   }, [open, task, defaults]);
 
   // When creating without an active-session model snapshot, prefill the
@@ -228,6 +232,32 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
         : { ...prev, provider: dm.provider, modelId: dm.modelId },
     );
   }, [open, task, meta]);
+
+  // For a *new* task, default the tool set to the current cwd's saved preset
+  // (the one set via CwdToolsPicker). Falls back to the active-session tools
+  // as an initial value when the cwd has no preset saved. Never overrides a
+  // tool set the user explicitly picked in this session.
+  useEffect(() => {
+    if (!open || task) return;
+    const cwd = form.cwd.trim();
+    if (!cwd) return;
+    let cancelled = false;
+    fetch(`/api/cwd-tools?cwd=${encodeURIComponent(cwd)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || toolsPickedRef.current) return;
+        const sel = data?.selection;
+        if (sel === "all" || (Array.isArray(sel) && sel.length >= 0)) {
+          setForm((prev) => ({ ...prev, toolSelection: sel }));
+        }
+      })
+      .catch(() => {
+        /* cwd default is optional */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, task, form.cwd]);
 
   // Keep the cwd tool catalog in sync with the selected cwd (same endpoint
   // the chat tool picker uses).
@@ -586,6 +616,7 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
                 toolsError={toolsError}
                 customExpanded={customExpanded}
                 onSelectPreset={(preset) => {
+                  toolsPickedRef.current = true;
                   const next: ToolSelection =
                     preset === "off"
                       ? []
@@ -595,7 +626,10 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
                   update("toolSelection", next);
                   if (preset !== "read_only") setToolsOpen(false);
                 }}
-                onToggleTool={(next) => update("toolSelection", next)}
+                onToggleTool={(next) => {
+                  toolsPickedRef.current = true;
+                  update("toolSelection", next);
+                }}
                 onToggleCustomExpanded={() => setCustomExpanded((v) => !v)}
                 onRetryEnsureTools={async () => {
                   if (!form.cwd.trim()) return;
