@@ -47,4 +47,11 @@ export const notes = {
   "Invalid name": "名称不合法",
   "Save note": "保存笔记",
   "Open note": "打开笔记",
+  "Search notes...": "搜索笔记…",
+  "No matching notes": "没有匹配的笔记",
+  "Words": "字词",
+  "Characters": "字符",
+  "Image upload failed": "图片上传失败",
+  "Operation failed": "操作失败",
+  "New note in folder": "在此文件夹新建笔记",
 };

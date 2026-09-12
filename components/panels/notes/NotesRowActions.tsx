@@ -3,7 +3,9 @@
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 
-/** A tiny inline popover that lists all folders a note can be moved into. */
+/** A tiny inline popover that lists all folders a note can be moved into.
+ *  Rendered inside the row's relative wrapper so it anchors just below the
+ *  row that triggered it. */
 export function NoteFolderPicker({
   folders,
   onPick,
@@ -20,27 +22,40 @@ export function NoteFolderPicker({
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [onClose]);
 
   return (
     <div
       ref={ref}
+      className="notes-fade-in"
       style={{
         position: "absolute",
+        top: "calc(100% + 2px)",
+        right: 4,
         zIndex: 50,
         minWidth: 180,
         maxHeight: 240,
         overflowY: "auto",
-        padding: 6,
+        padding: 5,
         background: "var(--bg-panel)",
         border: "1px solid var(--panel-border)",
         borderRadius: 8,
         boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
       }}
     >
-      <div style={{ padding: "2px 6px 6px", color: "var(--text-dim)", fontSize: 11 }}>
+      <div style={{ padding: "2px 6px 6px", color: "var(--text-dim)", fontSize: 11, fontWeight: 500 }}>
         {t("Move to")}
       </div>
       {folders.length === 0 ? (
@@ -67,11 +82,12 @@ export function NoteFolderPicker({
                 borderRadius: 5,
                 cursor: "pointer",
                 textAlign: "left",
+                transition: "background 0.1s",
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-selected)")}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
-              <span style={{ color: "var(--text-dim)", display: "inline-flex" }}>
+              <span style={{ color: "var(--text-dim)", display: "inline-flex", flexShrink: 0 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
                 </svg>

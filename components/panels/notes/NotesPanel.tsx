@@ -7,6 +7,9 @@ import {
   useState,
 } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useToast } from "@/components/ui/Toast";
+import { IconButton } from "@/components/ui/IconButton";
+import { Tooltip } from "@/components/ui/Tooltip";
 import {
   fetchNote,
   fetchNotesTree,
@@ -17,7 +20,7 @@ import { NotePreview } from "./NotePreview";
 import { NotesEditor } from "./NotesEditor";
 import { NotesList } from "./NotesList";
 
-type SaveStatus = "saved" | "unsaved" | "saving";
+type SaveStatus = "saved" | "unsaved" | "saving" | "error";
 
 interface NotesPanelProps {
   /** True when the right panel is in the expanded (wide) state. */
@@ -26,8 +29,20 @@ interface NotesPanelProps {
 
 const AUTOSAVE_MS = 600;
 
+/** Word count that treats CJK characters as one "word" each and groups
+ *  latin/digit runs into words — the usual convention for mixed text. */
+function countWords(content: string): number {
+  if (!content.trim()) return 0;
+  const cjk = content.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g)?.length ?? 0;
+  const latin = content.replace(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean).length;
+  return cjk + latin;
+}
+
 export function NotesPanel({ expanded }: NotesPanelProps) {
   const { t } = useI18n();
+  const toast = useToast();
   const [tree, setTree] = useState<NoteNode[]>([]);
   const [openNote, setOpenNote] = useState<string | null>(null);
   const [content, setContent] = useState("");
@@ -59,7 +74,7 @@ export function NotesPanel({ expanded }: NotesPanelProps) {
     refresh();
   }, [refresh]);
 
-  const flushSave = useCallback(async (note: string | null) => {
+  const flushSave = useCallback(async (note: string | null, notify = false) => {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
@@ -72,12 +87,14 @@ export function NotesPanel({ expanded }: NotesPanelProps) {
     try {
       await saveNote(note, c);
       setSaveStatus("saved");
+      if (notify) toast.show({ kind: "success", message: t("Notes saved") });
     } catch {
-      setSaveStatus("unsaved");
+      setSaveStatus("error");
+      if (notify) toast.show({ kind: "error", message: t("Save failed") });
     } finally {
       flushing.current = false;
     }
-  }, []);
+  }, [t, toast]);
 
   // Flush pending save when leaving the editor / switching notes.
   const open = useCallback(
@@ -117,14 +134,13 @@ export function NotesPanel({ expanded }: NotesPanelProps) {
     [flushSave],
   );
 
-  // Shortcut: toggle edit/preview pane in narrow mode (Cmd/Ctrl+Shift+P).
+  // Shortcut: save now (Cmd/Ctrl+S). Flushes any pending autosave.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
-        // Save now (Cmd/Ctrl+S). Flush any pending autosave.
         if (!openNoteRef.current) return;
         e.preventDefault();
-        flushSave(openNoteRef.current);
+        flushSave(openNoteRef.current, true);
       }
     };
     window.addEventListener("keydown", handler);
@@ -141,66 +157,79 @@ export function NotesPanel({ expanded }: NotesPanelProps) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
-            height: 34,
+            gap: 6,
+            height: 36,
             padding: "0 8px",
             borderBottom: "1px solid var(--border)",
             flexShrink: 0,
           }}
         >
-          <BackButton title={t("Back to list")} onClick={back} />
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: "var(--text)",
-            }}
-            title={title}
-          >
-            {title.replace(/\.md$/i, "")}
-          </span>
-          <span
-            style={{
-              flexShrink: 0,
-              fontSize: 11,
-              color: saveStatus === "saved" ? "var(--text-dim)" : saveStatus === "saving" ? "var(--text-muted)" : "#f87171",
-            }}
-          >
-            {saveStatus === "saved"
-              ? t("Saved")
-              : saveStatus === "saving"
-                ? t("Saving")
-                : t("Unsaved changes")}
-          </span>
-          {!expanded && (
-            <ModeToggle mode={narrowMode} onChange={setNarrowMode} />
-          )}
+          <IconButton label={t("Back to list")} size="xs" onClick={back}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </IconButton>
+          <Tooltip content={title} delayDuration={400}>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                fontSize: 12.5,
+                fontWeight: 600,
+                color: "var(--text)",
+              }}
+            >
+              {title.replace(/\.md$/i, "")}
+            </span>
+          </Tooltip>
+          {!expanded && <ModeToggle mode={narrowMode} onChange={setNarrowMode} />}
         </div>
 
         {/* Body: expanded → split edit|preview; normal → single pane. */}
         {expanded ? (
           <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
             <div style={{ flex: "1 1 50%", minWidth: 0, borderRight: "1px solid var(--border)" }}>
-              <NotesEditor noteRel={openNote} value={content} onChange={handleChange} onSave={() => flushSave(openNote)} />
+              <NotesEditor noteRel={openNote} value={content} onChange={handleChange} onSave={() => flushSave(openNote, true)} />
             </div>
             <div style={{ flex: "1 1 50%", minWidth: 0, overflowY: "auto" }}>
               <PreviewPane noteRel={openNote} content={content} />
             </div>
           </div>
         ) : narrowMode === "edit" ? (
-          <div style={{ flex: 1, minHeight: 0 }}>
-            <NotesEditor noteRel={openNote} value={content} onChange={handleChange} onSave={() => flushSave(openNote)} />
+          <div className="notes-fade-in" style={{ flex: 1, minHeight: 0 }}>
+            <NotesEditor noteRel={openNote} value={content} onChange={handleChange} onSave={() => flushSave(openNote, true)} />
           </div>
         ) : (
-          <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <div className="notes-fade-in" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
             <PreviewPane noteRel={openNote} content={content} />
           </div>
         )}
+
+        {/* Footer status bar */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            height: 24,
+            padding: "0 10px",
+            borderTop: "1px solid var(--border)",
+            flexShrink: 0,
+            fontSize: 11,
+            color: "var(--text-dim)",
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+            <span>{countWords(content)} {t("Words")}</span>
+            <span style={{ color: "var(--border)" }}>·</span>
+            <span>{content.length} {t("Characters")}</span>
+          </span>
+          <span style={{ flex: 1 }} />
+          <SaveStatusIndicator status={saveStatus} />
+        </div>
       </div>
     );
   }
@@ -218,39 +247,43 @@ export function NotesPanel({ expanded }: NotesPanelProps) {
 
 function PreviewPane({ noteRel, content }: { noteRel: string; content: string }) {
   return (
-    <div style={{ padding: "12px 14px", minHeight: "100%" }}>
+    <div style={{ padding: "12px 16px 24px", minHeight: "100%" }}>
       <NotePreview noteRel={noteRel} content={content} />
     </div>
   );
 }
 
-function BackButton({ title, onClick }: { title: string; onClick: () => void }) {
+const STATUS_META: Record<SaveStatus, { color: string; pulse?: boolean }> = {
+  saved: { color: "var(--success)" },
+  saving: { color: "var(--text-dim)", pulse: true },
+  unsaved: { color: "var(--warning)" },
+  error: { color: "var(--error)" },
+};
+
+function SaveStatusIndicator({ status }: { status: SaveStatus }) {
+  const { t } = useI18n();
+  const meta = STATUS_META[status];
+  const label = status === "saved"
+    ? t("Saved")
+    : status === "saving"
+      ? t("Saving")
+      : status === "error"
+        ? t("Save failed")
+        : t("Unsaved changes");
   return (
-    <button
-      type="button"
-      title={title}
-      onClick={onClick}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 26,
-        height: 26,
-        flexShrink: 0,
-        color: "var(--text-muted)",
-        background: "transparent",
-        border: "none",
-        borderRadius: 6,
-        cursor: "pointer",
-        padding: 0,
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-selected)"; e.currentTarget.style.color = "var(--text)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="15 18 9 12 15 6" />
-      </svg>
-    </button>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+      <span
+        className={meta.pulse ? "notes-saving-dot" : undefined}
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: meta.color,
+          flexShrink: 0,
+        }}
+      />
+      <span style={{ color: status === "error" ? "var(--error)" : "var(--text-dim)" }}>{label}</span>
+    </span>
   );
 }
 
@@ -262,10 +295,11 @@ function ModeToggle({ mode, onChange }: { mode: "edit" | "preview"; onChange: (m
         display: "flex",
         flexShrink: 0,
         height: 24,
+        padding: 2,
+        gap: 2,
         background: "var(--bg-subtle)",
         border: "1px solid var(--border)",
-        borderRadius: 6,
-        overflow: "hidden",
+        borderRadius: 7,
       }}
     >
       <ModeTab active={mode === "edit"} label={t("Edit")} onClick={() => onChange("edit")} />
@@ -282,11 +316,15 @@ function ModeTab({ active, label, onClick }: { active: boolean; label: string; o
       style={{
         padding: "0 10px",
         fontSize: 11,
+        height: 18,
+        lineHeight: "18px",
         color: active ? "var(--accent)" : "var(--text-muted)",
         background: active ? "var(--bg-selected)" : "transparent",
         border: "none",
+        borderRadius: 5,
         cursor: "pointer",
         fontWeight: active ? 600 : 400,
+        transition: "background 0.12s, color 0.12s",
       }}
     >
       {label}

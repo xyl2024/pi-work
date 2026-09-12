@@ -1501,3 +1501,48 @@ span.linenumber {
 .cm-editor-scoped .cm-gutterElement {
   color: var(--text-dim);
 }
+
+/* ── Notes panel ────────────────────────────────────────────────────────
+   Tree rows: hover reveals a compact action strip that overlays the
+   (dimmed) child-count meta, VSCode-explorer style. */
+.notes-row-actions {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: inherit;
+  border-radius: 6px;
+  padding-left: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.notes-row:hover .notes-row-actions,
+.notes-row:focus-within .notes-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.notes-row-meta {
+  transition: opacity 0.12s ease;
+}
+.notes-row:hover .notes-row-meta {
+  opacity: 0;
+}
+
+/* Soft fade for panel view switches (list ↔ editor, edit ↔ preview). */
+@keyframes notes-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: none; }
+}
+.notes-fade-in {
+  animation: notes-fade-in 0.16s ease-out;
+}
+
+/* Pulsing dot for the "saving…" status in the notes footer bar. */
+@keyframes notes-saving-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.notes-saving-dot {
+  animation: notes-saving-pulse 1s ease-in-out infinite;
+}
