@@ -44,6 +44,10 @@ type ColumnMeta = {
   accent: string;
 };
 
+/** How many cards a column shows on first render / per scroll-to-bottom batch. */
+const INITIAL_VISIBLE_CARDS = 10;
+const PAGE_VISIBLE_CARDS = 10;
+
 const COLUMNS: ColumnMeta[] = [
   { status: "backlog", accent: "#94a3b8" },
   { status: "in_progress", accent: "#3b82f6" },
@@ -117,6 +121,31 @@ export function KanbanPanel(props: KanbanPanelProps) {
   const dragIdRef = useRef<string | null>(null);
   const [query, setQuery] = useState("");
   const cwdAliases = useCwdAliases();
+
+  // Per-column card count currently shown, so a column with hundreds of cards
+  // only mounts its first 10 on first paint. Scrolling a column to the bottom
+  // reveals 10 more (see each column's onScroll below).
+  const [visibleCounts, setVisibleCounts] = useState<Record<KanbanStatus, number>>(() => {
+    const m = {} as Record<KanbanStatus, number>;
+    for (const s of KANBAN_STATUS_ORDER) m[s] = INITIAL_VISIBLE_CARDS;
+    return m;
+  });
+
+  // A new filter should start each column back at its first page, otherwise a
+  // narrowed result set might show an empty slice while cards still exist.
+  useEffect(() => {
+    setVisibleCounts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const s of KANBAN_STATUS_ORDER) {
+        if (next[s] !== INITIAL_VISIBLE_CARDS) {
+          next[s] = INITIAL_VISIBLE_CARDS;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [query]);
 
   // Provider icon map (<provider>:<modelId> → icon id) so cards can paint the
   // right model brand glyph. Loaded once per mount.
@@ -451,6 +480,21 @@ export function KanbanPanel(props: KanbanPanelProps) {
 
               {/* Column body — cards stacked vertically, scrolls internally. */}
               <div
+                onScroll={(e) => {
+                  // Load the next page of cards when the column is scrolled
+                  // close to the bottom, until every card is mounted.
+                  const el = e.currentTarget;
+                  const nearBottom =
+                    el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+                  if (!nearBottom) return;
+                  const status = col.status;
+                  const total = byStatus.get(status)?.length ?? 0;
+                  setVisibleCounts((prev) => {
+                    const cur = prev[status] ?? 0;
+                    if (cur >= total) return prev;
+                    return { ...prev, [status]: Math.min(cur + PAGE_VISIBLE_CARDS, total) };
+                  });
+                }}
                 style={{
                   flex: 1,
                   overflowY: "auto",
@@ -466,7 +510,11 @@ export function KanbanPanel(props: KanbanPanelProps) {
                     {t("No tasks in this column")}
                   </div>
                 )}
-                {tasks.map((task) => (
+                {tasks
+                  // Only render the first N cards of the column; the rest are
+                  // revealed lazily when the user scrolls to the bottom.
+                  .slice(0, Math.min(visibleCounts[col.status] ?? INITIAL_VISIBLE_CARDS, tasks.length))
+                  .map((task) => (
                   <KanbanCard
                     key={task.id}
                     task={task}
