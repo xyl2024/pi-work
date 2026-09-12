@@ -315,6 +315,35 @@ export function markRunEnd(
   return getTask(id)!;
 }
 
+/**
+ * Reverse-sync: revive a terminal card (review_test / done) whose pi session
+ * the user has started continuing. The card goes back to `in_progress` with a
+ * fresh `started_at`; when that conversation's run ends the resume watcher
+ * (lib/server/kanban/session-sync.ts) writes the new output back via
+ * markRunEnd. The session_id is left untouched — it already points at the
+ * session being continued.
+ *
+ * Only a card whose session_id matches AND status is a terminal one is
+ * resumed. A backlog (never ran) or already-in_progress card is left alone.
+ * Returns the resumed task, or null if there is nothing to resume.
+ */
+export function resumeTaskForSession(sessionId: string): KanbanTask | null {
+  const db = getKanbanDb();
+  const row = db
+    .prepare(
+      `SELECT * FROM kanban_tasks
+        WHERE session_id = @sid AND status IN ('review_test', 'done')
+        ORDER BY ended_at DESC LIMIT 1`,
+    )
+    .get({ sid: sessionId }) as TaskRow | undefined;
+  if (!row) return null;
+  db.prepare(
+    `UPDATE kanban_tasks SET status = 'in_progress', error = NULL,
+       result_summary = NULL, started_at = @now, ended_at = NULL WHERE id = @id`,
+  ).run({ id: row.id, now: Date.now() });
+  return getTask(row.id)!;
+}
+
 /** Stats for the top status bar — all counts are global (across cwds). */
 export function getKanbanStats(): {
   inProgress: number;
