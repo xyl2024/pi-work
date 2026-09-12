@@ -181,10 +181,15 @@ export function KanbanPanel(props: KanbanPanelProps) {
     else toast.show({ kind: "error", message: t(errMsg) });
   };
 
-  const handleCreate = async (taskId: string) => {
+  const handleCreate = async (taskId: string, opts?: { autoStart?: boolean }) => {
     await kanban.refresh();
     setModalOpen(false);
-    void taskId;
+    // "Create & start": immediately run the fresh task so it lands in the
+    // In Progress column and boots its pi session (same path as card Run).
+    if (opts?.autoStart) {
+      const ok = await kanban.start(taskId);
+      toastFrom(ok, "Started task", "Failed to start task");
+    }
   };
 
   const handleEditSaved = async (taskId: string) => {

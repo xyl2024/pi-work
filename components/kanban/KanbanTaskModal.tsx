@@ -50,8 +50,10 @@ interface Props {
   task: KanbanTask | null;
   defaults: KanbanTaskDefaults;
   onClose: () => void;
-  /** Called after a successful save with the task id (create or edit). */
-  onSaved: (taskId: string) => Promise<void> | void;
+  /** Called after a successful save with the task id (create or edit).
+   *  `autoStart` is true when the user picked "Create & start" — the parent
+   *  should immediately run the freshly created task. */
+  onSaved: (taskId: string, opts?: { autoStart?: boolean }) => Promise<void> | void;
   onToast: (kind: "success" | "error", message: string) => void;
 }
 
@@ -289,7 +291,7 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
   const promptError = submitted && !form.prompt.trim() ? t("prompt is required") : null;
   const cwdError = submitted && !form.cwd.trim() ? t("cwd is required") : null;
 
-  const submit = async () => {
+  const submit = async (autoStart = false) => {
     if (saving) return;
     setSubmitted(true);
     if (!form.prompt.trim() || !form.cwd.trim()) {
@@ -336,7 +338,7 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
         id = data.task.id;
         onToast("success", t("Created task"));
       }
-      await onSaved(id);
+      await onSaved(id, autoStart ? { autoStart: true } : undefined);
       requestClose();
     } catch (e) {
       onToast("error", e instanceof Error ? e.message : t("Failed to update task"));
@@ -680,6 +682,27 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
           >
             {t("Cancel")}
           </button>
+          {/* Create & start — create mode only: save, then immediately run
+              the task (lands in In Progress and boots its pi session). */}
+          {!task && (
+            <button
+              onClick={() => void submit(true)}
+              disabled={saving}
+              style={{
+                padding: "7px 16px",
+                borderRadius: 8,
+                border: "1px solid var(--accent)",
+                background: "transparent",
+                color: "var(--accent)",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                opacity: saving ? 0.6 : 1,
+              }}
+            >
+              {t("Create & start")}
+            </button>
+          )}
           <button
             onClick={() => void submit()}
             disabled={saving}

@@ -29,6 +29,7 @@ export const kanban = {
   "Select tools…": "选择工具…",
   "Cancel": "取消",
   "Create task": "创建任务",
+  "Create & start": "创建并开始",
   "Save": "保存",
   "Created task": "已创建任务",
   "Failed to create task": "创建任务失败",
