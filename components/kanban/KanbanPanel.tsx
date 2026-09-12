@@ -244,11 +244,6 @@ export function KanbanPanel(props: KanbanPanelProps) {
     if (!ok) toast.show({ kind: "error", message: t("Failed to stop task") });
   };
 
-  const handleMoveToDone = async (task: KanbanTask) => {
-    const ok = await kanban.move(task.id, { status: "done" });
-    toastFrom(ok, "Moved to Done", "Failed to update task");
-  };
-
   const handleDelete = async (task: KanbanTask) => {
     const confirmed = await confirm({
       title: t("Delete this task?"),
@@ -523,7 +518,6 @@ export function KanbanPanel(props: KanbanPanelProps) {
                     onDragStart={canDrag(task) ? handleDragStart(task) : undefined}
                     onDragEnd={canDrag(task) ? handleDragEnd : undefined}
                     onRun={() => void handleStart(task)}
-                    onMoveToDone={() => void handleMoveToDone(task)}
                     onStop={() => void handleStop(task)}
                     onEdit={() => {
                       setEditingTask(task);
@@ -604,6 +598,8 @@ const cardStyle: CSSProperties = {
   borderRadius: 9,
   background: "var(--bg)",
   border: "1px solid var(--border)",
+  // Right + bottom edge drop shadow for a subtle lift off the column.
+  boxShadow: "2px 3px 6px rgba(0,0,0,0.12)",
   cursor: "default",
 };
 
@@ -614,7 +610,6 @@ function KanbanCard({
   onDragStart,
   onDragEnd,
   onRun,
-  onMoveToDone,
   onStop,
   onEdit,
   onDelete,
@@ -626,7 +621,6 @@ function KanbanCard({
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: () => void;
   onRun: () => void;
-  onMoveToDone: () => void;
   onStop: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -822,7 +816,11 @@ function KanbanCard({
       {/* Run stats for the linked session (messages / tools / files / lines). */}
       <KanbanTaskStats stats={task.stats} usage={task.contextUsage} t={t} />
 
-      {/* Richer meta: model + thinking, tool set, cwd, timestamps. */}
+      </>
+      )}
+
+      {/* Richer meta: model + thinking, tool set, cwd, timestamps. Always shown,
+          even when the card body is collapsed. */}
       <div
         style={{
           display: "flex",
@@ -888,8 +886,6 @@ function KanbanCard({
           )}
         </div>
       </div>
-      </>
-      )}
 
       {task.status === "backlog" && (
         <div style={{ display: "flex", gap: 4, marginTop: 2, alignItems: "center" }}>
@@ -935,9 +931,6 @@ function KanbanCard({
 
       {task.status === "review_test" && (
         <div style={{ display: "flex", gap: 4, marginTop: 2, alignItems: "center" }}>
-          <TooltipButton tip={t("Move to Done")} onClick={() => onMoveToDone()} style={{ ...actionButton, color: "var(--text)", fontWeight: 600 }}>
-            {t("Move to Done")}
-          </TooltipButton>
           {onOpenSession && (
             <TooltipButton tip={t("Open session")} onClick={() => onOpenSession()} style={actionButton}>
               <ExternalLink size={11} />
