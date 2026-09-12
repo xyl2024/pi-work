@@ -6,6 +6,7 @@ import { useSessionUiState } from "@/hooks/sessionUiStore";
 import { AttachmentList } from "./AttachmentList";
 import { SlashCommandHint } from "./SlashCommandHint";
 import { SlashCommandMenu } from "./SlashCommandMenu";
+import { FileMentionMenu } from "./FileMentionMenu";
 import { PromptPreview } from "./PromptPreview";
 import { CollapsiblePanel } from "../ui/CollapsiblePanel";
 import { findDirectSlashResource, formatSlashContent, type SlashResource } from "@/lib/shared/slash-commands";
@@ -14,6 +15,7 @@ import { useImageAttachments } from "./chat-input/hooks/useImageAttachments";
 import { useInputHistory } from "./chat-input/hooks/useInputHistory";
 import { useToolsDropdown } from "./chat-input/hooks/useToolsDropdown";
 import { useSlashMenu } from "./chat-input/hooks/useSlashMenu";
+import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { THINKING_BORDER_COLOR } from "./chat-input/constants";
 import { THINKING_LEVEL_ORDER, type ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
@@ -164,6 +166,27 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     setCursorPosition,
     textareaRef,
   });
+  const {
+    mentionMenuOpen,
+    mentionActiveIndex,
+    mentionQuery,
+    visibleMentionEntries,
+    mentionPageCount,
+    mentionCurrentPage,
+    loading: mentionLoading,
+    error: mentionError,
+    syncFileMentionMenuForEdit,
+    handleFileMentionKeyDown,
+    selectFileMention,
+    retryFileMentionLoad,
+  } = useFileMentionMenu({ cwd, value, cursorPosition, setValue, setCursorPosition, textareaRef });
+
+  const syncInputMenus = useCallback((nextValue: string, cursor: number) => {
+    const mentionActive = Boolean(cwd && nextValue.slice(0, cursor).match(/(^|\s)@[^\s]*$/));
+    if (mentionActive) setSlashMenuOpen(false);
+    else syncSlashMenuForEdit(nextValue, cursor);
+    syncFileMentionMenuForEdit(nextValue, cursor);
+  }, [cwd, setSlashMenuOpen, syncSlashMenuForEdit, syncFileMentionMenuForEdit]);
 
   // ── Tools preset dropdown ─────────────────────────────────────────────
   const {
@@ -353,12 +376,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (handleShiftBackspaceClear(e)) return;
       if (handleThinkingTabKeyDown(e)) return;
+      if (handleFileMentionKeyDown(e)) return;
       if (handleSlashKeyDown(e)) return;
       if (handleSlashEscape(e)) return;
       if (handleHistoryKeyDown(e)) return;
       handleEnterAndBuiltin(e);
     },
-    [handleShiftBackspaceClear, handleThinkingTabKeyDown, handleSlashKeyDown, handleSlashEscape, handleHistoryKeyDown, handleEnterAndBuiltin],
+    [handleShiftBackspaceClear, handleThinkingTabKeyDown, handleFileMentionKeyDown, handleSlashKeyDown, handleSlashEscape, handleHistoryKeyDown, handleEnterAndBuiltin],
   );
 
   // ── Imperative handle for ChatWindow's chatInputRef ───────────────────
@@ -486,9 +510,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               setValue(e.target.value);
               const pos = e.target.selectionStart ?? e.target.value.length;
               setCursorPosition(pos);
-              // Menu appears only right after typing `/`; once open it
-              // keeps filtering while a slash token is active at the caret.
-              syncSlashMenuForEdit(e.target.value, pos);
+              syncInputMenus(e.target.value, pos);
               // E2: any user edit exits the history index so the next
               // ArrowUp is treated as a fresh recall, not a continuation.
               if (isInHistoryMode) {
@@ -507,7 +529,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               // slash token is still active at the caret. A bare tighten
               // here (endsWith("/")) would kill filtering after the first
               // typed character.
-              syncSlashMenuForEdit(e.currentTarget.value, pos);
+              syncInputMenus(e.currentTarget.value, pos);
             }}
             onFocus={(e) => {
               const pos = e.currentTarget.selectionStart ?? e.currentTarget.value.length;
@@ -515,7 +537,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               // Same rule as edits/caret moves: only a caret right after a
               // `/` opens the menu; an open menu keeps filtering while a
               // slash token is still active at the caret.
-              syncSlashMenuForEdit(e.currentTarget.value, pos);
+              syncInputMenus(e.currentTarget.value, pos);
             }}
             rows={1}
             disabled={disabled}
@@ -585,7 +607,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           )}
         </div>
         </CollapsiblePanel>
-        {(selectedSlashResource || (slashMenuOpen && slashQuery)) && !hideToolbar && (
+        {(selectedSlashResource || (slashMenuOpen && slashQuery) || (mentionMenuOpen && mentionQuery)) && !hideToolbar && (
           <div style={{ position: "relative" }}>
             {selectedSlashResource && (
               <SlashCommandHint resource={selectedSlashResource} onRemove={() => setSelectedSlashResource(null)} />
@@ -602,6 +624,26 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   items={visibleSlashResources}
                   activeIndex={slashActiveIndex}
                   onSelect={selectSlashResource}
+                />
+              </div>
+            )}
+            {mentionMenuOpen && mentionQuery && (
+              <div style={{
+                position: "absolute", bottom: "calc(100% + 44px)", left: 0,
+                zIndex: 200, width: "min(560px, 100%)", maxHeight: 320,
+                background: "var(--bg)", border: "1px solid var(--border)",
+                borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+                overflow: "auto",
+              }}>
+                <FileMentionMenu
+                  items={visibleMentionEntries}
+                  activeIndex={mentionActiveIndex}
+                  loading={mentionLoading}
+                  error={mentionError}
+                  onSelect={selectFileMention}
+                  onRetry={retryFileMentionLoad}
+                  page={mentionCurrentPage}
+                  pageCount={mentionPageCount}
                 />
               </div>
             )}
