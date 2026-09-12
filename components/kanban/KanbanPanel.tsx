@@ -24,7 +24,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
 import { KanbanTaskModal } from "./KanbanTaskModal";
 import { Play, ExternalLink, Plus, Pencil, Trash2, Loader2, CircleStop, Wrench, Folder, Clock, Search, X, MessagesSquare, FileDiff, ChevronRight } from "lucide-react";
-import type { KanbanStatus, KanbanTask, KanbanTaskStats } from "@/lib/shared/kanban-types";
+import type { KanbanStatus, KanbanTask, KanbanTaskStats, KanbanContextUsage } from "@/lib/shared/kanban-types";
 import { KANBAN_STATUS_ORDER } from "@/lib/shared/kanban-types";
 import type { ToolInfo } from "@/lib/shared/types";
 
@@ -670,7 +670,7 @@ function KanbanCard({
           non-backlog statuses the card body below sits between the name row
           and this row, so keep the buttons in their own row after the body. */}
       {collapsed && (
-        <KanbanTaskStats stats={task.stats} t={t} />
+        <KanbanTaskStats stats={task.stats} usage={task.contextUsage} t={t} />
       )}
 
       {/* Main + meta body — hidden when the card is collapsed. */}
@@ -772,7 +772,7 @@ function KanbanCard({
       )}
 
       {/* Run stats for the linked session (messages / tools / files / lines). */}
-      <KanbanTaskStats stats={task.stats} t={t} />
+      <KanbanTaskStats stats={task.stats} usage={task.contextUsage} t={t} />
 
       {/* Richer meta: model + thinking, tool set, cwd, timestamps. */}
       <div
@@ -923,14 +923,94 @@ function KanbanCard({
   );
 }
 
+/** Compact context-window ring for a card — mirrors the chat top-bar
+ *  `ContextUsageBar` (same five-tier palette, same SVG arc geometry) but
+ *  sized for a 220px card and showing just the ring + percent. Returns null
+ *  when the usage is unknown (no model window / no linked session). */
+function CardContextRing({
+  usage,
+  t,
+}: {
+  usage: KanbanContextUsage | null;
+  t: (key: string) => string;
+}) {
+  if (!usage?.contextWindow || usage.percent === null) return null;
+  const pct = Math.max(0, Math.min(100, usage.percent));
+  const color =
+    pct > 80 ? "#ef4444" :
+    pct > 60 ? "#f97316" :
+    pct > 40 ? "#eab308" :
+    pct > 20 ? "#22c55e" :
+                "var(--accent)";
+  const circumference = 2 * Math.PI * 5;
+  const dashOffset = circumference * (1 - pct / 100);
+  const ctxWindowFmt = usage.contextWindow >= 1_000_000
+    ? `${(usage.contextWindow / 1_000_000).toFixed(1)}M`
+    : usage.contextWindow >= 1000
+      ? `${(usage.contextWindow / 1000).toFixed(0)}k`
+      : String(usage.contextWindow);
+  const label = `${t("Context")}: ${pct.toFixed(1)}% of ${usage.contextWindow.toLocaleString()} tokens`;
+
+  return (
+    <Tooltip content={label} side="top">
+      <span
+        aria-label={label}
+        role="meter"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        style={{
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          gap: 3,
+          fontSize: 10,
+          fontWeight: 600,
+          fontVariantNumeric: "tabular-nums",
+          color,
+          cursor: "default",
+        }}
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 12 12"
+          style={{ flexShrink: 0, overflow: "visible" }}
+        >
+          <circle cx="6" cy="6" r="5" fill="none" stroke="var(--border)" strokeWidth="1.7" />
+          <circle
+            cx="6" cy="6" r="5"
+            fill="none"
+            stroke={color}
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            transform="rotate(-90 6 6)"
+            style={{ transition: "stroke-dashoffset 0.25s ease, stroke 0.2s ease" }}
+          />
+        </svg>
+        <span>{pct.toFixed(0)}%</span>
+        <span style={{ color: "var(--text-dim)", fontWeight: 500, fontSize: 9 }}>
+          / {ctxWindowFmt}
+        </span>
+      </span>
+    </Tooltip>
+  );
+}
+
 /** Compact run-stats row shown on the card: message count, tool-call count,
- *  changed-file count, and added/removed lines. Renders nothing when the task
- *  has no linked session / no computed stats yet (e.g. an idle backlog card). */
+ *  changed-file count, added/removed lines, and (right-aligned after the
+ *  line delta) the session's context-window ring. Renders nothing when the
+ *  task has no linked session / no computed stats yet (e.g. an idle backlog
+ *  card). */
 function KanbanTaskStats({
   stats,
+  usage,
   t,
 }: {
   stats: KanbanTaskStats | null;
+  usage: KanbanContextUsage | null;
   t: (key: string) => string;
 }) {
   if (!stats) return null;
@@ -982,6 +1062,8 @@ function KanbanTaskStats({
           )}
         </span>
       ) : null}
+      {/* Session context-window ring — sits right of the line delta. */}
+      <CardContextRing usage={usage} t={t} />
     </div>
   );
 }

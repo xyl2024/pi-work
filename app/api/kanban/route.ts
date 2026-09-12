@@ -3,6 +3,7 @@ import { createTask, listTasks, reconcileStaleTasks } from "@/lib/server/kanban/
 import type { KanbanTask } from "@/lib/shared/kanban-types";
 import type { CreateKanbanTaskInput } from "@/lib/shared/kanban-types";
 import { readKanbanSessionStats } from "@/lib/server/kanban/session-stats";
+import { readKanbanContextUsage } from "@/lib/server/kanban/session-context";
 
 // GET /api/kanban — list all tasks across columns. Before listing, sweep for
 // zombie in_progress cards whose session is gone (grace-window protected, so a
@@ -16,6 +17,7 @@ export async function GET() {
     tasks.map(async (task) => {
       if (!task.sessionId) return;
       task.stats = await readKanbanSessionStats(task.sessionId);
+      task.contextUsage = await readKanbanContextUsage(task.sessionId, task.provider, task.modelId);
     }),
   );
   return NextResponse.json({ tasks });

@@ -43,6 +43,19 @@ export interface KanbanTask {
    *  server-side from the linked session's JSONL when a `sessionId` exists;
    *  null for idle backlog cards or when the stats are unavailable. */
   stats: KanbanTaskStats | null;
+  /** Context-window occupancy for the linked session — mirrors the live
+   *  `getContextUsage()` circle shown in the chat top bar. Percent is the
+   *  estimated context tokens over the model's context window; `null` when
+   *  the data can't be derived (no model window, no session, etc.). */
+  contextUsage: KanbanContextUsage | null;
+}
+
+/** Context-window occupancy for a task's linked session. Mirrors
+ *  `components/chat/ContextUsageBar`'s `ContextUsage` shape. */
+export interface KanbanContextUsage {
+  percent: number | null;
+  contextWindow: number;
+  tokens: number | null;
 }
 
 /** Aggregated stats for a task's session run, shown on the card so the user

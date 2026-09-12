@@ -1,6 +1,6 @@
 import { createAgentSession, DefaultResourceLoader, isToolCallEventType, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
-import type { AgentSessionLike, ToolInfo } from "./pi-types";
+import type { AgentSessionLike, ContextUsage, ToolInfo } from "./pi-types";
 import type { ToolSelection } from "../shared/types";
 import { expandToolSelection } from "../shared/tool-selection";
 import type { ToolMarketId } from "../shared/tools-market";
@@ -153,6 +153,14 @@ export class AgentSessionWrapper {
   /** True while the agent is between agent_start and agent_end (or compacting). */
   isRunning(): boolean {
     return this._running || this.compactInFlight || this.inner.isStreaming || this.inner.isCompacting;
+  }
+
+  /** Context-window occupancy ({percent, contextWindow, tokens}) for the live
+   *  session — the same value pi draws in the chat top-bar circle. Shared with
+   *  the Kanban board so cards can mirror the circle without duplicating pi's
+   *  estimation logic. */
+  getContextUsage(): ContextUsage | undefined {
+    return this.inner.getContextUsage();
   }
 
   start(): void {

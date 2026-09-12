@@ -6,7 +6,7 @@ import type { ToolInfo } from "../shared/types";
 // in lib/types.ts.
 export type { ToolInfo };
 
-interface ContextUsage {
+export interface ContextUsage {
   percent: number | null;
   contextWindow: number;
   tokens: number | null;

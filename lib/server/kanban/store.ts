@@ -92,6 +92,7 @@ function mapRow(r: TaskRow): KanbanTask {
     resultSummary: r.result_summary,
     sortOrder: r.sort_order,
     stats: null,
+    contextUsage: null,
   };
 }
 
