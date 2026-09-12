@@ -452,112 +452,114 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
             {promptError && <div style={errorStyle}>{promptError}</div>}
           </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>{t("Working directory")}</label>
-            <CwdPicker cwd={form.cwd || null} onCwdChange={(c) => update("cwd", c)} fill />
-            {cwdError && <div style={errorStyle}>{cwdError}</div>}
-          </div>
-
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>{t("Model")}</label>
-            <button
-              type="button"
-              onClick={() => setModelOpen(true)}
-              style={pillTriggerStyle(modelOpen)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = "var(--text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = modelOpen ? "var(--bg-hover)" : "var(--bg)";
-                e.currentTarget.style.color = "var(--text-muted)";
-              }}
-            >
-              <ProviderIcon
-                id={triggerIconId ?? ""}
-                size={12}
-                fallback={<ProviderGearIcon size={11} />}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 12px", marginBottom: 14, alignItems: "start" }}>
+            {/* Left column: Model, Thinking level. Right column: Working directory, Tools. */}
+            <div>
+              <label style={labelStyle}>{t("Model")}</label>
+              <button
+                type="button"
+                onClick={() => setModelOpen(true)}
+                style={pillTriggerStyle(modelOpen)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                  e.currentTarget.style.color = "var(--text)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = modelOpen ? "var(--bg-hover)" : "var(--bg)";
+                  e.currentTarget.style.color = "var(--text-muted)";
+                }}
+              >
+                <ProviderIcon
+                  id={triggerIconId ?? ""}
+                  size={12}
+                  fallback={<ProviderGearIcon size={11} />}
+                />
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0 }}>
+                  {isUnselected
+                    ? t("Select a model")
+                    : current?.name ?? `${form.provider}/${form.modelId}`}
+                </span>
+              </button>
+              <ModelPickerModal
+                open={modelOpen}
+                model={pickerModel}
+                modelIcons={modelIcons}
+                modelList={options}
+                onModelChange={(provider, modelId) => {
+                  modelPickedRef.current = true;
+                  update("provider", provider);
+                  update("modelId", modelId);
+                  const nextKey = `${provider}:${modelId}`;
+                  const nextAvailable = meta?.thinkingLevels[nextKey] ?? null;
+                  const currentLevel = form.thinkingLevel;
+                  if (
+                    currentLevel &&
+                    (THINKING_LEVEL_ORDER as readonly string[]).includes(currentLevel)
+                  ) {
+                    const nextLevel = pickClosestAvailableThinkingLevel(
+                      currentLevel as (typeof THINKING_LEVEL_ORDER)[number],
+                      nextAvailable,
+                    );
+                    if (nextLevel !== currentLevel) update("thinkingLevel", nextLevel);
+                  }
+                }}
+                onClose={() => setModelOpen(false)}
               />
-              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0 }}>
-                {isUnselected
-                  ? t("Select a model")
-                  : current?.name ?? `${form.provider}/${form.modelId}`}
-              </span>
-            </button>
-            <ModelPickerModal
-              open={modelOpen}
-              model={pickerModel}
-              modelIcons={modelIcons}
-              modelList={options}
-              onModelChange={(provider, modelId) => {
-                modelPickedRef.current = true;
-                update("provider", provider);
-                update("modelId", modelId);
-                const nextKey = `${provider}:${modelId}`;
-                const nextAvailable = meta?.thinkingLevels[nextKey] ?? null;
-                const currentLevel = form.thinkingLevel;
-                if (
-                  currentLevel &&
-                  (THINKING_LEVEL_ORDER as readonly string[]).includes(currentLevel)
-                ) {
-                  const nextLevel = pickClosestAvailableThinkingLevel(
-                    currentLevel as (typeof THINKING_LEVEL_ORDER)[number],
-                    nextAvailable,
-                  );
-                  if (nextLevel !== currentLevel) update("thinkingLevel", nextLevel);
-                }
-              }}
-              onClose={() => setModelOpen(false)}
-            />
-          </div>
+            </div>
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>{t("Thinking level")}</label>
-            {/* Click-to-cycle, mirroring the chat input's ThinkingPicker. */}
-            <button
-              type="button"
-              onClick={cycleThinking}
-              aria-label={t("Thinking level. Click to cycle.")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                width: "100%",
-                height: 36,
-                padding: "0 10px",
-                boxSizing: "border-box",
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: 9,
-                color:
-                  currentThinking && THINKING_COLOR[currentThinking]
-                    ? THINKING_COLOR[currentThinking]
-                    : "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: 500,
-                whiteSpace: "nowrap",
-                fontFamily: "var(--font-mono)",
-                transition: "background 0.12s, color 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--bg-hover)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "none";
-              }}
-            >
-              <LightbulbIcon size={11} />
-              <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0 }}>
-                {thinkingDisplay ? thinkingDisplay : t("Select a thinking level")}
-              </span>
-              <span style={{ fontSize: 10, color: "var(--text-dim)" }}>↻</span>
-            </button>
-          </div>
+            <div>
+              <label style={labelStyle}>{t("Working directory")}</label>
+              <CwdPicker cwd={form.cwd || null} onCwdChange={(c) => update("cwd", c)} fill />
+              {cwdError && <div style={errorStyle}>{cwdError}</div>}
+            </div>
 
-          <div style={{ marginBottom: 4 }}>
-            <label style={labelStyle}>{t("Tools")}</label>
-            <div ref={toolsDrp.rootRef} style={{ position: "relative" }}>
+            <div>
+              <label style={labelStyle}>{t("Thinking level")}</label>
+              {/* Click-to-cycle, mirroring the chat input's ThinkingPicker. */}
+              <button
+                type="button"
+                onClick={cycleThinking}
+                aria-label={t("Thinking level. Click to cycle.")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  width: "100%",
+                  height: 36,
+                  padding: "0 10px",
+                  boxSizing: "border-box",
+                  background: "none",
+                  border: "1px solid var(--border)",
+                  borderRadius: 9,
+                  color:
+                    currentThinking && THINKING_COLOR[currentThinking]
+                      ? THINKING_COLOR[currentThinking]
+                      : "var(--text-muted)",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  whiteSpace: "nowrap",
+                  fontFamily: "var(--font-mono)",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--bg-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "none";
+                }}
+              >
+                <LightbulbIcon size={11} />
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "left", minWidth: 0 }}>
+                  {thinkingDisplay ? thinkingDisplay : t("Select a thinking level")}
+                </span>
+                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>↻</span>
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 0 }}>
+              <label style={labelStyle}>{t("Tools")}</label>
+              <div ref={toolsDrp.rootRef} style={{ position: "relative" }}>
               <button
                 type="button"
                 onClick={() => setToolsOpen((v) => !v)}
@@ -613,6 +615,7 @@ export function KanbanTaskModal({ open, task, defaults, onClose, onSaved, onToas
               />
             </div>
             {toolsError && <div style={errorStyle}>{toolsError}</div>}
+          </div>
           </div>
         </div>
 

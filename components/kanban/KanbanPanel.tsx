@@ -640,7 +640,7 @@ function KanbanCard({
                 fallback={<ProviderGearIcon size={10} />}
               />
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                {[task.provider, task.modelId].filter(Boolean).join("/")}
+                {task.modelId}
               </span>
             </>
           ) : (
@@ -664,14 +664,11 @@ function KanbanCard({
 
         <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text-dim)", overflow: "hidden" }}>
           <Wrench size={10} style={{ flexShrink: 0 }} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0 }}>
             {toolNamesLabel(task.toolNames)}
           </span>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "var(--text-dim)" }}>
-          <Folder size={10} style={{ flexShrink: 0 }} />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", direction: "rtl", textAlign: "left" }}>
+          <Folder size={10} style={{ flexShrink: 0, marginLeft: 4 }} />
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, direction: "rtl", textAlign: "left", flex: 1 }}>
             {cwdLabel}
           </span>
         </div>
