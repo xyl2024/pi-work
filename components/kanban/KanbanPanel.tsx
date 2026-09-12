@@ -19,11 +19,13 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { useKanban } from "@/hooks/useKanban";
 import { useCwdAlias, useCwdAliases } from "@/hooks/cwdAliasStore";
+import { useCwdList, initCwdList } from "@/hooks/cwdListStore";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
+import { CwdPicker } from "@/components/sessions/CwdPicker";
 import { KanbanTaskModal } from "./KanbanTaskModal";
-import { Play, ExternalLink, Plus, Pencil, Trash2, Loader2, CircleStop, Wrench, Folder, Clock, Search, X, MessagesSquare, FileDiff, ChevronRight } from "lucide-react";
+import { Play, ExternalLink, Plus, Pencil, Trash2, Loader2, CircleStop, Wrench, Folder, Clock, Search, X, MessagesSquare, FileDiff, ChevronRight, Layers } from "lucide-react";
 import type { KanbanStatus, KanbanTask, KanbanTaskStats, KanbanContextUsage } from "@/lib/shared/kanban-types";
 import { KANBAN_STATUS_ORDER } from "@/lib/shared/kanban-types";
 import type { ToolInfo } from "@/lib/shared/types";
@@ -121,6 +123,20 @@ export function KanbanPanel(props: KanbanPanelProps) {
   const dragIdRef = useRef<string | null>(null);
   const [query, setQuery] = useState("");
   const cwdAliases = useCwdAliases();
+  useCwdList();
+
+  // Board cwd scope. Defaults to the currently selected cwd (passed in as
+  // `defaultCwd`); `null` means "show tasks from all cwds". Initializing from
+  // the prop on mount gives the "default to current cwd" behavior, and once
+  // the user explicitly picks a different scope (via the CwdPicker or the
+  // All-cwds toggle) that choice sticks instead of jumping when they switch
+  // sessions.
+  const [cwdFilter, setCwdFilter] = useState<string | null>(
+    props.defaultCwd ?? null,
+  );
+  useEffect(() => {
+    initCwdList();
+  }, []);
 
   // Per-column card count currently shown, so a column with hundreds of cards
   // only mounts its first 10 on first paint. Scrolling a column to the bottom
@@ -145,7 +161,7 @@ export function KanbanPanel(props: KanbanPanelProps) {
       }
       return changed ? next : prev;
     });
-  }, [query]);
+  }, [query, cwdFilter]);
 
   // Provider icon map (<provider>:<modelId> → icon id) so cards can paint the
   // right model brand glyph. Loaded once per mount.
@@ -182,6 +198,7 @@ export function KanbanPanel(props: KanbanPanelProps) {
     const map = new Map<KanbanStatus, KanbanTask[]>();
     for (const s of KANBAN_STATUS_ORDER) map.set(s, []);
     for (const task of kanban.tasks ?? []) {
+      if (cwdFilter && task.cwd !== cwdFilter) continue;
       if (!matchesTaskFilter(task, query, cwdAliases.map)) continue;
       const list = map.get(task.status);
       if (list) list.push(task);
@@ -192,18 +209,19 @@ export function KanbanPanel(props: KanbanPanelProps) {
       if (list) list.sort((a, b) => b.createdAt - a.createdAt);
     }
     return map;
-  }, [kanban.tasks, query, cwdAliases]);
+  }, [kanban.tasks, query, cwdAliases, cwdFilter]);
 
-  // Global per-column tallies (unaffected by the filter) so the header
-  // keeps showing the true board state while the columns are narrowed.
+  // Per-column tallies for the active cwd scope (null scope = all cwds). The
+  // header keeps showing counts consistent with what the columns display.
   const totalByStatus = useMemo(() => {
     const map = new Map<KanbanStatus, number>();
     for (const s of KANBAN_STATUS_ORDER) map.set(s, 0);
     for (const task of kanban.tasks ?? []) {
+      if (cwdFilter && task.cwd !== cwdFilter) continue;
       map.set(task.status, (map.get(task.status) ?? 0) + 1);
     }
     return map;
-  }, [kanban.tasks]);
+  }, [kanban.tasks, cwdFilter]);
 
   const toastFrom = (ok: boolean, okMsg: string, errMsg: string) => {
     if (ok) toast.show({ kind: "success", message: t(okMsg) });
@@ -327,6 +345,40 @@ export function KanbanPanel(props: KanbanPanelProps) {
             <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />
             {t("{count} to review", { count: totalByStatus.get("review_test") ?? 0 })}
           </span>
+        </div>
+        {/* cwd scope — the board defaults to the currently selected cwd; the
+            All-cwds toggle widens it to every project, and the CwdPicker lets
+            the user lock in any specific cwd. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <Tooltip content={!cwdFilter ? t("Show tasks from current cwd") : t("Show tasks from all cwds")}>
+            <button
+              type="button"
+              onClick={() =>
+                setCwdFilter((cur) => (cur === null ? (props.defaultCwd ?? null) : null))
+              }
+              aria-pressed={!cwdFilter}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "5px 9px",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+                background: !cwdFilter ? "var(--accent)" : "transparent",
+                color: !cwdFilter ? "var(--on-accent, #fff)" : "var(--text-muted)",
+                cursor: "pointer",
+                fontSize: 11,
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              <Layers size={11} />
+              {t("All cwds")}
+            </button>
+          </Tooltip>
+          {cwdFilter && (
+            <CwdPicker cwd={cwdFilter} onCwdChange={(cwd) => setCwdFilter(cwd)} maxWidth={130} />
+          )}
         </div>
         {/* text filter — narrows columns by task name / prompt / cwd. */}
         <div
