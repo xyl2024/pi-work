@@ -20,6 +20,7 @@ import { ToolCallStatsPanel } from "../panels/ToolCallStatsPanel";
 import { RssPanel } from "../rss/RssPanel";
 import { GitHubTrendingPanel } from "../panels/github-trending/GitHubTrendingPanel";
 import { KanbanPanel } from "../kanban/KanbanPanel";
+import { NotesPanel } from "../panels/notes/NotesPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
@@ -67,6 +68,7 @@ import {
   BTW_TAB_ID,
   GITHUB_TRENDING_TAB_ID,
   KANBAN_TAB_ID,
+  NOTES_TAB_ID,
   RIGHT_BAR_ID_FOR_TAB_KIND,
 } from "@/lib/shared/types";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
@@ -1064,6 +1066,18 @@ export function AppShell() {
     ensureRightPanelOpen();
   }, [t, ensureRightPanelOpen]);
 
+  // Open the Notes panel. Unlike a fixed split, the notes panel renders its
+  // list/editor internally and splits edit|preview only when the panel is
+  // expanded; in the normal width it shows one pane and toggles via shortcut.
+  const handleOpenNotesTab = useCallback(() => {
+    setFileTabs((prev) => {
+      if (prev.some((tab) => tab.kind === "notes")) return prev;
+      return [{ kind: "notes", id: NOTES_TAB_ID, label: t("Notes") }, ...prev];
+    });
+    setActiveFileTabId(NOTES_TAB_ID);
+    ensureRightPanelOpen();
+  }, [t, ensureRightPanelOpen]);
+
   // Open the Kanban panel. Unlike the other toggles, this one opens the right
   // panel in the expanded state because the four-column board needs width.
   const handleOpenKanbanTab = useCallback(() => {
@@ -1450,6 +1464,7 @@ export function AppShell() {
       btw: handleOpenBtwTab,
       githubTrending: handleOpenGithubTrendingTab,
       kanban: handleOpenKanbanTab,
+      notes: handleOpenNotesTab,
     },
   };
 
@@ -1827,6 +1842,8 @@ export function AppShell() {
             onOpenSession={handleOpenKanbanSession}
             expanded={rightPanelState === "expanded"}
           />
+        ) : activeFileTab?.kind === "notes" ? (
+          <NotesPanel expanded={rightPanelState === "expanded"} />
         ) : (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
             {t("No file open")}

@@ -1481,3 +1481,23 @@ span.linenumber {
   transform-origin: center;
   animation: tool-picker-check-pop 0.18s ease-out;
 }
+
+/* ── Notes editor (CodeMirror) ─────────────────────────────────────────
+   Keep the line-number gutter flush with the rest of the editor area
+   (and therefore the panel) instead of its default gray wash, so the
+   editing surface reads as one continuous background. */
+.cm-editor-scoped .cm-editor,
+.cm-editor-scoped .cm-scroller,
+.cm-editor-scoped .cm-content {
+  background: var(--bg);
+}
+.cm-editor-scoped .cm-gutters {
+  background: transparent;
+  border-right: none;
+}
+.cm-editor-scoped .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.cm-editor-scoped .cm-gutterElement {
+  color: var(--text-dim);
+}

@@ -24,7 +24,8 @@ export type RightBarButtonId =
   | "context"
   | "btw"
   | "githubTrending"
-  | "kanban";
+  | "kanban"
+  | "notes";
 
 /** Where session-bound buttons sit within the configurable row.
  *

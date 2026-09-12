@@ -27,6 +27,7 @@ import { kanban } from "./kanban";
 import { inbox } from "./inbox";
 import { media } from "./media";
 import { models } from "./models";
+import { notes } from "./notes";
 import { permissions } from "./permissions";
 import { profile } from "./profile";
 import { prompts } from "./prompts";
@@ -60,6 +61,7 @@ export const ZH_TRANSLATIONS = {
   ...kanban,
   ...media,
   ...models,
+  ...notes,
   ...permissions,
   ...profile,
   ...prompts,

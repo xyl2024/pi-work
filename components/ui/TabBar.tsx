@@ -33,7 +33,8 @@ export type Tab =
   | { kind: "context"; id: string; label: string }
   | { kind: "btw"; id: string; label: string }
   | { kind: "githubTrending"; id: string; label: string }
-  | { kind: "kanban"; id: string; label: string };
+  | { kind: "kanban"; id: string; label: string }
+  | { kind: "notes"; id: string; label: string };
 
 interface Props {
   tabs: Tab[];

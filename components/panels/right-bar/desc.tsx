@@ -34,6 +34,7 @@ import {
   CONTEXT_TAB_ID,
   GITHUB_TRENDING_TAB_ID,
   KANBAN_TAB_ID,
+  NOTES_TAB_ID,
 } from "@/lib/shared/types";
 import type { Tab } from "@/components/ui/TabBar";
 import {
@@ -44,6 +45,7 @@ import {
   GitGraph,
   Languages,
   MessageSquareMore,
+  NotebookText,
   PanelRight,
   Rss,
   SquareKanban,
@@ -116,6 +118,7 @@ export interface RightBarCtx {
     btw: () => void;
     githubTrending: () => void;
     kanban: () => void;
+    notes: () => void;
   };
 }
 
@@ -361,6 +364,18 @@ const kanbanDescriptor: RightBarDescriptor = {
     ctx.toggleRightPanelTab(KANBAN_TAB_ID, ctx.openTab.kanban),
 };
 
+// Notes: global personal note-taking board, not session-bound. It stores
+// plain markdown under ~/.pi-work/user-notes and is intended for the human
+// user (the agent stays out of it).
+const notesDescriptor: RightBarDescriptor = {
+  id: "notes",
+  kind: "configurable",
+  labelKey: "Notes",
+  isActive: (ctx) => ctx.activeTabKind === "notes",
+  content: () => <NotebookText size={16} />,
+  onClick: (ctx) => ctx.toggleRightPanelTab(NOTES_TAB_ID, ctx.openTab.notes),
+};
+
 export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   // 'fixed' group
   panelToggleDescriptor,
@@ -378,6 +393,7 @@ export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   conversationTreeDescriptor,
   btwDescriptor,
   kanbanDescriptor,
+  notesDescriptor,
 ] as const;
 
 // Tab.kind → RightBarButtonId reverse lookup lives in `lib/types.ts` as a

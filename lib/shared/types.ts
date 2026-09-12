@@ -428,6 +428,7 @@ export const CONTEXT_TAB_ID = "context:global";
 export const BTW_TAB_ID = "btw:global";
 export const GITHUB_TRENDING_TAB_ID = "githubTrending:global";
 export const KANBAN_TAB_ID = "kanban:global";
+export const NOTES_TAB_ID = "notes:global";
 
 // Map a Tab.kind back to the corresponding configurable right-bar button id.
 // Used by AppShell's auto-close effect: when a panel whose button was just
@@ -453,7 +454,8 @@ type TabKindForAutoClose =
   | "context"
   | "btw"
   | "githubTrending"
-  | "kanban";
+  | "kanban"
+  | "notes";
 export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<
   Record<TabKindForAutoClose, RightBarButtonId>
 > = {
@@ -468,4 +470,5 @@ export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<
   btw: "btw",
   githubTrending: "githubTrending",
   kanban: "kanban",
+  notes: "notes",
 };
