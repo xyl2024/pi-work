@@ -23,8 +23,8 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
 import { KanbanTaskModal } from "./KanbanTaskModal";
-import { Play, ExternalLink, Plus, Pencil, Trash2, Loader2, CircleStop, Wrench, Folder, Clock, Search, X } from "lucide-react";
-import type { KanbanStatus, KanbanTask } from "@/lib/shared/kanban-types";
+import { Play, ExternalLink, Plus, Pencil, Trash2, Loader2, CircleStop, Wrench, Folder, Clock, Search, X, MessagesSquare, FileDiff, ChevronRight } from "lucide-react";
+import type { KanbanStatus, KanbanTask, KanbanTaskStats } from "@/lib/shared/kanban-types";
 import { KANBAN_STATUS_ORDER } from "@/lib/shared/kanban-types";
 import type { ToolInfo } from "@/lib/shared/types";
 
@@ -583,6 +583,9 @@ function KanbanCard({
   const cwdAlias = useCwdAlias(task.cwd);
   // Prefer the user-set alias; otherwise show only the basename of the cwd.
   const cwdLabel = cwdAlias || basename(task.cwd);
+  // Toggle detail: clicking the task name collapses / expands the card body.
+  // Cards start collapsed so a full board stays scannable.
+  const [collapsed, setCollapsed] = useState(true);
   // Provider-brand icon for the model (falls back to a small gear glyph).
   const modelIconId = resolveProviderIcon(task.provider, task.modelId, modelIcons);
 
@@ -615,21 +618,87 @@ function KanbanCard({
       onDragEnd={onDragEnd}
       style={{ ...cardStyle, opacity: dragging ? 0.4 : 1, cursor: "default" }}
     >
-      {task.taskName && (
-        <div
-          style={{
-            fontSize: 12,
-            fontWeight: 700,
-            color: "var(--text)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <ChevronRight
+          size={11}
+          onClick={(e) => {
+            e.stopPropagation();
+            setCollapsed((v) => !v);
           }}
-        >
-          {task.taskName}
-        </div>
+          aria-hidden
+          style={{
+            flexShrink: 0,
+            cursor: "pointer",
+            color: "var(--text-dim)",
+            transform: collapsed ? "none" : "rotate(90deg)",
+            transition: "transform 0.12s ease",
+          }}
+        />
+        {task.taskName && (
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            title={collapsed ? t("Expand") : t("Collapse")}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--text)",
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              textAlign: "left",
+              cursor: "pointer",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              fontFamily: "inherit",
+            }}
+          >
+            {task.taskName}
+          </button>
+        )}
+        {/* status-specific footer (buttons) — stays visible even collapsed. */}
+        {task.status === "backlog" && (
+          <div style={{ display: "flex", gap: 4, marginLeft: "auto", flexShrink: 0 }}>
+            <TooltipButton
+              tip={t("Start executing this task")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRun();
+              }}
+              style={{
+                ...actionButton,
+                background: "var(--accent)",
+                color: "var(--on-accent, #fff)",
+                borderColor: "transparent",
+                fontWeight: 600,
+              }}
+            >
+              <Play size={11} />
+              {t("Run")}
+            </TooltipButton>
+            <TooltipButton tip={t("Edit")} onClick={() => onEdit()} style={actionButton}>
+              <Pencil size={11} />
+            </TooltipButton>
+            <TooltipButton tip={t("Delete")} onClick={() => onDelete()} style={actionButton}>
+              <Trash2 size={11} />
+            </TooltipButton>
+          </div>
+        )}
+      </div>
+
+      {/* Run / stop / done / open-session footer toggles by status. For the
+          non-backlog statuses the card body below sits between the name row
+          and this row, so keep the buttons in their own row after the body. */}
+      {collapsed && (
+        <KanbanTaskStats stats={task.stats} t={t} />
       )}
 
+      {/* Main + meta body — hidden when the card is collapsed. */}
+      {!collapsed && (
+        <>
       {/* Main content: for review_test / done show both the user prompt and
           the final assistant message; otherwise just the prompt. */}
       {showResult ? (
@@ -725,6 +794,9 @@ function KanbanCard({
         </Tooltip>
       )}
 
+      {/* Run stats for the linked session (messages / tools / files / lines). */}
+      <KanbanTaskStats stats={task.stats} t={t} />
+
       {/* Richer meta: model + thinking, tool set, cwd, timestamps. */}
       <div
         style={{
@@ -791,34 +863,7 @@ function KanbanCard({
           )}
         </div>
       </div>
-
-      {/* status-specific footer */}
-      {task.status === "backlog" && (
-        <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
-          <TooltipButton
-            tip={t("Start executing this task")}
-            onClick={(e) => {
-              e.stopPropagation();
-              onRun();
-            }}
-            style={{
-              ...actionButton,
-              background: "var(--accent)",
-              color: "var(--on-accent, #fff)",
-              borderColor: "transparent",
-              fontWeight: 600,
-            }}
-          >
-            <Play size={11} />
-            {t("Run")}
-          </TooltipButton>
-          <TooltipButton tip={t("Edit")} onClick={() => onEdit()} style={actionButton}>
-            <Pencil size={11} />
-          </TooltipButton>
-          <TooltipButton tip={t("Delete")} onClick={() => onDelete()} style={actionButton}>
-            <Trash2 size={11} />
-          </TooltipButton>
-        </div>
+      </>
       )}
 
       {task.status === "in_progress" && (
@@ -872,6 +917,69 @@ function KanbanCard({
           </TooltipButton>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Compact run-stats row shown on the card: message count, tool-call count,
+ *  changed-file count, and added/removed lines. Renders nothing when the task
+ *  has no linked session / no computed stats yet (e.g. an idle backlog card). */
+function KanbanTaskStats({
+  stats,
+  t,
+}: {
+  stats: KanbanTaskStats | null;
+  t: (key: string) => string;
+}) {
+  if (!stats) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        fontSize: 10,
+        color: "var(--text-dim)",
+        flexWrap: "wrap",
+        marginTop: 2,
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <MessagesSquare size={10} style={{ flexShrink: 0 }} />
+        <Tooltip content={t("Messages")} side="top">
+          <span>{stats.messageCount}</span>
+        </Tooltip>
+      </span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <Wrench size={10} style={{ flexShrink: 0 }} />
+        <Tooltip content={t("Tool calls")} side="top">
+          <span>{stats.toolCallCount}</span>
+        </Tooltip>
+      </span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <FileDiff size={10} style={{ flexShrink: 0 }} />
+        <Tooltip content={t("Files changed")} side="top">
+          <span>{stats.changedFileCount}</span>
+        </Tooltip>
+      </span>
+      {stats.additions > 0 || stats.deletions > 0 ? (
+        <span
+          style={{
+            marginLeft: "auto",
+            flexShrink: 0,
+            fontFamily: "var(--font-mono), monospace",
+            display: "flex",
+            gap: 4,
+          }}
+        >
+          {stats.deletions > 0 && (
+            <span style={{ color: "var(--deletion, #e5534b)" }}>−{stats.deletions}</span>
+          )}
+          {stats.additions > 0 && (
+            <span style={{ color: "var(--addition, #3fb950)" }}>+{stats.additions}</span>
+          )}
+        </span>
+      ) : null}
     </div>
   );
 }

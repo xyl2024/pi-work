@@ -91,6 +91,7 @@ function mapRow(r: TaskRow): KanbanTask {
     sessionId: r.session_id,
     resultSummary: r.result_summary,
     sortOrder: r.sort_order,
+    stats: null,
   };
 }
 

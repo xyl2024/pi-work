@@ -66,4 +66,9 @@ export const kanban = {
   "Task name hint": "简短描述，例如：重构登录模块",
   "Leave empty to auto-derive from the prompt": "留空则从提示词自动生成任务名称",
   "Filter by name, prompt or cwd…": "按任务名/提示词/cwd 过滤…",
+  "Messages": "消息数",
+  "Tool calls": "工具调用次数",
+  "Files changed": "变更文件数",
+  "Collapse": "折叠",
+  "Expand": "展开",
 } as const;

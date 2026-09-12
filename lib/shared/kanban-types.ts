@@ -39,6 +39,25 @@ export interface KanbanTask {
   resultSummary: string | null;
   /** Ordering within the Backlog column (created/edited order). */
   sortOrder: number;
+  /** Optional live/derived stats for the task's (finished) run. Computed
+   *  server-side from the linked session's JSONL when a `sessionId` exists;
+   *  null for idle backlog cards or when the stats are unavailable. */
+  stats: KanbanTaskStats | null;
+}
+
+/** Aggregated stats for a task's session run, shown on the card so the user
+ *  gets a feel for how much the agent did without opening the full session. */
+export interface KanbanTaskStats {
+  /** Number of assistant turns (messages) in the session's active branch. */
+  messageCount: number;
+  /** Total number of tool calls issued across those messages. */
+  toolCallCount: number;
+  /** Number of distinct files touched by edit/write calls. */
+  changedFileCount: number;
+  /** Lines added across edit/write calls (+). */
+  additions: number;
+  /** Lines deleted across edit/write calls (−). */
+  deletions: number;
 }
 
 export interface CreateKanbanTaskInput {
