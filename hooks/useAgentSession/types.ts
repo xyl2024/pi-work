@@ -81,7 +81,12 @@ export interface UseAgentSessionOptions {
   setNewSessionModel?: (model: { provider: string; modelId: string } | null) => void;
   statsEmit?: ToolCallStatsDispatch;
   scrollToEntryId?: string | null;
-  onScrollComplete?: () => void;
+  /**
+   * The session-entry navigation finished: land the view at the end of the
+   * reloaded branch. `useScrollFollow` implements it (it owns every chat
+   * scroll write) and reports back to the shell from there.
+   */
+  onEntryNavigated?: () => void;
   isActive?: boolean;
   controllerId?: string;
 }

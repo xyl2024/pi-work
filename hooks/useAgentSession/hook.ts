@@ -34,7 +34,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady,
     modelsRefreshKey, statsEmit,
-    scrollToEntryId, onScrollComplete, isActive = true, controllerId,
+    scrollToEntryId, onEntryNavigated, isActive = true, controllerId,
   } = opts;
   const streamingKey = controllerId ?? session?.id ?? "default";
   const { t } = useI18n();
@@ -211,8 +211,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // moment (openSync "wx" in SessionManager._persist), which is the earliest
   // point the session becomes listable by the sidebar.
   const pendingNewSessionFirstAssistantRef = useRef(false);
-  const initialScrollDoneRef = useRef(false);
   const handledScrollEntryRef = useRef<string | null>(null);
+  // Chat scroll targets, owned here because the send path needs them
+  // (`pendingScrollToUserRef` is set by handleSend). The scroll rules and the
+  // DOM writes live in `useScrollFollow`; this hook only reports them.
   const lastUserMsgRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -646,20 +648,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
   }, [showToast, t]);
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior });
-  }, []);
-
-  const scrollUserMsgToTop = useCallback(() => {
-    const container = scrollContainerRef.current;
-    const el = lastUserMsgRef.current;
-    if (!container || !el) return;
-    const elAbsTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-    container.scrollTo({ top: elAbsTop - 16, behavior: "smooth" });
-  }, []);
-
   // Manual compaction lifecycle. Lives in the hook so all the related state
   // (busy flag, agentPhase, SSE subscription, post-RPC reload) is owned in
   // one place — the previous ChatWindow-local implementation relied on SSE
@@ -811,10 +799,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setActiveLeafId(scrollToEntryId);
       await loadContextRef.current(sid, scrollToEntryId);
       sendAgentCommand(sid, { type: "navigate_tree", targetId: scrollToEntryId }).catch(() => {});
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-      onScrollComplete?.();
+      // Landing the view at the end of the reloaded branch (and reporting it
+      // back to the shell) is a scroll concern: `useScrollFollow` owns it.
+      onEntryNavigated?.();
     })();
-  }, [loading, onScrollComplete, scrollToEntryId]);
+  }, [loading, onEntryNavigated, scrollToEntryId]);
 
   useEffect(() => {
     if (isActive) setSessionUiState({ systemPrompt });
@@ -834,19 +823,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setLeafChangeHandler(handleLeafChange, controllerId);
     return () => setLeafChangeHandler(null, controllerId);
   }, [controllerId, isActive, handleLeafChange]);
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      if (pendingScrollToUserRef.current) {
-        pendingScrollToUserRef.current = false;
-        initialScrollDoneRef.current = true;
-        scrollUserMsgToTop();
-      } else if (!initialScrollDoneRef.current) {
-        initialScrollDoneRef.current = true;
-        scrollToBottom("instant");
-      }
-    }
-  }, [messages.length, scrollToBottom, scrollUserMsgToTop]);
 
   // Load model list
   useEffect(() => {
@@ -939,7 +915,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     userMessageHistory,
     // Refs
     sessionIdRef, eventSourceRef, messagesEndRef, scrollContainerRef,
-    lastUserMsgRef, pendingScrollToUserRef, initialScrollDoneRef, userJustSentRef,
+    lastUserMsgRef, pendingScrollToUserRef, userJustSentRef,
     // Actions
     handleSend, handleAbort, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,

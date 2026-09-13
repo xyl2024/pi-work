@@ -51,6 +51,7 @@ import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
 import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
 import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
 import { useReplay } from "./chat-window/hooks/useReplay";
+import { useScrollFollow } from "./chat-window/hooks/useScrollFollow";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
 
@@ -132,6 +133,16 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     autoNameReadyRef.current();
   }, []);
 
+  // Same delegation for the scroll landing of an entry navigation: it is a
+  // scroll write, so `useScrollFollow` owns it — but that hook needs the refs
+  // useAgentSession returns and is therefore created later. The scroll hook
+  // fills the ref from an effect (see the assignment below); the navigation
+  // reports back a microtask later, so the ref is always filled by then.
+  const entryNavigatedRef = useRef<() => void>(() => {});
+  const handleEntryNavigated = useCallback(() => {
+    entryNavigatedRef.current();
+  }, []);
+
   // Tool call stats: wire the context emit into useAgentSession
   const statsEmit = useToolCallStatsEmit();
 
@@ -145,7 +156,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     subagentRefreshKey,
     isNew,
     messagesEndRef, scrollContainerRef,
-    lastUserMsgRef,
+    lastUserMsgRef, pendingScrollToUserRef,
     handleSend, handleAbort, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     handleCompact,
@@ -157,7 +168,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     modelsRefreshKey,
     statsEmit,
     scrollToEntryId,
-    onScrollComplete,
+    onEntryNavigated: handleEntryNavigated,
     isActive,
     controllerId: tabId,
   });
@@ -341,19 +352,39 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     }
   }, [currentSessionId, activeLeafId, locale, isExporting, showToast, t]);
 
-  // Scroll-to-bottom helper, hoisted before handleCompactClick so the compact
-  // path can call it. This is an explicit user action, not streaming follow.
-  const handleToBottom = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    userScrolledUpRef.current = false;
-    setShowToBottom(false);
-    // scrollHeight, not messagesEndRef.scrollIntoView: the latter aligns to
-    // the scrollport edges and leaves the container's bottom padding visible
-    // as a gap. Setting scrollTop directly to scrollHeight scrolls to the
-    // absolute bottom regardless of padding/layout.
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [scrollContainerRef]);
+  // ── Scroll follow ─────────────────────────────────────────────────────
+  // Every chat scroll rule lives in `lib/shared/scroll-follow.ts` and every
+  // scroll write in the hook below; this component only forwards events and
+  // renders the affordance. The pause flag is a ref because the nested live
+  // viewport writes it directly, so the chat window owns it and hands it to
+  // both the hook and `StreamingMessageViewport`.
+  const userScrolledUpRef = useRef(false);
+  const initialScrollDoneRef = useRef(false);
+  const scrollFollow = useScrollFollow({
+    isActive,
+    scrollContainerRef,
+    messagesEndRef,
+    lastUserMsgRef,
+    pausedRef: userScrolledUpRef,
+    messageCount: messages.length,
+    pendingScrollToUserRef,
+    initialScrollDoneRef,
+    onScrollComplete,
+  });
+  // Feed the scroll hook's entry-landing handler to the stable delegate that
+  // was passed to useAgentSession before the hook could be called (see
+  // entryNavigatedRef above). Assigned in an effect, not during render, so a
+  // concurrent render never publishes a handler it later discards.
+  useEffect(() => {
+    entryNavigatedRef.current = scrollFollow.handleEntryNavigated;
+  }, [scrollFollow.handleEntryNavigated]);
+
+  // Hoisted before handleCompactClick so the compact path can call it. This is
+  // an explicit user action, not streaming follow.
+  const handleToBottom = scrollFollow.handleToBottom;
+  // An explicit jump (a search hit, a tool-call row) re-engages streaming
+  // follow: the user asked to go somewhere, so the view should stick there.
+  const reengageScrollFollow = scrollFollow.handleExplicitScroll;
 
   // ── Manual compaction lifecycle lives in useAgentSession (see
   // handleCompact). The hook owns the SSE connection, busy state,
@@ -394,63 +425,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     setToolCallStatsState({ snapshot, runningSummary });
   }, [isActive, snapshot, runningSummary]);
 
-  // ── Scroll position: user scroll-up pauses streaming follow ──
-  const CHAT_BOTTOM_THRESHOLD_PX = 100;
-  const [showToBottom, setShowToBottom] = useState(false);
-  const userScrolledUpRef = useRef(false);
-
-  // Detect user-initiated scroll intent via wheel/touch events. This captures
-  // intent before the scroll event and reliably disengages streaming follow.
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    // Only treat upward scroll (deltaY < 0) as "user wants to disengage".
-    // Scrolling down at the bottom is a no-op; don't surface the button or
-    // flip sticky-bottom off in that case.
-    if (e.deltaY < 0) {
-      userScrolledUpRef.current = true;
-      setShowToBottom(true);
-    }
-  }, []);
-
-  const handleTouchMove = useCallback(() => {
-    // Touch has no direction; assume the user is actively scrolling.
-    userScrolledUpRef.current = true;
-    setShowToBottom(true);
-  }, []);
-
-  const handleStreamingViewportResume = useCallback(() => {
-    setShowToBottom(false);
-  }, []);
-
-  // The live viewport grows in the normal chat flow until it reaches its own
-  // max height. If the outer chat was near its bottom before that growth, keep
-  // the whole live viewport in view. This is deliberately driven by the
-  // viewport's box resize, not by every streaming snapshot/token.
-  const handleStreamingViewportHeightIncrease = useCallback((heightDelta: number) => {
-    const container = scrollContainerRef.current;
-    if (!container || heightDelta <= 0 || userScrolledUpRef.current) return;
-
-    // ResizeObserver runs after the layout change, so subtract the viewport's
-    // growth to recover the outer distance from bottom before the resize.
-    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const distanceBeforeResize = distanceFromBottom - heightDelta;
-    if (distanceBeforeResize > CHAT_BOTTOM_THRESHOLD_PX) return;
-
-    userScrolledUpRef.current = false;
-    setShowToBottom(false);
-    container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
-  }, [scrollContainerRef]);
-
   // ── /model slash command → model-picker modal ──
   const [modelModalOpen, setModelModalOpen] = useState(false);
-
-  const handleScroll = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const nearBottom = dist < CHAT_BOTTOM_THRESHOLD_PX;
-    userScrolledUpRef.current = !nearBottom;
-    setShowToBottom(!nearBottom);
-  }, [scrollContainerRef]);
 
   // ── 一键折叠 ──
   // Bumped on every click. Subscribed by ThinkingBlock / ToolCallBlock /
@@ -482,13 +458,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   messageRefs.current = Array(timeline.visibleCount)
     .fill(null)
     .map((_, i) => messageRefs.current[i] ?? null);
-
-  // An explicit jump (a search hit, a tool-call row) re-engages streaming
-  // follow: the user asked to go somewhere, so the view should stick there.
-  const reengageScrollFollow = useCallback(() => {
-    userScrolledUpRef.current = false;
-    setShowToBottom(false);
-  }, []);
 
   // ── In-session search ──
   // State and the entry → visible index jump rule live in the hook, which
@@ -964,7 +933,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       )}
       <CollapseNonceProvider value={collapseNonce}>
       <div className="relative flex flex-1 overflow-hidden">
-        <div ref={scrollContainerRef} data-scroll-wide data-streaming-hide-scroll={liveTurnActive || undefined} onScroll={handleScroll} onWheel={handleWheel} onTouchMove={handleTouchMove} className="relative flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-20">
+        <div ref={scrollContainerRef} data-scroll-wide data-streaming-hide-scroll={liveTurnActive || undefined} onScroll={scrollFollow.handleScroll} onWheel={scrollFollow.handleWheel} onTouchMove={scrollFollow.handleTouchMove} className="relative flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-20">
           <div className="mx-auto max-w-[820px]">
 
             {(() => {
@@ -1284,8 +1253,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                         <StreamingMessageViewport
                           tabId={streamingKey}
                           userScrollingUpRef={userScrolledUpRef}
-                          onResumeAutoScroll={handleStreamingViewportResume}
-                          onHeightIncrease={handleStreamingViewportHeightIncrease}
+                          onResumeAutoScroll={scrollFollow.handleResume}
+                          onHeightIncrease={scrollFollow.handleHeightIncrease}
                         >
                           {streamingRendered}
                           {!streamingErrorAlreadyRendered && (
@@ -1450,14 +1419,14 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
             <button
               type="button"
               onClick={handleToBottom}
-              disabled={!showToBottom}
+              disabled={!scrollFollow.showToBottom}
               aria-label={t("Scroll to bottom")}
               className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100"
               style={{
                 background: "var(--bg-panel)",
                 borderColor: "var(--border)",
-                color: showToBottom ? "var(--text-muted)" : "var(--text-dim)",
-                opacity: showToBottom ? 1 : 0.45,
+                color: scrollFollow.showToBottom ? "var(--text-muted)" : "var(--text-dim)",
+                opacity: scrollFollow.showToBottom ? 1 : 0.45,
               }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
