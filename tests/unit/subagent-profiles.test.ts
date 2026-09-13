@@ -19,8 +19,8 @@ describe("subagent profiles", () => {
     }
   });
 
-  it("keeps codebase_explorer read-only and gives code_reviewer bash", () => {
-    expect(CODEBASE_EXPLORER_TOOLS).not.toContain("bash");
+  it("gives both profiles bash so they can inspect history and diffs read-only", () => {
+    expect(CODEBASE_EXPLORER_TOOLS).toContain("bash");
     expect(CODE_REVIEWER_TOOLS).toContain("bash");
   });
 

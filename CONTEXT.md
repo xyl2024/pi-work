@@ -121,7 +121,7 @@ _Avoid_: 用它指代工作目录
 _Avoid_: 用「子 agent」指代它；把它当作会话标签页里的普通会话
 
 **子代理类型（Subagent type）**：
-`spawn_subagent` 的 `subagent_type` 取值，决定子代理的工具集与系统提示词；现有取值为 `codebase_explorer`（只读探索与报告）与 `code_reviewer`（审查代码或 diff，可只读使用 bash）。
+`spawn_subagent` 的 `subagent_type` 取值，决定子代理的工具集与系统提示词；现有取值为 `codebase_explorer`（只读探索与报告）与 `code_reviewer`（审查代码或 diff），两者工具集相同，都可只读使用 bash（`code_reviewer` 的系统提示词额外要求把结论绑定到证据）。
 _Avoid_: 用「子代理」指代某个类型；把模型与推理强度算作类型的一部分（那是全局 subagent 配置）
 
 **子代理任务（Subagent task）**：
