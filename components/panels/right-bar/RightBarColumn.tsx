@@ -37,6 +37,7 @@ import {
   RIGHT_BAR_BUTTON_IDS,
   RIGHT_BAR_DESCRIPTORS,
   isSessionBoundDescriptor,
+  resolveButtonContent,
   resolveButtonLabel,
   type RightBarCtx,
   type RightBarDescriptor,
@@ -197,7 +198,7 @@ function renderDescriptor(
       flexDirection={desc.bodyLayout?.flexDirection ?? "row"}
       gap={desc.bodyLayout?.gap}
     >
-      {desc.content(ctx)}
+      {resolveButtonContent(desc, ctx)}
     </RightBarButton>
   );
 }

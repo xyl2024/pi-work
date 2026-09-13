@@ -13,7 +13,7 @@ import { TranslateBubble } from "../chat/translate-bubble";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { SessionTabBar } from "../sessions/SessionTabBar";
 import { FileViewer } from "../files/FileViewer";
-import { TabBar, type Tab } from "../ui/TabBar";
+import { TabBar } from "../ui/TabBar";
 import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
 import { ToolCallStatsPanel } from "../panels/ToolCallStatsPanel";
@@ -55,31 +55,26 @@ import { useToast } from "../ui/Toast";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
-import {
-  FAVORITES_TAB_ID,
-  TRANSLATE_TAB_ID,
-  TOOL_CALLS_TAB_ID,
-  RSS_TAB_ID,
-  TOKENS_TAB_ID,
-  GIT_DIFF_TAB_ID,
-  CONVERSATION_TREE_TAB_ID,
-  LLM_AUDIT_TAB_ID,
-  CONTEXT_TAB_ID,
-  BTW_TAB_ID,
-  GITHUB_TRENDING_TAB_ID,
-  KANBAN_TAB_ID,
-  NOTES_TAB_ID,
-  RIGHT_BAR_ID_FOR_TAB_KIND,
-} from "@/lib/shared/types";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
+import {
+  createPanelTabsState,
+  panelButtonIdForKind,
+  panelTabsReducer,
+  selectActiveKind,
+  selectActiveTab,
+  selectCanExpand,
+  selectOpenCount,
+  type PanelMode,
+  type PanelTabsState,
+  type PanelViewKind,
+} from "@/lib/shared/panelTabs";
 import { useEnsureSettings } from "@/hooks/settingsStore";
 import type { ChatInputHandle } from "../chat/ChatInput";
 import { sendAgentCommand } from "@/lib/client/agent-client";
 import { buildCommands, type Command, type CommandContext } from "@/lib/client/commands";
 import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
-import type { RightBarCtx } from "../panels/right-bar/desc";
-import { useGitStatusStore } from "@/lib/client/git-status-store";
+import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
@@ -99,6 +94,92 @@ interface ToolInfo {
   description: string;
   active: boolean;
 }
+
+/** Everything the panel bodies read from the shell. Bundling it into one
+ *  object keeps the kind → body dispatch below a single table lookup. */
+interface PanelBodyCtx {
+  rightPanelState: PanelMode;
+  selectedSessionId: string | null;
+  cwd: string | null;
+  favoriteIds: string[];
+  onSelectSession: (session: SessionInfo) => void;
+  onToggleFavorite: (sessionId: string) => void;
+  systemPrompt: string | null;
+  tools: ToolInfo[];
+  currentModel: { provider: string; modelId: string } | null;
+  thinkingLevel: string;
+  onRefreshSystemPrompt: () => void;
+  isStreaming: boolean;
+  agentRunning: boolean;
+  onConversationTreeCardClick: (cardId: string) => void;
+  btwOpenCount: number;
+  gitDiffOpenCount: number;
+  onExpandGitPanel: () => void;
+  onOpenKanbanSession: (sessionId: string) => void;
+}
+
+/**
+ * The panel view body, looked up by kind. This is the only place the shell
+ * decides which component renders a panel view; the tab strip reads the same
+ * kind's glyph from the presentation registry (`PANEL_TAB_ICON_BY_KIND`), so
+ * adding a view touches one spec, one descriptor entry and this table.
+ *
+ * The file preview is intentionally absent: it is not a panel view — its path
+ * rides on the tab itself, so the shell renders it directly.
+ */
+const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode> = {
+  favorites: (ctx) => (
+    <CollectionPanel
+      favoriteIds={ctx.favoriteIds}
+      onSelectSession={ctx.onSelectSession}
+      onToggleFavorite={ctx.onToggleFavorite}
+    />
+  ),
+  translate: () => <TranslatePanel />,
+  toolCalls: () => <ToolCallStatsTabBody />,
+  rss: () => <RssPanel />,
+  githubTrending: () => <GitHubTrendingPanel />,
+  tokens: () => <TokensPanel />,
+  llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
+  context: (ctx) => <ContextPanel systemPrompt={ctx.systemPrompt} tools={ctx.tools} />,
+  btw: (ctx) => (
+    <BtwPanel
+      mainSessionId={ctx.selectedSessionId}
+      cwd={ctx.cwd}
+      model={ctx.currentModel}
+      systemPrompt={ctx.systemPrompt}
+      thinkingLevel={ctx.thinkingLevel}
+      onRefresh={ctx.onRefreshSystemPrompt}
+      focusRequest={ctx.btwOpenCount}
+    />
+  ),
+  gitDiff: (ctx) => (
+    <GitPanel
+      cwd={ctx.cwd}
+      openRefreshToken={ctx.gitDiffOpenCount}
+      onExpandPanel={ctx.onExpandGitPanel}
+      isPanelExpanded={ctx.rightPanelState === "expanded"}
+    />
+  ),
+  conversationTree: (ctx) => (
+    <ConversationTreePanel
+      isStreaming={ctx.isStreaming}
+      agentRunning={ctx.agentRunning}
+      onCardClick={(card) => ctx.onConversationTreeCardClick(card.id)}
+    />
+  ),
+  kanban: (ctx) => (
+    <KanbanPanel
+      defaultCwd={ctx.cwd}
+      defaultModel={ctx.currentModel}
+      defaultThinkingLevel={ctx.thinkingLevel}
+      defaultTools={ctx.tools}
+      onOpenSession={ctx.onOpenKanbanSession}
+      expanded={ctx.rightPanelState === "expanded"}
+    />
+  ),
+  notes: (ctx) => <NotesPanel expanded={ctx.rightPanelState === "expanded"} />,
+};
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "—";
@@ -433,24 +514,65 @@ export function AppShell() {
   // semantics.
   const layoutMode = useLayoutMode();
 
+  // ── Panel tab strip ────────────────────────────────────────────────
+  // The strip's whole state — the open tabs, the active tab and the panel's
+  // open state (closed / normal / expanded) — is owned by the pure
+  // `panelTabs` reducer in lib/shared; the shell keeps no panel state of its
+  // own. Every open / toggle / activate / close below dispatches an action,
+  // and the tab bar + right-bar column read the state directly.
+  const [panelTabsState, dispatchPanelTabs] = useReducer(
+    panelTabsReducer,
+    // Classic mode hides the chat card behind the right column being
+    // closed, so the very first commit has to paint with the column open.
+    // The `useReducer` initializer reads the persisted mode synchronously
+    // so the first render is already correct — going through the React
+    // subscription would commit the wrong state first and then flip on the
+    // next tick, producing a visible flash.
+    getLayoutModeSync() === "classic",
+    (classic): PanelTabsState => ({
+      ...createPanelTabsState(),
+      mode: classic ? "normal" : "closed",
+    }),
+  );
+  // Read through a ref where a callback must keep a stable identity yet act
+  // on the latest state (kanban's "open session", the keyboard toggle).
+  const panelTabsRef = useRef(panelTabsState);
+  panelTabsRef.current = panelTabsState;
+  /** Today's name for the panel open state — the right column's width and
+   *  the panel bodies still read it directly. */
+  const rightPanelState = panelTabsState.mode;
+  const setPanelMode = useCallback((mode: PanelMode) => {
+    dispatchPanelTabs({ type: "set_mode", mode });
+  }, []);
+  // The tab bar's props, derived straight from the state machine. Labels
+  // resolve from `labelKey` inside TabBar on every render, so the open tabs
+  // follow a locale switch instead of staying in the language they were
+  // opened in.
+  const openTabs = panelTabsState.tabs;
+  const activeFileTabId = panelTabsState.activeId;
+  const activePanelTab = selectActiveTab(panelTabsState);
+  const activeRightPanelKind = selectActiveKind(panelTabsState);
+  // Re-open counters carried by the tabs themselves: Git Diff refreshes and
+  // BTW focuses off these instead of shell-owned request tokens.
+  const gitDiffOpenCount = selectOpenCount(panelTabsState, "gitDiff");
+  const btwOpenCount = selectOpenCount(panelTabsState, "btw");
+
   // Classic mode hides the chat card behind the right column being
   // closed, so the very first commit has to paint with the column
-  // open. The `useState` initializer above already handles the
+  // open. The reducer initializer above already handles the
   // *persisted* case by reading the mode synchronously from
   // localStorage; this effect covers the *in-session* switch — when the
   // user flips the Agentic ↔ Classic toggle after the page has
   // loaded, we re-open the right column so the chat isn't lost behind
   // a width:0 panel. Only auto-opens; manual close after the switch
-  // is left alone until the next mode change.
+  // is left alone until the next mode change. Reading the mode through
+  // the ref keeps this keyed on layoutMode only — depending on the mode
+  // too would re-fire after the auto-open and try to "re-open" a panel
+  // that's already open.
   useEffect(() => {
-    if (layoutMode === "classic" && rightPanelState === "closed") {
-      setRightPanelState("normal");
+    if (layoutMode === "classic" && panelTabsRef.current.mode === "closed") {
+      dispatchPanelTabs({ type: "set_mode", mode: "normal" });
     }
-    // We intentionally key this on layoutMode only — depending on
-    // rightPanelState too would re-fire after the auto-open and try
-    // to "re-open" a panel that's already open, which is a no-op but
-    // makes the effect noisy in the React DevTools profiler.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutMode]);
 
   // Fetch the recent-cwd list exactly once at app start (shared with the
@@ -589,36 +711,6 @@ export function AppShell() {
       if (tab?.sessionId) void fetchTools(tab.sessionId);
     }
   }, [workspace.tabOrder, workspace.tabs, fetchTools]);
-
-  // Right panel — file tabs and the context tab
-  const [fileTabs, setFileTabs] = useState<Tab[]>([]);
-  const [activeFileTabId, setActiveFileTabId] = useState<string | null>(null);
-  // The right column hosts different cards depending on the layout mode:
-  //   • Agentic → file / panel card, hidden by default (matches the
-  //     pre-mode-toggle behavior: the right column is opt-in).
-  //   • Classic → chat card, so the column must be open by default or
-  //     the user lands on an empty right column with no chat visible.
-  // We read the persisted mode synchronously here so the very first
-  // render already paints the correct state — going through the React
-  // subscription would commit the wrong state first and then flip on
-  // the next tick, producing a visible flash.
-  const [rightPanelState, setRightPanelState] = useState<"closed" | "normal" | "expanded">(() =>
-    getLayoutModeSync() === "classic" ? "normal" : "closed",
-  );
-  // Incremented whenever the Git panel is opened, including reopening it
-  // after the right panel was closed. GitPanel uses this to refresh status.
-  const [gitPanelOpenRefreshToken, setGitPanelOpenRefreshToken] = useState(0);
-
-  // Open the right panel at its current width if it's already visible —
-  // only the "closed → normal" transition is forced. The user's expanded
-  // choice survives opening a file or switching to a different tab, so
-  // clicking another tab/file from an expanded panel doesn't snap the
-  // chat back. The expand toggle in the tab bar remains the only other way
-  // to collapse the panel down. Used by every `handleOpenXxxTab` /
-  // `handleOpenFile` below.
-  const ensureRightPanelOpen = useCallback(() => {
-    setRightPanelState((v) => (v === "closed" ? "normal" : v));
-  }, []);
 
   // Favorites — global list of session IDs, shared between the sidebar indicator
   // and the right-panel CollectionPanel so the two views stay in sync.
@@ -942,52 +1034,16 @@ export function AppShell() {
   }, [activeTab?.sessionId, initialSessionRestored, router, searchParams]);
 
   const handleOpenFile = useCallback((filePath: string, fileName: string) => {
-    const tabId = `file:${filePath}`;
-    setFileTabs((prev) => {
-      if (prev.find((t) => t.id === tabId)) return prev;
-      return [...prev, { kind: "file", id: tabId, label: fileName, filePath }];
-    });
-    setActiveFileTabId(tabId);
-    ensureRightPanelOpen();
-  }, [ensureRightPanelOpen]);
+    dispatchPanelTabs({ type: "open_file", path: filePath, label: fileName });
+  }, []);
 
-  // Open the favorites tab — same pattern as file tabs.
-  const handleOpenFavoritesTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((t) => t.kind === "favorites")) return prev;
-      return [{ kind: "favorites", id: FAVORITES_TAB_ID, label: t("Favorites") }, ...prev];
-    });
-    setActiveFileTabId(FAVORITES_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the translate tab — same pattern as favorites.
-  const handleOpenTranslateTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((t) => t.kind === "translate")) return prev;
-      return [{ kind: "translate", id: TRANSLATE_TAB_ID, label: t("Translate") }, ...prev];
-    });
-    setActiveFileTabId(TRANSLATE_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the tool-calls tab. Toggles: clicking when it's already the active
-  // tab hides the right panel entirely; otherwise activate (or create) the
-  // tab. Mirrors the original drawer toggle behaviour.
-  const handleOpenToolCallsTab = useCallback(() => {
-    const alreadyActive = activeFileTabId === TOOL_CALLS_TAB_ID && rightPanelState !== "closed";
-    if (alreadyActive) {
-      setActiveFileTabId(null);
-      setRightPanelState("closed");
-      return;
-    }
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "toolCalls")) return prev;
-      return [{ kind: "toolCalls", id: TOOL_CALLS_TAB_ID, label: t("Tool Calls") }, ...prev];
-    });
-    setActiveFileTabId(TOOL_CALLS_TAB_ID);
-    ensureRightPanelOpen();
-  }, [activeFileTabId, rightPanelState, t, ensureRightPanelOpen]);
+  // The single panel entry point. Every panel view is opened through this
+  // one call: tab id, default open state and session binding all come from
+  // the panel registry, and the toggle rule (clicking the active view again
+  // collapses the panel) lives in the reducer.
+  const handleTogglePanel = useCallback((kind: PanelViewKind) => {
+    dispatchPanelTabs({ type: "toggle", kind });
+  }, []);
 
   // Global keyboard shortcuts.
   useEffect(() => {
@@ -1009,7 +1065,10 @@ export function AppShell() {
       // Ctrl+Alt+B — toggle right sidebar
       if (mod && e.altKey && e.key === "b") {
         e.preventDefault();
-        setRightPanelState((v) => v === "closed" ? "normal" : "closed");
+        dispatchPanelTabs({
+          type: "set_mode",
+          mode: panelTabsRef.current.mode === "closed" ? "normal" : "closed",
+        });
         return;
       }
       // Ctrl+K — command palette. Fires regardless of focus (matches the
@@ -1043,152 +1102,23 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", handler);
   }, [paletteOpen, openPalette, getActiveChatInput]);
 
-  // Open the RSS panel — same pattern as translate.
-  const handleOpenRssTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "rss")) return prev;
-      return [{ kind: "rss", id: RSS_TAB_ID, label: t("RSS") }, ...prev];
-    });
-    setActiveFileTabId(RSS_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the GitHub Trending panel — same pattern as rss / tokens.
-  const handleOpenGithubTrendingTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "githubTrending")) return prev;
-      return [
-        { kind: "githubTrending", id: GITHUB_TRENDING_TAB_ID, label: t("GitHub Trending") },
-        ...prev,
-      ];
-    });
-    setActiveFileTabId(GITHUB_TRENDING_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the Notes panel. Unlike a fixed split, the notes panel renders its
-  // list/editor internally and splits edit|preview only when the panel is
-  // expanded; in the normal width it shows one pane and toggles via shortcut.
-  const handleOpenNotesTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "notes")) return prev;
-      return [{ kind: "notes", id: NOTES_TAB_ID, label: t("Notes") }, ...prev];
-    });
-    setActiveFileTabId(NOTES_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the Kanban panel. Unlike the other toggles, this one opens the right
-  // panel in the expanded state because the four-column board needs width.
-  const handleOpenKanbanTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "kanban")) return prev;
-      return [{ kind: "kanban", id: KANBAN_TAB_ID, label: t("Kanban") }, ...prev];
-    });
-    setActiveFileTabId(KANBAN_TAB_ID);
-    setRightPanelState("expanded");
-  }, [t]);
-
   // Kanban "Open session" jumps to the workspace session AND steps the right
   // panel down from expanded to normal (still open, but no longer full-width)
   // so the chat gets more room. Kept separate from handleOpenScheduledSession
   // (scheduler modal / command palette), which does not touch the right panel.
   const handleOpenKanbanSession = useCallback((sessionId: string) => {
     dispatchWorkspace({ type: "open_session_by_id", sessionId });
-    setRightPanelState((v) => (v === "expanded" ? "normal" : v));
+    if (panelTabsRef.current.mode === "expanded") {
+      dispatchPanelTabs({ type: "set_mode", mode: "normal" });
+    }
   }, []);
 
-  // Open the Token-audit panel.
-  const handleOpenTokensTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "tokens")) return prev;
-      return [{ kind: "tokens", id: TOKENS_TAB_ID, label: t("Token audit") }, ...prev];
-    });
-    setActiveFileTabId(TOKENS_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the LLM API audit panel.
-  const handleOpenLlmAuditTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "llmAudit")) return prev;
-      return [{ kind: "llmAudit", id: LLM_AUDIT_TAB_ID, label: t("LLM API audit") }, ...prev];
-    });
-    setActiveFileTabId(LLM_AUDIT_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the Context panel — combines the session system prompt and tool list.
-  const handleOpenContextTab = useCallback(() => {
-    const alreadyActive = activeFileTabId === CONTEXT_TAB_ID && rightPanelState !== "closed";
-    if (alreadyActive) {
-      setActiveFileTabId(null);
-      setRightPanelState("closed");
-      return;
-    }
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "context")) return prev;
-      return [{ kind: "context", id: CONTEXT_TAB_ID, label: t("Context") }, ...prev];
-    });
-    setActiveFileTabId(CONTEXT_TAB_ID);
-    ensureRightPanelOpen();
-  }, [activeFileTabId, rightPanelState, t, ensureRightPanelOpen]);
-
-  // Open the BTW (By the way) panel — read-only questions grounded in
-  // the active session. The tab id / label stay constant ("BTW") so the
-  // tab survives session switches; only the right-panel body re-renders
-  // based on the active session id (which is captured via
-  // `selectedSession?.id` at render time, not stored in the tab descriptor).
-  // Ensure-open helper shared by the right-bar toggle and the `/btw` slash
-  // action: adds the tab if missing, activates it, and opens the panel.
-  const ensureBtwTabOpen = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "btw")) return prev;
-      return [{ kind: "btw", id: BTW_TAB_ID, label: "BTW" }, ...prev];
-    });
-    setActiveFileTabId(BTW_TAB_ID);
-    ensureRightPanelOpen();
-  }, [ensureRightPanelOpen]);
-
-  const handleOpenBtwTab = useCallback(() => {
-    const alreadyActive = activeFileTabId === BTW_TAB_ID && rightPanelState !== "closed";
-    if (alreadyActive) {
-      setActiveFileTabId(null);
-      setRightPanelState("closed");
-      return;
-    }
-    ensureBtwTabOpen();
-  }, [activeFileTabId, rightPanelState, ensureBtwTabOpen]);
-
-  // `/btw` slash action (and the command-palette path): always open the BTW
-  // tab (never toggle-close it) and bump the focus request so BtwPanel
-  // focuses its input once mounted/visible.
-  const [btwFocusRequest, setBtwFocusRequest] = useState(0);
+  // `/btw` slash action: always open the BTW tab (never toggle-close it).
+  // BtwPanel focuses its input off the tab's own openCount, so the extra
+  // focus-request counter is gone.
   const handleSlashOpenBtw = useCallback(() => {
-    ensureBtwTabOpen();
-    setBtwFocusRequest((n) => n + 1);
-  }, [ensureBtwTabOpen]);
-
-  // Open the git diff panel — same pattern as translate / rss / tokens.
-  const handleOpenGitDiffTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "gitDiff")) return prev;
-      return [{ kind: "gitDiff", id: GIT_DIFF_TAB_ID, label: t("Git Diff") }, ...prev];
-    });
-    setActiveFileTabId(GIT_DIFF_TAB_ID);
-    setGitPanelOpenRefreshToken((n) => n + 1);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
-
-  // Open the conversation-tree panel — card map of the session's tree.
-  const handleOpenConversationTreeTab = useCallback(() => {
-    setFileTabs((prev) => {
-      if (prev.some((tab) => tab.kind === "conversationTree")) return prev;
-      return [{ kind: "conversationTree", id: CONVERSATION_TREE_TAB_ID, label: t("Conversation Tree") }, ...prev];
-    });
-    setActiveFileTabId(CONVERSATION_TREE_TAB_ID);
-    ensureRightPanelOpen();
-  }, [t, ensureRightPanelOpen]);
+    dispatchPanelTabs({ type: "open", kind: "btw" });
+  }, []);
 
   // Click on a card in the conversation-tree panel. We always resolve the
   // clicked card to the deepest leaf entry in its subtree, so the chat
@@ -1208,86 +1138,43 @@ export function AppShell() {
   // Right-bar tab buttons toggle the panel only when their own tab is both
   // active and visible. Opening through other entry points keeps its existing
   // "open this tab" semantics.
-  const handleToggleRightPanelTab = useCallback((tabId: string, openTab: () => void) => {
-    if (activeFileTabId === tabId && rightPanelState !== "closed") {
-      setRightPanelState("closed");
-      return;
-    }
-    openTab();
-  }, [activeFileTabId, rightPanelState]);
-
   // GitPanel widens the right panel to "expanded"
   // when the user switches it into Log view, so the commit history gets
   // the full column. Stable callback: the GitPanel effect keys on it.
   const handleExpandGitPanel = useCallback(() => {
-    setRightPanelState("expanded");
-  }, []);
+    setPanelMode("expanded");
+  }, [setPanelMode]);
 
   const handleCloseFileTab = useCallback((tabId: string) => {
-    setFileTabs((prev) => {
-      const next = prev.filter((t) => t.id !== tabId);
-      if (next.length === 0) setRightPanelState("closed");
-      return next;
-    });
-    setActiveFileTabId((cur) => {
-      if (cur !== tabId) return cur;
-      const remaining = fileTabs.filter((t) => t.id !== tabId);
-      return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
-    });
-  }, [fileTabs]);
+    dispatchPanelTabs({ type: "close", id: tabId });
+  }, []);
 
   // Close every tab strictly to the left of `tabId` (the right-clicked one).
   // If the active tab is being closed, fall back to `tabId` (still open).
   const handleCloseLeftTabs = useCallback((tabId: string) => {
-    setFileTabs((prev) => {
-      const idx = prev.findIndex((t) => t.id === tabId);
-      if (idx <= 0) return prev;
-      return prev.slice(idx);
-    });
-    setActiveFileTabId((cur) => {
-      if (cur === null) return cur;
-      const activeIdx = fileTabs.findIndex((t) => t.id === cur);
-      const refIdx = fileTabs.findIndex((t) => t.id === tabId);
-      if (activeIdx >= 0 && activeIdx < refIdx) return tabId;
-      return cur;
-    });
-  }, [fileTabs]);
+    dispatchPanelTabs({ type: "close_left", id: tabId });
+  }, []);
 
   // Close every tab strictly to the right of `tabId`. If the active tab is
   // being closed, fall back to `tabId`.
   const handleCloseRightTabs = useCallback((tabId: string) => {
-    setFileTabs((prev) => {
-      const idx = prev.findIndex((t) => t.id === tabId);
-      if (idx === -1 || idx === prev.length - 1) return prev;
-      return prev.slice(0, idx + 1);
-    });
-    setActiveFileTabId((cur) => {
-      if (cur === null) return cur;
-      const activeIdx = fileTabs.findIndex((t) => t.id === cur);
-      const refIdx = fileTabs.findIndex((t) => t.id === tabId);
-      if (activeIdx > refIdx && refIdx >= 0) return tabId;
-      return cur;
-    });
-  }, [fileTabs]);
+    dispatchPanelTabs({ type: "close_right", id: tabId });
+  }, []);
 
   // Close every tab other than `tabId`. The right-clicked tab is preserved
   // (and becomes the active one if it wasn't already), so the panel never
   // collapses from this action.
   const handleCloseOtherTabs = useCallback((tabId: string) => {
-    setFileTabs((prev) => {
-      if (!prev.some((t) => t.id === tabId)) return prev;
-      return prev.filter((t) => t.id === tabId);
-    });
-    setActiveFileTabId(tabId);
+    dispatchPanelTabs({ type: "close_others", id: tabId });
   }, []);
 
   // Build the per-tab right-click menu. Single tab → no batch actions shown.
   const handleTabContextMenu = useCallback((tabId: string, x: number, y: number, triggerElement: HTMLElement | null) => {
-    const idx = fileTabs.findIndex((t) => t.id === tabId);
+    const idx = openTabs.findIndex((t) => t.id === tabId);
     if (idx === -1) return;
     const hasLeft = idx > 0;
-    const hasRight = idx < fileTabs.length - 1;
-    const hasOthers = fileTabs.length > 1;
+    const hasRight = idx < openTabs.length - 1;
+    const hasOthers = openTabs.length > 1;
     const items: ContextMenuItem[] = [
       { key: "close", label: t("Close tab"), onSelect: () => handleCloseFileTab(tabId) },
       { key: "close-left", label: t("Close tabs to the left"), onSelect: () => handleCloseLeftTabs(tabId), disabled: !hasLeft },
@@ -1295,29 +1182,18 @@ export function AppShell() {
       { key: "close-others", label: t("Close other tabs"), onSelect: () => handleCloseOtherTabs(tabId), disabled: !hasOthers },
     ];
     cm.open({ x, y, items, triggerElement });
-  }, [fileTabs, t, cm, handleCloseFileTab, handleCloseLeftTabs, handleCloseRightTabs, handleCloseOtherTabs]);
+  }, [openTabs, t, cm, handleCloseFileTab, handleCloseLeftTabs, handleCloseRightTabs, handleCloseOtherTabs]);
 
+  // A deleted path may be a directory: the cascade rule (close every file tab
+  // at or under it) lives in the reducer, so the shell only forwards the path.
   const handleFileDeleted = useCallback((filePath: string) => {
-    // The deleted path may be a directory — close every open file tab at or
-    // under it, not just an exact match.
-    const prefixSlash = filePath + "/";
-    const prefixBackslash = filePath + "\\";
-    for (const tab of fileTabs) {
-      if (tab.kind !== "file") continue;
-      const p = tab.filePath;
-      if (p === filePath || p.startsWith(prefixSlash) || p.startsWith(prefixBackslash)) {
-        handleCloseFileTab(tab.id);
-      }
-    }
-  }, [fileTabs, handleCloseFileTab]);
+    dispatchPanelTabs({ type: "close_files_under", path: filePath });
+  }, []);
 
   // Show chat after the initial URL restore is done (or immediately when no
   // session parameter was supplied). A draft tab exists even before a cwd is
   // selected, so the welcome/input view can render without a placeholder.
   const showChat = initialSessionRestored && workspace.tabOrder.length > 0;
-
-  const activeFileTab = fileTabs.find((t) => t.id === activeFileTabId) ?? null;
-  const activeRightPanelKind = rightPanelState === "closed" ? null : activeFileTab?.kind ?? null;
 
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalFullscreen, setTerminalFullscreen] = useState(false);
@@ -1424,48 +1300,41 @@ export function AppShell() {
   }, []);
 
   const { snapshot: toolStatsSnapshot } = useToolCallStatsView();
-  // Number of changed files for the active cwd's git repo — drives the
-  // badge on the git-diff right-bar button. The store is event-driven
-  // now (refreshes on edit/write tool ends), so this stays live without
-  // polling. Falls back to 0 when there's no cwd, the cwd isn't a repo,
-  // or the repo has no changes — in all three cases the badge hides.
-  const gitStore = useGitStatusStore();
-  const gitChangedCount = selectedCwd
-    ? (gitStore.entriesByCwd.get(selectedCwd)?.files.length ?? 0)
-    : 0;
   const rightBarCtx: RightBarCtx = {
     rightPanelState,
-    layoutMode,
     activeTabKind: activeRightPanelKind,
-    hasOpenTabs: fileTabs.length > 0,
     selectedSessionId,
     selectedCwd,
     rssUnread,
-    gitChangedCount,
     toolStats: {
       runningCount: toolStatsSnapshot.runningCount,
       totalCount: toolStatsSnapshot.totalCount,
     },
     t,
     toggleRightPanel: () =>
-      setRightPanelState((v) => (v === "closed" ? "normal" : "closed")),
-    toggleRightPanelTab: handleToggleRightPanelTab,
-    setRightPanelState,
-    openTab: {
-      translate: handleOpenTranslateTab,
-      rss: handleOpenRssTab,
-      gitDiff: handleOpenGitDiffTab,
-      favorites: handleOpenFavoritesTab,
-      tokens: handleOpenTokensTab,
-      toolCalls: handleOpenToolCallsTab,
-      conversationTree: handleOpenConversationTreeTab,
-      llmAudit: handleOpenLlmAuditTab,
-      context: handleOpenContextTab,
-      btw: handleOpenBtwTab,
-      githubTrending: handleOpenGithubTrendingTab,
-      kanban: handleOpenKanbanTab,
-      notes: handleOpenNotesTab,
-    },
+      setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),
+    togglePanel: handleTogglePanel,
+  };
+  // Everything the panel bodies read, in one object — see PANEL_BODY_BY_KIND.
+  const panelBodyCtx: PanelBodyCtx = {
+    rightPanelState,
+    selectedSessionId,
+    cwd: selectedCwd,
+    favoriteIds,
+    onSelectSession: handleSelectSession,
+    onToggleFavorite: toggleSessionFavorite,
+    systemPrompt,
+    tools,
+    currentModel,
+    thinkingLevel,
+    onRefreshSystemPrompt: refreshSystemPrompt,
+    isStreaming,
+    agentRunning,
+    onConversationTreeCardClick: handleConversationTreeCardClick,
+    btwOpenCount,
+    gitDiffOpenCount,
+    onExpandGitPanel: handleExpandGitPanel,
+    onOpenKanbanSession: handleOpenKanbanSession,
   };
 
   // Ctrl+` toggles the terminal panel (VS Code muscle memory).
@@ -1522,11 +1391,11 @@ export function AppShell() {
   useEffect(() => {
     if (rightPanelState === "closed") return;
     if (activeRightPanelKind === null) return;
-    const id = RIGHT_BAR_ID_FOR_TAB_KIND[activeRightPanelKind];
-    if (id === undefined) return; // "file" kind — no configurable button
+    const id = panelButtonIdForKind(activeRightPanelKind);
+    if (id === null) return; // "file" kind — no configurable button
     if (isRightBarButtonVisible(rightSideBarConfig, id)) return;
-    setRightPanelState("closed");
-  }, [rightPanelState, activeRightPanelKind, rightSideBarConfig]);
+    setPanelMode("closed");
+  }, [rightPanelState, activeRightPanelKind, rightSideBarConfig, setPanelMode]);
 
   // ── Command palette context + command list ──
   // Re-built whenever any input changes (cheap; buildCommands is O(N) where
@@ -1544,29 +1413,25 @@ export function AppShell() {
     openScheduler: () => setSchedulerOpen(true),
     openChannels: () => setChannelsOpen(true),
     openToolMarket: () => setToolsMarketOpen(true),
-    openFavoritesTab: handleOpenFavoritesTab,
-    openTranslateTab: handleOpenTranslateTab,
-    openToolCallsTab: handleOpenToolCallsTab,
-    openTokensTab: handleOpenTokensTab,
-    openGitDiffTab: handleOpenGitDiffTab,
-    openLlmAuditTab: handleOpenLlmAuditTab,
     toggleSidebar: () => setSidebarOpen((v) => !v),
-    toggleRightPanel: () => setRightPanelState((v) => v === "closed" ? "normal" : "closed"),
+    toggleRightPanel: () => dispatchPanelTabs({
+      type: "set_mode",
+      mode: panelTabsRef.current.mode === "closed" ? "normal" : "closed",
+    }),
+    togglePanel: handleTogglePanel,
     agentControls,
     hasSession: selectedSession !== null || newSessionCwd !== null,
     hasCwd: !!(selectedSession?.cwd ?? newSessionCwd),
   }), [
     theme.setPreset, setLocale, handleSlashNew,
     setCwdPickerOpen,
-    handleOpenFavoritesTab,
-    handleOpenTranslateTab, handleOpenToolCallsTab,
-    handleOpenTokensTab, handleOpenGitDiffTab, handleOpenLlmAuditTab,
+    handleTogglePanel,
     agentControls,
     selectedSession, newSessionCwd,
   ]);
 
   const commands = useMemo<Command[]>(
-    () => buildCommands(commandContext, t),
+    () => buildCommands(commandContext, t, PANEL_COMMAND_ICON_BY_KIND),
     [commandContext, t],
   );
 
@@ -1632,15 +1497,14 @@ export function AppShell() {
   //   • Classic: the button rides the chat card; show it whenever the
   //     right column is open at all (so the user can collapse/expand
   //     even if no file tabs are open yet).
-  const showExpandPanelLeading = layoutMode === "agentic"
-    ? rightPanelState !== "closed" && fileTabs.length > 0
-    : rightPanelState !== "closed";
+  // The state machine's `selectCanExpand` absorbs both rules.
+  const showExpandPanelLeading = selectCanExpand(panelTabsState, layoutMode);
 
   const expandPanelLeading = showExpandPanelLeading ? (
     <Tooltip content={rightPanelState === "expanded" ? t("Collapse panel") : t("Expand panel")}>
       <button
         type="button"
-        onClick={() => setRightPanelState((v) => v === "expanded" ? "normal" : "expanded")}
+        onClick={() => setPanelMode(rightPanelState === "expanded" ? "normal" : "expanded")}
         aria-label={rightPanelState === "expanded" ? t("Collapse panel") : t("Expand panel")}
         style={{
           display: "flex",
@@ -1764,10 +1628,10 @@ export function AppShell() {
         )}
         <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
           <TabBar
-            tabs={fileTabs}
+            tabs={openTabs}
             activeTabId={activeFileTabId ?? ""}
             onSelectTab={(tabId) => {
-              setActiveFileTabId(tabId);
+              dispatchPanelTabs({ type: "activate", id: tabId });
             }}
             onCloseTab={(tabId) => {
               handleCloseFileTab(tabId);
@@ -1777,77 +1641,23 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* File content — same body routing as the original right panel.
-          Pulled into a fragment-level child so the surrounding column
+      {/* File content — one lookup by kind (`PANEL_BODY_BY_KIND`), plus the
+          file preview, which is not a panel view and takes its path from the
+          tab. Pulled into a fragment-level child so the surrounding column
           handles flex / overflow without an extra wrapper div. */}
       <div ref={rightPanelRef} style={{ flex: 1, overflow: "hidden" }}>
-        {activeFileTab?.kind === "favorites" ? (
-          <CollectionPanel
-            favoriteIds={favoriteIds}
-            onSelectSession={handleSelectSession}
-            onToggleFavorite={toggleSessionFavorite}
-          />
-        ) : activeFileTab?.kind === "translate" ? (
-          <TranslatePanel />
-        ) : activeFileTab?.kind === "toolCalls" ? (
-          <ToolCallStatsTabBody />
-        ) : activeFileTab?.kind === "file" ? (
-          <FileViewer
-            filePath={activeFileTab.filePath}
-            cwd={selectedSession?.cwd ?? newSessionCwd ?? undefined}
-            rightPanelState={rightPanelState}
-          />
-        ) : activeFileTab?.kind === "rss" ? (
-          <RssPanel />
-        ) : activeFileTab?.kind === "githubTrending" ? (
-          <GitHubTrendingPanel />
-        ) : activeFileTab?.kind === "tokens" ? (
-          <TokensPanel />
-        ) : activeFileTab?.kind === "llmAudit" ? (
-          <LlmAuditPanel currentSessionId={selectedSession?.id ?? null} />
-        ) : activeFileTab?.kind === "context" ? (
-          <ContextPanel
-            systemPrompt={systemPrompt}
-            tools={tools}
-          />
-        ) : activeFileTab?.kind === "btw" ? (
-          <BtwPanel
-            mainSessionId={selectedSession?.id ?? null}
-            cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
-            model={currentModel}
-            systemPrompt={systemPrompt}
-            thinkingLevel={thinkingLevel}
-            onRefresh={refreshSystemPrompt}
-            focusRequest={btwFocusRequest}
-          />
-        ) : activeFileTab?.kind === "gitDiff" ? (
-          <GitPanel
-            cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
-            openRefreshToken={gitPanelOpenRefreshToken}
-            onExpandPanel={handleExpandGitPanel}
-            isPanelExpanded={rightPanelState === "expanded"}
-          />
-        ) : activeFileTab?.kind === "conversationTree" ? (
-          <ConversationTreePanel
-            isStreaming={isStreaming}
-            agentRunning={agentRunning}
-            onCardClick={(card) => handleConversationTreeCardClick(card.id)}
-          />
-        ) : activeFileTab?.kind === "kanban" ? (
-          <KanbanPanel
-            defaultCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
-            defaultModel={currentModel}
-            defaultThinkingLevel={thinkingLevel}
-            defaultTools={tools}
-            onOpenSession={handleOpenKanbanSession}
-            expanded={rightPanelState === "expanded"}
-          />
-        ) : activeFileTab?.kind === "notes" ? (
-          <NotesPanel expanded={rightPanelState === "expanded"} />
-        ) : (
+        {activePanelTab === null ? (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
             {t("No file open")}
           </div>
+        ) : activePanelTab.kind === "file" ? (
+          <FileViewer
+            filePath={activePanelTab.params.path}
+            cwd={selectedSession?.cwd ?? newSessionCwd ?? undefined}
+            rightPanelState={rightPanelState}
+          />
+        ) : (
+          PANEL_BODY_BY_KIND[activePanelTab.kind](panelBodyCtx)
         )}
       </div>
     </>
@@ -2086,7 +1896,7 @@ export function AppShell() {
         {statusBar.git.branch != null && (
         <button
           type="button"
-          onClick={() => handleToggleRightPanelTab(GIT_DIFF_TAB_ID, handleOpenGitDiffTab)}
+          onClick={() => handleTogglePanel("gitDiff")}
           aria-label={t("Open git diff")}
           style={{
             display: "inline-flex",

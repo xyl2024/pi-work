@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
+import { PANEL_TAB_KINDS } from "@/lib/shared/panelTabs";
 import { api, uniqueId, type Json } from "./helpers";
 
 /**
@@ -102,5 +103,98 @@ describe("settings api", () => {
     });
     expect(bad.status).toBe(400);
     expect(String(bad.body.error)).toContain("unknown event");
+  });
+});
+
+/**
+ * right_side_bar is the panel registry's slice of the config: the server
+ * defaults are derived from `PANEL_TAB_SPEC_BY_KIND`, so every panel view is
+ * configurable without touching the server, and the two deleted panels
+ * (canvas / json) leave nothing behind.
+ */
+describe("settings api: right side bar", () => {
+  /** Panels missing from the hand-kept defaults used to be un-toggleable. */
+  const PREVIOUSLY_UNCONFIGURABLE = [
+    "githubTrending",
+    "notes",
+    "kanban",
+    "llmAudit",
+    "btw",
+  ];
+
+  async function snapshot(): Promise<Json> {
+    const res = await api("/api/settings");
+    expect(res.status).toBe(200);
+    return res.body;
+  }
+
+  it("offers every registered panel view in the defaults", async () => {
+    const cfg = await snapshot();
+    const rightSideBar = cfg.right_side_bar as Json;
+
+    for (const id of PANEL_TAB_KINDS) {
+      expect(typeof rightSideBar[id], `right_side_bar.${id}`).toBe("boolean");
+    }
+    // Panels that were deleted left no key behind.
+    expect(rightSideBar.canvas).toBeUndefined();
+    expect(rightSideBar.json).toBeUndefined();
+  });
+
+  it("persists hiding a panel through a write/read round trip", async () => {
+    const before = await snapshot();
+    const rightSideBar = before.right_side_bar as Json;
+
+    try {
+      const put = await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          ...before,
+          right_side_bar: {
+            ...rightSideBar,
+            ...Object.fromEntries(PREVIOUSLY_UNCONFIGURABLE.map((id) => [id, false])),
+          },
+        }),
+      });
+      expect(put.status).toBe(200);
+
+      const after = await snapshot();
+      const read = after.right_side_bar as Json;
+      for (const id of PREVIOUSLY_UNCONFIGURABLE) {
+        expect(read[id], `right_side_bar.${id} after a restart`).toBe(false);
+      }
+    } finally {
+      await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({ ...before, right_side_bar: rightSideBar }),
+      });
+    }
+  });
+
+  it("ignores stale canvas / json keys in an existing config", async () => {
+    const before = await snapshot();
+    const rightSideBar = before.right_side_bar as Json;
+
+    try {
+      const put = await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          ...before,
+          right_side_bar: { ...rightSideBar, canvas: false, json: false },
+        }),
+      });
+      expect(put.status).toBe(200);
+
+      const after = await snapshot();
+      const read = after.right_side_bar as Json;
+      expect(read.canvas).toBeUndefined();
+      expect(read.json).toBeUndefined();
+      // …and the real panel keys still parse alongside the stale ones.
+      expect(typeof read.translate).toBe("boolean");
+    } finally {
+      await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({ ...before, right_side_bar: rightSideBar }),
+      });
+    }
   });
 });

@@ -94,7 +94,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 | 命令注册 | `buildCommands`、`Command`（`lib/client/commands.tsx`） |
 | 右侧按钮列 | `RightBarColumn`（`components/panels/right-bar/RightBarColumn.tsx`） |
 | 右侧按钮描述器 | `RightBarDescriptor`、`RIGHT_BAR_DESCRIPTORS`（`components/panels/right-bar/desc.tsx`） |
-| 右侧面板配置 | `RightSideBarConfig`、`RightBarButtonId`（`lib/shared/right-bar.ts`） |
+| 右侧面板配置 | `RightSideBarConfig`（`lib/shared/right-bar.ts`）、`RightBarButtonId`（`lib/shared/panelTabs.ts`，由 `PANEL_TAB_SPEC_BY_KIND` 的键派生） |
 | 翻译 | `translate`、`translateDescriptor`、`openTab.translate` |
 | RSS | `rss`、`rssDescriptor`、`openTab.rss` |
 | 收藏 | `favorites`、`favoritesDescriptor`、`openTab.favorites` |
@@ -137,7 +137,7 @@ npm run lint
 npm run build                       # 需要生产构建验证时运行
 ```
 
-日常开发循环不要运行 `next build`，它会覆盖共享的 `.next/`，可能影响正在运行的生产/开发服务器（生产模式测试 `PI_WORK_TEST_PROD=1` 除外，它构建到独立的 `.next-test/`）。完成修改后至少运行与改动范围匹配的 TypeScript 检查或 ESLint；涉及会话、流式事件、权限、文件操作、后台任务或集成时补充手动 smoke test，并在最终说明已验证和未验证的部分。
+日常开发循环不要运行 `next build`，它会覆盖共享的 `.next/`，可能影响正在运行的生产/开发服务器。完成修改后至少运行与改动范围匹配的 TypeScript 检查或 ESLint；涉及会话、流式事件、权限、文件操作、后台任务或集成时补充手动 smoke test，并在最终说明已验证和未验证的部分。
 
 ## Agent skills
 

@@ -28,6 +28,7 @@ const log = createLogger("config");
 
 import type { RightBarButtonId, RightSideBarConfig } from "../shared/right-bar";
 import { resolveSessionBoundAlignment } from "../shared/right-bar";
+import { PANEL_TAB_SPEC_BY_KIND } from "../shared/panelTabs";
 
 // ── Custom tools enabled by `customTools` on createAgentSession ───────────
 // Names match the tool names registered in lib/rpc-manager.ts. Adding a new
@@ -45,22 +46,29 @@ const DEFAULT_DANGEROUS_PATTERNS: DangerousPatternsConfig = {
   timeout_ms: 300_000,
 };
 
-const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = {
-  canvas: true,
-  translate: true,
-  json: true,
-  rss: true,
-  favorites: true,
-  tokens: true,
-  toolCalls: true,
-  gitDiff: true,
-  conversationTree: true,
-  context: true,
-  // Session-bound group (context / toolCalls / conversationTree / gitDiff /
-  // llmAudit) pins to the bottom by default — they're meaningful only when
-  // a session is active and become empty on the new-session page.
-  session_bound_alignment: "bottom",
-};
+/**
+ * Configurable right-bar button ids, in panel-registry order. Derived from
+ * the panel registry (its keys *are* the button ids) so that adding a panel
+ * view needs no change here, and removing one (canvas, json) leaves no key
+ * in `config.yaml`.
+ */
+const CONFIGURABLE_BUTTON_IDS: readonly RightBarButtonId[] = Object.keys(
+  PANEL_TAB_SPEC_BY_KIND,
+) as RightBarButtonId[];
+
+/**
+ * Every panel view visible by default. Session-bound buttons (context /
+ * toolCalls / conversationTree / gitDiff / llmAudit) pin to the bottom —
+ * they're meaningful only when a session is active and become empty on the
+ * new-session page.
+ */
+function defaultRightSideBar(): RightSideBarConfig {
+  const out: RightSideBarConfig = { session_bound_alignment: "bottom" };
+  for (const id of CONFIGURABLE_BUTTON_IDS) out[id] = true;
+  return out;
+}
+
+const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = defaultRightSideBar();
 
 const DEFAULT_SUBAGENT: SubagentConfig = { thinking_level: "off" };
 const SUBAGENT_THINKING_LEVELS: readonly SubagentThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -127,10 +135,13 @@ function parseRightSideBar(raw: unknown): RightSideBarConfig {
   const out: RightSideBarConfig = { ...DEFAULT_RIGHT_SIDE_BAR };
   if (!raw || typeof raw !== "object") return out;
   const obj = raw as Record<string, unknown>;
-  for (const key of Object.keys(out)) {
-    if (key === "order" || key === "session_bound_alignment") continue;
-    const v = obj[key];
-    if (typeof v === "boolean") out[key] = v;
+  // Iterate the registry, not the file: a key that no panel view owns any
+  // more (canvas, json) is ignored instead of resurrected, and a `false` for
+  // any registered view round-trips — the defaults enumerate every view, so
+  // nothing is silently dropped on read.
+  for (const id of CONFIGURABLE_BUTTON_IDS) {
+    const v = obj[id];
+    if (typeof v === "boolean") out[id] = v;
     // missing or non-boolean → keep default (true)
   }
   // `order` is parsed at the consumer side (lib/config doesn't import

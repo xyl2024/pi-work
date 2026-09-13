@@ -5,10 +5,11 @@
  * Strategy:
  *   1. probe TEST_BASE_URL (default: the isolated instance on port 30143) —
  *      if it answers, reuse it and leave it running afterwards;
- *   2. otherwise start it ourselves and stop it on teardown:
- *        - dev mode (default): `next dev`, same as `npm run dev:isolated`;
- *        - prod mode (PI_WORK_TEST_PROD=1): `next build` + `next start`,
- *          same isolated data root, for production-shaped smoke runs.
+ *   2. otherwise start it ourselves (`next dev`, same as
+ *      `npm run dev:isolated`) and stop it on teardown.
+ *
+ * There is deliberately no production-shaped run: tests never build or start
+ * a production server, and never target a production instance.
  *
  * Isolation is identical in both modes (same layout as scripts/dev-isolated.mjs):
  * PI_WORK_DATA_DIR=~/.pi-work-dev, PI_CODING_AGENT_DIR=~/.pi-dev/agent,
@@ -26,7 +27,6 @@ import path from "node:path";
 import {
   ISOLATED_AGENT_DIR,
   ISOLATED_DATA_DIR,
-  PROD_MODE,
   SERVER_BOOT_TIMEOUT_MS,
   TEST_BASE_URL,
   TEST_PORT,
@@ -99,32 +99,16 @@ function runNext(args: string[], opts: { detached?: boolean } = {}): ChildProces
   });
 }
 
-function waitForExit(child: ChildProcess): Promise<void> {
-  return new Promise((resolve, reject) => {
-    child.on("exit", (code) =>
-      code === 0 ? resolve() : reject(new Error(`next ${child.spawnargs.slice(-2)[0]} exited with code ${code}`)),
-    );
-    child.on("error", reject);
-  });
-}
-
 export async function setup(): Promise<void> {
   if (await probe()) {
     console.log(`[test] reusing running isolated instance at ${TEST_BASE_URL}`);
     return;
   }
 
-  if (PROD_MODE) {
-    console.log("[test] prod mode: building (next build --webpack) — this takes a while ...");
-    // --webpack to mirror `npm run build` (what production actually runs).
-    await waitForExit(runNext(["build", "--webpack"]));
-  }
-  console.log(
-    `[test] starting isolated ${PROD_MODE ? "production" : "dev"} server at ${TEST_BASE_URL} ...`,
-  );
+  console.log(`[test] starting isolated dev server at ${TEST_BASE_URL} ...`);
 
   // detached so we can kill the whole process tree (next server + terminal WS server)
-  server = runNext([PROD_MODE ? "start" : "dev", "-p", String(TEST_PORT)], { detached: true });
+  server = runNext(["dev", "-p", String(TEST_PORT)], { detached: true });
   owned = true;
   await waitForServer();
 }
