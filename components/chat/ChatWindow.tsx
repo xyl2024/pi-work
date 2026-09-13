@@ -6,11 +6,11 @@ import type {
   AssistantMessage,
   SessionInfo,
   ToolCallContent,
-  ToolResultMessage,
   ReadFileInfo,
   CompactionPoint,
 } from "@/lib/shared/types";
 import { countToolCallsByName } from "@/lib/shared/message-display";
+import { buildChatTimeline, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
 import { getFileName } from "@/lib/shared/file-paths";
 import { extractEditDiffStats, extractWriteDiffStats, sumDiffStats, type ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
@@ -47,6 +47,11 @@ import { phaseLabel, phaseLoaderVariant, resolveReadPath, isGroupAnchor, findFin
 import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
 import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 import { NewSessionNotifyPicker } from "./chat-window/NewSessionNotifyPicker";
+import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
+import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
+import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
+import { useReplay } from "./chat-window/hooks/useReplay";
+import { useScrollFollow } from "./chat-window/hooks/useScrollFollow";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
 
@@ -117,55 +122,26 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const [isExporting, setIsExporting] = useState(false);
   const sessionInfoReportedRef = useRef<string | null>(null);
 
-  // Notification channel picked on the new-session page (null = no notify).
-  // Persisted to the server once the session is created (currentSessionId
-  // flips from null → real id) so reloads keep the binding.
-  const [notifyChannelId, setNotifyChannelId] = useState<string | null>(null);
-  const savedNotifySessionRef = useRef<string | null>(null);
-  // Notification channel bound to the CURRENT (existing) session, loaded from
-  // the server on session change. Mirrors the sidecar on disk; the MoreMenu
-  // entry edits it via handleSetNotifyChannel.
-  const [sessionNotifyChannelId, setSessionNotifyChannelId] = useState<string | null>(null);
+  // ── Auto-naming ──────────────────────────────────────────────────────
+  // The runner lives in `chat-window/hooks/useAutoNaming.ts`, but it needs the
+  // first user message text — which only exists after useAgentSession — while
+  // useAgentSession needs the first-assistant callback. This stable delegate
+  // breaks the cycle; the hook fills the ref on every render, the same shape
+  // the pre-hook code used for its timer.
+  const autoNameReadyRef = useRef<() => void>(() => {});
+  const handleFirstAssistantReady = useCallback(() => {
+    autoNameReadyRef.current();
+  }, []);
 
-  // ── Auto-name scheduling for brand-new sessions ──────────────────────
-  // The first assistant message of a new session lands only after pi lazily
-  // persists the .jsonl, which is exactly when /api/sessions/[id]/auto-name
-  // can read it. We piggyback on the existing onFirstAssistantReady prop,
-  // forward it to AppShell (sidebar refresh), and schedule a 1s timer to
-  // run auto-name. The actual runner lives below where it can close over
-  // currentSessionId / agentRunning / etc.; we keep a ref so the timer
-  // always reads the latest closure. currentSessionNameRef mirrors
-  // session.name so the post-LLM race check sees the freshest value.
-  const autoNamedSessionIdsRef = useRef<Set<string>>(new Set());
-  const autoNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const runAutoNameRef = useRef<((opts: { mode: "manual" | "auto" }) => Promise<void>) | null>(null);
-  const currentSessionNameRef = useRef<string | null>(session?.name ?? null);
-
-  const wrappedOnFirstAssistantReady = useCallback(() => {
-    // Forward to AppShell (sidebar refresh — unchanged behavior).
-    onFirstAssistantReady?.();
-    const sid = session?.id;
-    if (!sid) return;
-    if (autoNamedSessionIdsRef.current.has(sid)) return;
-    autoNamedSessionIdsRef.current.add(sid);
-    if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
-    autoNameTimerRef.current = setTimeout(() => {
-      autoNameTimerRef.current = null;
-      runAutoNameRef.current?.({ mode: "auto" });
-    }, 1000);
-  }, [onFirstAssistantReady, session?.id]);
-
-  // Drop a still-pending timer on unmount (session switch / window teardown)
-  // so we never PATCH against a stale session id.
-  useEffect(
-    () => () => {
-      if (autoNameTimerRef.current) {
-        clearTimeout(autoNameTimerRef.current);
-        autoNameTimerRef.current = null;
-      }
-    },
-    [],
-  );
+  // Same delegation for the scroll landing of an entry navigation: it is a
+  // scroll write, so `useScrollFollow` owns it — but that hook needs the refs
+  // useAgentSession returns and is therefore created later. The scroll hook
+  // fills the ref from an effect (see the assignment below); the navigation
+  // reports back a microtask later, so the ref is always filled by then.
+  const entryNavigatedRef = useRef<() => void>(() => {});
+  const handleEntryNavigated = useCallback(() => {
+    entryNavigatedRef.current();
+  }, []);
 
   // Tool call stats: wire the context emit into useAgentSession
   const statsEmit = useToolCallStatsEmit();
@@ -180,7 +156,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     subagentRefreshKey,
     isNew,
     messagesEndRef, scrollContainerRef,
-    lastUserMsgRef,
+    lastUserMsgRef, pendingScrollToUserRef,
     handleSend, handleAbort, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     handleCompact,
@@ -188,89 +164,26 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     activeLeafId, currentSessionId,
     inFlightToolResults,
   } = useAgentSession({
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady: wrappedOnFirstAssistantReady,
+    session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
     modelsRefreshKey,
     statsEmit,
     scrollToEntryId,
-    onScrollComplete,
+    onEntryNavigated: handleEntryNavigated,
     isActive,
     controllerId: tabId,
   });
 
-  // Persist the new-session notification channel once the session is created
-  // (currentSessionId flips from null → real id after POST /api/agent/new).
-  // Best-effort: a failure only toasts, it never blocks chat.
-  useEffect(() => {
-    if (!currentSessionId || notifyChannelId == null) return;
-    if (savedNotifySessionRef.current === currentSessionId) return;
-    savedNotifySessionRef.current = currentSessionId;
-    void (async () => {
-      try {
-        const res = await fetch(`/api/sessions/${encodeURIComponent(currentSessionId)}/notify`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channelId: notifyChannelId }),
-        });
-        if (!res.ok && isActiveRef.current) {
-          showToast({ kind: "error", message: t("Failed to set notification channel") });
-        } else {
-          setSessionNotifyChannelId(notifyChannelId);
-        }
-      } catch {
-        if (isActiveRef.current) {
-          showToast({ kind: "error", message: t("Failed to set notification channel") });
-        }
-      }
-    })();
-  }, [currentSessionId, notifyChannelId, showToast, t]);
-
-  // Load the existing session's notification binding on session change.
-  useEffect(() => {
-    const sid = session?.id;
-    if (!sid) return;
-    let cancelled = false;
-    setSessionNotifyChannelId(null);
-    void (async () => {
-      try {
-        const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}/notify`);
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { config?: { channelId?: unknown } | null };
-        if (cancelled) return;
-        // A brand-new session that just saved its binding through the creation
-        // path may still be racing this read — trust the in-memory save over
-        // the (possibly stale) disk answer.
-        if (savedNotifySessionRef.current === sid) return;
-        setSessionNotifyChannelId(
-          typeof data.config?.channelId === "string" ? data.config.channelId : null,
-        );
-      } catch {
-        // keep null — the MoreMenu entry then shows "No notification"
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [session?.id]);
-
-  // Persist a notification-channel change made from the MoreMenu (existing
-  // sessions). PUT with an empty channelId clears the binding.
-  const handleSetNotifyChannel = useCallback(async (channelId: string | null) => {
-    const sid = session?.id ?? currentSessionId;
-    if (!sid) return;
-    try {
-      const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}/notify`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId: channelId ?? "" }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSessionNotifyChannelId(channelId);
-      showToast({
-        kind: "success",
-        message: channelId ? t("Notification channel set") : t("Notification channel cleared"),
-      });
-    } catch {
-      showToast({ kind: "error", message: t("Failed to set notification channel") });
-    }
-  }, [session?.id, currentSessionId, showToast, t]);
+  // ── Session notification binding ──────────────────────────────────────
+  // Both bindings (the new-session pick, and the current session's saved
+  // channel) are owned by the local hook; its rules live in
+  // `lib/shared/session-notify-binding.ts`.
+  const { pickedChannelId, setPickedChannelId, boundChannelId, setNotifyChannel } = useSessionNotifyBinding({
+    sessionId: session?.id ?? null,
+    currentSessionId,
+    isActive,
+    showToast,
+    t,
+  });
 
   useEffect(() => {
     if (!data?.info || session?.id !== data.sessionId || sessionInfoReportedRef.current === data.sessionId) return;
@@ -439,19 +352,39 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     }
   }, [currentSessionId, activeLeafId, locale, isExporting, showToast, t]);
 
-  // Scroll-to-bottom helper, hoisted before handleCompactClick so the compact
-  // path can call it. This is an explicit user action, not streaming follow.
-  const handleToBottom = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    userScrolledUpRef.current = false;
-    setShowToBottom(false);
-    // scrollHeight, not messagesEndRef.scrollIntoView: the latter aligns to
-    // the scrollport edges and leaves the container's bottom padding visible
-    // as a gap. Setting scrollTop directly to scrollHeight scrolls to the
-    // absolute bottom regardless of padding/layout.
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [scrollContainerRef]);
+  // ── Scroll follow ─────────────────────────────────────────────────────
+  // Every chat scroll rule lives in `lib/shared/scroll-follow.ts` and every
+  // scroll write in the hook below; this component only forwards events and
+  // renders the affordance. The pause flag is a ref because the nested live
+  // viewport writes it directly, so the chat window owns it and hands it to
+  // both the hook and `StreamingMessageViewport`.
+  const userScrolledUpRef = useRef(false);
+  const initialScrollDoneRef = useRef(false);
+  const scrollFollow = useScrollFollow({
+    isActive,
+    scrollContainerRef,
+    messagesEndRef,
+    lastUserMsgRef,
+    pausedRef: userScrolledUpRef,
+    messageCount: messages.length,
+    pendingScrollToUserRef,
+    initialScrollDoneRef,
+    onScrollComplete,
+  });
+  // Feed the scroll hook's entry-landing handler to the stable delegate that
+  // was passed to useAgentSession before the hook could be called (see
+  // entryNavigatedRef above). Assigned in an effect, not during render, so a
+  // concurrent render never publishes a handler it later discards.
+  useEffect(() => {
+    entryNavigatedRef.current = scrollFollow.handleEntryNavigated;
+  }, [scrollFollow.handleEntryNavigated]);
+
+  // Hoisted before handleCompactClick so the compact path can call it. This is
+  // an explicit user action, not streaming follow.
+  const handleToBottom = scrollFollow.handleToBottom;
+  // An explicit jump (a search hit, a tool-call row) re-engages streaming
+  // follow: the user asked to go somewhere, so the view should stick there.
+  const reengageScrollFollow = scrollFollow.handleExplicitScroll;
 
   // ── Manual compaction lifecycle lives in useAgentSession (see
   // handleCompact). The hook owns the SSE connection, busy state,
@@ -492,84 +425,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     setToolCallStatsState({ snapshot, runningSummary });
   }, [isActive, snapshot, runningSummary]);
 
-  // ── Scroll position: user scroll-up pauses streaming follow ──
-  const CHAT_BOTTOM_THRESHOLD_PX = 100;
-  const [showToBottom, setShowToBottom] = useState(false);
-  const userScrolledUpRef = useRef(false);
-
-  // Detect user-initiated scroll intent via wheel/touch events. This captures
-  // intent before the scroll event and reliably disengages streaming follow.
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    // Only treat upward scroll (deltaY < 0) as "user wants to disengage".
-    // Scrolling down at the bottom is a no-op; don't surface the button or
-    // flip sticky-bottom off in that case.
-    if (e.deltaY < 0) {
-      userScrolledUpRef.current = true;
-      setShowToBottom(true);
-    }
-  }, []);
-
-  const handleTouchMove = useCallback(() => {
-    // Touch has no direction; assume the user is actively scrolling.
-    userScrolledUpRef.current = true;
-    setShowToBottom(true);
-  }, []);
-
-  const handleStreamingViewportResume = useCallback(() => {
-    setShowToBottom(false);
-  }, []);
-
-  // The live viewport grows in the normal chat flow until it reaches its own
-  // max height. If the outer chat was near its bottom before that growth, keep
-  // the whole live viewport in view. This is deliberately driven by the
-  // viewport's box resize, not by every streaming snapshot/token.
-  const handleStreamingViewportHeightIncrease = useCallback((heightDelta: number) => {
-    const container = scrollContainerRef.current;
-    if (!container || heightDelta <= 0 || userScrolledUpRef.current) return;
-
-    // ResizeObserver runs after the layout change, so subtract the viewport's
-    // growth to recover the outer distance from bottom before the resize.
-    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const distanceBeforeResize = distanceFromBottom - heightDelta;
-    if (distanceBeforeResize > CHAT_BOTTOM_THRESHOLD_PX) return;
-
-    userScrolledUpRef.current = false;
-    setShowToBottom(false);
-    container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
-  }, [scrollContainerRef]);
-
-  // ── In-session search state ──
-  const [searchVisible, setSearchVisible] = useState(false);
-  const [searchKeywords, setSearchKeywords] = useState<string[]>([]);
-  const [matchedEntryIds, setMatchedEntryIds] = useState<Set<string>>(new Set());
-  const [highlightEntryId, setHighlightEntryId] = useState<string | null>(null);
-  const [pendingJumpEntryId, setPendingJumpEntryId] = useState<string | null>(null);
-
-  // ── Replay ("time travel"): message-level scrubber. All state is local so it
-  // resets on session switch (ChatWindow remounts via key={sessionKey}). ──
-  const [replayOpen, setReplayOpen] = useState(false);
-  const [replayIndex, setReplayIndex] = useState(0);
-  const [replayPlaying, setReplayPlaying] = useState(false);
-  const [replaySpeed, setReplaySpeed] = useState(1);
-
   // ── /model slash command → model-picker modal ──
   const [modelModalOpen, setModelModalOpen] = useState(false);
-  const handleReplayIndexChange = useCallback((n: number) => setReplayIndex(n), []);
-  const handleReplayPlayingChange = useCallback((p: boolean) => setReplayPlaying(p), []);
-  const handleReplaySpeedChange = useCallback((s: number) => setReplaySpeed(s), []);
-  const closeReplay = useCallback(() => {
-    setReplayOpen(false);
-    setReplayPlaying(false);
-  }, []);
-
-  const handleScroll = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const nearBottom = dist < CHAT_BOTTOM_THRESHOLD_PX;
-    userScrolledUpRef.current = !nearBottom;
-    setShowToBottom(!nearBottom);
-  }, [scrollContainerRef]);
 
   // ── 一键折叠 ──
   // Bumped on every click. Subscribed by ThinkingBlock / ToolCallBlock /
@@ -579,91 +436,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const handleCollapseAll = useCallback(() => {
     setCollapseNonce((n) => n + 1);
   }, []);
-
-  // ── In-session search: Ctrl+F toggle ──
-  useEffect(() => {
-    if (!isActive) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "f" && session) {
-        e.preventDefault();
-        setSearchVisible((v) => !v);
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [isActive, session]);
-
-  // ── In-session search: close on session change ──
-  useEffect(() => {
-    setSearchVisible(false);
-    setSearchKeywords([]);
-    setMatchedEntryIds(new Set());
-    setHighlightEntryId(null);
-    setPendingJumpEntryId(null);
-    setReplayOpen(false);
-    setReplayPlaying(false);
-  }, [session?.id]);
-
-  // ── Replay: force-close when the agent starts running (replay and a live
-  // stream must not coexist — the truncated view would fight the SSE tail). ──
-  useEffect(() => {
-    if (streamState.isStreaming || agentRunning) {
-      setReplayOpen(false);
-      setReplayPlaying(false);
-    }
-  }, [streamState.isStreaming, agentRunning]);
-
-  // ── In-session search: results change callback ──
-  const handleSearchResultsChange = useCallback((ids: string[], keyword: string) => {
-    setMatchedEntryIds(new Set(ids));
-    setSearchKeywords(keyword ? [keyword] : []);
-    if (!keyword) setHighlightEntryId(null);
-  }, []);
-
-  // ── In-session search: jump to a message ──
-  const handleSearchJumpTo = useCallback((entryId: string, leafId: string) => {
-    // Navigate to the branch containing this message
-    handleNavigate(leafId);
-    setPendingJumpEntryId(entryId);
-  }, [handleNavigate]);
-
-  // ── In-session search: close callback ──
-  const handleSearchClose = useCallback(() => {
-    setSearchVisible(false);
-    setSearchKeywords([]);
-    setMatchedEntryIds(new Set());
-    setHighlightEntryId(null);
-  }, []);
-
-  // ── In-session search: scroll to entry after branch switch ──
-  useEffect(() => {
-    if (!pendingJumpEntryId) return;
-    const idx = entryIds.indexOf(pendingJumpEntryId);
-    if (idx === -1) return;
-
-    // Compute visible message index
-    let visibleIdx = 0;
-    for (let i = 0; i < idx; i++) {
-      const m = messages[i];
-      if (m && (m.role === "user" || m.role === "assistant")) visibleIdx++;
-    }
-
-    const el = messageRefs.current[visibleIdx];
-    const container = scrollContainerRef.current;
-    if (el && container) {
-      userScrolledUpRef.current = false;
-      setShowToBottom(false);
-      const elTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-      container.scrollTo({ top: elTop - 20, behavior: "smooth" });
-    }
-
-    setHighlightEntryId(pendingJumpEntryId);
-    setPendingJumpEntryId(null);
-
-    // Flash highlight off after 2s
-    const timer = setTimeout(() => setHighlightEntryId(null), 2000);
-    return () => clearTimeout(timer);
-  }, [pendingJumpEntryId, entryIds, messages, scrollContainerRef]);
 
   // Streaming output is followed by StreamingMessageViewport. ChatWindow
   // intentionally does not move the page-level scrollport while content grows;
@@ -675,29 +447,54 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
 
-  const visibleMessages = messages.filter((m) => m.role === "user" || m.role === "assistant");
+  // The chat timeline projection is the single source of "which messages are
+  // visible, how session indices map to visible ones, and where a tool call
+  // lands". The in-session search hook and the render ref array read it.
+  const timeline = useMemo(
+    () => buildChatTimeline({ messages, entryIds, entryTimestamps }),
+    [messages, entryIds, entryTimestamps],
+  );
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
-  messageRefs.current = Array(visibleMessages.length)
+  messageRefs.current = Array(timeline.visibleCount)
     .fill(null)
     .map((_, i) => messageRefs.current[i] ?? null);
 
-  // Replay is only active for a settled (non-streaming) session. When active,
-  // the chat renders only messages[0..replayIndex]; toolResultsMap is still
-  // built from the FULL messages so a tool call still pairs with its result
-  // even when the result sits past the cutoff.
-  const replayActive = replayOpen && !streamState.isStreaming && !agentRunning;
-  const renderMessages = replayActive ? messages.slice(0, replayIndex) : messages;
-  const renderEntryIds = replayActive ? entryIds.slice(0, replayIndex) : entryIds;
-  const renderEntryTimestamps = replayActive ? entryTimestamps.slice(0, replayIndex) : entryTimestamps;
+  // ── In-session search ──
+  // State and the entry → visible index jump rule live in the hook, which
+  // resolves entries through the timeline projection above.
+  const search = useSessionSearch({
+    isActive,
+    sessionId: session?.id ?? null,
+    timeline,
+    scrollContainerRef,
+    messageRefs,
+    onExplicitScroll: reengageScrollFollow,
+    onNavigate: handleNavigate,
+  });
+
+  // ── Replay ("time travel") ──
+  // State and the settled-session gate live in the hook, whose rules are the
+  // pure reducer in `lib/shared/replay.ts`.
+  const replay = useReplay({
+    sessionId: session?.id ?? null,
+    isStreaming: streamState.isStreaming,
+    agentRunning,
+    messages,
+  });
+
+  // When replay is active the chat renders only messages[0..cutoff];
+  // toolResultsMap is still built from the FULL messages so a tool call still
+  // pairs with its result even when the result sits past the cutoff.
+  const renderSlice = timeline.sliceForReplay(replay.cropIndex);
+  const renderMessages = renderSlice.messages;
+  const renderEntryIds = renderSlice.entryIds;
+  const renderEntryTimestamps = renderSlice.entryTimestamps;
 
   // Tool results are shared by historical messages and the live viewport. The
   // latter needs the in-flight overlay too, so a running tool can keep showing
   // partial output inside the fixed-height area.
   const toolResultsMap = useMemo(() => {
-    const map = new Map<string, ToolResultMessage>();
-    for (const msg of messages) {
-      if (msg.role === "toolResult") map.set(msg.toolCallId, msg);
-    }
+    const map = indexToolResults(messages);
     for (const [id, partial] of inFlightToolResults) {
       if (!map.has(id)) map.set(id, partial);
     }
@@ -804,52 +601,20 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // calculation here so a future reintroduction (e.g. a "currently streaming"
   // banner) has the index ready without having to recompute it.
   void lastAnchorIdx;
-  const replayLabel = (() => {
-    const base = `${replayIndex} / ${messages.length}`;
-    const m = messages[replayIndex - 1] as (AgentMessage & { timestamp?: number }) | undefined;
-    if (m?.timestamp) return `${base} · ${new Date(m.timestamp).toLocaleTimeString()}`;
-    return base;
-  })();
-  const openReplay = useCallback(() => {
-    setReplayIndex(messages.length);
-    setReplayPlaying(false);
-    setReplayOpen(true);
-  }, [messages.length]);
-
-  // Map every visible tool call's toolCallId to its visible message index.
-  // Used by handleScrollToToolCall; rebuilt when messages change so newly
-  // streamed tool calls become jumpable without delay.
-  const toolCallToVisibleIdx = useMemo(() => {
-    const map = new Map<string, number>();
-    let vi = 0;
-    for (const msg of messages) {
-      if (msg.role !== "user" && msg.role !== "assistant") continue;
-      if (msg.role === "assistant") {
-        for (const block of (msg as AssistantMessage).content ?? []) {
-          if (block.type === "toolCall") {
-            map.set((block as ToolCallContent).toolCallId, vi);
-          }
-        }
-      }
-      vi++;
-    }
-    return map;
-  }, [messages]);
-
-  // Scroll a tool call into view by its toolCallId. Shared between the stats
-  // drawer (click on a tool name).
+  // Scroll a tool call into view by its toolCallId, resolving the landing
+  // message through the timeline projection. Shared between the stats drawer
+  // (click on a tool name).
   const handleScrollToToolCall = useCallback((toolCallId: string) => {
-    const idx = toolCallToVisibleIdx.get(toolCallId);
+    const idx = timeline.toolCallVisibleIndices.get(toolCallId);
     if (idx === undefined) return;
     const el = messageRefs.current[idx];
     const container = scrollContainerRef.current;
     if (el && container) {
-      userScrolledUpRef.current = false;
-      setShowToBottom(false);
+      reengageScrollFollow();
       const elTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
       container.scrollTo({ top: elTop - 20, behavior: "smooth" });
     }
-  }, [toolCallToVisibleIdx, messageRefs, scrollContainerRef]);
+  }, [timeline, messageRefs, scrollContainerRef, reengageScrollFollow]);
 
   // Register the scroll callback with the module store so the right-panel tab
   // body can jump to a tool-call message when the user clicks a row. Clear on
@@ -878,148 +643,42 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     : null;
 
   const sessionId = session?.id;
-
-  // ── Auto-name: LLM-driven session name generation (moved up from ChatInput
-  // when the button relocated to the AppShell footer). The 3s "generated
-  // name" label flash was dropped with the move — the sidebar updates
-  // immediately and a toast already confirms the rename. ──
-  const [isAutoNaming, setIsAutoNaming] = useState(false);
   const confirm = useConfirm();
-  const currentSessionName = session?.name ?? null;
 
-  // Keep the ref in sync so the post-LLM race check (after the 5–30s wait)
-  // sees a freshly-named session even though the in-flight closure has
-  // captured the pre-LLM render value.
-  useEffect(() => {
-    currentSessionNameRef.current = currentSessionName;
-  }, [currentSessionName]);
-
-  // Shared core for both the manual button (mode "manual") and the
-  // 1s-after-first-assistant auto-trigger (mode "auto"). Manual preserves
-  // the user-confirm modal and the agent-running guard; auto skips both
-  // (silent, may piggyback on the in-flight first turn) but enforces the
-  // race guard: if session.name is already non-empty at trigger time or
-  // when the LLM response arrives, bail silently — manual rename wins
-  // (Q3 = A).
-  const runAutoName = useCallback(async ({ mode }: { mode: "manual" | "auto" }) => {
-    if (!sessionId) return;
-    if (isAutoNaming) return;
-    if (mode === "manual" && agentRunning) return;
-    if (!firstUserMessageText || !firstUserMessageText.trim()) return;
-
-    // Auto-mode pre-flight: a sidebar rename that landed in the 1s window
-    // before the LLM call already won — no LLM call needed.
-    if (mode === "auto" && currentSessionNameRef.current && currentSessionNameRef.current.trim()) {
-      return;
-    }
-
-    if (mode === "manual" && currentSessionName && currentSessionName.trim()) {
-      const ok = await confirm({
-        title: t("Auto-name session?"),
-        description: t("This will replace the current session name."),
-        confirmLabel: t("Auto-name"),
-        cancelLabel: t("Cancel"),
-        destructive: false,
-      });
-      if (!ok) return;
-    }
-
-    setIsAutoNaming(true);
-    try {
-      const suggestRes = await fetch(
-        `/api/sessions/${encodeURIComponent(sessionId)}/auto-name`,
-        { method: "POST" },
-      );
-      const suggestBody = (await suggestRes.json().catch(() => ({}))) as {
-        name?: unknown;
-        error?: unknown;
-      };
-      if (!suggestRes.ok || typeof suggestBody.name !== "string") {
-        const reason = typeof suggestBody.error === "string" ? suggestBody.error : `HTTP ${suggestRes.status}`;
-        throw new Error(reason);
-      }
-      const name = suggestBody.name.trim();
-      if (!name) {
-        showToast({ kind: "error", message: t("Auto-naming returned an empty name") });
-        return;
-      }
-
-      // Auto-mode post-LLM race check: a sidebar rename during the LLM
-      // call now wins — silent skip, no error toast (Q3 = A).
-      if (mode === "auto" && currentSessionNameRef.current && currentSessionNameRef.current.trim()) {
-        return;
-      }
-
-      const patchRes = await fetch(
-        `/api/sessions/${encodeURIComponent(sessionId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        },
-      );
-      if (!patchRes.ok) {
-        const body = (await patchRes.json().catch(() => ({}))) as { error?: unknown };
-        const reason = typeof body.error === "string" ? body.error : `HTTP ${patchRes.status}`;
-        throw new Error(reason);
-      }
-
-      onSessionNameChange?.(name);
-      try { await onRenameCompleted?.(); } catch { /* sidebar refresh is best-effort */ }
-      if (mode === "manual") {
-        showToast({ kind: "success", message: `${t("Renamed")} ${name}` });
-      }
-    } catch (error) {
-      showToast({
-        kind: "error",
-        message: `${t("Auto-naming failed")}: ${
-          error instanceof Error && error.message ? error.message : t("Network error")
-        }`,
-      });
-    } finally {
-      setIsAutoNaming(false);
-    }
-  }, [
-    sessionId,
+  // ── Auto-naming: the runner, its 1s silent timer, the requests, the toasts
+  // and the shell reporting all live in the local hook. The rules (which mode
+  // may run when, plus the two rename-race checks) live in
+  // `lib/shared/auto-naming.ts`. ──
+  const {
     isAutoNaming,
+    canAutoName,
+    handleAutoName,
+    handleFirstAssistantReady: autoNameFirstAssistantReady,
+  } = useAutoNaming({
+    session,
     agentRunning,
     firstUserMessageText,
-    currentSessionName,
-    confirm,
     showToast,
+    confirm,
+    t,
     onSessionNameChange,
     onRenameCompleted,
-    t,
-  ]);
-
-  // Keep the timer-side ref pointing at the latest closure so it always
-  // sees the freshest sessionId / agentRunning / currentSessionName.
+    onFirstAssistantReady,
+  });
+  // Feed the hook's first-assistant handler to the stable delegate that was
+  // passed to useAgentSession before the hook could be called (see
+  // autoNameReadyRef above). Assigned in an effect, not during render, so a
+  // concurrent render never publishes a handler it later discards.
   useEffect(() => {
-    runAutoNameRef.current = runAutoName;
-  }, [runAutoName]);
-
-  // Manual button entry point — today's behavior (confirm + agent-running
-  // guard) lives in runAutoName({ mode: "manual" }).
-  const handleAutoName = useCallback(() => {
-    void runAutoName({ mode: "manual" });
-  }, [runAutoName]);
-
-  // Auto-name is only available when there's a session, a usable first user
-  // message, the agent isn't running, and no LLM call is already in flight.
-  const canAutoName = Boolean(
-    sessionId &&
-    firstUserMessageText &&
-    firstUserMessageText.trim() &&
-    !agentRunning &&
-    !isAutoNaming
-  );
+    autoNameReadyRef.current = autoNameFirstAssistantReady;
+  }, [autoNameFirstAssistantReady]);
 
   // ── Publish Replay / Export / Auto-name actions for the AppShell footer.
   // Rebuilt only when a dependency changes; the store's content guard then
   // skips AppShell re-renders when nothing actually changed. ──
   const headerActions = useMemo(() => ({
-    onOpenReplay: openReplay,
-    replayVisible: !streamState.isStreaming && !agentRunning && messages.length > 0,
+    onOpenReplay: replay.open,
+    replayVisible: replay.buttonVisible,
     onExport: handleExport,
     exportVisible: Boolean(session) && !agentRunning,
     isExporting,
@@ -1035,16 +694,15 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     compactVisible: Boolean(session) && !agentRunning,
     isCompacting: agentPhase?.kind === "compacting",
     compactDisabled: agentRunning,
-    // Reply-notification channel binding (MoreMenu entry). The loader
-    // callback is stable; the memo rebuilds only when the id changes.
-    onSetNotifyChannel: handleSetNotifyChannel,
+    // Reply-notification channel binding (MoreMenu entry). The setter is
+    // stable; the memo rebuilds only when the id changes.
+    onSetNotifyChannel: setNotifyChannel,
     notifyVisible: Boolean(session),
-    currentNotifyChannelId: sessionNotifyChannelId,
+    currentNotifyChannelId: boundChannelId,
   }), [
-    openReplay,
-    streamState.isStreaming,
+    replay.open,
+    replay.buttonVisible,
     agentRunning,
-    messages.length,
     handleExport,
     session,
     isExporting,
@@ -1053,8 +711,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     isAutoNaming,
     handleCompactClick,
     agentPhase,
-    handleSetNotifyChannel,
-    sessionNotifyChannelId,
+    setNotifyChannel,
+    boundChannelId,
   ]);
 
   useEffect(() => {
@@ -1251,8 +909,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
             <div style={{ marginTop: 26, display: "flex", justifyContent: "center" }}>
               <NewSessionNotifyPicker
-                value={notifyChannelId}
-                onChange={setNotifyChannelId}
+                value={pickedChannelId}
+                onChange={setPickedChannelId}
               />
             </div>
           </div>
@@ -1260,27 +918,25 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         </>
       ) : (
       <>
-      {replayActive && (
+      {replay.visible && (
         <ReplayBar
           total={messages.length}
-          index={replayIndex}
-          playing={replayPlaying}
-          speed={replaySpeed}
-          positionLabel={replayLabel}
-          onIndexChange={handleReplayIndexChange}
-          onPlayingChange={handleReplayPlayingChange}
-          onSpeedChange={handleReplaySpeedChange}
-          onClose={closeReplay}
+          index={replay.index}
+          playing={replay.playing}
+          speed={replay.speed}
+          positionLabel={replay.positionLabel}
+          onIndexChange={replay.onIndexChange}
+          onPlayingChange={replay.onPlayingChange}
+          onSpeedChange={replay.onSpeedChange}
+          onClose={replay.onClose}
         />
       )}
       <CollapseNonceProvider value={collapseNonce}>
       <div className="relative flex flex-1 overflow-hidden">
-        <div ref={scrollContainerRef} data-scroll-wide data-streaming-hide-scroll={liveTurnActive || undefined} onScroll={handleScroll} onWheel={handleWheel} onTouchMove={handleTouchMove} className="relative flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-20">
+        <div ref={scrollContainerRef} data-scroll-wide data-streaming-hide-scroll={liveTurnActive || undefined} onScroll={scrollFollow.handleScroll} onWheel={scrollFollow.handleWheel} onTouchMove={scrollFollow.handleTouchMove} className="relative flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-20">
           <div className="mx-auto max-w-[820px]">
 
             {(() => {
-              let refIdx = 0;
-
               // Render one message at idx. Optional messageOverride renders a
               // clone (used for the process/answer split of the final assistant).
               // attachRef:false skips the wrapper div + ref — used when the same
@@ -1306,8 +962,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   msg.role === "user" && idx > 0 && renderMessages[idx - 1].role === "assistant"
                     ? renderEntryIds[idx - 1]
                     : undefined;
-                const isVisible = msg.role === "user" || msg.role === "assistant";
-                const currentRefIdx = isVisible && opts.attachRef !== false ? refIdx++ : -1;
+                const isVisible = isVisibleChatMessage(msg);
+                // The ref slot is the message's visible index, read from the
+                // timeline projection instead of counted here.
+                const currentRefIdx =
+                  isVisible && opts.attachRef !== false ? timeline.visibleIndexOfSession(idx) : -1;
                 let showTimestamp = opts.showTimestamp ?? false;
                 if (opts.showTimestamp === undefined) {
                   showTimestamp = false;
@@ -1337,9 +996,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     prevAssistantEntryId={agentRunning ? undefined : prevAssistantEntryId}
                     onEditContent={(content) => chatInputRef?.current?.insertIfEmpty(content)}
                     showTimestamp={showTimestamp}
-                    keywords={searchKeywords}
-                    highlightEntryId={highlightEntryId}
-                    isSearchMatch={matchedEntryIds.has(renderEntryIds[idx])}
+                    keywords={search.keywords}
+                    highlightEntryId={search.highlightEntryId}
+                    isSearchMatch={search.matchedEntryIds.has(renderEntryIds[idx])}
                     afterContent={opts.afterContent}
                     turnDuration={turnDurationMap.get(idx)}
                     readFiles={opts.readFiles}
@@ -1594,8 +1253,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                         <StreamingMessageViewport
                           tabId={streamingKey}
                           userScrollingUpRef={userScrolledUpRef}
-                          onResumeAutoScroll={handleStreamingViewportResume}
-                          onHeightIncrease={handleStreamingViewportHeightIncrease}
+                          onResumeAutoScroll={scrollFollow.handleResume}
+                          onHeightIncrease={scrollFollow.handleHeightIncrease}
                         >
                           {streamingRendered}
                           {!streamingErrorAlreadyRendered && (
@@ -1760,14 +1419,14 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
             <button
               type="button"
               onClick={handleToBottom}
-              disabled={!showToBottom}
+              disabled={!scrollFollow.showToBottom}
               aria-label={t("Scroll to bottom")}
               className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100"
               style={{
                 background: "var(--bg-panel)",
                 borderColor: "var(--border)",
-                color: showToBottom ? "var(--text-muted)" : "var(--text-dim)",
-                opacity: showToBottom ? 1 : 0.45,
+                color: scrollFollow.showToBottom ? "var(--text-muted)" : "var(--text-dim)",
+                opacity: scrollFollow.showToBottom ? 1 : 0.45,
               }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1791,10 +1450,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         {session && (
           <SessionSearch
             sessionId={session.id}
-            visible={searchVisible}
-            onJumpTo={handleSearchJumpTo}
-            onResultsChange={handleSearchResultsChange}
-            onClose={handleSearchClose}
+            visible={search.visible}
+            onJumpTo={search.handleJumpTo}
+            onResultsChange={search.handleResultsChange}
+            onClose={search.handleClose}
           />
         )}
         {chatInputElement}
