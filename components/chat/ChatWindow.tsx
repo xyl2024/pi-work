@@ -6,11 +6,11 @@ import type {
   AssistantMessage,
   SessionInfo,
   ToolCallContent,
-  ToolResultMessage,
   ReadFileInfo,
   CompactionPoint,
 } from "@/lib/shared/types";
 import { countToolCallsByName } from "@/lib/shared/message-display";
+import { buildChatTimeline, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
 import { getFileName } from "@/lib/shared/file-paths";
 import { extractEditDiffStats, extractWriteDiffStats, sumDiffStats, type ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
@@ -49,6 +49,7 @@ import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 import { NewSessionNotifyPicker } from "./chat-window/NewSessionNotifyPicker";
 import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
 import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
+import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
 
@@ -438,13 +439,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
   }, [scrollContainerRef]);
 
-  // ── In-session search state ──
-  const [searchVisible, setSearchVisible] = useState(false);
-  const [searchKeywords, setSearchKeywords] = useState<string[]>([]);
-  const [matchedEntryIds, setMatchedEntryIds] = useState<Set<string>>(new Set());
-  const [highlightEntryId, setHighlightEntryId] = useState<string | null>(null);
-  const [pendingJumpEntryId, setPendingJumpEntryId] = useState<string | null>(null);
-
   // ── Replay ("time travel"): message-level scrubber. All state is local so it
   // resets on session switch (ChatWindow remounts via key={sessionKey}). ──
   const [replayOpen, setReplayOpen] = useState(false);
@@ -480,26 +474,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     setCollapseNonce((n) => n + 1);
   }, []);
 
-  // ── In-session search: Ctrl+F toggle ──
+  // ── Replay: reset on session change. (In-session search resets inside
+  // useSessionSearch, which owns that state.) ──
   useEffect(() => {
-    if (!isActive) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "f" && session) {
-        e.preventDefault();
-        setSearchVisible((v) => !v);
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [isActive, session]);
-
-  // ── In-session search: close on session change ──
-  useEffect(() => {
-    setSearchVisible(false);
-    setSearchKeywords([]);
-    setMatchedEntryIds(new Set());
-    setHighlightEntryId(null);
-    setPendingJumpEntryId(null);
     setReplayOpen(false);
     setReplayPlaying(false);
   }, [session?.id]);
@@ -513,58 +490,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     }
   }, [streamState.isStreaming, agentRunning]);
 
-  // ── In-session search: results change callback ──
-  const handleSearchResultsChange = useCallback((ids: string[], keyword: string) => {
-    setMatchedEntryIds(new Set(ids));
-    setSearchKeywords(keyword ? [keyword] : []);
-    if (!keyword) setHighlightEntryId(null);
-  }, []);
-
-  // ── In-session search: jump to a message ──
-  const handleSearchJumpTo = useCallback((entryId: string, leafId: string) => {
-    // Navigate to the branch containing this message
-    handleNavigate(leafId);
-    setPendingJumpEntryId(entryId);
-  }, [handleNavigate]);
-
-  // ── In-session search: close callback ──
-  const handleSearchClose = useCallback(() => {
-    setSearchVisible(false);
-    setSearchKeywords([]);
-    setMatchedEntryIds(new Set());
-    setHighlightEntryId(null);
-  }, []);
-
-  // ── In-session search: scroll to entry after branch switch ──
-  useEffect(() => {
-    if (!pendingJumpEntryId) return;
-    const idx = entryIds.indexOf(pendingJumpEntryId);
-    if (idx === -1) return;
-
-    // Compute visible message index
-    let visibleIdx = 0;
-    for (let i = 0; i < idx; i++) {
-      const m = messages[i];
-      if (m && (m.role === "user" || m.role === "assistant")) visibleIdx++;
-    }
-
-    const el = messageRefs.current[visibleIdx];
-    const container = scrollContainerRef.current;
-    if (el && container) {
-      userScrolledUpRef.current = false;
-      setShowToBottom(false);
-      const elTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
-      container.scrollTo({ top: elTop - 20, behavior: "smooth" });
-    }
-
-    setHighlightEntryId(pendingJumpEntryId);
-    setPendingJumpEntryId(null);
-
-    // Flash highlight off after 2s
-    const timer = setTimeout(() => setHighlightEntryId(null), 2000);
-    return () => clearTimeout(timer);
-  }, [pendingJumpEntryId, entryIds, messages, scrollContainerRef]);
-
   // Streaming output is followed by StreamingMessageViewport. ChatWindow
   // intentionally does not move the page-level scrollport while content grows;
   // this keeps a user's outer scroll position stable after they scroll up.
@@ -575,29 +500,53 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
   const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } = useDragDrop(onDrop);
 
-  const visibleMessages = messages.filter((m) => m.role === "user" || m.role === "assistant");
+  // The chat timeline projection is the single source of "which messages are
+  // visible, how session indices map to visible ones, and where a tool call
+  // lands". The in-session search hook and the render ref array read it.
+  const timeline = useMemo(
+    () => buildChatTimeline({ messages, entryIds, entryTimestamps }),
+    [messages, entryIds, entryTimestamps],
+  );
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
-  messageRefs.current = Array(visibleMessages.length)
+  messageRefs.current = Array(timeline.visibleCount)
     .fill(null)
     .map((_, i) => messageRefs.current[i] ?? null);
+
+  // An explicit jump (a search hit, a tool-call row) re-engages streaming
+  // follow: the user asked to go somewhere, so the view should stick there.
+  const reengageScrollFollow = useCallback(() => {
+    userScrolledUpRef.current = false;
+    setShowToBottom(false);
+  }, []);
+
+  // ── In-session search ──
+  // State and the entry → visible index jump rule live in the hook, which
+  // resolves entries through the timeline projection above.
+  const search = useSessionSearch({
+    isActive,
+    sessionId: session?.id ?? null,
+    timeline,
+    scrollContainerRef,
+    messageRefs,
+    onExplicitScroll: reengageScrollFollow,
+    onNavigate: handleNavigate,
+  });
 
   // Replay is only active for a settled (non-streaming) session. When active,
   // the chat renders only messages[0..replayIndex]; toolResultsMap is still
   // built from the FULL messages so a tool call still pairs with its result
   // even when the result sits past the cutoff.
   const replayActive = replayOpen && !streamState.isStreaming && !agentRunning;
-  const renderMessages = replayActive ? messages.slice(0, replayIndex) : messages;
-  const renderEntryIds = replayActive ? entryIds.slice(0, replayIndex) : entryIds;
-  const renderEntryTimestamps = replayActive ? entryTimestamps.slice(0, replayIndex) : entryTimestamps;
+  const renderSlice = timeline.sliceForReplay(replayActive ? replayIndex : null);
+  const renderMessages = renderSlice.messages;
+  const renderEntryIds = renderSlice.entryIds;
+  const renderEntryTimestamps = renderSlice.entryTimestamps;
 
   // Tool results are shared by historical messages and the live viewport. The
   // latter needs the in-flight overlay too, so a running tool can keep showing
   // partial output inside the fixed-height area.
   const toolResultsMap = useMemo(() => {
-    const map = new Map<string, ToolResultMessage>();
-    for (const msg of messages) {
-      if (msg.role === "toolResult") map.set(msg.toolCallId, msg);
-    }
+    const map = indexToolResults(messages);
     for (const [id, partial] of inFlightToolResults) {
       if (!map.has(id)) map.set(id, partial);
     }
@@ -716,40 +665,20 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     setReplayOpen(true);
   }, [messages.length]);
 
-  // Map every visible tool call's toolCallId to its visible message index.
-  // Used by handleScrollToToolCall; rebuilt when messages change so newly
-  // streamed tool calls become jumpable without delay.
-  const toolCallToVisibleIdx = useMemo(() => {
-    const map = new Map<string, number>();
-    let vi = 0;
-    for (const msg of messages) {
-      if (msg.role !== "user" && msg.role !== "assistant") continue;
-      if (msg.role === "assistant") {
-        for (const block of (msg as AssistantMessage).content ?? []) {
-          if (block.type === "toolCall") {
-            map.set((block as ToolCallContent).toolCallId, vi);
-          }
-        }
-      }
-      vi++;
-    }
-    return map;
-  }, [messages]);
-
-  // Scroll a tool call into view by its toolCallId. Shared between the stats
-  // drawer (click on a tool name).
+  // Scroll a tool call into view by its toolCallId, resolving the landing
+  // message through the timeline projection. Shared between the stats drawer
+  // (click on a tool name).
   const handleScrollToToolCall = useCallback((toolCallId: string) => {
-    const idx = toolCallToVisibleIdx.get(toolCallId);
+    const idx = timeline.toolCallVisibleIndices.get(toolCallId);
     if (idx === undefined) return;
     const el = messageRefs.current[idx];
     const container = scrollContainerRef.current;
     if (el && container) {
-      userScrolledUpRef.current = false;
-      setShowToBottom(false);
+      reengageScrollFollow();
       const elTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
       container.scrollTo({ top: elTop - 20, behavior: "smooth" });
     }
-  }, [toolCallToVisibleIdx, messageRefs, scrollContainerRef]);
+  }, [timeline, messageRefs, scrollContainerRef, reengageScrollFollow]);
 
   // Register the scroll callback with the module store so the right-panel tab
   // body can jump to a tool-call message when the user clicks a row. Clear on
@@ -1073,8 +1002,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           <div className="mx-auto max-w-[820px]">
 
             {(() => {
-              let refIdx = 0;
-
               // Render one message at idx. Optional messageOverride renders a
               // clone (used for the process/answer split of the final assistant).
               // attachRef:false skips the wrapper div + ref — used when the same
@@ -1100,8 +1027,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   msg.role === "user" && idx > 0 && renderMessages[idx - 1].role === "assistant"
                     ? renderEntryIds[idx - 1]
                     : undefined;
-                const isVisible = msg.role === "user" || msg.role === "assistant";
-                const currentRefIdx = isVisible && opts.attachRef !== false ? refIdx++ : -1;
+                const isVisible = isVisibleChatMessage(msg);
+                // The ref slot is the message's visible index, read from the
+                // timeline projection instead of counted here.
+                const currentRefIdx =
+                  isVisible && opts.attachRef !== false ? timeline.visibleIndexOfSession(idx) : -1;
                 let showTimestamp = opts.showTimestamp ?? false;
                 if (opts.showTimestamp === undefined) {
                   showTimestamp = false;
@@ -1131,9 +1061,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     prevAssistantEntryId={agentRunning ? undefined : prevAssistantEntryId}
                     onEditContent={(content) => chatInputRef?.current?.insertIfEmpty(content)}
                     showTimestamp={showTimestamp}
-                    keywords={searchKeywords}
-                    highlightEntryId={highlightEntryId}
-                    isSearchMatch={matchedEntryIds.has(renderEntryIds[idx])}
+                    keywords={search.keywords}
+                    highlightEntryId={search.highlightEntryId}
+                    isSearchMatch={search.matchedEntryIds.has(renderEntryIds[idx])}
                     afterContent={opts.afterContent}
                     turnDuration={turnDurationMap.get(idx)}
                     readFiles={opts.readFiles}
@@ -1585,10 +1515,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         {session && (
           <SessionSearch
             sessionId={session.id}
-            visible={searchVisible}
-            onJumpTo={handleSearchJumpTo}
-            onResultsChange={handleSearchResultsChange}
-            onClose={handleSearchClose}
+            visible={search.visible}
+            onJumpTo={search.handleJumpTo}
+            onResultsChange={search.handleResultsChange}
+            onClose={search.handleClose}
           />
         )}
         {chatInputElement}
