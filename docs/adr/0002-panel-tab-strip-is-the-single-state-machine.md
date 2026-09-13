@@ -4,7 +4,7 @@ Every rule of the right panel used to live in `AppShell`: a 14-variant tab union
 
 We decided that the strip itself is one pure state machine in the shared layer: `lib/shared/panelTabs.ts` holds the identity registry (kind → tab id, label key, default mode, session binding, optional command entry) and a reducer over `{ tabs, activeId, mode }` with the actions `open` / `open_file` / `activate` / `toggle` / `close` / `close_left` / `close_right` / `close_others` / `set_mode`. Selectors expose the active tab and kind, `isOpen`, `hasTabs`, and `canExpand(state, layoutMode)` — the last one absorbing Classic ("open ⇒ visible") vs Agentic ("open and non-empty ⇒ visible"). Labels are stored as keys and resolved at render, so open tabs follow a locale switch. Each tab carries an `openCount` bumped on every open, replacing the per-panel counters that panels observe for refresh/focus.
 
-Presentation deliberately stays out: the right-bar descriptors keep the icon and body, looked up by kind. Adding a panel view is therefore two registrations (one spec, one descriptor entry) instead of the eight places it used to take, and file preview tabs share the same strip and the same close rules as panel views. The module ends with a compatibility adapter (`toLegacyTabs`, `toLegacyPanelState`) that reproduces the shapes the shell uses today, so the UI can be moved over in slices rather than in one rewrite.
+Presentation deliberately stays out: the right-bar descriptors keep the icon and body, looked up by kind. Adding a panel view is therefore two registrations (one spec, one descriptor entry) instead of the eight places it used to take, and file preview tabs share the same strip and the same close rules as panel views. The shell consumes the reducer state directly — there is no adapter layer, and the `RIGHT_BAR_ID_FOR_TAB_KIND` map that used to sit in `lib/shared/types.ts` is derived from the registry (`panelButtonIdForKind`).
 
 ## Considered options
 
@@ -16,5 +16,6 @@ Presentation deliberately stays out: the right-bar descriptors keep the icon and
 
 - `panelTabs` may not import React, the DOM, the client hooks or anything server-side; the layout mode is passed in as `PanelLayoutMode` instead of read from the client store.
 - The registry is keyed by `RightBarButtonId`, so a new right-bar button cannot ship without a panel identity, and a panel kind cannot appear without a button id.
-- Until the shell is rewired, the adapter is the only bridge: it speaks today's `Tab[]` and the right-bar context fields, and it is what the migration slices delete, one entry point at a time.
+- The shell keeps no panel state: `AppShell` dispatches actions, reads `selectActiveTab` / `selectOpenCount` directly, and the tab bar renders `PanelTab`s by resolving `labelKey` at render time.
+- Palette panel commands and right-bar buttons share one toggle path (`togglePanel`), matching "clicking the active view collapses the panel".
 - Behaviour is intentionally unchanged, including "close falls back to the oldest tab" and "the palette commands toggle rather than open"; any change to those rules is a separate product decision.

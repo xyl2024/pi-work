@@ -6,25 +6,30 @@ import {
   KANBAN_TAB_ID,
   NOTES_TAB_ID,
   RSS_TAB_ID,
-  TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
 import {
+  PANEL_BUTTON_ID_BY_KIND,
   PANEL_TAB_KINDS,
   PANEL_TAB_SPECS,
   createPanelTabsState,
   fileTabId,
+  panelButtonIdForKind,
   panelTabsReducer,
   selectActiveKind,
   selectActiveTab,
   selectCanExpand,
   selectHasTabs,
   selectIsOpen,
-  toLegacyPanelState,
-  toLegacyTabs,
+  selectOpenCount,
   type PanelTabsAction,
   type PanelTabsState,
 } from "@/lib/shared/panelTabs";
+import {
+  PANEL_COMMAND_ICON_BY_KIND,
+  RIGHT_BAR_BUTTON_IDS,
+  RIGHT_BAR_DESCRIPTORS,
+} from "@/components/panels/right-bar/desc";
 
 /** Apply a list of actions in order — mirrors how the shell dispatches them. */
 function reduce(state: PanelTabsState, ...actions: PanelTabsAction[]): PanelTabsState {
@@ -391,34 +396,96 @@ describe("panelTabs registry", () => {
   });
 });
 
-describe("panelTabs compat adapter", () => {
-  const t = (key: string) => `[${key}]`;
-
-  it("maps state onto today's tab strip shape", () => {
+describe("panelTabs file-deletion cascade", () => {
+  it("closes the deleted file's tab and every tab under the deleted directory", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "tokens" },
-      { type: "open_file", path: "/tmp/a.ts", label: "a.ts" },
+      { type: "open_file", path: "/repo/src/a.ts", label: "a.ts" },
+      { type: "open_file", path: "/repo/src/nested/b.ts", label: "b.ts" },
+      { type: "open_file", path: "/repo/src/keep.ts", label: "keep.ts" },
+      { type: "open", kind: "translate" },
+      { type: "close_files_under", path: "/repo/src" },
     );
 
-    expect(toLegacyTabs(state, t)).toEqual([
-      { kind: "file", id: fileTabId("/tmp/a.ts"), label: "a.ts", filePath: "/tmp/a.ts" },
-      { kind: "tokens", id: TOKENS_TAB_ID, label: "[Token audit]" },
-    ]);
+    expect(kinds(state)).toEqual(["translate"]);
+    expect(state.activeId).toBe("translate:global");
+    expect(selectIsOpen(state)).toBe(true);
   });
 
-  it("maps state onto today's right-bar panel fields", () => {
+  it("closes only an exact match when a file, not a directory, was deleted", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "kanban" },
-      { type: "set_mode", mode: "closed" },
+      { type: "open_file", path: "/repo/src/a.ts", label: "a.ts" },
+      { type: "open_file", path: "/repo/src/a.ts.bak", label: "a.ts.bak" },
+      { type: "close_files_under", path: "/repo/src/a.ts" },
     );
 
-    expect(toLegacyPanelState(state)).toEqual({
-      rightPanelState: "closed",
-      activeTabKind: null,
-      hasOpenTabs: true,
-      activeTabId: KANBAN_TAB_ID,
-    });
+    expect(kinds(state)).toEqual(["file"]);
+    expect(state.tabs[0].id).toBe(fileTabId("/repo/src/a.ts.bak"));
+  });
+
+  it("collapses the strip when the cascade removes every tab", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open_file", path: "/repo/src/a.ts", label: "a.ts" },
+      { type: "open_file", path: "/repo/src/b.ts", label: "b.ts" },
+      { type: "open_file", path: "/repo/src/c.ts", label: "c.ts" },
+      // Newest-first: c, b, a — c is active and gets closed by the cascade.
+      { type: "close_files_under", path: "/repo/src" },
+    );
+
+    expect(state.tabs).toEqual([]);
+    expect(state.activeId).toBe(null);
+    expect(state.mode).toBe("closed");
+  });
+
+  it("ignores a path that no open tab matches", () => {
+    const before = reduce(
+      createPanelTabsState(),
+      { type: "open_file", path: "/repo/keep.ts", label: "keep.ts" },
+    );
+    const after = reduce(before, { type: "close_files_under", path: "/repo/gone" });
+
+    expect(after).toBe(before);
+  });
+});
+
+describe("panelTabs open count selector", () => {
+  it("reports 0 for a view that was never opened and the re-open count otherwise", () => {
+    const once = reduce(createPanelTabsState(), { type: "open", kind: "gitDiff" });
+    const twice = reduce(once, { type: "open", kind: "gitDiff" });
+
+    expect(selectOpenCount(twice, "tokens")).toBe(0);
+    expect(selectOpenCount(once, "gitDiff")).toBe(1);
+    expect(selectOpenCount(twice, "gitDiff")).toBe(2);
+  });
+});
+
+describe("panelTabs registry ↔ right-bar presentation", () => {
+  it("has exactly one presentation entry per panel view kind", () => {
+    const descriptorKinds = RIGHT_BAR_DESCRIPTORS
+      .map((desc) => desc.panelKind)
+      .filter((kind): kind is NonNullable<typeof kind> => kind !== undefined)
+      .sort();
+
+    expect(descriptorKinds).toEqual([...PANEL_TAB_KINDS].sort());
+  });
+
+  it("keeps the right-bar default order aligned with the registry", () => {
+    expect([...RIGHT_BAR_BUTTON_IDS]).toEqual([...PANEL_TAB_KINDS]);
+  });
+
+  it("gives every command-bearing spec a palette icon from the same entry", () => {
+    for (const spec of PANEL_TAB_SPECS) {
+      if (!spec.command) continue;
+      expect(PANEL_COMMAND_ICON_BY_KIND[spec.kind]).toBeTruthy();
+    }
+  });
+
+  it("derives exactly one right-bar button id per panel kind", () => {
+    const ids = PANEL_TAB_KINDS.map((kind) => PANEL_BUTTON_ID_BY_KIND[kind]);
+    expect(ids.every(Boolean)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(panelButtonIdForKind("file")).toBe(null);
   });
 });

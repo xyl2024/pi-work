@@ -16,11 +16,9 @@
 //
 // Presentation (icon and panel body) deliberately stays outside this module:
 // the right-bar descriptors look a body up by kind. Adding a panel view is two
-// registrations — one spec here, one presentation entry there.
-//
-// The compatibility adapter at the bottom maps the new state onto the shapes
-// the shell uses today (`Tab[]` + the right-bar context fields), so the UI can
-// be migrated to this state machine in slices without a big-bang rewrite.
+// registrations — one spec here, one presentation entry there. The shell holds
+// the reducer state directly, so there is no adapter layer duplicating the tab
+// shape here.
 
 import type { RightBarButtonId } from "./right-bar";
 import {
@@ -89,9 +87,17 @@ export interface PanelTab<K extends PanelTabKind = PanelTabKind> {
   label?: string;
 }
 
+/**
+ * The strip's tab shape, distributed over every kind so `tab.kind`
+ * discriminates `tab.params` and `tab.labelKey` at the type level. This is the
+ * only place the kind ↔ payload link is declared; callers narrow by kind
+ * instead of maintaining their own unions.
+ */
+export type AnyPanelTab = { [K in PanelTabKind]: PanelTab<K> }[PanelTabKind];
+
 export interface PanelTabsState {
   /** Open tabs, newest first — the order the strip renders them in. */
-  tabs: PanelTab[];
+  tabs: AnyPanelTab[];
   activeId: string | null;
   mode: PanelMode;
 }
@@ -107,6 +113,8 @@ export type PanelTabsAction =
   | { type: "close_left"; id: string }
   | { type: "close_right"; id: string }
   | { type: "close_others"; id: string }
+  // Cascade of a deleted path: closes every file preview tab at or under it.
+  | { type: "close_files_under"; path: string }
   | { type: "set_mode"; mode: PanelMode };
 
 export function createPanelTabsState(): PanelTabsState {
@@ -286,7 +294,7 @@ function upgradeMode(current: PanelMode, target: Exclude<PanelMode, "closed">): 
 function createPanelTab<K extends PanelViewKind>(
   kind: K,
   params?: PanelTabParams[K],
-): PanelTab {
+): AnyPanelTab {
   const spec = PANEL_TAB_SPEC_BY_KIND[kind];
   return {
     id: spec.tabId,
@@ -294,13 +302,13 @@ function createPanelTab<K extends PanelViewKind>(
     labelKey: spec.labelKey,
     params,
     openCount: 1,
-  };
+  } as AnyPanelTab;
 }
 
 /** Keep `activeId` when it survived the cut, otherwise fall back to the ref tab. */
 function keepActive(
   activeId: string | null,
-  tabs: readonly PanelTab[],
+  tabs: readonly AnyPanelTab[],
   fallbackId: string,
 ): string | null {
   if (activeId === null) return null;
@@ -308,8 +316,17 @@ function keepActive(
 }
 
 /** Count the open on the tab that already had this id (re-opens included). */
-function bumpOpenCount(tabs: readonly PanelTab[], id: string): PanelTab[] {
+function bumpOpenCount(tabs: readonly AnyPanelTab[], id: string): AnyPanelTab[] {
   return tabs.map((tab) => (tab.id === id ? { ...tab, openCount: tab.openCount + 1 } : tab));
+}
+
+/** True when `path` is the deleted path itself or lives under it. */
+function isPathAtOrUnder(path: string, deleted: string): boolean {
+  return (
+    path === deleted ||
+    path.startsWith(deleted + "/") ||
+    path.startsWith(deleted + "\\")
+  );
 }
 
 /**
@@ -320,7 +337,9 @@ function bumpOpenCount(tabs: readonly PanelTab[], id: string): PanelTab[] {
  *   • closing the active tab falls back to the oldest remaining tab (tabs are
  *     stored newest-first, so that is the last element);
  *   • closing the last tab collapses the panel, while the batch closes always
- *     keep the reference tab and therefore never empty the strip.
+ *     keep the reference tab and therefore never empty the strip;
+ *   • deleting a file (or directory) closes every file tab at or under it in
+ *     one step — the cascade is a rule of the strip, not of the shell.
  */
 export function panelTabsReducer(
   state: PanelTabsState,
@@ -349,7 +368,7 @@ export function panelTabsReducer(
               params: { path: action.path },
               label: action.label,
               openCount: 1,
-            } satisfies PanelTab,
+            } satisfies AnyPanelTab,
             ...state.tabs,
           ];
       return { tabs, activeId: id, mode: upgradeMode(state.mode, "normal") };
@@ -397,6 +416,16 @@ export function panelTabsReducer(
       return { ...state, tabs: [state.tabs[index]], activeId: action.id };
     }
 
+    case "close_files_under": {
+      const tabs = state.tabs.filter(
+        (tab) => !(tab.kind === "file" && isPathAtOrUnder(tab.params.path, action.path)),
+      );
+      if (tabs.length === state.tabs.length) return state;
+      if (tabs.length === 0) return { tabs, activeId: null, mode: "closed" };
+      if (tabs.some((tab) => tab.id === state.activeId)) return { ...state, tabs };
+      return { tabs, activeId: tabs[tabs.length - 1].id, mode: state.mode };
+    }
+
     case "set_mode":
       return { ...state, mode: action.mode };
   }
@@ -404,12 +433,26 @@ export function panelTabsReducer(
 
 // ── Selectors ────────────────────────────────────────────────────────────
 
-export function selectTab(state: PanelTabsState, id: string): PanelTab | null {
+export function selectTab(state: PanelTabsState, id: string): AnyPanelTab | null {
   return state.tabs.find((tab) => tab.id === id) ?? null;
 }
 
-export function selectActiveTab(state: PanelTabsState): PanelTab | null {
+export function selectActiveTab(state: PanelTabsState): AnyPanelTab | null {
   return state.activeId === null ? null : selectTab(state, state.activeId);
+}
+
+/** The strip's tab for a panel view, open or not. */
+export function selectTabByKind(state: PanelTabsState, kind: PanelViewKind): AnyPanelTab | null {
+  return state.tabs.find((tab) => tab.kind === kind) ?? null;
+}
+
+/**
+ * How many times a panel view has been opened, 0 when it never was. Drives
+ * re-open side effects (git-diff refresh, BTW focus) without a second
+ * counter living in the shell.
+ */
+export function selectOpenCount(state: PanelTabsState, kind: PanelViewKind): number {
+  return selectTabByKind(state, kind)?.openCount ?? 0;
 }
 
 /** Active strip kind — null while the panel is collapsed. */
@@ -436,46 +479,21 @@ export function selectCanExpand(state: PanelTabsState, layoutMode: PanelLayoutMo
   return layoutMode === "agentic" ? selectHasTabs(state) : true;
 }
 
-// ── Compatibility adapter ────────────────────────────────────────────────
-// Shapes the shell uses today. `LegacyPanelTab` structurally matches
-// components/ui/TabBar's `Tab`, and the panel fields match the right-bar
-// context, so the shell can switch over one slice at a time.
+// ── Kind → right-bar button id ─────────────────────────────────────────
+// Derived from the registry instead of a second hand-kept mapping: the
+// registry is already keyed by `RightBarButtonId`, so flipping it gives the
+// button that owns each panel view (and nothing for the file preview, which
+// has no configurable button behind it).
 
-export type LegacyPanelTab =
-  | { kind: "file"; id: string; label: string; filePath: string }
-  | { kind: PanelViewKind; id: string; label: string };
+export const PANEL_BUTTON_ID_BY_KIND: Record<PanelViewKind, RightBarButtonId> =
+  Object.fromEntries(
+    Object.entries(PANEL_TAB_SPEC_BY_KIND).map(([buttonId, spec]) => [
+      spec.kind,
+      buttonId,
+    ]),
+  ) as Record<PanelViewKind, RightBarButtonId>;
 
-/** Today's strip shape: labels baked with `t()`, file tabs keeping their path. */
-export function toLegacyTabs(
-  state: PanelTabsState,
-  t: (key: string) => string,
-): LegacyPanelTab[] {
-  return state.tabs.map((tab): LegacyPanelTab =>
-    tab.kind === "file"
-      ? {
-          kind: "file",
-          id: tab.id,
-          label: tab.label ?? "",
-          filePath: tab.params?.path ?? "",
-        }
-      : { kind: tab.kind, id: tab.id, label: t(tab.labelKey ?? "") },
-  );
-}
-
-export interface LegacyPanelState {
-  /** Today's name for `mode` in the right-bar context. */
-  rightPanelState: PanelMode;
-  activeTabKind: PanelTabKind | null;
-  hasOpenTabs: boolean;
-  activeTabId: string | null;
-}
-
-/** Today's panel fields of the right-bar context. */
-export function toLegacyPanelState(state: PanelTabsState): LegacyPanelState {
-  return {
-    rightPanelState: state.mode,
-    activeTabKind: selectActiveKind(state),
-    hasOpenTabs: selectHasTabs(state),
-    activeTabId: state.activeId,
-  };
+/** Button id behind a strip kind; null for the file preview. */
+export function panelButtonIdForKind(kind: PanelTabKind): RightBarButtonId | null {
+  return kind === "file" ? null : PANEL_BUTTON_ID_BY_KIND[kind];
 }

@@ -1,14 +1,19 @@
 // ── Right-bar button column: descriptor registry ────────────────────────
 // Single source of truth for every button in the 36×36 column on the right
-// edge of AppShell. Adding a new toggle-button is a one-line append to
-// RIGHT_BAR_DESCRIPTORS and (only if its id is hidden-able) a matching
-// RIGHT_BAR_ID_FOR_TAB_KIND entry in lib/types.ts so the auto-close effect
-// knows how to dismiss it when the user hides its button.
+// edge of AppShell. Adding a new toggle-button is a two-line change:
+//
+//   1. register the panel identity in `lib/shared/panelTabs`
+//      (PANEL_TAB_SPEC_BY_KIND — tab id, label key, default mode, session
+//      binding, optional command-palette entry), then
+//   2. add one presentation entry here (icon / body / disabled rule).
+//
+// Everything behavioural — which button opens which panel, what "click the
+// active button" does, the ordering — is derived from that registry, so this
+// file never restates it.
 //
 // Two kinds of descriptors:
 //   - 'fixed'      — always visible, not in right_side_bar config, no
-//                    user-toggleable hidden state. Panel toggle (top),
-//                    expand/collapse (middle, conditional).
+//                    user-toggleable hidden state. Panel toggle (top).
 //   - 'configurable' — managed by RightSideBarConfig: each id has a boolean
 //                    visibility flag and an optional position in
 //                    `order` (see lib/config.ts). Settings modal lays them
@@ -18,25 +23,16 @@
 // through the ctx for state, and write via the callbacks it exposes.
 
 import type { ReactNode } from "react";
-import type { LayoutMode } from "@/hooks/layoutModeStore";
 import type { RightBarButtonId } from "@/lib/shared/right-bar";
 import { CountBadge } from "@/components/ui/CountBadge";
 import {
-  BTW_TAB_ID,
-  FAVORITES_TAB_ID,
-  TRANSLATE_TAB_ID,
-  TOOL_CALLS_TAB_ID,
-  RSS_TAB_ID,
-  TOKENS_TAB_ID,
-  GIT_DIFF_TAB_ID,
-  CONVERSATION_TREE_TAB_ID,
-  LLM_AUDIT_TAB_ID,
-  CONTEXT_TAB_ID,
-  GITHUB_TRENDING_TAB_ID,
-  KANBAN_TAB_ID,
-  NOTES_TAB_ID,
-} from "@/lib/shared/types";
-import type { Tab } from "@/components/ui/TabBar";
+  PANEL_BUTTON_ID_BY_KIND,
+  PANEL_TAB_KINDS,
+  PANEL_TAB_SPEC_BY_KIND,
+  type PanelMode,
+  type PanelTabKind,
+  type PanelViewKind,
+} from "@/lib/shared/panelTabs";
 import {
   Bot,
   ChartColumn,
@@ -54,36 +50,12 @@ import {
 } from "lucide-react";
 import GithubIcon from "@lobehub/icons/es/Github/components/Mono";
 
-// Tab kinds the right column toggles. Kept narrow so an accidental
-// Tab.kind value surfaces as a type error in the descriptor registry.
-export type RightBarTabKind = Extract<
-  Tab["kind"],
-  | "translate"
-  | "rss"
-  | "favorites"
-  | "tokens"
-  | "gitDiff"
-  | "conversationTree"
-  | "llmAudit"
-  | "context"
-  | "btw"
-  | "githubTrending"
-  | "kanban"
->;
-
 export interface RightBarCtx {
   // ── observed state ──
-  rightPanelState: "closed" | "normal" | "expanded";
-  /** Agentic / Classic layout. Descriptors like token audit
-   *  use it to decide whether opening them should auto-expand the panel
-   *  (Agentic: the panel takes the
-   *  full column; Classic: the panel sits next to the chat, so expanding
-   *  would hide it). */
-  layoutMode: LayoutMode;
-  activeTabKind: Tab["kind"] | null;
-  /** True when at least one tab is open in the right panel. Used by the
-   *  expand/collapse button to gate itself. */
-  hasOpenTabs: boolean;
+  /** The panel's own open state (see panelTabs). */
+  rightPanelState: PanelMode;
+  /** Kind of the strip's active tab, null while the panel is collapsed. */
+  activeTabKind: PanelTabKind | null;
   selectedSessionId: string | null;
   selectedCwd: string | null;
   rssUnread: number;
@@ -98,28 +70,13 @@ export interface RightBarCtx {
   t: (key: string) => string;
 
   // ── mutators ──
+  /** Collapse the panel when open, reopen it otherwise. */
   toggleRightPanel: () => void;
-  /** Standard toggle behavior for tab buttons: if `tabId` is already the
-   *  active tab and the panel is open, close the panel; otherwise open
-   *  the tab. The descriptor passes the appropriate openTab() so callers
-   *  never have to know how each tab is constructed. */
-  toggleRightPanelTab: (tabId: string, openTab: () => void) => void;
-  setRightPanelState: (s: "closed" | "normal" | "expanded") => void;
-  openTab: {
-    translate: () => void;
-    rss: () => void;
-    gitDiff: () => void;
-    favorites: () => void;
-    tokens: () => void;
-    toolCalls: () => void;
-    conversationTree: () => void;
-    llmAudit: () => void;
-    context: () => void;
-    btw: () => void;
-    githubTrending: () => void;
-    kanban: () => void;
-    notes: () => void;
-  };
+  /** The single toggle rule: reveal the view, or collapse the panel when
+   *  that view is already the active, open tab. Every panel entry point
+   *  (right-bar button, command palette) goes through this. */
+  togglePanel: (kind: PanelViewKind) => void;
+  setRightPanelState: (s: PanelMode) => void;
 }
 
 export interface RightBarDescriptor {
@@ -128,6 +85,9 @@ export interface RightBarDescriptor {
    *  reserved id 'panelToggle' (top, always visible). */
   id: RightBarButtonId | "panelToggle";
   kind: "fixed" | "configurable";
+  /** For configurable entries: the panel view this button toggles. Lets the
+   *  registry (and the tests) check the button ↔ panel link in one place. */
+  panelKind?: PanelViewKind;
   /** Visual slot — 'top' renders above the configurable row. Undefined =
    *  inline (renders among the configurable row, in user-configured
    *  order). 'bottom' is reserved for legacy slots registered through
@@ -146,8 +106,7 @@ export interface RightBarDescriptor {
   badge?: (ctx: RightBarCtx) => ReactNode | null;
   isActive: (ctx: RightBarCtx) => boolean;
   isDisabled?: (ctx: RightBarCtx) => boolean;
-  /** Optional visibility predicate. Defaults to always-true. Used by the
-   *  expand button (only when the panel has tabs and is open). */
+  /** Optional visibility predicate. Defaults to always-true. */
   isVisible?: (ctx: RightBarCtx) => boolean;
   /** Body of the button — typically an icon node, or icon+label for the
    *  tool-calls button. */
@@ -156,6 +115,10 @@ export interface RightBarDescriptor {
    *  { flexDirection: 'column', gap: 1 } to stack the icon and the
    *  running/total counter. */
   bodyLayout?: { flexDirection?: "row" | "column"; gap?: number };
+  /** Icon for the generated command-palette entry. Only panels whose spec
+   *  opts into a command need one; the palette falls back to nothing
+   *  otherwise. */
+  commandIcon?: ReactNode;
   onClick: (ctx: RightBarCtx) => void;
 }
 
@@ -176,230 +139,176 @@ const panelToggleDescriptor: RightBarDescriptor = {
   // Wrap so we can swap the tooltip when active.
 };
 
-// Configurable: panel buttons. Their default order in the Settings list
-// is the order they appear here — DESC defaults to this ordering when
-// `cfg.order` is undefined.
+// Configurable: one entry per panel view. Identity (button id, tab id,
+// session binding) and behaviour (active state, click = toggle) come from the
+// panel registry; only presentation is declared here.
+function panelButton(
+  kind: PanelViewKind,
+  presentation: {
+    labelKey: string;
+    content: (ctx: RightBarCtx) => ReactNode;
+    commandIcon?: ReactNode;
+    isDisabled?: (ctx: RightBarCtx) => boolean;
+    badge?: (ctx: RightBarCtx) => ReactNode | null;
+    bodyLayout?: RightBarDescriptor["bodyLayout"];
+  },
+): RightBarDescriptor {
+  const buttonId = PANEL_BUTTON_ID_BY_KIND[kind];
+  const spec = PANEL_TAB_SPEC_BY_KIND[buttonId];
+  return {
+    id: buttonId,
+    kind: "configurable",
+    panelKind: kind,
+    labelKey: presentation.labelKey,
+    isActive: (ctx) => ctx.activeTabKind === kind,
+    onClick: (ctx) => ctx.togglePanel(kind),
+    content: presentation.content,
+    ...(spec.sessionBound ? { sessionBound: true as const } : {}),
+    ...(presentation.commandIcon ? { commandIcon: presentation.commandIcon } : {}),
+    ...(presentation.isDisabled ? { isDisabled: presentation.isDisabled } : {}),
+    ...(presentation.badge ? { badge: presentation.badge } : {}),
+    ...(presentation.bodyLayout ? { bodyLayout: presentation.bodyLayout } : {}),
+  };
+}
 
-const translateDescriptor: RightBarDescriptor = {
-  id: "translate",
-  kind: "configurable",
-  labelKey: "Open translate",
-  isActive: (ctx) => ctx.activeTabKind === "translate",
-  content: () => <Languages size={16} />,
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(TRANSLATE_TAB_ID, ctx.openTab.translate),
-};
-
-const rssDescriptor: RightBarDescriptor = {
-  id: "rss",
-  kind: "configurable",
-  labelKey: "RSS",
-  isActive: (ctx) => ctx.activeTabKind === "rss",
-  badge: (ctx) => <CountBadge count={ctx.rssUnread} size="sm" />,
-  content: () => <Rss size={16} />,
-  onClick: (ctx) => ctx.toggleRightPanelTab(RSS_TAB_ID, ctx.openTab.rss),
-};
-
-const gitDiffDescriptor: RightBarDescriptor = {
-  id: "gitDiff",
-  kind: "configurable",
+// Declaration order below is the default Settings / command-palette order.
+const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
+  context: panelButton("context", {
+    labelKey: "Context",
+    content: () => <Bot size={16} />,
+  }),
+  translate: panelButton("translate", {
+    labelKey: "Open translate",
+    content: () => <Languages size={16} />,
+    commandIcon: <Languages size={16} />,
+  }),
+  rss: panelButton("rss", {
+    labelKey: "RSS",
+    badge: (ctx) => <CountBadge count={ctx.rssUnread} size="sm" />,
+    content: () => <Rss size={16} />,
+  }),
+  // GitHub Trending: global (not session-bound) — public data anyone can
+  // browse. Defaults right after RSS in the configurable row: another
+  // "external feed" panel, so they sit shoulder-to-shoulder. The button and
+  // tab-bar glyph is the GitHub Octocat (brand icon), not a generic arrow.
+  githubTrending: panelButton("githubTrending", {
+    labelKey: "GitHub Trending",
+    content: () => <GithubIcon size={16} />,
+  }),
   // Cwd-derived (one repo per active session) — treated as session-bound
   // for column layout so it pins with the other "live state" buttons.
-  sessionBound: true,
-  labelKey: "Open git diff",
-  isActive: (ctx) => ctx.activeTabKind === "gitDiff",
-  // Disabled when there's no cwd at all (no selected session, no
-  // in-flight new-session cwd) — matches the original inline guard.
-  isDisabled: (ctx) => !ctx.selectedCwd,
-  content: () => <GitGraph size={16} />,
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(GIT_DIFF_TAB_ID, ctx.openTab.gitDiff),
-};
-
-const favoritesDescriptor: RightBarDescriptor = {
-  id: "favorites",
-  kind: "configurable",
-  labelKey: "Open favorites",
-  isActive: (ctx) => ctx.activeTabKind === "favorites",
-  // Active state uses fill="var(--accent)" instead of just the color flip,
-  // matching the original star and the tab-bar icon.
-  content: (ctx) => (
-    <Star
-      size={16}
-      fill={ctx.activeTabKind === "favorites" ? "var(--accent)" : "none"}
-    />
-  ),
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(FAVORITES_TAB_ID, ctx.openTab.favorites),
-};
-
-const tokensDescriptor: RightBarDescriptor = {
-  id: "tokens",
-  kind: "configurable",
-  labelKey: "Open token audit",
-  isActive: (ctx) => ctx.activeTabKind === "tokens",
-  content: () => <ChartSpline size={16} />,
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(TOKENS_TAB_ID, ctx.openTab.tokens),
-};
-
-const llmAuditDescriptor: RightBarDescriptor = {
-  id: "llmAudit",
-  kind: "configurable",
-  sessionBound: true,
-  labelKey: "Open LLM API audit",
-  isActive: (ctx) => ctx.activeTabKind === "llmAudit",
-  content: () => <ChartColumn size={16} />,
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(LLM_AUDIT_TAB_ID, ctx.openTab.llmAudit),
-};
-
-const contextDescriptor: RightBarDescriptor = {
-  id: "context",
-  kind: "configurable",
-  sessionBound: true,
-  labelKey: "Context",
-  isActive: (ctx) => ctx.activeTabKind === "context",
-  content: () => <Bot size={16} />,
-  onClick: (ctx) => ctx.toggleRightPanelTab(CONTEXT_TAB_ID, ctx.openTab.context),
-};
-
-// BTW (By the way): session-bound, reads from the active main session.
-// Disabled when there's no stable sessionId yet. The button shows the
-// animated speech-bubble-with-dots glyph so the user can spot it without
-// reading, while the tooltip keeps the "Open BTW" label (an i18n key,
-// never inlined into the glyph).
-const btwDescriptor: RightBarDescriptor = {
-  id: "btw",
-  kind: "configurable",
-  sessionBound: true,
-  labelKey: "Open BTW",
-  isActive: (ctx) => ctx.activeTabKind === "btw",
-  isDisabled: (ctx) => !ctx.selectedSessionId,
-  // Speech-bubble-with-more glyph — matches the tab-bar icon.
-  content: () => <MessageSquareMore size={16} />,
-  onClick: (ctx) => ctx.toggleRightPanelTab(BTW_TAB_ID, ctx.openTab.btw),
-};
-
-const toolCallsDescriptor: RightBarDescriptor = {
-  id: "toolCalls",
-  kind: "configurable",
-  sessionBound: true,
-  labelKey: "Tool Calls",
-  isActive: (ctx) => ctx.activeTabKind === "toolCalls",
-  content: (ctx) => {
-    const { runningCount, totalCount } = ctx.toolStats;
-    const badgeColor =
-      runningCount > 0
-        ? "var(--accent)"
-        : totalCount > 0
-          ? "var(--text-muted)"
-          : null;
-    return (
-      <>
-        <Wrench size={16} />
-        {badgeColor !== null && (
-          <span
-            style={{
-              fontSize: 9,
-              lineHeight: "10px",
-              fontFamily: "var(--font-mono)",
-              fontWeight: 600,
-              color: badgeColor,
-            }}
-          >
-            {runningCount > 0 ? `${runningCount}/${totalCount}` : totalCount}
-          </span>
-        )}
-      </>
-    );
-  },
-  bodyLayout: { flexDirection: "column", gap: 1 },
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(TOOL_CALLS_TAB_ID, ctx.openTab.toolCalls),
-};
-
-// GitHub Trending: global (not session-bound) — public data anyone can
-// browse. Defaults right after RSS in the configurable row: another
-// "external feed" panel, so they sit shoulder-to-shoulder. The button and
-// tab-bar glyph is the GitHub Octocat (brand icon), not a generic arrow.
-const githubTrendingDescriptor: RightBarDescriptor = {
-  id: "githubTrending",
-  kind: "configurable",
-  labelKey: "GitHub Trending",
-  isActive: (ctx) => ctx.activeTabKind === "githubTrending",
-  content: () => <GithubIcon size={16} />,
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(
-      GITHUB_TRENDING_TAB_ID,
-      ctx.openTab.githubTrending,
+  gitDiff: panelButton("gitDiff", {
+    labelKey: "Open git diff",
+    // Disabled when there's no cwd at all (no selected session, no
+    // in-flight new-session cwd) — matches the original inline guard.
+    isDisabled: (ctx) => !ctx.selectedCwd,
+    content: () => <GitGraph size={16} />,
+    commandIcon: <GitGraph size={16} />,
+  }),
+  favorites: panelButton("favorites", {
+    labelKey: "Open favorites",
+    // Active state uses fill="var(--accent)" instead of just the color flip,
+    // matching the original star and the tab-bar icon.
+    content: (ctx) => (
+      <Star size={16} fill={ctx.activeTabKind === "favorites" ? "var(--accent)" : "none"} />
     ),
-};
-
-const conversationTreeDescriptor: RightBarDescriptor = {
-  id: "conversationTree",
-  kind: "configurable",
-  sessionBound: true,
-  labelKey: "Open conversation tree",
-  isActive: (ctx) => ctx.activeTabKind === "conversationTree",
-  isDisabled: (ctx) => !ctx.selectedSessionId && !ctx.selectedCwd,
-  content: () => <GitBranch size={16} />,
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(
-      CONVERSATION_TREE_TAB_ID,
-      ctx.openTab.conversationTree,
-    ),
-};
-
-// Kanban: global board (spans all cwds), not session-bound. Clicking it opens
-// the right panel in the expanded state so the four columns have room, while
-// a second click collapses the panel like any other toggle button.
-const kanbanDescriptor: RightBarDescriptor = {
-  id: "kanban",
-  kind: "configurable",
-  labelKey: "Kanban",
-  isActive: (ctx) => ctx.activeTabKind === "kanban",
-  content: () => <SquareKanban size={16} />,
-  onClick: (ctx) =>
-    ctx.toggleRightPanelTab(KANBAN_TAB_ID, ctx.openTab.kanban),
-};
-
-// Notes: global personal note-taking board, not session-bound. It stores
-// plain markdown under ~/.pi-work/user-notes and is intended for the human
-// user (the agent stays out of it).
-const notesDescriptor: RightBarDescriptor = {
-  id: "notes",
-  kind: "configurable",
-  labelKey: "Notes",
-  isActive: (ctx) => ctx.activeTabKind === "notes",
-  content: () => <NotebookText size={16} />,
-  onClick: (ctx) => ctx.toggleRightPanelTab(NOTES_TAB_ID, ctx.openTab.notes),
+    commandIcon: <Star size={16} />,
+  }),
+  tokens: panelButton("tokens", {
+    labelKey: "Open token audit",
+    content: () => <ChartSpline size={16} />,
+    commandIcon: <ChartSpline size={16} />,
+  }),
+  llmAudit: panelButton("llmAudit", {
+    labelKey: "Open LLM API audit",
+    content: () => <ChartColumn size={16} />,
+    commandIcon: <ChartColumn size={16} />,
+  }),
+  toolCalls: panelButton("toolCalls", {
+    labelKey: "Tool Calls",
+    content: (ctx) => {
+      const { runningCount, totalCount } = ctx.toolStats;
+      const badgeColor =
+        runningCount > 0
+          ? "var(--accent)"
+          : totalCount > 0
+            ? "var(--text-muted)"
+            : null;
+      return (
+        <>
+          <Wrench size={16} />
+          {badgeColor !== null && (
+            <span
+              style={{
+                fontSize: 9,
+                lineHeight: "10px",
+                fontFamily: "var(--font-mono)",
+                fontWeight: 600,
+                color: badgeColor,
+              }}
+            >
+              {runningCount > 0 ? `${runningCount}/${totalCount}` : totalCount}
+            </span>
+          )}
+        </>
+      );
+    },
+    commandIcon: <Wrench size={16} />,
+    bodyLayout: { flexDirection: "column", gap: 1 },
+  }),
+  conversationTree: panelButton("conversationTree", {
+    labelKey: "Open conversation tree",
+    isDisabled: (ctx) => !ctx.selectedSessionId && !ctx.selectedCwd,
+    content: () => <GitBranch size={16} />,
+  }),
+  // BTW (By the way): session-bound, reads from the active main session.
+  // Disabled when there's no stable sessionId yet. The button shows the
+  // animated speech-bubble-with-dots glyph so the user can spot it without
+  // reading, while the tooltip keeps the "Open BTW" label (an i18n key,
+  // never inlined into the glyph).
+  btw: panelButton("btw", {
+    labelKey: "Open BTW",
+    isDisabled: (ctx) => !ctx.selectedSessionId,
+    content: () => <MessageSquareMore size={16} />,
+  }),
+  // Kanban: global board (spans all cwds), not session-bound. Its spec
+  // declares an expanded default open state so the four columns have room,
+  // while a second click collapses the panel like any other toggle button.
+  kanban: panelButton("kanban", {
+    labelKey: "Kanban",
+    content: () => <SquareKanban size={16} />,
+  }),
+  // Notes: global personal note-taking board, not session-bound. It stores
+  // plain markdown under ~/.pi-work/user-notes and is intended for the human
+  // user (the agent stays out of it).
+  notes: panelButton("notes", {
+    labelKey: "Notes",
+    content: () => <NotebookText size={16} />,
+  }),
 };
 
 export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   // 'fixed' group
   panelToggleDescriptor,
-  // 'configurable' group — order here is the implicit default order used
-  // when the user hasn't customized `cfg.order`.
-  contextDescriptor,
-  translateDescriptor,
-  rssDescriptor,
-  githubTrendingDescriptor,
-  gitDiffDescriptor,
-  favoritesDescriptor,
-  tokensDescriptor,
-  llmAuditDescriptor,
-  toolCallsDescriptor,
-  conversationTreeDescriptor,
-  btwDescriptor,
-  kanbanDescriptor,
-  notesDescriptor,
-] as const;
+  // 'configurable' group — order follows the panel registry, which is also
+  // the implicit default order used when the user hasn't customized
+  // `cfg.order`.
+  ...PANEL_TAB_KINDS.map((kind) => PANEL_DESCRIPTOR_BY_KIND[kind]),
+];
 
-// Tab.kind → RightBarButtonId reverse lookup lives in `lib/types.ts` as a
-// plain object literal — there is intentionally no cycle between this
-// descriptor module and `lib/types.ts` (this module depends on lib/types
-// for tab id constants, so lib/types cannot depend on this module).
+/** Command-palette icon per panel kind, from the same presentation entries
+ *  the right-bar column uses. Reads the descriptor so an icon is declared
+ *  exactly once. */
+export const PANEL_COMMAND_ICON_BY_KIND: Partial<Record<PanelViewKind, ReactNode>> =
+  Object.fromEntries(
+    PANEL_TAB_KINDS.flatMap((kind) => {
+      const icon = PANEL_DESCRIPTOR_BY_KIND[kind].commandIcon;
+      return icon ? [[kind, icon] as const] : [];
+    }),
+  );
+
+// Tab.kind → RightBarButtonId reverse lookup is derived from the registry in
+// `lib/shared/panelTabs` (`panelButtonIdForKind`) — no second mapping here.
 
 /** Configureable ids, in declaration order (the default Settings ordering
  *  the user sees when no custom order is set). */

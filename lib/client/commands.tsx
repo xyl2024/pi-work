@@ -5,17 +5,13 @@ import type { ThemePreset } from "@/hooks/useTheme";
 import { PRESETS } from "@/hooks/useTheme";
 import type { Locale } from "@/hooks/useI18n";
 import { ICONS } from "@/components/ui/icons";
+import { PANEL_TAB_SPECS, type PanelViewKind } from "@/lib/shared/panelTabs";
 import {
-  ChartColumn,
-  ChartSpline,
-  GitGraph,
   Languages,
   LetterText,
   PanelRight,
   FolderOpen,
-  Star,
   Store,
-  Wrench,
 } from "lucide-react";
 
 // ── AgentControls ────────────────────────────────────────────────────────
@@ -46,14 +42,9 @@ const BookIcon = ICONS.book;
 
 const ClockIcon = ICONS.clock;
 
-// Keep right-panel command icons identical to the right-bar descriptors.
+// Keep the right-panel toggle command icon identical to the right-bar
+// descriptor's.
 const RightPanelIcon = () => <PanelRight size={16} />;
-const FavoritesPanelIcon = () => <Star size={16} />;
-const TranslatePanelIcon = () => <Languages size={16} />;
-const ToolCallsPanelIcon = () => <Wrench size={16} />;
-const TokensPanelIcon = () => <ChartSpline size={16} />;
-const GitDiffPanelIcon = () => <GitGraph size={16} />;
-const LlmAuditPanelIcon = () => <ChartColumn size={16} />;
 const CwdPickerIcon = () => <FolderOpen size={16} />;
 const ToolMarketIcon = () => <Store size={16} />;
 const EnglishLanguageIcon = () => <LetterText size={16} />;
@@ -115,17 +106,14 @@ export interface CommandContext {
   openChannels: () => void;
   openToolMarket: () => void;
 
-  // Right-panel tabs
-  openFavoritesTab: () => void;
-  openTranslateTab: () => void;
-  openToolCallsTab: () => void;
-  openTokensTab: () => void;
-  openGitDiffTab: () => void;
-  openLlmAuditTab: () => void;
-
   // View toggles
   toggleSidebar: () => void;
   toggleRightPanel: () => void;
+
+  /** The single panel toggle rule, shared by the right-bar buttons and the
+   *  generated panel commands: reveal the view, or collapse the panel when
+   *  it is already the active open tab. */
+  togglePanel: (kind: PanelViewKind) => void;
 
   // Imperative agent controls — null when no ChatWindow is mounted.
   agentControls: AgentControls | null;
@@ -137,7 +125,36 @@ export interface CommandContext {
 
 // ── buildCommands ────────────────────────────────────────────────────────
 
-export function buildCommands(ctx: CommandContext, t: (key: string) => string): Command[] {
+/**
+ * Panel commands generated from the panel registry instead of hand-written
+ * entries: only specs that opt in (`spec.command`) get one, and running it
+ * goes through the same toggle rule as the right-bar button.
+ */
+function buildPanelCommands(
+  ctx: CommandContext,
+  t: (key: string) => string,
+  icons: Partial<Record<PanelViewKind, ReactNode>>,
+): Command[] {
+  return PANEL_TAB_SPECS.flatMap((spec): Command[] => {
+    if (!spec.command) return [];
+    return [
+      {
+        id: `panel.${spec.kind}`,
+        title: t(spec.command.labelKey),
+        group: "Panel",
+        keywords: [...spec.command.keywords],
+        icon: icons[spec.kind] ?? null,
+        run: () => ctx.togglePanel(spec.kind),
+      },
+    ];
+  });
+}
+
+export function buildCommands(
+  ctx: CommandContext,
+  t: (key: string) => string,
+  panelIcons: Partial<Record<PanelViewKind, ReactNode>> = {},
+): Command[] {
   const cmds: Command[] = [];
 
   // ── Session ──
@@ -209,56 +226,8 @@ export function buildCommands(ctx: CommandContext, t: (key: string) => string): 
     run: () => ctx.toggleRightPanel(),
   });
   // ── Panel ──
-  cmds.push({
-    id: "panel.favorites",
-    title: t("Open favorites"),
-    group: "Panel",
-    keywords: ["favorite", "star", "collection", "收藏", "星标"],
-    icon: <FavoritesPanelIcon />,
-    run: () => ctx.openFavoritesTab(),
-  });
-  cmds.push({
-    id: "panel.translate",
-    title: t("Open translate"),
-    group: "Panel",
-    keywords: ["translate", "translation", "翻译"],
-    icon: <TranslatePanelIcon />,
-    run: () => ctx.openTranslateTab(),
-  });
-  cmds.push({
-    id: "panel.toolcalls",
-    title: t("Open tool calls"),
-    group: "Panel",
-    keywords: ["tool", "calls", "stats", "工具", "调用", "统计"],
-    icon: <ToolCallsPanelIcon />,
-    run: () => ctx.openToolCallsTab(),
-  });
-  cmds.push({
-    id: "panel.tokens",
-    title: t("Open token audit"),
-    group: "Panel",
-    keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
-    icon: <TokensPanelIcon />,
-    run: () => ctx.openTokensTab(),
-  });
-  cmds.push({
-    id: "panel.gitdiff",
-    title: t("Open git diff"),
-    group: "Panel",
-    keywords: ["git", "diff", "changes", "status", "变更", "改动", "差异"],
-    icon: <GitDiffPanelIcon />,
-    run: () => ctx.openGitDiffTab(),
-  });
-
-  cmds.push({
-    id: "panel.llmAudit",
-    title: t("Open LLM API audit"),
-    group: "Panel",
-    keywords: ["llm", "api", "audit", "request", "response", "调用", "审计", "请求", "响应"],
-    icon: <LlmAuditPanelIcon />,
-    run: () => ctx.openLlmAuditTab(),
-  });
-
+  // One command per registry spec that opts in; see buildPanelCommands.
+  cmds.push(...buildPanelCommands(ctx, t, panelIcons));
   // ── Modal (5) ──
   cmds.push({
     id: "modal.settings",

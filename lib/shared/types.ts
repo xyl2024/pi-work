@@ -442,45 +442,6 @@ export const GITHUB_TRENDING_TAB_ID = "githubTrending:global";
 export const KANBAN_TAB_ID = "kanban:global";
 export const NOTES_TAB_ID = "notes:global";
 
-// Map a Tab.kind back to the corresponding configurable right-bar button id.
-// Used by AppShell's auto-close effect: when a panel whose button was just
-// hidden is currently active, close the panel. "file" intentionally returns
-// undefined — file tabs have no configurable button behind them and must
-// stay open even if every toggle-button is hidden.
-//
-// Lives in lib/types.ts (not in components/rightBar/desc) to keep
-// dependencies one-way: desc.tsx imports tab id constants from here,
-// so this module can't re-export from desc without creating a cycle
-// that crashes Turbopack at module evaluation time.
-import type { RightBarButtonId } from "./right-bar";
-type TabKindForAutoClose =
-  | "file"
-  | "translate"
-  | "toolCalls"
-  | "rss"
-  | "favorites"
-  | "tokens"
-  | "gitDiff"
-  | "conversationTree"
-  | "llmAudit"
-  | "context"
-  | "btw"
-  | "githubTrending"
-  | "kanban"
-  | "notes";
-export const RIGHT_BAR_ID_FOR_TAB_KIND: Partial<
-  Record<TabKindForAutoClose, RightBarButtonId>
-> = {
-  translate: "translate",
-  favorites: "favorites",
-  tokens: "tokens",
-  toolCalls: "toolCalls",
-  gitDiff: "gitDiff",
-  conversationTree: "conversationTree",
-  llmAudit: "llmAudit",
-  context: "context",
-  btw: "btw",
-  githubTrending: "githubTrending",
-  kanban: "kanban",
-  notes: "notes",
-};
+// Map a Tab.kind back to the corresponding configurable right-bar button id
+// lives in `lib/shared/panelTabs` (`panelButtonIdForKind`), derived from the
+// panel registry — there is no second hand-kept mapping here.
