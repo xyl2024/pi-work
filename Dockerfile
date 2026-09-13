@@ -84,9 +84,7 @@ COPY --from=builder /app/next.config.ts    ./
 #   `npm install --ignore-scripts` skips postinstalls for every native dep
 #   (canvas, lightningcss, ...), so they sit in node_modules uncompiled.
 #   Then we rebuild ONLY better-sqlite3 and node-pty against THIS image's
-#   Node ABI. canvas is only needed for server-side Excalidraw PNG export,
-#   which pi-work doesn't do — the client uses the browser's native
-#   canvas. lightningcss is a postcss plugin used only at build time, so
+#   Node ABI. lightningcss is a postcss plugin used only at build time, so
 #   it's irrelevant at runtime.
 #
 #   NOTE: we deliberately use `npm install` instead of `npm ci` here. The
