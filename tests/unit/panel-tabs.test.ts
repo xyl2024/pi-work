@@ -1,0 +1,424 @@
+import { describe, expect, it } from "vitest";
+import {
+  BTW_TAB_ID,
+  FAVORITES_TAB_ID,
+  GIT_DIFF_TAB_ID,
+  KANBAN_TAB_ID,
+  NOTES_TAB_ID,
+  RSS_TAB_ID,
+  TOKENS_TAB_ID,
+  TRANSLATE_TAB_ID,
+} from "@/lib/shared/types";
+import {
+  PANEL_TAB_KINDS,
+  PANEL_TAB_SPECS,
+  createPanelTabsState,
+  fileTabId,
+  panelTabsReducer,
+  selectActiveKind,
+  selectActiveTab,
+  selectCanExpand,
+  selectHasTabs,
+  selectIsOpen,
+  toLegacyPanelState,
+  toLegacyTabs,
+  type PanelTabsAction,
+  type PanelTabsState,
+} from "@/lib/shared/panelTabs";
+
+/** Apply a list of actions in order — mirrors how the shell dispatches them. */
+function reduce(state: PanelTabsState, ...actions: PanelTabsAction[]): PanelTabsState {
+  return actions.reduce(panelTabsReducer, state);
+}
+
+/** Panel kinds present in the strip, newest first. */
+function kinds(state: PanelTabsState): string[] {
+  return state.tabs.map((tab) => tab.kind);
+}
+
+function openCount(state: PanelTabsState, id: string): number | undefined {
+  return state.tabs.find((tab) => tab.id === id)?.openCount;
+}
+
+describe("panelTabs open", () => {
+  it("opens a panel view once, activating it and opening the strip", () => {
+    const state = reduce(createPanelTabsState(), { type: "open", kind: "translate" });
+
+    expect(kinds(state)).toEqual(["translate"]);
+    expect(selectActiveTab(state)?.kind).toBe("translate");
+    expect(selectActiveKind(state)).toBe("translate");
+    expect(selectIsOpen(state)).toBe(true);
+    expect(state.mode).toBe("normal");
+  });
+
+  it("reuses the tab of an already open panel view and keeps it active", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "translate" },
+      { type: "open", kind: "favorites" },
+      { type: "open", kind: "translate" },
+    );
+
+    expect(kinds(state)).toEqual(["favorites", "translate"]);
+    expect(selectActiveKind(state)).toBe("translate");
+  });
+
+  it("bumps openCount on every open, including re-opens", () => {
+    const once = reduce(createPanelTabsState(), { type: "open", kind: "gitDiff" });
+    const twice = reduce(once, { type: "open", kind: "gitDiff" });
+
+    expect(openCount(once, GIT_DIFF_TAB_ID)).toBe(1);
+    expect(openCount(twice, GIT_DIFF_TAB_ID)).toBe(2);
+  });
+
+  it("only upgrades the panel mode, never downgrades it", () => {
+    // Kanban declares an expanded default, so it widens a fresh strip.
+    const expanded = reduce(createPanelTabsState(), { type: "open", kind: "kanban" });
+    expect(expanded.mode).toBe("expanded");
+
+    // Opening a normal-default panel while expanded keeps it expanded.
+    const stillExpanded = reduce(expanded, { type: "open", kind: "translate" });
+    expect(stillExpanded.mode).toBe("expanded");
+
+    // Opening kanban re-uses its tab; from normal it upgrades to expanded.
+    const fromNormal = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "translate" },
+      { type: "open", kind: "kanban" },
+    );
+    expect(fromNormal.mode).toBe("expanded");
+
+    // …and a re-open of a normal panel does not pull it back down.
+    expect(reduce(fromNormal, { type: "open", kind: "translate" }).mode).toBe("expanded");
+  });
+
+  it("keeps file preview tabs and panel view tabs in one strip", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "translate" },
+      { type: "open_file", path: "/tmp/notes.md", label: "notes.md" },
+    );
+
+    expect(kinds(state)).toEqual(["file", "translate"]);
+    expect(state.tabs[0].id).toBe(fileTabId("/tmp/notes.md"));
+    expect(state.tabs[0].label).toBe("notes.md");
+    expect(selectActiveKind(state)).toBe("file");
+    expect(state.mode).toBe("normal");
+  });
+
+  it("reuses an already open file tab and bumps its openCount", () => {
+    const path = "/tmp/notes.md";
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open_file", path, label: "notes.md" },
+      { type: "open", kind: "translate" },
+      { type: "open_file", path, label: "notes.md" },
+    );
+
+    // Reusing the tab keeps its original position in the strip.
+    expect(kinds(state)).toEqual(["translate", "file"]);
+    expect(openCount(state, fileTabId(path))).toBe(2);
+    expect(selectActiveKind(state)).toBe("file");
+  });
+});
+
+describe("panelTabs toggle", () => {
+  it("opens the panel when its tab is not active", () => {
+    const state = reduce(createPanelTabsState(), { type: "toggle", kind: "btw" });
+
+    expect(selectIsOpen(state)).toBe(true);
+    expect(selectActiveKind(state)).toBe("btw");
+    expect(openCount(state, BTW_TAB_ID)).toBe(1);
+  });
+
+  it("collapses the panel when the toggled tab is active and the panel is open", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "btw" },
+      { type: "toggle", kind: "btw" },
+    );
+
+    // The tab stays in the strip so the next toggle reopens the same view.
+    expect(kinds(state)).toEqual(["btw"]);
+    expect(state.mode).toBe("closed");
+    expect(selectIsOpen(state)).toBe(false);
+    expect(selectActiveKind(state)).toBe(null);
+  });
+
+  it("reopens an already open tab whose panel was collapsed", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "btw" },
+      { type: "set_mode", mode: "closed" },
+      { type: "toggle", kind: "btw" },
+    );
+
+    expect(state.mode).toBe("normal");
+    expect(openCount(state, BTW_TAB_ID)).toBe(2);
+  });
+
+  it("toggles a different panel view instead of collapsing the active one", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "btw" },
+      { type: "toggle", kind: "translate" },
+    );
+
+    expect(state.mode).toBe("normal");
+    expect(selectActiveKind(state)).toBe("translate");
+  });
+});
+
+describe("panelTabs close", () => {
+  it("falls back to the oldest remaining tab when the active one closes", () => {
+    // Newest-first strip: kanban, translate, favorites (favorites is oldest).
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "favorites" },
+      { type: "open", kind: "translate" },
+      { type: "open", kind: "kanban" },
+      { type: "close", id: KANBAN_TAB_ID },
+    );
+
+    expect(kinds(state)).toEqual(["translate", "favorites"]);
+    expect(selectActiveKind(state)).toBe("favorites");
+    expect(state.mode).not.toBe("closed");
+  });
+
+  it("keeps the active tab when a background tab closes", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "favorites" },
+      { type: "open", kind: "translate" },
+      { type: "close", id: FAVORITES_TAB_ID },
+    );
+
+    expect(selectActiveKind(state)).toBe("translate");
+  });
+
+  it("collapses the strip when the last tab closes", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "notes" },
+      { type: "set_mode", mode: "expanded" },
+      { type: "close", id: NOTES_TAB_ID },
+    );
+
+    expect(state.tabs).toEqual([]);
+    expect(state.activeId).toBe(null);
+    expect(state.mode).toBe("closed");
+  });
+
+  it("ignores a close of an unknown tab", () => {
+    const before = reduce(createPanelTabsState(), { type: "open", kind: "notes" });
+    const after = reduce(before, { type: "close", id: "file:/tmp/gone.md" });
+
+    expect(after).toEqual(before);
+  });
+});
+
+describe("panelTabs batch close", () => {
+  // Newest-first strip used by the batch tests: translate, favorites, notes,
+  // rss — i.e. rss is the oldest tab.
+  function strip(): PanelTabsState {
+    return reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "rss" },
+      { type: "open", kind: "notes" },
+      { type: "open", kind: "favorites" },
+      { type: "open", kind: "translate" },
+    );
+  }
+
+  it("close_left drops the tabs left of the reference tab", () => {
+    const state = reduce(strip(), { type: "close_left", id: NOTES_TAB_ID });
+
+    expect(kinds(state)).toEqual(["notes", "rss"]);
+  });
+
+  it("close_left re-activates the reference tab when the active one was dropped", () => {
+    const state = reduce(
+      strip(),
+      { type: "activate", id: TRANSLATE_TAB_ID },
+      { type: "close_left", id: NOTES_TAB_ID },
+    );
+
+    expect(kinds(state)).toEqual(["notes", "rss"]);
+    expect(state.activeId).toBe(NOTES_TAB_ID);
+    expect(selectActiveKind(state)).toBe("notes");
+  });
+
+  it("close_right drops the tabs right of the reference tab", () => {
+    const state = reduce(strip(), { type: "close_right", id: FAVORITES_TAB_ID });
+
+    expect(kinds(state)).toEqual(["translate", "favorites"]);
+  });
+
+  it("close_right re-activates the reference tab when the active one was dropped", () => {
+    const state = reduce(
+      strip(),
+      { type: "activate", id: RSS_TAB_ID },
+      { type: "close_right", id: FAVORITES_TAB_ID },
+    );
+
+    expect(kinds(state)).toEqual(["translate", "favorites"]);
+    expect(state.activeId).toBe(FAVORITES_TAB_ID);
+  });
+
+  it("close_others keeps only the reference tab and activates it", () => {
+    const state = reduce(strip(), { type: "close_others", id: NOTES_TAB_ID });
+
+    expect(kinds(state)).toEqual(["notes"]);
+    expect(state.activeId).toBe(NOTES_TAB_ID);
+    expect(selectIsOpen(state)).toBe(true);
+  });
+
+  it("close_others never collapses the panel", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "notes" },
+      { type: "close_others", id: NOTES_TAB_ID },
+    );
+
+    expect(state.mode).not.toBe("closed");
+  });
+});
+
+describe("panelTabs selectors", () => {
+  it("reports a closed strip with no active tab", () => {
+    const state = createPanelTabsState();
+
+    expect(selectIsOpen(state)).toBe(false);
+    expect(selectHasTabs(state)).toBe(false);
+    expect(selectActiveTab(state)).toBe(null);
+    expect(selectActiveKind(state)).toBe(null);
+  });
+
+  it("hides the active kind while the panel is collapsed", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "context" },
+      { type: "set_mode", mode: "closed" },
+    );
+
+    expect(selectHasTabs(state)).toBe(true);
+    expect(selectActiveTab(state)?.kind).toBe("context");
+    expect(selectActiveKind(state)).toBe(null);
+  });
+
+  it("allows set_mode to downgrade on purpose", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "kanban" },
+      { type: "set_mode", mode: "normal" },
+    );
+
+    expect(state.mode).toBe("normal");
+  });
+
+  it("gates the expand button per layout mode", () => {
+    const closed = createPanelTabsState();
+    const openNoTabs = { ...createPanelTabsState(), mode: "normal" as const };
+    const openWithTabs = reduce(createPanelTabsState(), { type: "open", kind: "kanban" });
+
+    // Agentic: only visible once the strip actually has tabs.
+    expect(selectCanExpand(closed, "agentic")).toBe(false);
+    expect(selectCanExpand(openNoTabs, "agentic")).toBe(false);
+    expect(selectCanExpand(openWithTabs, "agentic")).toBe(true);
+
+    // Classic: visible whenever the panel is open.
+    expect(selectCanExpand(closed, "classic")).toBe(false);
+    expect(selectCanExpand(openNoTabs, "classic")).toBe(true);
+    expect(selectCanExpand(openWithTabs, "classic")).toBe(true);
+  });
+});
+
+describe("panelTabs registry", () => {
+  const DELETED_PANEL_KINDS = ["canvas", "json"];
+
+  it("declares a label key for every spec", () => {
+    for (const spec of PANEL_TAB_SPECS) {
+      expect(spec.labelKey).toBeTruthy();
+      if (spec.command) {
+        expect(spec.command.labelKey).toBeTruthy();
+        expect(spec.command.keywords.length).toBeGreaterThan(0);
+        for (const keyword of spec.command.keywords) expect(keyword).toBeTruthy();
+      }
+    }
+  });
+
+  it("gives every spec a unique tab id", () => {
+    const ids = PANEL_TAB_SPECS.map((spec) => spec.tabId);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) expect(id).toMatch(/^[a-zA-Z]+:global$/);
+  });
+
+  it("does not resurrect deleted panels", () => {
+    for (const deleted of DELETED_PANEL_KINDS) {
+      expect(PANEL_TAB_KINDS as readonly string[]).not.toContain(deleted);
+      expect(PANEL_TAB_SPECS.some((spec) => spec.tabId.startsWith(`${deleted}:`))).toBe(false);
+    }
+  });
+
+  it("covers exactly the panel views the shell knows about", () => {
+    expect([...PANEL_TAB_KINDS].sort()).toEqual(
+      [
+        "btw",
+        "context",
+        "conversationTree",
+        "favorites",
+        "gitDiff",
+        "githubTrending",
+        "kanban",
+        "llmAudit",
+        "notes",
+        "rss",
+        "tokens",
+        "toolCalls",
+        "translate",
+      ].sort(),
+    );
+  });
+
+  it("marks session-bound panels and only expands kanban by default", () => {
+    const sessionBound = PANEL_TAB_SPECS.filter((spec) => spec.sessionBound).map((spec) => spec.kind);
+    expect([...sessionBound].sort()).toEqual(
+      ["btw", "context", "conversationTree", "gitDiff", "llmAudit", "toolCalls"].sort(),
+    );
+
+    const expanded = PANEL_TAB_SPECS.filter((spec) => spec.defaultMode === "expanded").map((spec) => spec.kind);
+    expect(expanded).toEqual(["kanban"]);
+  });
+});
+
+describe("panelTabs compat adapter", () => {
+  const t = (key: string) => `[${key}]`;
+
+  it("maps state onto today's tab strip shape", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "tokens" },
+      { type: "open_file", path: "/tmp/a.ts", label: "a.ts" },
+    );
+
+    expect(toLegacyTabs(state, t)).toEqual([
+      { kind: "file", id: fileTabId("/tmp/a.ts"), label: "a.ts", filePath: "/tmp/a.ts" },
+      { kind: "tokens", id: TOKENS_TAB_ID, label: "[Token audit]" },
+    ]);
+  });
+
+  it("maps state onto today's right-bar panel fields", () => {
+    const state = reduce(
+      createPanelTabsState(),
+      { type: "open", kind: "kanban" },
+      { type: "set_mode", mode: "closed" },
+    );
+
+    expect(toLegacyPanelState(state)).toEqual({
+      rightPanelState: "closed",
+      activeTabKind: null,
+      hasOpenTabs: true,
+      activeTabId: KANBAN_TAB_ID,
+    });
+  });
+});
