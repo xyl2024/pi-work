@@ -56,16 +56,39 @@ export function CodeBlock({ code, lang }: Props) {
       style={{
         position: "relative",
         marginTop: 8,
-        marginBottom: 8,
-        borderRadius: 10,
-        overflow: "hidden",
-        border: "1px solid var(--border)",
-        background: "var(--bg)",
-        boxShadow: isDark
-          ? "0 6px 18px rgba(0,0,0,0.35)"
-          : "0 4px 14px rgba(0,0,0,0.08)",
+        marginBottom: 12,
+        /* `.markdown-body` clips horizontal overflow, so leave room on the
+           right for the shadow's overhang instead of relying on it. */
+        marginRight: 10,
       }}
     >
+      {/**
+       * Shadow layer: a blurred block offset toward bottom-right and tucked
+       * behind the opaque code surface (which has bg + border), so only the
+       * right and bottom edges cast a shadow — the top/left stay clean.
+       */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: 34,
+          left: 34,
+          right: -2,
+          bottom: -2,
+          borderRadius: 12,
+          background: isDark ? "rgba(0,0,0,0.26)" : "rgba(0,0,0,0.06)",
+          filter: "blur(8px)",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          borderRadius: 10,
+          overflow: "hidden",
+          border: "1px solid var(--border)",
+          background: "var(--bg)",
+        }}
+        >
       <SyntaxHighlighter
         language={lang || "text"}
         className="syntax-highlighted-code"
@@ -146,6 +169,7 @@ export function CodeBlock({ code, lang }: Props) {
             <MorphToggleIcon from={COPY} to={CHECK} active={copied} size={12} />
           </button>
         </Tooltip>
+      </div>
       </div>
     </div>
   );
