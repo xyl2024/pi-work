@@ -552,6 +552,15 @@ export function TranslatePanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
+            // Tab cycles the target language (zh ⇄ en) instead of moving
+            // focus out of the textarea. Shift+Tab behaves the same so users
+            // can toggle in either direction. Streaming locks the switch,
+            // matching the toolbar button's disabled state.
+            if (e.key === "Tab" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+              e.preventDefault();
+              if (!isStreaming) setTarget((prev) => (prev === "en" ? "zh" : "en"));
+              return;
+            }
             // Cmd/Ctrl+Enter triggers translation (or stops, if streaming).
             // Plain Enter still inserts a newline — translation is an
             // explicit action, not an auto-fire.
