@@ -230,7 +230,7 @@ export function UsageIcons({ usage }: { usage: { input: number; output: number; 
       label: `${usage.input.toLocaleString()} in · ${cacheHitRate.toFixed(1)}% cached`,
       icon: (
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M6 2.5v7" /><polyline points="3 6 6 9.5 9 6" />
+          <path d="M6 9.5v-7" /><polyline points="3 6 6 2.5 9 6" />
         </svg>
       ),
     });
@@ -241,7 +241,7 @@ export function UsageIcons({ usage }: { usage: { input: number; output: number; 
       label: `${usage.output.toLocaleString()} out`,
       icon: (
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M6 9.5v-7" /><polyline points="3 6 6 2.5 9 6" />
+          <path d="M6 2.5v7" /><polyline points="3 6 6 9.5 9 6" />
         </svg>
       ),
     });
