@@ -50,6 +50,7 @@ import { NewSessionNotifyPicker } from "./chat-window/NewSessionNotifyPicker";
 import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
 import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
 import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
+import { useReplay } from "./chat-window/hooks/useReplay";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
 
@@ -439,22 +440,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
   }, [scrollContainerRef]);
 
-  // ── Replay ("time travel"): message-level scrubber. All state is local so it
-  // resets on session switch (ChatWindow remounts via key={sessionKey}). ──
-  const [replayOpen, setReplayOpen] = useState(false);
-  const [replayIndex, setReplayIndex] = useState(0);
-  const [replayPlaying, setReplayPlaying] = useState(false);
-  const [replaySpeed, setReplaySpeed] = useState(1);
-
   // ── /model slash command → model-picker modal ──
   const [modelModalOpen, setModelModalOpen] = useState(false);
-  const handleReplayIndexChange = useCallback((n: number) => setReplayIndex(n), []);
-  const handleReplayPlayingChange = useCallback((p: boolean) => setReplayPlaying(p), []);
-  const handleReplaySpeedChange = useCallback((s: number) => setReplaySpeed(s), []);
-  const closeReplay = useCallback(() => {
-    setReplayOpen(false);
-    setReplayPlaying(false);
-  }, []);
 
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current;
@@ -473,22 +460,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const handleCollapseAll = useCallback(() => {
     setCollapseNonce((n) => n + 1);
   }, []);
-
-  // ── Replay: reset on session change. (In-session search resets inside
-  // useSessionSearch, which owns that state.) ──
-  useEffect(() => {
-    setReplayOpen(false);
-    setReplayPlaying(false);
-  }, [session?.id]);
-
-  // ── Replay: force-close when the agent starts running (replay and a live
-  // stream must not coexist — the truncated view would fight the SSE tail). ──
-  useEffect(() => {
-    if (streamState.isStreaming || agentRunning) {
-      setReplayOpen(false);
-      setReplayPlaying(false);
-    }
-  }, [streamState.isStreaming, agentRunning]);
 
   // Streaming output is followed by StreamingMessageViewport. ChatWindow
   // intentionally does not move the page-level scrollport while content grows;
@@ -532,12 +503,20 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     onNavigate: handleNavigate,
   });
 
-  // Replay is only active for a settled (non-streaming) session. When active,
-  // the chat renders only messages[0..replayIndex]; toolResultsMap is still
-  // built from the FULL messages so a tool call still pairs with its result
-  // even when the result sits past the cutoff.
-  const replayActive = replayOpen && !streamState.isStreaming && !agentRunning;
-  const renderSlice = timeline.sliceForReplay(replayActive ? replayIndex : null);
+  // ── Replay ("time travel") ──
+  // State and the settled-session gate live in the hook, whose rules are the
+  // pure reducer in `lib/shared/replay.ts`.
+  const replay = useReplay({
+    sessionId: session?.id ?? null,
+    isStreaming: streamState.isStreaming,
+    agentRunning,
+    messages,
+  });
+
+  // When replay is active the chat renders only messages[0..cutoff];
+  // toolResultsMap is still built from the FULL messages so a tool call still
+  // pairs with its result even when the result sits past the cutoff.
+  const renderSlice = timeline.sliceForReplay(replay.cropIndex);
   const renderMessages = renderSlice.messages;
   const renderEntryIds = renderSlice.entryIds;
   const renderEntryTimestamps = renderSlice.entryTimestamps;
@@ -653,18 +632,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // calculation here so a future reintroduction (e.g. a "currently streaming"
   // banner) has the index ready without having to recompute it.
   void lastAnchorIdx;
-  const replayLabel = (() => {
-    const base = `${replayIndex} / ${messages.length}`;
-    const m = messages[replayIndex - 1] as (AgentMessage & { timestamp?: number }) | undefined;
-    if (m?.timestamp) return `${base} · ${new Date(m.timestamp).toLocaleTimeString()}`;
-    return base;
-  })();
-  const openReplay = useCallback(() => {
-    setReplayIndex(messages.length);
-    setReplayPlaying(false);
-    setReplayOpen(true);
-  }, [messages.length]);
-
   // Scroll a tool call into view by its toolCallId, resolving the landing
   // message through the timeline projection. Shared between the stats drawer
   // (click on a tool name).
@@ -741,8 +708,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // Rebuilt only when a dependency changes; the store's content guard then
   // skips AppShell re-renders when nothing actually changed. ──
   const headerActions = useMemo(() => ({
-    onOpenReplay: openReplay,
-    replayVisible: !streamState.isStreaming && !agentRunning && messages.length > 0,
+    onOpenReplay: replay.open,
+    replayVisible: replay.buttonVisible,
     onExport: handleExport,
     exportVisible: Boolean(session) && !agentRunning,
     isExporting,
@@ -764,10 +731,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     notifyVisible: Boolean(session),
     currentNotifyChannelId: boundChannelId,
   }), [
-    openReplay,
-    streamState.isStreaming,
+    replay.open,
+    replay.buttonVisible,
     agentRunning,
-    messages.length,
     handleExport,
     session,
     isExporting,
@@ -983,17 +949,17 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         </>
       ) : (
       <>
-      {replayActive && (
+      {replay.visible && (
         <ReplayBar
           total={messages.length}
-          index={replayIndex}
-          playing={replayPlaying}
-          speed={replaySpeed}
-          positionLabel={replayLabel}
-          onIndexChange={handleReplayIndexChange}
-          onPlayingChange={handleReplayPlayingChange}
-          onSpeedChange={handleReplaySpeedChange}
-          onClose={closeReplay}
+          index={replay.index}
+          playing={replay.playing}
+          speed={replay.speed}
+          positionLabel={replay.positionLabel}
+          onIndexChange={replay.onIndexChange}
+          onPlayingChange={replay.onPlayingChange}
+          onSpeedChange={replay.onSpeedChange}
+          onClose={replay.onClose}
         />
       )}
       <CollapseNonceProvider value={collapseNonce}>
