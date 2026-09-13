@@ -50,9 +50,12 @@ export function fileLanguage(fileName: string): string {
   return EXT_TO_LANGUAGE[ext] || "text";
 }
 
-export function sourceLabel(skill: Skill): string {
+export type SkillGroup = "pi-work" | "global" | "project" | "path";
+
+export function sourceLabel(skill: Skill): SkillGroup {
   const src = skill.sourceInfo?.source;
   const scope = skill.sourceInfo?.scope;
+  if (src === "pi-work" || scope === "pi-work") return "pi-work";
   if (scope === "user" || src === "user") return "global";
   if (scope === "project" || src === "project") return "project";
   return "path";

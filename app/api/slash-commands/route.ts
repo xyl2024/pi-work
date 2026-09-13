@@ -5,6 +5,7 @@ import { DefaultResourceLoader, getAgentDir, SessionManager } from "@earendil-wo
 import { resolveSessionPath } from "@/lib/server/session-reader";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { readConfig } from "@/lib/server/config";
+import { loadPiWorkSkillsSafety } from "@/lib/server/pi-work-skills";
 
 const log = createLogger("api/slash-commands");
 
@@ -96,8 +97,14 @@ async function loadSlashCommands(cwd: string, startedAt: number): Promise<Cached
     // keyed by cwd) from the slash menu — same rule /api/skills uses for
     // `disableModelInvocation`.
     const disabledSkillPaths = new Set(readConfig().disabled_skills[cwd] ?? []);
+    // Merge in Pi Work–owned skills (~/.pi-work/skills/), which pi's loader
+    // does not discover — same merge rule as /api/skills and rpc-manager.
+    const loaderAndPiWorkSkills = [
+      ...loader.getSkills().skills,
+      ...loadPiWorkSkillsSafety(),
+    ];
     const skills: SlashResource[] = await Promise.all(
-      loader.getSkills().skills
+      loaderAndPiWorkSkills
         .filter((skill) => !disabledSkillPaths.has(skill.filePath))
         .map(async (skill) => ({
         source: "skill" as const,

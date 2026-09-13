@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { DefaultResourceLoader, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readConfig, writeConfig } from "@/lib/server/config";
+import { loadPiWorkSkills } from "@/lib/server/pi-work-skills";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,13 @@ export async function GET(req: Request) {
 
   try {
     const { skills, diagnostics } = await loadSkills(cwd);
+    // Merge in the Pi Work–owned skills (~/.pi-work/skills/), which pi's
+    // loader does not discover. Same per-cwd disable overrides apply.
+    const piWorkSkills = loadPiWorkSkills().skills;
+    const allSkills = [...skills, ...piWorkSkills];
     const disabled = new Set(readConfig().disabled_skills[cwd] ?? []);
     return NextResponse.json({
-      skills: skills.map((skill) => ({
+      skills: allSkills.map((skill) => ({
         ...skill,
         // The SKILL.md frontmatter (`disable-model-invocation: true`) is
         // authoritative in pi: such a skill is NEVER rendered into the system
@@ -59,7 +64,9 @@ export async function PATCH(req: Request) {
     }
 
     const { skills } = await loadSkills(cwd);
-    const loaderSkill = skills.find((skill) => skill.filePath === filePath);
+    const piWorkSkills = loadPiWorkSkills().skills;
+    const candidateSkills = [...skills, ...piWorkSkills];
+    const loaderSkill = candidateSkills.find((skill) => skill.filePath === filePath);
     if (!loaderSkill) {
       return NextResponse.json({ error: "skill is not loaded for this cwd" }, { status: 404 });
     }

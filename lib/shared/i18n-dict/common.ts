@@ -99,6 +99,7 @@ export const common = {
   "global": "全局",
   "project": "项目",
   "path": "路径",
+  "pi-work": "平台",
   "lines": "行",
   "Source repository": "原仓库",
   "Connect": "连接",

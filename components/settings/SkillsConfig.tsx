@@ -109,7 +109,7 @@ export function SkillsConfig({
 
   const groups = (() => {
     const result: { label: string; skills: Skill[] }[] = [];
-    for (const grpLabel of ["project", "global", "path"]) {
+    for (const grpLabel of ["pi-work", "project", "global", "path"] as const) {
       const grpSkills = skills.filter((s) => sourceLabel(s) === grpLabel);
       if (grpSkills.length > 0) result.push({ label: grpLabel, skills: grpSkills });
     }

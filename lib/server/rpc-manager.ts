@@ -6,6 +6,7 @@ import { expandToolSelection } from "../shared/tool-selection";
 import type { ToolMarketId } from "../shared/tools-market";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
+import { loadPiWorkSkillsSafety } from "./pi-work-skills";
 import path from "node:path";
 
 import { recordCall } from "./token-audit-store";
@@ -1163,7 +1164,13 @@ export async function startRpcSession(
         ...base,
         skills: options.systemPromptPrefix
           ? []
-          : base.skills.filter((skill) => !disabledSkillPaths.has(skill.filePath)),
+          : [
+              ...base.skills.filter((skill) => !disabledSkillPaths.has(skill.filePath)),
+              // Pi Work–owned skills (~/.pi-work/skills/) are not discovered by
+              // pi's loader; merge them here so sessions can actually invoke
+              // the same list the UI shows. Same per-cwd disable list applies.
+              ...loadPiWorkSkillsSafety(),
+            ].filter((skill) => !disabledSkillPaths.has(skill.filePath)),
       }),
       extensionFactories: [
         ...(options.systemPromptPrefix
