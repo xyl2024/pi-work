@@ -11,8 +11,6 @@ export default defineConfig({
     include: ["tests/unit/**/*.test.ts"],
     globalSetup: ["tests/global-setup.ts"],
     testTimeout: 30_000,
-    // prod mode (PI_WORK_TEST_PROD=1) runs `next build` inside globalSetup,
-    // which can take several minutes.
-    hookTimeout: 900_000,
+    hookTimeout: 900_000, // globalSetup may boot the isolated dev instance
   },
 });
