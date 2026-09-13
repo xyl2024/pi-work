@@ -1,22 +1,30 @@
 /**
- * Pi Work self-management tools (read-only).
+ * `pi_work_call` — dispatcher for Pi Work platform capabilities.
  *
- * Give the agent visibility into Pi Work itself:
- * - `pi_work_get_active_sessions_id`      — ids of the sessions currently
- *   loaded in memory (the `__piSessions` registry).
- * - `pi_work_get_session_info_by_id`      — disk-backed detail for a session
- *   (name, cwd, timestamps, first/last messages, model, thinking level, token
+ * Consolidates the former `pi_work_get_sessions_id`,
+ * `pi_work_get_active_sessions_id` and `pi_work_get_session_info_by_id`
+ * tools into ONE tool so the platform tool descriptions don't flood the
+ * system prompt. Deeper guidance is meant to be provided later by a
+ * pi-work platform skill (progressive disclosure), so this tool carries no
+ * appended system-prompt block — only its description.
+ *
+ * Actions (all read-only):
+ * - `list_recent_sessions`  — most recently modified sessions (disk-backed).
+ * - `list_active_sessions`  — ids of sessions currently loaded in memory
+ *   (the `__piSessions` registry) + which are running.
+ * - `get_session_info`      — disk-backed detail for one session id (name,
+ *   cwd, timestamps, first/last messages, model, thinking level, token
  *   usage, compaction history).
  *
- * Everything is derived from existing server modules:
+ * Implementation is derived from existing server modules:
  *   - live set + running state: lib/server/session-registry.ts
  *   - disk session detail:      lib/server/session-reader.ts (readSessionDetails)
  *
- * These tools are intentionally READ-ONLY, mirroring other custom
- * philosophy: the agent can inspect Pi Work sessions but never mutate them.
- * They are gated via ~/.pi-work/tools-market.json and only exist inside
- * pi-work sessions (registered in rpc-manager.ts). Because they read server
- * state, they are server-only and must not be imported by client code.
+ * These tools are intentionally READ-ONLY: the agent can inspect Pi Work
+ * sessions but never mutate them. Gated via TOOL_MARKET_IDS and only
+ * registered inside pi-work sessions (rpc-manager.ts). Because they read
+ * server state, this module is server-only and must not be imported by
+ * client code.
  */
 
 import { Type } from "typebox";
@@ -25,9 +33,9 @@ import { listAllSessionsHeaderOnly, readSessionDetails } from "@/lib/server/sess
 import { getRpcSession, listRunningRpcSessions } from "@/lib/server/session-registry";
 import type { AgentMessage, AssistantMessage, SessionContext } from "@/lib/shared/types";
 
-export const PI_WORK_ACTIVE_SESSIONS_TOOL = "pi_work_get_active_sessions_id";
-export const PI_WORK_SESSION_INFO_TOOL = "pi_work_get_session_info_by_id";
-export const PI_WORK_GET_SESSIONS_TOOL = "pi_work_get_sessions_id";
+export const PI_WORK_CALL_TOOL = "pi_work_call";
+
+export type PiWorkCallAction = "list_recent_sessions" | "list_active_sessions" | "get_session_info";
 
 /** Cap on the amount of message text / compaction summary surfaced to the
  *  model per call, so a busy session can't blow out the tool result. */
@@ -53,18 +61,48 @@ function messageText(msg: AgentMessage): string {
 }
 
 // ============================================================================
-// Tool 1: pi_work_get_active_sessions_id
+// list_recent_sessions
 // ============================================================================
 
-const ActiveSessionsParams = Type.Object({}, { additionalProperties: false });
+interface RecentSessionSummary {
+  id: string;
+  name: string;
+  firstUserMessage: string;
+}
 
-interface ActiveSessionsDetails {
+interface ListRecentSessionsDetails {
+  action: "list_recent_sessions";
+  sessions: RecentSessionSummary[];
+  limit: number;
+  count: number;
+}
+
+async function listRecentSessions(limit = 10) {
+  const normalizedLimit = Math.min(Math.max(Math.trunc(limit), 1), 50);
+  const sessions = (await listAllSessionsHeaderOnly()).slice(0, normalizedLimit).map((session) => ({
+    id: session.id,
+    name: session.name ?? "",
+    firstUserMessage: truncate(session.firstMessage ?? ""),
+  }));
+  const details: ListRecentSessionsDetails = { action: "list_recent_sessions", sessions, limit: normalizedLimit, count: sessions.length };
+  const text = sessions.length === 0
+    ? "No sessions found."
+    : `Recent sessions (${sessions.length}):\n${sessions.map((s, i) => `${i + 1}. id=${s.id}\n   name=${s.name || "(unnamed)"}\n   firstUserMessage=${s.firstUserMessage || "(none)"}`).join("\n")}`;
+  return { content: [{ type: "text" as const, text }], details };
+}
+
+// ============================================================================
+// list_active_sessions
+// ============================================================================
+
+interface ListActiveSessionsDetails {
+  action: "list_active_sessions";
   sessionIds: string[];
   running: string[];
   count: number;
 }
 
-function activeSessionsResult() {
+function listActiveSessions() {
   const entries = listRunningRpcSessions();
   const sessionIds = entries.map((e) => e.id);
   const running = entries.filter((e) => e.running).map((e) => e.id);
@@ -76,59 +114,12 @@ function activeSessionsResult() {
       ? "No sessions are currently loaded in memory."
       : `Active sessions in memory (${count})${running.length ? `, ${running.length} running` : ""}:\n${lines.join("\n")}`;
 
-  return { content: [{ type: "text" as const, text }], details: { sessionIds, running, count } };
+  return { content: [{ type: "text" as const, text }], details: { action: "list_active_sessions", sessionIds, running, count } satisfies ListActiveSessionsDetails };
 }
 
 // ============================================================================
-// Tool 2: pi_work_get_sessions_id
+// get_session_info
 // ============================================================================
-
-const GetSessionsParams = Type.Object(
-  {
-    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50, default: 10, description: "Number of most recently modified sessions to return." })),
-  },
-  { additionalProperties: false },
-);
-
-interface RecentSessionSummary {
-  id: string;
-  name: string;
-  firstUserMessage: string;
-}
-
-interface GetSessionsDetails {
-  sessions: RecentSessionSummary[];
-  limit: number;
-  count: number;
-}
-
-async function recentSessionsResult(limit = 10) {
-  const normalizedLimit = Math.min(Math.max(Math.trunc(limit), 1), 50);
-  const sessions = (await listAllSessionsHeaderOnly()).slice(0, normalizedLimit).map((session) => ({
-    id: session.id,
-    name: session.name ?? "",
-    firstUserMessage: truncate(session.firstMessage ?? ""),
-  }));
-  const details: GetSessionsDetails = { sessions, limit: normalizedLimit, count: sessions.length };
-  const text = sessions.length === 0
-    ? "No sessions found."
-    : `Recent sessions (${sessions.length}):\n${sessions.map((s, i) => `${i + 1}. id=${s.id}\n   name=${s.name || "(unnamed)"}\n   firstUserMessage=${s.firstUserMessage || "(none)"}`).join("\n")}`;
-  return { content: [{ type: "text" as const, text }], details };
-}
-
-// ============================================================================
-// Tool 3: pi_work_get_session_info_by_id
-// ============================================================================
-
-const SessionInfoParams = Type.Object(
-  {
-    sessionId: Type.String({
-      minLength: 1,
-      description: "The Pi Work session id to inspect (e.g. one returned by pi_work_get_active_sessions_id).",
-    }),
-  },
-  { additionalProperties: false },
-);
 
 interface CompactionInfo {
   count: number;
@@ -136,7 +127,8 @@ interface CompactionInfo {
   lastSummary: string | null;
 }
 
-interface SessionInfoDetails {
+interface GetSessionInfoDetails {
+  action: "get_session_info";
   sessionId: string;
   sessionName: string;
   cwd: string;
@@ -166,7 +158,7 @@ interface SessionInfoDetails {
 function sessionInfoPayload(
   sessionId: string,
   details: Awaited<ReturnType<typeof readSessionDetails>>,
-): SessionInfoDetails {
+): GetSessionInfoDetails {
   const wrapper = getRpcSession(sessionId);
   const alive = wrapper?.isAlive() ?? false;
   const running = wrapper?.isRunning() ?? false;
@@ -202,6 +194,7 @@ function sessionInfoPayload(
   const lastPoint = points[points.length - 1];
 
   return {
+    action: "get_session_info",
     sessionId,
     sessionName: info?.name ?? "",
     cwd: info?.cwd ?? "",
@@ -234,7 +227,7 @@ function sessionInfoPayload(
   };
 }
 
-function sessionInfoText(d: SessionInfoDetails): string {
+function sessionInfoText(d: GetSessionInfoDetails): string {
   const model = d.model ? `${d.model.provider}/${d.model.modelId}` : "unknown";
   const status = d.lastAssistantStatus.error
     ? `error: ${d.lastAssistantStatus.error}`
@@ -266,10 +259,11 @@ function sessionInfoText(d: SessionInfoDetails): string {
   return lines.join("\n");
 }
 
-async function sessionInfoResult(sessionId: string) {
+async function getSessionInfo(sessionId: string) {
   const details = await readSessionDetails(sessionId);
   if (!details) {
-    const notFound: SessionInfoDetails = {
+    const notFound: GetSessionInfoDetails = {
+      action: "get_session_info",
       sessionId,
       sessionName: "",
       cwd: "",
@@ -301,77 +295,58 @@ async function sessionInfoResult(sessionId: string) {
 // Tool registration
 // ============================================================================
 
-/*
- * Hardcoded, whole-block system-prompt contributions for the three
- * self-tools. Appended at the very end of the system prompt via
- * `appendSystemPromptOverride`, each gated on its tool being enabled AND
- * part of the session's tool set. Replaces
- * the flat `promptGuidelines` arrays that used to live on the tool
- * definitions.
- */
-export const RECENT_SESSIONS_SYSTEM_PROMPT_BLOCK = `\
-## Tool pi_work_get_sessions_id guidelines
-- Use this tool when you need to discover recent sessions; results are ordered newest first.
-- Use pi_work_get_session_info_by_id when you need more detail for a returned id.
-`;
-
-export const ACTIVE_SESSIONS_SYSTEM_PROMPT_BLOCK = `\
-## Tool pi_work_get_active_sessions_id guidelines
-- Call pi_work_get_active_sessions_id to enumerate sessions currently loaded in Pi Work, then use pi_work_get_session_info_by_id with a returned session id for detail.
-- The result is a snapshot; a session that isn't in memory won't be listed.
-`;
-
-export const SESSION_INFO_SYSTEM_PROMPT_BLOCK = `\
-## Tool pi_work_get_session_info_by_id guidelines
-- Get an id first with pi_work_get_active_sessions_id.
-- This tool is read-only; it never modifies the session.
-- Token usage is aggregated per-message from the disk JSONL; context window is not reported because it is not stored on disk.
-`;
-
-export const getSessionsTool = defineTool<typeof GetSessionsParams, GetSessionsDetails>({
-  name: PI_WORK_GET_SESSIONS_TOOL,
-  label: "Pi Work Recent Sessions",
-  description: "List the most recently modified Pi Work sessions, returning each session's id, name, and first user message. Results are newest first. Use the limit parameter to request 1-50 sessions.",
-  parameters: GetSessionsParams,
-  executionMode: "sequential",
-  promptSnippet: "List recent Pi Work session ids, names, and first user messages.",
-  // Guidelines moved to RECENT_SESSIONS_SYSTEM_PROMPT_BLOCK — injected via
-  // appendSystemPromptOverride, gated on the tool being loaded.
-  async execute(_toolCallId, params) {
-    return recentSessionsResult(params.limit);
+const PiWorkCallParams = Type.Object(
+  {
+    action: Type.Union(
+      [
+        Type.Literal("list_recent_sessions"),
+        Type.Literal("list_active_sessions"),
+        Type.Literal("get_session_info"),
+      ],
+      {
+        description:
+          "Which Pi Work platform operation to perform. 'list_recent_sessions' lists the most recently modified sessions (use `limit`). 'list_active_sessions' lists sessions currently loaded in memory. 'get_session_info' returns a detail snapshot for one session (use `sessionId`).",
+      },
+    ),
+    limit: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        maximum: 50,
+        default: 10,
+        description: "list_recent_sessions only: number of most recently modified sessions to return (1-50, default 10).",
+      }),
+    ),
+    sessionId: Type.Optional(
+      Type.String({
+        minLength: 1,
+        description: "get_session_info only: the Pi Work session id to inspect (e.g. one returned by list_active_sessions or list_recent_sessions).",
+      }),
+    ),
   },
-});
+  { additionalProperties: false },
+);
 
-export const activeSessionsTool = defineTool<typeof ActiveSessionsParams, ActiveSessionsDetails>({
-  name: PI_WORK_ACTIVE_SESSIONS_TOOL,
-  label: "Pi Work Active Sessions",
+export type PiWorkCallDetails =
+  | ListRecentSessionsDetails
+  | ListActiveSessionsDetails
+  | GetSessionInfoDetails;
+
+export const piWorkCallTool = defineTool<typeof PiWorkCallParams, PiWorkCallDetails>({
+  name: PI_WORK_CALL_TOOL,
+  label: "Pi Work Call",
   description:
-    "List the ids of sessions currently loaded in memory in Pi Work (the live session registry). Each entry is a session id you can pass to pi_work_get_session_info_by_id. Sessions that were opened/active recently but not currently in memory are not listed; call pi_work_get_active_sessions_id again after a session loads to refresh.",
-  parameters: ActiveSessionsParams,
+    "Call Pi Work platform capabilities. Actions: 'list_recent_sessions' (most recently modified sessions, newest first, with id/name/first user message; use `limit` 1-50, default 10), 'list_active_sessions' (ids of sessions currently loaded in Pi Work's memory, plus which are running; a session not in memory won't be listed), 'get_session_info' (read-only disk-backed detail snapshot for one session id: sessionName, cwd, created/modified timestamps, messageCount, current model + thinking level, first user message, last assistant message text + stop reason/error, aggregated token usage (input/output/cache + cost), compaction history (count, last tokens-before + summary), parent session, and whether the session is alive/running; returns error not_found when the id doesn't exist). Get a session id first via list_active_sessions or list_recent_sessions, then pass it to get_session_info.",
+  parameters: PiWorkCallParams,
   executionMode: "sequential",
-  promptSnippet: "List active Pi Work session ids.",
-  // Guidelines moved to ACTIVE_SESSIONS_SYSTEM_PROMPT_BLOCK — injected via
-  // appendSystemPromptOverride, gated on the tool being loaded.
-  async execute() {
-    return activeSessionsResult();
-  },
-});
-
-export const sessionInfoTool = defineTool<typeof SessionInfoParams, SessionInfoDetails>({
-  name: PI_WORK_SESSION_INFO_TOOL,
-  label: "Pi Work Session Info",
-  description:
-    "Return a read-only disk-backed detail snapshot for one Pi Work session by id (e.g. from pi_work_get_active_sessions_id): sessionName, cwd, created/modified timestamps, messageCount, current model + thinking level, first user message, last assistant message text + stop reason/error, aggregated token usage across all assistant messages (input/output/cache + cost), compaction history (count, last tokens-before + summary), parent session, and whether the session is currently alive/running. Returns an error result if the session id doesn't exist.",
-  parameters: SessionInfoParams,
-  executionMode: "sequential",
-  promptSnippet: "Read details for one Pi Work session.",
-  // Guidelines moved to SESSION_INFO_SYSTEM_PROMPT_BLOCK — injected via
-  // appendSystemPromptOverride, gated on the tool being loaded.
+  promptSnippet: "Call Pi Work platform APIs: recent/active sessions and session detail.",
   async execute(_toolCallId, params) {
-    return sessionInfoResult(params.sessionId);
+    switch (params.action) {
+      case "list_recent_sessions":
+        return listRecentSessions(params.limit);
+      case "list_active_sessions":
+        return listActiveSessions();
+      case "get_session_info":
+        return getSessionInfo(params.sessionId ?? "");
+    }
   },
 });
-
-export function buildSessionInfoTools() {
-  return [getSessionsTool, activeSessionsTool, sessionInfoTool];
-}

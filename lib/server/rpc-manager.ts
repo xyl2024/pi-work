@@ -22,12 +22,7 @@ import { readCwdToolSelection } from "./cwd-tools-config";
 import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK, type UserInputResolution } from "./ask-user-questions-tool";
 import { celebrateTool, CELEBRATE_SYSTEM_PROMPT_BLOCK } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
-import {
-  buildSessionInfoTools,
-  RECENT_SESSIONS_SYSTEM_PROMPT_BLOCK,
-  ACTIVE_SESSIONS_SYSTEM_PROMPT_BLOCK,
-  SESSION_INFO_SYSTEM_PROMPT_BLOCK,
-} from "./self-tools/session-tools";
+import { piWorkCallTool } from "./self-tools/pi-work-call";
 import {
   buildCodeGraphTools,
   CODEGRAPH_SYSTEM_PROMPT_BLOCK,
@@ -1137,12 +1132,9 @@ export async function startRpcSession(
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("spawn_subagent")) blocks.push(SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("show_media")) blocks.push(SHOW_MEDIA_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("pi_work_celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("web_search")) blocks.push(WEB_SEARCH_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("fetch_content")) blocks.push(FETCH_CONTENT_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("pi_work_get_sessions_id")) blocks.push(RECENT_SESSIONS_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("pi_work_get_active_sessions_id")) blocks.push(ACTIVE_SESSIONS_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("pi_work_get_session_info_by_id")) blocks.push(SESSION_INFO_SYSTEM_PROMPT_BLOCK);
         // CodeGraph tools are registered as a whole family when ANY codegraph
         // id is enabled (same condition as the customTools entry below). The
         // family shares ONE append block: its tools are bound together in the
@@ -1372,15 +1364,12 @@ export async function startRpcSession(
               source: capturedSource,
             })
           : []),
-        ...(enabledTools.has("pi_work_celebrate") ? [celebrateTool] : []),
-        // Self-management tools: read-only visibility into Pi Work's own live
-        // sessions + disk-backed session details. Gated together via
-        // ~/.pi-work/tools-market.json (TOOL_MARKET_IDS).
-        ...(enabledTools.has("pi_work_get_sessions_id") ||
-        enabledTools.has("pi_work_get_active_sessions_id") ||
-        enabledTools.has("pi_work_get_session_info_by_id")
-          ? buildSessionInfoTools()
-          : []),
+        ...(enabledTools.has("celebrate") ? [celebrateTool] : []),
+        // Pi Work platform dispatcher: read-only visibility into Pi Work's
+        // own live sessions + disk-backed session details, consolidated into
+        // one tool (pi_work_call) to keep tool descriptions out of the
+        // system prompt. Gated via TOOL_MARKET_IDS.
+        ...(enabledTools.has("pi_work_call") ? [piWorkCallTool] : []),
         // CodeGraph semantic code-intelligence tools: drive the CodeGraph SDK's
         // MCP ToolHandler in-process (see lib/server/codegraph-tool.ts). All
         // eight are gated by the same ~/.pi-work/tools-market.json entry list;

@@ -8,7 +8,7 @@
  * `lib/client/celebrate-store.ts`. Client-safe: no Node / server imports.
  */
 
-export const CELEBRATE_TOOL_NAME = "pi_work_celebrate";
+export const CELEBRATE_TOOL_NAME = "celebrate";
 
 export type CelebrationStyle = "auto" | "confetti" | "cannon" | "grand";
 
