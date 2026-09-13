@@ -24,7 +24,9 @@ import {
   selectOpenCount,
   type PanelTabsAction,
   type PanelTabsState,
+  type PanelViewKind,
 } from "@/lib/shared/panelTabs";
+import { buildCommands, type CommandContext } from "@/lib/client/commands";
 import {
   PANEL_COMMAND_ICON_BY_KIND,
   PANEL_TAB_ICON_BY_KIND,
@@ -527,5 +529,92 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     expect(ids.every(Boolean)).toBe(true);
     expect(new Set(ids).size).toBe(ids.length);
     expect(panelButtonIdForKind("file")).toBe(null);
+  });
+});
+
+// ── Registry → command palette ─────────────────────────────────────────
+// #7: the palette's panel entries are generated from the registry's opt-in
+// `command` declarations. These tests pin the derived side, so re-adding a
+// hand-written palette entry (or silently giving a panel one it never had)
+// fails here instead of shipping.
+
+describe("panelTabs registry → command palette", () => {
+  const panelCommands = (ctx: CommandContext) =>
+    buildCommands(ctx, (key) => key).filter((cmd) => cmd.group === "Panel");
+
+  function commandCtx(overrides: Partial<CommandContext> = {}): CommandContext {
+    return {
+      setTheme: () => {},
+      setLocale: () => {},
+      newSession: () => {},
+      openSettings: () => {},
+      openCwdPicker: () => {},
+      openModels: () => {},
+      openSkills: () => {},
+      openPrompts: () => {},
+      openScheduler: () => {},
+      openChannels: () => {},
+      openToolMarket: () => {},
+      toggleSidebar: () => {},
+      toggleRightPanel: () => {},
+      togglePanel: () => {},
+      agentControls: null,
+      hasSession: false,
+      hasCwd: false,
+      ...overrides,
+    };
+  }
+
+  const optInKinds = PANEL_TAB_SPECS.filter((spec) => spec.command).map(
+    (spec) => spec.kind,
+  );
+
+  it("generates one command per opt-in spec, in registry order", () => {
+    expect(panelCommands(commandCtx()).map((cmd) => cmd.id)).toEqual(
+      optInKinds.map((kind) => `panel.${kind}`),
+    );
+  });
+
+  it("keeps the palette down to exactly the six panels that already had an entry", () => {
+    // Output-side pin: a seventh panel gaining a palette entry (or a sixth
+    // losing one) fails here, not just in the registry declaration.
+    expect(
+      panelCommands(commandCtx())
+        .map((cmd) => cmd.id)
+        .sort(),
+    ).toEqual(
+      ["favorites", "gitDiff", "llmAudit", "tokens", "toolCalls", "translate"]
+        .map((kind) => `panel.${kind}`)
+        .sort(),
+    );
+  });
+
+  it("titles and keywords come from the spec, not from the call site", () => {
+    const specs = PANEL_TAB_SPECS.filter((spec) => spec.command);
+    const commands = panelCommands(commandCtx());
+
+    expect(commands.map((cmd) => cmd.title)).toEqual(
+      specs.map((spec) => spec.command!.labelKey),
+    );
+    expect(commands.map((cmd) => cmd.keywords)).toEqual(
+      specs.map((spec) => [...spec.command!.keywords]),
+    );
+    // Fresh arrays: a mutated command entry must not write back into the
+    // shared registry declaration.
+    commands.forEach((cmd, index) => {
+      expect(cmd.keywords).not.toBe(specs[index].command!.keywords);
+    });
+  });
+
+  it("routes every palette entry through the shared toggle rule", () => {
+    const toggled: PanelViewKind[] = [];
+    const ctx = commandCtx({ togglePanel: (kind) => toggled.push(kind) });
+
+    // Run the whole palette, not just the Panel group: a hand-written entry
+    // that opens a panel from any group (the regression this issue deletes)
+    // shows up as an extra togglePanel call here.
+    for (const cmd of buildCommands(ctx, (key) => key)) cmd.run(ctx);
+
+    expect(toggled).toEqual(optInKinds);
   });
 });
