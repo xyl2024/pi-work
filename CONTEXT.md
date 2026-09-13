@@ -94,6 +94,24 @@ _Avoid_: 把它当作会话、分支或子 agent
 用户标记的会话，保存在 `favorites.json` 的 sessionIds 中。
 _Avoid_: 用它指代工作目录
 
+### 子代理
+
+**子代理（Subagent）**：
+由某个会话通过 `spawn_subagent` 工具启动、拥有自己的 pi 会话文件、且工具集被限制的辅助 agent。
+_Avoid_: 用「子 agent」指代它；把它当作会话标签页里的普通会话
+
+**子代理类型（Subagent type）**：
+`spawn_subagent` 的 `subagent_type` 取值，决定子代理的工具集与系统提示词；现有取值为 `codebase_explorer`（只读探索与报告）与 `code_reviewer`（审查代码或 diff，可只读使用 bash）。
+_Avoid_: 用「子代理」指代某个类型；把模型与推理强度算作类型的一部分（那是全局 subagent 配置）
+
+**子代理任务（Subagent task）**：
+一次 `spawn_subagent` 调用：从派发到终态的完整过程，对应子代理会话列表中的一项与 `subagent_tasks` 中的一行。
+_Avoid_: 用它指代子代理会话本身
+
+**子代理会话（Subagent session）**：
+子代理实际运行的 pi 会话（`subagent_tasks.child_session_id`）；不出现在侧栏，只能从子代理会话列表打开。
+_Avoid_: 与「子代理任务」混用
+
 ### 频道与消息
 
 **频道（Channel）**：
