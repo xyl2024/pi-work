@@ -45,9 +45,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ channelId:
     configured: Boolean(account),
     accountId: account?.accountId ?? null,
     userId: account?.userId ?? channel.userId ?? null,
-    status: account?.status ?? channel.status,
+    status: channel.status,
     currentWorkspaceId: channel.workspaceId,
-    currentSessionId: account?.currentSessionId ?? channel.currentSessionId ?? null,
+    currentSessionId: channel.currentSessionId,
     workspaceAvailable,
     monitorRunning: isRunning(channelId),
     health: {

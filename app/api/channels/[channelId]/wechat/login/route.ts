@@ -166,7 +166,6 @@ function advancePhase(
         baseUrl: status.baseurl || session.baseUrl,
         userId: status.ilink_user_id,
         savedAt: new Date().toISOString(),
-        status: "ok" as const,
       };
       const existing = listChannels("wechat").find(
         (candidate) => candidate.accountId === account.accountId && candidate.id !== channelId,
