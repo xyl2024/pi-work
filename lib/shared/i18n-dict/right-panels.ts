@@ -155,6 +155,8 @@ export const rightPanels = {
   "No subagent sessions": "暂无子代理会话",
   "Failed to load subagent sessions": "加载子代理会话失败",
   "Open subagent session": "打开子代理会话",
+  "Code explorer": "代码探索",
+  "Code reviewer": "代码审查",
   "{count} messages": "{count} 条消息",
   "read {count} files": "已读 {count} 个文件",
   "Creating": "创建中",

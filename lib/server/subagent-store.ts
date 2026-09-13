@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 import { dataPath } from "./data-dir";
+import type { SubagentType } from "../shared/types";
 
 export type SubagentTaskStatus = "creating" | "running" | "completed" | "failed" | "cancelled";
 
@@ -9,7 +10,7 @@ export interface SubagentTask {
   taskId: string;
   parentSessionId: string;
   childSessionId: string | null;
-  subagentType: "codebase_explorer";
+  subagentType: SubagentType;
   description: string;
   prompt: string;
   status: SubagentTaskStatus;
@@ -67,7 +68,7 @@ function mapRow(row: Record<string, unknown>): SubagentTask {
     taskId: row.task_id as string,
     parentSessionId: row.parent_session_id as string,
     childSessionId: (row.child_session_id as string | null) ?? null,
-    subagentType: row.subagent_type as "codebase_explorer",
+    subagentType: row.subagent_type as SubagentType,
     description: row.description as string,
     prompt: row.prompt as string,
     status: row.status as SubagentTaskStatus,
@@ -82,7 +83,7 @@ function mapRow(row: Record<string, unknown>): SubagentTask {
 export function createSubagentTask(input: {
   taskId: string;
   parentSessionId: string;
-  subagentType: "codebase_explorer";
+  subagentType: SubagentType;
   description: string;
   prompt: string;
 }): SubagentTask {

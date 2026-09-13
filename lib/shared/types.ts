@@ -237,13 +237,25 @@ export interface SessionInfo {
   running: boolean;
 }
 
+/** Specialized subagent profiles `spawn_subagent` can launch. */
+export type SubagentType = "codebase_explorer" | "code_reviewer";
+
+/**
+ * How many subagent child sessions may run at the same time, process-wide.
+ * Shared with `lib/shared/tools-market.ts` so the server's slot pool and the
+ * prompt text shown for `spawn_subagent` state one number. A call beyond the
+ * limit waits for a free slot: that wait is invisible to the UI and does not
+ * count against the child's runtime limit.
+ */
+export const MAX_CONCURRENT_SUBAGENT_RUNS = 4;
+
 export type SubagentTaskStatus = "creating" | "running" | "completed" | "failed" | "cancelled";
 
 /** Browser-safe summary returned by the parent session's subagent endpoint. */
 export interface SubagentTaskSummary {
   taskId: string;
   childSessionId: string | null;
-  subagentType: string;
+  subagentType: SubagentType;
   description: string;
   status: SubagentTaskStatus;
   createdAt: number;

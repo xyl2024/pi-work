@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
-import type { SubagentTaskStatus, SubagentTaskSummary } from "@/lib/shared/types";
+import type { SubagentTaskStatus, SubagentTaskSummary, SubagentType } from "@/lib/shared/types";
 
 interface Props {
   parentSessionId: string | null;
@@ -26,6 +26,15 @@ const STATUS_COLORS: Record<SubagentTaskStatus, string> = {
   completed: "#22c55e",
   failed: "#ef4444",
   cancelled: "var(--text-dim)",
+};
+
+/**
+ * Short labels for `subagentType`. Parallel children are often described in
+ * similar words, so the profile is shown next to the status.
+ */
+const TYPE_KEYS: Record<SubagentType, string> = {
+  codebase_explorer: "Code explorer",
+  code_reviewer: "Code reviewer",
 };
 
 export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSession }: Props) {
@@ -280,8 +289,21 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                     >
                       {task.description}
                     </span>
-                    <span style={{ display: "block", marginTop: 2, color: statusColor, fontSize: 10, lineHeight: 1.3 }}>
-                      {t(STATUS_KEYS[task.status])}
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        marginTop: 2,
+                        fontSize: 10,
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      <span style={{ color: statusColor }}>{t(STATUS_KEYS[task.status])}</span>
+                      <span aria-hidden="true" style={{ color: "var(--text-dim)" }}>·</span>
+                      <span style={{ color: "var(--text-dim)" }}>
+                        {t(TYPE_KEYS[task.subagentType])}
+                      </span>
                     </span>
                     {stats && (
                       <span

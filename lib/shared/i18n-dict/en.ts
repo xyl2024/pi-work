@@ -11,6 +11,8 @@ export const EN_TRANSLATIONS = {
   "Open subagent session": "Open subagent session",
   "Creating": "Creating",
   "Cancelled": "Cancelled",
+  "Code explorer": "Code explorer",
+  "Code reviewer": "Code reviewer",
   "platform.wechat": "WeChat",
   "platform.dingtalk": "DingTalk",
   "platform.feishu": "Feishu",

@@ -972,6 +972,20 @@ function stripPiDocumentationSection(prompt: string): string {
  */
 type RpcThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
+/**
+ * Subagent sessions are attached to no UI (their SSE stream is only read when
+ * the child session is opened manually), so a permission prompt raised there
+ * can only time out — dangerous_patterns.timeout_ms, 5 minutes by default —
+ * and be auto-denied anyway. Refuse immediately with a reason the child can
+ * act on. See docs/adr/0001-subagent-toolsets-must-not-need-a-permission-prompt.md.
+ */
+function subagentPermissionBlock(what: string) {
+  return {
+    block: true,
+    reason: `Blocked: ${what} requires the user's confirmation, which is unavailable inside a subagent session. Don't retry it; use a read-only alternative and tell the user what you need.`,
+  };
+}
+
 export interface StartRpcSessionOptions {
   /** Use a specific model for a newly-created session. */
   model?: { provider: string; modelId: string };
@@ -1228,6 +1242,9 @@ export async function startRpcSession(
               const w = wrapperRef.current;
               if (!w) return;
               if (w.isRuleAllowedThisSession(`codegraph_${mode}`)) return;
+              if (capturedSource === "subagent") {
+                return subagentPermissionBlock(`codegraph_build mode=${mode}`);
+              }
               const command =
                 mode === "init"
                   ? `codegraph init ${event.input?.path ?? "<cwd>"}`
@@ -1257,6 +1274,9 @@ export async function startRpcSession(
             const w = wrapperRef.current;
             if (!w) return;
             if (w.isRuleAllowedThisSession(match.ruleName)) return;
+            if (capturedSource === "subagent") {
+              return subagentPermissionBlock(`the dangerous-command rule "${match.ruleName}"`);
+            }
             const decision = await w.requestPermission(event.toolCallId, match.ruleName, command);
             if (decision === "deny") {
               return { block: true, reason: "Denied by user" };
