@@ -47,6 +47,8 @@ import { phaseLabel, phaseLoaderVariant, resolveReadPath, isGroupAnchor, findFin
 import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
 import { NewSessionPresets } from "./chat-window/NewSessionPresets";
 import { NewSessionNotifyPicker } from "./chat-window/NewSessionNotifyPicker";
+import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
+import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { TextSelectionToolbar } from "./text-selection-toolbar";
 
@@ -117,55 +119,16 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const [isExporting, setIsExporting] = useState(false);
   const sessionInfoReportedRef = useRef<string | null>(null);
 
-  // Notification channel picked on the new-session page (null = no notify).
-  // Persisted to the server once the session is created (currentSessionId
-  // flips from null → real id) so reloads keep the binding.
-  const [notifyChannelId, setNotifyChannelId] = useState<string | null>(null);
-  const savedNotifySessionRef = useRef<string | null>(null);
-  // Notification channel bound to the CURRENT (existing) session, loaded from
-  // the server on session change. Mirrors the sidecar on disk; the MoreMenu
-  // entry edits it via handleSetNotifyChannel.
-  const [sessionNotifyChannelId, setSessionNotifyChannelId] = useState<string | null>(null);
-
-  // ── Auto-name scheduling for brand-new sessions ──────────────────────
-  // The first assistant message of a new session lands only after pi lazily
-  // persists the .jsonl, which is exactly when /api/sessions/[id]/auto-name
-  // can read it. We piggyback on the existing onFirstAssistantReady prop,
-  // forward it to AppShell (sidebar refresh), and schedule a 1s timer to
-  // run auto-name. The actual runner lives below where it can close over
-  // currentSessionId / agentRunning / etc.; we keep a ref so the timer
-  // always reads the latest closure. currentSessionNameRef mirrors
-  // session.name so the post-LLM race check sees the freshest value.
-  const autoNamedSessionIdsRef = useRef<Set<string>>(new Set());
-  const autoNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const runAutoNameRef = useRef<((opts: { mode: "manual" | "auto" }) => Promise<void>) | null>(null);
-  const currentSessionNameRef = useRef<string | null>(session?.name ?? null);
-
-  const wrappedOnFirstAssistantReady = useCallback(() => {
-    // Forward to AppShell (sidebar refresh — unchanged behavior).
-    onFirstAssistantReady?.();
-    const sid = session?.id;
-    if (!sid) return;
-    if (autoNamedSessionIdsRef.current.has(sid)) return;
-    autoNamedSessionIdsRef.current.add(sid);
-    if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
-    autoNameTimerRef.current = setTimeout(() => {
-      autoNameTimerRef.current = null;
-      runAutoNameRef.current?.({ mode: "auto" });
-    }, 1000);
-  }, [onFirstAssistantReady, session?.id]);
-
-  // Drop a still-pending timer on unmount (session switch / window teardown)
-  // so we never PATCH against a stale session id.
-  useEffect(
-    () => () => {
-      if (autoNameTimerRef.current) {
-        clearTimeout(autoNameTimerRef.current);
-        autoNameTimerRef.current = null;
-      }
-    },
-    [],
-  );
+  // ── Auto-naming ──────────────────────────────────────────────────────
+  // The runner lives in `chat-window/hooks/useAutoNaming.ts`, but it needs the
+  // first user message text — which only exists after useAgentSession — while
+  // useAgentSession needs the first-assistant callback. This stable delegate
+  // breaks the cycle; the hook fills the ref on every render, the same shape
+  // the pre-hook code used for its timer.
+  const autoNameReadyRef = useRef<() => void>(() => {});
+  const handleFirstAssistantReady = useCallback(() => {
+    autoNameReadyRef.current();
+  }, []);
 
   // Tool call stats: wire the context emit into useAgentSession
   const statsEmit = useToolCallStatsEmit();
@@ -188,7 +151,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     activeLeafId, currentSessionId,
     inFlightToolResults,
   } = useAgentSession({
-    session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady: wrappedOnFirstAssistantReady,
+    session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
     modelsRefreshKey,
     statsEmit,
     scrollToEntryId,
@@ -197,80 +160,17 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     controllerId: tabId,
   });
 
-  // Persist the new-session notification channel once the session is created
-  // (currentSessionId flips from null → real id after POST /api/agent/new).
-  // Best-effort: a failure only toasts, it never blocks chat.
-  useEffect(() => {
-    if (!currentSessionId || notifyChannelId == null) return;
-    if (savedNotifySessionRef.current === currentSessionId) return;
-    savedNotifySessionRef.current = currentSessionId;
-    void (async () => {
-      try {
-        const res = await fetch(`/api/sessions/${encodeURIComponent(currentSessionId)}/notify`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channelId: notifyChannelId }),
-        });
-        if (!res.ok && isActiveRef.current) {
-          showToast({ kind: "error", message: t("Failed to set notification channel") });
-        } else {
-          setSessionNotifyChannelId(notifyChannelId);
-        }
-      } catch {
-        if (isActiveRef.current) {
-          showToast({ kind: "error", message: t("Failed to set notification channel") });
-        }
-      }
-    })();
-  }, [currentSessionId, notifyChannelId, showToast, t]);
-
-  // Load the existing session's notification binding on session change.
-  useEffect(() => {
-    const sid = session?.id;
-    if (!sid) return;
-    let cancelled = false;
-    setSessionNotifyChannelId(null);
-    void (async () => {
-      try {
-        const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}/notify`);
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { config?: { channelId?: unknown } | null };
-        if (cancelled) return;
-        // A brand-new session that just saved its binding through the creation
-        // path may still be racing this read — trust the in-memory save over
-        // the (possibly stale) disk answer.
-        if (savedNotifySessionRef.current === sid) return;
-        setSessionNotifyChannelId(
-          typeof data.config?.channelId === "string" ? data.config.channelId : null,
-        );
-      } catch {
-        // keep null — the MoreMenu entry then shows "No notification"
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [session?.id]);
-
-  // Persist a notification-channel change made from the MoreMenu (existing
-  // sessions). PUT with an empty channelId clears the binding.
-  const handleSetNotifyChannel = useCallback(async (channelId: string | null) => {
-    const sid = session?.id ?? currentSessionId;
-    if (!sid) return;
-    try {
-      const res = await fetch(`/api/sessions/${encodeURIComponent(sid)}/notify`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId: channelId ?? "" }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSessionNotifyChannelId(channelId);
-      showToast({
-        kind: "success",
-        message: channelId ? t("Notification channel set") : t("Notification channel cleared"),
-      });
-    } catch {
-      showToast({ kind: "error", message: t("Failed to set notification channel") });
-    }
-  }, [session?.id, currentSessionId, showToast, t]);
+  // ── Session notification binding ──────────────────────────────────────
+  // Both bindings (the new-session pick, and the current session's saved
+  // channel) are owned by the local hook; its rules live in
+  // `lib/shared/session-notify-binding.ts`.
+  const { pickedChannelId, setPickedChannelId, boundChannelId, setNotifyChannel } = useSessionNotifyBinding({
+    sessionId: session?.id ?? null,
+    currentSessionId,
+    isActive,
+    showToast,
+    t,
+  });
 
   useEffect(() => {
     if (!data?.info || session?.id !== data.sessionId || sessionInfoReportedRef.current === data.sessionId) return;
@@ -878,141 +778,35 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     : null;
 
   const sessionId = session?.id;
-
-  // ── Auto-name: LLM-driven session name generation (moved up from ChatInput
-  // when the button relocated to the AppShell footer). The 3s "generated
-  // name" label flash was dropped with the move — the sidebar updates
-  // immediately and a toast already confirms the rename. ──
-  const [isAutoNaming, setIsAutoNaming] = useState(false);
   const confirm = useConfirm();
-  const currentSessionName = session?.name ?? null;
 
-  // Keep the ref in sync so the post-LLM race check (after the 5–30s wait)
-  // sees a freshly-named session even though the in-flight closure has
-  // captured the pre-LLM render value.
-  useEffect(() => {
-    currentSessionNameRef.current = currentSessionName;
-  }, [currentSessionName]);
-
-  // Shared core for both the manual button (mode "manual") and the
-  // 1s-after-first-assistant auto-trigger (mode "auto"). Manual preserves
-  // the user-confirm modal and the agent-running guard; auto skips both
-  // (silent, may piggyback on the in-flight first turn) but enforces the
-  // race guard: if session.name is already non-empty at trigger time or
-  // when the LLM response arrives, bail silently — manual rename wins
-  // (Q3 = A).
-  const runAutoName = useCallback(async ({ mode }: { mode: "manual" | "auto" }) => {
-    if (!sessionId) return;
-    if (isAutoNaming) return;
-    if (mode === "manual" && agentRunning) return;
-    if (!firstUserMessageText || !firstUserMessageText.trim()) return;
-
-    // Auto-mode pre-flight: a sidebar rename that landed in the 1s window
-    // before the LLM call already won — no LLM call needed.
-    if (mode === "auto" && currentSessionNameRef.current && currentSessionNameRef.current.trim()) {
-      return;
-    }
-
-    if (mode === "manual" && currentSessionName && currentSessionName.trim()) {
-      const ok = await confirm({
-        title: t("Auto-name session?"),
-        description: t("This will replace the current session name."),
-        confirmLabel: t("Auto-name"),
-        cancelLabel: t("Cancel"),
-        destructive: false,
-      });
-      if (!ok) return;
-    }
-
-    setIsAutoNaming(true);
-    try {
-      const suggestRes = await fetch(
-        `/api/sessions/${encodeURIComponent(sessionId)}/auto-name`,
-        { method: "POST" },
-      );
-      const suggestBody = (await suggestRes.json().catch(() => ({}))) as {
-        name?: unknown;
-        error?: unknown;
-      };
-      if (!suggestRes.ok || typeof suggestBody.name !== "string") {
-        const reason = typeof suggestBody.error === "string" ? suggestBody.error : `HTTP ${suggestRes.status}`;
-        throw new Error(reason);
-      }
-      const name = suggestBody.name.trim();
-      if (!name) {
-        showToast({ kind: "error", message: t("Auto-naming returned an empty name") });
-        return;
-      }
-
-      // Auto-mode post-LLM race check: a sidebar rename during the LLM
-      // call now wins — silent skip, no error toast (Q3 = A).
-      if (mode === "auto" && currentSessionNameRef.current && currentSessionNameRef.current.trim()) {
-        return;
-      }
-
-      const patchRes = await fetch(
-        `/api/sessions/${encodeURIComponent(sessionId)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name }),
-        },
-      );
-      if (!patchRes.ok) {
-        const body = (await patchRes.json().catch(() => ({}))) as { error?: unknown };
-        const reason = typeof body.error === "string" ? body.error : `HTTP ${patchRes.status}`;
-        throw new Error(reason);
-      }
-
-      onSessionNameChange?.(name);
-      try { await onRenameCompleted?.(); } catch { /* sidebar refresh is best-effort */ }
-      if (mode === "manual") {
-        showToast({ kind: "success", message: `${t("Renamed")} ${name}` });
-      }
-    } catch (error) {
-      showToast({
-        kind: "error",
-        message: `${t("Auto-naming failed")}: ${
-          error instanceof Error && error.message ? error.message : t("Network error")
-        }`,
-      });
-    } finally {
-      setIsAutoNaming(false);
-    }
-  }, [
-    sessionId,
+  // ── Auto-naming: the runner, its 1s silent timer, the requests, the toasts
+  // and the shell reporting all live in the local hook. The rules (which mode
+  // may run when, plus the two rename-race checks) live in
+  // `lib/shared/auto-naming.ts`. ──
+  const {
     isAutoNaming,
+    canAutoName,
+    handleAutoName,
+    handleFirstAssistantReady: autoNameFirstAssistantReady,
+  } = useAutoNaming({
+    session,
     agentRunning,
     firstUserMessageText,
-    currentSessionName,
-    confirm,
     showToast,
+    confirm,
+    t,
     onSessionNameChange,
     onRenameCompleted,
-    t,
-  ]);
-
-  // Keep the timer-side ref pointing at the latest closure so it always
-  // sees the freshest sessionId / agentRunning / currentSessionName.
+    onFirstAssistantReady,
+  });
+  // Feed the hook's first-assistant handler to the stable delegate that was
+  // passed to useAgentSession before the hook could be called (see
+  // autoNameReadyRef above). Assigned in an effect, not during render, so a
+  // concurrent render never publishes a handler it later discards.
   useEffect(() => {
-    runAutoNameRef.current = runAutoName;
-  }, [runAutoName]);
-
-  // Manual button entry point — today's behavior (confirm + agent-running
-  // guard) lives in runAutoName({ mode: "manual" }).
-  const handleAutoName = useCallback(() => {
-    void runAutoName({ mode: "manual" });
-  }, [runAutoName]);
-
-  // Auto-name is only available when there's a session, a usable first user
-  // message, the agent isn't running, and no LLM call is already in flight.
-  const canAutoName = Boolean(
-    sessionId &&
-    firstUserMessageText &&
-    firstUserMessageText.trim() &&
-    !agentRunning &&
-    !isAutoNaming
-  );
+    autoNameReadyRef.current = autoNameFirstAssistantReady;
+  }, [autoNameFirstAssistantReady]);
 
   // ── Publish Replay / Export / Auto-name actions for the AppShell footer.
   // Rebuilt only when a dependency changes; the store's content guard then
@@ -1035,11 +829,11 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     compactVisible: Boolean(session) && !agentRunning,
     isCompacting: agentPhase?.kind === "compacting",
     compactDisabled: agentRunning,
-    // Reply-notification channel binding (MoreMenu entry). The loader
-    // callback is stable; the memo rebuilds only when the id changes.
-    onSetNotifyChannel: handleSetNotifyChannel,
+    // Reply-notification channel binding (MoreMenu entry). The setter is
+    // stable; the memo rebuilds only when the id changes.
+    onSetNotifyChannel: setNotifyChannel,
     notifyVisible: Boolean(session),
-    currentNotifyChannelId: sessionNotifyChannelId,
+    currentNotifyChannelId: boundChannelId,
   }), [
     openReplay,
     streamState.isStreaming,
@@ -1053,8 +847,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     isAutoNaming,
     handleCompactClick,
     agentPhase,
-    handleSetNotifyChannel,
-    sessionNotifyChannelId,
+    setNotifyChannel,
+    boundChannelId,
   ]);
 
   useEffect(() => {
@@ -1251,8 +1045,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
             <div style={{ marginTop: 26, display: "flex", justifyContent: "center" }}>
               <NewSessionNotifyPicker
-                value={notifyChannelId}
-                onChange={setNotifyChannelId}
+                value={pickedChannelId}
+                onChange={setPickedChannelId}
               />
             </div>
           </div>
