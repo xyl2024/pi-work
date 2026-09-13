@@ -165,7 +165,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
   // Tools trigger button label. "Tools · Off" when no tools, the named
   // preset's label ("Tools · Read only" / "Tools · Minimal" / …) when one of
   // the quick presets is active, "Tools · Custom (N)" when a partial subset
-  // is active, plain "Tools" for Full (the default). Drives discoverability:
+  // is active, plain "Tools" for Full (the default). The selection is the
+  // session's live one (restored from `get_state` for existing sessions), so
   // the user can tell at a glance which mode they're in without opening the
   // popover.
   const namedPreset = matchNamedToolPreset(toolSelection);
@@ -177,10 +178,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
         : t("Tools · Custom ({count})", { count: toolSelection.length })
     : t("Tools");
 
-  // Local capture: `onToolSelectionChange` is declared optional on Props,
-  // but the surrounding `!isStreaming && onToolSelectionChange` guard means
-  // it's always defined inside this block. Capturing it as a non-optional
-  // local lets TS narrow the type for the inline callbacks below.
+  // `onToolSelectionChange` is optional on Props (older call sites), so an
+  // explicit no-op keeps the inline preset/toggle callbacks total.
   const handleToolSelectionChangeLocal = onToolSelectionChange ?? (() => {});
 
   return (

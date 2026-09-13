@@ -1,6 +1,6 @@
 import { useCallback, useRef } from "react";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
-import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/shared/types";
+import type { AgentMessage, CompactionPoint, ToolInfo, ToolSelection } from "@/lib/shared/types";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import { endStreaming as endStreamingStore, getStreamingSnapshot } from "../streamingMessageStore";
 import type {
@@ -27,6 +27,9 @@ type UseAgentSessionDataOptions = {
   setCompactionPoints: StateSetter<CompactionPoint[]>;
   setCurrentModelOverride: StateSetter<{ provider: string; modelId: string } | null>;
   setThinkingLevel: StateSetter<ThinkingLevelOption>;
+  /** Syncs the raw tool selection reported by the live agent into the chat
+   *  input's local state (existing sessions restore it from `get_state`). */
+  setToolSelection: StateSetter<ToolSelection>;
   setContextUsage: StateSetter<{ percent: number | null; contextWindow: number; tokens: number | null } | null>;
   setSystemPrompt: StateSetter<string | null>;
   setAgentPhase: StateSetter<AgentPhase>;
@@ -86,6 +89,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     setCompactionPoints,
     setCurrentModelOverride,
     setThinkingLevel,
+    setToolSelection,
     setContextUsage,
     setSystemPrompt,
     setAgentPhase,
@@ -240,6 +244,19 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     const state = agentState?.state;
     if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
     if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
+    // Adopt the live raw selection so re-opening an existing session shows the
+    // preset it actually runs with (the local default is "all"). Skipped when
+    // the server doesn't report one, and identity-stable when unchanged so it
+    // can't loop through re-renders on every runtime-state refresh.
+    if (state?.toolNames !== undefined) {
+      const next = state.toolNames;
+      setToolSelection((prev) =>
+        prev === next || (Array.isArray(prev) && Array.isArray(next)
+          && prev.length === next.length && prev.every((name, i) => name === next[i]))
+          ? prev
+          : next,
+      );
+    }
 
     const compacting = state?.isCompacting === true || state?.phase === "compacting";
     const running = Boolean(
@@ -271,7 +288,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
       const modelCallFailed = streamingMessage?.role === "assistant" && streamingMessage.stopReason === "error";
       endStreamingStore(streamingKey, modelCallFailed);
     }
-  }, [dispatch, setAgentPhase, setAgentRunningSync, setCompactingSync, setContextUsage, setSystemPrompt, streamingKey]);
+  }, [dispatch, setAgentPhase, setAgentRunningSync, setCompactingSync, setContextUsage, setSystemPrompt, setToolSelection, streamingKey]);
 
   const refreshAgentRuntimeState = useCallback(async (sid = sessionIdRef.current) => {
     if (!sid) return null;

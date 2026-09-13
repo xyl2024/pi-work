@@ -121,9 +121,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [newSessionModel, setNewSessionModelState] = useState<{ provider: string; modelId: string } | null>(null);
   // The user's tool selection state. `[]` ≡ Off, `"all"` ≡ High (every
   // registered tool — sentinel so newly-added tools auto-include), a partial
-  // string[] ≡ Custom. Only meaningful for new sessions — the tools popover
-  // is hidden on existing-session pages (button gated on `isNew` in
-  // ChatWindow), so the value for existing sessions is unused.
+  // string[] ≡ Custom. New sessions seed it from the cwd preset; existing
+  // sessions adopt the live selection reported by `get_state`
+  // (set_tools persists it in a sidecar, so restarts restore the same set).
   const [toolSelection, setToolSelection] = useState<ToolSelection>(() => "all");
   // Load the cwd preset for a new-session page. A browser event lets the cwd
   // menu update an already-mounted new-session controller immediately.
@@ -311,6 +311,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setCompactionPoints,
     setCurrentModelOverride,
     setThinkingLevel,
+    setToolSelection,
     setContextUsage,
     setSystemPrompt,
     setAgentPhase,

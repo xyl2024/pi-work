@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
-import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode } from "@/lib/shared/types";
+import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode, ToolSelection } from "@/lib/shared/types";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 
 export interface SessionData {
@@ -44,6 +44,9 @@ export interface AgentRuntimeState {
     contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
     systemPrompt?: string;
     thinkingLevel?: string;
+    /** Raw tool selection the live agent is using ("all" | string[], patterns
+     *  included). Absent on older servers; drives the tools button label. */
+    toolNames?: ToolSelection;
   };
 }
 

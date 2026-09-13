@@ -127,6 +127,12 @@ export class AgentSessionWrapper {
   // per-session reply notifications (see start() + deliverSessionNotify).
   // Reset on agent_start, updated on each assistant message_end.
   private lastAssistantText = "";
+  // Raw tool selection that is live for this session — "all" or the string[]
+  // exactly as the user picked it (trailing-`*` patterns included). Kept in
+  // sync by set_tools and at session start, so `get_state` can hand the UI the
+  // selection it needs to label the tools button: the expanded active-tool list
+  // (getActiveToolNames) can't be mapped back to a named preset.
+  private _toolSelection: ToolSelection = "all";
 
   constructor(
     public readonly inner: AgentSessionLike,
@@ -140,6 +146,20 @@ export class AgentSessionWrapper {
 
   get sessionFile(): string {
     return this.inner.sessionFile ?? "";
+  }
+
+  /** The raw (un-expanded) tool selection live for this session. */
+  get toolSelection(): ToolSelection {
+    return this._toolSelection;
+  }
+
+  /** Record the raw selection the caller just applied. Malformed values are
+   *  ignored so a bad RPC payload can't blank out the stored selection. */
+  setToolSelection(selection: unknown): void {
+    if (selection === "all") this._toolSelection = "all";
+    else if (Array.isArray(selection) && selection.every((name) => typeof name === "string")) {
+      this._toolSelection = [...(selection as string[])];
+    }
   }
 
   isAlive(): boolean {
@@ -680,6 +700,9 @@ export class AgentSessionWrapper {
             : null,
           systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
+          // Raw selection (patterns included) — lets the UI render the active
+          // preset label instead of re-deriving it from the expanded tool list.
+          toolNames: this.toolSelection,
         };
       }
 
@@ -791,6 +814,7 @@ export class AgentSessionWrapper {
           const allNames = this.inner.getAllTools().map((t) => t.name);
           this.inner.setActiveToolsByName(expandToolSelection(toolNames, allNames) as string[]);
         }
+        this.setToolSelection(toolNames);
         // Mirror to the sidecar so the selection survives a server restart.
         // Best-effort: a failed write must not fail the tool switch.
         if (!writeSessionToolSelection(this.sessionId, toolNames)) {
@@ -1415,6 +1439,10 @@ export async function startRpcSession(
     }
 
     const wrapper = new AgentSessionWrapper(inner, source, cwd);
+    // Remember the raw selection this session started with so `get_state` can
+    // report it (restored-from-sidecar selection included) — the UI labels the
+    // tools button from it.
+    wrapper.setToolSelection(effectiveToolNames);
     wrapperRef.current = wrapper;
     requestUserInputRef.current = wrapper;
     wrapper.start();

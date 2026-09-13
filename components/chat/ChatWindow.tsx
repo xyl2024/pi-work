@@ -1131,7 +1131,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         availableTools={availableTools}
         toolsLoading={toolsLoading}
         toolsError={toolsError}
-        onToolSelectionChange={isNew ? handleToolSelectionChange : undefined}
+        // Available for both flows: existing sessions push the change to the
+        // live agent via `set_tools` (persisted per session), while new
+        // sessions only update local state until the first prompt is sent.
+        onToolSelectionChange={handleToolSelectionChange}
         onEnsureAvailableTools={ensureAvailableTools}
         thinkingLevel={thinkingLevel}
         onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
