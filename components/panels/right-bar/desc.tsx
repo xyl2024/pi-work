@@ -5,7 +5,13 @@
 //   1. register the panel identity in `lib/shared/panelTabs`
 //      (PANEL_TAB_SPEC_BY_KIND — tab id, label key, default mode, session
 //      binding, optional command-palette entry), then
-//   2. add one presentation entry here (icon / body / disabled rule).
+//   2. add one presentation entry here (glyph / disabled rule / badge) and
+//      one body entry in AppShell's `PANEL_BODY_BY_KIND`.
+//
+// The glyph lives here, once: the button column, the tab strip
+// (`PANEL_TAB_ICON_BY_KIND`) and the command palette all read this entry, so
+// there is no second icon chain to keep in sync. The panel body stays with
+// the shell because it reads the shell's live session state.
 //
 // Everything behavioural — which button opens which panel, what "click the
 // active button" does, the ordering — is derived from that registry, so this
@@ -28,6 +34,7 @@ import { CountBadge } from "@/components/ui/CountBadge";
 import {
   PANEL_BUTTON_ID_BY_KIND,
   PANEL_TAB_KINDS,
+  PANEL_TAB_SPECS,
   PANEL_TAB_SPEC_BY_KIND,
   type PanelMode,
   type PanelTabKind,
@@ -50,6 +57,15 @@ import {
 } from "lucide-react";
 import GithubIcon from "@lobehub/icons/es/Github/components/Mono";
 
+/** Options for rendering a panel view's glyph. The right-bar button, the tab
+ *  strip and the command palette share one icon per kind, differing only in
+ *  size and whether the view is active. */
+export interface PanelIconOptions {
+  size: number;
+  active: boolean;
+}
+export type PanelIcon = (options: PanelIconOptions) => ReactNode;
+
 export interface RightBarCtx {
   // ── observed state ──
   /** The panel's own open state (see panelTabs). */
@@ -59,10 +75,6 @@ export interface RightBarCtx {
   selectedSessionId: string | null;
   selectedCwd: string | null;
   rssUnread: number;
-  /** Number of changed files (M/A/D/R/C/T/? ?) for the active cwd's git
-   *  repo. 0 when there's no cwd, the cwd isn't a repo, or the repo has
-   *  no changes. Drives the badge on the git-diff button. */
-  gitChangedCount: number;
   toolStats: { runningCount: number; totalCount: number };
   /** Active tool-call counter is the only thing that requires i18n inside
    *  the descriptor body, so we expose the AppShell-bound t() to avoid
@@ -76,7 +88,6 @@ export interface RightBarCtx {
    *  that view is already the active, open tab. Every panel entry point
    *  (right-bar button, command palette) goes through this. */
   togglePanel: (kind: PanelViewKind) => void;
-  setRightPanelState: (s: PanelMode) => void;
 }
 
 export interface RightBarDescriptor {
@@ -102,23 +113,23 @@ export interface RightBarDescriptor {
   sessionBound?: true;
   /** Translation key consumed by `t()`. */
   labelKey: string;
+  /** The entry's glyph, declared exactly once: the right-bar button, the tab
+   *  strip (`PANEL_TAB_ICON_BY_KIND`) and the command palette all read it. */
+  icon: PanelIcon;
+  /** Optional override for the button body when it shows more than the icon
+   *  (tool-calls stacks a running/total counter under it). Receives the
+   *  already-rendered icon so the glyph is still declared once. */
+  content?: (ctx: RightBarCtx, icon: ReactNode) => ReactNode;
   /** Optional top-right corner badge (RSS unread count etc.). */
   badge?: (ctx: RightBarCtx) => ReactNode | null;
   isActive: (ctx: RightBarCtx) => boolean;
   isDisabled?: (ctx: RightBarCtx) => boolean;
   /** Optional visibility predicate. Defaults to always-true. */
   isVisible?: (ctx: RightBarCtx) => boolean;
-  /** Body of the button — typically an icon node, or icon+label for the
-   *  tool-calls button. */
-  content: (ctx: RightBarCtx) => ReactNode;
   /** Optional layout override forwarded to RightBarButton. Tool-calls uses
    *  { flexDirection: 'column', gap: 1 } to stack the icon and the
    *  running/total counter. */
   bodyLayout?: { flexDirection?: "row" | "column"; gap?: number };
-  /** Icon for the generated command-palette entry. Only panels whose spec
-   *  opts into a command need one; the palette falls back to nothing
-   *  otherwise. */
-  commandIcon?: ReactNode;
   onClick: (ctx: RightBarCtx) => void;
 }
 
@@ -133,10 +144,9 @@ const panelToggleDescriptor: RightBarDescriptor = {
   kind: "fixed",
   slot: "top",
   labelKey: "", // resolved below — active/inactive have different labels
+  icon: ({ size }) => <PanelRight size={size} />,
   isActive: (ctx) => ctx.rightPanelState !== "closed",
-  content: () => <PanelRight size={16} />,
   onClick: (ctx) => ctx.toggleRightPanel(),
-  // Wrap so we can swap the tooltip when active.
 };
 
 // Configurable: one entry per panel view. Identity (button id, tab id,
@@ -146,8 +156,8 @@ function panelButton(
   kind: PanelViewKind,
   presentation: {
     labelKey: string;
-    content: (ctx: RightBarCtx) => ReactNode;
-    commandIcon?: ReactNode;
+    icon: PanelIcon;
+    content?: (ctx: RightBarCtx, icon: ReactNode) => ReactNode;
     isDisabled?: (ctx: RightBarCtx) => boolean;
     badge?: (ctx: RightBarCtx) => ReactNode | null;
     bodyLayout?: RightBarDescriptor["bodyLayout"];
@@ -160,11 +170,11 @@ function panelButton(
     kind: "configurable",
     panelKind: kind,
     labelKey: presentation.labelKey,
+    icon: presentation.icon,
     isActive: (ctx) => ctx.activeTabKind === kind,
     onClick: (ctx) => ctx.togglePanel(kind),
-    content: presentation.content,
+    ...(presentation.content ? { content: presentation.content } : {}),
     ...(spec.sessionBound ? { sessionBound: true as const } : {}),
-    ...(presentation.commandIcon ? { commandIcon: presentation.commandIcon } : {}),
     ...(presentation.isDisabled ? { isDisabled: presentation.isDisabled } : {}),
     ...(presentation.badge ? { badge: presentation.badge } : {}),
     ...(presentation.bodyLayout ? { bodyLayout: presentation.bodyLayout } : {}),
@@ -175,17 +185,16 @@ function panelButton(
 const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   context: panelButton("context", {
     labelKey: "Context",
-    content: () => <Bot size={16} />,
+    icon: ({ size }) => <Bot size={size} />,
   }),
   translate: panelButton("translate", {
     labelKey: "Open translate",
-    content: () => <Languages size={16} />,
-    commandIcon: <Languages size={16} />,
+    icon: ({ size }) => <Languages size={size} />,
   }),
   rss: panelButton("rss", {
     labelKey: "RSS",
     badge: (ctx) => <CountBadge count={ctx.rssUnread} size="sm" />,
-    content: () => <Rss size={16} />,
+    icon: ({ size }) => <Rss size={size} />,
   }),
   // GitHub Trending: global (not session-bound) — public data anyone can
   // browse. Defaults right after RSS in the configurable row: another
@@ -193,7 +202,7 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   // tab-bar glyph is the GitHub Octocat (brand icon), not a generic arrow.
   githubTrending: panelButton("githubTrending", {
     labelKey: "GitHub Trending",
-    content: () => <GithubIcon size={16} />,
+    icon: ({ size }) => <GithubIcon size={size} />,
   }),
   // Cwd-derived (one repo per active session) — treated as session-bound
   // for column layout so it pins with the other "live state" buttons.
@@ -202,31 +211,30 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     // Disabled when there's no cwd at all (no selected session, no
     // in-flight new-session cwd) — matches the original inline guard.
     isDisabled: (ctx) => !ctx.selectedCwd,
-    content: () => <GitGraph size={16} />,
-    commandIcon: <GitGraph size={16} />,
+    icon: ({ size }) => <GitGraph size={size} />,
   }),
   favorites: panelButton("favorites", {
     labelKey: "Open favorites",
     // Active state uses fill="var(--accent)" instead of just the color flip,
     // matching the original star and the tab-bar icon.
-    content: (ctx) => (
-      <Star size={16} fill={ctx.activeTabKind === "favorites" ? "var(--accent)" : "none"} />
+    icon: ({ size, active }) => (
+      <Star size={size} fill={active ? "var(--accent)" : "none"} />
     ),
-    commandIcon: <Star size={16} />,
   }),
   tokens: panelButton("tokens", {
     labelKey: "Open token audit",
-    content: () => <ChartSpline size={16} />,
-    commandIcon: <ChartSpline size={16} />,
+    icon: ({ size }) => <ChartSpline size={size} />,
   }),
   llmAudit: panelButton("llmAudit", {
     labelKey: "Open LLM API audit",
-    content: () => <ChartColumn size={16} />,
-    commandIcon: <ChartColumn size={16} />,
+    icon: ({ size }) => <ChartColumn size={size} />,
   }),
   toolCalls: panelButton("toolCalls", {
     labelKey: "Tool Calls",
-    content: (ctx) => {
+    icon: ({ size }) => <Wrench size={size} />,
+    // The only button that stacks a live counter under its glyph; the tab
+    // strip shows the bare icon, so the extra stays in this override.
+    content: (ctx, icon) => {
       const { runningCount, totalCount } = ctx.toolStats;
       const badgeColor =
         runningCount > 0
@@ -236,7 +244,7 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
             : null;
       return (
         <>
-          <Wrench size={16} />
+          {icon}
           {badgeColor !== null && (
             <span
               style={{
@@ -253,13 +261,12 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
         </>
       );
     },
-    commandIcon: <Wrench size={16} />,
     bodyLayout: { flexDirection: "column", gap: 1 },
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",
     isDisabled: (ctx) => !ctx.selectedSessionId && !ctx.selectedCwd,
-    content: () => <GitBranch size={16} />,
+    icon: ({ size }) => <GitBranch size={size} />,
   }),
   // BTW (By the way): session-bound, reads from the active main session.
   // Disabled when there's no stable sessionId yet. The button shows the
@@ -269,21 +276,21 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   btw: panelButton("btw", {
     labelKey: "Open BTW",
     isDisabled: (ctx) => !ctx.selectedSessionId,
-    content: () => <MessageSquareMore size={16} />,
+    icon: ({ size }) => <MessageSquareMore size={size} />,
   }),
   // Kanban: global board (spans all cwds), not session-bound. Its spec
   // declares an expanded default open state so the four columns have room,
   // while a second click collapses the panel like any other toggle button.
   kanban: panelButton("kanban", {
     labelKey: "Kanban",
-    content: () => <SquareKanban size={16} />,
+    icon: ({ size }) => <SquareKanban size={size} />,
   }),
   // Notes: global personal note-taking board, not session-bound. It stores
   // plain markdown under ~/.pi-work/user-notes and is intended for the human
   // user (the agent stays out of it).
   notes: panelButton("notes", {
     labelKey: "Notes",
-    content: () => <NotebookText size={16} />,
+    icon: ({ size }) => <NotebookText size={size} />,
   }),
 };
 
@@ -296,16 +303,24 @@ export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
   ...PANEL_TAB_KINDS.map((kind) => PANEL_DESCRIPTOR_BY_KIND[kind]),
 ];
 
-/** Command-palette icon per panel kind, from the same presentation entries
- *  the right-bar column uses. Reads the descriptor so an icon is declared
- *  exactly once. */
+/** Icon per panel kind, from the same presentation entries the right-bar
+ *  column uses. The tab strip is the only other consumer, so the glyph is
+ *  declared once in `PANEL_DESCRIPTOR_BY_KIND` and looked up here by kind. */
+export const PANEL_TAB_ICON_BY_KIND: Record<PanelViewKind, PanelIcon> =
+  Object.fromEntries(
+    PANEL_TAB_KINDS.map((kind) => [kind, PANEL_DESCRIPTOR_BY_KIND[kind].icon]),
+  ) as Record<PanelViewKind, PanelIcon>;
+
+/** Command-palette icon per panel kind, for the specs that opt into a
+ *  palette command — the same glyph at button size, never active. Panels
+ *  without a command keep no palette icon (the palette falls back to null). */
 export const PANEL_COMMAND_ICON_BY_KIND: Partial<Record<PanelViewKind, ReactNode>> =
   Object.fromEntries(
-    PANEL_TAB_KINDS.flatMap((kind) => {
-      const icon = PANEL_DESCRIPTOR_BY_KIND[kind].commandIcon;
-      return icon ? [[kind, icon] as const] : [];
-    }),
-  );
+    PANEL_TAB_SPECS.filter((spec) => spec.command).map((spec) => [
+      spec.kind,
+      PANEL_TAB_ICON_BY_KIND[spec.kind]({ size: 16, active: false }),
+    ]),
+  ) as Partial<Record<PanelViewKind, ReactNode>>;
 
 // Tab.kind → RightBarButtonId reverse lookup is derived from the registry in
 // `lib/shared/panelTabs` (`panelButtonIdForKind`) — no second mapping here.
@@ -329,6 +344,16 @@ export const RIGHT_BAR_DESCRIPTOR_BY_ID: ReadonlyMap<
   RightBarDescriptor["id"],
   RightBarDescriptor
 > = new Map(RIGHT_BAR_DESCRIPTORS.map((d) => [d.id, d]));
+
+/** Resolve the body of a button: the plain glyph, or the descriptor's
+ *  override with the glyph already rendered at button size. */
+export function resolveButtonContent(
+  desc: RightBarDescriptor,
+  ctx: RightBarCtx,
+): ReactNode {
+  const icon = desc.icon({ size: 16, active: desc.isActive(ctx) });
+  return desc.content ? desc.content(ctx, icon) : icon;
+}
 
 /** Resolve the user-visible label for a button. Handles descriptors whose
  *  label flips based on state (panel toggle: Hide/Show; expand: Collapse/

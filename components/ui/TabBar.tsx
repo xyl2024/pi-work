@@ -3,20 +3,7 @@
 import { useCallback, useRef } from "react";
 import { getFileIcon } from "@/components/ui/icons";
 import { ICONS } from "@/components/ui/icons";
-import {
-  Bot,
-  ChartColumn,
-  ChartSpline,
-  GitBranch,
-  GitGraph,
-  Languages,
-  MessageSquareMore,
-  Rss,
-  SquareKanban,
-  Star,
-  Wrench,
-} from "lucide-react";
-import GithubIcon from "@lobehub/icons/es/Github/components/Mono";
+import { PANEL_TAB_ICON_BY_KIND } from "@/components/panels/right-bar/desc";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "./Tooltip";
 import type { AnyPanelTab } from "@/lib/shared/panelTabs";
@@ -88,34 +75,13 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
           const displayLabel = tab.kind === "file" ? tab.label ?? "" : t(tab.labelKey);
           const tooltipContent =
             tab.kind === "file" ? tab.params.path : displayLabel;
+          // Panel glyphs come from the right-bar presentation registry, so
+          // the tab strip and the button column can never drift apart. The
+          // file preview is not a panel view: it keeps its per-file icon.
           const icon =
-            tab.kind === "favorites" ? (
-              <Star size={13} fill={isActive ? "var(--accent)" : "none"} />
-            ) : tab.kind === "translate" ? (
-              <Languages size={13} />
-            ) : tab.kind === "toolCalls" ? (
-              <Wrench size={13} />
-            ) : tab.kind === "rss" ? (
-              <Rss size={13} />
-            ) : tab.kind === "tokens" ? (
-              <ChartSpline size={13} />
-            ) : tab.kind === "llmAudit" ? (
-              <ChartColumn size={13} />
-            ) : tab.kind === "context" ? (
-              <Bot size={13} />
-            ) : tab.kind === "conversationTree" ? (
-              <GitBranch size={13} />
-            ) : tab.kind === "gitDiff" ? (
-              <GitGraph size={13} />
-            ) : tab.kind === "btw" ? (
-              <MessageSquareMore size={13} />
-            ) : tab.kind === "githubTrending" ? (
-              <GithubIcon size={13} />
-            ) : tab.kind === "kanban" ? (
-              <SquareKanban size={13} />
-            ) : (
-              getFileIcon(tab.label ?? "", 13)
-            );
+            tab.kind === "file"
+              ? getFileIcon(tab.label ?? "", 13)
+              : PANEL_TAB_ICON_BY_KIND[tab.kind]({ size: 13, active: isActive });
           return (
             <div
               key={tab.id}

@@ -27,8 +27,12 @@ import {
 } from "@/lib/shared/panelTabs";
 import {
   PANEL_COMMAND_ICON_BY_KIND,
+  PANEL_TAB_ICON_BY_KIND,
   RIGHT_BAR_BUTTON_IDS,
+  RIGHT_BAR_DESCRIPTOR_BY_ID,
   RIGHT_BAR_DESCRIPTORS,
+  resolveButtonContent,
+  type RightBarCtx,
 } from "@/components/panels/right-bar/desc";
 
 /** Apply a list of actions in order — mirrors how the shell dispatches them. */
@@ -479,6 +483,42 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     for (const spec of PANEL_TAB_SPECS) {
       if (!spec.command) continue;
       expect(PANEL_COMMAND_ICON_BY_KIND[spec.kind]).toBeTruthy();
+    }
+  });
+
+  it("shares one glyph per kind between the tab strip and its right-bar button", () => {
+    // The tab strip no longer keeps its own icon chain: it reads the same
+    // descriptor entry the button column renders, so the two can't drift.
+    for (const kind of PANEL_TAB_KINDS) {
+      const buttonId = PANEL_BUTTON_ID_BY_KIND[kind];
+      expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get(buttonId)?.icon).toBe(PANEL_TAB_ICON_BY_KIND[kind]);
+    }
+  });
+
+  it("renders a truthy glyph for every panel kind", () => {
+    for (const kind of PANEL_TAB_KINDS) {
+      const element = PANEL_TAB_ICON_BY_KIND[kind]({ size: 13, active: false }) as {
+        type?: unknown;
+      } | null;
+      expect(element).toBeTruthy();
+      expect(element?.type).toBeTruthy();
+    }
+  });
+
+  it("resolves a non-empty button body for every descriptor from its glyph", () => {
+    const ctx: RightBarCtx = {
+      rightPanelState: "normal",
+      activeTabKind: null,
+      selectedSessionId: null,
+      selectedCwd: null,
+      rssUnread: 0,
+      toolStats: { runningCount: 0, totalCount: 0 },
+      t: (key) => key,
+      toggleRightPanel: () => {},
+      togglePanel: () => {},
+    };
+    for (const desc of RIGHT_BAR_DESCRIPTORS) {
+      expect(resolveButtonContent(desc, ctx)).toBeTruthy();
     }
   });
 

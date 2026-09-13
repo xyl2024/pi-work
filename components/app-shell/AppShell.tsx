@@ -75,7 +75,6 @@ import { buildCommands, type Command, type CommandContext } from "@/lib/client/c
 import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
-import { useGitStatusStore } from "@/lib/client/git-status-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
@@ -95,6 +94,92 @@ interface ToolInfo {
   description: string;
   active: boolean;
 }
+
+/** Everything the panel bodies read from the shell. Bundling it into one
+ *  object keeps the kind → body dispatch below a single table lookup. */
+interface PanelBodyCtx {
+  rightPanelState: PanelMode;
+  selectedSessionId: string | null;
+  cwd: string | null;
+  favoriteIds: string[];
+  onSelectSession: (session: SessionInfo) => void;
+  onToggleFavorite: (sessionId: string) => void;
+  systemPrompt: string | null;
+  tools: ToolInfo[];
+  currentModel: { provider: string; modelId: string } | null;
+  thinkingLevel: string;
+  onRefreshSystemPrompt: () => void;
+  isStreaming: boolean;
+  agentRunning: boolean;
+  onConversationTreeCardClick: (cardId: string) => void;
+  btwOpenCount: number;
+  gitDiffOpenCount: number;
+  onExpandGitPanel: () => void;
+  onOpenKanbanSession: (sessionId: string) => void;
+}
+
+/**
+ * The panel view body, looked up by kind. This is the only place the shell
+ * decides which component renders a panel view; the tab strip reads the same
+ * kind's glyph from the presentation registry (`PANEL_TAB_ICON_BY_KIND`), so
+ * adding a view touches one spec, one descriptor entry and this table.
+ *
+ * The file preview is intentionally absent: it is not a panel view — its path
+ * rides on the tab itself, so the shell renders it directly.
+ */
+const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode> = {
+  favorites: (ctx) => (
+    <CollectionPanel
+      favoriteIds={ctx.favoriteIds}
+      onSelectSession={ctx.onSelectSession}
+      onToggleFavorite={ctx.onToggleFavorite}
+    />
+  ),
+  translate: () => <TranslatePanel />,
+  toolCalls: () => <ToolCallStatsTabBody />,
+  rss: () => <RssPanel />,
+  githubTrending: () => <GitHubTrendingPanel />,
+  tokens: () => <TokensPanel />,
+  llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
+  context: (ctx) => <ContextPanel systemPrompt={ctx.systemPrompt} tools={ctx.tools} />,
+  btw: (ctx) => (
+    <BtwPanel
+      mainSessionId={ctx.selectedSessionId}
+      cwd={ctx.cwd}
+      model={ctx.currentModel}
+      systemPrompt={ctx.systemPrompt}
+      thinkingLevel={ctx.thinkingLevel}
+      onRefresh={ctx.onRefreshSystemPrompt}
+      focusRequest={ctx.btwOpenCount}
+    />
+  ),
+  gitDiff: (ctx) => (
+    <GitPanel
+      cwd={ctx.cwd}
+      openRefreshToken={ctx.gitDiffOpenCount}
+      onExpandPanel={ctx.onExpandGitPanel}
+      isPanelExpanded={ctx.rightPanelState === "expanded"}
+    />
+  ),
+  conversationTree: (ctx) => (
+    <ConversationTreePanel
+      isStreaming={ctx.isStreaming}
+      agentRunning={ctx.agentRunning}
+      onCardClick={(card) => ctx.onConversationTreeCardClick(card.id)}
+    />
+  ),
+  kanban: (ctx) => (
+    <KanbanPanel
+      defaultCwd={ctx.cwd}
+      defaultModel={ctx.currentModel}
+      defaultThinkingLevel={ctx.thinkingLevel}
+      defaultTools={ctx.tools}
+      onOpenSession={ctx.onOpenKanbanSession}
+      expanded={ctx.rightPanelState === "expanded"}
+    />
+  ),
+  notes: (ctx) => <NotesPanel expanded={ctx.rightPanelState === "expanded"} />,
+};
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "—";
@@ -1215,22 +1300,12 @@ export function AppShell() {
   }, []);
 
   const { snapshot: toolStatsSnapshot } = useToolCallStatsView();
-  // Number of changed files for the active cwd's git repo — drives the
-  // badge on the git-diff right-bar button. The store is event-driven
-  // now (refreshes on edit/write tool ends), so this stays live without
-  // polling. Falls back to 0 when there's no cwd, the cwd isn't a repo,
-  // or the repo has no changes — in all three cases the badge hides.
-  const gitStore = useGitStatusStore();
-  const gitChangedCount = selectedCwd
-    ? (gitStore.entriesByCwd.get(selectedCwd)?.files.length ?? 0)
-    : 0;
   const rightBarCtx: RightBarCtx = {
     rightPanelState,
     activeTabKind: activeRightPanelKind,
     selectedSessionId,
     selectedCwd,
     rssUnread,
-    gitChangedCount,
     toolStats: {
       runningCount: toolStatsSnapshot.runningCount,
       totalCount: toolStatsSnapshot.totalCount,
@@ -1239,7 +1314,27 @@ export function AppShell() {
     toggleRightPanel: () =>
       setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),
     togglePanel: handleTogglePanel,
-    setRightPanelState: setPanelMode,
+  };
+  // Everything the panel bodies read, in one object — see PANEL_BODY_BY_KIND.
+  const panelBodyCtx: PanelBodyCtx = {
+    rightPanelState,
+    selectedSessionId,
+    cwd: selectedCwd,
+    favoriteIds,
+    onSelectSession: handleSelectSession,
+    onToggleFavorite: toggleSessionFavorite,
+    systemPrompt,
+    tools,
+    currentModel,
+    thinkingLevel,
+    onRefreshSystemPrompt: refreshSystemPrompt,
+    isStreaming,
+    agentRunning,
+    onConversationTreeCardClick: handleConversationTreeCardClick,
+    btwOpenCount,
+    gitDiffOpenCount,
+    onExpandGitPanel: handleExpandGitPanel,
+    onOpenKanbanSession: handleOpenKanbanSession,
   };
 
   // Ctrl+` toggles the terminal panel (VS Code muscle memory).
@@ -1546,77 +1641,23 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* File content — same body routing as the original right panel.
-          Pulled into a fragment-level child so the surrounding column
+      {/* File content — one lookup by kind (`PANEL_BODY_BY_KIND`), plus the
+          file preview, which is not a panel view and takes its path from the
+          tab. Pulled into a fragment-level child so the surrounding column
           handles flex / overflow without an extra wrapper div. */}
       <div ref={rightPanelRef} style={{ flex: 1, overflow: "hidden" }}>
-        {activePanelTab?.kind === "favorites" ? (
-          <CollectionPanel
-            favoriteIds={favoriteIds}
-            onSelectSession={handleSelectSession}
-            onToggleFavorite={toggleSessionFavorite}
-          />
-        ) : activePanelTab?.kind === "translate" ? (
-          <TranslatePanel />
-        ) : activePanelTab?.kind === "toolCalls" ? (
-          <ToolCallStatsTabBody />
-        ) : activePanelTab?.kind === "file" ? (
+        {activePanelTab === null ? (
+          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
+            {t("No file open")}
+          </div>
+        ) : activePanelTab.kind === "file" ? (
           <FileViewer
             filePath={activePanelTab.params.path}
             cwd={selectedSession?.cwd ?? newSessionCwd ?? undefined}
             rightPanelState={rightPanelState}
           />
-        ) : activePanelTab?.kind === "rss" ? (
-          <RssPanel />
-        ) : activePanelTab?.kind === "githubTrending" ? (
-          <GitHubTrendingPanel />
-        ) : activePanelTab?.kind === "tokens" ? (
-          <TokensPanel />
-        ) : activePanelTab?.kind === "llmAudit" ? (
-          <LlmAuditPanel currentSessionId={selectedSession?.id ?? null} />
-        ) : activePanelTab?.kind === "context" ? (
-          <ContextPanel
-            systemPrompt={systemPrompt}
-            tools={tools}
-          />
-        ) : activePanelTab?.kind === "btw" ? (
-          <BtwPanel
-            mainSessionId={selectedSession?.id ?? null}
-            cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
-            model={currentModel}
-            systemPrompt={systemPrompt}
-            thinkingLevel={thinkingLevel}
-            onRefresh={refreshSystemPrompt}
-            focusRequest={btwOpenCount}
-          />
-        ) : activePanelTab?.kind === "gitDiff" ? (
-          <GitPanel
-            cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
-            openRefreshToken={gitDiffOpenCount}
-            onExpandPanel={handleExpandGitPanel}
-            isPanelExpanded={rightPanelState === "expanded"}
-          />
-        ) : activePanelTab?.kind === "conversationTree" ? (
-          <ConversationTreePanel
-            isStreaming={isStreaming}
-            agentRunning={agentRunning}
-            onCardClick={(card) => handleConversationTreeCardClick(card.id)}
-          />
-        ) : activePanelTab?.kind === "kanban" ? (
-          <KanbanPanel
-            defaultCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
-            defaultModel={currentModel}
-            defaultThinkingLevel={thinkingLevel}
-            defaultTools={tools}
-            onOpenSession={handleOpenKanbanSession}
-            expanded={rightPanelState === "expanded"}
-          />
-        ) : activePanelTab?.kind === "notes" ? (
-          <NotesPanel expanded={rightPanelState === "expanded"} />
         ) : (
-          <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            {t("No file open")}
-          </div>
+          PANEL_BODY_BY_KIND[activePanelTab.kind](panelBodyCtx)
         )}
       </div>
     </>
