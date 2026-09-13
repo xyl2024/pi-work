@@ -182,7 +182,6 @@ export const common = {
   "Searching...": "正在搜索...",
   "Add": "添加",
   "All": "全部",
-  "Pinned": "已固定",
   "Recent": "最近使用",
   "Configured": "已配置",
   "Not configured": "未配置",
@@ -239,7 +238,6 @@ export const common = {
   "Session renamed": "会话已重命名",
   "Failed to delete session": "删除会话失败",
   "Failed to rename session": "重命名会话失败",
-  "Failed to update pin": "更新置顶失败",
 
   // Layout mode switcher (settings → Appearance). "Agentic" / "Classic"
   // are product-style identifiers; keep them as-is in zh to match the

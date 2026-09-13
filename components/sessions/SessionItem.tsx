@@ -168,8 +168,8 @@ export function SessionItem({
     try {
       const res = await fetch(`/api/sessions/${encodeURIComponent(session.id)}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      // Per handoff §2 #25: when the main session is deleted, drop the
-      // BTW record for the same id from localStorage. We do this in the
+      // When the main session is deleted, drop the BTW record for the
+      // same id from localStorage. We do this in the
       // success path (after the server confirmed the delete); the delete
       // itself must not block on the localStorage removal, so a
       // quota / SecurityError here silently fails.

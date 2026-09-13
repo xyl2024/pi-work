@@ -8,7 +8,7 @@
 // the provider receives the same prompt/context/tool prefix the main agent
 // would send next, maximising prompt-cache hits.
 //
-// Per the handoff §3.5, the wire format mirrors `/api/agent/[id]/events`
+// The wire format mirrors `/api/agent/[id]/events`
 // and `/api/translate/route.ts`: each event is `data: <json>\n\n`, plus a
 // 30s heartbeat (`:\n\n`) to keep proxies from killing the stream.
 //

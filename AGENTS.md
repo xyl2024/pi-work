@@ -8,7 +8,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 
 - **会话与 Agent**：多会话工作区和标签页、SSE 流式事件、分支树导航、上下文压缩、模型/思考级别/工具选择、会话搜索/重命名/删除/导出/自动命名。
 - **项目工作区**：按 cwd 浏览和搜索文件，编辑、重命名、删除和查看文本、代码、Diff、图片、音频、视频、PDF、SVG、Mermaid、ECharts；支持 Git Diff 和独立终端。
-- **辅助面板**：用户 Todo、Agent Todo、收藏、Canvas、翻译、JSON、RSS、定时任务、Token 审计、LLM API 审计、工具调用统计、会话 Context/Conversation Tree。
+- **辅助面板**：收藏、翻译、RSS、GitHub Trending、看板、笔记、BTW、定时任务、Token 审计、LLM API 审计、工具调用统计、会话 Context/Conversation Tree。
 - **配置与集成**：模型/API Key/OAuth、Prompt、Skill、危险命令确认、自定义 Agent 工具、右侧按钮、音效和界面设置；另有 Inbox、微信登录/收发消息及 Grokbot 功能。
 
 ## 目录与架构
@@ -24,9 +24,9 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 **`app/api/`** 按领域拆分的路由目录：
 
 - Agent 与配置：`agent`、`agent-settings`、`append-system`、`models`、`models-config`、`prompts`、`skills`、`slash-commands`、`settings`、`status-bar`。
-- 会话与工作区：`sessions`、`workspaces`、`create-space`、`default-cwd`、`pinned-cwds`、`favorites`、`tags`、`home`。
+- 会话与工作区：`sessions`、`workspaces`、`create-space`、`default-cwd`、`favorites`、`tags`、`home`。
 - 文件与开发工具：`files`、`git`、`terminal`、`translate`、`exchange-rate`。
-- Todo 与审计：`todos`、`todo-images`、`todo-tools`、`token-audit`、`llm-audit`。
+- 审计：`token-audit`、`llm-audit`。
 - 外部服务与消息：`auth`、`profile`、`inbox`、`rss`、`scheduled-tasks`、`weixin`。
 
 **`components/`** 按功能划分：
@@ -35,19 +35,19 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 - `chat/`：会话聊天、输入、消息渲染、模型/思考级别/工具选择、权限确认和 Ask User Questions；`chat/chat-input/`、`chat/chat-window/`、`chat/message-view/` 是进一步拆分的子模块。
 - `sessions/`：会话侧栏、标签页、搜索、会话库、多 cwd 管理、收藏和 Conversation Tree；`sessions/session-library/` 存放会话库相关视图。
 - `files/`：工作区文件浏览、Git 状态和文件查看；`files/file-viewer/` 提供文本/代码、图片、音频、视频和 PDF 查看器。
-- `panels/`：右侧辅助面板，包括 Canvas、Git、JSON、LLM Audit、Tokens、Tool Call Stats、Translate 和 Terminal；`panels/right-bar/` 是右侧按钮列，`desc.tsx` 注册描述符，`icons.tsx` 提供图标。
-- `settings/`：设置弹窗及模型、Prompt、Skill、Profile、重试、Append System、自定义工具、文件预览、Todo、右侧按钮、音效等设置区块；`settings/models-config/` 和 `settings/skills-config/` 是复杂配置子模块。
-- `inbox/`：消息中心；`grokbot/`：Grokbot 功能；`rss/`：RSS 阅读面板；`scheduler/`：定时任务 UI；`todos/`：Agent Todo 和用户 Todo UI。
+- `panels/`：右侧辅助面板，包括 Git、LLM Audit、Tokens、Tool Call Stats、Translate、Terminal、BTW、看板、笔记和 GitHub Trending；`panels/right-bar/` 是右侧按钮列，`desc.tsx` 注册描述符，`icons.tsx` 提供图标。
+- `settings/`：设置弹窗及模型、Prompt、Skill、Profile、重试、Append System、自定义工具、文件预览、右侧按钮、音效等设置区块；`settings/models-config/` 和 `settings/skills-config/` 是复杂配置子模块。
+- `inbox/`：消息中心；`grokbot/`：Grokbot 功能；`rss/`：RSS 阅读面板；`scheduler/`：定时任务 UI；`kanban/`：看板；`tools-market/`：工具市场。
 - `renderers/`：聊天消息中的代码块、ECharts、Mermaid、SVG 和图片等渲染器。
 - `ui/`：公共 UI 原语与图标；`ui/animated-icons/` 是独立 motion 动画图标（`shared.ts` 提供 `useIconHover`、`ICON_WRAP` 等共享能力），`ui/icons/` 是通用图标注册与实现。
 
-**`hooks/`**：客户端 hooks、store 和会话状态。`hooks/useAgentSession/` 对外从 `index.ts` 导出，内部文件不是稳定 API；常见模块包括 `useAgentTodo`、`useInbox*`、`useRss*`、`useTodos`、`useTheme`、`useI18n`、`useToolCallStats`，以及 `session*Store`、`settingsStore`、`cwdListStore` 等模块级 store。
+**`hooks/`**：客户端 hooks、store 和会话状态。`hooks/useAgentSession/` 对外从 `index.ts` 导出，内部文件不是稳定 API；常见模块包括 `useInbox*`、`useRss*`、`useBtw`、`useKanban`、`useTheme`、`useI18n`、`useToolCallStats`，以及 `session*Store`、`settingsStore`、`cwdListStore` 等模块级 store。
 
 **`lib/`** 按运行环境分为三层：
 
 - `lib/client/`：浏览器端工具、状态和展示辅助，包括 Agent client、命令、文件图标、Git 状态、Grokbot 数据、Canvas 文件状态、Monaco 主题和 UI 音效。
-- `lib/shared/`：客户端/服务端共用的类型、协议和纯函数，包括基础类型、配置/审计/Todo/微信类型、会话树、文件路径与查看限制、国际化字典、RSS 数据、右侧面板、翻译和消息展示逻辑。
-- `lib/server/`：仅服务端的文件系统、SQLite、pi SDK、RPC、会话、终端、后台循环和第三方集成。主要模块包括 `rpc-manager.ts`、`sessions/`、`session-export/`、`files/`、`terminal/`、`wechat/`、`scheduler/`、`rss/`，以及 Inbox、LLM Audit、Token Audit、Profile、User Todo 等 store/db 模块。
+- `lib/shared/`：客户端/服务端共用的类型、协议和纯函数，包括基础类型、配置/审计/微信类型、会话树、文件路径与查看限制、国际化字典、RSS 数据、右侧面板、翻译和消息展示逻辑。
+- `lib/server/`：仅服务端的文件系统、SQLite、pi SDK、RPC、会话、终端、后台循环和第三方集成。主要模块包括 `rpc-manager.ts`、`sessions/`、`session-export/`、`files/`、`terminal/`、`wechat/`、`scheduler/`、`rss/`，以及 Inbox、LLM Audit、Token Audit、Profile 等 store/db 模块。
 
 ### 关键服务关系
 
@@ -69,7 +69,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 ## 配置和数据
 
 - pi 会话/配置默认位于 `~/.pi/agent/`；Pi Work 配置位于 `~/.pi-work/config.yaml`。
-- Todo、Scheduler、RSS、Inbox、Token 审计、LLM 审计等功能各自使用 `~/.pi-work/` 下的 SQLite 数据库，并支持对应的 `PI_WORK_*_DB` 环境变量覆盖。
+- Scheduler、RSS、Inbox、Token 审计、LLM 审计等功能各自使用 `~/.pi-work/` 下的 SQLite 数据库，并支持对应的 `PI_WORK_*_DB` 环境变量覆盖。
 - 自定义工具、Append System、文件预览限制和右侧面板等配置通常在新 Agent session 创建时读取；修改设置后不要假定已有 session 会自动更新。
 - `PI_CODING_AGENT_DIR` 可覆盖 pi 数据目录；不要在测试中直接污染真实用户目录。
 - 新增环境隔离：所有 Pi Work 数据默认位于 `~/.pi-work/`，可用 `PI_WORK_DATA_DIR` 整体覆盖（各 `PI_WORK_*_DB` 单项覆盖优先级更高）；生产与开发多实例并存时，用 `npm run dev:isolated`（`scripts/dev-isolated.mjs`）启动完全隔离的开发实例（独立数据根、pi 数据目录与端口）。
@@ -95,10 +95,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 | 右侧按钮列 | `RightBarColumn`（`components/panels/right-bar/RightBarColumn.tsx`） |
 | 右侧按钮描述器 | `RightBarDescriptor`、`RIGHT_BAR_DESCRIPTORS`（`components/panels/right-bar/desc.tsx`） |
 | 右侧面板配置 | `RightSideBarConfig`、`RightBarButtonId`（`lib/shared/right-bar.ts`） |
-| 待办 | `todos`、`todosDescriptor`、`openTab.todo` |
-| 画布 | `canvas`、`canvasDescriptor`、`openTab.canvas` |
 | 翻译 | `translate`、`translateDescriptor`、`openTab.translate` |
-| JSON 格式化 | `json`、`jsonDescriptor`、`openTab.json` |
 | RSS | `rss`、`rssDescriptor`、`openTab.rss` |
 | 收藏 | `favorites`、`favoritesDescriptor`、`openTab.favorites` |
 | Token 审计 | `tokens`、`tokensDescriptor`、`openTab.tokens` |
@@ -108,6 +105,9 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 | LLM API 审计 | `llmAudit`、`llmAuditDescriptor`、`openTab.llmAudit` |
 | Context 面板 | `context`、`contextDescriptor`、`openTab.context` |
 | BTW 面板 | `btw`、`btwDescriptor`、`openTab.btw` |
+| 看板 | `kanban`、`kanbanDescriptor`、`openTab.kanban` |
+| 笔记 | `notes`、`notesDescriptor`、`openTab.notes` |
+| GitHub Trending | `githubTrending`、`githubTrendingDescriptor`、`openTab.githubTrending` |
 | 工具市场 | `openToolMarket`、`ToolMarket` |
 | 设置 | `openSettings`、`modal.settings` |
 | 频道 | `openChannels`、`modal.channels` |
@@ -138,3 +138,17 @@ npm run build                       # 需要生产构建验证时运行
 ```
 
 日常开发循环不要运行 `next build`，它会覆盖共享的 `.next/`，可能影响正在运行的生产/开发服务器（生产模式测试 `PI_WORK_TEST_PROD=1` 除外，它构建到独立的 `.next-test/`）。完成修改后至少运行与改动范围匹配的 TypeScript 检查或 ESLint；涉及会话、流式事件、权限、文件操作、后台任务或集成时补充手动 smoke test，并在最终说明已验证和未验证的部分。
+
+## Agent skills
+
+### Issue tracker
+
+Issue 与 spec 记录在本仓库的 GitHub Issues（`xyl2024/pi-work`），统一用 `gh` CLI 操作。详见 `docs/agents/issue-tracker.md`。
+
+### Triage labels
+
+沿用默认的五个分诊标签：`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`。详见 `docs/agents/triage-labels.md`。
+
+### Domain docs
+
+单上下文（single-context）：根目录 `CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。

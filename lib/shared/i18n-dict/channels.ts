@@ -55,7 +55,6 @@ export const channels = {
   "channels.scanHint": "用微信扫码，或在手机上打开下方链接：",
   "channels.currentWorkspace": "当前 workspace",
   "channels.switchWorkspace": "切换 workspace",
-  "channels.pinned": "置顶",
   "channels.recent": "最近",
   "channels.noWorkspaces": "暂无可用 workspace",
   "channels.noChannels": "还没有频道，先创建一个吧",

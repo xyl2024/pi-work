@@ -5,7 +5,7 @@
 //   - the BTW message history (mirrored from `pi-work:btw:<sessionId>`)
 //   - the in-flight send lifecycle (idle → loading → streaming → done/error)
 //   - persistence to localStorage on every committed transition
-//   - 7-day expiry cleanup on first read (§3.3 of the handoff)
+//   - 7-day expiry cleanup on first read
 //
 // It deliberately stays out of `useAgentSession` — that hook owns the
 // MAIN session's RPC events and JSONL writes, and BTW is forbidden
@@ -19,7 +19,7 @@
 //
 // Persistence model (mirrors `lib/client/btw-storage.ts`):
 //   - `user` message is written synchronously to localStorage BEFORE
-//     `fetch()` is fired (handoff §3.3 "user 消息在 send 调用前同步写入")
+//     `fetch()` is fired, so a failed send never loses the user message
 //   - `assistant` is only written when the stream ends cleanly (success
 //     or `agent_end` with `stopReason: "error"`) — partial / aborted
 //     assistants are dropped
@@ -82,7 +82,7 @@ export interface UseBtwApi extends BtwState {
 
 export interface UseBtwArgs {
   /** Main session id. When null/undefined, BTW is disabled and the
-   *  hook returns an inert API (handoff §2 #14). */
+   *  hook returns an inert API. */
   mainSessionId: string | null;
 }
 
@@ -290,7 +290,7 @@ export function useBtw(args: UseBtwArgs): UseBtwApi {
         return;
       }
       if (phase === "loading" || phase === "streaming") {
-        // Concurrent send blocked per handoff §2 #13.
+        // A send is already in flight; ignore concurrent submits.
         return;
       }
 

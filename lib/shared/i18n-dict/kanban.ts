@@ -22,7 +22,6 @@ export const kanban = {
   "Model": "模型",
   "Thinking level": "推理强度",
   "Working directory": "工作目录",
-  "Tools": "工具集",
   "All tools": "全部工具",
   "No tools": "关闭工具",
   "Custom tools": "自定义工具",

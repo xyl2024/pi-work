@@ -1,12 +1,11 @@
 // ── BTW (By the way) localStorage layer ────────────────────────────────
 //
 // BTW is a sidebar panel that asks a temporary, in-memory, read-only-only
-// agent grounded in the active session's context. Per the handoff (§1, §2,
-// §7), BTW must NOT touch the main session's JSONL, the RPC registry, or
-// any server-side store. The browser-localStorage is its only durable
-// home.
+// agent grounded in the active session's context. BTW must NOT touch the
+// main session's JSONL, the RPC registry, or any server-side store — the
+// browser's localStorage is its only durable home.
 //
-// Per the handoff §3.3:
+// Persistence contract:
 //   - key: `pi-work:btw:<mainSessionId>` — one entry per main session
 //   - 2 MB ceiling per key — bump up to the user instead of silently
 //     dropping messages
@@ -121,8 +120,8 @@ export function readBtw(mainSessionId: string): BtwPersisted | null {
 }
 
 /** Persist `next`. Throws `BtwStorageQuotaError` when the serialized
- *  payload exceeds the 2 MB cap (per handoff §3.3, the user must clear
- *  instead of silently dropping messages). All other write failures
+ *  payload exceeds the 2 MB cap — the user must clear instead of having
+ *  messages silently dropped. All other write failures
  *  (private mode, etc.) are swallowed — BTW is best-effort persistence
  *  and a transient write failure should not crash the panel. */
 export function writeBtw(next: BtwPersisted): void {
@@ -152,7 +151,7 @@ export function writeBtw(next: BtwPersisted): void {
 
 /** Drop the BTW record for `mainSessionId`. No-op when the key is absent
  *  or storage is unavailable. Used by manual "clear" and by the main
- *  session delete handler (per handoff §2 #25). */
+ *  session delete handler. */
 export function deleteBtw(mainSessionId: string): void {
   const store = getStore();
   if (!store) return;

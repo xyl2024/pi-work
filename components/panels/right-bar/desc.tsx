@@ -265,10 +265,10 @@ const contextDescriptor: RightBarDescriptor = {
 };
 
 // BTW (By the way): session-bound, reads from the active main session.
-// Disabled when there's no stable sessionId yet (handoff §2 #14). The
-// button shows the animated speech-bubble-with-dots glyph so the user
-// can spot it without reading, while the tooltip keeps the "Open BTW"
-// label per the handoff's i18n rules.
+// Disabled when there's no stable sessionId yet. The button shows the
+// animated speech-bubble-with-dots glyph so the user can spot it without
+// reading, while the tooltip keeps the "Open BTW" label (an i18n key,
+// never inlined into the glyph).
 const btwDescriptor: RightBarDescriptor = {
   id: "btw",
   kind: "configurable",

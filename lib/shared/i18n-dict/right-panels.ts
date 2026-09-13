@@ -183,7 +183,7 @@ export const rightPanels = {
   // BTW (By the way) — right-side panel that asks a temporary agent
   // read-only questions grounded in the active session. The panel header
   // shows no title; the on-tab "BTW" mark is intentionally kept as English
-  // per the handoff §2 row #20.
+  // (a brand mark, not a translatable label).
   "Open BTW": "打开 BTW",
   "By the way": "顺带一提",
   "btw.tooltip": "基于当前会话提问（仅只读工具，不影响主会话）",

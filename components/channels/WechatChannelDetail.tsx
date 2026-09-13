@@ -104,7 +104,6 @@ export function WechatChannelDetail({
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [pinnedCwds, setPinnedCwds] = useState<string[]>([]);
   const [recentCwds, setRecentCwds] = useState<string[]>([]);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
@@ -122,13 +121,8 @@ export function WechatChannelDetail({
 
   const loadWorkspaceOptions = useCallback(async () => {
     try {
-      const [pinnedRes, sessionsRes] = await Promise.all([
-        fetch("/api/pinned-cwds", { cache: "no-store" }),
-        fetch("/api/sessions?limit=30", { cache: "no-store" }),
-      ]);
-      const pinned = (await pinnedRes.json().catch(() => ({ cwds: [] }))) as { cwds?: string[] };
+      const sessionsRes = await fetch("/api/sessions?limit=30", { cache: "no-store" });
       const sessions = (await sessionsRes.json().catch(() => ({ recentCwds: [] }))) as { recentCwds?: string[] };
-      setPinnedCwds(pinned.cwds ?? []);
       setRecentCwds(sessions.recentCwds ?? []);
     } catch {
       // ignore
@@ -523,61 +517,33 @@ export function WechatChannelDetail({
               boxShadow: "0 4px 16px rgba(0,0,0,0.15)", maxHeight: 240, overflowY: "auto",
             }}
           >
-            {pinnedCwds.length === 0 && recentCwds.length === 0 ? (
+            {recentCwds.length === 0 ? (
               <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>{t("channels.noWorkspaces")}</div>
             ) : (
               <>
-                {pinnedCwds.length > 0 && (
-                  <>
-                    <div style={{ padding: "6px 10px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase" }}>
-                      {t("channels.pinned")}
-                    </div>
-                    {pinnedCwds.map((cwd) => (
-                      <button
-                        key={`p-${cwd}`}
-                        onClick={() => switchWorkspace(cwd)}
-                        title={cwd}
-                        style={{
-                          display: "block", width: "100%", padding: "6px 10px",
-                          background: cwd === workspace ? "var(--bg-selected)" : "none",
-                          border: "none", textAlign: "left", cursor: "pointer",
-                          color: cwd === workspace ? "var(--text)" : "var(--text-muted)",
-                          fontSize: 11, fontFamily: "var(--font-mono)",
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        }}
-                      >
-                        {shortenPath(cwd, 40)}
-                      </button>
-                    ))}
-                  </>
-                )}
-                {recentCwds.length > 0 && (
-                  <>
-                    <div style={{
-                      padding: "6px 10px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
-                      textTransform: "uppercase", borderTop: pinnedCwds.length > 0 ? "1px solid var(--border)" : "none",
-                    }}>
-                      {t("channels.recent")}
-                    </div>
-                    {recentCwds.map((cwd) => (
-                      <button
-                        key={`r-${cwd}`}
-                        onClick={() => switchWorkspace(cwd)}
-                        title={cwd}
-                        style={{
-                          display: "block", width: "100%", padding: "6px 10px",
-                          background: cwd === workspace ? "var(--bg-selected)" : "none",
-                          border: "none", textAlign: "left", cursor: "pointer",
-                          color: cwd === workspace ? "var(--text)" : "var(--text-muted)",
-                          fontSize: 11, fontFamily: "var(--font-mono)",
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        }}
-                      >
-                        {shortenPath(cwd, 40)}
-                      </button>
-                    ))}
-                  </>
-                )}
+                <div style={{
+                  padding: "6px 10px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
+                  textTransform: "uppercase",
+                }}>
+                  {t("channels.recent")}
+                </div>
+                {recentCwds.map((cwd) => (
+                  <button
+                    key={`r-${cwd}`}
+                    onClick={() => switchWorkspace(cwd)}
+                    title={cwd}
+                    style={{
+                      display: "block", width: "100%", padding: "6px 10px",
+                      background: cwd === workspace ? "var(--bg-selected)" : "none",
+                      border: "none", textAlign: "left", cursor: "pointer",
+                      color: cwd === workspace ? "var(--text)" : "var(--text-muted)",
+                      fontSize: 11, fontFamily: "var(--font-mono)",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}
+                  >
+                    {shortenPath(cwd, 40)}
+                  </button>
+                ))}
               </>
             )}
           </div>

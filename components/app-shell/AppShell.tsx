@@ -1135,10 +1135,10 @@ export function AppShell() {
   }, [activeFileTabId, rightPanelState, t, ensureRightPanelOpen]);
 
   // Open the BTW (By the way) panel — read-only questions grounded in
-  // the active session. The tab id / label stay constant ("BTW") per
-  // handoff §2 #20; only the right-panel body re-renders based on the
-  // active session id (which is captured via `selectedSession?.id` at
-  // render time, not stored in the tab descriptor).
+  // the active session. The tab id / label stay constant ("BTW") so the
+  // tab survives session switches; only the right-panel body re-renders
+  // based on the active session id (which is captured via
+  // `selectedSession?.id` at render time, not stored in the tab descriptor).
   // Ensure-open helper shared by the right-bar toggle and the `/btw` slash
   // action: adds the tab if missing, activates it, and opens the panel.
   const ensureBtwTabOpen = useCallback(() => {

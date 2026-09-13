@@ -63,7 +63,6 @@ export const EN_TRANSLATIONS = {
   "channels.scanHint": "Scan with WeChat, or open the link below on your phone:",
   "channels.currentWorkspace": "Current workspace",
   "channels.switchWorkspace": "Switch workspace",
-  "channels.pinned": "Pinned",
   "channels.recent": "Recent",
   "channels.noWorkspaces": "No workspaces available",
   "channels.noChannels": "No channels yet; create one to get started",
