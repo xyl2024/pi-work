@@ -10,12 +10,12 @@ Presentation deliberately stays out of the shared layer, in two kind-keyed looku
 
 - **Keep the handlers in `AppShell` and only share the toggle helper.** Smallest diff, but leaves the close fallback and "last tab closes the panel" rules duplicated, and keeps panel identity (tab ids, labels, command entries) spread across the shell, the descriptors, the palette and the config defaults.
 - **A React context/provider owning the strip.** Same rules, but untestable without jsdom, and the panels' open/close behaviour is not view state that any component may arbitrarily subscribe to — it is a reducer over a list.
-- **Deriving the persisted config defaults from the registry now.** Tempting (it is what still leaves `canvas` / `json` in user `config.yaml`), but it touches server config and the settings UI, so it is a separate slice.
+- **Deriving the persisted config defaults from the registry now.** Tempting (it is what still left `canvas` / `json` in user `config.yaml`), but it touches server config and the settings UI, so it became the follow-up slice instead. That slice landed with the registry as the source: `lib/server/config.ts` derives `right_side_bar` defaults — and filters stale `order` entries — from the registry keys, which also made every registered panel view toggleable in Settings (five of them were missing from the hand-kept default list and silently reverted to visible).
 
 ## Consequences
 
 - `panelTabs` may not import React, the DOM, the client hooks or anything server-side; the layout mode is passed in as `PanelLayoutMode` instead of read from the client store.
-- The registry is keyed by `RightBarButtonId`, so a new right-bar button cannot ship without a panel identity, and a panel kind cannot appear without a button id.
+- The registry is keyed by right-bar button id and *is* the id list: `RightBarButtonId` is derived from its keys, and each key must carry its own kind, so a new right-bar button cannot ship without a panel identity and a panel kind cannot appear without a button id. `lib/shared/right-bar.ts` re-exports the type instead of restating the union, and the server's `right_side_bar` defaults read the same keys.
 - The shell keeps no panel state: `AppShell` dispatches actions, reads `selectActiveTab` / `selectOpenCount` directly, and the tab bar renders `PanelTab`s by resolving `labelKey` at render time.
 - A panel view's glyph and body are each looked up by kind exactly once: the tab strip can never carry an icon the button column does not, and the body table is exhaustive by type, so a new kind fails `tsc` until both sides are registered.
 - Palette panel commands and right-bar buttons share one toggle path (`togglePanel`), matching "clicking the active view collapses the panel".

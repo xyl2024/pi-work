@@ -20,7 +20,6 @@
 // the reducer state directly, so there is no adapter layer duplicating the tab
 // shape here.
 
-import type { RightBarButtonId } from "./right-bar";
 import {
   BTW_TAB_ID,
   CONTEXT_TAB_ID,
@@ -150,11 +149,15 @@ export interface PanelTabSpec<K extends PanelViewKind = PanelViewKind> {
 }
 
 /**
- * Panel view identity, declared once. The object is keyed by
- * `RightBarButtonId`, so a new right-bar button must register its panel
- * identity here and a stray kind cannot sneak in with an unknown button id.
+ * Panel view identity, declared once. The object is keyed by right-bar button
+ * id, so this key list *is* `RightBarButtonId` — the id union is derived from
+ * it (below) instead of being restated in `lib/shared/right-bar.ts`.
  * Declaration order is also the strip/settings default order, and it matches
  * the ordering of the right-bar descriptor list.
+ *
+ * The value type is the kind-keyed mirror of the same list, so each key must
+ * carry its own kind (`kind: K` where `K` is the key): a spec cannot register
+ * under a button id it does not actually implement.
  */
 export const PANEL_TAB_SPEC_BY_KIND = {
   context: {
@@ -274,7 +277,15 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     defaultMode: "normal",
     sessionBound: false,
   },
-} as const satisfies Record<RightBarButtonId, PanelTabSpec>;
+} as const satisfies { [K in PanelViewKind]: PanelTabSpec<K> };
+
+/**
+ * Every configurable right-bar button id, in registry declaration order. The
+ * registry is keyed by button id, so this union is its key list — the panel
+ * registry is the only place the id list is written down, and the server's
+ * config defaults read the same keys.
+ */
+export type RightBarButtonId = keyof typeof PANEL_TAB_SPEC_BY_KIND;
 
 /** Every panel view spec, in declaration (default) order. */
 export const PANEL_TAB_SPECS: readonly PanelTabSpec[] = Object.values(PANEL_TAB_SPEC_BY_KIND);

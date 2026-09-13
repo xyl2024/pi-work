@@ -94,7 +94,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 | 命令注册 | `buildCommands`、`Command`（`lib/client/commands.tsx`） |
 | 右侧按钮列 | `RightBarColumn`（`components/panels/right-bar/RightBarColumn.tsx`） |
 | 右侧按钮描述器 | `RightBarDescriptor`、`RIGHT_BAR_DESCRIPTORS`（`components/panels/right-bar/desc.tsx`） |
-| 右侧面板配置 | `RightSideBarConfig`、`RightBarButtonId`（`lib/shared/right-bar.ts`） |
+| 右侧面板配置 | `RightSideBarConfig`（`lib/shared/right-bar.ts`）、`RightBarButtonId`（`lib/shared/panelTabs.ts`，由 `PANEL_TAB_SPEC_BY_KIND` 的键派生） |
 | 翻译 | `translate`、`translateDescriptor`、`openTab.translate` |
 | RSS | `rss`、`rssDescriptor`、`openTab.rss` |
 | 收藏 | `favorites`、`favoritesDescriptor`、`openTab.favorites` |

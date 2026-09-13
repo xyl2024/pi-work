@@ -11,21 +11,14 @@
 // shapes are intentionally tolerant: missing id = visible (legacy files
 // stay on their on-by-default defaults), missing `order` = the descriptor
 // registry's default order.
+//
+// The id set is not restated here: a configurable id is a panel view, so
+// `RightBarButtonId` is derived from the panel registry's key list
+// (`lib/shared/panelTabs`) and re-exported for the config layer.
 
-export type RightBarButtonId =
-  | "translate"
-  | "rss"
-  | "favorites"
-  | "tokens"
-  | "toolCalls"
-  | "gitDiff"
-  | "conversationTree"
-  | "llmAudit"
-  | "context"
-  | "btw"
-  | "githubTrending"
-  | "kanban"
-  | "notes";
+import type { RightBarButtonId } from "./panelTabs";
+
+export type { RightBarButtonId };
 
 /** Where session-bound buttons sit within the configurable row.
  *
