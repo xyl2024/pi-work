@@ -606,6 +606,18 @@ export function KanbanPanel(props: KanbanPanelProps) {
   );
 }
 
+/** Format a cumulative run duration for the stats row: "42s" under a
+ *  minute, "5m 32s" under an hour, "1h 23m" above. Returns "" for
+ *  non-positive input so callers can hide the badge. */
+function formatRunDuration(ms: number): string {
+  if (!(ms > 0)) return "";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 function statusLabelKey(status: KanbanStatus): string {
   switch (status) {
     case "backlog":
@@ -1131,6 +1143,14 @@ function KanbanTaskStats({
           <span>{stats.toolCallCount}</span>
         </Tooltip>
       </span>
+      {stats.runDurationMs > 0 && (
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Clock size={10} style={{ flexShrink: 0 }} />
+          <Tooltip content={t("Run duration")} side="top">
+            <span>{formatRunDuration(stats.runDurationMs)}</span>
+          </Tooltip>
+        </span>
+      )}
       <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <FileDiff size={10} style={{ flexShrink: 0 }} />
         <Tooltip content={t("Files changed")} side="top">

@@ -73,6 +73,7 @@ export const kanban = {
   "Messages": "消息数",
   "Tool calls": "工具调用次数",
   "Files changed": "变更文件数",
+  "Run duration": "运行时长",
   "Collapse": "折叠",
   "Expand": "展开",
 } as const;

@@ -23,6 +23,7 @@ import {
 } from "@/lib/shared/tool-diff-stats";
 import type {
   AssistantMessage,
+  SessionContext,
   ToolCallContent,
   ToolResultMessage,
 } from "@/lib/shared/types";
@@ -54,7 +55,56 @@ const EMPTY: KanbanTaskStats = {
   changedFileCount: 0,
   additions: 0,
   deletions: 0,
+  runDurationMs: 0,
 };
+
+/**
+ * Sum of per-turn wall-clock time across the active branch. A turn starts at
+ * its user message and ends at the last entry belonging to that turn; the
+ * (often long) idle gaps BETWEEN turns are excluded, so a session continued
+ * with several prompts accumulates only actual run time.
+ *
+ * Timestamps: entry-level persistence timestamps (context.entryTimestamps,
+ * parallel to messages) are the reliable source for every entry; the user
+ * message's own runtime timestamp is preferred as the turn start when present
+ * (same semantics as the chat UI's per-turn duration). Turns missing either
+ * bound contribute nothing rather than voiding the whole sum.
+ */
+function sumRunDurationMs(context: SessionContext): number {
+  const messages = context.messages;
+  const entryTimestamps = context.entryTimestamps ?? [];
+  const tsAt = (i: number): number | null => {
+    const entry = entryTimestamps[i];
+    if (typeof entry === "number" && Number.isFinite(entry)) return entry;
+    const msg = messages[i]?.timestamp;
+    return typeof msg === "number" && Number.isFinite(msg) ? msg : null;
+  };
+
+  let total = 0;
+  let startMs: number | null = null;
+  let lastMs: number | null = null;
+  for (let i = 0; i < messages.length; i++) {
+    const isUser = messages[i].role === "user";
+    if (isUser) {
+      // Close out the previous turn before starting the next one.
+      if (startMs !== null && lastMs !== null && lastMs > startMs) {
+        total += lastMs - startMs;
+      }
+      startMs = null;
+      lastMs = null;
+    }
+    const ts = tsAt(i);
+    if (ts === null) continue;
+    if (startMs === null) {
+      startMs = isUser ? (messages[i].timestamp ?? ts) : ts;
+    }
+    lastMs = ts;
+  }
+  if (startMs !== null && lastMs !== null && lastMs > startMs) {
+    total += lastMs - startMs;
+  }
+  return total;
+}
 
 /**
  * Aggregate stats for one session's active branch. Returns null when the
@@ -125,6 +175,7 @@ export async function readKanbanSessionStats(
       changedFileCount: changedFiles.size,
       additions: combined?.additions ?? 0,
       deletions: combined?.deletions ?? 0,
+      runDurationMs: sumRunDurationMs(context),
     };
   } catch {
     // Unreadable / mid-write JSONL: treat as unavailable (null), not zeroed,

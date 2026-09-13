@@ -71,6 +71,11 @@ export interface KanbanTaskStats {
   additions: number;
   /** Lines deleted across edit/write calls (−). */
   deletions: number;
+  /** Cumulative wall-clock run time (ms), summed per turn across the
+   *  session's active branch: each turn is measured from its user message
+   *  to the last entry on that turn, so idle gaps between the user's
+   *  prompts are excluded. 0 when no timestamps are available. */
+  runDurationMs: number;
 }
 
 export interface CreateKanbanTaskInput {
