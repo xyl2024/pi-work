@@ -1,14 +1,10 @@
 /**
  * Shared test constants.
  *
- * Both test layers target the *isolated* Pi Work instance (the one started by
+ * Interface tests target the *isolated* Pi Work instance (the one started by
  * `npm run dev:isolated`, port 30143, data root ~/.pi-work-dev) — never the
- * production instance on 30141:
- *
- *   - UI tests (Playwright) require the instance to be running already
- *     (see playwright.config.ts);
- *   - interface tests (Vitest) probe the URL first and auto-start the isolated
- *     instance when nothing answers (see tests/global-setup.ts).
+ * production instance on 30141. They probe the URL first and auto-start the
+ * isolated instance when nothing answers (see tests/global-setup.ts).
  *
  * Interface tests run against `next dev` by default; set PI_WORK_TEST_PROD=1
  * to build and test against a production server (`next build` + `next start`)
