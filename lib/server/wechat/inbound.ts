@@ -5,13 +5,23 @@
  * reuses (or cold-starts) the channel's agent session, runs the prompt,
  * and replies with the agent's final text.
  *
+ * The turn itself (acquire the session → deliver the prompt → wait until it has
+ * really finished → clean up) goes through the turn module (`lib/server/turn`,
+ * via `runTurnRpcSession`); this file is the channel's adapter: it owns the
+ * channel binding, the queue, the idempotency gate, the activity feed and the
+ * reply. `agent_settled` is the terminal event, so a turn pi is still retrying
+ * is not mistaken for a finished one, and a session destroyed mid-wait stops
+ * waiting instead of hanging until the deadline.
+ *
  * Isolation guarantees (multi-channel):
  *   - every access goes through the channel record / channel credentials;
  *     there is no global single-account state any more;
- *   - messages are serialized per `channelId` via an in-memory FIFO chain;
+ *   - messages are serialized per `channelId` via
+ *     `lib/server/serial-chain.ts:runSerial`;
  *   - idempotency: a message key (upstream message_id, else a hash of
  *     channel+user+time+text) is claimed before processing, so redeliveries
- *     never produce a duplicate reply;
+ *     never produce a duplicate reply, and a key whose handling failed is
+ *     released so an upstream redelivery can be retried;
  *   - a reply is only sent while the channel is still `connected` — after
  *     disable/delete/expire the agent work may finish, but no reply goes out;
  *   - token rejection marks only this channel `expired`.
@@ -19,11 +29,11 @@
  * Caller: `lib/server/channels/wechat-worker.ts` (per-channel poll loop).
  */
 import { existsSync, statSync } from "fs";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { api } from "@/lib/server/wechat";
-import { getRpcSession, startRpcSession } from "@/lib/server/rpc-manager";
-import { resolveSessionPath } from "@/lib/server/session-reader";
+import { runTurnRpcSession } from "@/lib/server/rpc-manager";
+import { runSerial } from "@/lib/server/serial-chain";
 import { logSessionEvent } from "./sessions-log";
+import { toInboundReply } from "./inbound-reply";
 import { createLogger } from "@/lib/server/logger";
 import { getChannel, updateChannel } from "@/lib/server/channels";
 import { pushActivity } from "@/lib/server/channels/activity";
@@ -35,111 +45,17 @@ import {
   markProcessed,
 } from "@/lib/server/channels/messages";
 import { isPathAllowed, getAllowedRoots } from "@/lib/server/file-access";
-import type { AgentEvent } from "@/lib/server/rpc-manager";
 import type { WeChatAccount } from "@/lib/shared/wechat/types";
 
 const log = createLogger("wechat/inbound");
 
-/** A 5min safety net — even if the agent misbehaves we won't wait forever. */
-const AGENT_END_TIMEOUT_MS = 5 * 60 * 1000;
-
-/** Per-channel FIFO chain of in-flight handleInbound calls. */
-const inboundChains = new Map<string, Promise<unknown>>();
-
-interface TextBlock { type: "text"; text: string }
-interface AssistantMsg {
-  role: "assistant";
-  content: Array<{ type: string; text?: string }>;
-  stopReason?: string;
-  errorMessage?: string;
-}
-type AgentMessage = AssistantMsg | { role: "user" | "toolResult"; [k: string]: unknown };
-
 /**
- * Cold-start a fresh session in the given workspace, with all tools
- * enabled and the default model from settings.json.
+ * A 5min safety net — even if the agent misbehaves we won't wait forever. The
+ * deadline is this channel's policy, passed to the turn module: at the deadline
+ * the module destroys the stuck session (the pre-seam path left it alive) and
+ * the user gets a failure reply.
  */
-async function coldStart(workspaceId: string, firstMessage: string): Promise<string> {
-  if (!existsSync(workspaceId)) {
-    throw new Error(`Directory does not exist: ${workspaceId}`);
-  }
-  const tempKey = `__new__${Date.now()}`;
-  const { session, realSessionId } = await startRpcSession(tempKey, "", workspaceId, "all");
-  await session.send({ type: "prompt", message: firstMessage });
-  return realSessionId;
-}
-
-/** Send a prompt to an existing session, starting it from disk if needed. */
-async function sendPrompt(sessionId: string, message: string): Promise<void> {
-  let session = getRpcSession(sessionId);
-  if (!session?.isAlive()) {
-    const filePath = await resolveSessionPath(sessionId);
-    if (!filePath) throw new Error(`Session not found: ${sessionId}`);
-    const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
-    ({ session } = await startRpcSession(sessionId, filePath, cwd));
-  }
-  await session.send({ type: "prompt", message });
-}
-
-async function waitForAgentReply(sessionId: string): Promise<string> {
-  const session = getRpcSession(sessionId);
-  if (!session?.isAlive()) {
-    throw new Error(`Session not running: ${sessionId}`);
-  }
-
-  return new Promise<string>((resolve, reject) => {
-    let done = false;
-    const timer = setTimeout(() => {
-      if (done) return;
-      done = true;
-      unsubscribe();
-      reject(new Error(`agent_end timed out after ${AGENT_END_TIMEOUT_MS}ms`));
-    }, AGENT_END_TIMEOUT_MS);
-
-    const unsubscribe = session.onEvent((event: AgentEvent) => {
-      logSessionEvent({
-        kind: "agent_event",
-        sessionId,
-        fromUserId: "",
-        eventType: event.type,
-      });
-      if (event.type !== "agent_end") return;
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      unsubscribe();
-
-      const error = typeof event.error === "string" ? event.error : null;
-      if (error) {
-        reject(new Error(error));
-        return;
-      }
-      const messages = Array.isArray(event.messages) ? (event.messages as AgentMessage[]) : null;
-      if (!messages) {
-        reject(new Error("agent_end arrived without messages"));
-        return;
-      }
-
-      for (let i = messages.length - 1; i >= 0; i--) {
-        const m = messages[i];
-        if (m.role !== "assistant") continue;
-        if (m.stopReason === "error" || m.stopReason === "aborted") {
-          reject(new Error(m.errorMessage || `assistant stopReason=${m.stopReason}`));
-          return;
-        }
-        const text = m.content
-          .filter((b): b is TextBlock => b.type === "text")
-          .map((b) => b.text)
-          .join("");
-        if (text) {
-          resolve(text);
-          return;
-        }
-      }
-      resolve("");
-    });
-  });
-}
+const AGENT_END_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface InboundMessage {
   channelId: string;
@@ -169,10 +85,7 @@ export async function handleInbound(msg: InboundMessage): Promise<void> {
   const claim = claimMessage(msg.channelId, messageKey);
   if (claim !== "accepted") return;
 
-  const prev = inboundChains.get(msg.channelId) ?? Promise.resolve();
-  const next = prev.catch(() => undefined).then(() => handleInboundImpl(msg, messageKey));
-  inboundChains.set(msg.channelId, next);
-  return next;
+  return runSerial(msg.channelId, () => handleInboundImpl(msg, messageKey));
 }
 
 async function handleInboundImpl(msg: InboundMessage, messageKey: string): Promise<void> {
@@ -251,42 +164,87 @@ async function processMessage(
     return;
   }
 
+  // Captured for the run below: the onSession hook is a closure, so it cannot
+  // rely on the narrowing of `channel.workspaceId` done above.
+  const workspaceId = channel.workspaceId;
   let sessionId: string | null = channel.currentSessionId ?? null;
+  const coldStart = sessionId === null;
   void fireTyping(account, msg);
 
   try {
-    if (!sessionId) {
-      sessionId = await coldStart(channel.workspaceId, msg.text);
-      updateChannel(channelId, { currentSessionId: sessionId });
-      pushActivity(channelId, { kind: "session_started", sessionId, fromUserId: msg.fromUserId, text: msg.text });
-      logSessionEvent({
-        kind: "cold_start",
-        sessionId,
-        cwd: channel.workspaceId,
-        fromUserId: msg.fromUserId,
-      });
-    } else {
+    if (sessionId) {
       logSessionEvent({
         kind: "send",
         sessionId,
         fromUserId: msg.fromUserId,
         text: msg.text,
       });
-      await sendPrompt(sessionId, msg.text);
-      pushActivity(channelId, { kind: "agent_sent", sessionId, fromUserId: msg.fromUserId, text: msg.text });
     }
 
-    const replyText = await waitForAgentReply(sessionId);
+    const result = await runTurnRpcSession({
+      cwd: workspaceId,
+      prompt: msg.text,
+      // A cold start has always run with the full registry; a reuse turn leaves
+      // the selection alone so a revived session keeps the set its sidecar
+      // recorded (the pre-seam split between `coldStart` and `sendPrompt`).
+      ...(coldStart ? { toolNames: "all" as const } : {}),
+      source: "user",
+      session: sessionId ? { kind: "reuse", sessionId } : { kind: "fresh" },
+      timeoutMs: AGENT_END_TIMEOUT_MS,
+      // Runs the moment the session is acquired — before any setup command and
+      // before the prompt. The pre-seam path bound the channel after
+      // dispatching the prompt (cold start) or after `sendPrompt` returned
+      // (reuse), so this only moves the binding / activity event slightly
+      // earlier within the same turn.
+      onSession: ({ realSessionId }) => {
+        if (!coldStart) {
+          pushActivity(channelId, {
+            kind: "agent_sent",
+            sessionId: realSessionId,
+            fromUserId: msg.fromUserId,
+            text: msg.text,
+          });
+          return;
+        }
+        sessionId = realSessionId;
+        updateChannel(channelId, { currentSessionId: realSessionId });
+        pushActivity(channelId, {
+          kind: "session_started",
+          sessionId: realSessionId,
+          fromUserId: msg.fromUserId,
+          text: msg.text,
+        });
+        logSessionEvent({
+          kind: "cold_start",
+          sessionId: realSessionId,
+          cwd: workspaceId,
+          fromUserId: msg.fromUserId,
+        });
+      },
+    });
+
+    const reply = toInboundReply(result, AGENT_END_TIMEOUT_MS);
+    if (!reply.ok) {
+      // Surface the failure through the shared path below, keeping the wording
+      // this channel has always shown its users ("处理失败：Error: …").
+      throw new Error(reply.error ?? `turn ${result.status}`);
+    }
+
     const durationMs = Date.now() - startedAt;
-    pushActivity(channelId, { kind: "agent_done", sessionId: sessionId ?? undefined, durationMs, text: replyText || undefined });
+    pushActivity(channelId, {
+      kind: "agent_done",
+      sessionId: result.realSessionId,
+      durationMs,
+      text: result.hasReply ? result.text : undefined,
+    });
     logSessionEvent({
       kind: "agent_end",
-      sessionId,
+      sessionId: result.realSessionId,
       fromUserId: msg.fromUserId,
       durationMs,
-      replyText,
+      replyText: result.text,
     });
-    await safeReplyIfActive(account, msg, replyText || "（agent 没有产生输出）");
+    await safeReplyIfActive(account, msg, reply.text);
   } catch (err) {
     // Surface to the user but keep the session binding — the user can
     // retry with a follow-up message.
