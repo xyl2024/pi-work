@@ -7,6 +7,7 @@ import {
   type TurnEvent,
   type TurnSessionFactory,
   type TurnSession,
+  type TurnSessionPolicy,
 } from "@/lib/server/turn";
 
 /**
@@ -69,11 +70,12 @@ interface FactoryCall {
   cwd: string;
   toolNames: string[] | "all" | undefined;
   source: string;
+  policy: TurnSessionPolicy;
 }
 
 function makeFactory(sessions: FakeTurnSession[], calls: FactoryCall[], failure?: Error): TurnSessionFactory {
-  return async (cwd, toolNames, source) => {
-    calls.push({ cwd, toolNames, source });
+  return async (cwd, toolNames, source, policy) => {
+    calls.push({ cwd, toolNames, source, policy });
     if (failure) throw failure;
     const session = sessions[0];
     if (!session) throw new Error("fake session exhausted");
@@ -118,7 +120,7 @@ describe("runTurn — one call runs the whole turn", () => {
     expect(result.stopReason).toBe("end_turn");
     expect(result.sessionId).toBe("key-1");
     expect(result.realSessionId).toBe("real-1");
-    expect(calls).toEqual([{ cwd: "/tmp/project", toolNames: ["read"], source: "scheduled" }]);
+    expect(calls).toEqual([{ cwd: "/tmp/project", toolNames: ["read"], source: "scheduled", policy: { kind: "fresh" } }]);
     expect(session.sent.map((command) => command.type)).toEqual(["set_model", "set_thinking_level", "prompt"]);
     expect(session.sent[0]).toEqual({ type: "set_model", provider: "anthropic", modelId: "claude-x" });
     expect(session.sent[1]).toEqual({ type: "set_thinking_level", level: "high" });
@@ -150,8 +152,30 @@ describe("runTurn — one call runs the whole turn", () => {
     expect(session.sent.map((command) => command.type)).toEqual(["prompt"]);
     // toolNames undefined → the factory applies its own default (sidecar / cwd
     // default); the module never invents one. source defaults to "user".
-    expect(calls).toEqual([{ cwd: "/tmp/project", toolNames: undefined, source: "user" }]);
+    expect(calls).toEqual([{ cwd: "/tmp/project", toolNames: undefined, source: "user", policy: { kind: "fresh" } }]);
     expect(result.status).toBe("completed");
+  });
+
+  it("forwards the reuse policy and runs the turn in the caller's existing session", async () => {
+    // The factory is the acquisition seam: `reuse` names a session id and the
+    // factory hands back that very session (live or revived). Observable from
+    // here as: one acquisition, the reuse policy reaches the factory, and the
+    // returned session is the one that gets the prompt.
+    const existing = new FakeTurnSession("real-9");
+    existing.settleOnPrompt = true;
+    const calls: FactoryCall[] = [];
+
+    const result = await runTurn(
+      baseSpec({ session: { kind: "reuse", sessionId: "real-9" } }),
+      makeFactory([existing], calls),
+    );
+
+    expect(result.status).toBe("completed");
+    expect(result.realSessionId).toBe("real-9");
+    expect(calls).toEqual([
+      { cwd: "/tmp/project", toolNames: undefined, source: "user", policy: { kind: "reuse", sessionId: "real-9" } },
+    ]);
+    expect(existing.sent.map((command) => command.type)).toEqual(["prompt"]);
   });
 
   it("waits for agent_settled — a retrying agent_end does not end the turn", async () => {

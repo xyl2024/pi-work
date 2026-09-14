@@ -5,10 +5,14 @@
  * import edge back into `rpc-manager`, and so this file can import both
  * statically without a cycle. The runtime knowledge lives here: a fresh
  * session per turn gets a unique registry key, mirroring the `__kanban__…` /
- * `__sched__…` temp-key pattern of the pre-seam runners.
+ * `__sched__…` temp-key pattern of the pre-seam runners; a reuse turn continues
+ * the session the caller named (see `./reuse`).
  */
-import { runTurn, type TurnResult } from "./orchestrate";
-import { startRpcSession } from "../rpc-manager";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { runTurn, type AcquiredTurnSession, type TurnResult } from "./orchestrate";
+import { acquireReusedSession } from "./reuse";
+import { getRpcSession, startRpcSession } from "../rpc-manager";
+import { resolveSessionPath } from "../session-reader";
 import type { ToolSelection } from "../../shared/types";
 
 /** The audit sources `startRpcSession` accepts for a session. */
@@ -27,10 +31,11 @@ export type RunTurnRpcSpec = Omit<Parameters<typeof runTurn>[0], "source" | "too
 };
 
 /**
- * Run one complete turn in a freshly opened pi session: start the session in
- * `cwd`, apply the optional model/thinking level, deliver the prompt and wait
- * until the turn has really finished. No side effects — notifications, inbox
- * pushes, logs and channel state are the caller's job.
+ * Run one complete turn in a pi session: acquire it (`fresh` opens one in
+ * `cwd`; `reuse` continues the named session), apply the optional
+ * model/thinking level, deliver the prompt and wait until the turn has really
+ * finished. No side effects — notifications, inbox pushes, logs and channel
+ * state are the caller's job.
  */
 export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResult> {
   return await runTurn(
@@ -42,18 +47,55 @@ export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResul
       ...(spec.thinkingLevel !== undefined ? { thinkingLevel: spec.thinkingLevel } : {}),
       ...(spec.toolNames !== undefined ? { toolNames: spec.toolNames } : {}),
       ...(spec.source ? { source: spec.source } : {}),
+      ...(spec.session ? { session: spec.session } : {}),
       ...(spec.onSession ? { onSession: spec.onSession } : {}),
     },
     // The turn module treats key-present-undefined exactly like absent, so the
     // conditional spreads above only keep `exactOptionalPropertyTypes`-style
     // intent explicit: a missing option is distinguishable from a set one.
-    async (cwd, toolNames, source) => {
+    async (cwd, toolNames, source, policy) => {
+      if (policy.kind === "reuse") {
+        return await acquireReusedSession(policy.sessionId, {
+          // A live session is one the registry still holds an alive wrapper for.
+          getLiveSession: (sessionId) => {
+            const session = getRpcSession(sessionId);
+            return session?.isAlive() ? session : undefined;
+          },
+          // null here means "there is no such session" — the resolver turns
+          // that into an error rather than a silent fresh session.
+          findSessionFile: (sessionId) => resolveSessionPath(sessionId),
+          // Reopen in the cwd the conversation actually ran in, keeping the
+          // pre-seam wechat fallback for legacy headers without one.
+          readSessionCwd: (sessionFile) => SessionManager.open(sessionFile).getHeader()?.cwd ?? process.cwd(),
+          reopenSession: (sessionId, sessionFile, sessionCwd) =>
+            startExistingSession(sessionId, sessionFile, sessionCwd, toolNames, source as RpcSessionSource),
+        });
+      }
+
       // A fresh session per turn uses a unique registry key (the pre-seam
       // runners used `__kanban__…` / `__sched__…` temp keys).
       const tempKey = `__turn__${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       // "" as the session file means "create a new session" (startRpcSession).
-      const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames, source as RpcSessionSource);
+      const { session, realSessionId } = await startRpcSession(
+        tempKey,
+        "",
+        cwd,
+        toolNames,
+        source as RpcSessionSource,
+      );
       return { session, sessionId: tempKey, realSessionId };
     },
   );
+}
+
+/** Revive a session from its file and address it by the id the caller named. */
+async function startExistingSession(
+  sessionId: string,
+  sessionFile: string,
+  cwd: string,
+  toolNames: ToolSelection | undefined,
+  source: RpcSessionSource,
+): Promise<AcquiredTurnSession> {
+  const { session, realSessionId } = await startRpcSession(sessionId, sessionFile, cwd, toolNames, source);
+  return { session, sessionId, realSessionId };
 }

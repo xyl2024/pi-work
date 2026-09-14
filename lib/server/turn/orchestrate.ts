@@ -1,7 +1,7 @@
 /**
- * Turn orchestration: open a session, prepare it in the right order, deliver
- * the prompt, wait until the turn has *really* finished, classify the result
- * and clean up.
+ * Turn orchestration: acquire a session (fresh, or an existing one the caller
+ * names), prepare it in the right order, deliver the prompt, wait until the
+ * turn has *really* finished, classify the result and clean up.
  *
  * This is the active half of the turn module (see
  * docs/adr/0004-turn-execution-has-one-seam-and-waits-for-agent-settled.md).
@@ -51,19 +51,33 @@ export interface AcquiredTurnSession {
   realSessionId: string;
 }
 
+/**
+ * How the turn gets its session. `fresh` opens a new one; `reuse` continues an
+ * existing session id — the caller's policy, since wechat is the only caller
+ * that continues an existing conversation (ADR-0004).
+ */
+export type TurnSessionPolicy =
+  | { kind: "fresh" }
+  | { kind: "reuse"; sessionId: string };
+
 /** Audit sources accepted by the turn module; identical to the shared
  *  LlmAuditSource union (re-exported so callers can import it from here). */
 export type { LlmAuditSource };
 
 /**
- * The one dependency seam of the orchestration: how a fresh turn session is
- * acquired. Production wires this to `startRpcSession`; tests substitute a
- * factory that yields scripted fake sessions.
+ * The one dependency seam of the orchestration: how the turn's session is
+ * acquired. Production wires this to `startRpcSession` (see `./rpc-factory`);
+ * tests substitute a factory that yields scripted fake sessions.
+ *
+ * The policy is the caller's session strategy: `fresh` opens a session in
+ * `cwd`, `reuse` continues an existing session id (the factory must return the
+ * live session, or revive it from its file, never silently open a new one).
  */
 export type TurnSessionFactory = (
   cwd: string,
   toolNames: ToolSelection | undefined,
   source: LlmAuditSource,
+  policy: TurnSessionPolicy,
 ) => Promise<AcquiredTurnSession>;
 
 /** Everything a caller needs to say to run one turn. Everything except cwd,
@@ -85,6 +99,18 @@ export interface RunTurnSpec {
   toolNames?: ToolSelection;
   /** Who is running this turn (LLM-audit attribution). Defaults to "user". */
   source?: LlmAuditSource;
+  /**
+   * Session strategy. Defaults to `{ kind: "fresh" }`: a new session in `cwd`.
+   * `{ kind: "reuse", sessionId }` continues that session — the factory hands
+   * back the live one when it is still running, revives it from its file when
+   * its process is gone, and fails loudly when there is no such session.
+   *
+   * Cleanup does not depend on the policy: a failed setup or the caller's
+   * deadline destroys the session, a reused one included. A caller that must
+   * keep a shared session running after a timeout should not route it through
+   * `runTurn` yet.
+   */
+  session?: TurnSessionPolicy;
   /** Caller-owned deadline in ms; the session is destroyed when it fires. */
   timeoutMs: number;
   /**
@@ -177,10 +203,10 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
 }
 
 /**
- * Run one complete turn in a freshly opened session:
- * acquire → apply optional model/thinking/tools → install the terminal
- * listener → deliver the prompt → wait for the turn to really finish →
- * return the neutral result.
+ * Run one complete turn:
+ * acquire (fresh, or the existing session the caller named) → apply optional
+ * model/thinking/tools → install the terminal listener → deliver the prompt →
+ * wait for the turn to really finish → return the neutral result.
  *
  * The waiting reuses `watchSettled`, so there is exactly one terminal-state
  * judgement. Cleanup: a failed setup or a timed-out wait destroys the
@@ -191,10 +217,12 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
 export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFactory): Promise<TurnResult> {
   // Session acquisition: the factory owns registry keys and pi's own ids.
   // toolNames stays `undefined` when the caller did not specify it.
+  const policy: TurnSessionPolicy = spec.session ?? { kind: "fresh" };
   const { session, sessionId, realSessionId } = await createSession(
     spec.cwd,
     spec.toolNames,
     spec.source ?? "user",
+    policy,
   );
   const ids = { sessionId, realSessionId };
 
