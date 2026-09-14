@@ -1,6 +1,7 @@
 import { useCallback, useRef, type Dispatch } from "react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage } from "@/lib/shared/types";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
+import type { ContextComposition } from "@/lib/shared/context-composition";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
 import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "@/lib/shared/celebrate-tool-types";
@@ -89,6 +90,7 @@ type AgentSessionEventsOptions = {
   seenSubagentToolStartIds: Set<string>;
   seenSubagentToolEndIds: Set<string>;
   setContextUsage: StateSetter<{ percent: number | null; contextWindow: number; tokens: number | null } | null>;
+  setContextComposition: StateSetter<ContextComposition | null>;
   setThinkingLevel: StateSetter<ThinkingLevelOption>;
   compactInFlightRef: { current: boolean };
   showToast: (notification: ToastNotification) => void;
@@ -134,6 +136,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     seenSubagentToolStartIds,
     seenSubagentToolEndIds,
     setContextUsage,
+    setContextComposition,
     setThinkingLevel,
     compactInFlightRef,
     showToast,
@@ -273,8 +276,12 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           if (sessionIdRef.current) {
             fetch(`/api/agent/${encodeURIComponent(sessionIdRef.current)}`)
               .then((response) => response.json())
-              .then((data: { state?: { contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null } }) => {
+              .then((data: { state?: { contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; contextComposition?: ContextComposition | null } }) => {
                 if (data.state?.contextUsage !== undefined) setContextUsage(data.state.contextUsage ?? null);
+                // The server recomputes the composition on this same
+                // `message_end`, so the round trip that fetches `contextUsage`
+                // usually brings the fresh estimate along with it.
+                if (data.state?.contextComposition !== undefined) setContextComposition(data.state.contextComposition ?? null);
               })
               .catch(() => {});
           }
@@ -523,6 +530,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     setAgentRunningSync,
     setSubagentRefreshKey,
     setCompactingSync,
+    setContextComposition,
     setContextUsage,
     setInFlightToolResults,
     setLiveTree,

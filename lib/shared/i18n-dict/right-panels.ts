@@ -176,7 +176,6 @@ export const rightPanels = {
   "By model": "按模型",
   "By hour (24h)": "按小时（24h）",
   "Cost over time": "成本趋势",
-  "Token composition": "Token 构成",
   "Cost by model": "按模型分摊",
   "Cost by provider": "按提供方分摊",
   "Cost by category": "按类别分摊",

@@ -127,7 +127,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   disabled = false,
 }: Props, ref) {
   const { t } = useI18n();
-  const { contextUsage, sessionStats } = useSessionUiState();
+  const { contextUsage, sessionStats, contextComposition } = useSessionUiState();
 
   // ── Textarea + caret ──────────────────────────────────────────────────
   const [value, setValue] = useState("");
@@ -666,6 +666,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onCwdChange={onCwdChange}
             contextUsage={contextUsage}
             sessionStats={sessionStats}
+            contextComposition={contextComposition}
             thinkingLevel={thinkingLevel}
             onThinkingLevelChange={onThinkingLevelChange}
             availableThinkingLevels={availableThinkingLevels}

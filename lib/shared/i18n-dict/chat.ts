@@ -235,6 +235,16 @@ export const chat = {
     "你正在脱离大模型的 Smart Zone，模型可能出现幻觉",
   "Context is nearly full — the model will hallucinate badly. Compact the session or start a new one.":
     "上下文太满了，大模型将出现较大的幻觉，建议压缩或开启新的会话",
+  // Context composition (ADR-0005): the context ring tooltip shows one `≈`
+  // line per top-level bucket. The total is provider-exact, these are local
+  // estimates — the `≈` prefix is added by the component.
+  "System prompt": "系统提示",
+  "System tool definitions": "系统工具定义",
+  // "Skills" is already defined above (技能) and is reused as the bucket label.
+  // "Messages" is taken by the kanban count label (消息数), so the bucket uses
+  // its own key that still reads as the canonical「消息」.
+  "Messages (context)": "消息",
+  "Input tokens: {count} (excluding cache)": "输入 Token: {count}（不包含缓存）",
   "System Prompts": "系统提示词",
   "System prompt is empty (tools are disabled)": "系统提示词为空（工具已禁用）",
   "Send a message to load the system prompt.": "发送一条消息后加载系统提示词",

@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import type { SessionTreeNode } from "@/lib/shared/types";
+import type { ContextComposition } from "@/lib/shared/context-composition";
 import type { AgentControls } from "@/lib/client/commands";
 import { isContentEqual } from "@/lib/client/shallowEqual";
 
@@ -40,12 +41,18 @@ export type ContextUsage = {
   tokens: number | null;
 } | null;
 
+/** What the context window is made of, locally estimated and anchored to the
+ *  provider total (ADR-0005). The server computes it on `message_end` and hands
+ *  it over in `get_state`; the UI only ever reads it. `null` before the first
+ *  estimate lands (or when no provider anchor exists yet). */
+
 export interface SessionUiState {
   branchTree: SessionTreeNode[];
   branchActiveLeafId: string | null;
   systemPrompt: string | null;
   sessionStats: SessionStats;
   contextUsage: ContextUsage;
+  contextComposition: ContextComposition | null;
   /**
    * Whether the active session's agent is currently streaming a response.
    * Drives the streaming pulse dot in the conversation-tree panel and any
@@ -85,6 +92,7 @@ const INITIAL: SessionUiState = {
   systemPrompt: null,
   sessionStats: null,
   contextUsage: null,
+  contextComposition: null,
   isStreaming: false,
   agentRunning: false,
   currentModel: null,

@@ -9,7 +9,24 @@ import {
   formatContextTokensK,
   formatContextWindowCompact,
 } from "@/lib/shared/context-usage";
+import {
+  formatCompositionPercent,
+  type ContextBucketId,
+  type ContextComposition,
+} from "@/lib/shared/context-composition";
 import { Tooltip } from "../ui/Tooltip";
+
+/** i18n keys for the composition buckets, one per `ContextBucketId`. `Record`
+ *  (not a lookup with a fallback) so adding a bucket to the shared module is a
+ *  compile error here instead of an untranslated tooltip line. `messages` uses
+ *  the disambiguated key because the plain `Messages` key is the kanban count
+ *  label (`消息数`), which would win the dictionary merge. */
+const CONTEXT_BUCKET_LABELS: Record<ContextBucketId, string> = {
+  "system-prompt": "System prompt",
+  "system-tools": "System tool definitions",
+  skills: "Skills",
+  messages: "Messages (context)",
+};
 
 export interface ContextUsage {
   percent: number | null;
@@ -27,6 +44,13 @@ interface Props {
    * the data into the hover keeps the input bar visually quiet.
    */
   sessionStats?: SessionStats;
+  /**
+   * Local estimate of what this context window is made of (ADR-0005), anchored
+   * to `contextUsage.tokens`. Rendered as one `≈` line per bucket, right under
+   * the context line: the total is exact (provider), the split is not (local
+   * tokenizer), and the `≈` is the only thing that tells the two apart.
+   */
+  contextComposition?: ContextComposition | null;
 }
 
 /**
@@ -46,12 +70,13 @@ interface Props {
  * the unit the shared 125k/250k thresholds are expressed in.
  *
  * Tooltip: full precision percent + window tokens, a warning line once the
- * context crosses 125k / 250k, plus — when `sessionStats` is available —
- * the cumulative input / output / cache-hit rate / cost on separate lines.
- * The cumulative totals are only shown once `useAgentSession` has populated
- * `sessionStats` with at least one assistant `usage` block.
+ * context crosses 125k / 250k, one `≈` line per context-composition bucket
+ * (ADR-0005), plus — when `sessionStats` is available — the cumulative input /
+ * output / cache-hit rate / cost on separate lines. The cumulative totals are
+ * only shown once `useAgentSession` has populated `sessionStats` with at least
+ * one assistant `usage` block.
  */
-export function ContextUsageBar({ contextUsage, sessionStats }: Props) {
+export function ContextUsageBar({ contextUsage, sessionStats, contextComposition }: Props) {
   const { t } = useI18n();
   const { formatCost } = useFormatCurrency();
 
@@ -89,7 +114,9 @@ export function ContextUsageBar({ contextUsage, sessionStats }: Props) {
   // cost omitted when 0) so existing muscle memory still works.
   const statsLines = sessionStats
     ? [
-        `${t("Input tokens")}: ${sessionStats.tokens.input.toLocaleString()}（不包含缓存）`,
+        t("Input tokens: {count} (excluding cache)", {
+          count: sessionStats.tokens.input.toLocaleString(),
+        }),
         `${t("Output tokens")}: ${sessionStats.tokens.output.toLocaleString()}`,
         `${t("Cache hit rate")}: ${((sessionStats.cachedHitRate ?? 0) * 100).toFixed(1)}%`,
         ...(sessionStats.cost !== undefined && sessionStats.cost > 0
@@ -98,10 +125,22 @@ export function ContextUsageBar({ contextUsage, sessionStats }: Props) {
       ]
     : [];
 
+  // Composition lines sit between the context line and the cumulative stats:
+  // they describe *this* prompt, not the session's lifetime spend. Without a
+  // provider anchor the bucket has no percentage, so it degrades to the local
+  // count alone rather than showing a wrong share of the window.
+  const compositionLines = (contextComposition?.buckets ?? []).map((bucket) => {
+    const label = t(CONTEXT_BUCKET_LABELS[bucket.id]);
+    const tokens = formatContextTokensK(bucket.tokens ?? bucket.localTokens);
+    return bucket.percent === null
+      ? `${label} ≈ ${tokens}`
+      : `${label} ≈ ${tokens} (${formatCompositionPercent(bucket.percent)}%)`;
+  });
+
   // Absolute-size warning line, present only past the 125k / 250k thresholds.
   const warningLines = ring.warning ? [t(ring.warning)] : [];
 
-  const tooltipText = [contextLine, ...warningLines, ...statsLines].join("\n");
+  const tooltipText = [contextLine, ...warningLines, ...compositionLines, ...statsLines].join("\n");
 
   return (
     <Tooltip content={tooltipText}>
