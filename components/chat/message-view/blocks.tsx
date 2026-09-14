@@ -12,7 +12,8 @@ import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { Tooltip } from "../../ui/Tooltip";
 import { openSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
-import { extractEditDiffStats, extractWriteDiffStats } from "@/lib/shared/tool-diff-stats";
+import { classifyToolCall, isToolResultEmpty, toolCallDiffStats } from "@/lib/shared/tool-call-display";
+import { extractMessageText } from "@/lib/shared/message-content";
 import { deriveSubagentBlockState } from "@/lib/shared/subagent-block-state";
 import { useShowFileResults } from "@/hooks/showFileResultsStore";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
@@ -165,9 +166,12 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
 function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?: ToolResultMessage; cwd?: string | null }) {
   const { t } = useI18n();
   const { isDark } = useTheme();
-  const isBash = block.toolName === "bash";
-  const isFileMutation = block.toolName === "write" || block.toolName === "edit";
-  const isSpawnSubagent = block.toolName === "spawn_subagent";
+  // The tool-call-display module owns "what kind of call is this"; the block
+  // never compares tool names itself.
+  const toolKind = classifyToolCall(block.toolName);
+  const isBash = toolKind === "bash";
+  const isFileMutation = toolKind === "file-mutation";
+  const isSpawnSubagent = toolKind === "subagent";
   // Only the specialized renderers (bash / diff for edit & write / the
   // subagent live panel) stay expanded by default; every other tool call
   // block collapses by default.
@@ -184,22 +188,17 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const inputStr = JSON.stringify(block.input, null, 2);
 
-  const resultText = result
-    ? result.content.filter((item): item is { type: "text"; text: string } => item.type === "text").map((item) => item.text).join("\n")
-    : null;
-  const resultIsEmpty = resultText === null ? false : (resultText.trim() === "(no output)" || resultText.trim() === "");
+  const resultText = result ? extractMessageText(result) : null;
+  const resultIsEmpty = isToolResultEmpty(result);
   const isError = result?.isError ?? false;
 
-  // Added/deleted line counts derived purely from the tool's own data:
-  // edit → result details' diff payload (persisted in the session JSONL);
-  // write → the input content. Never from git. Null while streaming.
-  const diffStats = useMemo(() => {
-    if (!isFileMutation) return null;
-    if (isError) return null;
-    return block.toolName === "edit"
-      ? extractEditDiffStats(result?.details)
-      : extractWriteDiffStats(block.input);
-  }, [isFileMutation, isError, block, result]);
+  // Added/deleted line counts, including where each count comes from, are the
+  // tool-call-display module's policy (edit → result details' diff payload;
+  // write → the input content; errored calls → null). Never from git.
+  const diffStats = useMemo(
+    () => (isFileMutation ? toolCallDiffStats(block, result) : null),
+    [isFileMutation, block, result],
+  );
 
   const isShowFile = isShowFileToolName(block.toolName);
   const showFilePaths: string[] | null = (() => {

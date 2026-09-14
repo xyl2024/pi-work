@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useReducer, useEffect, useRef } from "react";
 import type { AgentMessage, ToolCallContent, ToolResultMessage, AssistantMessage } from "@/lib/shared/types";
-import { extractEditDiffStats, extractWriteDiffStats, extractMutatingPath } from "@/lib/shared/tool-diff-stats";
+import { extractMutatingPath } from "@/lib/shared/tool-diff-stats";
+import { toolCallDiffStats } from "@/lib/shared/tool-call-display";
 import { useToolCallStatsRegister } from "./ToolCallStatsContext";
 import type { ToolCallStatsEvent } from "./ToolCallStatsContext";
 
@@ -182,18 +183,20 @@ function statsReducer(state: StatsState, action: StatsAction): StatsState {
 
       let nextFileEdits = state.fileEdits;
       if (runningEntry.toolName === "edit" || runningEntry.toolName === "write") {
-        // edit: counts come from the result details' diff payload; write: from
-        // the tool input content captured at start. No git involved.
-        const stats = runningEntry.toolName === "edit"
-          ? extractEditDiffStats(action.resultDetails)
-          : extractWriteDiffStats(runningEntry.args);
+        // Counts come from the shared tool-call-display policy: an errored
+        // call yields null, edit reads the result details' diff payload, write
+        // reads the tool input content captured at start. No git involved.
+        const stats = toolCallDiffStats(
+          { toolName: runningEntry.toolName, input: runningEntry.args ?? {} },
+          { role: "toolResult", toolCallId: action.toolCallId, content: [], isError, details: action.resultDetails },
+        );
         nextFileEdits = state.fileEdits.map((r) =>
           r.toolCallId === action.toolCallId
             ? {
                 ...r,
                 isError,
-                additions: isError ? null : stats?.additions ?? null,
-                deletions: isError ? null : stats?.deletions ?? null,
+                additions: stats?.additions ?? null,
+                deletions: stats?.deletions ?? null,
               }
             : r,
         );
@@ -271,17 +274,16 @@ function buildStatsFromMessages(messages: AgentMessage[]): BuiltStats {
       }
 
       if (toolName === "edit" || toolName === "write") {
-        // edit: pi persists the tool result's `details` (diff payload) in the
-        // session JSONL, so counts survive reloads. write: derived from input.
-        const stats = toolName === "edit"
-          ? extractEditDiffStats(result?.details)
-          : extractWriteDiffStats(tc.input);
+        // Same shared policy as the live path: errored calls yield null, edit
+        // reads the result details' diff payload (pi persists it in the
+        // session JSONL, so counts survive reloads), write reads the input.
+        const stats = toolCallDiffStats(tc, result);
         fileEdits.push({
           toolCallId: tc.toolCallId,
           toolName,
           path: extractMutatingPath(tc.input),
-          additions: isError ? null : stats?.additions ?? null,
-          deletions: isError ? null : stats?.deletions ?? null,
+          additions: stats?.additions ?? null,
+          deletions: stats?.deletions ?? null,
           isError,
           timestamp: assistantTs,
         });
