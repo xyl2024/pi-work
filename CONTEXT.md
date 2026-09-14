@@ -86,6 +86,10 @@ _Avoid_: conversation、对话、chat
 会话内部由消息与分支组成的对话历史；对话树（Conversation Tree）是它的一种视图。
 _Avoid_: 用 conversation 指代整个会话
 
+**回合（Turn）**：
+向一个会话投递一次输入、直到该会话彻底结束（不再有待重试、压缩重试或排队续跑）的完整过程；聊天里的一轮对话与后台任务的一次执行都是回合。
+_Avoid_: 把它当作 pi SDK 的 turn（那是一步 assistant 响应加其工具调用）；用裸的 run / 「运行」指代它
+
 **上下文窗口（Context Window）**：
 会话当前送入模型的上下文内容与容量；压缩（compact）是对它的操作。
 _Avoid_: context、Context 面板视图、React Context
