@@ -48,6 +48,7 @@ export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResul
       ...(spec.toolNames !== undefined ? { toolNames: spec.toolNames } : {}),
       ...(spec.source ? { source: spec.source } : {}),
       ...(spec.session ? { session: spec.session } : {}),
+      ...(spec.abortSources ? { abortSources: spec.abortSources } : {}),
       ...(spec.onSession ? { onSession: spec.onSession } : {}),
     },
     // The turn module treats key-present-undefined exactly like absent, so the

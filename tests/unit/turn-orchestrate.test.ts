@@ -368,6 +368,169 @@ describe("runTurn — the wait reuses the watchSettled judgement", () => {
   });
 });
 
+describe("runTurn — abort sources", () => {
+  const tickMs = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  it("returns cancelled the moment a source fires, without waiting for the deadline", async () => {
+    const session = new FakeTurnSession("real-1");
+    const source = new AbortController();
+
+    const turn = runTurn(
+      baseSpec({ timeoutMs: 60_000, abortSources: [{ signal: source.signal, reason: "Subagent cancelled" }] }),
+      makeFactory([session], []),
+    );
+    await tick();
+    source.abort();
+
+    const result = await turn;
+    expect(result.status).toBe("cancelled");
+    expect(result.error).toBe("Subagent cancelled");
+    expect(result.hasReply).toBe(false);
+    // The deadline never fired: the session was not torn down by a timeout.
+    expect(session.destroyed).toBe(0);
+  });
+
+  it("tells the session to abort so no running turn is left behind", async () => {
+    const session = new FakeTurnSession("real-1");
+    const source = new AbortController();
+
+    const turn = runTurn(
+      baseSpec({ abortSources: [{ signal: source.signal, reason: "Parent stopped" }] }),
+      makeFactory([session], []),
+    );
+    await tick();
+    source.abort();
+    await turn;
+
+    // The prompt went out, then the abort command right after it.
+    expect(session.sent.map((command) => command.type)).toEqual(["prompt", "abort"]);
+  });
+
+  it("cancels when any one of several sources fires", async () => {
+    const session = new FakeTurnSession("real-1");
+    const quiet = new AbortController();
+    const firer = new AbortController();
+
+    const turn = runTurn(
+      baseSpec({
+        abortSources: [
+          { signal: quiet.signal, reason: "whatever" },
+          { signal: firer.signal, reason: "Parent session was closed" },
+        ],
+      }),
+      makeFactory([session], []),
+    );
+    await tick();
+    firer.abort();
+
+    const result = await turn;
+    expect(result.status).toBe("cancelled");
+    expect(result.error).toBe("Parent session was closed");
+    expect(quiet.signal.aborted).toBe(false);
+  });
+
+  it("does not produce a second terminal state after the cancel", async () => {
+    const session = new FakeTurnSession("real-1");
+    const source = new AbortController();
+
+    const turn = runTurn(
+      baseSpec({ timeoutMs: 10, abortSources: [{ signal: source.signal, reason: "Subagent cancelled" }] }),
+      makeFactory([session], []),
+    );
+    await tick();
+    source.abort();
+    // The session settles on its own right after the abort, and the deadline
+    // elapses — neither may turn the already-terminal result into another one.
+    session.emit({ type: "agent_end", willRetry: false, messages: [settledAssistant("too late")] });
+    session.emit({ type: "agent_settled" });
+    await tickMs(30);
+
+    const result = await turn;
+    expect(result.status).toBe("cancelled");
+    expect(result.text).toBe("");
+    expect(session.destroyed).toBe(0);
+    expect(session.sent.filter((command) => command.type === "abort")).toHaveLength(1);
+  });
+
+  it("cancels before the prompt is dispatched when a source is already aborted", async () => {
+    const session = new FakeTurnSession("real-1");
+    const source = new AbortController();
+    source.abort();
+
+    const result = await runTurn(
+      baseSpec({ abortSources: [{ signal: source.signal, reason: "Subagent cancelled" }] }),
+      makeFactory([session], []),
+    );
+
+    expect(result.status).toBe("cancelled");
+    expect(result.error).toBe("Subagent cancelled");
+    // No prompt was ever sent: a turn nobody is going to wait for must not be
+    // started and left running.
+    expect(session.sent.map((command) => command.type)).toEqual(["abort"]);
+  });
+
+  it("behaves exactly as before when no abort sources are given", async () => {
+    const session = new FakeTurnSession("real-1");
+    session.settleOnPrompt = true;
+
+    const result = await runTurn(baseSpec(), makeFactory([session], []));
+
+    expect(result.status).toBe("completed");
+    // No abort command appears on a run that was never given a stop policy.
+    expect(session.sent.map((command) => command.type)).toEqual(["prompt"]);
+  });
+
+  it("ignores an abort source that never fires", async () => {
+    const session = new FakeTurnSession("real-1");
+    session.settleOnPrompt = true;
+    const source = new AbortController();
+
+    const result = await runTurn(
+      baseSpec({ abortSources: [{ signal: source.signal, reason: "never" }] }),
+      makeFactory([session], []),
+    );
+
+    expect(result.status).toBe("completed");
+    expect(session.sent.map((command) => command.type)).toEqual(["prompt"]);
+  });
+});
+
+describe("watchSettled — abort sources", () => {
+  it("tells the session to abort and converges as cancelled", async () => {
+    const session = new FakeTurnSession("shared");
+    const source = new AbortController();
+
+    const watch = watchSettled(session, {
+      abortSources: [{ signal: source.signal, reason: "Parent stopped" }],
+    });
+    await tick();
+    source.abort();
+
+    const result = await watch;
+    expect(result.status).toBe("cancelled");
+    expect(result.error).toBe("Parent stopped");
+    expect(session.sent).toEqual([{ type: "abort" }]);
+    expect(session.destroyed).toBe(0);
+  });
+
+  it("reports cancelled with the caller's reason and ignores later settlements", async () => {
+    const session = new FakeTurnSession("shared");
+    const source = new AbortController();
+
+    const watch = watchSettled(session, {
+      abortSources: [{ signal: source.signal, reason: "Session was closed" }],
+    });
+    await tick();
+    source.abort();
+    session.emit({ type: "agent_end", willRetry: false, messages: [settledAssistant("late")] });
+    session.emit({ type: "agent_settled" });
+
+    const result = await watch;
+    expect(result.status).toBe("cancelled");
+    expect(result.text).toBe("");
+  });
+});
+
 describe("watchSettled — observe only", () => {
   it("delivers no command to the session", async () => {
     const session = new FakeTurnSession("shared");

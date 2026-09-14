@@ -57,19 +57,24 @@ export function observeTurnEvent(snapshot: TurnSnapshot, event: TurnEvent): Turn
 }
 
 /** Neutral terminal states. Callers map these onto their own vocabulary. */
-export type TurnStatus = "completed" | "aborted" | "failed" | "timeout" | "interrupted";
+export type TurnStatus = "completed" | "aborted" | "failed" | "timeout" | "interrupted" | "cancelled";
 
 /**
  * Why the wait for the turn ended. `settled`/`failed` come from the event
- * stream; `timeout`/`interrupted` are the caller's own policy (the caller owns
- * the deadline, and it is the caller's session-destroy listener that reports an
- * interruption).
+ * stream; `timeout`/`interrupted`/`cancelled` are the caller's own policy (the
+ * caller owns the deadline and the abort sources, and it is the caller's
+ * session-destroy listener that reports an interruption).
+ *
+ * `aborted` (a session that stopped itself with `stopReason === "aborted"`) is a
+ * different fact from `cancelled` (one of the caller's abort sources fired and
+ * the module told the session to stop); both are terminal states.
  */
 export type TurnEndReason =
   | { kind: "settled" }
   | { kind: "timeout"; deadlineMs: number }
   | { kind: "interrupted" }
-  | { kind: "failed"; error: string };
+  | { kind: "failed"; error: string }
+  | { kind: "cancelled"; reason: string };
 
 /** What one turn ended up being. */
 export interface TurnOutcome {
@@ -116,6 +121,12 @@ export function classifyTurnEnd(snapshot: TurnSnapshot, reason: TurnEndReason): 
   }
   if (reason.kind === "failed") {
     return outcome("failed", "", false, reason.error, null);
+  }
+  if (reason.kind === "cancelled") {
+    // The caller's abort source fired; `reason` is its wording. No reply text:
+    // the turn was cut short, and a partial result is the caller's to re-read
+    // (the subagent path does) rather than something this layer invents.
+    return outcome("cancelled", "", false, reason.reason, null);
   }
 
   const last = lastAssistantMessage(snapshot.lastRunMessages);

@@ -214,6 +214,19 @@ describe("classifyTurnEnd — non-settle reasons", () => {
     expect(outcome.status).toBe("failed");
     expect(outcome.error).toBe("send failed");
   });
+
+  it("maps a fired abort source to cancelled with the caller's wording", () => {
+    const outcome = classifyTurnEnd(observe([runEnd([assistant("partial")])]), {
+      kind: "cancelled",
+      reason: "Subagent cancelled",
+    });
+    expect(outcome.status).toBe("cancelled");
+    expect(outcome.error).toBe("Subagent cancelled");
+    // A cancelled turn was cut short: no reply text is invented for it.
+    expect(outcome.text).toBe("");
+    expect(outcome.hasReply).toBe(false);
+    expect(outcome.stopReason).toBeNull();
+  });
 });
 
 describe("the whole scripted turn", () => {

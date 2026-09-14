@@ -114,6 +114,13 @@ export interface RunTurnSpec {
   /** Caller-owned deadline in ms; the session is destroyed when it fires. */
   timeoutMs: number;
   /**
+   * Optional stop policy: any source firing cancels this turn — the module
+   * tells the session to abort and returns `cancelled` at once, without waiting
+   * for `timeoutMs`. A source already aborted at call time cancels before the
+   * prompt is ever dispatched. Absent/empty leaves today's behaviour unchanged.
+   */
+  abortSources?: TurnAbortSource[];
+  /**
    * Called once, right after the session is acquired and before any setup
    * command or the prompt reaches it. Lets a caller that must address the
    * live session while the turn is running (to abort it, or to link it from a
@@ -135,16 +142,36 @@ export interface TurnResult extends TurnOutcome {
 export interface WatchSettledOptions {
   /** Optional deadline in ms; the session is destroyed when it fires. */
   timeoutMs?: number;
+  /**
+   * Optional stop policy: any source firing cancels the turn. The module tells
+   * the session to abort (so the turn really stops, rather than being merely
+   * labelled) and settles as `cancelled` at once, without waiting for the
+   * deadline. Absent/empty leaves today's behaviour untouched.
+   */
+  abortSources?: TurnAbortSource[];
+}
+
+/**
+ * A side condition under which the turn must be cancelled. The caller owns the
+ * signal and the wording (parent stopped, parent session closed, the parent
+ * agent's own abort, …); the module only executes it.
+ */
+export interface TurnAbortSource {
+  signal: AbortSignal;
+  /** Human-readable reason recorded as the cancelled result's `error`. */
+  reason: string;
 }
 
 /**
  * Observe one already-running session until its current turn has really
  * finished (`agent_settled`), then report the neutral terminal state.
  *
- * Delivers NO command to the session — not even an abort. A destroyed session
+ * Delivers NO command to the session on its own — not even an abort — unless
+ * the caller hands it `abortSources`: any one of those firing tells the session
+ * to abort and settles as `cancelled` immediately. A destroyed session
  * converges to `interrupted`. When `timeoutMs` is given, the deadline is the
  * caller's policy executed here: the session is destroyed and the result is
- * `timeout`. Without `timeoutMs` the session is never touched.
+ * `timeout`. Without `timeoutMs` the session is never touched by a deadline.
  *
  * Ids: an observe-only call sees the wrapper's `sessionId`, which in
  * production IS pi's real session id. `runTurn` overwrites both ids with the
@@ -166,6 +193,7 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
     let timer: ReturnType<typeof setTimeout> | null = null;
     let removeEventListener: () => void = () => {};
     let removeDestroyListener: () => void = () => {};
+    let removeAbortListeners: () => void = () => {};
 
     const finish = (reason: TurnEndReason) => {
       if (done) return;
@@ -173,6 +201,7 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
       if (timer !== null) clearTimeout(timer);
       removeEventListener();
       removeDestroyListener();
+      removeAbortListeners();
       resolve({ ...classifyTurnEnd(snapshot, reason), ...ids });
     };
 
@@ -199,6 +228,38 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
         finish({ kind: "timeout", deadlineMs });
       }, deadlineMs);
     }
+
+    // Abort sources are the caller's stop policy executed here, just like the
+    // deadline: any one firing tells the session to abort — so the turn really
+    // stops and no running session is left behind — and settles the wait as
+    // `cancelled` right away. `finish`'s `done` guard is what keeps the events
+    // the abort itself provokes (a settled/aborted agent_end) from reporting a
+    // second terminal state.
+    if (options.abortSources?.length) {
+      const removeFns: Array<() => void> = [];
+      const cancel = (source: TurnAbortSource) => {
+        // Best-effort, exactly like the pre-seam subagent path: the abort
+        // completes asynchronously and its JSONL still records the stop.
+        void Promise.resolve(session.send({ type: "abort" })).catch(() => undefined);
+        finish({ kind: "cancelled", reason: source.reason });
+      };
+      for (const source of options.abortSources) {
+        const onAbort = () => cancel(source);
+        source.signal.addEventListener("abort", onAbort, { once: true });
+        removeFns.push(() => source.signal.removeEventListener("abort", onAbort));
+      }
+      removeAbortListeners = () => {
+        for (const remove of removeFns) remove();
+      };
+      // A signal aborted before this call never fires its listener; converge at
+      // once instead of hanging until the session settles on its own.
+      for (const source of options.abortSources) {
+        if (source.signal.aborted) {
+          cancel(source);
+          break;
+        }
+      }
+    }
   });
 }
 
@@ -210,9 +271,10 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
  *
  * The waiting reuses `watchSettled`, so there is exactly one terminal-state
  * judgement. Cleanup: a failed setup or a timed-out wait destroys the
- * session. Factory failures propagate to the caller. No side effects are
- * owned here — notifications, inbox pushes, logs and channel state belong to
- * the caller.
+ * session; a cancel from one of the caller's abort sources instead tells the
+ * session to abort and returns `cancelled`. Factory failures propagate to the
+ * caller. No side effects are owned here — notifications, inbox pushes, logs
+ * and channel state belong to the caller.
  */
 export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFactory): Promise<TurnResult> {
   // Session acquisition: the factory owns registry keys and pi's own ids.
@@ -252,7 +314,17 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
   // short turn may settle before any code after `send("prompt")` runs.
   // watchSettled installs its listeners synchronously inside the Promise
   // executor, so by the time the call below returns, the listener is live.
-  const watched = watchSettled(session, { timeoutMs: spec.timeoutMs });
+  const watched = watchSettled(session, {
+    timeoutMs: spec.timeoutMs,
+    ...(spec.abortSources ? { abortSources: spec.abortSources } : {}),
+  });
+
+  // A turn cancelled before its prompt is dispatched never starts one: the
+  // watcher has already told the session to abort and settled as `cancelled`,
+  // so sending the prompt now would leave a running session nobody stops.
+  if (spec.abortSources?.some((source) => source.signal.aborted)) {
+    return { ...(await watched), ...ids };
+  }
 
   try {
     await session.send({ type: "prompt", message: spec.prompt });
