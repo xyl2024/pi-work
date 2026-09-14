@@ -6,13 +6,15 @@
  * This is the active half of the turn module (see
  * docs/adr/0004-turn-execution-has-one-seam-and-waits-for-agent-settled.md).
  * The ordering knowledge lives here — install the terminal listener BEFORE
- * dispatching the prompt; set model/thinking/tools BEFORE the prompt — because
- * those orderings are part of "what a turn is", not of any caller.
+ * dispatching the prompt; apply model/thinking BEFORE the prompt — because
+ * those orderings are part of "what a turn is", not of any caller. The tool
+ * set is not a command this module sends: it is baked into the session at
+ * acquisition, so it is forwarded to the session factory instead.
  *
  * No side effects live here: notifications, inbox pushes, logs and channel
  * state stay with the callers. Options are genuinely optional — an absent
- * model/thinking/tools simply sends no setup command and defers to the
- * session sidecar / cwd defaults; the module never invents a default.
+ * model/thinking simply sends no setup command and defers to the session
+ * sidecar / cwd defaults; the module never invents a default.
  */
 import {
   classifyTurnEnd,
@@ -92,9 +94,10 @@ export interface RunTurnSpec {
   /** Optional thinking level applied via `set_thinking_level` before the prompt. */
   thinkingLevel?: string;
   /**
-   * Optional tool selection applied before the prompt. `undefined` sends no
-   * command and lets the session factory apply its own default (sidecar /
-   * cwd default) — the module never invents a tool set for the caller.
+   * Optional tool selection handed to the session factory, which bakes it in
+   * while acquiring the session (this module sends no tool command).
+   * `undefined` lets the factory apply its own default (sidecar / cwd
+   * default) — the module never invents a tool set for the caller.
    */
   toolNames?: ToolSelection;
   /** Who is running this turn (LLM-audit attribution). Defaults to "user". */
@@ -265,9 +268,10 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
 
 /**
  * Run one complete turn:
- * acquire (fresh, or the existing session the caller named) → apply optional
- * model/thinking/tools → install the terminal listener → deliver the prompt →
- * wait for the turn to really finish → return the neutral result.
+ * acquire (fresh, or the existing session the caller named; the factory also
+ * bakes in the tool set) → apply optional model/thinking → install the
+ * terminal listener → deliver the prompt → wait for the turn to really finish
+ * → return the neutral result.
  *
  * The waiting reuses `watchSettled`, so there is exactly one terminal-state
  * judgement. Cleanup: a failed setup or a timed-out wait destroys the
@@ -288,8 +292,9 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
   );
   const ids = { sessionId, realSessionId };
 
-  // Model / thinking / tools must be in place BEFORE the prompt. Each option
-  // is genuinely optional: absent → no command at all, and the session's own
+  // Model / thinking must be in place BEFORE the prompt (the tool set is
+  // already in place: the factory applied it at acquisition). Each option is
+  // genuinely optional: absent → no command at all, and the session's own
   // defaults (sidecar, cwd config) stand.
   try {
     // Announce the live session before anything touches it: a caller that

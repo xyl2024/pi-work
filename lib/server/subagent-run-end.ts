@@ -6,9 +6,18 @@
  * Pure — no session, no SQLite, no I/O — so the tool's run-policy decisions can
  * be asserted directly. The pre-seam tool kept its own wait
  * (`subagent-tool.ts:waitForAgentEnd`) plus a hand-tracked terminal state; this
- * mapping keeps the same verdicts and the same wording while the wait itself
- * now goes through `lib/server/turn` (see
+ * mapping keeps the same verdicts and the same wording as that wait for every
+ * terminal state it had, while the wait itself now goes through
+ * `lib/server/turn` (see
  * docs/adr/0004-turn-execution-has-one-seam-and-waits-for-agent-settled.md).
+ *
+ * One verdict necessarily narrows. The pre-seam wait tracked `sawAssistant` (an
+ * assistant message arrived at all) and called a settle with an assistant
+ * message but no text a `completed` run with an empty result; the module reports
+ * only the stronger fact `hasReply` (the final assistant message carries text).
+ * An empty assistant message therefore now fails with "stopped without
+ * producing any response", which is the same verdict the board's and the
+ * scheduler's mappings give an empty reply.
  *
  * Three verdicts are this caller's own — the turn module reports facts, not
  * verdicts:
