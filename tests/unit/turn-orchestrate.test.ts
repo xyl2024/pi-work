@@ -201,6 +201,44 @@ describe("runTurn — one call runs the whole turn", () => {
     expect(session.destroyed).toBe(1);
   });
 
+  it("announces the acquired session before any command reaches it", async () => {
+    const session = new FakeTurnSession("real-1");
+    session.settleOnPrompt = true;
+    const seen: Array<{ sessionId: string; realSessionId: string; commandsSoFar: number }> = [];
+
+    await runTurn(
+      baseSpec({
+        onSession: (ids) => seen.push({ ...ids, commandsSoFar: session.sent.length }),
+      }),
+      makeFactory([session], []),
+    );
+
+    // key-1 / real-1 come from the factory; commandsSoFar is 0 because the hook
+    // fires right after acquisition, before set_model / set_thinking_level / prompt.
+    expect(seen).toEqual([{ sessionId: "key-1", realSessionId: "real-1", commandsSoFar: 0 }]);
+  });
+
+  it("destroys the session when the onSession callback throws", async () => {
+    const session = new FakeTurnSession("real-1");
+    const factory = makeFactory([session], []);
+
+    await expect(
+      runTurn(
+        baseSpec({
+          onSession: () => {
+            throw new Error("card gone");
+          },
+        }),
+        factory,
+      ),
+    ).rejects.toThrow("card gone");
+
+    // The callback failed before any command reached the session: tear it down
+    // rather than leak a session the caller could never link.
+    expect(session.destroyed).toBe(1);
+    expect(session.sent).toEqual([]);
+  });
+
   it("reports failed when the prompt dispatch itself fails", async () => {
     const session = new FakeTurnSession("real-1");
     const factory = makeFactory([session], []);

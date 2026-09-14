@@ -87,6 +87,14 @@ export interface RunTurnSpec {
   source?: LlmAuditSource;
   /** Caller-owned deadline in ms; the session is destroyed when it fires. */
   timeoutMs: number;
+  /**
+   * Called once, right after the session is acquired and before any setup
+   * command or the prompt reaches it. Lets a caller that must address the
+   * live session while the turn is running (to abort it, or to link it from a
+   * run record) learn its ids. The module performs no side effect here — the
+   * caller owns whatever it does with the ids.
+   */
+  onSession?: (ids: { sessionId: string; realSessionId: string }) => void;
 }
 
 /** The neutral terminal state of one turn. */
@@ -194,6 +202,11 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
   // is genuinely optional: absent → no command at all, and the session's own
   // defaults (sidecar, cwd config) stand.
   try {
+    // Announce the live session before anything touches it: a caller that
+    // needs to cancel or link this run has the ids from here on. Kept inside
+    // the try so a throwing callback tears the session down instead of
+    // leaking it.
+    spec.onSession?.(ids);
     if (spec.model) {
       await session.send({ type: "set_model", provider: spec.model.provider, modelId: spec.model.modelId });
     }

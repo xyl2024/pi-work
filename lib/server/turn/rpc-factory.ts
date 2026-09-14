@@ -42,6 +42,7 @@ export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResul
       ...(spec.thinkingLevel !== undefined ? { thinkingLevel: spec.thinkingLevel } : {}),
       ...(spec.toolNames !== undefined ? { toolNames: spec.toolNames } : {}),
       ...(spec.source ? { source: spec.source } : {}),
+      ...(spec.onSession ? { onSession: spec.onSession } : {}),
     },
     // The turn module treats key-present-undefined exactly like absent, so the
     // conditional spreads above only keep `exactOptionalPropertyTypes`-style
