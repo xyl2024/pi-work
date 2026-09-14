@@ -225,6 +225,29 @@ describe("runTurn — one call runs the whole turn", () => {
     expect(session.destroyed).toBe(1);
   });
 
+  it("reports the timeout, not a cancel, when the deadline's own destroy fires a caller's stop source", async () => {
+    // A caller may wire one of its stop sources to the session's destroy — the
+    // subagent path does, because the child session being closed is one of its
+    // stop conditions. The wrapper runs destroy callbacks synchronously, so the
+    // deadline must decide the outcome *before* it tears the session down, or
+    // that source would settle the wait as cancelled first.
+    const session = new FakeTurnSession("real-1");
+    const childGone = new AbortController();
+    session.onDestroy(() => childGone.abort());
+
+    const result = await runTurn(
+      baseSpec({
+        timeoutMs: 10,
+        abortSources: [{ signal: childGone.signal, reason: "Subagent stopped because the subagent session was closed" }],
+      }),
+      makeFactory([session], []),
+    );
+
+    expect(result.status).toBe("timeout");
+    expect(result.error).toContain("10");
+    expect(session.destroyed).toBe(1);
+  });
+
   it("announces the acquired session before any command reaches it", async () => {
     const session = new FakeTurnSession("real-1");
     session.settleOnPrompt = true;

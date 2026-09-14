@@ -186,10 +186,6 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
 
   return await new Promise<TurnResult>((resolve) => {
     let done = false;
-    // True while the deadline itself is destroying the session — the wrapper's
-    // destroy() runs its onDestroy callbacks synchronously, so without this
-    // flag the timeout would be misreported as an external interruption.
-    let destroyingForTimeout = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let removeEventListener: () => void = () => {};
     let removeDestroyListener: () => void = () => {};
@@ -216,16 +212,20 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
       if (reason) finish(reason);
     });
     removeDestroyListener = session.onDestroy(() => {
-      if (destroyingForTimeout) return;
       finish({ kind: "interrupted" });
     });
 
     if (options.timeoutMs !== undefined) {
       const deadlineMs = options.timeoutMs;
       timer = setTimeout(() => {
-        destroyingForTimeout = true;
-        session.destroy();
+        // Decide the outcome BEFORE destroying the session. The wrapper runs
+        // its onDestroy callbacks synchronously, and a caller may have wired
+        // one of them to a stop source (the subagent path wires the child
+        // session's destruction that way). Finishing first removes every
+        // listener — including this wait's own — so that teardown cannot
+        // settle the wait as `interrupted` or `cancelled` instead.
         finish({ kind: "timeout", deadlineMs });
+        session.destroy();
       }, deadlineMs);
     }
 
