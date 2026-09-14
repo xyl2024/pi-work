@@ -46,11 +46,12 @@ PORT=8080 pi-work                 # 也支持 PORT 环境变量
 
 ## 开发
 
-要求 Node.js 22+。
+要求 Node.js 22+，并使用 pnpm 作为包管理器（版本固定在 `package.json` 的 `packageManager` 字段）。
 
 ```bash
-npm install
-npm run dev                 # 开发服务器，端口 30141
+corepack enable             # 让 pnpm 走固定版本（Node 自带 corepack）
+pnpm install
+pnpm run dev                # 开发服务器，端口 30141
 ```
 
 常用检查：
@@ -63,11 +64,24 @@ node_modules/.bin/eslint <本次修改的文件>
 不要在开发循环中运行 `next build`；生产构建会污染 `.next/`，并可能影响正在运行的开发服务器。需要生产构建时，明确执行：
 
 ```bash
-npm run build
-npm start
+pnpm run build
+pnpm start
 ```
 
-若生产实例（`npm start`，端口 30141）与开发实例在同一目录并存，两者共享 `~/.pi-work/` 与 `~/.pi/agent/` 会互相干扰（定时任务/频道重复执行等）；开发请用隔离模式 `npm run dev:isolated`（数据、端口完全独立，详见下方“多实例隔离”）。
+### 包管理器注意事项
+
+仓库已从 npm 迁移到 pnpm，锁文件是 `pnpm-lock.yaml`：
+
+- **不要**再生成 `package-lock.json`；新增/升级依赖用 `pnpm add <pkg>`、`pnpm add -D <pkg>`、`pnpm update <pkg>`，`pnpm run` 可略写为 `pnpm <script>`。
+- 全部 pnpm 配置在 **`pnpm-workspace.yaml`**（pnpm 11 起设置的家），`.npmrc` 只留注册表/鉴权配置。
+- 依赖安装脚本默认被禁用，允许清单是同文件的 `allowBuilds`（`better-sqlite3`、`node-pty` 等原生模块必须允许，否则运行时加载 `.node` 会失败）。
+- 与 npm 的两处行为差异需要注意：
+  - `pnpm install` **不会**因 `NODE_ENV=production` 跳过 devDependencies（只在显式 `--prod` 时跳过）。
+  - node_modules 是严格隔离布局，**没有提升**：代码里 `import "某个间接依赖"` 会失败，必须把它声明为直接依赖。同理，按包名在运行时 `require` 平台包时需要 `publicHoistPattern`（见 `@colbymchenry/codegraph-*`）。
+- 改了 `pnpm-workspace.yaml` 里影响解析的配置（`overrides` 等）后，普通 `pnpm install` 不会重新解析；用 `pnpm install --no-frozen-lockfile` 更新 `pnpm-lock.yaml`。
+- `electron-shell/` 是独立的 Electron 包（自带 `package.json`，无锁文件），不在 pnpm workspace 内，不要把它加进 `pnpm-workspace.yaml`。
+
+若生产实例（`pnpm start`，端口 30141）与开发实例在同一目录并存，两者共享 `~/.pi-work/` 与 `~/.pi/agent/` 会互相干扰（定时任务/频道重复执行等）；开发请用隔离模式 `pnpm run dev:isolated`（数据、端口完全独立，详见下方“多实例隔离”）。
 
 在本机长期运行时，也可以使用项目环境提供的启动脚本：
 
@@ -100,7 +114,7 @@ Pi Work 默认使用以下数据目录：
 用隔离模式启动开发实例，让开发使用完全独立的数据：
 
 ```bash
-npm run dev:isolated          # 等价于 node scripts/dev-isolated.mjs
+pnpm run dev:isolated         # 等价于 node scripts/dev-isolated.mjs
 ```
 
 `dev:isolated` 默认把开发实例隔离到：
@@ -132,10 +146,10 @@ cp -r ~/.pi/agent ~/.pi-dev/agent
 可用环境变量：
 
 ```bash
-PI_WORK_LOG_LEVEL=debug npm run dev
-PI_WORK_LOG_FILE=/tmp/pi-work.log npm run dev
-PI_WORK_LOG_DIR=/tmp/pi-work-logs npm run dev
-PI_WORK_LOG_FILE=off npm run dev
+PI_WORK_LOG_LEVEL=debug pnpm run dev
+PI_WORK_LOG_FILE=/tmp/pi-work.log pnpm run dev
+PI_WORK_LOG_DIR=/tmp/pi-work-logs pnpm run dev
+PI_WORK_LOG_FILE=off pnpm run dev
 ```
 
 ## 当前目录结构

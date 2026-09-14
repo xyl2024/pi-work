@@ -29,11 +29,16 @@ rsync -a --delete \
 
 cd "$DEPLOY_DIR"
 
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pnpm not found. Enable the pinned version with 'corepack enable pnpm' (see README, 开发)." >&2
+  exit 1
+fi
+
 echo "Installing dependencies in $DEPLOY_DIR"
-npm ci
+pnpm install --frozen-lockfile
 
 echo "Building production app in $DEPLOY_DIR"
-npm run build
+pnpm run build
 
 echo "Restarting systemd user service: $SERVICE_NAME"
 systemctl --user restart "$SERVICE_NAME"

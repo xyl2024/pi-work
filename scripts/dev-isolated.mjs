@@ -17,7 +17,7 @@
  * are set, so a single file can be redirected independently.
  *
  * Usage:
- *   npm run dev:isolated
+ *   pnpm run dev:isolated
  *   node scripts/dev-isolated.mjs [--port 30143] [--term-port 30144]
  *       [--data-dir ~/.pi-work-dev] [--agent-dir ~/.pi-dev/agent]
  *       [--base-url http://localhost:30143]

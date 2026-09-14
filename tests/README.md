@@ -4,7 +4,7 @@
 
 | 层 | 框架 | 位置 | 运行 |
 |---|---|---|---|
-| 接口 / 单元 | Vitest | `tests/unit/**/*.test.ts` | `npm test` |
+| 接口 / 单元 | Vitest | `tests/unit/**/*.test.ts` | `pnpm test` |
 
 `tests/unit/` 下有两类测试：
 
@@ -15,7 +15,7 @@
 
 ## 隔离原则（红线）
 
-测试只针对隔离实例（`npm run dev:isolated`，端口 30143，数据根 `~/.pi-work-dev`），
+测试只针对隔离实例（`pnpm run dev:isolated`，端口 30143，数据根 `~/.pi-work-dev`），
 绝不接触生产实例和真实 `~/.pi` / `~/.pi-work` 数据。数据之外，**构建产物也完全隔离**：
 `next.config.ts` 支持 `NEXT_DIST_DIR` 环境变量，测试实例构建到 `.next-test/`，
 `dev:isolated` 构建到 `.next-isolated/`，生产实例正在使用的 `.next/` 永远不会被写入。
@@ -24,7 +24,7 @@
   已在运行则直接复用（测试结束后保持运行）；没在运行则自动启动
   `scripts/dev-isolated.mjs`，等待就绪后跑测试，结束时自动停掉。
 - **纯单元测试**不访问实例，但 `vitest.config.ts` 的 `globalSetup` 对所有
-  `tests/unit/**` 生效，所以 `npm test` 仍会先确保隔离实例可用（不会跳过）。
+  `tests/unit/**` 生效，所以 `pnpm test` 仍会先确保隔离实例可用（不会跳过）。
 - 端口/地址冲突时可用 `PI_WORK_TEST_BASE_URL` 覆盖。
 - **不测试生产环境**：不存在生产形态的测试路径，`tests/global-setup.ts` 只以
   `next dev` 启动隔离实例，没有 `next build` / `next start`，也没有

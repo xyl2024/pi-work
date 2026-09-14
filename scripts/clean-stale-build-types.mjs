@@ -7,7 +7,7 @@
  * validators are type-checked from the main checkout too. Next writes one
  * `RouteHandlerConfig<"/api/...">` entry per route into `types/validator.ts`,
  * so deleting a route leaves a stale entry pointing at a file that no longer
- * exists — and the next `npm run build` (or a plain `tsc --noEmit`) fails with
+ * exists — and the next `pnpm run build` (or a plain `tsc --noEmit`) fails with
  * `TS2307` until that other instance happens to be rebuilt.
  *
  * Wired as `prebuild`. Deleting a route is the trigger; adding one is not,

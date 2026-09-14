@@ -6,7 +6,7 @@
  *   1. probe TEST_BASE_URL (default: the isolated instance on port 30143) —
  *      if it answers, reuse it and leave it running afterwards;
  *   2. otherwise start it ourselves (`next dev`, same as
- *      `npm run dev:isolated`) and stop it on teardown.
+ *      `pnpm run dev:isolated`) and stop it on teardown.
  *
  * There is deliberately no production-shaped run: tests never build or start
  * a production server, and never target a production instance.

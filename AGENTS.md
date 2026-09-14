@@ -19,7 +19,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 - `components/`：React UI，按产品功能拆分（见下）。`hooks/`：客户端 hooks、会话控制和模块级状态。`lib/`：客户端、服务端及共享业务逻辑（见下）。
 - `scripts/`：迁移、恢复、部署和字体处理；`agent-skills/`：项目维护的 Agent skill；`bin/`：CLI 启动入口（`pi-work.js`）；`public/`：静态资源。
 - `instrumentation.ts`：Node.js 服务启动入口，负责引导微信监控、Scheduler、RSS 刷新循环和终端 WebSocket 服务；改动这些后台服务的启动/停止逻辑时要特别检查幂等性、退出清理和开发模式热重载。
-- 顶层配置：`next.config.ts`、`tailwind.config.ts`、`postcss.config.mjs`、`tsconfig.json`、`eslint.config.mjs`、`.npmrc`（`production=false`，见“常用命令与验证”）、`Dockerfile` + `docker-compose.yml`、`electron-shell/`（可选 Electron 外壳，非核心 Web 应用）。
+- 顶层配置：`next.config.ts`、`tailwind.config.ts`、`postcss.config.mjs`、`tsconfig.json`、`eslint.config.mjs`、`.npmrc`（注册表配置；包管理器设置见 `pnpm-workspace.yaml`）、`Dockerfile` + `docker-compose.yml`、`electron-shell/`（可选 Electron 外壳，非核心 Web 应用）。
 
 **`app/api/`** 按领域拆分的路由目录：
 
@@ -72,7 +72,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 - Scheduler、RSS、Inbox、Token 审计、LLM 审计等功能各自使用 `~/.pi-work/` 下的 SQLite 数据库，并支持对应的 `PI_WORK_*_DB` 环境变量覆盖。
 - 自定义工具、Append System、文件预览限制和右侧面板等配置通常在新 Agent session 创建时读取；修改设置后不要假定已有 session 会自动更新。
 - `PI_CODING_AGENT_DIR` 可覆盖 pi 数据目录；不要在测试中直接污染真实用户目录。
-- 新增环境隔离：所有 Pi Work 数据默认位于 `~/.pi-work/`，可用 `PI_WORK_DATA_DIR` 整体覆盖（各 `PI_WORK_*_DB` 单项覆盖优先级更高）；生产与开发多实例并存时，用 `npm run dev:isolated`（`scripts/dev-isolated.mjs`）启动完全隔离的开发实例（独立数据根、pi 数据目录与端口）。
+- 新增环境隔离：所有 Pi Work 数据默认位于 `~/.pi-work/`，可用 `PI_WORK_DATA_DIR` 整体覆盖（各 `PI_WORK_*_DB` 单项覆盖优先级更高）；生产与开发多实例并存时，用 `pnpm run dev:isolated`（`scripts/dev-isolated.mjs`）启动完全隔离的开发实例（独立数据根、pi 数据目录与端口）。
 
 ## 开发约定
 
@@ -81,7 +81,8 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 - 所有用户可见文案遵循现有 `useI18n` / `lib/shared/i18n-dict/` 机制；不要随意硬编码单语言文本。
 - 优先使用现有 store、hook、API client 和错误处理方式；跨层新增协议时同步更新共享类型、服务端路由和客户端调用方。
 - 涉及 pi SDK、session JSONL、ToolCall、模型协议或 SQLite schema 的修改，要检查兼容旧数据和重复事件（SSE 重连/压缩可能重放事件）。
-- 修改 pi 依赖时保持相关 `@earendil-works/pi-*` 包版本同步，使用精确版本并更新 `package-lock.json`。
+- 修改 pi 依赖时保持相关 `@earendil-works/pi-*` 包版本同步，使用精确版本并更新 `pnpm-lock.yaml`；`typebox` 与 pi-coding-agent 内部使用的版本必须一致（工具的 schema 类型要在同一个包实例里），所以也精确锁定。
+- 新增依赖用 `pnpm add` / `pnpm add -D`（不要手改 `package.json` 后跑 npm）。改动 `pnpm-workspace.yaml` 的 `allowBuilds` / `publicHoistPattern` 时，同步更新该文件里的注释说明理由。
 - 除非用户允许，否则永远不要直接或间接损坏 `~/.pi` 或 `~/.pi-work` 的用户数据，这是红线。
 
 ## 中英代码术语表
@@ -121,20 +122,29 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 | 思考强度 / 推理强度 | `ThinkingPicker`、`ThinkingLevel`、`ThinkingLevelOption`（`components/chat/ThinkingPicker.tsx`、`hooks/useAgentSession/types.ts`） |
 | 压缩上下文 | `handleCompactClick`、`handleCompact`、`compact`（`components/chat/ChatWindow.tsx`、`hooks/useAgentSession/hook.ts`） |
 | 国际化 | `useI18n`、`t`、`lib/shared/i18n-dict/` |
+| 包管理器 / 锁文件 | `pnpm`、`packageManager`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`allowBuilds`、`publicHoistPattern` |
 | 左下角快捷菜单 / 快捷菜单 / 头像快捷菜单 | `ProfileBlock`、`menuOpen`、`openMenu`（`components/settings/ProfileBlock.tsx`） |
 
 ## 常用命令与验证
 
-仓库根 `.npmrc` 设 `production=false`：即使 shell 带 `NODE_ENV=production`，`npm install` 也会安装 devDependencies（否则缺 typescript/tailwindcss/eslint 等会导致 `next build` 因 `@/` 路径别名未注册而失败）。
+包管理器是 **pnpm**（版本由 `package.json` 的 `packageManager` 固定，`corepack enable` 启用），锁文件是 `pnpm-lock.yaml`——不要再生成 `package-lock.json`。仓库的 pnpm 设置（`allowBuilds`、`ignoredOptionalDependencies`、`publicHoistPattern`）都在 `pnpm-workspace.yaml`，`.npmrc` 只留注册表配置。
+
+与 npm 的两处关键差异：
+
+- `pnpm install` 不因 `NODE_ENV=production` 跳过 devDependencies（只在 `--prod` 时跳过），所以旧的 `.npmrc production=false` 已删除。缺 typescript/tailwindcss/eslint 仍会导致 `next build` 因 `@/` 路径别名未注册而失败。
+- node_modules 是严格隔离布局，没有提升。若源码 `import`/`require` 了未声明的包，`tsc`（TS2307）或 dev/build 会直接报错——必须把该包加入 `dependencies`。按裸包名做**运行时**解析的平台包（如 `@colbymchenry/codegraph-<platform>-<arch>`）不能用这种方式声明，要在 `pnpm-workspace.yaml` 加 `publicHoistPattern`。
+- 改了 `pnpm-workspace.yaml` 里**影响解析**的配置（`overrides` 等）后，直接 `pnpm install` 会走 “Already up to date” 快速路径，把改动当没发生（`--force` 会隐含 frozen 并直接报 `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`）；要用 `pnpm install --no-frozen-lockfile` 重新解析并更新 `pnpm-lock.yaml`。
 
 ```bash
-npm install
-npm run dev                         # Next.js 开发服务器，端口 30141
-npm run dev:isolated                # 隔离开发实例（web 30143 / ws 30144，独立数据根与构建目录，见 scripts/dev-isolated.mjs）
+corepack enable                     # 启用固定版本的 pnpm
+pnpm install
+pnpm run dev                        # Next.js 开发服务器，端口 30141
+pnpm run dev:isolated               # 隔离开发实例（web 30143 / ws 30144，独立数据根与构建目录，见 scripts/dev-isolated.mjs）
 node_modules/.bin/tsc --noEmit
 node_modules/.bin/eslint <修改的文件>
-npm run lint
-npm run build                       # 需要生产构建验证时运行
+pnpm run lint
+pnpm run build                      # 需要生产构建验证时运行
+pnpm test                           # vitest，需要隔离实例（见 tests/README.md）
 ```
 
 日常开发循环不要运行 `next build`，它会覆盖共享的 `.next/`，可能影响正在运行的生产/开发服务器。完成修改后至少运行与改动范围匹配的 TypeScript 检查或 ESLint；涉及会话、流式事件、权限、文件操作、后台任务或集成时补充手动 smoke test，并在最终说明已验证和未验证的部分。

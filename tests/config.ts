@@ -2,7 +2,7 @@
  * Shared test constants.
  *
  * Interface tests target the *isolated* Pi Work instance (the one started by
- * `npm run dev:isolated`, port 30143, data root ~/.pi-work-dev) — never the
+ * `pnpm run dev:isolated`, port 30143, data root ~/.pi-work-dev) — never the
  * production instance on 30141. They probe the URL first and auto-start the
  * isolated instance when nothing answers (see tests/global-setup.ts).
  *

@@ -3,7 +3,8 @@
 ## 版本策略
 
 - **精确锁定版本**（见 `package.json`），不使用 `^` / `~` 范围。
-- 升级是有意识的决策，不会因为 `npm install` 意外浮到新版本。
+- 升级是有意识的决策，不会因为 `pnpm install` 意外浮到新版本。
+- `typebox` 也是精确锁定的：它与 `@earendil-works/pi-coding-agent` 内部使用的版本必须一致（工具的 schema 类型要在同一个包里实例化），升级 pi 时一并核对。
 - 所有 pi 开头的包升级时保持同一版本号 — 它们是 monorepo，版本号同步发布。
 
 ## 升级前
@@ -25,18 +26,20 @@ gh api "repos/earendil-works/pi/compare/v0.78.0...v0.78.1" --paginate
 
 ```bash
 # 1. 安装新版本（精确锁定）
-npm install @earendil-works/pi-ai@<version> \
-            @earendil-works/pi-coding-agent@<version> \
-            --save-exact
+pnpm add @earendil-works/pi-ai@<version> \
+          @earendil-works/pi-coding-agent@<version> \
+          --save-exact
+# 若 pi-coding-agent 的 typebox 依赖也变了，同步更新（见“版本策略”）
+pnpm add typebox@<version> --save-exact
 
 # 2. typecheck
 node_modules/.bin/tsc --noEmit
 
 # 3. lint
-npm run lint   # = eslint . — the `next lint` subcommand was removed in Next 16
+pnpm run lint   # = eslint . — the `next lint` subcommand was removed in Next 16
 
 # 4. 手动冒烟测试
-npm run dev  # http://localhost:30141
+pnpm run dev  # http://localhost:30141
 ```
 
 ## 冒烟测试检查项
@@ -52,12 +55,12 @@ npm run dev  # http://localhost:30141
 如果升级后出现兼容性问题，回滚到上一个已知正常版本：
 
 ```bash
-npm install @earendil-works/pi-ai@<last-good-version> \
-            @earendil-works/pi-coding-agent@<last-good-version> \
-            --save-exact
+pnpm add @earendil-works/pi-ai@<last-good-version> \
+          @earendil-works/pi-coding-agent@<last-good-version> \
+          --save-exact
 ```
 
-因为只改了 `node_modules` 和 `package.json`/`package-lock.json`，回滚零副作用。
+因为只改了 `node_modules` 和 `package.json`/`pnpm-lock.yaml`，回滚零副作用。
 
 ## 关注的风险点
 

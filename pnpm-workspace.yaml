@@ -1,0 +1,56 @@
+# pnpm settings live here (not in `.npmrc` / package.json) since pnpm 11.
+# This file also makes the repo a single-package "workspace" so pnpm treats it
+# as the settings home. `electron-shell/` is deliberately NOT a workspace
+# member: it is a standalone Electron shell with its own dependency tree.
+
+# Dependency build scripts are deny-by-default. Every dependency that ships an
+# install/postinstall script has to be decided explicitly here:
+#
+#   - better-sqlite3 / node-pty: compile native addons against the local Node
+#     ABI (see lib/server, instrumentation.ts);
+#   - esbuild: resolves its platform binary for vite/vitest;
+#   - sharp: verifies/links the prebuilt libvips binary used by next/image;
+#   - protobufjs: its postinstall only regenerates .d.ts files we do not use;
+#   - @google/genai / unrs-resolver: no build step needed, their platform
+#     bindings come from optionalDependencies.
+allowBuilds:
+  better-sqlite3: true
+  node-pty: true
+  esbuild: true
+  sharp: true
+  protobufjs: false
+  '@google/genai': false
+  unrs-resolver: false
+
+# `canvas` is deliberately never installed. It is only an *optional* peer of
+# linkedom / jsdom / pdfjs-dist (server-side <canvas> rasterisation), none of
+# which this app uses — but pnpm's autoInstallPeers would pull it in, and its
+# native `canvas.node` binding then makes webpack choke ("Module parse failed")
+# because the .pnpm path escapes Next's `node_modules/<pkg>` externals regex.
+ignoredOptionalDependencies:
+  - canvas
+
+# linkedom / jsdom declare canvas as an optional peer; without ignoreMissing,
+# autoInstallPeers would put it back.
+peerDependencyRules:
+  ignoreMissing:
+    - canvas
+
+# App code loads the CodeGraph platform bundle by bare specifier
+# (`lib/server/codegraph-sdk.ts` -> `@colbymchenry/codegraph-<platform>-<arch>/
+# lib/dist/index.js`), which only resolves if that package is also reachable
+# from the app root. npm's hoisting did that for free; with pnpm's isolated
+# layout the platform bundle lives in `.pnpm/` only, so link it back.
+publicHoistPattern:
+  - '@colbymchenry/codegraph-*'
+
+# eslint-config-next 16.2.1 declares `eslint-plugin-react-hooks: ^7.0.0`; the npm
+# lockfile had frozen it at 7.0.1. 7.1.x promotes a batch of React Compiler
+# diagnostics (preserve-manual-memoization, purity, static-components) from
+# warnings/off to errors, which turns `pnpm run lint` from "10 pre-existing
+# errors" into "34 errors" without any code change. Pin it back so the pnpm
+# migration stays behaviour-neutral; drop this override in the same PR that
+# fixes those 24 findings (they are real, just out of scope here).
+
+overrides:
+  eslint-plugin-react-hooks: 7.0.1
