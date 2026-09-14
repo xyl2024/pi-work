@@ -5,6 +5,10 @@
  * given a userId + time window, you can reconstruct everything that
  * happened in chronological order.
  *
+ * The turn module owns the raw event stream now, so the per-event
+ * `agent_event` line this trail used to carry is gone; the lifecycle lines
+ * (send / cold_start / agent_end / agent_error / reply) remain.
+ *
  * File: <data root>/wechat/sessions.log (chmod 600 best-effort)
  */
 import { appendFileSync, mkdirSync, existsSync, writeFileSync } from "fs";
@@ -16,7 +20,6 @@ export type SessionLogEvent =
   | { kind: "cold_start"; sessionId: string; cwd: string; fromUserId: string }
   | { kind: "send"; sessionId: string; fromUserId: string; text: string }
   | { kind: "typing"; sessionId: string; fromUserId: string }
-  | { kind: "agent_event"; sessionId: string; eventType: string; fromUserId: string }
   | { kind: "agent_end"; sessionId: string; fromUserId: string; durationMs: number; replyText: string }
   | { kind: "agent_error"; sessionId: string; fromUserId: string; error: string }
   | { kind: "reply"; sessionId: string; fromUserId: string; length: number; messageId?: number }

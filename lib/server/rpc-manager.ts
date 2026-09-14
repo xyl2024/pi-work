@@ -923,6 +923,7 @@ function getLocks(): Map<string, Promise<{ session: AgentSessionWrapper; realSes
 }
 
 export { getRpcSession, listRunningRpcSessions } from "./session-registry";
+export { runTurnRpcSession, type RunTurnRpcSpec } from "./turn/rpc-factory";
 
 /** Remove generic Pi sections while preserving tool-generated tools/guidelines. */
 function stripDefaultSystemPromptSections(prompt: string): string {

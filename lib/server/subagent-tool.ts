@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Type } from "typebox";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import type { AgentSessionWrapper } from "./rpc-manager";
+import { runTurn, type TurnAbortSource } from "./turn";
+import { toSubagentEnd, type SubagentEndStatus } from "./subagent-run-end";
 import { readSessionDetails } from "./session-reader";
 import { readConfig } from "./config";
 import { writeSessionName } from "./session-names";
@@ -59,6 +61,13 @@ const MAX_RUNTIME_MS = 15 * 60 * 1000;
 const SUBAGENT_CUSTOM_ENTRY = "pi_work_subagent";
 
 /**
+ * Wording for a subagent run that must not go on: the parent agent aborted the
+ * tool call, or the run was refused its slot because the parent stopped while
+ * queued. Shared so the abort source and the slot queue cannot drift apart.
+ */
+const SUBAGENT_CANCELLED = "Subagent cancelled";
+
+/**
  * Admittance bookkeeping for parallel subagent runs: at most
  * MAX_CONCURRENT_SUBAGENT_RUNS child sessions run at once, the rest queue.
  */
@@ -83,7 +92,7 @@ function getSubagentSlots(): SubagentSlots {
 
 /**
  * Wait for a free subagent slot and resolve with the function that frees it
- * again. Rejects with "Subagent cancelled" when any given signal aborts while
+ * again. Rejects with `SUBAGENT_CANCELLED` when any given signal aborts while
  * still queued, so a stopped or deleted parent never starts a child it is no
  * longer waiting for.
  */
@@ -91,7 +100,7 @@ function acquireSubagentSlot(signals: Array<AbortSignal | undefined>): Promise<(
   const slots = getSubagentSlots();
   const live = signals.filter((signal): signal is AbortSignal => !!signal);
   if (live.some((signal) => signal.aborted)) {
-    return Promise.reject(new Error("Subagent cancelled"));
+    return Promise.reject(new Error(SUBAGENT_CANCELLED));
   }
   const release = () => {
     slots.active -= 1;
@@ -108,7 +117,7 @@ function acquireSubagentSlot(signals: Array<AbortSignal | undefined>): Promise<(
     function cancel() {
       const index = slots.waiting.indexOf(admit);
       if (index !== -1) slots.waiting.splice(index, 1);
-      reject(new Error("Subagent cancelled"));
+      reject(new Error(SUBAGENT_CANCELLED));
     }
     function admit() {
       cleanup();
@@ -148,56 +157,10 @@ interface SpawnSubagentDetails {
   taskId: string;
   sessionId: string | null;
   /** "running" is only ever seen on in-flight onUpdate partials (never persisted). */
-  status: "running" | "completed" | "failed" | "cancelled";
+  status: "running" | SubagentEndStatus;
   description: string;
   result?: string;
   error?: string;
-}
-
-/** Terminal state of the child agent run, observed from its event stream. */
-interface SubagentTerminalState {
-  /** `stopReason` of the last assistant message, or null when none arrived. */
-  stopReason: string | null;
-  /** `errorMessage` of the last assistant message (populated on error stops). */
-  errorMessage: string | null;
-  /** Whether any assistant message was produced at all. */
-  sawAssistant: boolean;
-}
-
-/**
- * A side condition under which the tool must stop the child agent and settle
- * with an explanatory reason (parent stopped, parent stopped via abort, ...).
- */
-interface SubagentStopSource {
-  signal: AbortSignal;
-  reason: string;
-}
-
-const EMPTY_TERMINAL: SubagentTerminalState = {
-  stopReason: null,
-  errorMessage: null,
-  sawAssistant: false,
-};
-
-/**
- * Human-readable explanation for an abnormal child-agent terminal state, or
- * null when the child finished normally. Abnormal = aborted externally,
- * provider error, output truncated at the token limit, or no response at all.
- */
-function describeAbnormalTerminal(state: SubagentTerminalState): string | null {
-  if (state.stopReason === "error") {
-    return `Subagent run failed: ${state.errorMessage ?? "model/provider error"}`;
-  }
-  if (state.stopReason === "aborted") {
-    return "Subagent was aborted before it finished (the subagent session was stopped externally)";
-  }
-  if (state.stopReason === "length") {
-    return "Subagent stopped after hitting the model's output token limit";
-  }
-  if (!state.sawAssistant) {
-    return "Subagent stopped without producing any response";
-  }
-  return null;
 }
 
 function resultEnvelope(details: SpawnSubagentDetails) {
@@ -227,78 +190,6 @@ function extractMessageText(message: unknown): string {
 function truncateResult(text: string): string {
   if (text.length <= MAX_RESULT_LENGTH) return text;
   return `${text.slice(0, MAX_RESULT_LENGTH)}\n… [truncated ${text.length - MAX_RESULT_LENGTH} chars]`;
-}
-
-/**
- * Wait for the child agent run to settle, tracking its terminal state so the
- * caller can tell a normal finish from an abnormal stop (and explain why).
- *
- * Resolves with the child's terminal state on `agent_settled`; rejects with an
- * explanatory `Error` on prompt failure, runtime-limit overrun, or when any of
- * the given stop sources fires (each source aborts the child first so the
- * child session always stops together with its stop condition).
- */
-function waitForAgentEnd(
-  session: AgentSessionWrapper,
-  stopSources: SubagentStopSource[],
-): Promise<SubagentTerminalState> {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const cleanups: Array<() => void> = [];
-    const terminal: SubagentTerminalState = { ...EMPTY_TERMINAL };
-
-    const finish = (error?: Error) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      for (const cleanup of cleanups) cleanup();
-      if (error) reject(error);
-      else resolve(terminal);
-    };
-
-    // Best-effort: tell the child to abort, then settle with the reason. The
-    // child's abort completes asynchronously; its JSONL will still record the
-    // aborted terminal message.
-    const stop = (reason: string) => {
-      void session.send({ type: "abort" }).catch(() => undefined);
-      finish(new Error(reason));
-    };
-
-    cleanups.push(
-      session.onEvent((event) => {
-        // agent_end marks one attempt. A retryable attempt emits agent_end
-        // before the session has actually finished; agent_settled is the
-        // terminal event for the complete prompt lifecycle.
-        if (event.type === "agent_settled") {
-          finish();
-        } else if (event.type === "message_end") {
-          // Track the LAST assistant message's stopReason/errorMessage: it is
-          // the run's terminal outcome. Intermediate retries may emit error
-          // stops that later recover — only the last one counts.
-          const msg = (event as { message?: { role?: unknown; stopReason?: unknown; errorMessage?: unknown } }).message;
-          if (msg && msg.role === "assistant") {
-            terminal.stopReason = typeof msg.stopReason === "string" ? msg.stopReason : null;
-            terminal.errorMessage = typeof msg.errorMessage === "string" ? msg.errorMessage : null;
-            terminal.sawAssistant = true;
-          }
-        } else if (event.type === "prompt_failed") {
-          finish(new Error(typeof event.error === "string" ? event.error : "Subagent prompt failed"));
-        }
-      }),
-    );
-
-    timer = setTimeout(() => {
-      stop(`Subagent exceeded the ${MAX_RUNTIME_MS / 60_000}-minute runtime limit`);
-    }, MAX_RUNTIME_MS);
-
-    for (const source of stopSources) {
-      const onAbort = () => stop(source.reason);
-      source.signal.addEventListener("abort", onAbort, { once: true });
-      cleanups.push(() => source.signal.removeEventListener("abort", onAbort));
-      if (source.signal.aborted) stop(source.reason);
-    }
-  });
 }
 
 function getLastAssistantText(details: Awaited<ReturnType<typeof readSessionDetails>>): string {
@@ -407,16 +298,24 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
       prompt,
     });
 
-    // Side conditions that must stop the child together with their trigger.
-    // parentStop: the parent wrapper was destroyed (session deleted, idle
-    // reap, process-exit cleanup). childGone: the child wrapper itself was
-    // destroyed externally (e.g. the subagent session was deleted from the
-    // UI while it was running). The tool's own AbortSignal (parent agent
-    // aborted) is added as a third source below.
+    // Side condition that must stop the child together with its trigger: the
+    // parent wrapper was destroyed (session deleted, idle reap, process-exit
+    // cleanup). The child's own two stop conditions — the child session being
+    // closed and the parent agent aborting this tool call — are wired below,
+    // once the child session exists / the tool's AbortSignal is known.
     const parentStop = new AbortController();
     const childGone = new AbortController();
+    // Caller-side wiring of the child run, filled in by the factory below and
+    // read back here: the child session (needed to write its discovery entry
+    // once the run completed) and its destroy subscription (dropped in the
+    // cleanup). They live in a holder because the only assignments happen
+    // inside the factory closure, where a plain local would defeat the type
+    // checker.
+    const childRun: { session: AgentSessionWrapper | null; offDestroy: (() => void) | null } = {
+      session: null,
+      offDestroy: null,
+    };
     let offParentDestroy: (() => void) | null = null;
-    let offChildDestroy: (() => void) | null = null;
     let releaseSlot: (() => void) | null = null;
 
     try {
@@ -434,52 +333,20 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
       offParentDestroy = parent?.onDestroy(() => parentStop.abort());
 
       // Wait for a free parallel slot before creating the child session. The
-      // stop sources are honoured while queued so a cancelled, stopped, or
-      // deleted parent does not leave a child starting up for nobody.
-      releaseSlot = await acquireSubagentSlot([signal, parentStop.signal, childGone.signal]);
+      // stop sources are honoured while queued so a cancelled or stopped
+      // parent does not leave a child starting up for nothing.
+      releaseSlot = await acquireSubagentSlot([signal, parentStop.signal]);
 
       const tools = [...profile.tools];
-      const { session, realSessionId } = await startRpcSession(
-        `__subagent__${taskId}`,
-        "",
-        ctx.cwd,
-        tools,
-        "subagent",
-        {
-          model: subagentConfig.subagent.model ?? {
-            provider: parentModel.provider,
-            modelId: parentModel.id,
-          },
-          thinkingLevel: subagentConfig.subagent.thinking_level,
-          allowedToolNames: tools,
-          systemPromptPrefix: profile.systemPrompt(ctx.cwd),
-          stripDefaultSystemPromptSections: true,
-          parentSessionId,
-        },
-      );
-
-      // Stop waiting (and abort the child) if the child wrapper is destroyed
-      // externally while the tool is still waiting on it.
-      offChildDestroy = session.onDestroy(() => childGone.abort());
-
-      markSubagentRunning(task.taskId, realSessionId);
-      // Publish the taskId/child-sessionId to the parent session's event
-      // stream (tool_execution_update → in-flight tool result details) so the
-      // UI's spawn_subagent ToolCallBlock can start polling child activity
-      // before the tool itself finishes.
-      onUpdate?.({
-        // Content stays empty — the parent UI renders its own live panel while
-        // details.status === "running", and any text here would be mistaken
-        // for the final result.
-        content: [],
-        details: { taskId, sessionId: realSessionId, status: "running" as const, description },
-      });
       const displayName = `[Subagent] ${description}`;
-      session.inner.sessionManager.appendSessionInfo(displayName);
-      writeSessionName(realSessionId, displayName);
+      const registryKey = `__subagent__${taskId}`;
 
-      await session.send({ type: "prompt", message: prompt });
-      const stopSources: SubagentStopSource[] = [
+      // The run itself goes through the turn module: session acquisition (the
+      // factory below), the terminal wait, the stop policy and the cleanup.
+      // The child's stop conditions are the caller's to name, and are handed
+      // over as abort sources — any one firing tells the child to abort and
+      // settles the run as `cancelled` at once.
+      const abortSources: TurnAbortSource[] = [
         {
           signal: parentStop.signal,
           reason: "Subagent stopped because the parent session was stopped",
@@ -490,51 +357,116 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
         },
       ];
       if (signal) {
-        stopSources.push({ signal, reason: "Subagent cancelled" });
+        abortSources.push({ signal, reason: SUBAGENT_CANCELLED });
       }
-      const terminal = await waitForAgentEnd(session, stopSources);
 
-      const details = await readSessionDetails(realSessionId);
-      const result = getLastAssistantText(details);
+      const turn = await runTurn(
+        {
+          cwd: ctx.cwd,
+          prompt,
+          toolNames: tools,
+          source: "subagent",
+          timeoutMs: MAX_RUNTIME_MS,
+          abortSources,
+          // Runs the moment the child session is acquired — before the prompt.
+          // Publishes the taskId/child-sessionId to the parent session's event
+          // stream (tool_execution_update → in-flight tool result details) so
+          // the UI's spawn_subagent ToolCallBlock can start polling child
+          // activity before the tool itself finishes.
+          onSession: ({ realSessionId }) => {
+            markSubagentRunning(taskId, realSessionId);
+            onUpdate?.({
+              // Content stays empty — the parent UI renders its own live panel
+              // while details.status === "running", and any text here would be
+              // mistaken for the final result.
+              content: [],
+              details: { taskId, sessionId: realSessionId, status: "running" as const, description },
+            });
+          },
+        },
+        // Session acquisition for a subagent turn: always a fresh child session
+        // under its own registry key, with the profile's tool set and system
+        // prompt baked in at creation, and a name so the session is
+        // discoverable from the UI.
+        async (cwd, toolNames) => {
+          const { session, realSessionId } = await startRpcSession(
+            registryKey,
+            "",
+            cwd,
+            toolNames,
+            "subagent",
+            {
+              model: subagentConfig.subagent.model ?? {
+                provider: parentModel.provider,
+                modelId: parentModel.id,
+              },
+              thinkingLevel: subagentConfig.subagent.thinking_level,
+              allowedToolNames: tools,
+              systemPromptPrefix: profile.systemPrompt(cwd),
+              stripDefaultSystemPromptSections: true,
+              parentSessionId,
+            },
+          );
+          childRun.session = session;
+          // Stop the run (and abort the child) if the child wrapper is
+          // destroyed externally while the tool is still waiting on it.
+          childRun.offDestroy = session.onDestroy(() => childGone.abort());
+          session.inner.sessionManager.appendSessionInfo(displayName);
+          writeSessionName(realSessionId, displayName);
+          return { session, sessionId: registryKey, realSessionId };
+        },
+      );
 
-      // An abnormal terminal state (external abort, provider error, output
-      // truncated at the token limit, or no response at all) must NOT be
-      // reported as completed — surface the stop reason instead.
-      const abnormalReason = describeAbnormalTerminal(terminal);
-      if (abnormalReason) {
-        const status = terminal.stopReason === "aborted" ? "cancelled" : "failed";
-        const errorText = result ? `${abnormalReason}\n\nLast partial output:\n${result}` : abnormalReason;
-        failSubagentTask(task.taskId, abnormalReason, status);
+      const end = toSubagentEnd(turn, MAX_RUNTIME_MS);
+      // The child's final text is re-read from its session file, exactly as the
+      // pre-seam tool did: the tool reports the last assistant message that
+      // actually has text, and an abnormal stop attaches it as the partial
+      // output. A cancel / interruption / timeout has no partial result to
+      // report, so nothing is read for those.
+      const resultText = end.status === "completed" || end.partialOutput
+        ? getLastAssistantText(await readSessionDetails(turn.realSessionId))
+        : "";
+
+      if (end.status === "completed") {
+        completeSubagentTask(taskId, resultText);
+
+        // Persist a small non-context entry in the child session so its purpose
+        // remains discoverable even when opened independently.
+        childRun.session?.inner.sessionManager.appendCustomEntry(SUBAGENT_CUSTOM_ENTRY, {
+          taskId,
+          parentSessionId,
+          description,
+          subagentType,
+        });
+
         return resultEnvelope({
           taskId,
-          sessionId: realSessionId,
-          status,
+          sessionId: turn.realSessionId,
+          status: "completed",
           description,
-          error: errorText,
+          result: resultText,
         });
       }
 
-      completeSubagentTask(task.taskId, result);
-
-      // Persist a small non-context entry in the child session so its purpose
-      // remains discoverable even when opened independently.
-      session.inner.sessionManager.appendCustomEntry(SUBAGENT_CUSTOM_ENTRY, {
-        taskId,
-        parentSessionId,
-        description,
-        subagentType,
-      });
-
+      const reason = end.error ?? "Unknown error";
+      // The store records the bare reason; the tool result also carries the
+      // partial output, exactly as before.
+      failSubagentTask(taskId, reason, end.status);
       return resultEnvelope({
         taskId,
-        sessionId: realSessionId,
-        status: "completed",
+        sessionId: turn.realSessionId,
+        status: end.status,
         description,
-        result,
+        error: resultText ? `${reason}\n\nLast partial output:\n${resultText}` : reason,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const cancelled = message === "Subagent cancelled" || message.startsWith("Subagent stopped");
+      // Everything that reaches here failed before a turn existed: the slot
+      // queue refusing a parent that stopped, a parent that was already gone,
+      // no model to inherit, a child session that could not be created. The
+      // only cancel wording among them is the queue's (a turn stopped by one of
+      // the abort sources settles as `cancelled` instead, via `toSubagentEnd`).
+      const cancelled = message === SUBAGENT_CANCELLED;
       failSubagentTask(task.taskId, message, cancelled ? "cancelled" : "failed");
       return resultEnvelope({
         taskId,
@@ -546,7 +478,7 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
     } finally {
       releaseSlot?.();
       offParentDestroy?.();
-      offChildDestroy?.();
+      childRun.offDestroy?.();
     }
   },
 });

@@ -1,23 +1,29 @@
 /**
- * Executes one scheduled task: cold-start a fresh pi session, send the
- * configured prompt, wait for the real `agent_end`, and record the
- * outcome on the pre-created `task_runs` row.
+ * Executes one scheduled task as a background pi session.
  *
- * Pattern mirrors `lib/wechat/inbound.ts:coldStart` + `waitForAgentReply`
- * without the 5-minute blanket timeout: the scheduler waits as long as
- * the real agent needs to finish. The only cap is the task's
- * `maxLifetimeMs` (or the global default), which is a safety net that
- * force-destroys the wrapper if the agent truly never reports back.
+ * The run itself (open a session → apply model/thinking/tools → deliver the
+ * prompt → wait until the turn has *really* finished → clean up) goes through
+ * the turn module (`lib/server/turn`); this file is the scheduler's adapter: it
+ * owns the run vocabulary, the inbox push, the notification and the per-task
+ * queue, and nothing else. `agent_settled` is the terminal event, so a task
+ * that pi is still retrying (or compaction-retrying, or continuation-running)
+ * stays `running` instead of being recorded as finished mid-flight.
  *
- * Concurrency: a per-task FIFO chain (`taskChains`) prevents the same task
- * from running twice in parallel if a previous run is still in flight.
- * Different tasks run independently.
+ * The scheduler really does wait for the real terminal event — there is no
+ * 5-minute blanket timeout. The only cap is the task's `maxLifetimeMs` (or the
+ * global default), passed to the turn module as this caller's deadline: a
+ * safety net that force-destroys the wrapper if the agent truly never reports
+ * back.
+ *
+ * Concurrency: a per-task FIFO chain (`runSerial`) prevents the same task from
+ * running twice in parallel; different tasks run independently.
  */
 
 import { existsSync } from "fs";
-import { startRpcSession } from "@/lib/server/rpc-manager";
-import type { AgentEvent } from "@/lib/server/rpc-manager";
+import { runTurnRpcSession, type RunTurnRpcSpec } from "@/lib/server/rpc-manager";
+import { runSerial } from "@/lib/server/serial-chain";
 import { recordRunEnd, type ScheduledTask } from "./store";
+import { toRunEnd } from "./run-end";
 import { pushMessage } from "@/lib/server/inbox-store";
 import { notify, shouldNotify } from "@/lib/server/notifications";
 import { createLogger } from "../logger";
@@ -26,44 +32,13 @@ const log = createLogger("scheduler/runner");
 
 /**
  * Global fallback for the per-task max lifetime. The scheduler really does
- * wait for the real `agent_end` — the previous 5-min blanket timeout was
+ * wait for the real terminal event — the previous 5-min blanket timeout was
  * killing legitimate long-running tasks mid-flight. This default is just
  * a safety net for a stuck agent that never reports back; pick it big
  * enough that no real task should hit it, but small enough that a runaway
  * agent can't pin a slot forever.
  */
 const DEFAULT_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
-
-interface TextBlock { type: string; text?: string }
-interface AssistantMsg {
-  role: string;
-  content: Array<{ type: string; text?: string }>;
-  stopReason?: string;
-  errorMessage?: string;
-}
-
-/** Thrown by waitForAgentReply when the per-task max lifetime is reached
- *  and the wrapper is force-destroyed. The executeRun catch maps this to
- *  status="timeout" via instanceof (not a regex on the message), so the
- *  status enum stays a deliberate signalling choice rather than a string
- *  match against an error message. */
-class MaxLifetimeExceededError extends Error {
-  constructor(public readonly maxLifetimeMs: number) {
-    super(`max lifetime exceeded: ${maxLifetimeMs}ms`);
-    this.name = "MaxLifetimeExceededError";
-  }
-}
-
-/** The wrapper disappeared before pi emitted its terminal agent_end event. */
-class SessionInterruptedError extends Error {
-  constructor() {
-    super("agent session destroyed before agent_end");
-    this.name = "SessionInterruptedError";
-  }
-}
-
-/** Per-task FIFO chain so two overlapping triggers don't run concurrently. */
-const taskChains = new Map<string, Promise<void>>();
 
 /**
  * Inbox is a side channel — pushMessage can throw InboxValidationError on
@@ -100,12 +75,7 @@ function dispatchNotifications(
 }
 
 export function runTask(task: ScheduledTask, runId: string): Promise<void> {
-  const prev = taskChains.get(task.id) ?? Promise.resolve();
-  const next = prev
-    .catch(() => undefined) // never poison the chain
-    .then(() => executeRun(task, runId));
-  taskChains.set(task.id, next);
-  return next;
+  return runSerial(task.id, () => executeRun(task, runId));
 }
 
 async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
@@ -120,216 +90,92 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       source: "scheduler",
       level: "error",
       title: task.name,
-      payload: { body: `cwd missing: ${task.cwd}` },
+      payload: { body: msg },
     });
-    dispatchNotifications(task, "error", `cwd missing: ${task.cwd}`, msg, runId);
+    dispatchNotifications(task, "error", msg, msg, runId);
     return;
   }
 
+  const maxLifetimeMs = task.maxLifetimeMs ?? DEFAULT_MAX_LIFETIME_MS;
+  log.debug("waiting for agent_settled", {
+    taskId: task.id,
+    runId,
+    maxLifetimeMs,
+    maxLifetimeSource: task.maxLifetimeMs !== null ? "task" : "default",
+  });
+
+  // The real pi session id is only known once the session exists; record it on
+  // the run row as soon as that happens (the turn module announces it before
+  // any setup command), so the runs tab can link the session mid-run.
   let sessionId: string | null = null;
+
   try {
-    const tempKey = `__sched__${runId}`;
-    const { session, realSessionId } = await startRpcSession(
-      tempKey,
-      "",
-      task.cwd,
-      task.toolNames ?? "all",
-      "scheduled",
-    );
-    sessionId = realSessionId;
-    recordRunEnd(runId, { sessionId, status: "running", durationMs: Date.now() - startedAt });
-
-    if (task.provider && task.modelId) {
-      await session.send({ type: "set_model", provider: task.provider, modelId: task.modelId });
-    }
-    if (task.thinkingLevel) {
-      await session.send({ type: "set_thinking_level", level: task.thinkingLevel });
-    }
-
-    const maxLifetimeMs = task.maxLifetimeMs ?? DEFAULT_MAX_LIFETIME_MS;
-    log.debug("waiting for agent_end", {
-      taskId: task.id,
-      runId,
-      maxLifetimeMs,
-      maxLifetimeSource: task.maxLifetimeMs !== null ? "task" : "default",
+    const result = await runTurnRpcSession({
+      cwd: task.cwd,
+      prompt: task.prompt,
+      ...(task.provider && task.modelId
+        ? { model: { provider: task.provider, modelId: task.modelId } }
+        : {}),
+      // The store only validates that this is a string; keep the pass-through.
+      ...(task.thinkingLevel
+        ? { thinkingLevel: task.thinkingLevel as RunTurnRpcSpec["thinkingLevel"] }
+        : {}),
+      // The scheduler always states an explicit selection: the task's own
+      // subset, or "all" when it has none. Never "unspecified".
+      toolNames: task.toolNames ?? "all",
+      source: "scheduled",
+      timeoutMs: maxLifetimeMs,
+      onSession: ({ realSessionId }) => {
+        sessionId = realSessionId;
+        recordRunEnd(runId, { sessionId, status: "running", durationMs: Date.now() - startedAt });
+      },
     });
-    // Install the terminal-event listener before dispatching the prompt so a
-    // very short turn cannot emit agent_end before the scheduler is listening.
-    const waiter = waitForAgentReply(session, runId, maxLifetimeMs);
-    void session.send({ type: "prompt", message: task.prompt }).catch((err: unknown) => {
-      waiter.fail(err instanceof Error ? err : new Error(String(err)));
-    });
-    const reply = await waiter.promise;
+
     const durationMs = Date.now() - startedAt;
-    log.info("run success", { taskId: task.id, runId, sessionId, durationMs });
+    const end = toRunEnd(result, task.name);
+    if (end.status === "success") {
+      log.info("run success", { taskId: task.id, runId, sessionId, durationMs });
+    } else {
+      log.error("run failed", { taskId: task.id, runId, sessionId, status: end.status, error: end.error });
+    }
     recordRunEnd(runId, {
-      status: "success",
-      replyText: reply || null,
+      status: end.status,
+      replyText: end.replyText,
+      error: end.error,
       sessionId,
       durationMs,
     });
     safePush(task.id, {
       source: "scheduler",
-      level: "info",
+      level: end.push.level,
       title: task.name,
-      payload: { body: reply ? reply.slice(0, 200) : "Task completed" },
+      payload: { body: end.push.body },
     });
-    dispatchNotifications(task, "success", reply ? reply.slice(0, 120) : "Task completed", reply || "", runId);
+    if (end.notification) {
+      dispatchNotifications(task, end.notification.outcome, end.notification.text, end.notification.detail, runId);
+    }
   } catch (err) {
+    // Acquiring the session or preparing it failed before the turn ever
+    // started: the run module has no terminal state for that, so the
+    // scheduler records it as the failure it is — same shape as a failed turn.
     const errorStr = err instanceof Error ? err.message : String(err);
-    const isTimeout = err instanceof MaxLifetimeExceededError;
-    const isInterrupted = err instanceof SessionInterruptedError;
-    const status = isTimeout ? "timeout" : isInterrupted ? "interrupted" : "error";
+    const end = toRunEnd({ status: "failed", text: "", hasReply: false, error: errorStr }, task.name);
     const durationMs = Date.now() - startedAt;
-    log.error("run failed", { taskId: task.id, runId, sessionId, status, error: errorStr });
-    recordRunEnd(runId, { status, error: errorStr, sessionId, durationMs });
+    log.error("run failed", { taskId: task.id, runId, sessionId, status: end.status, error: errorStr });
+    recordRunEnd(runId, {
+      status: end.status,
+      error: end.error,
+      sessionId,
+      durationMs,
+    });
     safePush(task.id, {
       source: "scheduler",
-      level: isTimeout || isInterrupted ? "warn" : "error",
+      level: end.push.level,
       title: task.name,
-      payload: { body: errorStr.slice(0, 200) },
+      payload: { body: end.push.body },
     });
-    // Notify on real errors and timeouts; interruptions from server restart
-    // are surfaced in the runs tab but not blared to a phone.
-    if (status === "error" || status === "timeout") {
-      const label = status === "timeout" ? "Timeout" : "Error";
-      dispatchNotifications(task, status, `${label}: ${task.name}`, errorStr, runId);
+    if (end.notification) {
+      dispatchNotifications(task, end.notification.outcome, end.notification.text, end.notification.detail, runId);
     }
   }
-}
-
-type SessionWithDestroy = {
-  onEvent: (cb: (event: AgentEvent) => void) => () => void;
-  onDestroy: (cb: () => void) => () => void;
-  destroy: () => void;
-};
-
-interface AgentReplyWaiter {
-  promise: Promise<string>;
-  fail: (err: Error) => void;
-}
-
-/**
- * Subscribe to the wrapper's event stream and resolve on `agent_end`,
- * extracting the last assistant message text.
- *
- * No artificial agent_end timeout — we wait for the real result. The
- * `maxLifetimeMs` cap is a safety net: if the agent truly never reports
- * back (stuck loop, network hang, etc.) we force-destroy the wrapper so
- * the slot is freed and the run is recorded as `timeout`. The actual
- * return value is otherwise the real assistant text from the agent.
- *
- * Mirrors `lib/wechat/inbound.ts:waitForAgentReply` in spirit (event
- * subscription + single resolution) but without the 5-min blanket cap.
- */
-function waitForAgentReply(
-  session: SessionWithDestroy,
-  runId: string,
-  maxLifetimeMs: number,
-): AgentReplyWaiter {
-  let done = false;
-  let lifetimeTimer: ReturnType<typeof setTimeout> | null = null;
-  let unsubscribe = () => {};
-  let removeDestroyListener = () => {};
-  let destroyingForTimeout = false;
-  let resolvePromise: (reply: string) => void = () => {};
-  let rejectPromise: (err: Error) => void = () => {};
-
-  const promise = new Promise<string>((resolve, reject) => {
-    resolvePromise = resolve;
-    rejectPromise = (err) => reject(err);
-  });
-
-  const finish = (err: Error | null, reply: string) => {
-    if (done) return;
-    done = true;
-    if (lifetimeTimer !== null) clearTimeout(lifetimeTimer);
-    unsubscribe();
-    removeDestroyListener();
-    if (err) rejectPromise(err);
-    else resolvePromise(reply);
-  };
-
-  const fail = (err: Error) => finish(err, "");
-
-  const onDestroy = () => {
-    if (destroyingForTimeout) return;
-    log.warn("agent session destroyed before agent_end", { runId });
-    fail(new SessionInterruptedError());
-  };
-
-  lifetimeTimer = setTimeout(() => {
-    log.warn("max lifetime reached, destroying wrapper", {
-      runId,
-      maxLifetimeMs,
-    });
-    // Force-destroy so the agent actually stops (otherwise a stuck
-    // session would keep the slot pinned and the model provider would
-    // continue to be billed). The session file on disk is left as-is
-    // for post-mortem — the recorded sessionId lets the user inspect
-    // whatever the agent had actually written.
-    destroyingForTimeout = true;
-    try {
-      session.destroy();
-    } catch (err) {
-      log.warn("destroy failed during lifetime cap", { runId, error: String(err) });
-    }
-    finish(new MaxLifetimeExceededError(maxLifetimeMs), "");
-  }, maxLifetimeMs);
-
-  // Register both listeners before the prompt is dispatched. This closes
-  // the short-task race where agent_end could otherwise arrive first.
-  unsubscribe = session.onEvent((event: AgentEvent) => {
-    if (event.type === "prompt_failed") {
-      const message = typeof event.error === "string" && event.error
-        ? event.error
-        : "prompt failed";
-      fail(new Error(message));
-      return;
-    }
-    if (event.type !== "agent_end") return;
-    const error = typeof event.error === "string" ? event.error : null;
-    if (error) {
-      fail(new Error(error));
-      return;
-    }
-    const messages = Array.isArray((event as Record<string, unknown>).messages)
-      ? ((event as Record<string, unknown>).messages as AssistantMsg[])
-      : null;
-    if (!messages) {
-      // A scheduler task has no other durable completion signal. Do not mark
-      // it successful merely because pi emitted agent_end without the message
-      // snapshot we need to verify a final reply.
-      log.warn("agent_end without messages snapshot", { runId });
-      fail(new Error("agent ended without a messages snapshot"));
-      return;
-    }
-
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i];
-      if (m.role !== "assistant") continue;
-      if (m.stopReason === "error" || m.stopReason === "aborted") {
-        fail(new Error(m.errorMessage || `assistant stopReason=${m.stopReason}`));
-        return;
-      }
-      const text = m.content
-        .filter((b): b is TextBlock => b.type === "text")
-        .map((b) => b.text ?? "")
-        .join("");
-      // A normal-looking `agent_end` can still carry an empty final assistant
-      // message (for example, a model silently stops after a tool result).
-      // For unattended work that is not evidence of task completion; record a
-      // visible error instead of a false-success run.
-      if (!text.trim()) {
-        fail(new Error("agent ended without a final assistant reply"));
-        return;
-      }
-      finish(null, text);
-      return;
-    }
-    finish(null, "");
-  });
-  removeDestroyListener = session.onDestroy(onDestroy);
-
-  return { promise, fail };
 }
