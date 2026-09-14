@@ -47,7 +47,14 @@ COPY public/     ./public
 RUN pnpm install --frozen-lockfile
 
 # Layer 2: config (almost never changes)
-COPY tsconfig.json next.config.ts postcss.config.mjs tailwind.config.ts ./
+# proxy.ts is the Next.js 16 middleware convention (global auth gateway) — it is
+# compiled into the .next output at build time, so it MUST be present here.
+COPY tsconfig.json next.config.ts postcss.config.mjs tailwind.config.ts proxy.ts ./
+
+# Build-time scripts. `pnpm run build` triggers the `prebuild` lifecycle hook
+# (`node scripts/clean-stale-build-types.mjs`), so scripts/ must exist before the
+# build runs — otherwise pnpm fails with MODULE_NOT_FOUND.
+COPY scripts/    ./scripts
 
 # Layer 3: source code (changes frequently → invalidates only this layer).
 # extensions/ is intentionally NOT copied: pi-work builds without bundling
