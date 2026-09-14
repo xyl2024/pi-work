@@ -28,6 +28,11 @@ import { KanbanTaskModal } from "./KanbanTaskModal";
 import { Play, ExternalLink, Plus, Pencil, Trash2, Loader2, CircleStop, Wrench, Folder, Clock, Search, X, MessagesSquare, FileDiff, ChevronRight, Layers } from "lucide-react";
 import type { KanbanStatus, KanbanTask, KanbanTaskStats, KanbanContextUsage } from "@/lib/shared/kanban-types";
 import { KANBAN_STATUS_ORDER } from "@/lib/shared/kanban-types";
+import {
+  contextUsageSignal,
+  formatContextTokensK,
+  formatContextWindowCompact,
+} from "@/lib/shared/context-usage";
 import type { ToolInfo } from "@/lib/shared/types";
 
 interface KanbanPanelProps {
@@ -1029,9 +1034,10 @@ function KanbanCard({
 }
 
 /** Compact context-window ring for a card — mirrors the chat top-bar
- *  `ContextUsageBar` (same five-tier palette, same SVG arc geometry) but
- *  sized for a 220px card and showing just the ring + percent. Returns null
- *  when the usage is unknown (no model window / no linked session). */
+ *  `ContextUsageBar` (same absolute-size tiers from `lib/shared/context-usage`,
+ *  same SVG arc geometry) but sized for a 220px card and showing just the ring
+ *  + absolute context size. Returns null when the usage is unknown (no model
+ *  window / no linked session). */
 function CardContextRing({
   usage,
   t,
@@ -1041,20 +1047,16 @@ function CardContextRing({
 }) {
   if (!usage?.contextWindow || usage.percent === null) return null;
   const pct = Math.max(0, Math.min(100, usage.percent));
-  const color =
-    pct > 80 ? "#ef4444" :
-    pct > 60 ? "#f97316" :
-    pct > 40 ? "#eab308" :
-    pct > 20 ? "#22c55e" :
-                "var(--accent)";
+  const tokens =
+    usage.tokens ?? Math.round((usage.contextWindow * pct) / 100);
+  const { color, warning } = contextUsageSignal(tokens);
   const circumference = 2 * Math.PI * 5;
   const dashOffset = circumference * (1 - pct / 100);
-  const ctxWindowFmt = usage.contextWindow >= 1_000_000
-    ? `${(usage.contextWindow / 1_000_000).toFixed(1)}M`
-    : usage.contextWindow >= 1000
-      ? `${(usage.contextWindow / 1000).toFixed(0)}k`
-      : String(usage.contextWindow);
-  const label = `${t("Context")}: ${pct.toFixed(1)}% of ${usage.contextWindow.toLocaleString()} tokens`;
+  const ctxWindowFmt = formatContextWindowCompact(usage.contextWindow);
+  const label = [
+    `${t("Context")}: ${pct.toFixed(1)}% of ${usage.contextWindow.toLocaleString()} tokens`,
+    ...(warning ? [t(warning)] : []),
+  ].join("\n");
 
   return (
     <Tooltip content={label} side="top">
@@ -1095,7 +1097,7 @@ function CardContextRing({
             style={{ transition: "stroke-dashoffset 0.25s ease, stroke 0.2s ease" }}
           />
         </svg>
-        <span>{pct.toFixed(0)}%</span>
+        <span>{formatContextTokensK(tokens)}</span>
         <span style={{ color: "var(--text-dim)", fontWeight: 500, fontSize: 9 }}>
           / {ctxWindowFmt}
         </span>

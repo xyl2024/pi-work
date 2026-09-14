@@ -45,8 +45,10 @@ export interface KanbanTask {
   stats: KanbanTaskStats | null;
   /** Context-window occupancy for the linked session — mirrors the live
    *  `getContextUsage()` circle shown in the chat top bar. Percent is the
-   *  estimated context tokens over the model's context window; `null` when
-   *  the data can't be derived (no model window, no session, etc.). */
+   *  estimated context tokens over the model's context window; the ring's
+   *  color/textual warnings are tiered on the absolute `tokens` value (see
+   *  `lib/shared/context-usage`). `null` when the data can't be derived (no
+   *  model window, no session, etc.). */
   contextUsage: KanbanContextUsage | null;
 }
 

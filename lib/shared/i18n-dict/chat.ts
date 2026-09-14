@@ -230,6 +230,11 @@ export const chat = {
 
   // Activity / context panel
   "Context": "上下文",
+  // Context ring tooltip warnings — absolute-size tiers (125k / 250k tokens)
+  "You are leaving the model's Smart Zone — hallucinations become possible.":
+    "你正在脱离大模型的 Smart Zone，模型可能出现幻觉",
+  "Context is nearly full — the model will hallucinate badly. Compact the session or start a new one.":
+    "上下文太满了，大模型将出现较大的幻觉，建议压缩或开启新的会话",
   "System Prompts": "系统提示词",
   "System prompt is empty (tools are disabled)": "系统提示词为空（工具已禁用）",
   "Send a message to load the system prompt.": "发送一条消息后加载系统提示词",
