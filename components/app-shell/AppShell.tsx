@@ -44,6 +44,7 @@ import { CwdPicker } from "../sessions/CwdPicker";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisableDefaultTab } from "@/hooks/useDisableDefaultTab";
+import { useExternalLinks } from "@/hooks/useExternalLinks";
 import { useInboxUnreadCount } from "@/hooks/useInboxUnreadCount";
 import { useRssUnreadCount } from "@/hooks/useRssUnreadCount";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
@@ -501,6 +502,10 @@ export function AppShell() {
   // Strip the browser default Tab focus-traversal app-wide so that Tab can
   // be repurposed per-surface (see useDisableDefaultTab).
   useDisableDefaultTab();
+  // External links open in a new tab instead of replacing the app
+  // (see useExternalLinks; in the Electron shell they land in the default
+  // browser).
+  useExternalLinks();
   const cm = useContextMenu();
   const { unread: inboxUnread } = useInboxUnreadCount();
   const { unread: rssUnread } = useRssUnreadCount();

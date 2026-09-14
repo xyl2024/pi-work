@@ -16,6 +16,7 @@ const path = require("path");
 // ── Config ──────────────────────────────────────────────────────────
 const PI_PORT = process.env.PI_PORT || "14514";
 const PI_URL = `http://localhost:${PI_PORT}`;
+const PI_ORIGIN = new URL(PI_URL).origin;
 
 // ── CLI flags ────────────────────────────────────────────────────────
 const startHidden = process.argv.includes("--hidden");
@@ -84,6 +85,26 @@ function createWindow() {
       shell.openExternal(url);
     }
     return { action: "deny" };
+  });
+
+  // Backstop for links that navigate instead of popping: a plain <a href>
+  // without target, or a location.href assignment, would otherwise replace
+  // the Pi Work app inside the shell with the target page. Anything leaving
+  // the Pi origin goes to the default browser; in-app navigations (route
+  // changes, the login redirect) and the app's own data: error page are left
+  // alone.
+  win.webContents.on("will-frame-navigate", (event) => {
+    const { url } = event;
+    if (!/^https?:|^mailto:/.test(url)) return;
+    let origin = null;
+    try {
+      origin = new URL(url).origin;
+    } catch (_) {
+      return;
+    }
+    if (origin === PI_ORIGIN) return;
+    event.preventDefault();
+    shell.openExternal(url);
   });
 
   // Iframe (subframe) load failure → ask the title bar to swap the
