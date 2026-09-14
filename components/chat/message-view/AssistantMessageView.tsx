@@ -16,7 +16,8 @@ import { COPY, CHECK, THUMBS_UP, HEART } from "@/lib/client/icon-paths";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
 import { BlockView } from "./blocks";
 import { formatTime, TurnDuration, UsageIcons } from "./utils";
-import type { AssistantMessage, ToolResultMessage, TextContent, ThinkingContent, ToolCallContent, ReadFileInfo } from "@/lib/shared/types";
+import { countContentChars, extractMessageText } from "@/lib/shared/message-content";
+import type { AssistantMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared/types";
 
 interface AssistantMessageViewProps {
   message: AssistantMessage;
@@ -83,13 +84,7 @@ function AssistantMessageViewInner({
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
 
-  const textContent = useMemo(
-    () => blocks
-      .filter((block): block is TextContent => block.type === "text")
-      .map((block) => block.text)
-      .join("\n"),
-    [blocks],
-  );
+  const textContent = useMemo(() => extractMessageText(message), [message]);
   const copyableContent = useMemo(
     () => textContent || blocks
       .map((block) => {
@@ -107,13 +102,7 @@ function AssistantMessageViewInner({
   // flag flips).
   const streamChars = useMemo(() => {
     if (!isStreaming) return 0;
-    let chars = 0;
-    for (const block of blocks) {
-      if (block.type === "text") chars += (block as TextContent).text?.length ?? 0;
-      else if (block.type === "thinking") chars += (block as ThinkingContent).thinking?.length ?? 0;
-      else if (block.type === "toolCall") chars += JSON.stringify((block as ToolCallContent).input ?? {}).length;
-    }
-    return chars;
+    return countContentChars(blocks);
   }, [isStreaming, blocks]);
 
   const copyContent = () => {
@@ -173,12 +162,7 @@ function AssistantMessageViewInner({
       const currentBlocks = blocksRef.current;
       const now = Date.now();
 
-      let chars = 0;
-      for (const block of currentBlocks) {
-        if (block.type === "text") chars += (block as TextContent).text?.length ?? 0;
-        else if (block.type === "thinking") chars += (block as ThinkingContent).thinking?.length ?? 0;
-        else if (block.type === "toolCall") chars += JSON.stringify((block as ToolCallContent).input ?? {}).length;
-      }
+      const chars = countContentChars(currentBlocks);
       if (chars === 0) return;
       if (streamStartRef.current === null) streamStartRef.current = now;
       const elapsed = (now - streamStartRef.current) / 1000;
