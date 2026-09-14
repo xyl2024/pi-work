@@ -13,6 +13,7 @@ import { Tooltip } from "../../ui/Tooltip";
 import { openSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
 import { extractEditDiffStats, extractWriteDiffStats } from "@/lib/shared/tool-diff-stats";
+import { deriveSubagentBlockState } from "@/lib/shared/subagent-block-state";
 import { useShowFileResults } from "@/hooks/showFileResultsStore";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
 import { SpawnSubagentLivePanel } from "./SpawnSubagentLivePanel";
@@ -223,12 +224,8 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   // shows the live activity panel (details arrive via in-flight
   // tool_execution_update partials). Once the final result lands it replaces
   // the panel entirely.
-  const subDetails = isSpawnSubagent
-    ? ((result?.details ?? null) as { status?: string; sessionId?: string | null } | null)
-    : null;
-  const subagentHasResultText = !!result && result.content.some((item) => item.type === "text" && item.text.trim().length > 0);
-  const subagentTerminal = subDetails?.status === "completed" || subDetails?.status === "failed" || subDetails?.status === "cancelled" || isError;
-  const isSubagentRunning = isSpawnSubagent && !subagentHasResultText && !subagentTerminal;
+  const subagentState = isSpawnSubagent ? deriveSubagentBlockState({ result, isError }) : null;
+  const isSubagentRunning = subagentState?.running ?? false;
 
   const header = (
     <div
@@ -380,7 +377,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
                 {inputStr}
               </pre>
               {isSpawnSubagent && isSubagentRunning ? (
-                <SpawnSubagentLivePanel childSessionId={subDetails?.sessionId ?? null} />
+                <SpawnSubagentLivePanel childSessionId={subagentState?.childSessionId ?? null} />
               ) : (
                 result && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />
               )}
