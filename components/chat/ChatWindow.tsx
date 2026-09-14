@@ -3,16 +3,14 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AgentMessage,
-  AssistantMessage,
   SessionInfo,
-  ToolCallContent,
   ReadFileInfo,
   CompactionPoint,
 } from "@/lib/shared/types";
 import { countToolCallsByName } from "@/lib/shared/message-display";
 import { buildChatTimeline, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
-import { getFileName } from "@/lib/shared/file-paths";
-import { extractEditDiffStats, extractWriteDiffStats, sumDiffStats, type ToolDiffStats } from "@/lib/shared/tool-diff-stats";
+import { summarizeTurn } from "@/lib/shared/tool-call-display";
+import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { ReadFileChips } from "./ReadFileChips";
 import { StreamingBubble } from "./StreamingBubble";
@@ -1078,76 +1076,20 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   continue;
                 }
 
-                // Turn-level files: collect every read / edit / write tool call
-                // across this turn's assistant messages, dedupe by resolved path,
-                // and drop errored results (read of a nonexistent path, failed
-                // edit). Edit/write files carry their per-file added/deleted line
-                // counts (from the tools' own data, no git). Surfaced as footer
-                // chips on the final assistant message.
+                // Turn-level files and added/deleted totals both come out of a
+                // single tool-call-display traversal: read / edit / write calls
+                // across this turn's assistant messages, deduped by resolved
+                // path (read-first; a mutation attaches its per-file counts),
+                // errored results dropped. Surfaced as footer chips plus one
+                // aggregate on the final assistant message; the two can never
+                // disagree because they came from the same pass.
                 const turnCwd = session?.cwd ?? cwd ?? null;
-                const readFiles: ReadFileInfo[] = (() => {
-                  const byPath = new Map<string, ReadFileInfo>();
-                  const out: ReadFileInfo[] = [];
-                  for (let i = userIdx + 1; i < endIdx; i++) {
-                    const m = renderMessages[i];
-                    if (m.role !== "assistant") continue;
-                    for (const block of (m as AssistantMessage).content ?? []) {
-                      if (block.type !== "toolCall") continue;
-                      const tc = block as ToolCallContent;
-                      const isRead = tc.toolName === "read";
-                      const isMutate = tc.toolName === "edit" || tc.toolName === "write";
-                      if (!isRead && !isMutate) continue;
-                      const result = toolResultsMap.get(tc.toolCallId);
-                      if (result?.isError) continue;
-                      const raw = tc.input?.path;
-                      if (typeof raw !== "string" || !raw.trim()) continue;
-                      const resolved = resolveReadPath(raw.trim(), turnCwd);
-                      if (!resolved) continue;
-                      let diffStats: ToolDiffStats | null | undefined;
-                      if (isMutate) {
-                        diffStats = tc.toolName === "edit"
-                          ? extractEditDiffStats(result?.details)
-                          : extractWriteDiffStats(tc.input);
-                      }
-                      const existing = byPath.get(resolved);
-                      if (existing) {
-                        // Same file read and edited within the turn — merge:
-                        // the chip stays read-first, stats attach when they land.
-                        if (diffStats && !existing.diffStats) existing.diffStats = diffStats;
-                        continue;
-                      }
-                      const entry: ReadFileInfo = { path: resolved, name: getFileName(resolved), diffStats };
-                      byPath.set(resolved, entry);
-                      out.push(entry);
-                    }
-                  }
-                  return out;
-                })();
-
-                // Turn-level aggregate added/deleted line counts across this
-                // turn's edit/write tool calls. Derived purely from the tools'
-                // own data (edit: result details' diff payload; write: input
-                // content) — never from git. Errored calls are skipped.
-                const turnDiffStats: ToolDiffStats | null = (() => {
-                  const parts: Array<ToolDiffStats | null | undefined> = [];
-                  for (let i = userIdx + 1; i < endIdx; i++) {
-                    const m = renderMessages[i];
-                    if (m.role !== "assistant") continue;
-                    for (const block of (m as AssistantMessage).content ?? []) {
-                      if (block.type !== "toolCall") continue;
-                      const tc = block as ToolCallContent;
-                      if (tc.toolName !== "edit" && tc.toolName !== "write") continue;
-                      const result = toolResultsMap.get(tc.toolCallId);
-                      if (result?.isError) continue;
-                      parts.push(
-                        tc.toolName === "edit"
-                          ? extractEditDiffStats(result?.details)
-                          : extractWriteDiffStats(tc.input),
-                      );
-                    }
-                  }
-                  return sumDiffStats(parts);
-                })();
+                const { readFiles, diffStats: turnDiffStats } = summarizeTurn(
+                  renderMessages.slice(userIdx + 1, endIdx),
+                  toolResultsMap,
+                  turnCwd,
+                  resolveReadPath,
+                );
 
                 // Anchor message (user)
                 rendered.push(renderOne(userIdx));

@@ -10,6 +10,7 @@ import { copyText } from "@/lib/client/clipboard";
 import { SmartImage } from "../../ui/SmartImage";
 import { type ImageItem } from "@/components/renderers/ImageLightbox";
 import { highlightKeywords, formatTime } from "./utils";
+import { extractMessageImages, extractMessageText } from "@/lib/shared/message-content";
 import type { ImageContent, UserMessage } from "@/lib/shared/types";
 
 const COLLAPSED_USER_MSG_HEIGHT = 240;
@@ -49,18 +50,8 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
     };
   }, []);
 
-  const content =
-    typeof message.content === "string"
-      ? message.content
-      : message.content
-          .filter((block): block is { type: "text"; text: string } => block.type === "text")
-          .map((block) => block.text)
-          .join("\n");
-
-  const imageBlocks: ImageContent[] =
-    typeof message.content === "string"
-      ? []
-      : message.content.filter((block): block is ImageContent => block.type === "image");
+  const content = extractMessageText(message);
+  const imageBlocks: ImageContent[] = extractMessageImages(message);
   const imageGallery: ImageItem[] = imageBlocks.map((image) => {
     const flat = image as unknown as { data?: string; mimeType?: string };
     const src = image.source

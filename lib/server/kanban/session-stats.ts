@@ -15,12 +15,8 @@ import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { buildSessionContext, fallbackSessionLeafId, resolveSessionPath } from "@/lib/server/sessions/index";
 import type { KanbanTaskStats } from "@/lib/shared/kanban-types";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
-import {
-  extractEditDiffStats,
-  extractMutatingPath,
-  extractWriteDiffStats,
-  sumDiffStats,
-} from "@/lib/shared/tool-diff-stats";
+import { classifyToolCall, toolCallDiffStats } from "@/lib/shared/tool-call-display";
+import { extractMutatingPath, sumDiffStats } from "@/lib/shared/tool-diff-stats";
 import type {
   AssistantMessage,
   SessionContext,
@@ -139,8 +135,9 @@ export async function readKanbanSessionStats(
     const changedFiles = new Set<string>();
     const diffStats: Array<{ additions: number; deletions: number }> = [];
 
-    // Map toolResult messages by id so each edit/write call can pull its diff
-    // stats out of the result's `details` (edit) or its input (write).
+    // Map toolResult messages by id so each file-mutation call can hand its
+    // result to the shared display policy (which reads the diff payload out of
+    // `details` for edit and out of the tool input for write).
     const resultsById = new Map<string, ToolResultMessage>();
     for (const message of context.messages) {
       if (message.role !== "toolResult") continue;
@@ -156,14 +153,19 @@ export async function readKanbanSessionStats(
         if (block.type !== "toolCall") continue;
         const tc = block as ToolCallContent;
         toolCallCount += 1;
-        if (tc.toolName !== "edit" && tc.toolName !== "write") continue;
+        // Classification comes from the shared tool-call-display module — the
+        // same seam the chat side uses.
+        if (classifyToolCall(tc.toolName) !== "file-mutation") continue;
         const result = resultsById.get(tc.toolCallId);
+        // Errored edits/writes touched nothing that landed, so they count for
+        // neither the changed-file total nor the added/deleted lines, exactly
+        // like the chat views. The module owns the added/deleted half of that
+        // policy (toolCallDiffStats returns null on isError); this check is
+        // what also keeps the failed call's path out of `changedFiles`.
+        if (result?.isError) continue;
         const path = extractMutatingPath(tc.input);
         if (path) changedFiles.add(path);
-        const item =
-          tc.toolName === "edit"
-            ? extractEditDiffStats(result?.details)
-            : extractWriteDiffStats(tc.input);
+        const item = toolCallDiffStats(tc, result);
         if (item) diffStats.push(item);
       }
     }

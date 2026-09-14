@@ -3,7 +3,7 @@ import {
   countAssistantBlocks,
   countImages,
   extractMessageText,
-} from "./extractCardText";
+} from "./message-content";
 
 export type CardRole = "user" | "assistant" | "compaction";
 
