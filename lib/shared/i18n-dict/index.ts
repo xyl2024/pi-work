@@ -29,6 +29,7 @@ import { media } from "./media";
 import { models } from "./models";
 import { notes } from "./notes";
 import { permissions } from "./permissions";
+import { plans } from "./plans";
 import { profile } from "./profile";
 import { prompts } from "./prompts";
 import { renderers } from "./renderers";
@@ -63,6 +64,7 @@ export const ZH_TRANSLATIONS = {
   ...models,
   ...notes,
   ...permissions,
+  ...plans,
   ...profile,
   ...prompts,
   ...renderers,

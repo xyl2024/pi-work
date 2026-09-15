@@ -383,6 +383,7 @@ describe("panelTabs registry", () => {
         "kanban",
         "llmAudit",
         "notes",
+        "plans",
         "rss",
         "tokens",
         "toolCalls",
@@ -575,15 +576,15 @@ describe("panelTabs registry → command palette", () => {
     );
   });
 
-  it("keeps the palette down to exactly the six panels that already had an entry", () => {
-    // Output-side pin: a seventh panel gaining a palette entry (or a sixth
-    // losing one) fails here, not just in the registry declaration.
+  it("keeps the palette down to exactly the seven panels that declare an entry", () => {
+    // Output-side pin: an eighth panel gaining a palette entry (or one of
+    // these losing one) fails here, not just in the registry declaration.
     expect(
       panelCommands(commandCtx())
         .map((cmd) => cmd.id)
         .sort(),
     ).toEqual(
-      ["favorites", "gitDiff", "llmAudit", "tokens", "toolCalls", "translate"]
+      ["favorites", "gitDiff", "llmAudit", "plans", "tokens", "toolCalls", "translate"]
         .map((kind) => `panel.${kind}`)
         .sort(),
     );

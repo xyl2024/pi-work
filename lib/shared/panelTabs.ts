@@ -30,6 +30,7 @@ import {
   KANBAN_TAB_ID,
   LLM_AUDIT_TAB_ID,
   NOTES_TAB_ID,
+  PLANS_TAB_ID,
   RSS_TAB_ID,
   TOKENS_TAB_ID,
   TOOL_CALLS_TAB_ID,
@@ -58,6 +59,7 @@ export interface PanelTabParams {
   githubTrending: undefined;
   kanban: undefined;
   notes: undefined;
+  plans: undefined;
   file: { path: string };
 }
 
@@ -276,6 +278,17 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Notes",
     defaultMode: "normal",
     sessionBound: false,
+  },
+  plans: {
+    kind: "plans",
+    tabId: PLANS_TAB_ID,
+    labelKey: "Plans",
+    defaultMode: "normal",
+    sessionBound: false,
+    command: {
+      labelKey: "Open plans",
+      keywords: ["plan", "plans", "schedule", "agenda", "计划", "安排", "日程"],
+    },
   },
 } as const satisfies { [K in PanelViewKind]: PanelTabSpec<K> };
 

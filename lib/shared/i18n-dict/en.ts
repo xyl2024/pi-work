@@ -114,4 +114,5 @@ export const EN_TRANSLATIONS = {
   "btw.disabled.noSession": "Open a session before using BTW.",
   "btw.disabled.loading": "The main session is initializing…",
   "btw.refreshHint": "Recheck readiness (click if stuck here)",
+  "plans.inbox": "Inbox",
 } as const;

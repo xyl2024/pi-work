@@ -21,6 +21,7 @@ import { RssPanel } from "../rss/RssPanel";
 import { GitHubTrendingPanel } from "../panels/github-trending/GitHubTrendingPanel";
 import { KanbanPanel } from "../kanban/KanbanPanel";
 import { NotesPanel } from "../panels/notes/NotesPanel";
+import { PlansPanel } from "../panels/plans/PlansPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
@@ -118,6 +119,7 @@ interface PanelBodyCtx {
   onConversationTreeCardClick: (cardId: string) => void;
   btwOpenCount: number;
   gitDiffOpenCount: number;
+  plansOpenCount: number;
   onExpandGitPanel: () => void;
   onOpenKanbanSession: (sessionId: string) => void;
 }
@@ -183,6 +185,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   notes: (ctx) => <NotesPanel expanded={ctx.rightPanelState === "expanded"} />,
+  plans: (ctx) => <PlansPanel openCount={ctx.plansOpenCount} />,
 };
 
 function formatBytes(bytes: number): string {
@@ -468,6 +471,7 @@ export function AppShell() {
   // BTW focuses off these instead of shell-owned request tokens.
   const gitDiffOpenCount = selectOpenCount(panelTabsState, "gitDiff");
   const btwOpenCount = selectOpenCount(panelTabsState, "btw");
+  const plansOpenCount = selectOpenCount(panelTabsState, "plans");
 
   // Classic mode hides the chat card behind the right column being
   // closed, so the very first commit has to paint with the column
@@ -1245,6 +1249,7 @@ export function AppShell() {
     onConversationTreeCardClick: handleConversationTreeCardClick,
     btwOpenCount,
     gitDiffOpenCount,
+    plansOpenCount,
     onExpandGitPanel: handleExpandGitPanel,
     onOpenKanbanSession: handleOpenKanbanSession,
   };
