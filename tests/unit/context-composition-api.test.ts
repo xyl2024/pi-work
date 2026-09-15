@@ -67,6 +67,9 @@ describe("context composition (agent API)", () => {
       // A fresh session has no provider usage yet, so there is no anchor: the
       // buckets must degrade to local counts rather than invent percentages.
       expect(composition!.anchoredTotalTokens).toBeNull();
+      // No transcript yet, so the Top-5 list is empty (the panel then renders
+      // neither the list nor its title).
+      expect(composition!.topToolResults).toEqual([]);
       for (const bucket of composition!.buckets) {
         expect(bucket.tokens).toBeNull();
         expect(bucket.percent).toBeNull();

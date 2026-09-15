@@ -6,9 +6,11 @@ import {
   formatCompositionPercent,
   formatEstimatedTokens,
   type ContextComposition,
+  type ContextToolResultEntry,
 } from "@/lib/shared/context-composition";
 import { contextBucketRows, type ContextCompositionRow } from "@/lib/shared/context-composition-rows";
 import { formatContextTokensK, formatContextWindowCompact } from "@/lib/shared/context-usage";
+import { getToolPreview } from "./message-view/utils";
 import {
   CONTEXT_BUCKET_COLORS,
   CONTEXT_BUCKET_LABELS,
@@ -27,6 +29,11 @@ interface Props {
   /** Space the popover may occupy above the ring. Measured by the trigger so the
    *  panel is never clipped by the chat window on short viewports. */
   maxHeight: number | null;
+  /** Jump the chat to the message that issued a tool call. Routed through the
+   *  same module-level `toolCallId → scroll` bridge the tool-call stats panel
+   *  uses (the input bar and the scroll container are separate subtrees), and
+   *  the chat flashes the landed message for two seconds. */
+  onJumpToToolCall?: (toolCallId: string) => void;
 }
 
 /** The fields a row needs to render — a bucket and a `ContextCompositionRow`
@@ -47,7 +54,7 @@ interface Segment {
 /** One row renders as `≈ 12.3K  6.2%` — the `≈` is the whole point of the
  *  panel (ADR-0005): the total is provider-exact, this is a local estimate, and
  *  the two must never look like the same kind of number. */
-function formatRowTokens(row: RowData): string {
+function formatRowTokens(row: { tokens: number | null; localTokens: number }): string {
   return formatEstimatedTokens(row.tokens ?? row.localTokens);
 }
 
@@ -263,6 +270,133 @@ function ChildRows({
   );
 }
 
+/** Depth-1 indent, so the list lines up with the messages bucket's own rows
+ *  (`CompositionRow` writes the same `4 + depth * 14`). */
+const MESSAGE_ROW_INDENT = 4 + 14;
+
+/**
+ * The biggest tool results, hung under the messages bucket (#38).
+ *
+ * Each row names the tool and its target through `getToolPreview` — the same
+ * parameter summary the tool-call block in the transcript renders, so the list
+ * never grows a second opinion about what a `grep` or a `read` is looking at —
+ * followed by the result's own size.
+ *
+ * Clicking a row jumps to the **assistant message that issued the call**: a
+ * tool result has no visible row in the transcript, so the message that asked
+ * for it is the only thing to land on. A result with no `toolCallId` is still
+ * listed (its size is information) but is not a button and is dimmed, because
+ * there is nowhere to jump.
+ */
+function TopToolResults({
+  results,
+  onJump,
+}: {
+  // Optional because a composition cached before this feature landed (or an
+  // in-flight SSE replay of one) simply has no list yet — that must render as
+  // "no list", not throw.
+  results?: ContextToolResultEntry[];
+  onJump?: (toolCallId: string) => void;
+}) {
+  const { t } = useI18n();
+  // No results: no list and no title — an empty section would just be noise.
+  if (!results || results.length === 0) return null;
+
+  const rowStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    width: "100%",
+    padding: `3px 4px 3px ${MESSAGE_ROW_INDENT}px`,
+    background: "none",
+    border: "none",
+    borderRadius: 4,
+    color: "var(--text)",
+    font: "inherit",
+    fontSize: 11,
+    textAlign: "left",
+  };
+
+  return (
+    <div style={{ margin: "2px 0 2px" }}>
+      <div
+        style={{
+          padding: `2px 4px 1px ${MESSAGE_ROW_INDENT}px`,
+          color: "var(--text-dim)",
+          fontSize: 10,
+        }}
+      >
+        {t("Top tool results")}
+      </div>
+      {results.map((entry) => {
+        const toolCallId = entry.toolCallId;
+        const preview = getToolPreview({ toolName: entry.toolName, input: entry.input ?? undefined });
+        const content = (
+          <>
+            <span
+              style={{
+                flexShrink: 0,
+                fontFamily: "var(--font-mono)",
+                fontWeight: 600,
+                color: toolCallId === null ? "var(--text-dim)" : "var(--text)",
+              }}
+            >
+              {entry.toolName || t("Tool")}
+            </span>
+            {preview && (
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--text-dim)",
+                }}
+              >
+                {preview}
+              </span>
+            )}
+            <span
+              style={{
+                flexShrink: 0,
+                marginLeft: "auto",
+                color: toolCallId === null ? "var(--text-dim)" : "var(--text-muted)",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {formatRowTokens(entry)}
+            </span>
+          </>
+        );
+
+        return toolCallId !== null && onJump ? (
+          <button
+            key={entry.id}
+            type="button"
+            title={t("Jump to the message that issued this call")}
+            onClick={() => onJump(toolCallId)}
+            style={{ ...rowStyle, cursor: "pointer" }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+          >
+            {content}
+          </button>
+        ) : (
+          <div
+            key={entry.id}
+            title={t("This tool result cannot be located in the conversation")}
+            style={{ ...rowStyle, cursor: "default", opacity: 0.6 }}
+          >
+            {content}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * The click-opened "what is this context made of" panel (ADR-0005).
  *
@@ -278,7 +412,7 @@ function ChildRows({
  * clipped by the chat scroll container (the input bar lives outside it) and
  * needs no portal.
  */
-export function ContextCompositionPopover({ composition, contextWindow, fallbackTotalTokens, maxHeight }: Props) {
+export function ContextCompositionPopover({ composition, contextWindow, fallbackTotalTokens, maxHeight, onJumpToToolCall }: Props) {
   const { t } = useI18n();
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
   const toggleKey = (key: string) => setExpandedKeys((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -352,7 +486,14 @@ export function ContextCompositionPopover({ composition, contextWindow, fallback
               expanded={expanded}
               onToggle={expandable ? () => toggleKey(bucket.id) : null}
             >
-              {expanded && <ChildRows rows={rows} color={color} depth={1} expandedKeys={expandedKeys} toggleKey={toggleKey} />}
+              {expanded && (
+                <>
+                  <ChildRows rows={rows} color={color} depth={1} expandedKeys={expandedKeys} toggleKey={toggleKey} />
+                  {bucket.id === "messages" && (
+                    <TopToolResults results={composition.topToolResults} onJump={onJumpToToolCall} />
+                  )}
+                </>
+              )}
             </CompositionRow>
           );
         })}

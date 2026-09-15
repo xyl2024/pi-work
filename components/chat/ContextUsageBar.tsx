@@ -15,6 +15,7 @@ import {
   type ContextComposition,
 } from "@/lib/shared/context-composition";
 import { Tooltip } from "../ui/Tooltip";
+import { useToolCallStatsScroll } from "@/hooks/toolCallStatsStore";
 import { ContextCompositionPopover } from "./ContextCompositionPopover";
 import { CONTEXT_BUCKET_LABELS } from "./context-composition-label";
 
@@ -110,6 +111,11 @@ export function ContextUsageBar({ contextUsage, sessionStats, contextComposition
   const [popoverMaxHeight, setPopoverMaxHeight] = useState<number | null>(null);
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const canOpenComposition = !!contextComposition;
+  // Jumping to a tool call reuses the stats panel's module-level bridge
+  // (`toolCallId → scroll`): the input bar and the chat scroll container are
+  // separate subtrees, and this is the repo's existing channel for exactly that
+  // hop — a third one is not needed. The chat also flashes the landed message.
+  const jumpToToolCall = useToolCallStatsScroll();
 
   useEffect(() => {
     if (!compositionOpen) return;
@@ -266,6 +272,7 @@ export function ContextUsageBar({ contextUsage, sessionStats, contextComposition
           contextWindow={contextUsage!.contextWindow}
           fallbackTotalTokens={contextUsage!.tokens}
           maxHeight={popoverMaxHeight}
+          onJumpToToolCall={jumpToToolCall}
         />
       )}
     </div>

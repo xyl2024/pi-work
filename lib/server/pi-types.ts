@@ -24,10 +24,16 @@ export interface AgentToolStateLike {
 
 /** The subset of a pi `AgentMessage` context composition and `btw_context`
  *  read. `content` stays `unknown` because its block union is provider-shaped;
- *  `command`/`output`/`summary` cover the non-content message roles. */
+ *  `toolCallId`/`toolName` cover pairing a tool result with the call that
+ *  produced it (the composition panel's Top-N list); `command`/`output`/`summary`
+ *  cover the non-content message roles. */
 export interface AgentMessageStateLike {
   role?: string;
   content?: unknown;
+  /** toolResult: the call that produced this result. */
+  toolCallId?: unknown;
+  /** toolResult: the tool's own name, used when no matching call was found. */
+  toolName?: unknown;
   command?: unknown;
   output?: unknown;
   /** `!!`-prefixed bash is excluded from the model request. */

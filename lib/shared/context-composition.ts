@@ -82,9 +82,37 @@ export interface ContextCompositionBucket {
   percent: number | null;
 }
 
+/** How many of the biggest tool results the composition panel lists. */
+export const TOP_TOOL_RESULTS = 5;
+
+/** One tool result as the composition panel's Top-N list shows it: the call
+ *  that produced it, what to call it, and how big it is. */
+export interface ContextToolResultEntry {
+  /** Stable id for the row — the tool call id when the call is in the
+   *  transcript, otherwise a transcript-position id. */
+  id: string;
+  /** The call that produced this result; `null` when the transcript did not
+   *  pair one. The row is still listed, it just cannot be jumped to. */
+  toolCallId: string | null;
+  /** The tool's name: from the matching call, else the result's own
+   *  `toolName`, else empty. */
+  toolName: string;
+  /** The matching call's arguments, for the existing tool-call preview. `null`
+   *  when no call matched. */
+  input: Record<string, unknown> | null;
+  /** Local estimate before anchoring. Never negative. */
+  localTokens: number;
+  /** Local count scaled to the provider total; `null` without an anchor. */
+  tokens: number | null;
+}
+
 export interface ContextComposition {
   /** Every top-level bucket, in canonical order, always all four. */
   buckets: ContextCompositionBucket[];
+  /** The transcript's biggest tool results, biggest first, at most
+   *  `TOP_TOOL_RESULTS` — empty when there are none, in which case the panel
+   *  renders neither a list nor a title. */
+  topToolResults: ContextToolResultEntry[];
   /** Σ of every leaf's local count — the normalization denominator. */
   localTotal: number;
   /** The provider-reported total this composition was anchored to, or `null`
@@ -104,6 +132,13 @@ export interface ContextToolSchema {
 export interface ContextMessage {
   role?: string | null;
   content?: unknown;
+  /** toolResult: the call that produced this result. Absent on transcripts
+   *  that did not pair them; the Top-N list then still counts the result but
+   *  has nothing to jump to. */
+  toolCallId?: unknown;
+  /** toolResult: the tool's own name, used only when no matching call was
+   *  found. */
+  toolName?: unknown;
   /** bashExecution */
   command?: unknown;
   output?: unknown;
@@ -313,6 +348,74 @@ function systemPromptBuckets(
   return { prompt, skills };
 }
 
+/** The transcript's tool calls, keyed by call id, so a tool result can be
+ *  named after the call that produced it. pi's raw `ToolCall` block carries the
+ *  id as `id` (`toolCallId` is the normalized name the client projection uses),
+ *  and `agent.state.messages` is raw — both are read so either shape pairs. */
+function toolCallsById(
+  messages: readonly ContextMessage[] | null | undefined,
+): Map<string, { toolName: string; input: Record<string, unknown> | null }> {
+  const calls = new Map<string, { toolName: string; input: Record<string, unknown> | null }>();
+  for (const message of messages ?? []) {
+    if (message?.role !== "assistant" || !Array.isArray(message.content)) continue;
+    for (const block of message.content) {
+      if (!block || typeof block !== "object") continue;
+      const typed = block as Record<string, unknown>;
+      if (typed.type !== "toolCall") continue;
+      const id =
+        typeof typed.id === "string" ? typed.id : typeof typed.toolCallId === "string" ? typed.toolCallId : "";
+      if (!id) continue;
+      const args = typed.arguments ?? typed.input;
+      calls.set(id, {
+        toolName: typeof typed.name === "string" ? typed.name : typeof typed.toolName === "string" ? typed.toolName : "",
+        input: args && typeof args === "object" && !Array.isArray(args) ? (args as Record<string, unknown>) : null,
+      });
+    }
+  }
+  return calls;
+}
+
+/** The transcript's tool results, biggest first, capped at `TOP_TOOL_RESULTS`.
+ *  Counted with the same content + image stand-in as the aggregate
+ *  `tool-result` leaf, so a listed result can never exceed the bucket it
+ *  belongs to. */
+function collectTopToolResults(
+  messages: readonly ContextMessage[] | null | undefined,
+  countTokens: (text: string) => number,
+): Array<Omit<ContextToolResultEntry, "tokens">> {
+  const calls = toolCallsById(messages);
+  const entries: Array<Omit<ContextToolResultEntry, "tokens"> & { index: number }> = [];
+  (messages ?? []).forEach((message, index) => {
+    if (message?.role !== "toolResult") return;
+    const rawToolCallId =
+      typeof message.toolCallId === "string" && message.toolCallId ? message.toolCallId : null;
+    const call = rawToolCallId ? calls.get(rawToolCallId) : undefined;
+    const content = contentText(message.content);
+    entries.push({
+      index,
+      id: rawToolCallId && call ? rawToolCallId : `tool-result:${index}`,
+      // Only a result whose call is in the same transcript can be jumped to.
+      // An id with no matching call (a truncated or imported transcript) is
+      // exposed as "no target" so the panel does not render a button that
+      // scrolls nowhere.
+      toolCallId: call ? rawToolCallId : null,
+      toolName: call?.toolName ?? (typeof message.toolName === "string" ? message.toolName : ""),
+      input: call?.input ?? null,
+      localTokens: countLeaf(content.text, countTokens) + content.images * IMAGE_TOKEN_EQUIVALENT,
+    });
+  });
+  return entries
+    .sort((a, b) => b.localTokens - a.localTokens || a.index - b.index)
+    .slice(0, TOP_TOOL_RESULTS)
+    .map((entry) => ({
+      id: entry.id,
+      toolCallId: entry.toolCallId,
+      toolName: entry.toolName,
+      input: entry.input,
+      localTokens: entry.localTokens,
+    }));
+}
+
 /** Build the four buckets' raw (unanchored) leaves. */
 function buildRawBuckets(input: ContextCompositionInput): RawBucket[] {
   const { prompt, skills } = systemPromptBuckets(input.systemPrompt, input.countTokens);
@@ -358,6 +461,7 @@ function allocateTokens(localTokens: number[], anchoredTotal: number): number[] 
  */
 export function computeContextComposition(input: ContextCompositionInput): ContextComposition {
   const rawBuckets = buildRawBuckets(input);
+  const toolResults = collectTopToolResults(input.messages, input.countTokens);
   const localTotal = rawBuckets.reduce(
     (sum, bucket) => sum + bucket.leaves.reduce((bucketSum, leaf) => bucketSum + leaf.localTokens, 0),
     0,
@@ -375,6 +479,7 @@ export function computeContextComposition(input: ContextCompositionInput): Conte
         tokens: null,
         percent: null,
       })),
+      topToolResults: toolResults.map((entry) => ({ ...entry, tokens: null })),
       localTotal,
       anchoredTotalTokens: null,
     };
@@ -401,7 +506,18 @@ export function computeContextComposition(input: ContextCompositionInput): Conte
     };
   });
 
-  return { buckets, localTotal, anchoredTotalTokens };
+  return {
+    buckets,
+    // A listed result is a fraction of the `tool-result` leaf, so it is scaled
+    // by the same global factor as that leaf instead of getting a share of its
+    // own — the list must not read as if it were a fifth bucket.
+    topToolResults: toolResults.map((entry) => ({
+      ...entry,
+      tokens: Math.round(entry.localTokens * (anchoredTotalTokens / localTotal)),
+    })),
+    localTotal,
+    anchoredTotalTokens,
+  };
 }
 
 /** One-decimal percentage for the ring tooltip, dropping a trailing `.0` so a

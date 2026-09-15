@@ -263,6 +263,13 @@ export const chat = {
   "Branch summary": "分支摘要",
   "The total comes from the model and is exact; the categories are local estimates.":
     "总量来自模型返回，精确；各分类为本地预估。",
+  // Top tool results, hung under the messages bucket (#38). Each row names the
+  // tool and its target through the same preview the transcript's tool-call
+  // block uses; a result without a toolCallId stays listed but cannot be
+  // clicked, and says so on hover.
+  "Top tool results": "最大的工具结果",
+  "Jump to the message that issued this call": "跳转到发起该工具调用的消息",
+  "This tool result cannot be located in the conversation": "此工具结果无法定位到对话中的消息",
   "Input tokens: {count} (excluding cache)": "输入 Token: {count}（不包含缓存）",
   "System Prompts": "系统提示词",
   "System prompt is empty (tools are disabled)": "系统提示词为空（工具已禁用）",

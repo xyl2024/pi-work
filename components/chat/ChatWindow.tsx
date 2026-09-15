@@ -48,6 +48,7 @@ import { NewSessionNotifyPicker } from "./chat-window/NewSessionNotifyPicker";
 import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
 import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
 import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
+import { useJumpHighlight } from "./chat-window/hooks/useJumpHighlight";
 import { useReplay } from "./chat-window/hooks/useReplay";
 import { useScrollFollow } from "./chat-window/hooks/useScrollFollow";
 import { useTextSelection } from "@/hooks/useTextSelection";
@@ -601,7 +602,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   void lastAnchorIdx;
   // Scroll a tool call into view by its toolCallId, resolving the landing
   // message through the timeline projection. Shared between the stats drawer
-  // (click on a tool name).
+  // (click on a tool name) and the context-composition panel's Top-5 list: the
+  // tool result itself has no visible row, so both land on the assistant
+  // message that issued the call and flash it for two seconds.
+  const { highlightEntryId: jumpHighlightEntryId, flash: flashJumpHighlight } = useJumpHighlight();
   const handleScrollToToolCall = useCallback((toolCallId: string) => {
     const idx = timeline.toolCallVisibleIndices.get(toolCallId);
     if (idx === undefined) return;
@@ -612,7 +616,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       const elTop = el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
       container.scrollTo({ top: elTop - 20, behavior: "smooth" });
     }
-  }, [timeline, messageRefs, scrollContainerRef, reengageScrollFollow]);
+    const sessionIndex = timeline.sessionIndexOfVisible(idx);
+    const entryId = sessionIndex === null ? null : renderEntryIds[sessionIndex] ?? null;
+    flashJumpHighlight(entryId);
+  }, [timeline, messageRefs, scrollContainerRef, reengageScrollFollow, renderEntryIds, flashJumpHighlight]);
 
   // Register the scroll callback with the module store so the right-panel tab
   // body can jump to a tool-call message when the user clicks a row. Clear on
@@ -995,7 +1002,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     onEditContent={(content) => chatInputRef?.current?.insertIfEmpty(content)}
                     showTimestamp={showTimestamp}
                     keywords={search.keywords}
-                    highlightEntryId={search.highlightEntryId}
+                    // One flash per row: the tool-call jump the user just made
+                    // wins over a search hit that is still within its own two
+                    // seconds (both fade on the same timer).
+                    highlightEntryId={jumpHighlightEntryId ?? search.highlightEntryId}
                     isSearchMatch={search.matchedEntryIds.has(renderEntryIds[idx])}
                     afterContent={opts.afterContent}
                     turnDuration={turnDurationMap.get(idx)}

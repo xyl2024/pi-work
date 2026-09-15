@@ -15,9 +15,7 @@
 
 import { useCallback, useEffect, useState, type RefObject } from "react";
 import { decideSearchJump, type ChatTimeline } from "@/lib/shared/chat-timeline";
-
-/** How long a jumped-to message stays highlighted before fading out. */
-const HIGHLIGHT_DURATION_MS = 2000;
+import { HIGHLIGHT_DURATION_MS } from "./useJumpHighlight";
 
 /** Empty hit set shared across renders (never mutated). */
 const NO_MATCHES: ReadonlySet<string> = new Set<string>();

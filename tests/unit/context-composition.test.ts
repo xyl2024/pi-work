@@ -6,6 +6,7 @@ import {
   type ContextBucketId,
   type ContextComposition,
   type ContextCompositionInput,
+  type ContextMessage,
 } from "@/lib/shared/context-composition";
 
 // ── Fixtures ──
@@ -253,6 +254,110 @@ describe("computeContextComposition", () => {
     const result = composition({ messages: [{ role: "mystery", content: "???".repeat(40) }] });
 
     expect(bucket(result, "messages").localTokens).toBe(0);
+  });
+});
+
+// The composition panel's Top-N list (`#38`). The list is a *projection of the
+// same transcript* the seven message leaves are counted from, so it lives in
+// the same pure module and is tested at the same seam: a deterministic injected
+// `countTokens`, no tokenizer, no request.
+describe("top tool results", () => {
+  /** A transcript of `count` read calls, each result one step bigger than the
+   *  last, so "biggest first" is checkable by id. Result `i` counts `10*(i+1)`
+   *  tokens under `chars4`. The call block uses pi's raw shape
+   *  (`id`/`name`/`arguments`) — that is what `agent.state.messages` holds. */
+  function readTranscript(count: number): ContextMessage[] {
+    const messages: ContextMessage[] = [];
+    for (let index = 0; index < count; index += 1) {
+      messages.push({
+        role: "assistant",
+        content: [{ type: "toolCall", id: `c${index}`, name: "read", arguments: { path: `f${index}.ts` } }],
+      });
+      messages.push({
+        role: "toolResult",
+        toolCallId: `c${index}`,
+        content: [{ type: "text", text: "x".repeat(40 * (index + 1)) }],
+      });
+    }
+    return messages;
+  }
+
+  it("lists the biggest results first, capped at five", () => {
+    const result = composition({ messages: readTranscript(7) });
+
+    expect(result.topToolResults.map((entry) => entry.toolCallId)).toEqual(["c6", "c5", "c4", "c3", "c2"]);
+    expect(result.topToolResults.map((entry) => entry.localTokens)).toEqual([70, 60, 50, 40, 30]);
+  });
+
+  it("names each result after the call that produced it", () => {
+    const result = composition({ messages: readTranscript(1) });
+
+    expect(result.topToolResults[0]).toMatchObject({
+      id: "c0",
+      toolCallId: "c0",
+      toolName: "read",
+      input: { path: "f0.ts" },
+    });
+  });
+
+  it("still lists a result with no toolCallId, but leaves it unjumpable", () => {
+    const result = composition({
+      messages: [
+        { role: "toolResult", toolName: "bash", content: [{ type: "text", text: "x".repeat(40) }] },
+      ],
+    });
+
+    expect(result.topToolResults).toHaveLength(1);
+    expect(result.topToolResults[0].toolCallId).toBeNull();
+    expect(result.topToolResults[0].toolName).toBe("bash");
+    expect(result.topToolResults[0].input).toBeNull();
+    expect(result.topToolResults[0].localTokens).toBe(10);
+  });
+
+  it("treats a result whose call is not in the transcript as unjumpable", () => {
+    // An id with no matching call would make the panel render a button that
+    // scrolls nowhere, so "no target" is the honest answer.
+    const result = composition({
+      messages: [
+        { role: "toolResult", toolCallId: "compacted-away", toolName: "read", content: [{ type: "text", text: "x".repeat(40) }] },
+      ],
+    });
+
+    expect(result.topToolResults).toHaveLength(1);
+    expect(result.topToolResults[0].toolCallId).toBeNull();
+    expect(result.topToolResults[0].toolName).toBe("read");
+  });
+
+  it("lists nothing when the transcript has no tool results", () => {
+    expect(composition({ messages: [{ role: "user", content: "hi" }] }).topToolResults).toEqual([]);
+    expect(composition({}).topToolResults).toEqual([]);
+  });
+
+  it("scales each listed result by the same global factor as the buckets", () => {
+    // Results only, no tool-call blocks: the denominator is exactly the three
+    // results (10 + 20 + 30 = 60), so k = 600 / 60 = 10.
+    const resultsOnly: ContextMessage[] = [10, 20, 30].map((size, index) => ({
+      role: "toolResult",
+      toolCallId: `c${index}`,
+      content: [{ type: "text", text: "x".repeat(4 * size) }],
+    }));
+
+    const anchored = composition({ messages: resultsOnly, anchoredTotalTokens: 600 });
+    expect(anchored.topToolResults.map((entry) => entry.localTokens)).toEqual([30, 20, 10]);
+    expect(anchored.topToolResults.map((entry) => entry.tokens)).toEqual([300, 200, 100]);
+
+    const unanchored = composition({ messages: resultsOnly });
+    expect(unanchored.topToolResults.every((entry) => entry.tokens === null)).toBe(true);
+  });
+
+  it("counts an image result with pi's image stand-in", () => {
+    const result = composition({
+      messages: [
+        { role: "toolResult", toolCallId: "c0", content: [{ type: "image", data: "…", mimeType: "image/png" }] },
+      ],
+    });
+
+    expect(result.topToolResults[0].localTokens).toBe(1200);
   });
 });
 
