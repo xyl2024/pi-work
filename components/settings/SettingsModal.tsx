@@ -16,6 +16,7 @@ import { PiDocumentationSection } from "./sections/PiDocumentationSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
+import { NetworkProxySection } from "./sections/NetworkProxySection";
 import { SubagentSection } from "./sections/SubagentSection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 import { ToastTestSection } from "./sections/ToastTestSection";
@@ -38,7 +39,11 @@ import { WebAccessSection } from "./sections/WebAccessSection";
  *   7  File preview limits (immediate-apply per kind)
  *   8  Agent retry         (independent state machine; lives in
  *                          ~/.pi/agent/settings.json, not config.yaml)
- *   9  UI Sounds           (immediate-apply master volume + per-event recipes)
+ *   9  Network proxy       (draft url + save; enable toggle immediate-apply;
+ *                          hot-swaps the process fetch dispatcher)
+ *   10 Subagent            (immediate-apply model + thinking level)
+ *   11 UI Sounds           (immediate-apply master volume + per-event recipes)
+ *   12 Web Access          (toggle + Tavily key)
  */
 export function SettingsModal({
   onClose,
@@ -280,13 +285,16 @@ export function SettingsModal({
             {/* 9: Agent retry */}
             <RetrySection />
 
+            {/* 10: Network proxy */}
+            <NetworkProxySection config={config} apply={apply} />
+
             {/* 10: Subagent */}
             <SubagentSection config={config} apply={apply} />
 
             {/* 11: UI Sounds */}
             <SoundSettingsSection config={config} apply={apply} />
 
-            {/* 11: Web Access */}
+            {/* 12: Web Access */}
             <WebAccessSection config={config} apply={apply} />
 
           </div>

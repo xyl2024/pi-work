@@ -16,6 +16,7 @@ import {
   type WebAccessConfig,
 } from "../shared/config-types";
 import { DEFAULT_UI_SOUND_EVENTS } from "../shared/ui-sounds-defaults";
+import type { NetworkProxyConfig } from "../shared/config-types";
 import {
   FILE_VIEWER_LIMITS,
   FILE_VIEWER_KINDS,
@@ -110,6 +111,9 @@ const DEFAULT_CONFIG: PiWorkConfig = {
     tavily: {},
   },
   subagent: { ...DEFAULT_SUBAGENT },
+  // Off by default: never silently route traffic through a proxy the user
+  // did not ask for. `url` is required for the proxy to take effect.
+  network_proxy: { enabled: false, url: "", no_proxy: "" },
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -278,6 +282,22 @@ function parseWebAccess(raw: unknown): WebAccessConfig {
   return { enabled: obj.enabled !== false, tavily: apiKey ? { api_key: apiKey } : {} };
 }
 
+// Network proxy (Settings → Network proxy). Fail-open: a missing / garbled
+// block means "no proxy", which is the pre-feature behavior. The URL is
+// shape-checked at the PUT boundary (app/api/settings) so the UI can't
+// persist garbage; here we only keep strings and let the applier ignore an
+// unusable URL rather than throwing during readConfig.
+function parseNetworkProxy(raw: unknown): NetworkProxyConfig {
+  const defaults = DEFAULT_CONFIG.network_proxy;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...defaults };
+  const obj = raw as Record<string, unknown>;
+  return {
+    enabled: obj.enabled === true,
+    url: typeof obj.url === "string" ? obj.url.trim() : "",
+    no_proxy: typeof obj.no_proxy === "string" ? obj.no_proxy.trim() : "",
+  };
+}
+
 function parseDisabledSkills(raw: unknown): Record<string, string[]> {
   if (!raw || typeof raw !== "object") return {};
   const out: Record<string, string[]> = {};
@@ -336,6 +356,7 @@ export function readConfig(): PiWorkConfig {
       disabled_skills: parseDisabledSkills(cfg.disabled_skills),
       web_access: parseWebAccess(cfg.web_access),
       subagent: parseSubagent(cfg.subagent),
+      network_proxy: parseNetworkProxy(cfg.network_proxy),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });

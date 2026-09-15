@@ -21,6 +21,11 @@ const nextConfig: NextConfig = {
     "better-sqlite3",
     "node-pty",
     "ws",
+    // lib/server/network-proxy.ts hands undici a process-wide dispatcher that
+    // Node's built-in fetch then resolves through. Keep undici out of the
+    // bundle so the class we construct is the same module this file resolves
+    // at runtime, not a second webpack-inlined copy.
+    "undici",
     // CodeGraph's compiled bundle ships tree-sitter wasm loaders that neither
     // webpack nor Turbopack can compile (duplicate-symbol errors). Keep it out
     // of the bundle so it resolves via Node require at runtime instead.

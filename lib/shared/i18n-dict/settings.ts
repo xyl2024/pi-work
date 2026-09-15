@@ -121,4 +121,25 @@ export const settings = {
   "weightless": "失重",
   "sea-breeze": "海风",
   "celebration": "欢庆",
+
+  // Network proxy (~/.pi-work/config.yaml → network_proxy)
+  "Network proxy": "网络代理",
+  "Route every outbound server request — model calls, RSS, GitHub Trending — through an HTTP proxy. Takes effect immediately, no restart needed.":
+    "服务端所有对外请求（模型调用、RSS、GitHub Trending 等）都走这个 HTTP 代理。保存后立即生效，无需重启。",
+  "Use proxy": "启用代理",
+  "Enter a proxy address first — it is required to enable or test the proxy.":
+    "请先填写代理地址 —— 启用和测试都需要它。",
+  "Proxy enabled — {url}": "代理已启用 —— {url}",
+  "Proxy disabled": "代理未启用",
+  "Proxy address": "代理地址",
+  "Bypass list (optional)": "绕过列表（可选）",
+  "Comma-separated hosts or suffixes. {hosts} are always bypassed.":
+    "逗号分隔的主机名或后缀。{hosts} 始终不走代理。",
+  "Test connection": "测试连接",
+  "Testing…": "测试中…",
+  "Proxy reachable — {status} in {ms} ms": "代理可用 — {status}，耗时 {ms} ms",
+  "Proxy test failed: {error}": "代理测试失败：{error}",
+  "unknown error": "未知错误",
+  "The connection test sends one request to {url} through the proxy. Only http:// and https:// proxies are supported.":
+    "测试连接会通过该代理向 {url} 发一次真实请求。仅支持 http:// 与 https:// 代理。",
 } as const;

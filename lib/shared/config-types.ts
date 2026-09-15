@@ -47,6 +47,27 @@ export interface WebAccessConfig {
   };
 }
 
+/**
+ * Hosts that must never be proxied: the app talks to itself (and to the
+ * terminal WebSocket service) over these. Always merged into the effective
+ * NO_PROXY list, so a user-supplied `no_proxy` can only add to it.
+ */
+export const ALWAYS_BYPASS_HOSTS = ["localhost", "127.0.0.1", "::1"] as const;
+
+/**
+ * Outbound network proxy (Settings → Network proxy). Applies to every `fetch`
+ * the server process performs — provider calls, RSS, GitHub Trending, update
+ * checks — so they share one exit. `no_proxy` is a comma-separated host /
+ * host-suffix list on top of {@link ALWAYS_BYPASS_HOSTS}.
+ */
+export interface NetworkProxyConfig {
+  enabled: boolean;
+  /** Proxy URL, e.g. `http://127.0.0.1:7897`. Empty means nothing to apply. */
+  url: string;
+  /** Extra comma-separated bypass entries appended to ALWAYS_BYPASS_HOSTS. */
+  no_proxy: string;
+}
+
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   right_side_bar: RightSideBarConfig;
@@ -63,6 +84,7 @@ export interface PiWorkConfig {
   disabled_skills: Record<string, string[]>;
   web_access: WebAccessConfig;
   subagent: SubagentConfig;
+  network_proxy: NetworkProxyConfig;
 }
 
 /**

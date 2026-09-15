@@ -26,6 +26,10 @@ export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
   await safeBootstrap("wechat",    () => import("@/lib/server/wechat/startup"));
+  // Installs the process-wide outbound proxy dispatcher (a no-op until the
+  // user enables it in Settings). Runs before any route module so a request
+  // served during boot can never race the first `setGlobalDispatcher` call.
+  await safeBootstrap("network-proxy", () => import("@/lib/server/network-proxy"));
   await safeBootstrap("scheduler", () => import("@/lib/server/scheduler/startup"));
   await safeBootstrap("kanban",    () => import("@/lib/server/kanban/startup"));
   await safeBootstrap("rss",       () => import("@/lib/server/rss/startup"));

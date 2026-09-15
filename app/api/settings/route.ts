@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { readConfig, writeConfig } from "@/lib/server/config";
+import { applyNetworkProxy, checkProxyUrl } from "@/lib/server/network-proxy";
 import {
   FILE_VIEWER_LIMITS,
   FILE_VIEWER_KINDS,
@@ -71,6 +72,30 @@ function validateWebAccess(raw: unknown): { ok: true } | { ok: false; error: str
   const tavily = (obj.tavily ?? {}) as Record<string, unknown>;
   if (tavily.api_key !== undefined && typeof tavily.api_key !== "string") return { ok: false, error: "web_access.tavily.api_key must be a string" };
   if (tavily.clear_api_key !== undefined && typeof tavily.clear_api_key !== "boolean") return { ok: false, error: "web_access.tavily.clear_api_key must be a boolean" };
+  return { ok: true };
+}
+
+function validateNetworkProxy(
+  raw: unknown,
+): { ok: true } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "network_proxy must be an object" };
+  }
+  const obj = raw as Record<string, unknown>;
+  if (obj.enabled !== undefined && typeof obj.enabled !== "boolean") {
+    return { ok: false, error: "network_proxy.enabled must be a boolean" };
+  }
+  if (obj.no_proxy !== undefined && typeof obj.no_proxy !== "string") {
+    return { ok: false, error: "network_proxy.no_proxy must be a string" };
+  }
+  const urlCheck = checkProxyUrl(obj.url);
+  if (!urlCheck.ok) return { ok: false, error: urlCheck.error };
+  // Enabling the proxy without an address would silently leave traffic
+  // direct, which reads as "the setting did nothing" — reject it instead.
+  if (obj.enabled === true && !urlCheck.url) {
+    return { ok: false, error: "network_proxy.url is required when the proxy is enabled" };
+  }
   return { ok: true };
 }
 
@@ -163,6 +188,18 @@ export async function PUT(req: Request) {
       );
     }
 
+    const networkProxyCheck = validateNetworkProxy(body.network_proxy);
+    if (!networkProxyCheck.ok) {
+      log.warn("settings rejected: invalid network_proxy", {
+        error: networkProxyCheck.error,
+        durationMs: elapsedMs(startedAt),
+      });
+      return NextResponse.json(
+        { error: networkProxyCheck.error },
+        { status: 400 },
+      );
+    }
+
     // If the body omitted file_viewer (or any other field) entirely,
     // merge it back from disk so we never write a partial PiWorkConfig
     // — the parser's fail-open behavior is the only thing keeping
@@ -188,9 +225,13 @@ export async function PUT(req: Request) {
       ui_sounds: body.ui_sounds ?? onDisk.ui_sounds,
       disabled_skills: body.disabled_skills ?? onDisk.disabled_skills,
       web_access: nextWebAccess,
+      network_proxy: body.network_proxy ?? onDisk.network_proxy,
     };
 
     writeConfig(next);
+    // Hot-apply: the dispatcher is process-wide, so a saved setting changes
+    // the next outbound request without restarting the server.
+    applyNetworkProxy(next.network_proxy);
     log.info("settings written", { durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ success: true });
   } catch (error) {

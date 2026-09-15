@@ -25,8 +25,8 @@ export function Field({ label, children }: { label: string; children: React.Reac
   );
 }
 
-export function TextInput({ value, onChange, placeholder, mono }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean }) {
-  return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ ...inputStyle, fontFamily: mono ? "var(--font-mono)" : "inherit" }} />;
+export function TextInput({ value, onChange, placeholder, mono, id }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean; id?: string }) {
+  return <input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{ ...inputStyle, fontFamily: mono ? "var(--font-mono)" : "inherit" }} />;
 }
 
 export function SecretTextInput({
