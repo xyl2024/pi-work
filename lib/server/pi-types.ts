@@ -12,6 +12,29 @@ export interface ContextUsage {
   tokens: number | null;
 }
 
+/** The subset of pi's `AgentTool` this layer reads: the API `tools` schema
+ *  fields plus the sampling override `btw_context` forwards. The execute
+ *  function and the rest of the runtime tool are none of our business. */
+export interface AgentToolStateLike {
+  name?: string;
+  description?: string;
+  parameters?: unknown;
+  constrainedSampling?: unknown;
+}
+
+/** The subset of a pi `AgentMessage` context composition and `btw_context`
+ *  read. `content` stays `unknown` because its block union is provider-shaped;
+ *  `command`/`output`/`summary` cover the non-content message roles. */
+export interface AgentMessageStateLike {
+  role?: string;
+  content?: unknown;
+  command?: unknown;
+  output?: unknown;
+  /** `!!`-prefixed bash is excluded from the model request. */
+  excludeFromContext?: boolean;
+  summary?: unknown;
+}
+
 interface ModelLike {
   id: string;
   provider: string;
@@ -50,7 +73,18 @@ export interface AgentSessionLike {
   readonly modelRuntime: Pick<ModelRuntime, "getModel" | "getModels">;
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
-  readonly agent: { state?: { systemPrompt?: string; thinkingLevel?: string } };
+  /** Mirror of the pi SDK `AgentState` fields this layer reads. `tools` and
+   *  `messages` are typed here (rather than reached through a cast at each
+   *  call site) because context composition and `btw_context` both consume
+   *  them. */
+  readonly agent: {
+    state?: {
+      systemPrompt?: string;
+      thinkingLevel?: string;
+      tools?: AgentToolStateLike[];
+      messages?: AgentMessageStateLike[];
+    };
+  };
 
   subscribe(listener: (event: AgentSessionEvent) => void): () => void;
   prompt(text: string, options?: { images?: Array<{ type: "image"; data: string; mimeType: string }> }): Promise<void>;

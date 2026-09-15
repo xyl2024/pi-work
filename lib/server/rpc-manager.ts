@@ -145,8 +145,15 @@ export class AgentSessionWrapper {
   private compositionRefreshId = 0;
   private compositionRefreshChain: Promise<void> = Promise.resolve();
   // Last accepted refresh inputs, so a `message_end` that didn't move the
-  // anchor (a tool result, say) costs nothing.
-  private lastCompositionInput: { anchoredTotalTokens: number | null; systemPrompt: string } | null = null;
+  // anchor (a tool result, say) costs nothing. Message/tool *counts* are
+  // enough to notice an append: the transcript only ever grows, and a tool
+  // change rebuilds the system prompt, which is compared in full.
+  private lastCompositionInput: {
+    anchoredTotalTokens: number | null;
+    systemPrompt: string;
+    toolCount: number;
+    messageCount: number;
+  } | null = null;
 
   constructor(
     public readonly inner: AgentSessionLike,
@@ -275,11 +282,16 @@ export class AgentSessionWrapper {
     this.compositionRefreshChain = this.compositionRefreshChain
       .then(async () => {
         if (refreshId !== this.compositionRefreshId || !this._alive) return;
-        const systemPrompt = this.inner.agent.state?.systemPrompt ?? "";
+        const agentState = this.inner.agent.state;
+        const systemPrompt = agentState?.systemPrompt ?? "";
+        const tools = agentState?.tools ?? [];
+        const messages = agentState?.messages ?? [];
         const anchoredTotalTokens = this.getContextUsage()?.tokens ?? null;
         if (
           this.lastCompositionInput?.anchoredTotalTokens === anchoredTotalTokens &&
-          this.lastCompositionInput.systemPrompt === systemPrompt
+          this.lastCompositionInput.systemPrompt === systemPrompt &&
+          this.lastCompositionInput.toolCount === tools.length &&
+          this.lastCompositionInput.messageCount === messages.length
         ) {
           return;
         }
@@ -292,15 +304,23 @@ export class AgentSessionWrapper {
           return;
         }
         if (refreshId !== this.compositionRefreshId || !this._alive) return;
+        // The four top-level buckets (ADR-0005): system prompt (minus skills),
+        // tool schemas, skills, messages. Every classified number is anchored
+        // to the provider total; the system prompt is counted by prefix
+        // differencing so `system prompt + skills` equals the whole exactly.
         this.contextComposition = computeContextComposition({
-          // #34 pins a single bucket: nothing else is classified yet, so under
-          // ADR-0005's global normalization the system prompt holds the whole
-          // provider-anchored total. #36 splits this into the four buckets.
-          buckets: [{ id: "system-prompt", leaves: [{ id: "system-prompt", text: systemPrompt }] }],
+          systemPrompt,
+          tools,
+          messages,
           anchoredTotalTokens,
           countTokens,
         });
-        this.lastCompositionInput = { anchoredTotalTokens, systemPrompt };
+        this.lastCompositionInput = {
+          anchoredTotalTokens,
+          systemPrompt,
+          toolCount: tools.length,
+          messageCount: messages.length,
+        };
       })
       .catch((error) => {
         log.warn("context composition refresh failed", {
@@ -796,23 +816,9 @@ export class AgentSessionWrapper {
         // (state.messages carries SDK-shaped blocks incl. thinking
         // signatures + toolCall id/name/arguments) — not the UI-rendered
         // transcript, which would drop those fields.
-        const agent = (this.inner as unknown as {
-          agent?: {
-            state?: {
-              systemPrompt?: string;
-              thinkingLevel?: string;
-              tools?: Array<{
-                name: string;
-                description: string;
-                parameters: unknown;
-                constrainedSampling?: unknown;
-              }>;
-              messages?: unknown[];
-            };
-          };
-        }).agent;
+        const agentState = this.inner.agent.state;
         const model = this.inner.model;
-        const tools = ((agent?.state?.tools ?? []) as Array<Record<string, unknown>>).map((t) => {
+        const tools = (agentState?.tools ?? []).map((t) => {
           const out: Record<string, unknown> = {
             name: typeof t.name === "string" ? t.name : "",
             description: typeof t.description === "string" ? t.description : "",
@@ -825,10 +831,10 @@ export class AgentSessionWrapper {
         });
         return {
           model: model ? { provider: model.provider, id: model.id } : undefined,
-          systemPrompt: agent?.state?.systemPrompt ?? "",
-          thinkingLevel: agent?.state?.thinkingLevel ?? "off",
+          systemPrompt: agentState?.systemPrompt ?? "",
+          thinkingLevel: agentState?.thinkingLevel ?? "off",
           tools,
-          messages: agent?.state?.messages ?? [],
+          messages: agentState?.messages ?? [],
         };
       }
 

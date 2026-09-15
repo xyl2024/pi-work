@@ -38,6 +38,9 @@ import { ChannelsModal } from "../channels/ChannelsModal";
 import { ToolsMarketModal } from "../tools-market/ToolsMarketModal";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
+// System-prompt segmentation lives in a pure module so the context panel and
+// the context-composition estimate share one set of boundaries (ADR-0005).
+import { splitBaseBlocks, splitSystemPrompt, type SystemPromptSegment } from "@/lib/shared/system-prompt-segments";
 import { CommandPalette } from "./CommandPalette";
 import { InboxModal } from "../inbox/InboxModal";
 import { CwdPicker } from "../sessions/CwdPicker";
@@ -239,15 +242,6 @@ function findDeepestLeafEntryId(
   return deepest.entry.id;
 }
 
-// Split a fully-assembled system prompt into "Pi base + Append" segments and
-// "<project_instructions path=...>...</project_instructions>" segments — the
-// pi SDK wraps each AGENTS.md file in those tags, so they're our only reliable
-// per-source boundary in the rendered string. Each AGENTS.md segment is then
-// colored differently in the System panel.
-type SystemPromptSegment =
-  | { kind: "base"; text: string }
-  | { kind: "agents"; path: string; text: string };
-
 // Color palette for AGENTS.md segments. Loops if there are more files than colors.
 const AGENTS_SEGMENT_COLORS = [
   "#3b82f6", // blue
@@ -257,93 +251,6 @@ const AGENTS_SEGMENT_COLORS = [
   "#10b981", // emerald
   "#06b6d4", // cyan
 ];
-
-function splitSystemPrompt(systemPrompt: string): SystemPromptSegment[] {
-  const segments: SystemPromptSegment[] = [];
-  const re = /<project_instructions path="([^"]+)">([\s\S]*?)<\/project_instructions>/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(systemPrompt)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({ kind: "base", text: systemPrompt.slice(lastIndex, match.index) });
-    }
-    // pi's buildSystemPrompt wraps content as `<tag>\n${content}\n</tag>`;
-    // strip the wrapper-introduced leading/trailing newlines so the rendered
-    // segment matches the original file rather than the assembly scaffolding.
-    segments.push({ kind: "agents", path: match[1], text: match[2].replace(/^\n+|\n+$/g, "") });
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < systemPrompt.length) {
-    segments.push({ kind: "base", text: systemPrompt.slice(lastIndex) });
-  }
-  return segments;
-}
-
-// ── Context panel: fine-grained quick-jump anchors inside the base prompt ──
-// The pi base prompt is a flat text blob; we cut it at its known section
-// headings so the context panel can offer per-section jump targets (Available
-// tools / Guidelines / Pi documentation / user's Append) instead of only the
-// whole base block. Parsing is defensive: headings that aren't found simply
-// yield no anchor, and a custom-prompt setup that matches nothing falls back
-// to the whole-block base anchor.
-
-type BasePromptBlock = {
-  /** data-context-anchor id; null for unanchored filler. */
-  anchor: string | null;
-  text: string;
-};
-
-const BASE_HEADING_ANCHORS: Array<{ id: string; re: RegExp }> = [
-  { id: "available-tools", re: /Available tools:/ },
-  { id: "guidelines", re: /Guidelines:/ },
-  { id: "pi-docs", re: /Pi documentation/ },
-];
-
-/** Detect the `<available_skills>…</available_skills>` listing that pi injects
- *  into its base prompt, so the context panel can offer a dedicated jump
- *  target and highlight each skill's `<name>` line. */
-const SKILLS_SECTION_RE = /<available_skills>[\s\S]*?<\/available_skills>/;
-
-/** Index just after pi's \"Always read pi .md files…\" line (the end of the
- *  Pi documentation section). `-1` when the pi docs section is absent. */
-function findPiDocsEnd(text: string): number {
-  const m = /Always read pi\s*\.md files[^\n]*/.exec(text);
-  return m ? m.index + m[0].length : -1;
-}
-
-/** Non-whitespace (non-cwd) content still following the pi docs section —
- *  i.e. the user's APPEND_SYSTEM.md block. */
-function hasAppendSection(text: string, after: number): boolean {
-  const rest = text.slice(after).replace(/\nCurrent working directory:[\s\S]*$/, "");
-  return rest.trim().length > 0;
-}
-
-/** Slice a base segment into anchorable blocks at its known headings. */
-function splitBaseBlocks(text: string): BasePromptBlock[] {
-  const marks: Array<{ index: number; id: string }> = [];
-  for (const { id, re } of BASE_HEADING_ANCHORS) {
-    const m = re.exec(text);
-    if (m) marks.push({ index: m.index, id });
-  }
-  const piDocsEnd = findPiDocsEnd(text);
-  if (piDocsEnd >= 0 && hasAppendSection(text, piDocsEnd)) {
-    marks.push({ index: piDocsEnd, id: "append" });
-  }
-  const skillsMatch = SKILLS_SECTION_RE.exec(text);
-  if (skillsMatch) marks.push({ index: skillsMatch.index, id: "skills" });
-  marks.sort((a, b) => a.index - b.index);
-  const blocks: BasePromptBlock[] = [];
-  let cursor = 0;
-  for (let i = 0; i < marks.length; i++) {
-    const mark = marks[i];
-    const end = i + 1 < marks.length ? marks[i + 1].index : text.length;
-    if (mark.index > cursor) blocks.push({ anchor: null, text: text.slice(cursor, mark.index) });
-    blocks.push({ anchor: mark.id, text: text.slice(mark.index, end) });
-    cursor = end;
-  }
-  if (cursor < text.length) blocks.push({ anchor: null, text: text.slice(cursor) });
-  return blocks;
-}
 
 /** Combined highlighter for the base prompt body: the skill `<name>…</name>`
  *  tags plus pi's section headings "Available tools:", "Guidelines:" and

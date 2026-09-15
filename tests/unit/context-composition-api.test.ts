@@ -4,12 +4,12 @@ import type { ContextComposition } from "@/lib/shared/context-composition";
 import { api, expectOk } from "./helpers";
 
 /**
- * Interface test for the server half of #34: the 2.4MB `o200k_base` tokenizer
- * must actually load inside the *Next.js server runtime* and produce a
- * composition on `get_state`. The Node-only test (`context-tokenizer.test.ts`)
- * proves the package loads in plain Node; it says nothing about whether the
- * app's runtime can resolve it — which is exactly the risk this ticket exists
- * to retire.
+ * Interface test for the server half of the context-composition feature: the
+ * 2.4MB `o200k_base` tokenizer must actually load inside the *Next.js server
+ * runtime* and produce a four-bucket composition on `get_state`. The Node-only
+ * test (`context-tokenizer.test.ts`) proves the package loads in plain Node; it
+ * says nothing about whether the app's runtime can resolve it — which is
+ * exactly the risk this ticket exists to retire.
  *
  * `POST /api/agent/new` boots a real pi session for the cwd and forwards the
  * command in the body to it, so asking for `get_state` (instead of a prompt)
@@ -34,26 +34,43 @@ describe("context composition (agent API)", () => {
     }
   }
 
-  it("returns a server-computed composition from get_state", async () => {
+  it("returns a server-computed four-bucket composition from get_state", async () => {
     await withFreshSession((state) => {
       const composition = state.contextComposition;
 
       // Non-null is the assertion that matters: the refresh swallows a failed
       // tokenizer load, so a null here means the dynamic import didn't work.
       expect(composition).toBeTruthy();
-      expect(composition!.buckets.map((bucket) => bucket.id)).toEqual(["system-prompt"]);
+      expect(composition!.buckets.map((bucket) => bucket.id)).toEqual([
+        "system-prompt",
+        "system-tools",
+        "skills",
+        "messages",
+      ]);
 
-      const bucket = composition!.buckets[0];
-      expect(Number.isFinite(bucket.localTokens)).toBe(true);
-      expect(bucket.localTokens).toBeGreaterThan(0);
-      expect(bucket.localTokens).toBeLessThan(1_000_000);
+      const prompt = composition!.buckets.find((bucket) => bucket.id === "system-prompt")!;
+      const tools = composition!.buckets.find((bucket) => bucket.id === "system-tools")!;
+      const messages = composition!.buckets.find((bucket) => bucket.id === "messages")!;
+
+      // A live session always has a system prompt and active tool schemas; the
+      // tool bucket is counted locally even though the prompt's one-line tool
+      // list lives in the prompt bucket.
+      expect(prompt.localTokens).toBeGreaterThan(0);
+      expect(tools.localTokens).toBeGreaterThan(0);
+      expect(tools.leaves.length).toBeGreaterThan(0);
+      expect(messages.localTokens).toBe(0);
+      expect(composition!.localTotal).toBe(
+        composition!.buckets.reduce((sum, bucket) => sum + bucket.localTokens, 0),
+      );
+
       // A fresh session has no provider usage yet, so there is no anchor: the
-      // bucket must degrade to its local count rather than invent a percentage.
+      // buckets must degrade to local counts rather than invent percentages.
       expect(composition!.anchoredTotalTokens).toBeNull();
-      expect(bucket.tokens).toBeNull();
-      expect(bucket.percent).toBeNull();
-      expect(bucket.leaves).toHaveLength(1);
-      expect(bucket.leaves[0].localTokens).toBe(bucket.localTokens);
+      for (const bucket of composition!.buckets) {
+        expect(bucket.tokens).toBeNull();
+        expect(bucket.percent).toBeNull();
+        expect(Number.isFinite(bucket.localTokens)).toBe(true);
+      }
     });
   }, 60_000);
 
