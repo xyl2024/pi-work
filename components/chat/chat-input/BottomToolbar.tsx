@@ -11,6 +11,7 @@ import { ThinkingPicker, THINKING_LEVEL_COLOR, type ThinkingLevel } from "../Thi
 import { MoreMenu } from "../MoreMenu";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import type { ContextUsage, SessionStats } from "@/hooks/sessionUiStore";
+import type { ContextComposition } from "@/lib/shared/context-composition";
 
 type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -40,6 +41,7 @@ export interface BottomToolbarProps {
 
   // MIDDLE
   contextUsage: ContextUsage;
+  contextComposition: ContextComposition | null;
   sessionStats: SessionStats;
 
   // RIGHT - thinking
@@ -86,7 +88,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
     fileInputRef,
     model, modelNames, modelIcons, modelList, onModelChange,
     cwd, onCwdChange,
-    contextUsage, sessionStats,
+    contextUsage, sessionStats, contextComposition,
     thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
     toolSelection, availableTools, toolsLoading, toolsError,
     toolDropdownRef,
@@ -336,7 +338,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
           {/* Cumulative token stats (input / output / cache hit rate / cost)
               are surfaced in the context bar's hover tooltip. The previous
               inline strip was removed so the input row stays compact. */}
-          <ContextUsageBar contextUsage={contextUsage} sessionStats={sessionStats} />
+          <ContextUsageBar contextUsage={contextUsage} sessionStats={sessionStats} contextComposition={contextComposition} />
         </div>
       )}
 

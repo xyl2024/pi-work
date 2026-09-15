@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
 import type { AgentMessage, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
+import type { ContextComposition } from "@/lib/shared/context-composition";
 import { sendAgentCommand } from "@/lib/client/agent-client";
 import { readLastUsedModel, writeLastUsedModel } from "@/lib/client/last-used-model";
 import { useToast } from "@/components/ui/Toast";
@@ -160,6 +161,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("off");
   const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
   const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
+  const [contextComposition, setContextComposition] = useState<ContextComposition | null>(null);
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
@@ -315,6 +317,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setThinkingLevel,
     setToolSelection,
     setContextUsage,
+    setContextComposition,
     setSystemPrompt,
     setAgentPhase,
     setAgentRunningSync,
@@ -409,6 +412,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     seenSubagentToolStartIds: seenSubagentToolStartIdsRef.current,
     seenSubagentToolEndIds: seenSubagentToolEndIdsRef.current,
     setContextUsage,
+    setContextComposition,
     setThinkingLevel,
     compactInFlightRef,
     showToast,
@@ -863,6 +867,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // the same scalar contents.
   useEffect(() => { if (isActive) setSessionUiState({ sessionStats }); }, [isActive, sessionStats]);
   useEffect(() => { if (isActive) setSessionUiState({ contextUsage }); }, [isActive, contextUsage]);
+  useEffect(() => { if (isActive) setSessionUiState({ contextComposition }); }, [isActive, contextComposition]);
   useEffect(() => { if (isActive) setSessionUiState({ isStreaming: streamState.isStreaming }); }, [isActive, streamState.isStreaming]);
   // Publish the wider "agent is busy with this turn" flag so the
   // conversation-tree panel can lock card clicks for the entire turn,

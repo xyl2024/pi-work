@@ -91,6 +91,11 @@ export function useToolCallStatsView(): ToolCallStatsView {
 // ChatWindow's `handleScrollToToolCall` depends on `toolCallToVisibleIdx` which
 // is rebuilt every time `messages` changes, so its identity is unstable. We
 // stash the latest callback in a module ref and expose a stable wrapper.
+//
+// This is the repo's only `toolCallId → chat` bridge: the input bar and the
+// chat scroll container are separate subtrees, so the context-composition
+// panel's Top-5 list reaches the chat through this same registry instead of
+// growing a second channel.
 
 let scrollCallbackRef: ((toolCallId: string) => void) | null = null;
 let scrollCallbackOwner: string | null = null;

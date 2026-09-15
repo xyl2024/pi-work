@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode, ToolSelection } from "@/lib/shared/types";
+import type { ContextComposition } from "@/lib/shared/context-composition";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 
 export interface SessionData {
@@ -42,6 +43,10 @@ export interface AgentRuntimeState {
     isRunning?: boolean;
     phase?: "compacting" | "streaming" | null;
     contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
+    /** Local context-composition estimate anchored to `contextUsage.tokens`
+     *  (ADR-0005). Computed server-side on `message_end`; absent on older
+     *  servers and `null` until the first estimate lands. */
+    contextComposition?: ContextComposition | null;
     systemPrompt?: string;
     thinkingLevel?: string;
     /** Raw tool selection the live agent is using ("all" | string[], patterns

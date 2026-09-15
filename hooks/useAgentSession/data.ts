@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
 import type { AgentMessage, CompactionPoint, ToolInfo, ToolSelection } from "@/lib/shared/types";
+import type { ContextComposition } from "@/lib/shared/context-composition";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import { endStreaming as endStreamingStore, getStreamingSnapshot } from "../streamingMessageStore";
 import type {
@@ -31,6 +32,7 @@ type UseAgentSessionDataOptions = {
    *  input's local state (existing sessions restore it from `get_state`). */
   setToolSelection: StateSetter<ToolSelection>;
   setContextUsage: StateSetter<{ percent: number | null; contextWindow: number; tokens: number | null } | null>;
+  setContextComposition: StateSetter<ContextComposition | null>;
   setSystemPrompt: StateSetter<string | null>;
   setAgentPhase: StateSetter<AgentPhase>;
   setAgentRunningSync: (running: boolean) => void;
@@ -91,6 +93,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     setThinkingLevel,
     setToolSelection,
     setContextUsage,
+    setContextComposition,
     setSystemPrompt,
     setAgentPhase,
     setAgentRunningSync,
@@ -243,6 +246,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
   const applyAgentRuntimeState = useCallback((agentState: AgentRuntimeState | null | undefined) => {
     const state = agentState?.state;
     if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
+    if (state?.contextComposition !== undefined) setContextComposition(state.contextComposition ?? null);
     if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
     // Adopt the live raw selection so re-opening an existing session shows the
     // preset it actually runs with (the local default is "all"). Skipped when
@@ -288,7 +292,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
       const modelCallFailed = streamingMessage?.role === "assistant" && streamingMessage.stopReason === "error";
       endStreamingStore(streamingKey, modelCallFailed);
     }
-  }, [dispatch, setAgentPhase, setAgentRunningSync, setCompactingSync, setContextUsage, setSystemPrompt, setToolSelection, streamingKey]);
+  }, [dispatch, setAgentPhase, setAgentRunningSync, setCompactingSync, setContextUsage, setContextComposition, setSystemPrompt, setToolSelection, streamingKey]);
 
   const refreshAgentRuntimeState = useCallback(async (sid = sessionIdRef.current) => {
     if (!sid) return null;

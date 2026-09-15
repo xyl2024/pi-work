@@ -37,6 +37,8 @@ import { matchSelfKillCommand } from "./self-protection";
 import { createPiWorkBashTool } from "./pi-bash-tool";
 import { notify } from "./notifications";
 import { readSessionNotify } from "./session-notify";
+import { computeContextComposition, type ContextComposition } from "../shared/context-composition";
+import { getContextTokenCounter, type TokenCounter } from "./context-tokenizer";
 import { getChannel } from "./channels/db";
 import type { NotificationPayload, TaskNotification } from "../shared/notifications";
 
@@ -133,6 +135,25 @@ export class AgentSessionWrapper {
   // selection it needs to label the tools button: the expanded active-tool list
   // (getActiveToolNames) can't be mapped back to a named preset.
   private _toolSelection: ToolSelection = "all";
+  // Local context-composition estimate (ADR-0005), rendered by `get_state` and
+  // refreshed on `message_end` — never computed on a read path. See
+  // `scheduleContextCompositionRefresh`.
+  private contextComposition: ContextComposition | null = null;
+  // Monotonic id + serialized promise chain: a newer refresh supersedes an
+  // in-flight one, and the tokenizer's 2.4MB first load can never interleave
+  // two writes into the cache.
+  private compositionRefreshId = 0;
+  private compositionRefreshChain: Promise<void> = Promise.resolve();
+  // Last accepted refresh inputs, so a `message_end` that didn't move the
+  // anchor (a tool result, say) costs nothing. Message/tool *counts* are
+  // enough to notice an append: the transcript only ever grows, and a tool
+  // change rebuilds the system prompt, which is compared in full.
+  private lastCompositionInput: {
+    anchoredTotalTokens: number | null;
+    systemPrompt: string;
+    toolCount: number;
+    messageCount: number;
+  } | null = null;
 
   constructor(
     public readonly inner: AgentSessionLike,
@@ -191,7 +212,13 @@ export class AgentSessionWrapper {
       // listeners after ten quiet minutes.
       this.updateRunningState(event);
       this.resetIdleTimer();
-      if (event.type === "agent_end") this.logEmptyTerminalReply(event);
+      if (event.type === "agent_end") {
+        this.logEmptyTerminalReply(event);
+        // Safety net for the end of the turn: re-anchor with the final branch
+        // state. A no-op when the `message_end` refresh already covered it
+        // (the input dedupe below skips identical anchor + prompt).
+        this.scheduleContextCompositionRefresh();
+      }
       // Per-session reply notifications: track the last assistant body reply of
       // this turn (agent_start → agent_end) and, when the turn ends, forward it
       // to the session's configured notification channel. Only fires for
@@ -211,6 +238,7 @@ export class AgentSessionWrapper {
       // for the whole turn to finish (agent_end → full session reload).
       if (event.type === "message_end") {
         this.emitTreeUpdate();
+        this.scheduleContextCompositionRefresh();
       }
       // Mirror the latest session display name into the sidecar index
       // (see lib/server/session-names.ts). The mutation path that
@@ -234,7 +262,72 @@ export class AgentSessionWrapper {
       }
       for (const l of this.listeners) l(event);
     });
+    this.scheduleContextCompositionRefresh();
     this.resetIdleTimer();
+  }
+
+  /**
+   * Recompute the local context-composition estimate out of band and cache it
+   * on this session. Called on `message_end` / `agent_end` / branch navigation
+   * and once at startup — never from `get_state` itself, so a request path (and
+   * therefore hover) only ever reads the cache.
+   *
+   * Deferred by one microtask on purpose: pi emits `message_end` *before* it
+   * appends the message to the session manager, and the anchor walks that
+   * branch — reading it synchronously here would anchor one message behind.
+   * The continuation runs after pi's own synchronous persistence.
+   */
+  private scheduleContextCompositionRefresh(): void {
+    const refreshId = ++this.compositionRefreshId;
+    this.compositionRefreshChain = this.compositionRefreshChain
+      .then(async () => {
+        if (refreshId !== this.compositionRefreshId || !this._alive) return;
+        const agentState = this.inner.agent.state;
+        const systemPrompt = agentState?.systemPrompt ?? "";
+        const tools = agentState?.tools ?? [];
+        const messages = agentState?.messages ?? [];
+        const anchoredTotalTokens = this.getContextUsage()?.tokens ?? null;
+        if (
+          this.lastCompositionInput?.anchoredTotalTokens === anchoredTotalTokens &&
+          this.lastCompositionInput.systemPrompt === systemPrompt &&
+          this.lastCompositionInput.toolCount === tools.length &&
+          this.lastCompositionInput.messageCount === messages.length
+        ) {
+          return;
+        }
+        let countTokens: TokenCounter;
+        try {
+          countTokens = await getContextTokenCounter();
+        } catch {
+          // Already logged by the tokenizer module; keep the previous cache
+          // rather than blanking the tooltip.
+          return;
+        }
+        if (refreshId !== this.compositionRefreshId || !this._alive) return;
+        // The four top-level buckets (ADR-0005): system prompt (minus skills),
+        // tool schemas, skills, messages. Every classified number is anchored
+        // to the provider total; the system prompt is counted by prefix
+        // differencing so `system prompt + skills` equals the whole exactly.
+        this.contextComposition = computeContextComposition({
+          systemPrompt,
+          tools,
+          messages,
+          anchoredTotalTokens,
+          countTokens,
+        });
+        this.lastCompositionInput = {
+          anchoredTotalTokens,
+          systemPrompt,
+          toolCount: tools.length,
+          messageCount: messages.length,
+        };
+      })
+      .catch((error) => {
+        log.warn("context composition refresh failed", {
+          sessionId: this.sessionId,
+          error: String(error),
+        });
+      });
   }
 
   /**
@@ -685,6 +778,11 @@ export class AgentSessionWrapper {
         const isStreaming = this.inner.isStreaming;
         const isCompacting = this.compactInFlight || this.inner.isCompacting;
         const isRunning = this.isRunning();
+        // Startup/wrapper-reuse path: the cache is filled asynchronously (the
+        // tokenizer is a dynamic import), and nothing else would wake an idle
+        // session up to publish it. Joining that in-flight refresh here is
+        // still a cache read — it never starts a new computation.
+        if (!this.contextComposition) await this.compositionRefreshChain;
         return {
           sessionId: this.inner.sessionId,
           sessionFile: this.inner.sessionFile ?? "",
@@ -698,6 +796,10 @@ export class AgentSessionWrapper {
           contextUsage: contextUsage
             ? { percent: contextUsage.percent, contextWindow: contextUsage.contextWindow, tokens: contextUsage.tokens }
             : null,
+          // Local estimate of what the context is made of (ADR-0005) — the
+          // exact total stays in `contextUsage` above; every classified number
+          // is anchored to it. `null` until the first refresh lands.
+          contextComposition: this.contextComposition,
           systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           // Raw selection (patterns included) — lets the UI render the active
@@ -714,23 +816,9 @@ export class AgentSessionWrapper {
         // (state.messages carries SDK-shaped blocks incl. thinking
         // signatures + toolCall id/name/arguments) — not the UI-rendered
         // transcript, which would drop those fields.
-        const agent = (this.inner as unknown as {
-          agent?: {
-            state?: {
-              systemPrompt?: string;
-              thinkingLevel?: string;
-              tools?: Array<{
-                name: string;
-                description: string;
-                parameters: unknown;
-                constrainedSampling?: unknown;
-              }>;
-              messages?: unknown[];
-            };
-          };
-        }).agent;
+        const agentState = this.inner.agent.state;
         const model = this.inner.model;
-        const tools = ((agent?.state?.tools ?? []) as Array<Record<string, unknown>>).map((t) => {
+        const tools = (agentState?.tools ?? []).map((t) => {
           const out: Record<string, unknown> = {
             name: typeof t.name === "string" ? t.name : "",
             description: typeof t.description === "string" ? t.description : "",
@@ -743,10 +831,10 @@ export class AgentSessionWrapper {
         });
         return {
           model: model ? { provider: model.provider, id: model.id } : undefined,
-          systemPrompt: agent?.state?.systemPrompt ?? "",
-          thinkingLevel: agent?.state?.thinkingLevel ?? "off",
+          systemPrompt: agentState?.systemPrompt ?? "",
+          thinkingLevel: agentState?.thinkingLevel ?? "off",
           tools,
-          messages: agent?.state?.messages ?? [],
+          messages: agentState?.messages ?? [],
         };
       }
 
@@ -760,6 +848,9 @@ export class AgentSessionWrapper {
       }
       case "navigate_tree": {
         const result = await this.inner.navigateTree(command.targetId as string, {});
+        // The leaf changed, so the anchor (which walks the current branch) did
+        // too — re-anchor the cached composition to the branch being shown.
+        if (!result.cancelled) this.scheduleContextCompositionRefresh();
         log.info("navigate tree completed", {
           sessionId: this.sessionId,
           targetId: command.targetId,

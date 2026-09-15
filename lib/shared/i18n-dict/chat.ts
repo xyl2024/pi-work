@@ -235,6 +235,42 @@ export const chat = {
     "你正在脱离大模型的 Smart Zone，模型可能出现幻觉",
   "Context is nearly full — the model will hallucinate badly. Compact the session or start a new one.":
     "上下文太满了，大模型将出现较大的幻觉，建议压缩或开启新的会话",
+  // Context composition (ADR-0005): the context ring tooltip shows one `≈`
+  // line per top-level bucket, and the click-opened panel expands them. The
+  // total is provider-exact, these are local estimates — the `≈` prefix is
+  // added by the component. 「预估」 is the word the dictionary already uses for
+  // a local estimate (`Estimated tokens while streaming`), so the panel does
+  // not coin a second synonym.
+  "Context composition": "上下文构成",
+  "System prompt": "系统提示",
+  "System tool definitions": "系统工具定义",
+  // "Skills" is already defined above (技能) and is reused as the bucket label.
+  // "Messages" is taken by the kanban count label (消息数), so the bucket uses
+  // its own key that still reads as the canonical「消息」.
+  "Messages (context)": "消息",
+  // System-prompt rows. `Pi base prompt` is the prompt's own prose plus the
+  // `Available tools` / `Guidelines` sections; those two keep the Context
+  // panel's anchor names so both surfaces say the same word.
+  "Pi base prompt": "Pi 基础提示",
+  "Current working directory": "当前工作目录",
+  // Message rows. `user-text` is "user-side", not "typed by the user": pi folds
+  // bash executions and custom messages into it, and the label has to say so.
+  "User-side text (incl. bash, custom)": "用户侧文本（含 bash、自定义消息）",
+  "Assistant text": "Assistant 正文",
+  "Tool call arguments": "工具调用参数",
+  "Tool results": "工具结果",
+  "Compaction summary": "压缩摘要",
+  "Branch summary": "分支摘要",
+  "The total comes from the model and is exact; the categories are local estimates.":
+    "总量来自模型返回，精确；各分类为本地预估。",
+  // Top tool results, hung under the messages bucket (#38). Each row names the
+  // tool and its target through the same preview the transcript's tool-call
+  // block uses; a result without a toolCallId stays listed but cannot be
+  // clicked, and says so on hover.
+  "Top tool results": "最大的工具结果",
+  "Jump to the message that issued this call": "跳转到发起该工具调用的消息",
+  "This tool result cannot be located in the conversation": "此工具结果无法定位到对话中的消息",
+  "Input tokens: {count} (excluding cache)": "输入 Token: {count}（不包含缓存）",
   "System Prompts": "系统提示词",
   "System prompt is empty (tools are disabled)": "系统提示词为空（工具已禁用）",
   "Send a message to load the system prompt.": "发送一条消息后加载系统提示词",
