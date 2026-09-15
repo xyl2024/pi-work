@@ -42,6 +42,7 @@
 // ============================================================================
 
 import { splitSystemPromptLeaves } from "./system-prompt-segments";
+import { formatContextTokensK } from "./context-usage";
 
 /** The four top-level sources of a context window, per CONTEXT.md
  *  （上下文构成）. `skills` is carved out of the system prompt, so
@@ -154,7 +155,10 @@ const IMAGE_TOKEN_EQUIVALENT = 1200;
  *  buckets: pi folds them into user messages in `convertToLlm`, so lumping
  *  them into `user-text` would show the single biggest block of a long
  *  compacted conversation as if the user had typed it. */
-const MESSAGE_LEAF_IDS = [
+/** The seven message leaves, in canonical order. `MessageCompositionLeafId` is
+ *  the key union the UI's label `Record` is built from, so adding a role here
+ *  is a compile error in the panel instead of an untranslated row. */
+const MESSAGE_COMPOSITION_LEAF_IDS = [
   "user-text",
   "assistant-text",
   "thinking",
@@ -164,7 +168,7 @@ const MESSAGE_LEAF_IDS = [
   "branch-summary",
 ] as const;
 
-type MessageLeafId = (typeof MESSAGE_LEAF_IDS)[number];
+export type MessageCompositionLeafId = (typeof MESSAGE_COMPOSITION_LEAF_IDS)[number];
 
 /** A usable anchor is a positive, finite number. Anything else (missing,
  *  zero, negative, NaN) degrades the whole composition to unanchored. */
@@ -226,8 +230,8 @@ function contentText(content: unknown): { text: string; images: number } {
  *  `estimateTokens` role coverage (the SDK is the authority on which roles
  *  exist) but counts with the injected tokenizer instead of chars/4. */
 function messageBuckets(messages: readonly ContextMessage[] | null | undefined, countTokens: (text: string) => number): RawLeaf[] {
-  const totals = new Map<MessageLeafId, number>(MESSAGE_LEAF_IDS.map((id) => [id, 0]));
-  const add = (id: MessageLeafId, text: string, images = 0) => {
+  const totals = new Map<MessageCompositionLeafId, number>(MESSAGE_COMPOSITION_LEAF_IDS.map((id) => [id, 0]));
+  const add = (id: MessageCompositionLeafId, text: string, images = 0) => {
     totals.set(id, (totals.get(id) ?? 0) + countLeaf(text, countTokens) + images * IMAGE_TOKEN_EQUIVALENT);
   };
 
@@ -282,7 +286,7 @@ function messageBuckets(messages: readonly ContextMessage[] | null | undefined, 
     }
   }
 
-  return MESSAGE_LEAF_IDS.map((id) => ({ id, localTokens: totals.get(id) ?? 0 }));
+  return MESSAGE_COMPOSITION_LEAF_IDS.map((id) => ({ id, localTokens: totals.get(id) ?? 0 }));
 }
 
 /**
@@ -404,4 +408,12 @@ export function computeContextComposition(input: ContextCompositionInput): Conte
  *  solo bucket reads as `100%` rather than `100.0%`. */
 export function formatCompositionPercent(percent: number): string {
   return Number.isInteger(percent) ? String(percent) : percent.toFixed(1);
+}
+
+/** A local estimate as it is printed: `≈ 12.3K`. The `≈` is the only thing that
+ *  tells a classified number apart from the provider-exact total (ADR-0005) —
+ *  keeping it in one helper is what stops the ring tooltip and the composition
+ *  panel from drifting into two different agreements with the user. */
+export function formatEstimatedTokens(tokens: number): string {
+  return `≈ ${formatContextTokensK(tokens)}`;
 }

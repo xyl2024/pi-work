@@ -199,4 +199,38 @@ describe("splitSystemPromptLeaves", () => {
   it("returns no leaves for an empty prompt", () => {
     expect(splitSystemPromptLeaves("")).toEqual([]);
   });
+
+  it("carves the trailing cwd footer out as its own leaf", () => {
+    const leaves = splitSystemPromptLeaves(FULL);
+
+    expectTiling(leaves, FULL.length);
+    const cwd = leaves[leaves.length - 1];
+    expect(cwd.id).toBe("cwd");
+    expect(cwd.text).toBe("Current working directory: /repo");
+    // Offsets still cover the leading newline; only the display text strips it.
+    expect(FULL.slice(cwd.start, cwd.end)).toBe("\nCurrent working directory: /repo");
+  });
+
+  it("separates the cwd footer from the pi-docs block when nothing else would", () => {
+    // No skills, no APPEND, no project files: without an explicit cwd leaf the
+    // pi-docs block would swallow the footer.
+    const prompt = BASE + CWD;
+    const leaves = splitSystemPromptLeaves(prompt);
+
+    expectTiling(leaves, prompt.length);
+    expect(leaves[leaves.length - 1].id).toBe("cwd");
+    expect(leaves[leaves.length - 1].text).toBe("Current working directory: /repo");
+    const piDocs = leaves.find((leaf) => leaf.id === "pi-docs");
+    expect(piDocs?.text.endsWith("TUI API details)")).toBe(true);
+    expect(piDocs?.text).not.toContain("Current working directory");
+  });
+
+  it("never mistakes an AGENTS.md tail for the cwd footer", () => {
+    const prompt =
+      '<project_instructions path="/repo/AGENTS.md">\nsee:\nCurrent working directory: /nope\n</project_instructions>';
+    const leaves = splitSystemPromptLeaves(prompt);
+
+    expectTiling(leaves, prompt.length);
+    expect(leaves.map((leaf) => leaf.id)).toEqual(["agents:/repo/AGENTS.md"]);
+  });
 });

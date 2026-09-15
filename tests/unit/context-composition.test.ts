@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeContextComposition,
   formatCompositionPercent,
+  formatEstimatedTokens,
   type ContextBucketId,
   type ContextComposition,
   type ContextCompositionInput,
@@ -259,5 +260,15 @@ describe("formatCompositionPercent", () => {
   it("drops a trailing .0 and keeps one decimal otherwise", () => {
     expect(formatCompositionPercent(100)).toBe("100");
     expect(formatCompositionPercent(33.333)).toBe("33.3");
+  });
+});
+
+describe("formatEstimatedTokens", () => {
+  it("prefixes a local estimate with `≈`, the total's only tell apart", () => {
+    // ADR-0005: the provider total is printed bare, so every classified number
+    // goes through this helper — the ring tooltip and the composition panel
+    // must not each invent their own convention.
+    expect(formatEstimatedTokens(12_300)).toBe("≈ 12.3K");
+    expect(formatEstimatedTokens(0)).toBe("≈ 0.0K");
   });
 });

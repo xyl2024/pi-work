@@ -45,7 +45,12 @@ export type BasePromptBlock = {
 };
 
 /** What a composition leaf came from. Only `skills` is carved out into its own
- *  top-level bucket today; `base` / `agents` stay inside the system prompt. */
+ *  top-level bucket today; `base` / `agents` stay inside the system prompt.
+ *
+ *  `base` covers everything the base prompt contributed, including the trailing
+ *  `Current working directory:` footer — that one gets its own leaf (`id: "cwd"`)
+ *  so the composition panel can show it as its own line even when nothing else
+ *  separates it from the pi-docs section. */
 export type SystemPromptLeafKind = "base" | "skills" | "agents";
 
 /** One leaf of the system prompt partition used by `context-composition`. */
@@ -125,6 +130,12 @@ function skillsSectionStart(text: string, tagIndex: number): number {
   // Skip the blank-line separator; the leaf starts at the sentence itself.
   return preambleIndex < 0 ? tagIndex : preambleIndex + 2;
 }
+
+/** pi always terminates the assembled prompt with `\nCurrent working
+ *  directory: <cwd>` (`dist/core/system-prompt.js` — both the custom-prompt and
+ *  the built-in branch). It is its own composition leaf so "current working
+ *  directory" is a line the user can read off directly. */
+const CWD_LEAF_RE = /\nCurrent working directory: [^\n]*\n?$/;
 
 /** Index just after pi's "Always read pi .md files…" line (the end of the
  *  Pi documentation section). `-1` when the pi docs section is absent. */
@@ -236,6 +247,30 @@ export function splitSystemPromptLeaves(systemPrompt: string): SystemPromptLeaf[
       });
     }
   }
+  // Carve the trailing `Current working directory:` footer out of the last
+  // base leaf. Without this it is glued to whatever block happens to precede it
+  // (the pi-docs section when there are no skills / project files, the
+  // `</project_context>` wrapper when there are) and the composition cannot
+  // report it as its own source. Only `base` tails qualify: an AGENTS.md file
+  // whose content ends with such a line is file content, not the footer.
+  const tail = leaves[leaves.length - 1];
+  if (tail && tail.kind === "base") {
+    const tailEnd = tail.end;
+    const match = CWD_LEAF_RE.exec(systemPrompt.slice(tail.start, tailEnd));
+    if (match) {
+      const cwdStart = tail.start + match.index;
+      tail.end = cwdStart;
+      tail.text = systemPrompt.slice(tail.start, cwdStart);
+      leaves.push({
+        id: "cwd",
+        kind: "base",
+        start: cwdStart,
+        end: tailEnd,
+        text: systemPrompt.slice(cwdStart, tailEnd).replace(/^\n+|\n+$/g, ""),
+      });
+    }
+  }
+
   // A shrunk filler can end up zero-length; the partition only keeps real ones.
   return leaves.filter((leaf) => leaf.end > leaf.start);
 }

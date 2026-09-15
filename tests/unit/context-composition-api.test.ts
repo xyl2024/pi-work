@@ -1,6 +1,7 @@
 import { unlink } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import type { ContextComposition } from "@/lib/shared/context-composition";
+import { contextBucketRows } from "@/lib/shared/context-composition-rows";
 import { api, expectOk } from "./helpers";
 
 /**
@@ -82,5 +83,22 @@ describe("context composition (agent API)", () => {
 
     expect(localTotals[0]).toBeGreaterThan(0);
     expect(localTotals[1]).toBe(localTotals[0]);
+  }, 60_000);
+
+  it("projects a real prompt into rows that add up to their bucket", async () => {
+    await withFreshSession((state) => {
+      const composition = state.contextComposition!;
+      const prompt = composition.buckets.find((bucket) => bucket.id === "system-prompt")!;
+      const rows = contextBucketRows(prompt);
+
+      // A real pi prompt always ends with the `Current working directory:`
+      // footer, so the row projection has to surface it as its own line and
+      // still partition the bucket exactly.
+      expect(rows.map((row) => row.id)).toContain("cwd");
+      expect(rows.reduce((sum, row) => sum + row.localTokens, 0)).toBe(prompt.localTokens);
+      const base = rows.find((row) => row.id === "base");
+      expect(base?.children.map((child) => child.id)).toContain("available-tools");
+      expect(base?.children.reduce((sum, child) => sum + child.localTokens, 0)).toBe(base?.localTokens);
+    });
   }, 60_000);
 });
