@@ -154,6 +154,138 @@ describe("GET /api/plans", () => {
   });
 });
 
+// ── 待整理 (unsorted files) ────────────────────────────────────────────
+// Files that break the naming or frontmatter contract are never dropped and
+// never rewritten: they come back as an `unsorted` entry with the reason, the
+// panel lists them without any editing control, and a write aimed at one is
+// refused instead of silently serialized (which would throw away whatever the
+// parser could not read). Fixing the file is the user's job — the next read
+// has to take it back into the normal sections.
+
+describe("待整理 (unsorted files)", () => {
+  const list = async (refresh = false) =>
+    (await api(`/api/plans?today=${TODAY}${refresh ? "&refresh=1" : ""}`)).body as unknown as PlansResponse;
+  const unsortedOf = (data: PlansResponse, rel: string) =>
+    data.unsorted.find((entry) => entry.path === rel);
+  const inAnySection = (data: PlansResponse, rel: string) =>
+    data.sections.some((section) => section.plans.some((plan) => plan.path === rel));
+  const patch = (body: unknown) =>
+    api("/api/plans/file", { method: "PATCH", body: JSON.stringify(body) });
+
+  it("lists every kind of breakage with its path and problems, and never as a plan", async () => {
+    const uid = uniqueId("plans");
+    // Four ways a hand-written file misses the contract: a name with no anchor
+    // prefix, one whose frontmatter does not parse, one filed outside the two
+    // known layouts, and one whose name is not a real date.
+    const badName = `2026-03/${uid}-随手记.md`;
+    const badMeta = `2026-03/2026-03-15-${uid}-badmeta.md`;
+    const wrongPlace = `${uid}-loose.md`;
+    const badDate = `2026-03/2026-13-40-${uid}-bad-date.md`;
+    const seeds: [string, string][] = [
+      [badName, "随手写下的东西\n"],
+      [badMeta, "---\ndone: maybe\n---\n我的备注\n"],
+      [wrongPlace, "躺在根目录\n"],
+      [badDate, "日期不存在\n"],
+    ];
+    try {
+      for (const [rel, content] of seeds) seed(rel, content);
+      const data = await list();
+
+      expect(unsortedOf(data, badName)?.problems.map((p) => p.code)).toEqual(["name-syntax"]);
+      expect(unsortedOf(data, badMeta)?.problems.map((p) => p.code)).toEqual([
+        "frontmatter-done",
+      ]);
+      expect(unsortedOf(data, wrongPlace)?.problems.map((p) => p.code)).toEqual(["location"]);
+      expect(unsortedOf(data, badDate)?.problems.map((p) => p.code)).toEqual(["date-invalid"]);
+
+      // Each entry carries the absolute path the panel's "copy path" hands to
+      // an external editor, and none of them is a plan.
+      for (const [rel] of seeds) {
+        expect(unsortedOf(data, rel)?.absPath).toBe(planAbs(rel));
+        expect(inAnySection(data, rel)).toBe(false);
+      }
+
+      // Reading them back changed nothing on disk: Pi Work has not "fixed"
+      // anything on the user's behalf.
+      for (const [rel, content] of seeds) {
+        expect(readFileSync(planAbs(rel), "utf8")).toBe(content);
+      }
+    } finally {
+      for (const [rel] of seeds) rmSync(planAbs(rel), { force: true });
+    }
+  });
+
+  it("refuses a write to an unsorted file, even with 覆盖, and keeps its bytes", async () => {
+    const uid = uniqueId("plans");
+    const byName = `2026-03/${uid}-随手记.md`;
+    const byMeta = `2026-03/2026-03-15-${uid}-badmeta.md`;
+    try {
+      for (const [rel, content] of [
+        [byName, "whatever the user wrote"],
+        [byMeta, "---\ncreated_at: yesterday\n---\nbody"],
+      ] as const) {
+        seed(rel, content);
+        // `force` is the user's 「覆盖」 answer to a *stale view*; it is not an
+        // answer to "this file is not a plan", so the refusal stands.
+        for (const body of [
+          { path: rel, note: "我的备注", force: true },
+          { path: rel, anchor: { kind: "day", date: "2026-04-10" }, force: true },
+        ]) {
+          const res = await patch(body);
+          expect(res.status).toBe(422);
+          // The message says it is a format problem, not a permission one.
+          expect(String(res.body.error)).toContain("does not follow the plan format");
+          expect(readFileSync(planAbs(rel), "utf8")).toBe(content);
+        }
+      }
+    } finally {
+      rmSync(planAbs(byName), { force: true });
+      rmSync(planAbs(byMeta), { force: true });
+    }
+  });
+
+  it("takes a file back into the normal sections once the user fixes it", async () => {
+    const uid = uniqueId("plans");
+    const brokenName = `2026-03/${uid}-随手记.md`;
+    const fixedRel = `2026-03/2026-03-15-${uid}-随手记.md`;
+    const brokenMeta = `2026-03/2026-03-20-${uid}-badmeta.md`;
+    try {
+      const nameBody = "---\ndone: false\ncreated_at: 2026-03-01T09:00:00+08:00\ndone_at:\n---\n\n取号\n";
+      const metaBody = "---\ndone: true\ncreated_at: 2026-03-02T09:00:00+08:00\ndone_at: 2026-03-03T09:00:00+08:00\n---\n\n还书\n";
+      seed(brokenName, nameBody);
+      seed(brokenMeta, "---\ndone: maybe\n---\n\n还书\n");
+
+      const before = await list();
+      expect(unsortedOf(before, brokenName)).toBeTruthy();
+      expect(unsortedOf(before, brokenMeta)).toBeTruthy();
+
+      // The user fixes both outside the panel: renames the badly named file to
+      // the contract shape, and repairs the frontmatter in place.
+      renameSync(planAbs(brokenName), planAbs(fixedRel));
+      writeFileSync(planAbs(brokenMeta), metaBody, "utf8");
+
+      const after = await list(true);
+      expect(unsortedOf(after, brokenName)).toBeUndefined();
+      expect(unsortedOf(after, brokenMeta)).toBeUndefined();
+      expect(sectionOf(after, "today").plans.map((plan) => plan.path)).toContain(fixedRel);
+
+      const repaired = sectionOf(after, "upcoming").plans.find((plan) => plan.path === brokenMeta);
+      expect(repaired?.title).toBe(`${uid}-badmeta`);
+      expect(repaired?.done).toBe(true);
+      expect(repaired?.note).toBe("还书");
+
+      // The bytes on disk are still exactly what the user wrote — the panel
+      // read them, it did not round-trip them through the serializer.
+      expect(readFileSync(planAbs(fixedRel), "utf8")).toBe(nameBody);
+      expect(readFileSync(planAbs(brokenMeta), "utf8")).toBe(metaBody);
+    } finally {
+      rmSync(planAbs(brokenName), { force: true });
+      rmSync(planAbs(fixedRel), { force: true });
+      rmSync(planAbs(brokenMeta), { force: true });
+    }
+  });
+});
+
 // ── Create ─────────────────────────────────────────────────────────────
 // The write side of the seam: one POST makes exactly one file, and the list
 // endpoint must see it again. Everything the client sends is untrusted — the

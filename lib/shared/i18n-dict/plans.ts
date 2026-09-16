@@ -58,6 +58,22 @@ export const plans = {
   "Sun": "日",
   "{n} plans": "{n} 项计划",
   "New plan anchor": "新建锚点",
+  // 待整理 (unsorted): files that break the naming / frontmatter contract. They
+  // are listed with the parser's complaint and are never rewritten by Pi Work,
+  // so the wording must say what to fix and where (ADR-0006).
+  "Unsorted": "待整理",
+  "These files do not follow the plan convention. Pi Work never rewrites them — fix them outside the panel and refresh.":
+    "这些文件不符合计划约定。Pi Work 不会改写它们，请在外面修好后刷新。",
+  "The file is not in a plan folder (inbox/ or YYYY-MM/)":
+    "文件不在计划目录里（应为 inbox/ 或 YYYY-MM/）",
+  "The file name does not follow the plan naming rule": "文件名不符合计划命名规则",
+  "The date in the file name is not a real date": "文件名里的日期不是真实日期",
+  "A week anchor must be named by its Monday": "周锚点的日期必须是周一",
+  "The month folder and the date in the name disagree": "月份目录与文件名里的日期不一致",
+  "The frontmatter could not be parsed": "frontmatter 无法解析",
+  "done must be true or false": "done 只能是 true 或 false",
+  "created_at is not a valid timestamp": "created_at 不是合法时间戳",
+  "done_at is not a valid timestamp": "done_at 不是合法时间戳",
   // Write conflicts (409)
   "This plan changed outside the panel": "这个计划已在面板外被改动",
   "This plan was moved or renamed outside the panel": "这个计划已在面板外被移动或改名",

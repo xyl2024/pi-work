@@ -442,10 +442,11 @@ export function listPlans(refresh = false): PlanScan {
 
   const collect = (rel: string) => {
     try {
-      seen.add(resolvePlanPath(rel));
+      const abs = resolvePlanPath(rel);
+      seen.add(abs);
       const result = readPlanFile(rel);
       if ("plan" in result) plans.push(result.plan);
-      else unsorted.push({ path: rel, problems: result.problems });
+      else unsorted.push({ path: rel, absPath: abs, problems: result.problems });
     } catch (error) {
       // The file vanished between readdir and read — leave it out. Any other
       // failure (permissions, …) is a real error and must surface, not be
@@ -469,10 +470,10 @@ export function listPlans(refresh = false): PlanScan {
     }
 
     if (dirent.isFile() && dirent.name.toLowerCase().endsWith(".md")) {
-      seen.add(abs);
-      const parsedPath = parsePlanPath(dirent.name);
-      const problems = parsedPath.ok ? [] : parsedPath.problems;
-      unsorted.push({ path: dirent.name, problems });
+      // A markdown file directly under the root is in neither layout the
+      // contract allows, so it is 待整理 for the reason `collect` reports for
+      // it: a path without a `<dir>/` segment (ADR-0006).
+      collect(dirent.name);
     }
   }
 
@@ -480,6 +481,11 @@ export function listPlans(refresh = false): PlanScan {
   for (const key of cache.keys()) {
     if (!seen.has(key)) cache.delete(key);
   }
+
+  // `readdir` order is whatever the filesystem hands back. The panel lists this
+  // feed as-is, so sort it here: a stable order is what makes "it moved out of
+  // 待整理 after I fixed it" observable rather than a reshuffle.
+  unsorted.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 
   return { plans, unsorted };
 }

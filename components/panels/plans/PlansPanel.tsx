@@ -5,7 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
-import { copyText } from "@/lib/client/clipboard";
+import { useCopyPath } from "./useCopyPath";
 import {
   createPlan,
   deletePlan,
@@ -27,7 +27,9 @@ import {
 } from "@/lib/shared/plans";
 import { PlanRow, type PlanConflictState, type PlanSaveStatus } from "./PlanRow";
 import { AnchorChips } from "./AnchorChips";
+import { Chevron } from "./Chevron";
 import { MiniCalendar } from "./MiniCalendar";
+import { UnsortedPlans } from "./UnsortedPlans";
 import { anchorDisplayText } from "./anchorText";
 
 interface PlansPanelProps {
@@ -586,17 +588,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     setSaveStatus(dirtyRef.current ? "unsaved" : "saved");
   }, [setPendingConflict]);
 
-  const copyPath = useCallback(
-    async (plan: Plan) => {
-      try {
-        await copyText(plan.absPath);
-        toast.show({ kind: "success", message: t("Path copied"), description: plan.absPath });
-      } catch {
-        toast.show({ kind: "error", message: t("Copy path failed"), description: plan.absPath });
-      }
-    },
-    [t, toast],
-  );
+  const copyPath = useCopyPath();
 
   const removePlan = useCallback(
     async (plan: Plan) => {
@@ -700,7 +692,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         onSaveNote={() => void flushNote(true)}
         onResolveConflict={(choice) => void resolveConflict(choice)}
         onDismissConflict={dismissConflict}
-        onCopyPath={() => void copyPath(plan)}
+        onCopyPath={() => void copyPath(plan.absPath)}
         onDelete={() => void removePlan(plan)}
       />
     ),
@@ -871,31 +863,43 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           <div style={{ padding: "8px 4px", fontSize: 12, color: "var(--text-dim)" }}>
             {t("Loading")}
           </div>
-        ) : !hasVisible ? (
-          <div
-            style={{
-              padding: "32px 12px",
-              textAlign: "center",
-              fontSize: 12,
-              color: "var(--text-dim)",
-            }}
-          >
-            {total > 0 ? t("All plans are completed") : t("No plans yet")}
-          </div>
         ) : (
-          sections.map((section) =>
-            section.id === "overdue" ? (
-              <OverdueSection
-                key={section.id}
-                plans={section.plans}
-                open={overdueOpen}
-                onToggle={() => setOverdueOpen((value) => !value)}
-                renderRow={renderRow}
-              />
+          <>
+            {!hasVisible ? (
+              <div
+                style={{
+                  padding: "32px 12px",
+                  textAlign: "center",
+                  fontSize: 12,
+                  color: "var(--text-dim)",
+                }}
+              >
+                {total > 0 ? t("All plans are completed") : t("No plans yet")}
+              </div>
             ) : (
-              <LabeledSection key={section.id} id={section.id} plans={section.plans} renderRow={renderRow} />
-            ),
-          )
+              sections.map((section) =>
+                section.id === "overdue" ? (
+                  <OverdueSection
+                    key={section.id}
+                    plans={section.plans}
+                    open={overdueOpen}
+                    onToggle={() => setOverdueOpen((value) => !value)}
+                    renderRow={renderRow}
+                  />
+                ) : (
+                  <LabeledSection
+                    key={section.id}
+                    id={section.id}
+                    plans={section.plans}
+                    renderRow={renderRow}
+                  />
+                ),
+              )
+            )}
+            {/* Files that are not plans are listed last, never hidden: the
+                user has to see what the panel could not read (ADR-0006). */}
+            <UnsortedPlans items={data.unsorted} />
+          </>
         )}
       </div>
     </div>
@@ -1044,24 +1048,3 @@ function OverdueSection({
   );
 }
 
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{
-        flexShrink: 0,
-        transform: open ? "rotate(90deg)" : "rotate(0deg)",
-        transition: "transform 0.12s",
-      }}
-    >
-      <polyline points="9 6 15 12 9 18" />
-    </svg>
-  );
-}

@@ -1,22 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
 import {
   anchorDisplayText,
   monthLabel,
   weekRangeLabel,
 } from "@/components/panels/plans/anchorText";
+import { dictT as t } from "./i18n-dict-stub";
 
 /**
- * The panel passes `useI18n`'s `t`; this rebuilds it from the real zh
+ * The panel passes `useI18n`'s `t`; `dictT` rebuilds it from the real zh
  * dictionary, so a missing or re-worded key fails the test rather than being
  * papered over by a stub.
  */
-const t = (key: string, params?: Record<string, string | number>) => {
-  const template = ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS] ?? key;
-  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-    params && name in params ? String(params[name]) : match,
-  );
-};
 
 describe("plan anchor display text", () => {
   it("labels a cross-month week with its range and owning month", () => {

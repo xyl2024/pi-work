@@ -680,7 +680,12 @@ export function noteSummary(note: string): string {
 
 /** A file that could not be read as a plan; shown in 待整理, never rewritten. */
 export interface UnsortedPlan {
+  /** Path relative to the plans root, "/"-separated. */
   path: string;
+  /** Absolute path on disk — the 待整理 row's "copy path" hands it to an
+   *  external editor, which is where the fix belongs. */
+  absPath: string;
+  /** Every reason the file is not a plan, in the order the parser found them. */
   problems: PlanProblem[];
 }
 
