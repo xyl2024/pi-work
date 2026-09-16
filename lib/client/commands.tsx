@@ -115,6 +115,11 @@ export interface CommandContext {
    *  it is already the active open tab. */
   togglePanel: (kind: PanelViewKind) => void;
 
+  /** Always reveal a panel view (never collapses) for the palette entries
+   *  that mean "do something now" rather than "go look at the panel". The
+   *  view hands focus to its own entry point when it is opened. */
+  openPanel: (kind: PanelViewKind) => void;
+
   // Imperative agent controls — null when no ChatWindow is mounted.
   agentControls: AgentControls | null;
 
@@ -127,27 +132,28 @@ export interface CommandContext {
 
 /**
  * Panel commands generated from the panel registry instead of hand-written
- * entries: only specs that opt in (`spec.command`) get one, and running it
- * goes through the same toggle rule as the right-bar button.
+ * entries: only specs that opt in (`spec.commands`) get any, and each one
+ * routes through the shared panel rules — `toggle` entries through the same
+ * toggle rule as the right-bar button, `open` entries through `openPanel`,
+ * which reveals the view without being able to collapse it.
  */
 function buildPanelCommands(
   ctx: CommandContext,
   t: (key: string) => string,
   icons: Partial<Record<PanelViewKind, ReactNode>>,
 ): Command[] {
-  return PANEL_TAB_SPECS.flatMap((spec): Command[] => {
-    if (!spec.command) return [];
-    return [
-      {
-        id: `panel.${spec.kind}`,
-        title: t(spec.command.labelKey),
-        group: "Panel",
-        keywords: [...spec.command.keywords],
-        icon: icons[spec.kind] ?? null,
-        run: () => ctx.togglePanel(spec.kind),
-      },
-    ];
-  });
+  return PANEL_TAB_SPECS.flatMap((spec): Command[] =>
+    (spec.commands ?? []).map((entry) => ({
+      // `panel.<kind>` is the view's own entry; extra entries carry an id.
+      id: entry.id ? `panel.${spec.kind}.${entry.id}` : `panel.${spec.kind}`,
+      title: t(entry.labelKey),
+      group: "Panel",
+      keywords: [...entry.keywords],
+      icon: icons[spec.kind] ?? null,
+      run: () =>
+        entry.action === "open" ? ctx.openPanel(spec.kind) : ctx.togglePanel(spec.kind),
+    })),
+  );
 }
 
 export function buildCommands(

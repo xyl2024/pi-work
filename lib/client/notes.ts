@@ -1,20 +1,7 @@
 // Client-side API access for the Notes feature. Thin wrappers around the
 // /api/notes routes — all fetch calls, no server logic.
+import { jsonOrThrow } from "./http";
 import type { NoteNode } from "@/lib/shared/notes";
-
-async function jsonOrThrow<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    let message = `${res.status} ${res.statusText}`;
-    try {
-      const body = (await res.json()) as { error?: unknown };
-      if (body && typeof body.error === "string") message = body.error;
-    } catch {
-      /* ignore body */
-    }
-    throw new Error(message);
-  }
-  return (await res.json()) as T;
-}
 
 export async function fetchNotesTree(): Promise<NoteNode[]> {
   const data = await jsonOrThrow<{ tree?: NoteNode[] }>(

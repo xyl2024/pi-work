@@ -21,6 +21,7 @@ import { RssPanel } from "../rss/RssPanel";
 import { GitHubTrendingPanel } from "../panels/github-trending/GitHubTrendingPanel";
 import { KanbanPanel } from "../kanban/KanbanPanel";
 import { NotesPanel } from "../panels/notes/NotesPanel";
+import { PlansPanel } from "../panels/plans/PlansPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
@@ -118,6 +119,7 @@ interface PanelBodyCtx {
   onConversationTreeCardClick: (cardId: string) => void;
   btwOpenCount: number;
   gitDiffOpenCount: number;
+  plansOpenCount: number;
   onExpandGitPanel: () => void;
   onOpenKanbanSession: (sessionId: string) => void;
 }
@@ -183,6 +185,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   notes: (ctx) => <NotesPanel expanded={ctx.rightPanelState === "expanded"} />,
+  plans: (ctx) => <PlansPanel openCount={ctx.plansOpenCount} />,
 };
 
 function formatBytes(bytes: number): string {
@@ -468,6 +471,7 @@ export function AppShell() {
   // BTW focuses off these instead of shell-owned request tokens.
   const gitDiffOpenCount = selectOpenCount(panelTabsState, "gitDiff");
   const btwOpenCount = selectOpenCount(panelTabsState, "btw");
+  const plansOpenCount = selectOpenCount(panelTabsState, "plans");
 
   // Classic mode hides the chat card behind the right column being
   // closed, so the very first commit has to paint with the column
@@ -957,6 +961,13 @@ export function AppShell() {
     dispatchPanelTabs({ type: "toggle", kind });
   }, []);
 
+  // The palette entries that mean "do it now" ("New plan") reveal the view
+  // unconditionally — they must never collapse the panel they need. The view
+  // itself takes the keyboard on open, off the open count the reducer bumps.
+  const handleOpenPanel = useCallback((kind: PanelViewKind) => {
+    dispatchPanelTabs({ type: "open", kind });
+  }, []);
+
   // Global keyboard shortcuts.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1025,12 +1036,13 @@ export function AppShell() {
     }
   }, []);
 
-  // `/btw` slash action: always open the BTW tab (never toggle-close it).
+  // `/btw` slash action: always open the BTW tab (never toggle-close it) —
+  // the same "open, never collapse" rule as the palette's record-now entries.
   // BtwPanel focuses its input off the tab's own openCount, so the extra
   // focus-request counter is gone.
   const handleSlashOpenBtw = useCallback(() => {
-    dispatchPanelTabs({ type: "open", kind: "btw" });
-  }, []);
+    handleOpenPanel("btw");
+  }, [handleOpenPanel]);
 
   // Click on a card in the conversation-tree panel. We always resolve the
   // clicked card to the deepest leaf entry in its subtree, so the chat
@@ -1245,6 +1257,7 @@ export function AppShell() {
     onConversationTreeCardClick: handleConversationTreeCardClick,
     btwOpenCount,
     gitDiffOpenCount,
+    plansOpenCount,
     onExpandGitPanel: handleExpandGitPanel,
     onOpenKanbanSession: handleOpenKanbanSession,
   };
@@ -1331,6 +1344,7 @@ export function AppShell() {
       mode: panelTabsRef.current.mode === "closed" ? "normal" : "closed",
     }),
     togglePanel: handleTogglePanel,
+    openPanel: handleOpenPanel,
     agentControls,
     hasSession: selectedSession !== null || newSessionCwd !== null,
     hasCwd: !!(selectedSession?.cwd ?? newSessionCwd),
@@ -1338,6 +1352,7 @@ export function AppShell() {
     theme.setPreset, setLocale, handleSlashNew,
     setCwdPickerOpen,
     handleTogglePanel,
+    handleOpenPanel,
     agentControls,
     selectedSession, newSessionCwd,
   ]);

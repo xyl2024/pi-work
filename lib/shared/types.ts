@@ -441,6 +441,7 @@ export const BTW_TAB_ID = "btw:global";
 export const GITHUB_TRENDING_TAB_ID = "githubTrending:global";
 export const KANBAN_TAB_ID = "kanban:global";
 export const NOTES_TAB_ID = "notes:global";
+export const PLANS_TAB_ID = "plans:global";
 
 // Map a Tab.kind back to the corresponding configurable right-bar button id
 // lives in `lib/shared/panelTabs` (`panelButtonIdForKind`), derived from the

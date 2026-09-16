@@ -4,7 +4,7 @@
 //
 //   1. register the panel identity in `lib/shared/panelTabs`
 //      (PANEL_TAB_SPEC_BY_KIND — tab id, label key, default mode, session
-//      binding, optional command-palette entry), then
+//      binding, optional command-palette entries), then
 //   2. add one presentation entry here (glyph / disabled rule / badge) and
 //      one body entry in AppShell's `PANEL_BODY_BY_KIND`.
 //
@@ -47,6 +47,7 @@ import {
   GitBranch,
   GitGraph,
   Languages,
+  ListChecks,
   MessageSquareMore,
   NotebookText,
   PanelRight,
@@ -292,6 +293,13 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     labelKey: "Notes",
     icon: ({ size }) => <NotebookText size={size} />,
   }),
+  // Plans: global personal plan list (plain markdown under
+  // ~/.pi-work/user-plans, anchors encoded in the filename), not
+  // session-bound. Read-only in this slice; editing arrives later.
+  plans: panelButton("plans", {
+    labelKey: "Plans",
+    icon: ({ size }) => <ListChecks size={size} />,
+  }),
 };
 
 export const RIGHT_BAR_DESCRIPTORS: readonly RightBarDescriptor[] = [
@@ -313,10 +321,10 @@ export const PANEL_TAB_ICON_BY_KIND: Record<PanelViewKind, PanelIcon> =
 
 /** Command-palette icon per panel kind, for the specs that opt into a
  *  palette command — the same glyph at button size, never active. Panels
- *  without a command keep no palette icon (the palette falls back to null). */
+ *  with no palette entry keep no icon (the palette falls back to null). */
 export const PANEL_COMMAND_ICON_BY_KIND: Partial<Record<PanelViewKind, ReactNode>> =
   Object.fromEntries(
-    PANEL_TAB_SPECS.filter((spec) => spec.command).map((spec) => [
+    PANEL_TAB_SPECS.filter((spec) => spec.commands?.length).map((spec) => [
       spec.kind,
       PANEL_TAB_ICON_BY_KIND[spec.kind]({ size: 16, active: false }),
     ]),
