@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_PLAN_VIEW_MODE,
   PLAN_TITLE_MAX_LENGTH,
+  PLAN_VIEW_MODES,
   addDays,
   addMonths,
   anchorChoiceOf,
@@ -19,9 +21,11 @@ import {
   monthKeyOf,
   movedPlanRelativePath,
   noteSummary,
+  orderPlansForTimeline,
   parsePlanAnchor,
   parsePlanContent,
   parsePlanPath,
+  parsePlanViewMode,
   planAnchorsEqual,
   planDirOf,
   planFileName,
@@ -873,6 +877,122 @@ describe("plans hide-completed filter", () => {
     // …and the same list keeps it when the switch is off, because a completed
     // plan is a record that stays where it was.
     expect(hideCompletedPlans(groupPlans([completed], "2026-09-15"), false)[2].plans).toHaveLength(1);
+  });
+});
+
+describe("plans appearance modes", () => {
+  it("defaults to compact and lists the three modes in switcher order", () => {
+    expect(DEFAULT_PLAN_VIEW_MODE).toBe("compact");
+    expect(PLAN_VIEW_MODES).toEqual(["compact", "cards", "timeline"]);
+  });
+
+  it("accepts only the three modes out of untrusted storage", () => {
+    expect(parsePlanViewMode("compact")).toBe("compact");
+    expect(parsePlanViewMode("cards")).toBe("cards");
+    expect(parsePlanViewMode("timeline")).toBe("timeline");
+    // A stale / garbled / absent value is not a mode — the caller falls back
+    // to the default rather than rendering an unknown shape.
+    expect(parsePlanViewMode("board")).toBe(null);
+    expect(parsePlanViewMode("")).toBe(null);
+    expect(parsePlanViewMode(null)).toBe(null);
+    expect(parsePlanViewMode(undefined)).toBe(null);
+    expect(parsePlanViewMode({ mode: "cards" })).toBe(null);
+  });
+});
+
+describe("plans timeline ordering", () => {
+  const today = "2026-09-15"; // a Tuesday; its week started Mon 09-14
+
+  it("pins the inbox on top, then lays anchored plans out past → today → future", () => {
+    const ordered = orderPlansForTimeline(
+      [
+        plan({
+          path: "2026-10/2026-10-M-下月.md",
+          title: "下月",
+          anchor: { kind: "month", month: "2026-10" },
+        }),
+        plan({
+          path: "2026-09/2026-09-20-晚点.md",
+          title: "晚点",
+          anchor: { kind: "day", date: "2026-09-20" },
+        }),
+        plan({
+          path: "2026-09/2026-09-M-本月.md",
+          title: "本月",
+          anchor: { kind: "month", month: "2026-09" },
+        }),
+        plan({
+          path: "2026-09/2026-09-14W-本周.md",
+          title: "本周",
+          anchor: { kind: "week", date: "2026-09-14" },
+        }),
+        plan({
+          path: "2026-09/2026-09-15-今天.md",
+          title: "今天",
+          anchor: { kind: "day", date: "2026-09-15" },
+        }),
+        plan({
+          path: "2026-09/2026-09-10-旧事.md",
+          title: "旧事",
+          anchor: { kind: "day", date: "2026-09-10" },
+        }),
+        plan({ path: "inbox/随手记.md", title: "随手记", anchor: { kind: "inbox" } }),
+      ],
+      today,
+    );
+
+    // The inbox never has a time, so it would sort to the end of a plain date
+    // sort — it is pinned instead, so it cannot disappear.
+    expect(ordered.map((item) => item.title)).toEqual([
+      "随手记",
+      "旧事", // past
+      "今天", // day anchor on today comes first…
+      "本周", // …then the week / month that still cover today,
+      "本月", //    drawn at today rather than at the 1st / Monday
+      "晚点", // future day
+      "下月", // future month
+    ]);
+  });
+
+  it("falls back to created_at then path for plans at the same point", () => {
+    const ordered = orderPlansForTimeline(
+      [
+        plan({
+          path: "2026-09/2026-09-15-b.md",
+          title: "b",
+          anchor: { kind: "day", date: today },
+          createdAt: "2026-09-01T00:00:00+08:00",
+        }),
+        plan({
+          path: "2026-09/2026-09-15-a.md",
+          title: "a",
+          anchor: { kind: "day", date: today },
+          createdAt: "2026-08-01T00:00:00+08:00",
+        }),
+        plan({
+          path: "2026-09/2026-09-15-c.md",
+          title: "c",
+          anchor: { kind: "day", date: today },
+          createdAt: "2026-08-01T00:00:00+08:00",
+        }),
+      ],
+      today,
+    );
+    expect(ordered.map((item) => item.title)).toEqual(["a", "c", "b"]);
+  });
+
+  it("keeps completed plans in the axis — hiding them is the caller's filter", () => {
+    const done = plan({
+      path: "2026-09/2026-09-10-做完.md",
+      title: "做完",
+      anchor: { kind: "day", date: "2026-09-10" },
+      done: true,
+    });
+    expect(orderPlansForTimeline([done], today).map((item) => item.title)).toEqual(["做完"]);
+  });
+
+  it("is empty for an empty list", () => {
+    expect(orderPlansForTimeline([], today)).toEqual([]);
   });
 });
 

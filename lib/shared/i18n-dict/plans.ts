@@ -58,6 +58,13 @@ export const plans = {
   "Sun": "日",
   "{n} plans": "{n} 项计划",
   "New plan anchor": "新建锚点",
+  // Appearance modes (#48): one three-cell switcher in the panel header. Keys
+  // are namespaced because the plain "Compact" / "Timeline" keys already mean
+  // something else in the chat dictionary.
+  "plans.view.label": "计划外观",
+  "plans.view.compact": "紧凑",
+  "plans.view.cards": "卡片",
+  "plans.view.timeline": "时间轴",
   // 待整理 (unsorted): files that break the naming / frontmatter contract. They
   // are listed with the parser's complaint and are never rewritten by Pi Work,
   // so the wording must say what to fix and where (ADR-0006).

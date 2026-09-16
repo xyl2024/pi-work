@@ -733,8 +733,15 @@ export function planSectionOf(plan: Plan, today: string): PlanSectionId {
 
 /** Anchor start first, then created_at, then path — never drag order. */
 function comparePlans(a: Plan, b: Plan): number {
-  const keyA = [anchorStartKey(a.anchor), a.createdAt ?? "", a.path];
-  const keyB = [anchorStartKey(b.anchor), b.createdAt ?? "", b.path];
+  return compareKeys(
+    [anchorStartKey(a.anchor), a.createdAt ?? "", a.path],
+    [anchorStartKey(b.anchor), b.createdAt ?? "", b.path],
+  );
+}
+
+/** Lexicographic compare of two equal-length key tuples — the one place the
+ *  sections and the timeline share their tie-break rule. */
+function compareKeys(keyA: readonly string[], keyB: readonly string[]): number {
   for (let i = 0; i < keyA.length; i += 1) {
     if (keyA[i] !== keyB[i]) return keyA[i] < keyB[i] ? -1 : 1;
   }
@@ -765,6 +772,81 @@ export function hideCompletedPlans(
     ...section,
     plans: section.plans.filter((plan) => !plan.done),
   }));
+}
+
+// ── Appearance modes (#48) ───────────────────────────────────────────────
+// The panel renders the same data in three shapes: 紧凑 (compact rows inside
+// the sections), 卡片 (the same sections, each plan a light card) and 时间轴
+// (no sections, one continuous past → future axis with the inbox pinned). The
+// mode changes grouping and row shape only — never *which* plans are listed —
+// so switching is a pure re-render with no request and no data change, and
+// 「隐藏已完成」/ done-dimming apply in all three. The choice is a browser-local
+// preference, not a plan field (ADR-0006).
+
+export type PlanViewMode = "compact" | "cards" | "timeline";
+
+/** Switcher order, left to right; the first one is the default. */
+export const PLAN_VIEW_MODES: readonly PlanViewMode[] = ["compact", "cards", "timeline"];
+
+export const DEFAULT_PLAN_VIEW_MODE: PlanViewMode = "compact";
+
+/**
+ * Read a mode out of untrusted storage (localStorage). Returns `null` for
+ * anything that is not one of the three modes, so a stale or garbled value
+ * falls back to the default instead of rendering an unknown shape.
+ */
+export function parsePlanViewMode(value: unknown): PlanViewMode | null {
+  return typeof value === "string" && (PLAN_VIEW_MODES as readonly string[]).includes(value)
+    ? (value as PlanViewMode)
+    : null;
+}
+
+/** Granularity tie-break for plans that share a timeline position: the most
+ *  specific anchor first (今天's day plan, then 本周, then 本月). */
+const TIMELINE_RANK: Record<Exclude<PlanAnchorKind, "inbox">, number> = {
+  day: 0,
+  week: 1,
+  month: 2,
+};
+
+/**
+ * Where a plan sits on 时间轴. An anchor that still *covers* today is drawn at
+ * today rather than at the period's own start — otherwise a month anchor would
+ * jump to the 1st and a 「本月」plan would read as the past. Everything else sits
+ * at its start, so the axis reads 过期 → 今天 → 未来.
+ */
+function timelineKey(plan: Plan, today: string): string {
+  const start = anchorStartKey(plan.anchor);
+  const end = anchorEndKey(plan.anchor);
+  if (end !== null && start <= today && today <= end) return today;
+  return start;
+}
+
+/**
+ * The one continuous ordering of 时间轴 mode: the inbox pinned at the top (so
+ * a plan without a time never disappears), then every anchored plan from past
+ * to future. Sections are deliberately *not* used here — a single unbroken axis
+ * is the point of the mode. Ties fall back to anchor granularity, then to the
+ * sections' own anchor-start / `created_at` / path order, so the two layouts
+ * agree on everything except the axis.
+ */
+export function orderPlansForTimeline(plans: readonly Plan[], today: string): Plan[] {
+  const inbox: Plan[] = [];
+  const anchored: Plan[] = [];
+  for (const plan of plans) {
+    if (plan.anchor.kind === "inbox") inbox.push(plan);
+    else anchored.push(plan);
+  }
+  inbox.sort(comparePlans);
+  anchored.sort((a, b) => {
+    const rankA = TIMELINE_RANK[a.anchor.kind as Exclude<PlanAnchorKind, "inbox">];
+    const rankB = TIMELINE_RANK[b.anchor.kind as Exclude<PlanAnchorKind, "inbox">];
+    return compareKeys(
+      [timelineKey(a, today), String(rankA), anchorStartKey(a.anchor), a.createdAt ?? "", a.path],
+      [timelineKey(b, today), String(rankB), anchorStartKey(b.anchor), b.createdAt ?? "", b.path],
+    );
+  });
+  return [...inbox, ...anchored];
 }
 
 // ── HTTP payload ─────────────────────────────────────────────────────────

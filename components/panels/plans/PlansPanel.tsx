@@ -13,10 +13,13 @@ import {
   PlanConflictError,
   updatePlan,
 } from "@/lib/client/plans";
+import { readPlanViewMode, writePlanViewMode } from "@/lib/client/plans-view-mode";
 import {
+  DEFAULT_PLAN_VIEW_MODE,
   anchorChoiceOf,
   anchorForChoice,
   hideCompletedPlans,
+  orderPlansForTimeline,
   planAnchorsEqual,
   toDateKey,
   type Plan,
@@ -24,12 +27,14 @@ import {
   type PlanAnchorChoice,
   type PlanSectionId,
   type PlansResponse,
+  type PlanViewMode,
 } from "@/lib/shared/plans";
 import { PlanRow, type PlanConflictState, type PlanSaveStatus } from "./PlanRow";
 import { AnchorChips } from "./AnchorChips";
 import { Chevron } from "./Chevron";
 import { MiniCalendar } from "./MiniCalendar";
 import { UnsortedPlans } from "./UnsortedPlans";
+import { ViewModeSwitch } from "./ViewModeSwitch";
 import { anchorDisplayText } from "./anchorText";
 
 interface PlansPanelProps {
@@ -73,6 +78,10 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [hideDone, setHideDone] = useState(false);
+  // Appearance mode (紧凑 / 卡片 / 时间轴). Presentational only: it is restored
+  // from localStorage after mount and never changes what is fetched, so
+  // switching re-renders the data already on screen (ADR-0006).
+  const [viewMode, setViewMode] = useState<PlanViewMode>(DEFAULT_PLAN_VIEW_MODE);
   const [title, setTitle] = useState("");
   // The anchor the next typed plan will get. "today" is the zero-friction
   // default the pointer starts on; the chips move it. Resolved against the
@@ -181,6 +190,17 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [load]);
+
+  // Restore the appearance mode after mount, never during render: the server
+  // prerender has no localStorage, so reading it there would break hydration.
+  useEffect(() => {
+    setViewMode(readPlanViewMode());
+  }, []);
+
+  const changeViewMode = useCallback((mode: PlanViewMode) => {
+    setViewMode(mode);
+    writePlanViewMode(mode);
+  }, []);
 
   // A calendar pick navigates the list: the rows on that anchor are marked by
   // `renderRow` below, and this brings the first of them into view. A pick is
@@ -661,6 +681,14 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     () => data?.sections.flatMap((section) => section.plans) ?? [],
     [data],
   );
+  // 时间轴 mode's single ordered axis. It reuses the *same* filtered sections
+  // the other two modes render, flattened — so the switch behaves identically
+  // in every mode and only the arrangement differs (ADR-0006). Order within
+  // the sections is irrelevant: `orderPlansForTimeline` re-sorts.
+  const timelinePlans = useMemo(
+    () => orderPlansForTimeline(sections.flatMap((section) => section.plans), today),
+    [sections, today],
+  );
   // The overdue section hides completed-only plans, so a lone done past plan
   // must still fall through to the empty state instead of a blank panel.
   const hasVisible = sections.some((section) =>
@@ -676,6 +704,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       <PlanRow
         key={plan.path}
         plan={plan}
+        variant={viewMode === "cards" ? "cards" : "compact"}
         showDate={showDate}
         expanded={editing?.path === plan.path}
         rescheduleOpen={reschedulePath === plan.path}
@@ -714,6 +743,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       toggleDone,
       toggleExpand,
       toggleReschedule,
+      viewMode,
     ],
   );
 
@@ -723,9 +753,11 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         style={{
           display: "flex",
           alignItems: "center",
+          flexWrap: "wrap",
+          rowGap: 4,
           gap: 6,
-          height: 34,
-          padding: "0 4px 0 12px",
+          minHeight: 34,
+          padding: "2px 4px 2px 12px",
           borderBottom: "1px solid var(--border)",
           flexShrink: 0,
         }}
@@ -735,6 +767,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{visibleCount}</span>
         )}
         <span style={{ flex: 1 }} />
+        <ViewModeSwitch value={viewMode} onChange={changeViewMode} />
         <button
           type="button"
           onClick={() => setHideDone((value) => !value)}
@@ -865,17 +898,14 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           </div>
         ) : (
           <>
-            {!hasVisible ? (
-              <div
-                style={{
-                  padding: "32px 12px",
-                  textAlign: "center",
-                  fontSize: 12,
-                  color: "var(--text-dim)",
-                }}
-              >
-                {total > 0 ? t("All plans are completed") : t("No plans yet")}
-              </div>
+            {viewMode === "timeline" ? (
+              timelinePlans.length === 0 ? (
+                <EmptyPlans total={total} />
+              ) : (
+                <TimelineList plans={timelinePlans} renderRow={renderRow} />
+              )
+            ) : !hasVisible ? (
+              <EmptyPlans total={total} />
             ) : (
               sections.map((section) =>
                 section.id === "overdue" ? (
@@ -961,6 +991,64 @@ function findPlan(data: PlansResponse | null, path: string): Plan | undefined {
 
 type RenderRow = (plan: Plan, showDate: boolean) => React.ReactNode;
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        padding: "4px 4px",
+        fontSize: 11,
+        fontWeight: 600,
+        color: "var(--text-muted)",
+        letterSpacing: "0.02em",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** The shared empty state: with no plans at all it invites a first one, with
+ *  plans on the record but none visible it says they are all done. */
+function EmptyPlans({ total }: { total: number }) {
+  const { t } = useI18n();
+  return (
+    <div
+      style={{
+        padding: "32px 12px",
+        textAlign: "center",
+        fontSize: 12,
+        color: "var(--text-dim)",
+      }}
+    >
+      {total > 0 ? t("All plans are completed") : t("No plans yet")}
+    </div>
+  );
+}
+
+/**
+ * 时间轴 mode: no sections, one continuous axis. The inbox is pinned at the top
+ * behind its own label — a plan without a time must not drift out of sight —
+ * and every anchored plan below it is laid out past → today → future by
+ * `orderPlansForTimeline`. Anchored rows always show their date so the axis
+ * can be read; inbox rows have no time to show.
+ */
+function TimelineList({ plans, renderRow }: { plans: Plan[]; renderRow: RenderRow }) {
+  const { t } = useI18n();
+  const inbox = plans.filter((plan) => plan.anchor.kind === "inbox");
+  const anchored = plans.filter((plan) => plan.anchor.kind !== "inbox");
+  return (
+    <>
+      {inbox.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <SectionLabel>{t("plans.inbox")}</SectionLabel>
+          {inbox.map((plan) => renderRow(plan, false))}
+        </div>
+      )}
+      {anchored.map((plan) => renderRow(plan, true))}
+    </>
+  );
+}
+
 function LabeledSection({
   id,
   plans,
@@ -975,17 +1063,7 @@ function LabeledSection({
 
   return (
     <div style={{ marginBottom: 10 }}>
-      <div
-        style={{
-          padding: "4px 4px",
-          fontSize: 11,
-          fontWeight: 600,
-          color: "var(--text-muted)",
-          letterSpacing: "0.02em",
-        }}
-      >
-        {t(SECTION_LABEL_KEY[id])}
-      </div>
+      <SectionLabel>{t(SECTION_LABEL_KEY[id])}</SectionLabel>
       {plans.map((plan) => renderRow(plan, id === "upcoming"))}
     </div>
   );

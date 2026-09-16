@@ -9,6 +9,7 @@ import {
   type Plan,
   type PlanAnchor,
   type PlanAnchorChoice,
+  type PlanViewMode,
 } from "@/lib/shared/plans";
 import { AnchorChips } from "./AnchorChips";
 import { anchorDisplayText } from "./anchorText";
@@ -39,6 +40,10 @@ export interface PlanConflictState {
 
 export interface PlanRowProps {
   plan: Plan;
+  /** Row shape: `compact` is the dense line (also used by 时间轴), `cards` the
+   *  lighter card of the 卡片 appearance mode (#48). Grouping is the panel's
+   *  job — this only changes the container. */
+  variant?: Extract<PlanViewMode, "compact" | "cards">;
   /** Show a day anchor's date on the row (overdue / upcoming sections). Week
    *  and month anchors always show their own label regardless. */
   showDate: boolean;
@@ -77,6 +82,7 @@ export interface PlanRowProps {
  */
 export function PlanRow({
   plan,
+  variant = "compact",
   showDate,
   expanded,
   rescheduleOpen,
@@ -100,6 +106,7 @@ export function PlanRow({
   const [hovered, setHovered] = useState(false);
   const summary = noteSummary(plan.note);
   const actionsVisible = hovered || expanded || rescheduleOpen;
+  const card = variant === "cards";
 
   return (
     <div
@@ -109,12 +116,18 @@ export function PlanRow({
       onFocus={() => setHovered(true)}
       onBlur={() => setHovered(false)}
       style={{
-        borderRadius: 5,
+        borderRadius: card ? 7 : 5,
+        // Cards keep a resting surface so the list reads as separate objects;
+        // compact rows sit directly on the panel background.
         background: selected
           ? "var(--bg-selected)"
           : hovered && !expanded
             ? "var(--bg-hover)"
-            : "transparent",
+            : card
+              ? "var(--bg-subtle)"
+              : "transparent",
+        border: card ? "1px solid var(--border)" : undefined,
+        marginBottom: card ? 6 : undefined,
         // A left accent bar marks the row the mini calendar navigated to,
         // without moving or recolouring the list.
         boxShadow: selected ? "inset 2px 0 0 var(--accent)" : undefined,
@@ -124,7 +137,14 @@ export function PlanRow({
         transition: "opacity 0.15s, background 0.1s",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 6px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: card ? "7px 8px" : "5px 6px",
+        }}
+      >
         <DoneCheckbox done={plan.done} label={t("Toggle done")} onToggle={onToggleDone} />
 
         <button
@@ -217,13 +237,13 @@ export function PlanRow({
       </div>
 
       {rescheduleOpen && (
-        <div style={{ padding: "0 6px 6px" }}>
+        <div style={{ padding: card ? "0 8px 8px" : "0 6px 6px" }}>
           <AnchorChips activeChoice={activeChoice} label={t("Move plan to")} onSelect={onReschedule} />
         </div>
       )}
 
       {expanded && (
-        <div style={{ padding: "0 6px 6px" }}>
+        <div style={{ padding: card ? "0 8px 8px" : "0 6px 6px" }}>
           <textarea
             autoFocus
             value={draft}
@@ -279,7 +299,7 @@ export function PlanRow({
             alignItems: "center",
             gap: 6,
             flexWrap: "wrap",
-            margin: "0 6px 6px",
+            margin: card ? "0 8px 8px" : "0 6px 6px",
             padding: "6px 8px",
             fontSize: 11,
             color: "var(--text)",

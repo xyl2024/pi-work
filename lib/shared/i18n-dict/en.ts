@@ -117,4 +117,8 @@ export const EN_TRANSLATIONS = {
   "plans.inbox": "Inbox",
   "plans.week": "This week",
   "plans.month": "This month",
+  "plans.view.label": "Plan view",
+  "plans.view.compact": "Compact",
+  "plans.view.cards": "Cards",
+  "plans.view.timeline": "Timeline",
 } as const;
