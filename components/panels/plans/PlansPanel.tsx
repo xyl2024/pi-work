@@ -14,9 +14,11 @@ import {
   updatePlan,
 } from "@/lib/client/plans";
 import {
+  anchorForChoice,
   hideCompletedPlans,
   toDateKey,
   type Plan,
+  type PlanAnchorChoice,
   type PlanSectionId,
   type PlansResponse,
 } from "@/lib/shared/plans";
@@ -64,6 +66,10 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [hideDone, setHideDone] = useState(false);
   const [title, setTitle] = useState("");
+  // The anchor the next typed plan will get. "today" is the zero-friction
+  // default the pointer starts on; the chips move it. Resolved to a real
+  // anchor at submit time, against the browser's *then* today.
+  const [anchorChoice, setAnchorChoice] = useState<PlanAnchorChoice>("today");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [draft, setDraft] = useState("");
@@ -480,9 +486,9 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     creatingRef.current = true;
     setCreating(true);
     try {
-      // The default anchor is the browser's today; the server never picks a
-      // date for us.
-      await createPlan({ title: value, anchor: { kind: "day", date: toDateKey(new Date()) } });
+      // The chosen anchor is resolved against the browser's today here on the
+      // client; the server never picks a date for us.
+      await createPlan({ title: value, anchor: anchorForChoice(anchorChoice, toDateKey(new Date())) });
       setTitle("");
       await load();
     } catch (err) {
@@ -497,7 +503,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       refocusPending.current = true;
       setCreating(false);
     }
-  }, [title, load, toast, t]);
+  }, [anchorChoice, title, load, toast, t]);
 
   useEffect(() => {
     if (creating || !refocusPending.current) return;
@@ -638,7 +644,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
                 setTitle("");
               }
             }}
-            placeholder={t("Record a plan for today; press Enter")}
+            placeholder={t("Record a plan; press Enter")}
             aria-label={t("New plan")}
             disabled={creating}
             style={{
@@ -652,6 +658,30 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
               outline: "none",
             }}
           />
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+          {ANCHOR_CHOICES.map((choice) => (
+            <button
+              key={choice}
+              type="button"
+              onClick={() => setAnchorChoice(choice)}
+              aria-pressed={anchorChoice === choice}
+              title={t("Anchor for the next plan")}
+              style={{
+                padding: "2px 7px",
+                fontSize: 10.5,
+                color: anchorChoice === choice ? "var(--text)" : "var(--text-muted)",
+                background: anchorChoice === choice ? "var(--bg-selected)" : "transparent",
+                border: "1px solid var(--border)",
+                borderRadius: 999,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {t(ANCHOR_CHOICE_LABEL_KEY[choice])}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -752,7 +782,20 @@ function LabeledSection({
 const SECTION_LABEL_KEY: Record<Exclude<PlanSectionId, "overdue">, string> = {
   inbox: "plans.inbox",
   today: "Today",
+  week: "plans.week",
+  month: "plans.month",
   upcoming: "Upcoming",
+};
+
+/** The one-tap anchors a newly typed plan can be filed under. */
+const ANCHOR_CHOICES: readonly PlanAnchorChoice[] = ["inbox", "today", "tomorrow", "week", "month"];
+
+const ANCHOR_CHOICE_LABEL_KEY: Record<PlanAnchorChoice, string> = {
+  inbox: "plans.inbox",
+  today: "Today",
+  tomorrow: "Tomorrow",
+  week: "plans.week",
+  month: "plans.month",
 };
 
 /**

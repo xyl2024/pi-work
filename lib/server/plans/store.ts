@@ -187,7 +187,7 @@ export interface CreatePlanInput {
  * create response and the list can never disagree.
  */
 export function createPlan(input: CreatePlanInput): Plan {
-  // Re-check the anchor here as well: `PlanAnchor`'s day date is only typed
+  // Re-check the anchor here as well: `PlanAnchor`'s date / month fields are
   // as a string, and this is the value that becomes a path segment.
   const anchor = parsePlanAnchor(input.anchor);
   if (anchor === null) throw new PlanStoreError("Invalid anchor", 400);

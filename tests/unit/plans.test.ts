@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   PLAN_TITLE_MAX_LENGTH,
+  addDays,
+  anchorEndKey,
+  anchorForChoice,
+  anchorStartKey,
   groupPlans,
   hideCompletedPlans,
   isDateKey,
+  isMonday,
+  isMonthKey,
+  monthEndOf,
   monthKeyOf,
   noteSummary,
   parsePlanAnchor,
@@ -18,6 +25,8 @@ import {
   toDateKey,
   toLocalTimestamp,
   uniquePlanFileName,
+  weekEndOf,
+  weekStartOf,
   type Plan,
   type PlanAnchor,
 } from "@/lib/shared/plans";
@@ -88,6 +97,88 @@ describe("plans date keys", () => {
   it("derives the month directory key", () => {
     expect(monthKeyOf("2026-09-15")).toBe("2026-09");
   });
+
+  it("accepts only real calendar months", () => {
+    expect(isMonthKey("2026-09")).toBe(true);
+    expect(isMonthKey("2026-12")).toBe(true);
+    expect(isMonthKey("2026-00")).toBe(false);
+    expect(isMonthKey("2026-13")).toBe(false);
+    expect(isMonthKey("2026-9")).toBe(false);
+    expect(isMonthKey("2026-09-15")).toBe(false);
+  });
+
+  it("shifts a date key by days, across month and year ends", () => {
+    expect(addDays("2026-09-30", 1)).toBe("2026-10-01");
+    expect(addDays("2027-01-01", -1)).toBe("2026-12-31");
+    expect(addDays("2024-02-28", 1)).toBe("2024-02-29");
+    expect(addDays("2026-03-01", -1)).toBe("2026-02-28");
+  });
+});
+
+describe("plans calendar weeks", () => {
+  it("starts a week on Monday whatever day of the week you ask about", () => {
+    expect(weekStartOf("2026-09-28")).toBe("2026-09-28"); // Monday itself
+    expect(weekStartOf("2026-10-01")).toBe("2026-09-28"); // Thursday
+    expect(weekStartOf("2026-10-04")).toBe("2026-09-28"); // Sunday
+    expect(weekStartOf("2026-09-27")).toBe("2026-09-21"); // Sunday belongs to the week before
+  });
+
+  it("ends a week on the Sunday six days later", () => {
+    expect(weekEndOf("2026-09-28")).toBe("2026-10-04");
+  });
+
+  it("recognizes Mondays and rejects everything else", () => {
+    expect(isMonday("2026-09-28")).toBe(true);
+    expect(isMonday("2026-09-29")).toBe(false);
+    expect(isMonday("2026-10-04")).toBe(false);
+    expect(isMonday("2026-02-30")).toBe(false);
+  });
+
+  it("gives the last day of a month, leap years included", () => {
+    expect(monthEndOf("2026-02")).toBe("2026-02-28");
+    expect(monthEndOf("2024-02")).toBe("2024-02-29");
+    expect(monthEndOf("2026-09")).toBe("2026-09-30");
+    expect(monthEndOf("2026-12")).toBe("2026-12-31");
+  });
+
+  it("files a cross-month week under the Monday's month, not the month it ends in", () => {
+    // 2026-09-28 (Mon) – 2026-10-04 (Sun) straddles the boundary; the path
+    // names the Monday, and the directory is the Monday's month.
+    const week: PlanAnchor = { kind: "week", date: "2026-09-28" };
+    expect(planDirOf(week)).toBe("2026-09");
+    expect(anchorStartKey(week)).toBe("2026-09-28");
+    expect(anchorEndKey(week)).toBe("2026-10-04");
+    expect(planRelativePath(week, "整理书架")).toBe("2026-09/2026-09-28W-整理书架.md");
+    expect(parsePlanPath("2026-09/2026-09-28W-整理书架.md")).toEqual({
+      ok: true,
+      anchor: week,
+      title: "整理书架",
+    });
+  });
+
+  it("files a year-crossing week under the Monday's December", () => {
+    // 2026-12-28 (Mon) – 2027-01-03 (Sun).
+    expect(weekStartOf("2027-01-01")).toBe("2026-12-28");
+    expect(planDirOf({ kind: "week", date: "2026-12-28" })).toBe("2026-12");
+  });
+
+  it("orders anchors by their start and expires them by their end", () => {
+    expect(anchorStartKey({ kind: "inbox" })).toBe("");
+    expect(anchorStartKey({ kind: "month", month: "2026-09" })).toBe("2026-09-01");
+    expect(anchorEndKey({ kind: "inbox" })).toBe(null);
+    expect(anchorEndKey({ kind: "day", date: "2026-09-15" })).toBe("2026-09-15");
+    expect(anchorEndKey({ kind: "week", date: "2026-09-28" })).toBe("2026-10-04");
+    expect(anchorEndKey({ kind: "month", month: "2026-02" })).toBe("2026-02-28");
+  });
+
+  it("derives the one-tap create anchors from the caller's today", () => {
+    const today = "2026-10-01";
+    expect(anchorForChoice("inbox", today)).toEqual({ kind: "inbox" });
+    expect(anchorForChoice("today", today)).toEqual({ kind: "day", date: "2026-10-01" });
+    expect(anchorForChoice("tomorrow", today)).toEqual({ kind: "day", date: "2026-10-02" });
+    expect(anchorForChoice("week", today)).toEqual({ kind: "week", date: "2026-09-28" });
+    expect(anchorForChoice("month", today)).toEqual({ kind: "month", month: "2026-10" });
+  });
 });
 
 describe("plans path parsing", () => {
@@ -113,8 +204,40 @@ describe("plans path parsing", () => {
     expect(result.ok ? [] : result.problems.map((p) => p.code)).toEqual(["name-syntax"]);
   });
 
+  it("parses a month anchor and title out of its month directory", () => {
+    const result = parsePlanPath("2026-09/2026-09-M-读完一本书.md");
+    expect(result).toEqual({
+      ok: true,
+      anchor: { kind: "month", month: "2026-09" },
+      title: "读完一本书",
+    });
+  });
+
   it("reports an impossible date in the prefix", () => {
     const result = parsePlanPath("2026-13/2026-13-40-x.md");
+    expect(result.ok ? [] : result.problems.map((p) => p.code)).toEqual(["date-invalid"]);
+  });
+
+  it("reports a week prefix that is not a Monday", () => {
+    // 2026-09-29 is a Tuesday — a week anchor must name its Monday.
+    const result = parsePlanPath("2026-09/2026-09-29W-整理书架.md");
+    expect(result.ok ? [] : result.problems.map((p) => p.code)).toEqual(["week-not-monday"]);
+  });
+
+  it("reports a cross-month week filed under the wrong month", () => {
+    // The 2026-09-28 week belongs to September, so filing it in 2026-10 is a
+    // mismatch even though the week ends in October.
+    const result = parsePlanPath("2026-10/2026-09-28W-整理书架.md");
+    expect(result.ok ? [] : result.problems.map((p) => p.code)).toEqual(["month-mismatch"]);
+  });
+
+  it("reports a month prefix that disagrees with its directory", () => {
+    const result = parsePlanPath("2026-09/2026-10-M-读书.md");
+    expect(result.ok ? [] : result.problems.map((p) => p.code)).toEqual(["month-mismatch"]);
+  });
+
+  it("reports a month prefix that is not a real month", () => {
+    const result = parsePlanPath("2026-13/2026-13-M-读书.md");
     expect(result.ok ? [] : result.problems.map((p) => p.code)).toEqual(["date-invalid"]);
   });
 
@@ -202,19 +325,57 @@ describe("plans filename generation", () => {
     );
   });
 
+  it("round-trips a week anchor through generation and parsing", () => {
+    const anchor: PlanAnchor = { kind: "week", date: "2026-09-28" };
+    expect(planFileName(anchor, "整理书架")).toBe("2026-09-28W-整理书架.md");
+    expect(parsePlanPath(planRelativePath(anchor, "整理书架"))).toEqual({
+      ok: true,
+      anchor,
+      title: "整理书架",
+    });
+  });
+
+  it("round-trips a month anchor through generation and parsing", () => {
+    const anchor: PlanAnchor = { kind: "month", month: "2026-09" };
+    expect(planRelativePath(anchor, "读完一本书")).toBe("2026-09/2026-09-M-读完一本书.md");
+    expect(parsePlanPath(planRelativePath(anchor, "读完一本书"))).toEqual({
+      ok: true,
+      anchor,
+      title: "读完一本书",
+    });
+  });
+
   it("files every anchor in the directory its month decides", () => {
     expect(planDirOf({ kind: "inbox" })).toBe("inbox");
     expect(planDirOf({ kind: "day", date: "2026-09-15" })).toBe("2026-09");
+    expect(planDirOf({ kind: "week", date: "2026-09-28" })).toBe("2026-09");
+    expect(planDirOf({ kind: "month", month: "2026-11" })).toBe("2026-11");
   });
 });
 
 describe("plans anchors from untrusted input", () => {
-  it("accepts the inbox and a real day", () => {
+  it("accepts the inbox, a real day, a Monday and a real month", () => {
     expect(parsePlanAnchor({ kind: "inbox" })).toEqual({ kind: "inbox" });
     expect(parsePlanAnchor({ kind: "day", date: "2026-09-15" })).toEqual({
       kind: "day",
       date: "2026-09-15",
     });
+    expect(parsePlanAnchor({ kind: "week", date: "2026-09-28" })).toEqual({
+      kind: "week",
+      date: "2026-09-28",
+    });
+    expect(parsePlanAnchor({ kind: "month", month: "2026-09" })).toEqual({
+      kind: "month",
+      month: "2026-09",
+    });
+  });
+
+  it("rejects a week anchor that is not a Monday or a month that is not real", () => {
+    expect(parsePlanAnchor({ kind: "week", date: "2026-09-29" })).toBe(null);
+    expect(parsePlanAnchor({ kind: "week" })).toBe(null);
+    expect(parsePlanAnchor({ kind: "month", month: "2026-13" })).toBe(null);
+    expect(parsePlanAnchor({ kind: "month", month: "2026-09-15" })).toBe(null);
+    expect(parsePlanAnchor({ kind: "month" })).toBe(null);
   });
 
   it("rejects anything that could steer a write out of the plans root", () => {
@@ -355,12 +516,110 @@ describe("plans sections", () => {
       "inbox",
       "overdue",
       "today",
+      "week",
+      "month",
       "upcoming",
     ]);
     expect(sections[0].plans.map((p) => p.title)).toEqual(["随手记"]);
     expect(sections[1].plans.map((p) => p.title)).toEqual(["做完的旧事", "旧事"]);
     expect(sections[2].plans.map((p) => p.title)).toEqual(["今天"]);
-    expect(sections[3].plans.map((p) => p.title)).toEqual(["明天", "晚点"]);
+    expect(sections[3].plans).toEqual([]);
+    expect(sections[4].plans).toEqual([]);
+    expect(sections[5].plans.map((p) => p.title)).toEqual(["明天", "晚点"]);
+  });
+
+  it("puts a day, week and month anchor each in its own period section, never two", () => {
+    // Today is a Tuesday inside the 2026-09-28 week, which is also September.
+    // Sections are decided by granularity, so all three live in different
+    // sections and no plan appears twice.
+    const today = "2026-09-29";
+    const plans = [
+      plan({ path: "2026-09/2026-09-29-今天.md", title: "今天", anchor: { kind: "day", date: today } }),
+      plan({
+        path: "2026-09/2026-09-28W-本周.md",
+        title: "本周",
+        anchor: { kind: "week", date: "2026-09-28" },
+      }),
+      plan({
+        path: "2026-09/2026-09-M-本月.md",
+        title: "本月",
+        anchor: { kind: "month", month: "2026-09" },
+      }),
+    ];
+    const sections = groupPlans(plans, today);
+
+    expect(sections.map((section) => [section.id, section.plans.map((p) => p.title)])).toEqual([
+      ["inbox", []],
+      ["overdue", []],
+      ["today", ["今天"]],
+      ["week", ["本周"]],
+      ["month", ["本月"]],
+      ["upcoming", []],
+    ]);
+    const seen = sections.flatMap((section) => section.plans.map((p) => p.path));
+    expect(new Set(seen).size).toBe(seen.length);
+  });
+
+  it("expires an anchor only once its end has passed", () => {
+    const anchor = (a: PlanAnchor) => plan({ path: "p.md", title: "p", anchor: a });
+    const day = anchor({ kind: "day", date: "2026-09-15" });
+    const week = anchor({ kind: "week", date: "2026-09-28" });
+    const month = anchor({ kind: "month", month: "2026-09" });
+
+    // On the anchor's last covered day nothing is overdue.
+    expect(planSectionOf(day, "2026-09-15")).toBe("today");
+    expect(planSectionOf(week, "2026-10-04")).toBe("week");
+    expect(planSectionOf(month, "2026-09-30")).toBe("month");
+    // One day past the end, all three are overdue.
+    expect(planSectionOf(day, "2026-09-16")).toBe("overdue");
+    expect(planSectionOf(week, "2026-10-05")).toBe("overdue");
+    expect(planSectionOf(month, "2026-10-01")).toBe("overdue");
+    // A future anchor is upcoming, not overdue.
+    expect(planSectionOf(day, "2026-09-14")).toBe("upcoming");
+    expect(planSectionOf(week, "2026-09-27")).toBe("upcoming");
+    expect(planSectionOf(month, "2026-08-31")).toBe("upcoming");
+  });
+
+  it("handles month and year boundaries", () => {
+    const anchor = (a: PlanAnchor) => plan({ path: "p.md", title: "p", anchor: a });
+    // December 2026's month anchor is not overdue on Dec 31, and is on Jan 1.
+    const december = anchor({ kind: "month", month: "2026-12" });
+    expect(planSectionOf(december, "2026-12-31")).toBe("month");
+    expect(planSectionOf(december, "2027-01-01")).toBe("overdue");
+    // January 2027's is upcoming from Dec 31 and current on Jan 1.
+    const january = anchor({ kind: "month", month: "2027-01" });
+    expect(planSectionOf(january, "2026-12-31")).toBe("upcoming");
+    expect(planSectionOf(january, "2027-01-01")).toBe("month");
+    // A week that crosses the year boundary belongs to the week containing today.
+    const week = anchor({ kind: "week", date: "2026-12-28" });
+    expect(planSectionOf(week, "2027-01-01")).toBe("week");
+    expect(planSectionOf(week, "2027-01-04")).toBe("overdue");
+    // The last day of the year as a day anchor.
+    expect(planSectionOf(anchor({ kind: "day", date: "2026-12-31" }), "2027-01-01")).toBe(
+      "overdue",
+    );
+  });
+
+  it("orders upcoming plans by anchor start, mixing granularities", () => {
+    const upcoming = groupPlans(
+      [
+        plan({
+          path: "2026-10/2026-10-M-读完.md",
+          title: "读完",
+          anchor: { kind: "month", month: "2026-10" },
+        }),
+        plan({ path: "2026-09/2026-09-20-x.md", title: "晚点", anchor: { kind: "day", date: "2026-09-20" } }),
+        plan({
+          path: "2026-09/2026-09-21W-下周.md",
+          title: "下周",
+          anchor: { kind: "week", date: "2026-09-21" },
+        }),
+        plan({ path: "2026-09/2026-09-16-x.md", title: "明天", anchor: { kind: "day", date: "2026-09-16" } }),
+      ],
+      "2026-09-15",
+    ).find((section) => section.id === "upcoming")!;
+
+    expect(upcoming.plans.map((p) => p.title)).toEqual(["明天", "晚点", "下周", "读完"]);
   });
 
   it("keeps completed past anchors in the overdue section for the UI to filter", () => {
@@ -384,7 +643,14 @@ describe("plans sections", () => {
 
   it("returns all sections even when there are no plans", () => {
     const sections = groupPlans([], "2026-09-15");
-    expect(sections.map((s) => s.id)).toEqual(["inbox", "overdue", "today", "upcoming"]);
+    expect(sections.map((s) => s.id)).toEqual([
+      "inbox",
+      "overdue",
+      "today",
+      "week",
+      "month",
+      "upcoming",
+    ]);
     expect(sections.every((s) => s.plans.length === 0)).toBe(true);
   });
 });
@@ -402,6 +668,8 @@ describe("plans hide-completed filter", () => {
       "inbox",
       "overdue",
       "today",
+      "week",
+      "month",
       "upcoming",
     ]);
     // The completed plan lived in the overdue section and is the only one gone.

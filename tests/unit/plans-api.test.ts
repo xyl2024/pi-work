@@ -83,6 +83,8 @@ describe("GET /api/plans", () => {
         "inbox",
         "overdue",
         "today",
+        "week",
+        "month",
         "upcoming",
       ]);
       expect(sectionOf(data, "today").plans.map((p) => p.title)).toContain(`${uid}-today`);
@@ -248,6 +250,75 @@ describe("POST /api/plans", () => {
     }
   });
 
+  it("files a week anchor under its Monday's month and lists it in 本周", async () => {
+    const uid = uniqueId("plans");
+    let rel: string | null = null;
+    try {
+      // 2026-03-09 is the Monday of the week containing TODAY (2026-03-15).
+      const plan = await create({ title: uid, anchor: { kind: "week", date: "2026-03-09" } });
+      rel = plan.path;
+      expect(plan.path).toBe(`2026-03/2026-03-09W-${uid}.md`);
+      expect(plan.anchor).toEqual({ kind: "week", date: "2026-03-09" });
+
+      const data = (await api(`/api/plans?today=${TODAY}`)).body as unknown as PlansResponse;
+      expect(sectionOf(data, "week").plans.map((p) => p.title)).toContain(uid);
+      expect(findPlan(data, rel)?.anchor).toEqual({ kind: "week", date: "2026-03-09" });
+    } finally {
+      if (rel !== null) removePlanFiles([rel]);
+    }
+  });
+
+  it("files a month anchor under its month and lists it in 本月", async () => {
+    const uid = uniqueId("plans");
+    let rel: string | null = null;
+    try {
+      const plan = await create({ title: uid, anchor: { kind: "month", month: "2026-03" } });
+      rel = plan.path;
+      expect(plan.path).toBe(`2026-03/2026-03-M-${uid}.md`);
+      expect(plan.anchor).toEqual({ kind: "month", month: "2026-03" });
+
+      const data = (await api(`/api/plans?today=${TODAY}`)).body as unknown as PlansResponse;
+      expect(sectionOf(data, "month").plans.map((p) => p.title)).toContain(uid);
+      expect(findPlan(data, rel)?.anchor).toEqual({ kind: "month", month: "2026-03" });
+    } finally {
+      if (rel !== null) removePlanFiles([rel]);
+    }
+  });
+
+  it("keeps a cross-month week in its Monday's month and finds it from the following month", async () => {
+    const uid = uniqueId("plans");
+    // 2026-03-30 (Mon) – 2026-04-05 (Sun): the week crosses the boundary and
+    // is filed under March, named by its Monday. Asking as 2026-04-01 (Wed,
+    // inside that week) must find it in the 本周 section.
+    const rel = `2026-03/2026-03-30W-${uid}.md`;
+    const abs = seed(rel, "");
+    try {
+      const data = (await api("/api/plans?today=2026-04-01")).body as unknown as PlansResponse;
+      expect(findPlan(data, rel)?.anchor).toEqual({ kind: "week", date: "2026-03-30" });
+      expect(sectionOf(data, "week").plans.some((p) => p.path === rel)).toBe(true);
+      expect(sectionOf(data, "upcoming").plans.some((p) => p.path === rel)).toBe(false);
+    } finally {
+      rmSync(abs, { force: true });
+    }
+  });
+
+  it("creates a cross-month week under its Monday's month, not the month it ends in", async () => {
+    const uid = uniqueId("plans");
+    let rel: string | null = null;
+    try {
+      // The 2026-03-30 week runs into April; the file is filed under March.
+      const plan = await create({ title: uid, anchor: { kind: "week", date: "2026-03-30" } });
+      rel = plan.path;
+      expect(plan.path).toBe(`2026-03/2026-03-30W-${uid}.md`);
+
+      // …and it shows up in 本周 from a day inside that week.
+      const data = (await api("/api/plans?today=2026-04-01")).body as unknown as PlansResponse;
+      expect(sectionOf(data, "week").plans.some((p) => p.path === rel)).toBe(true);
+    } finally {
+      if (rel !== null) removePlanFiles([rel]);
+    }
+  });
+
   it("writes the optional note as the body", async () => {
     const uid = uniqueId("plans");
     let rel: string | null = null;
@@ -274,9 +345,14 @@ describe("POST /api/plans", () => {
     }
   });
 
-  it("rejects an anchor that is not a real inbox/day anchor", async () => {
+  it("rejects an anchor that is not a real inbox/day/week/month anchor", async () => {
     const rejected: unknown[] = [
       { kind: "week" },
+      { kind: "week", date: "2026-03-15" }, // a Sunday, not a Monday
+      { kind: "week", date: "2026-03/../x" },
+      { kind: "month" },
+      { kind: "month", month: "2026-13" },
+      { kind: "month", month: "2026-03-15" },
       { kind: "day" },
       { kind: "day", date: "../../etc" },
       { kind: "day", date: "2026-02-30" },

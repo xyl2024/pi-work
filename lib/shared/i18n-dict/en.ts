@@ -115,4 +115,6 @@ export const EN_TRANSLATIONS = {
   "btw.disabled.loading": "The main session is initializing…",
   "btw.refreshHint": "Recheck readiness (click if stuck here)",
   "plans.inbox": "Inbox",
+  "plans.week": "This week",
+  "plans.month": "This month",
 } as const;

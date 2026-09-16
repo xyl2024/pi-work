@@ -53,7 +53,8 @@ interface CreatePlanBody {
  * POST /api/plans → create a plan file.
  *
  * body: `{ title, anchor, note? }`, where `anchor` is a `PlanAnchor`
- * (`{ kind: "inbox" }` / `{ kind: "day", date }`); a missing or null anchor
+ * (`{ kind: "inbox" }` / `{ kind: "day", date }` / `{ kind: "week", date }` /
+ * `{ kind: "month", month }`); a missing or null anchor
  * means the inbox. The client defaults the anchor to *its* today — the server
  * never invents a date. An empty title and a malformed anchor are rejected
  * with 400 rather than creating a file somewhere unexpected.

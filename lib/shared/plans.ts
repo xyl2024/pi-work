@@ -11,10 +11,15 @@
 //
 //   inbox/<title>.md                     no anchor
 //   YYYY-MM/YYYY-MM-DD-<title>.md        day anchor
+//   YYYY-MM/YYYY-MM-DDW-<title>.md       week anchor (date = that week's Monday)
+//   YYYY-MM/YYYY-MM-M-<title>.md         month anchor
 //
 // The anchor is the single source of truth and lives in the *path*; the
-// frontmatter carries only `done` / `created_at` / `done_at`. Week and month
-// anchors are added by a later slice of the same feature.
+// frontmatter carries only `done` / `created_at` / `done_at`.
+//
+// A calendar week runs Monday–Sunday. A week that straddles a month boundary
+// belongs to the month its *Monday* falls in, and the path names that Monday
+// (never "week N"), so the file also says which month it was filed under.
 
 // ── Date keys ────────────────────────────────────────────────────────────
 
@@ -53,6 +58,53 @@ export function monthKeyOf(dateKey: string): string {
   return dateKey.slice(0, 7);
 }
 
+/** True for a real calendar month in `YYYY-MM` form (rejects 2026-13, 2026-9). */
+export function isMonthKey(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const month = Number(match[2]);
+  return month >= 1 && month <= 12;
+}
+
+function toLocalDate(dateKey: string): Date {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+/** `dateKey` shifted by `delta` days, keeping the local calendar. */
+export function addDays(dateKey: string, delta: number): string {
+  const date = toLocalDate(dateKey);
+  date.setDate(date.getDate() + delta);
+  return toDateKey(date);
+}
+
+/**
+ * Date key of the Monday starting the calendar week a date belongs to
+ * (weeks run Monday–Sunday, ISO-style). `weekEndOf(dateKey)` is the Sunday.
+ */
+export function weekStartOf(dateKey: string): string {
+  const date = toLocalDate(dateKey);
+  const offset = (date.getDay() + 6) % 7; // Sunday = 0 → 6, Monday = 1 → 0
+  return addDays(dateKey, -offset);
+}
+
+/** Date key of the Sunday ending the calendar week a date belongs to. */
+export function weekEndOf(dateKey: string): string {
+  return addDays(weekStartOf(dateKey), 6);
+}
+
+/** True when a real date key is a Monday — what a week anchor is named by. */
+export function isMonday(dateKey: string): boolean {
+  return isDateKey(dateKey) && weekStartOf(dateKey) === dateKey;
+}
+
+/** Last day of a `YYYY-MM` month, as a date key (2024-02 → 2024-02-29). */
+export function monthEndOf(monthKey: string): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  const last = new Date(year, month, 0).getDate(); // day 0 of the next month
+  return `${monthKey}-${String(last).padStart(2, "0")}`;
+}
+
 /**
  * Timestamp in the frontmatter's canonical shape, in the *writer's* local
  * zone: `2026-09-14T22:03:11+08:00`. Written as an explicit offset (never
@@ -76,24 +128,86 @@ export function toLocalTimestamp(date: Date): string {
 
 export type PlanAnchor =
   | { kind: "inbox" }
-  | { kind: "day"; date: string };
+  | { kind: "day"; date: string }
+  | { kind: "week"; date: string }
+  | { kind: "month"; month: string };
 
 export type PlanAnchorKind = PlanAnchor["kind"];
 
 /**
  * Parse an anchor out of untrusted input (a request body). Returns `null`
- * for anything that is not the inbox or a real day — in particular a date
- * carrying path syntax, which is what keeps a client-supplied anchor from
- * steering the write outside the plans root.
+ * for anything that is not a real inbox / day / week / month anchor — in
+ * particular a date carrying path syntax, which is what keeps a
+ * client-supplied anchor from steering the write outside the plans root.
+ * A week anchor must name a Monday, which is the day its path is built from.
  */
 export function parsePlanAnchor(value: unknown): PlanAnchor | null {
   if (typeof value !== "object" || value === null) return null;
-  const anchor = value as { kind?: unknown; date?: unknown };
+  const anchor = value as { kind?: unknown; date?: unknown; month?: unknown };
   if (anchor.kind === "inbox") return { kind: "inbox" };
   if (anchor.kind === "day" && typeof anchor.date === "string" && isDateKey(anchor.date)) {
     return { kind: "day", date: anchor.date };
   }
+  if (anchor.kind === "week" && typeof anchor.date === "string" && isMonday(anchor.date)) {
+    return { kind: "week", date: anchor.date };
+  }
+  if (anchor.kind === "month" && typeof anchor.month === "string" && isMonthKey(anchor.month)) {
+    return { kind: "month", month: anchor.month };
+  }
   return null;
+}
+
+// ── Anchor↔time helpers ──────────────────────────────────────────────────
+// The anchor's *end* decides overdue; its *start* orders it. Both are plain
+// date keys so the rest of the module compares strings.
+
+/** First day the anchor covers: the day itself, the Monday, or the 1st.
+ *  The inbox has no time, so it sorts (and reads) as the empty key. */
+export function anchorStartKey(anchor: PlanAnchor): string {
+  switch (anchor.kind) {
+    case "inbox":
+      return "";
+    case "day":
+    case "week":
+      return anchor.date;
+    case "month":
+      return `${anchor.month}-01`;
+  }
+}
+
+/** Last day the anchor covers — what "overdue" compares against. `null` for
+ *  the inbox, which never expires. */
+export function anchorEndKey(anchor: PlanAnchor): string | null {
+  switch (anchor.kind) {
+    case "inbox":
+      return null;
+    case "day":
+      return anchor.date;
+    case "week":
+      return weekEndOf(anchor.date);
+    case "month":
+      return monthEndOf(anchor.month);
+  }
+}
+
+/** The create input's one-tap anchor choices. `today` is the caller's local
+ *  date key; "tomorrow", "week" and "month" are derived from it here so the
+ *  client never does calendar arithmetic of its own. */
+export type PlanAnchorChoice = "inbox" | "today" | "tomorrow" | "week" | "month";
+
+export function anchorForChoice(choice: PlanAnchorChoice, today: string): PlanAnchor {
+  switch (choice) {
+    case "inbox":
+      return { kind: "inbox" };
+    case "today":
+      return { kind: "day", date: today };
+    case "tomorrow":
+      return { kind: "day", date: addDays(today, 1) };
+    case "week":
+      return { kind: "week", date: weekStartOf(today) };
+    case "month":
+      return { kind: "month", month: monthKeyOf(today) };
+  }
 }
 
 // ── Parse problems (the 待整理 feed) ──────────────────────────────────────
@@ -104,6 +218,7 @@ export function parsePlanAnchor(value: unknown): PlanAnchor | null {
 export type PlanProblemCode =
   | "name-syntax"
   | "date-invalid"
+  | "week-not-monday"
   | "month-mismatch"
   | "location"
   | "frontmatter-syntax"
@@ -128,6 +243,8 @@ export type PlanPathParse =
   | { ok: false; problems: PlanProblem[] };
 
 const DAY_FILE_RE = /^(\d{4}-\d{2}-\d{2})-(.+)$/;
+const WEEK_FILE_RE = /^(\d{4}-\d{2}-\d{2})W-(.+)$/;
+const MONTH_FILE_RE = /^(\d{4}-\d{2})-M-(.+)$/;
 
 function parseFailure(code: PlanProblemCode, detail: string): PlanPathParse {
   return { ok: false, problems: [problem(code, detail)] };
@@ -154,6 +271,31 @@ export function parsePlanPath(relPath: string): PlanPathParse {
   }
 
   if (!MONTH_KEY_RE.test(dir)) return parseFailure("location", relPath);
+
+  // The `W` / `M` markers are what keep the three prefixes unambiguous: a
+  // day file is the only one with a bare `YYYY-MM-DD-` before the title.
+  const week = WEEK_FILE_RE.exec(stem);
+  if (week) {
+    const date = week[1];
+    const title = week[2];
+    if (!isDateKey(date)) return parseFailure("date-invalid", date);
+    if (!isMonday(date)) return parseFailure("week-not-monday", date);
+    if (monthKeyOf(date) !== dir) {
+      return parseFailure("month-mismatch", `${dir} ≠ ${monthKeyOf(date)}`);
+    }
+    if (!title.trim()) return parseFailure("name-syntax", fileName);
+    return { ok: true, anchor: { kind: "week", date }, title };
+  }
+
+  const month = MONTH_FILE_RE.exec(stem);
+  if (month) {
+    const key = month[1];
+    const title = month[2];
+    if (!isMonthKey(key)) return parseFailure("date-invalid", key);
+    if (key !== dir) return parseFailure("month-mismatch", `${dir} ≠ ${key}`);
+    if (!title.trim()) return parseFailure("name-syntax", fileName);
+    return { ok: true, anchor: { kind: "month", month: key }, title };
+  }
 
   const match = DAY_FILE_RE.exec(stem);
   if (!match) return parseFailure("name-syntax", fileName);
@@ -201,9 +343,33 @@ export function planFileName(anchor: PlanAnchor, title: string): string {
   return uniquePlanFileName(anchor, title, NO_NAMES);
 }
 
-/** Directory (relative to the plans root) holding every plan of an anchor. */
+/** Directory (relative to the plans root) holding every plan of an anchor.
+ *  That is the anchor's *month* — for a cross-month week, the month its
+ *  Monday falls in (9/29–10/5 is filed under 9). */
 export function planDirOf(anchor: PlanAnchor): string {
-  return anchor.kind === "inbox" ? "inbox" : monthKeyOf(anchor.date);
+  switch (anchor.kind) {
+    case "inbox":
+      return "inbox";
+    case "month":
+      return anchor.month;
+    default:
+      return monthKeyOf(anchor.date);
+  }
+}
+
+/** Filename prefix that encodes the anchor (`""`, `2026-09-15-`,
+ *  `2026-09-29W-`, `2026-09-M-`). */
+function planFilePrefix(anchor: PlanAnchor): string {
+  switch (anchor.kind) {
+    case "inbox":
+      return "";
+    case "day":
+      return `${anchor.date}-`;
+    case "week":
+      return `${anchor.date}W-`;
+    case "month":
+      return `${anchor.month}-M-`;
+  }
 }
 
 /** Plan-relative path for a plan, i.e. the inverse of `parsePlanPath`. */
@@ -226,7 +392,7 @@ export function uniquePlanFileName(
   title: string,
   taken: ReadonlySet<string>,
 ): string {
-  const prefix = anchor.kind === "inbox" ? "" : `${anchor.date}-`;
+  const prefix = planFilePrefix(anchor);
   const base = sanitizePlanTitle(title);
   const existing = new Set([...taken].map((name) => name.toLowerCase()));
   for (let n = 1; ; n += 1) {
@@ -385,13 +551,15 @@ export interface UnsortedPlan {
   problems: PlanProblem[];
 }
 
-export type PlanSectionId = "inbox" | "overdue" | "today" | "upcoming";
+export type PlanSectionId = "inbox" | "overdue" | "today" | "week" | "month" | "upcoming";
 
 /** Section order the panel renders, top to bottom. */
 export const PLAN_SECTION_IDS: readonly PlanSectionId[] = [
   "inbox",
   "overdue",
   "today",
+  "week",
+  "month",
   "upcoming",
 ];
 
@@ -400,18 +568,35 @@ export interface PlanSection {
   plans: Plan[];
 }
 
-/** Which section a plan belongs to. Sections are decided by the anchor alone,
- *  so a plan never shows up in two of them. */
+/**
+ * Which section a plan belongs to. A section is decided by the anchor's
+ * *granularity* plus where "today" falls: only a day anchor can be `today`,
+ * only a week anchor can be `week`, only a month anchor can be `month` — so a
+ * plan is assigned exactly once and never shows up in two sections.
+ *
+ * Overdue compares the anchor's *end* (day = that day, week = Sunday,
+ * month = the month's last day) against today, so a plan whose anchor has not
+ * finished yet is never overdue.
+ */
 export function planSectionOf(plan: Plan, today: string): PlanSectionId {
-  if (plan.anchor.kind === "inbox") return "inbox";
-  if (plan.anchor.date === today) return "today";
-  return plan.anchor.date < today ? "overdue" : "upcoming";
+  const { anchor } = plan;
+  if (anchor.kind === "inbox") return "inbox";
+  const end = anchorEndKey(anchor)!;
+  if (end < today) return "overdue";
+  switch (anchor.kind) {
+    case "day":
+      return anchor.date === today ? "today" : "upcoming";
+    case "week":
+      return today >= anchor.date && today <= end ? "week" : "upcoming";
+    case "month":
+      return monthKeyOf(today) === anchor.month ? "month" : "upcoming";
+  }
 }
 
-/** Anchor time first, then created_at, then path — never drag order. */
+/** Anchor start first, then created_at, then path — never drag order. */
 function comparePlans(a: Plan, b: Plan): number {
-  const keyA = [a.anchor.kind === "inbox" ? "" : a.anchor.date, a.createdAt ?? "", a.path];
-  const keyB = [b.anchor.kind === "inbox" ? "" : b.anchor.date, b.createdAt ?? "", b.path];
+  const keyA = [anchorStartKey(a.anchor), a.createdAt ?? "", a.path];
+  const keyB = [anchorStartKey(b.anchor), b.createdAt ?? "", b.path];
   for (let i = 0; i < keyA.length; i += 1) {
     if (keyA[i] !== keyB[i]) return keyA[i] < keyB[i] ? -1 : 1;
   }

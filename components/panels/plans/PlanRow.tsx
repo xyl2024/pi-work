@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { IconButton } from "@/components/ui/IconButton";
-import { noteSummary, type Plan } from "@/lib/shared/plans";
+import { monthKeyOf, noteSummary, weekEndOf, type Plan } from "@/lib/shared/plans";
 
 /** Save state of the row's note, mirroring the notes editor's indicator. */
 export type PlanSaveStatus = "saved" | "unsaved" | "saving" | "error";
@@ -27,7 +27,8 @@ export interface PlanConflictState {
 
 export interface PlanRowProps {
   plan: Plan;
-  /** Show the anchor's date on the row (overdue / upcoming sections). */
+  /** Show a day anchor's date on the row (overdue / upcoming sections). Week
+   *  and month anchors always show their own label regardless. */
   showDate: boolean;
   /** True when this row's note editor is the open one. */
   expanded: boolean;
@@ -138,18 +139,7 @@ export function PlanRow({
           )}
         </button>
 
-        {showDate && plan.anchor.kind === "day" && (
-          <span
-            style={{
-              flexShrink: 0,
-              fontSize: 10.5,
-              fontFamily: "var(--font-mono)",
-              color: "var(--text-dim)",
-            }}
-          >
-            {plan.anchor.date.slice(5)}
-          </span>
-        )}
+        <AnchorLabel anchor={plan.anchor} showDate={showDate} />
 
         <span
           style={{
@@ -284,6 +274,73 @@ export function PlanRow({
         </div>
       )}
     </div>
+  );
+}
+
+/** `2026-09-28` → `9/28`, for compact week ranges. */
+function numericDay(dateKey: string): string {
+  const [, month, day] = dateKey.split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
+/** Localized month label for a `YYYY-MM` key (`2026年9月` / `Sep 2026`). */
+function monthLabel(monthKey: string, locale: string): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Intl.DateTimeFormat(locale, { year: "numeric", month: "short" }).format(
+    new Date(year, month - 1, 1),
+  );
+}
+
+/**
+ * The anchor as a compact label: `09-15` for a day, `9/28–10/4` for a week
+ * (plus which month owns it when the week straddles a month), `2026年9月` for
+ * a month.
+ *
+ * A week or month anchor always shows its label — the section header says
+ * "this week" / "this month", not *which* week or month — while a day anchor
+ * only shows it where the section does not already (`showDate`). The inbox has
+ * no time to show.
+ */
+function AnchorLabel({ anchor, showDate }: { anchor: Plan["anchor"]; showDate: boolean }) {
+  const { t, locale } = useI18n();
+  if (anchor.kind === "inbox") return null;
+  if (anchor.kind === "day" && !showDate) return null;
+
+  let text: string;
+  let title: string | undefined;
+  if (anchor.kind === "day") {
+    text = anchor.date.slice(5);
+  } else if (anchor.kind === "week") {
+    const end = weekEndOf(anchor.date);
+    const range = `${numericDay(anchor.date)}–${numericDay(end)}`;
+    // A cross-month week is filed under its Monday's month, so name that
+    // month: otherwise `9/28–10/4` sitting in the 本周 section would not say
+    // which month owns it.
+    text =
+      monthKeyOf(anchor.date) === monthKeyOf(end)
+        ? range
+        : t("{range} (in {month})", {
+            range,
+            month: monthLabel(monthKeyOf(anchor.date), locale),
+          });
+    title = `${anchor.date} – ${end}`;
+  } else {
+    text = monthLabel(anchor.month, locale);
+  }
+
+  return (
+    <span
+      title={title}
+      style={{
+        flexShrink: 0,
+        fontSize: 10.5,
+        fontFamily: "var(--font-mono)",
+        color: "var(--text-dim)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {text}
+    </span>
   );
 }
 
