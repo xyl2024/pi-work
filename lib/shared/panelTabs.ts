@@ -7,7 +7,7 @@
 //
 // Two halves:
 //   • PANEL_TAB_SPEC_BY_KIND — panel identity: kind, tab id, label key,
-//     default mode, session binding and the optional command-palette entry.
+//     default mode, session binding and the optional command-palette entries.
 //     This is the single source of truth for "what a panel view is".
 //   • panelTabsReducer + selectors — the strip's state machine. Label text is
 //     resolved at render time from `labelKey`, so open tabs follow a locale
@@ -134,6 +134,17 @@ export interface PanelTabCommand {
   labelKey: string;
   /** Palette search keywords (english + chinese, matching the palette). */
   keywords: readonly string[];
+  /** Palette id suffix: the generated id is `panel.<kind>` when omitted and
+   *  `panel.<kind>.<id>` otherwise. */
+  id?: string;
+  /**
+   * How the entry reveals the view. `toggle` (the default) reuses the shared
+   * panel toggle rule — running it again collapses the panel; `open` always
+   * reveals the view instead, for entries that mean "do something now" and so
+   * must never close the panel they need. (Focus comes from the view itself:
+   * it focuses its entry point on open, off its own open count.)
+   */
+  action?: "toggle" | "open";
 }
 
 export interface PanelTabSpec<K extends PanelViewKind = PanelViewKind> {
@@ -146,8 +157,8 @@ export interface PanelTabSpec<K extends PanelViewKind = PanelViewKind> {
   defaultMode: Exclude<PanelMode, "closed">;
   /** True when the panel reads state of the selected session. */
   sessionBound: boolean;
-  /** Optional command-palette entry. Panels without one get no palette command. */
-  command?: PanelTabCommand;
+  /** Command-palette entries. Panels without any get no palette command. */
+  commands?: readonly PanelTabCommand[];
 }
 
 /**
@@ -175,10 +186,12 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Translate",
     defaultMode: "normal",
     sessionBound: false,
-    command: {
-      labelKey: "Open translate",
-      keywords: ["translate", "translation", "翻译"],
-    },
+    commands: [
+      {
+        labelKey: "Open translate",
+        keywords: ["translate", "translation", "翻译"],
+      },
+    ],
   },
   rss: {
     kind: "rss",
@@ -200,10 +213,12 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Git Diff",
     defaultMode: "normal",
     sessionBound: true,
-    command: {
-      labelKey: "Open git diff",
-      keywords: ["git", "diff", "changes", "status", "变更", "改动", "差异"],
-    },
+    commands: [
+      {
+        labelKey: "Open git diff",
+        keywords: ["git", "diff", "changes", "status", "变更", "改动", "差异"],
+      },
+    ],
   },
   favorites: {
     kind: "favorites",
@@ -211,10 +226,12 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Favorites",
     defaultMode: "normal",
     sessionBound: false,
-    command: {
-      labelKey: "Open favorites",
-      keywords: ["favorite", "star", "collection", "收藏", "星标"],
-    },
+    commands: [
+      {
+        labelKey: "Open favorites",
+        keywords: ["favorite", "star", "collection", "收藏", "星标"],
+      },
+    ],
   },
   tokens: {
     kind: "tokens",
@@ -222,10 +239,12 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Token audit",
     defaultMode: "normal",
     sessionBound: false,
-    command: {
-      labelKey: "Open token audit",
-      keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
-    },
+    commands: [
+      {
+        labelKey: "Open token audit",
+        keywords: ["tokens", "token", "usage", "audit", "cost", "用量", "审计", "Token"],
+      },
+    ],
   },
   llmAudit: {
     kind: "llmAudit",
@@ -233,10 +252,12 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "LLM API audit",
     defaultMode: "normal",
     sessionBound: true,
-    command: {
-      labelKey: "Open LLM API audit",
-      keywords: ["llm", "api", "audit", "request", "response", "调用", "审计", "请求", "响应"],
-    },
+    commands: [
+      {
+        labelKey: "Open LLM API audit",
+        keywords: ["llm", "api", "audit", "request", "response", "调用", "审计", "请求", "响应"],
+      },
+    ],
   },
   toolCalls: {
     kind: "toolCalls",
@@ -244,10 +265,12 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Tool Calls",
     defaultMode: "normal",
     sessionBound: true,
-    command: {
-      labelKey: "Open tool calls",
-      keywords: ["tool", "calls", "stats", "工具", "调用", "统计"],
-    },
+    commands: [
+      {
+        labelKey: "Open tool calls",
+        keywords: ["tool", "calls", "stats", "工具", "调用", "统计"],
+      },
+    ],
   },
   conversationTree: {
     kind: "conversationTree",
@@ -285,10 +308,21 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Plans",
     defaultMode: "normal",
     sessionBound: false,
-    command: {
-      labelKey: "Open plans",
-      keywords: ["plan", "plans", "schedule", "agenda", "计划", "安排", "日程"],
-    },
+    // Two entries: "Open plans" browses (and collapse-toggles on a second
+    // run), "New plan" is the record-now action — it always reveals the panel,
+    // which then focuses its entry input.
+    commands: [
+      {
+        labelKey: "Open plans",
+        keywords: ["plan", "plans", "schedule", "agenda", "计划", "安排", "日程"],
+      },
+      {
+        id: "new",
+        labelKey: "New plan",
+        keywords: ["new", "add", "plan", "today", "新建", "添加", "计划", "今天"],
+        action: "open",
+      },
+    ],
   },
 } as const satisfies { [K in PanelViewKind]: PanelTabSpec<K> };
 

@@ -3,8 +3,9 @@
 // Plans are plain Markdown files under `<dataRoot>/user-plans/` (ADR-0006);
 // this module is the only place that touches the filesystem for them. It
 // scans the two layouts the panel knows (`inbox/` and `YYYY-MM/`), reads each
-// file, and reports names/frontmatter that break the contract as problems
-// instead of throwing or rewriting anything.
+// file, creates new ones (atomic temp-file write), and reports names /
+// frontmatter that break the contract as problems instead of throwing or
+// rewriting anything.
 //
 // The scan keeps an in-process `mtime`+size cache: a re-read of an unchanged
 // file reuses the parsed result. Nothing is persisted, nothing watches the
@@ -16,9 +17,16 @@
 import fs from "fs";
 import path from "path";
 import {
+  parsePlanAnchor,
   parsePlanContent,
   parsePlanPath,
+  planDirOf,
+  sanitizePlanTitle,
+  serializePlanContent,
+  toLocalTimestamp,
+  uniquePlanFileName,
   type Plan,
+  type PlanAnchor,
   type PlanProblem,
   type UnsortedPlan,
 } from "@/lib/shared/plans";
@@ -119,6 +127,77 @@ export function readPlanFile(rel: string): PlanFileRead {
   }
   if (!stat.isFile()) throw new PlanStoreError("Not found", 404);
   return readCandidate(normalizeRel(rel), abs, stat);
+}
+
+/** Atomically write a plan file: temp file in the same directory + rename, so
+ *  a reader never sees a half-written plan (same shape as the notes store).
+ *  The temp name starts with "." and is therefore invisible to the scan. */
+function writePlanFileAtomic(abs: string, content: string): void {
+  const dir = path.dirname(abs);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmp = path.join(dir, `.${path.basename(abs)}.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, content, "utf8");
+  try {
+    fs.renameSync(tmp, abs);
+  } catch (error) {
+    try {
+      fs.rmSync(tmp, { force: true });
+    } catch {
+      /* ignore */
+    }
+    throw error;
+  }
+}
+
+export interface CreatePlanInput {
+  title: string;
+  anchor: PlanAnchor;
+  /** Initial body (the 备注); the panel creates plans with an empty note. */
+  note?: string;
+}
+
+/**
+ * Create a plan file. The anchor decides the directory, the title becomes the
+ * file name (sanitized and de-duplicated against what is already there), and
+ * the frontmatter is stamped with `created_at` / `done: false` / empty
+ * `done_at` — the only fields Pi Work ever writes on creation.
+ *
+ * Returns the plan exactly as a subsequent scan would report it, so the
+ * create response and the list can never disagree.
+ */
+export function createPlan(input: CreatePlanInput): Plan {
+  // Re-check the anchor here as well: `PlanAnchor`'s day date is only typed
+  // as a string, and this is the value that becomes a path segment.
+  const anchor = parsePlanAnchor(input.anchor);
+  if (anchor === null) throw new PlanStoreError("Invalid anchor", 400);
+  if (!sanitizePlanTitle(input.title)) throw new PlanStoreError("Title is required", 400);
+
+  const dir = planDirOf(anchor);
+  // `resolvePlanPath` is the single place that validates "inside the plans
+  // root"; everything below is built from its output.
+  const dirAbs = resolvePlanPath(dir);
+  fs.mkdirSync(dirAbs, { recursive: true });
+
+  const name = uniquePlanFileName(anchor, input.title, new Set(fs.readdirSync(dirAbs)));
+  const rel = `${dir}/${name}`;
+  const abs = resolvePlanPath(rel);
+  // Cannot happen for a name picked from this directory's own listing; it is
+  // what stops a create that raced another one from silently overwriting a
+  // plan file (the rename below would replace it).
+  if (fs.existsSync(abs)) throw new PlanStoreError("Already exists", 409);
+
+  writePlanFileAtomic(
+    abs,
+    serializePlanContent(
+      { done: false, createdAt: toLocalTimestamp(new Date()), doneAt: null },
+      input.note ?? "",
+    ),
+  );
+  cache.delete(abs);
+
+  const read = readPlanFile(rel);
+  if (!("plan" in read)) throw new PlanStoreError("Created plan could not be read back", 500);
+  return read.plan;
 }
 
 export interface PlanScan {

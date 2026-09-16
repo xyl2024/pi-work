@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useToast } from "@/components/ui/Toast";
 import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
-import { fetchPlans } from "@/lib/client/plans";
+import { createPlan, fetchPlans } from "@/lib/client/plans";
 import {
   toDateKey,
   type Plan,
@@ -17,8 +18,9 @@ interface PlansPanelProps {
 }
 
 /**
- * Plans panel view — a read-only list of the Markdown files under
- * `<dataRoot>/user-plans/`, grouped into 收件箱 / 过期 / 今天 / 即将到来.
+ * Plans panel view — the Markdown files under `<dataRoot>/user-plans/`,
+ * grouped into 收件箱 / 过期 / 今天 / 即将到来, plus the resident create input
+ * that turns a title typed + Enter into one new plan file.
  *
  * It reads the filesystem on open, on window re-focus and on the manual
  * refresh button; there is no polling and no watcher (ADR-0006). The local
@@ -26,10 +28,21 @@ interface PlansPanelProps {
  */
 export function PlansPanel({ openCount }: PlansPanelProps) {
   const { t } = useI18n();
+  const toast = useToast();
   const [data, setData] = useState<PlansResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [overdueOpen, setOverdueOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [creating, setCreating] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Latch for the in-flight create: `creating` is a state update, so two
+  // Enter presses in the same tick would both read `false` and create twice.
+  const creatingRef = useRef(false);
+  // The input is disabled while a create is in flight and a disabled control
+  // cannot take focus, so the caret is restored once the re-enable has been
+  // committed — by the effect below, not by the request handler.
+  const refocusPending = useRef(false);
 
   const load = useCallback(async (refresh = false) => {
     setLoading(true);
@@ -50,6 +63,14 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     if (openCount > 0) void load();
   }, [openCount, load]);
 
+  // Opening the view also hands the keyboard to the entry input: recording a
+  // plan is the panel's one action, and this is the same openCount-as-focus
+  // handoff the BTW panel uses for `/btw`. It is what makes the palette's
+  // "New plan" entry land the caret in the box.
+  useEffect(() => {
+    if (openCount > 0) inputRef.current?.focus();
+  }, [openCount]);
+
   // …and when the window regains focus, which is the usual way to notice an
   // external editor's or the agent's change.
   useEffect(() => {
@@ -57,6 +78,37 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [load]);
+
+  const submit = useCallback(async () => {
+    const value = title.trim();
+    if (!value || creatingRef.current) return;
+    creatingRef.current = true;
+    setCreating(true);
+    try {
+      // The default anchor is the browser's today; the server never picks a
+      // date for us.
+      await createPlan({ title: value, anchor: { kind: "day", date: toDateKey(new Date()) } });
+      setTitle("");
+      await load();
+    } catch (err) {
+      toast.show({
+        kind: "error",
+        message: t("Failed to create plan"),
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      creatingRef.current = false;
+      // Keep the flow going: clear the box, keep the caret, record another.
+      refocusPending.current = true;
+      setCreating(false);
+    }
+  }, [title, load, toast, t]);
+
+  useEffect(() => {
+    if (creating || !refocusPending.current) return;
+    refocusPending.current = false;
+    inputRef.current?.focus();
+  }, [creating]);
 
   const sections = data?.sections ?? [];
   // The overdue section hides completed-only plans, so a lone done past plan
@@ -87,6 +139,67 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         )}
         <span style={{ flex: 1 }} />
         <RefreshIconButton onClick={() => void load(true)} disabled={loading} />
+      </div>
+
+      <div style={{ padding: "8px 10px", flexShrink: 0 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            height: 28,
+            padding: "0 8px",
+            background: "var(--bg-subtle)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+          }}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="var(--text-dim)"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+            style={{ flexShrink: 0 }}
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          <input
+            ref={inputRef}
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onKeyDown={(event) => {
+              // Enter creates, the box stays put for the next one; Escape
+              // abandons what was typed. `isComposing` lets the Enter that
+              // commits an IME candidate (Chinese input) through untouched —
+              // the same guard the chat input uses.
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void submit();
+              } else if (event.key === "Escape") {
+                setTitle("");
+              }
+            }}
+            placeholder={t("Record a plan for today; press Enter")}
+            aria-label={t("New plan")}
+            disabled={creating}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              height: "100%",
+              fontSize: 12,
+              color: "var(--text)",
+              background: "transparent",
+              border: "none",
+              outline: "none",
+            }}
+          />
+        </div>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 10px 24px" }}>

@@ -20,3 +20,7 @@ Presentation deliberately stays out of the shared layer, in two kind-keyed looku
 - A panel view's glyph and body are each looked up by kind exactly once: the tab strip can never carry an icon the button column does not, and the body table is exhaustive by type, so a new kind fails `tsc` until both sides are registered.
 - Palette panel commands and right-bar buttons share one toggle path (`togglePanel`), matching "clicking the active view collapses the panel".
 - Behaviour is intentionally unchanged, including "close falls back to the oldest tab" and "the palette commands toggle rather than open"; any change to those rules is a separate product decision.
+
+## 修订 2026-09-16（计划面板 #42）
+
+上一条的「another product decision」发生了，并记录在此而不是静默覆盖：注册表条目现在可以声明 `action: "open"` 的命令，执行时走 `openPanel` 而**永不折叠**面板——用于「现在就做」类命令（计划面板的「新建计划」）。切换语义对右栏按钮、Tab 条以及未声明 `action` 的命令条目完全不变，唯一的额外行为是：面板自己在**被打开时**把自己的输入框接管键盘（沿用 BTW 既有的 `openCount` 交接形态，不新增 shell 状态）。参见 #40 的「面板与入口」与 ADR-0006。

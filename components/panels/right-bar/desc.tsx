@@ -4,7 +4,7 @@
 //
 //   1. register the panel identity in `lib/shared/panelTabs`
 //      (PANEL_TAB_SPEC_BY_KIND — tab id, label key, default mode, session
-//      binding, optional command-palette entry), then
+//      binding, optional command-palette entries), then
 //   2. add one presentation entry here (glyph / disabled rule / badge) and
 //      one body entry in AppShell's `PANEL_BODY_BY_KIND`.
 //
@@ -321,10 +321,10 @@ export const PANEL_TAB_ICON_BY_KIND: Record<PanelViewKind, PanelIcon> =
 
 /** Command-palette icon per panel kind, for the specs that opt into a
  *  palette command — the same glyph at button size, never active. Panels
- *  without a command keep no palette icon (the palette falls back to null). */
+ *  with no palette entry keep no icon (the palette falls back to null). */
 export const PANEL_COMMAND_ICON_BY_KIND: Partial<Record<PanelViewKind, ReactNode>> =
   Object.fromEntries(
-    PANEL_TAB_SPECS.filter((spec) => spec.command).map((spec) => [
+    PANEL_TAB_SPECS.filter((spec) => spec.commands?.length).map((spec) => [
       spec.kind,
       PANEL_TAB_ICON_BY_KIND[spec.kind]({ size: 16, active: false }),
     ]),

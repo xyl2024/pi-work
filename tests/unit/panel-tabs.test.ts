@@ -347,13 +347,15 @@ describe("panelTabs selectors", () => {
 describe("panelTabs registry", () => {
   const DELETED_PANEL_KINDS = ["canvas", "json"];
 
-  it("declares a label key for every spec", () => {
+  it("declares a label key and keywords for every spec and palette entry", () => {
     for (const spec of PANEL_TAB_SPECS) {
       expect(spec.labelKey).toBeTruthy();
-      if (spec.command) {
-        expect(spec.command.labelKey).toBeTruthy();
-        expect(spec.command.keywords.length).toBeGreaterThan(0);
-        for (const keyword of spec.command.keywords) expect(keyword).toBeTruthy();
+      for (const entry of spec.commands ?? []) {
+        expect(entry.labelKey).toBeTruthy();
+        expect(entry.keywords.length).toBeGreaterThan(0);
+        for (const keyword of entry.keywords) expect(keyword).toBeTruthy();
+        // The id is a palette-id suffix; the generated id adds the separator.
+        expect(entry.id ?? "").not.toContain(".");
       }
     }
   });
@@ -484,7 +486,7 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
 
   it("gives every command-bearing spec a palette icon from the same entry", () => {
     for (const spec of PANEL_TAB_SPECS) {
-      if (!spec.command) continue;
+      if (!spec.commands?.length) continue;
       expect(PANEL_COMMAND_ICON_BY_KIND[spec.kind]).toBeTruthy();
     }
   });
@@ -559,6 +561,7 @@ describe("panelTabs registry → command palette", () => {
       toggleSidebar: () => {},
       toggleRightPanel: () => {},
       togglePanel: () => {},
+      openPanel: () => {},
       agentControls: null,
       hasSession: false,
       hasCwd: false,
@@ -566,56 +569,81 @@ describe("panelTabs registry → command palette", () => {
     };
   }
 
-  const optInKinds = PANEL_TAB_SPECS.filter((spec) => spec.command).map(
-    (spec) => spec.kind,
+  /** Every palette entry the registry declares, in declaration order. */
+  const optInCommands = PANEL_TAB_SPECS.flatMap((spec) =>
+    (spec.commands ?? []).map((entry) => ({
+      id: entry.id ? `panel.${spec.kind}.${entry.id}` : `panel.${spec.kind}`,
+      kind: spec.kind,
+      action: entry.action ?? "toggle",
+      labelKey: entry.labelKey,
+      keywords: entry.keywords,
+    })),
   );
 
-  it("generates one command per opt-in spec, in registry order", () => {
+  it("generates one command per opt-in entry, in registry order", () => {
     expect(panelCommands(commandCtx()).map((cmd) => cmd.id)).toEqual(
-      optInKinds.map((kind) => `panel.${kind}`),
+      optInCommands.map((entry) => entry.id),
     );
   });
 
-  it("keeps the palette down to exactly the seven panels that declare an entry", () => {
-    // Output-side pin: an eighth panel gaining a palette entry (or one of
-    // these losing one) fails here, not just in the registry declaration.
+  it("keeps the generated palette ids unique", () => {
+    const ids = panelCommands(commandCtx()).map((cmd) => cmd.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("keeps the palette down to exactly the entries seven panels declare", () => {
+    // Output-side pin: another palette entry appearing (or one of these
+    // disappearing) fails here, not just in the registry declaration.
     expect(
       panelCommands(commandCtx())
         .map((cmd) => cmd.id)
         .sort(),
     ).toEqual(
-      ["favorites", "gitDiff", "llmAudit", "plans", "tokens", "toolCalls", "translate"]
-        .map((kind) => `panel.${kind}`)
-        .sort(),
+      [
+        "panel.favorites",
+        "panel.gitDiff",
+        "panel.llmAudit",
+        "panel.plans",
+        "panel.plans.new",
+        "panel.tokens",
+        "panel.toolCalls",
+        "panel.translate",
+      ].sort(),
     );
   });
 
   it("titles and keywords come from the spec, not from the call site", () => {
-    const specs = PANEL_TAB_SPECS.filter((spec) => spec.command);
     const commands = panelCommands(commandCtx());
 
     expect(commands.map((cmd) => cmd.title)).toEqual(
-      specs.map((spec) => spec.command!.labelKey),
+      optInCommands.map((entry) => entry.labelKey),
     );
     expect(commands.map((cmd) => cmd.keywords)).toEqual(
-      specs.map((spec) => [...spec.command!.keywords]),
+      optInCommands.map((entry) => [...entry.keywords]),
     );
     // Fresh arrays: a mutated command entry must not write back into the
     // shared registry declaration.
     commands.forEach((cmd, index) => {
-      expect(cmd.keywords).not.toBe(specs[index].command!.keywords);
+      expect(cmd.keywords).not.toBe(optInCommands[index].keywords);
     });
   });
 
-  it("routes every palette entry through the shared toggle rule", () => {
+  it("routes every palette entry through the shared panel rules", () => {
     const toggled: PanelViewKind[] = [];
-    const ctx = commandCtx({ togglePanel: (kind) => toggled.push(kind) });
+    const opened: PanelViewKind[] = [];
+    const ctx = commandCtx({
+      togglePanel: (kind) => toggled.push(kind),
+      openPanel: (kind) => opened.push(kind),
+    });
 
     // Run the whole palette, not just the Panel group: a hand-written entry
     // that opens a panel from any group (the regression this issue deletes)
-    // shows up as an extra togglePanel call here.
+    // shows up as an extra panel call here.
     for (const cmd of buildCommands(ctx, (key) => key)) cmd.run(ctx);
 
-    expect(toggled).toEqual(optInKinds);
+    const kindsOf = (action: "toggle" | "open") =>
+      optInCommands.filter((entry) => entry.action === action).map((entry) => entry.kind);
+    expect(toggled).toEqual(kindsOf("toggle"));
+    expect(opened).toEqual(kindsOf("open"));
   });
 });

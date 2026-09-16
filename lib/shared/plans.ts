@@ -53,6 +53,23 @@ export function monthKeyOf(dateKey: string): string {
   return dateKey.slice(0, 7);
 }
 
+/**
+ * Timestamp in the frontmatter's canonical shape, in the *writer's* local
+ * zone: `2026-09-14T22:03:11+08:00`. Written as an explicit offset (never
+ * `Z`) so the file says which wall clock it was made in; the parser accepts
+ * both.
+ */
+export function toLocalTimestamp(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const offset = -date.getTimezoneOffset();
+  const sign = offset < 0 ? "-" : "+";
+  const abs = Math.abs(offset);
+  return (
+    `${toDateKey(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
+    `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+  );
+}
+
 // ── Anchors ──────────────────────────────────────────────────────────────
 // Same lexical ordering as calendar order, which is why the rest of the
 // module compares date keys as plain strings.
@@ -62,6 +79,22 @@ export type PlanAnchor =
   | { kind: "day"; date: string };
 
 export type PlanAnchorKind = PlanAnchor["kind"];
+
+/**
+ * Parse an anchor out of untrusted input (a request body). Returns `null`
+ * for anything that is not the inbox or a real day — in particular a date
+ * carrying path syntax, which is what keeps a client-supplied anchor from
+ * steering the write outside the plans root.
+ */
+export function parsePlanAnchor(value: unknown): PlanAnchor | null {
+  if (typeof value !== "object" || value === null) return null;
+  const anchor = value as { kind?: unknown; date?: unknown };
+  if (anchor.kind === "inbox") return { kind: "inbox" };
+  if (anchor.kind === "day" && typeof anchor.date === "string" && isDateKey(anchor.date)) {
+    return { kind: "day", date: anchor.date };
+  }
+  return null;
+}
 
 // ── Parse problems (the 待整理 feed) ──────────────────────────────────────
 // A problem is a machine-readable code plus the offending fragment; the panel
@@ -157,16 +190,51 @@ export function sanitizePlanTitle(raw: string): string {
     .replace(EDGE_JUNK, "");
 }
 
-/** File name for a plan (`2026-09-15-去办居住证.md`, `随手记.md`). */
+const NO_NAMES: ReadonlySet<string> = new Set<string>();
+
+/**
+ * File name for a plan (`2026-09-15-去办居住证.md`, `随手记.md`), assuming the
+ * name is still free in its directory. `uniquePlanFileName` is the variant
+ * that deals with the names already there.
+ */
 export function planFileName(anchor: PlanAnchor, title: string): string {
-  const clean = sanitizePlanTitle(title);
-  return anchor.kind === "inbox" ? `${clean}.md` : `${anchor.date}-${clean}.md`;
+  return uniquePlanFileName(anchor, title, NO_NAMES);
+}
+
+/** Directory (relative to the plans root) holding every plan of an anchor. */
+export function planDirOf(anchor: PlanAnchor): string {
+  return anchor.kind === "inbox" ? "inbox" : monthKeyOf(anchor.date);
 }
 
 /** Plan-relative path for a plan, i.e. the inverse of `parsePlanPath`. */
 export function planRelativePath(anchor: PlanAnchor, title: string): string {
-  const name = planFileName(anchor, title);
-  return anchor.kind === "inbox" ? `inbox/${name}` : `${monthKeyOf(anchor.date)}/${name}`;
+  return `${planDirOf(anchor)}/${planFileName(anchor, title)}`;
+}
+
+/**
+ * File name for a plan that does not collide with `taken` — the file names
+ * already present in its directory (any case: the check is case-insensitive
+ * so a case-blind filesystem cannot be silently overwritten). On a collision
+ * a `-2` / `-3` suffix is appended, and the title is shortened to keep the
+ * whole title within `PLAN_TITLE_MAX_LENGTH`.
+ *
+ * Pure on purpose: the caller hands in the directory listing, so the naming
+ * rule is testable without touching a filesystem.
+ */
+export function uniquePlanFileName(
+  anchor: PlanAnchor,
+  title: string,
+  taken: ReadonlySet<string>,
+): string {
+  const prefix = anchor.kind === "inbox" ? "" : `${anchor.date}-`;
+  const base = sanitizePlanTitle(title);
+  const existing = new Set([...taken].map((name) => name.toLowerCase()));
+  for (let n = 1; ; n += 1) {
+    const suffix = n === 1 ? "" : `-${n}`;
+    const clean = sanitizePlanTitle(base.slice(0, PLAN_TITLE_MAX_LENGTH - suffix.length));
+    const name = `${prefix}${clean}${suffix}.md`;
+    if (!existing.has(name.toLowerCase())) return name;
+  }
 }
 
 // ── Frontmatter (lenient) ────────────────────────────────────────────────
@@ -259,6 +327,25 @@ export function parsePlanContent(content: string): PlanContentParse {
   meta.doneAt = parseTimestamp(values.get("done_at"), "frontmatter-done-at", problems);
 
   return { meta, note: text.slice(match[0].length).trim(), problems };
+}
+
+/**
+ * Write `meta` + `note` back out in the canonical file shape: the three
+ * frontmatter fields in a fixed order, then the note as the body. This is the
+ * only serializer — Pi Work never rewrites a file it did not create itself
+ * (待整理 files keep their original bytes).
+ */
+export function serializePlanContent(meta: PlanMeta, note = ""): string {
+  const body = note.trim();
+  const line = (key: string, value: string | null) => `${key}:${value ? ` ${value}` : ""}`;
+  const front = [
+    "---",
+    `done: ${meta.done ? "true" : "false"}`,
+    line("created_at", meta.createdAt),
+    line("done_at", meta.doneAt),
+    "---",
+  ].join("\n");
+  return body ? `${front}\n\n${body}\n` : `${front}\n`;
 }
 
 // ── Plan entry + sections ────────────────────────────────────────────────

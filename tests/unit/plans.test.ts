@@ -4,13 +4,18 @@ import {
   groupPlans,
   isDateKey,
   monthKeyOf,
+  parsePlanAnchor,
   parsePlanContent,
   parsePlanPath,
+  planDirOf,
   planFileName,
   planRelativePath,
   planSectionOf,
   sanitizePlanTitle,
+  serializePlanContent,
   toDateKey,
+  toLocalTimestamp,
+  uniquePlanFileName,
   type Plan,
   type PlanAnchor,
 } from "@/lib/shared/plans";
@@ -134,6 +139,64 @@ describe("plans filename generation", () => {
     expect(sanitizePlanTitle("..hidden.")).toBe("hidden");
     expect(sanitizePlanTitle("***")).toBe("");
   });
+
+  it("appends -2 / -3 until the name is free in its directory", () => {
+    const anchor: PlanAnchor = { kind: "day", date: "2026-09-15" };
+    expect(uniquePlanFileName(anchor, "买牛奶", new Set())).toBe("2026-09-15-买牛奶.md");
+    expect(
+      uniquePlanFileName(
+        anchor,
+        "买牛奶",
+        new Set(["2026-09-15-买牛奶.md", "2026-09-15-买牛奶-2.md"]),
+      ),
+    ).toBe("2026-09-15-买牛奶-3.md");
+  });
+
+  it("treats an existing name as taken whatever its case", () => {
+    // A case-blind filesystem would otherwise silently overwrite the file.
+    expect(
+      uniquePlanFileName({ kind: "inbox" }, "Buy milk", new Set(["buy milk.md"])),
+    ).toBe("Buy milk-2.md");
+  });
+
+  it("shortens the title so a de-duplicated name still fits the limit", () => {
+    const long = "计".repeat(PLAN_TITLE_MAX_LENGTH);
+    expect(uniquePlanFileName({ kind: "inbox" }, long, new Set([`${long}.md`]))).toBe(
+      `${"计".repeat(PLAN_TITLE_MAX_LENGTH - 2)}-2.md`,
+    );
+  });
+
+  it("files every anchor in the directory its month decides", () => {
+    expect(planDirOf({ kind: "inbox" })).toBe("inbox");
+    expect(planDirOf({ kind: "day", date: "2026-09-15" })).toBe("2026-09");
+  });
+});
+
+describe("plans anchors from untrusted input", () => {
+  it("accepts the inbox and a real day", () => {
+    expect(parsePlanAnchor({ kind: "inbox" })).toEqual({ kind: "inbox" });
+    expect(parsePlanAnchor({ kind: "day", date: "2026-09-15" })).toEqual({
+      kind: "day",
+      date: "2026-09-15",
+    });
+  });
+
+  it("rejects anything that could steer a write out of the plans root", () => {
+    const rejected: unknown[] = [
+      null,
+      undefined,
+      "2026-09-15",
+      42,
+      {},
+      { kind: "week", date: "2026-09-15" },
+      { kind: "day", date: "../../etc" },
+      { kind: "day", date: "2026-09/../x" },
+      { kind: "day", date: "2026-02-30" },
+      { kind: "day" },
+      { kind: "day", date: 20260915 },
+    ];
+    for (const value of rejected) expect(parsePlanAnchor(value)).toBe(null);
+  });
 });
 
 describe("plans frontmatter parsing", () => {
@@ -203,6 +266,47 @@ describe("plans frontmatter parsing", () => {
     const parsed = parsePlanContent("---\ndone: true\nstill going");
 
     expect(parsed.problems.map((p) => p.code)).toEqual(["frontmatter-syntax"]);
+  });
+});
+
+describe("plans serialization", () => {
+  it("stamps the writer's local zone in a shape the parser accepts back", () => {
+    const stamp = toLocalTimestamp(new Date(2026, 8, 14, 22, 3, 11));
+    expect(stamp).toMatch(/^2026-09-14T22:03:11[+-]\d{2}:\d{2}$/);
+    expect(parsePlanContent(`---\ncreated_at: ${stamp}\n---\n`).problems).toEqual([]);
+  });
+
+  it("writes a new plan as the frontmatter contract with an empty body", () => {
+    const content = serializePlanContent({
+      done: false,
+      createdAt: "2026-09-14T22:03:11+08:00",
+      doneAt: null,
+    });
+
+    expect(content).toBe(
+      "---\ndone: false\ncreated_at: 2026-09-14T22:03:11+08:00\ndone_at:\n---\n",
+    );
+    const parsed = parsePlanContent(content);
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.meta).toEqual({
+      done: false,
+      createdAt: "2026-09-14T22:03:11+08:00",
+      doneAt: null,
+    });
+    expect(parsed.note).toBe("");
+  });
+
+  it("round-trips a completed plan with a note", () => {
+    const meta = {
+      done: true,
+      createdAt: "2026-09-14T22:03:11+08:00",
+      doneAt: "2026-09-15T09:00:00+08:00",
+    };
+    const parsed = parsePlanContent(serializePlanContent(meta, "顺路去银行取号"));
+
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.meta).toEqual(meta);
+    expect(parsed.note).toBe("顺路去银行取号");
   });
 });
 
