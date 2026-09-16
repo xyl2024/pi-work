@@ -14,6 +14,7 @@ import {
   updatePlan,
 } from "@/lib/client/plans";
 import {
+  anchorChoiceOf,
   anchorForChoice,
   hideCompletedPlans,
   toDateKey,
@@ -23,6 +24,7 @@ import {
   type PlansResponse,
 } from "@/lib/shared/plans";
 import { PlanRow, type PlanConflictState, type PlanSaveStatus } from "./PlanRow";
+import { AnchorChips } from "./AnchorChips";
 
 interface PlansPanelProps {
   /** Bumped on every open; re-opening the tab refetches. */
@@ -75,10 +77,15 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   const [draft, setDraft] = useState("");
   const [saveStatus, setSaveStatus] = useState<PlanSaveStatus>("saved");
   const [conflict, setConflict] = useState<PendingConflict | null>(null);
+  // Which row's re-schedule chip menu is open (at most one).
+  const [reschedulePath, setReschedulePath] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Latch for the in-flight create: `creating` is a state update, so two
   // Enter presses in the same tick would both read `false` and create twice.
   const creatingRef = useRef(false);
+  // Same latch for a re-schedule: the move is a write, so a double-click must
+  // not send two of them.
+  const reschedulingRef = useRef(false);
   // The input is disabled while a create is in flight and a disabled control
   // cannot take focus, so the caret is restored once the re-enable has been
   // committed — by the effect below, not by the request handler.
@@ -227,7 +234,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         }
         if (notify) toast.show({ kind: "success", message: t("Plan saved") });
       } catch (err) {
-        if (err instanceof PlanConflictError) {
+        if (err instanceof PlanConflictError && err.code !== "name-taken") {
           setPendingConflict({
             path: target.path,
             code: err.code,
@@ -311,7 +318,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           setEditorTarget({ path: updated.path, mtime: updated.mtime });
         }
       } catch (err) {
-        if (err instanceof PlanConflictError) {
+        if (err instanceof PlanConflictError && err.code !== "name-taken") {
           // Show the conflict where the user is looking, and remember that
           // 「覆盖」 must redo the toggle, not save a note.
           if (editorRef.current?.path !== plan.path) openEditor(plan);
@@ -345,6 +352,73 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     [applyPlan, setEditorTarget],
   );
 
+  /**
+   * Re-schedule a plan: a different anchor is a different path, so this is a
+   * move (the server renames the file) and the list is re-read rather than
+   * patched in place — the row changes section anyway.
+   */
+  const reschedule = useCallback(
+    async (plan: Plan, choice: PlanAnchorChoice) => {
+      if (reschedulingRef.current) return;
+      // The chosen chip is resolved against the browser's today here on the
+      // client; the server never picks a date for us. A chip the plan already
+      // sits on is a no-op, not a write.
+      const today = toDateKey(new Date());
+      if (anchorChoiceOf(plan.anchor, today) === choice) {
+        setReschedulePath(null);
+        return;
+      }
+      reschedulingRef.current = true;
+      const anchor = anchorForChoice(choice, today);
+      try {
+        const updated = await updatePlan({
+          path: plan.path,
+          anchor,
+          expectedMtime: plan.mtime,
+        });
+        // A moved plan takes the open note editor with it.
+        if (editorRef.current?.path === plan.path) {
+          setEditorTarget({ path: updated.path, mtime: updated.mtime });
+        }
+        if (conflictRef.current?.path === plan.path) setPendingConflict(null);
+        setReschedulePath(null);
+        await reload();
+      } catch (err) {
+        if (err instanceof PlanConflictError && err.code === "name-taken") {
+          // The target month already holds a plan of that name. Nothing was
+          // written and there is nothing to overwrite, so just say so.
+          toast.show({
+            kind: "error",
+            message: t("A plan with that name already exists"),
+            description: err.target ?? undefined,
+          });
+          return;
+        }
+        if (err instanceof PlanConflictError && err.code !== "name-taken") {
+          setPendingConflict({
+            path: plan.path,
+            code: err.code,
+            movedTo: err.movedTo,
+            retry: { kind: "anchor", anchor },
+          });
+          return;
+        }
+        toast.show({
+          kind: "error",
+          message: t("Failed to reschedule plan"),
+          description: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        reschedulingRef.current = false;
+      }
+    },
+    [reload, setEditorTarget, setPendingConflict, t, toast],
+  );
+
+  const toggleReschedule = useCallback((plan: Plan) => {
+    setReschedulePath((prev) => (prev === plan.path ? null : plan.path));
+  }, []);
+
   const resolveConflict = useCallback(
     async (choice: "overwrite" | "reload") => {
       const pending = conflictRef.current;
@@ -356,6 +430,17 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
             // `force` skips the guard, so no mtime is needed — and none of the
             // list's (stale) data has to be trusted.
             await saveDone(pending.path, pending.retry.done, undefined, true);
+          } else if (pending.retry.kind === "anchor") {
+            // Move the file as it is on disk to the anchor the user picked.
+            const updated = await updatePlan({
+              path: pending.path,
+              anchor: pending.retry.anchor,
+              force: true,
+            });
+            if (editorRef.current?.path === pending.path) {
+              setEditorTarget({ path: updated.path, mtime: updated.mtime });
+            }
+            await reload();
           } else {
             const updated = await updatePlan({
               path: pending.path,
@@ -409,14 +494,45 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
             description: err instanceof Error ? err.message : String(err),
           });
         }
+      } else if (pending.retry.kind === "anchor") {
+        try {
+          const updated = await updatePlan({
+            path: found.path,
+            anchor: pending.retry.anchor,
+            expectedMtime: found.mtime,
+          });
+          if (editorRef.current?.path === pending.path) {
+            setEditorTarget({ path: updated.path, mtime: updated.mtime });
+          }
+          await reload();
+        } catch (err) {
+          if (err instanceof PlanConflictError && err.code === "name-taken") {
+            toast.show({
+              kind: "error",
+              message: t("A plan with that name already exists"),
+              description: err.target ?? undefined,
+            });
+          } else {
+            toast.show({
+              kind: "error",
+              message: t("Failed to reschedule plan"),
+              description: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
       } else if (pending.code === "modified") {
         openEditor(found);
       }
 
       // 2. A moved plan takes the open editor with it. Only a note the user
       //    actually typed is written to the new path — the editor merely
-      //    pointing at a plan is not a reason to rewrite it elsewhere.
-      if (pending.code === "missing" && editorRef.current?.path === pending.path) {
+      //    pointing at a plan is not a reason to rewrite it elsewhere. A
+      //    re-schedule moved the editor itself in step 1.
+      if (
+        pending.retry.kind !== "anchor" &&
+        pending.code === "missing" &&
+        editorRef.current?.path === pending.path
+      ) {
         setEditorTarget({ path: found.path, mtime: found.mtime });
         if (noteWasDirty) {
           dirtyRef.current = true;
@@ -532,11 +648,15 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         plan={plan}
         showDate={showDate}
         expanded={editing?.path === plan.path}
+        rescheduleOpen={reschedulePath === plan.path}
+        activeChoice={anchorChoiceOf(plan.anchor, toDateKey(new Date()))}
         draft={draft}
         saveStatus={saveStatus}
         conflict={conflict?.path === plan.path ? conflict : null}
         onToggleExpand={() => toggleExpand(plan)}
         onToggleDone={() => void toggleDone(plan)}
+        onToggleReschedule={() => toggleReschedule(plan)}
+        onReschedule={(choice) => void reschedule(plan, choice)}
         onNoteChange={handleNoteChange}
         onSaveNote={() => void flushNote(true)}
         onResolveConflict={(choice) => void resolveConflict(choice)}
@@ -554,10 +674,13 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       flushNote,
       handleNoteChange,
       removePlan,
+      reschedule,
+      reschedulePath,
       resolveConflict,
       saveStatus,
       toggleDone,
       toggleExpand,
+      toggleReschedule,
     ],
   );
 
@@ -660,28 +783,8 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           />
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-          {ANCHOR_CHOICES.map((choice) => (
-            <button
-              key={choice}
-              type="button"
-              onClick={() => setAnchorChoice(choice)}
-              aria-pressed={anchorChoice === choice}
-              title={t("Anchor for the next plan")}
-              style={{
-                padding: "2px 7px",
-                fontSize: 10.5,
-                color: anchorChoice === choice ? "var(--text)" : "var(--text-muted)",
-                background: anchorChoice === choice ? "var(--bg-selected)" : "transparent",
-                border: "1px solid var(--border)",
-                borderRadius: 999,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {t(ANCHOR_CHOICE_LABEL_KEY[choice])}
-            </button>
-          ))}
+        <div style={{ marginTop: 6 }}>
+          <AnchorChips activeChoice={anchorChoice} onSelect={setAnchorChoice} />
         </div>
       </div>
 
@@ -785,17 +888,6 @@ const SECTION_LABEL_KEY: Record<Exclude<PlanSectionId, "overdue">, string> = {
   week: "plans.week",
   month: "plans.month",
   upcoming: "Upcoming",
-};
-
-/** The one-tap anchors a newly typed plan can be filed under. */
-const ANCHOR_CHOICES: readonly PlanAnchorChoice[] = ["inbox", "today", "tomorrow", "week", "month"];
-
-const ANCHOR_CHOICE_LABEL_KEY: Record<PlanAnchorChoice, string> = {
-  inbox: "plans.inbox",
-  today: "Today",
-  tomorrow: "Tomorrow",
-  week: "plans.week",
-  month: "plans.month",
 };
 
 /**

@@ -161,6 +161,21 @@ export function parsePlanAnchor(value: unknown): PlanAnchor | null {
 // The anchor's *end* decides overdue; its *start* orders it. Both are plain
 // date keys so the rest of the module compares strings.
 
+/** True when two anchors point at the same point in time — what tells a real
+ *  re-schedule from a PATCH that merely restates the anchor already on the
+ *  file. The inverse of `planAnchorsEqual` is what renames the file. */
+export function planAnchorsEqual(a: PlanAnchor, b: PlanAnchor): boolean {
+  switch (a.kind) {
+    case "inbox":
+      return b.kind === "inbox";
+    case "day":
+    case "week":
+      return a.kind === b.kind && a.date === b.date;
+    case "month":
+      return b.kind === "month" && a.month === b.month;
+  }
+}
+
 /** First day the anchor covers: the day itself, the Monday, or the 1st.
  *  The inbox has no time, so it sorts (and reads) as the empty key. */
 export function anchorStartKey(anchor: PlanAnchor): string {
@@ -207,6 +222,25 @@ export function anchorForChoice(choice: PlanAnchorChoice, today: string): PlanAn
       return { kind: "week", date: weekStartOf(today) };
     case "month":
       return { kind: "month", month: monthKeyOf(today) };
+  }
+}
+
+/**
+ * The one-tap choice an anchor currently *is*, or `null` when no chip names it
+ * (a day far in the future, say). The row uses this to mark the chip the plan
+ * already sits on, so clicking it cannot silently re-write the file.
+ */
+export function anchorChoiceOf(anchor: PlanAnchor, today: string): PlanAnchorChoice | null {
+  switch (anchor.kind) {
+    case "inbox":
+      return "inbox";
+    case "day":
+      if (anchor.date === today) return "today";
+      return anchor.date === addDays(today, 1) ? "tomorrow" : null;
+    case "week":
+      return anchor.date === weekStartOf(today) ? "week" : null;
+    case "month":
+      return anchor.month === monthKeyOf(today) ? "month" : null;
   }
 }
 
@@ -375,6 +409,19 @@ function planFilePrefix(anchor: PlanAnchor): string {
 /** Plan-relative path for a plan, i.e. the inverse of `parsePlanPath`. */
 export function planRelativePath(anchor: PlanAnchor, title: string): string {
   return `${planDirOf(anchor)}/${planFileName(anchor, title)}`;
+}
+
+/**
+ * Path a plan moves to when its anchor changes.
+ *
+ * The title goes in **verbatim**: it came out of a filename that already
+ * passed the contract, so re-sanitizing it could silently change what the plan
+ * is called. No `-2` de-duplication either — a target that is already taken is
+ * an error the user has to answer, not a rename behind their back (see
+ * `updatePlanFile`).
+ */
+export function movedPlanRelativePath(anchor: PlanAnchor, title: string): string {
+  return `${planDirOf(anchor)}/${planFilePrefix(anchor)}${title}.md`;
 }
 
 /**
@@ -637,3 +684,8 @@ export interface PlansResponse {
   sections: PlanSection[];
   unsorted: UnsortedPlan[];
 }
+
+/** Why the server refused a plan write (the API answers 409 for all three).
+ *  Shared so the route, the store and the client cannot drift apart:
+ *  `modified` / `missing` are resolved by 「覆盖 / 重载」，`name-taken` is not. */
+export type PlanConflictCode = "modified" | "missing" | "name-taken";

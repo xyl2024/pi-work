@@ -3,17 +3,29 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { IconButton } from "@/components/ui/IconButton";
-import { monthKeyOf, noteSummary, weekEndOf, type Plan } from "@/lib/shared/plans";
+import {
+  monthKeyOf,
+  noteSummary,
+  weekEndOf,
+  type Plan,
+  type PlanAnchor,
+  type PlanAnchorChoice,
+} from "@/lib/shared/plans";
+import { AnchorChips } from "./AnchorChips";
 
 /** Save state of the row's note, mirroring the notes editor's indicator. */
 export type PlanSaveStatus = "saved" | "unsaved" | "saving" | "error";
 
 /**
- * What 「覆盖」 must redo after the user answers a conflict: the note save, or
- * the completion state the checkbox was aiming for. Carried as data instead of
- * re-derived from the list, which is stale exactly when a conflict happens.
+ * What 「覆盖」 must redo after the user answers a conflict: the note save, the
+ * completion state the checkbox was aiming for, or the re-schedule the chip
+ * asked for. Carried as data instead of re-derived from the list, which is
+ * stale exactly when a conflict happens.
  */
-export type PlanConflictRetry = { kind: "note" } | { kind: "done"; done: boolean };
+export type PlanConflictRetry =
+  | { kind: "note" }
+  | { kind: "done"; done: boolean }
+  | { kind: "anchor"; anchor: PlanAnchor };
 
 /** A write the server refused with 409 because the panel's view was stale. */
 export interface PlanConflictState {
@@ -32,12 +44,18 @@ export interface PlanRowProps {
   showDate: boolean;
   /** True when this row's note editor is the open one. */
   expanded: boolean;
+  /** True when this row's re-schedule chip menu is open. */
+  rescheduleOpen: boolean;
+  /** The one-tap choice this plan's anchor currently maps to, if any. */
+  activeChoice: PlanAnchorChoice | null;
   /** The note being edited (only meaningful while expanded). */
   draft: string;
   saveStatus: PlanSaveStatus;
   conflict: PlanConflictState | null;
   onToggleExpand: () => void;
   onToggleDone: () => void;
+  onToggleReschedule: () => void;
+  onReschedule: (choice: PlanAnchorChoice) => void;
   onNoteChange: (value: string) => void;
   onSaveNote: () => void;
   onResolveConflict: (choice: "overwrite" | "reload") => void;
@@ -58,11 +76,15 @@ export function PlanRow({
   plan,
   showDate,
   expanded,
+  rescheduleOpen,
+  activeChoice,
   draft,
   saveStatus,
   conflict,
   onToggleExpand,
   onToggleDone,
+  onToggleReschedule,
+  onReschedule,
   onNoteChange,
   onSaveNote,
   onResolveConflict,
@@ -73,7 +95,7 @@ export function PlanRow({
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const summary = noteSummary(plan.note);
-  const actionsVisible = hovered || expanded;
+  const actionsVisible = hovered || expanded || rescheduleOpen;
 
   return (
     <div
@@ -154,6 +176,17 @@ export function PlanRow({
             transition: "opacity 0.1s",
           }}
         >
+          <IconButton
+            label={t("Reschedule")}
+            size="xs"
+            active={rescheduleOpen}
+            onClick={onToggleReschedule}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="5" width="18" height="16" rx="2" />
+              <path d="M8 3v4M16 3v4M3 10h18" />
+            </svg>
+          </IconButton>
           <IconButton label={t("Copy path")} size="xs" onClick={onCopyPath}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -170,6 +203,12 @@ export function PlanRow({
           </IconButton>
         </span>
       </div>
+
+      {rescheduleOpen && (
+        <div style={{ padding: "0 6px 6px" }}>
+          <AnchorChips activeChoice={activeChoice} label={t("Move plan to")} onSelect={onReschedule} />
+        </div>
+      )}
 
       {expanded && (
         <div style={{ padding: "0 6px 6px" }}>

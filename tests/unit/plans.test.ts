@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PLAN_TITLE_MAX_LENGTH,
   addDays,
+  anchorChoiceOf,
   anchorEndKey,
   anchorForChoice,
   anchorStartKey,
@@ -12,10 +13,12 @@ import {
   isMonthKey,
   monthEndOf,
   monthKeyOf,
+  movedPlanRelativePath,
   noteSummary,
   parsePlanAnchor,
   parsePlanContent,
   parsePlanPath,
+  planAnchorsEqual,
   planDirOf,
   planFileName,
   planRelativePath,
@@ -350,6 +353,81 @@ describe("plans filename generation", () => {
     expect(planDirOf({ kind: "day", date: "2026-09-15" })).toBe("2026-09");
     expect(planDirOf({ kind: "week", date: "2026-09-28" })).toBe("2026-09");
     expect(planDirOf({ kind: "month", month: "2026-11" })).toBe("2026-11");
+  });
+});
+
+describe("plans re-scheduling paths", () => {
+  it("builds the new path from the new anchor with the title kept verbatim", () => {
+    // A week → day re-schedule keeps the title and only swaps the prefix and
+    // the month directory (9/28 and 9/15 both live in 2026-09).
+    expect(movedPlanRelativePath({ kind: "day", date: "2026-09-15" }, "整理书架")).toBe(
+      "2026-09/2026-09-15-整理书架.md",
+    );
+    // …and a cross-month move changes the directory too.
+    expect(movedPlanRelativePath({ kind: "day", date: "2026-10-02" }, "整理书架")).toBe(
+      "2026-10/2026-10-02-整理书架.md",
+    );
+    expect(movedPlanRelativePath({ kind: "inbox" }, "随手记")).toBe("inbox/随手记.md");
+    expect(movedPlanRelativePath({ kind: "month", month: "2026-11" }, "读书")).toBe(
+      "2026-11/2026-11-M-读书.md",
+    );
+  });
+
+  it("never re-sanitizes the title or de-duplicates the name", () => {
+    // The title came from a filename that already passed the contract: it must
+    // survive a move unchanged, and a would-be collision must stay a collision
+    // (the store turns it into an error) rather than become a `-2` rename.
+    const title = "foo.";
+    expect(movedPlanRelativePath({ kind: "day", date: "2026-09-15" }, title)).toBe(
+      "2026-09/2026-09-15-foo..md",
+    );
+  });
+
+  it("round-trips a moved path straight back to the same anchor and title", () => {
+    const anchor: PlanAnchor = { kind: "week", date: "2026-09-28" };
+    expect(parsePlanPath(movedPlanRelativePath(anchor, "整理书架"))).toEqual({
+      ok: true,
+      anchor,
+      title: "整理书架",
+    });
+  });
+
+  it("tells a real re-schedule from restating the current anchor", () => {
+    expect(planAnchorsEqual({ kind: "inbox" }, { kind: "inbox" })).toBe(true);
+    expect(
+      planAnchorsEqual({ kind: "day", date: "2026-09-15" }, { kind: "day", date: "2026-09-15" }),
+    ).toBe(true);
+    expect(
+      planAnchorsEqual({ kind: "day", date: "2026-09-15" }, { kind: "day", date: "2026-09-16" }),
+    ).toBe(false);
+    // Same date, different granularity is a different anchor — and a move.
+    expect(
+      planAnchorsEqual({ kind: "day", date: "2026-09-28" }, { kind: "week", date: "2026-09-28" }),
+    ).toBe(false);
+    expect(
+      planAnchorsEqual({ kind: "inbox" }, { kind: "day", date: "2026-09-15" }),
+    ).toBe(false);
+    expect(planAnchorsEqual({ kind: "month", month: "2026-09" }, { kind: "month", month: "2026-09" })).toBe(
+      true,
+    );
+    expect(planAnchorsEqual({ kind: "month", month: "2026-09" }, { kind: "month", month: "2026-10" })).toBe(
+      false,
+    );
+    expect(
+      planAnchorsEqual({ kind: "month", month: "2026-09" }, { kind: "week", date: "2026-09-28" }),
+    ).toBe(false);
+  });
+
+  it("names the chip an anchor already sits on, and null for a far date", () => {
+    const today = "2026-09-15"; // a Tuesday; its week starts Monday 09-14
+    expect(anchorChoiceOf({ kind: "inbox" }, today)).toBe("inbox");
+    expect(anchorChoiceOf({ kind: "day", date: "2026-09-15" }, today)).toBe("today");
+    expect(anchorChoiceOf({ kind: "day", date: "2026-09-16" }, today)).toBe("tomorrow");
+    expect(anchorChoiceOf({ kind: "day", date: "2026-09-20" }, today)).toBe(null);
+    expect(anchorChoiceOf({ kind: "week", date: "2026-09-14" }, today)).toBe("week");
+    expect(anchorChoiceOf({ kind: "week", date: "2026-09-21" }, today)).toBe(null);
+    expect(anchorChoiceOf({ kind: "month", month: "2026-09" }, today)).toBe("month");
+    expect(anchorChoiceOf({ kind: "month", month: "2026-10" }, today)).toBe(null);
   });
 });
 

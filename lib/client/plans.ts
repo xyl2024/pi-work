@@ -1,7 +1,7 @@
 // Client-side API access for the Plans panel. Thin wrappers around
 // /api/plans — fetch only, no server logic.
 import { jsonOrThrow } from "./http";
-import type { Plan, PlanAnchor, PlansResponse } from "@/lib/shared/plans";
+import type { Plan, PlanAnchor, PlanConflictCode, PlansResponse } from "@/lib/shared/plans";
 
 /**
  * Fetch the grouped plan list for a local date key. `refresh` bypasses the
@@ -35,29 +35,42 @@ export async function createPlan(input: {
  * The 409 the panel must answer with 「覆盖 / 重载到新位置」 rather than an error
  * toast: `modified` = the file changed under us, `missing` = it was moved,
  * renamed or deleted. `movedTo` is the server's best guess at the new path.
+ *
+ * `name-taken` is different: a re-schedule landed on a plan that already exists
+ * there. Nothing was written, so there is nothing to overwrite or reload — the
+ * panel just reports it (`target` is the occupied path).
  */
 export class PlanConflictError extends Error {
-  code: "modified" | "missing";
+  code: PlanConflictCode;
   movedTo: string | null;
+  target: string | null;
 
-  constructor(code: "modified" | "missing", message: string, movedTo: string | null) {
+  constructor(
+    code: PlanConflictCode,
+    message: string,
+    movedTo: string | null,
+    target: string | null = null,
+  ) {
     super(message);
     this.code = code;
     this.movedTo = movedTo;
+    this.target = target;
   }
 }
 
 /**
- * Update a plan in place (note and/or completion).
+ * Update a plan in place (note, completion and/or anchor).
  *
  * `expectedMtime` is the file's `mtime` as the panel last saw it; a stale
  * value (or a path that is gone) throws `PlanConflictError` instead of writing.
- * `force` is the user's 「覆盖」 answer to that conflict.
+ * `force` is the user's 「覆盖」 answer to that conflict. A different `anchor`
+ * makes the server move / rename the file, which is what re-scheduling *is*.
  */
 export async function updatePlan(input: {
   path: string;
   note?: string;
   done?: boolean;
+  anchor?: PlanAnchor;
   expectedMtime?: string;
   force?: boolean;
 }): Promise<Plan> {
@@ -69,13 +82,15 @@ export async function updatePlan(input: {
   if (res.status === 409) {
     const body = (await res.json().catch(() => ({}))) as {
       error?: string;
-      code?: "modified" | "missing";
+      code?: PlanConflictCode;
       movedTo?: string | null;
+      target?: string | null;
     };
     throw new PlanConflictError(
       body.code ?? "modified",
       body.error ?? "The plan file changed on disk",
       body.movedTo ?? null,
+      body.target ?? null,
     );
   }
   const { plan } = await jsonOrThrow<{ plan: Plan }>(res);

@@ -660,6 +660,310 @@ describe("PATCH /api/plans/file", () => {
   });
 });
 
+// ── Re-schedule (anchor) ──────────────────────────────────────────────
+// A different anchor is a different path: the anchor lives in the filename
+// (ADR-0006), so re-scheduling *is* a move. These pin the three transitions
+// the panel offers (inbox → day, month → month, anchored → inbox), the field
+// survival across the move, and the one case that must never silently
+// succeed: a target that is already taken.
+
+describe("PATCH /api/plans/file — re-schedule", () => {
+  const patch = (body: unknown) =>
+    api("/api/plans/file", { method: "PATCH", body: JSON.stringify(body) });
+  const list = async (refresh = false) =>
+    (await api(`/api/plans?today=${TODAY}${refresh ? "&refresh=1" : ""}`)).body as unknown as PlansResponse;
+
+  async function create(title: string, anchor: PlanAnchor, note?: string): Promise<Plan> {
+    const res = await api("/api/plans", {
+      method: "POST",
+      body: JSON.stringify({ title, anchor, note }),
+    });
+    expect(res.status).toBe(201);
+    return res.body.plan as unknown as Plan;
+  }
+
+  it("moves an inbox plan to a day anchor, keeping created_at, note and done", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const inbox = await create(uid, { kind: "inbox" }, "顺路取号");
+      paths.push(inbox.path);
+      // Complete it first, so the move has a done state to carry.
+      const doneRes = await patch({ path: inbox.path, done: true, expectedMtime: inbox.mtime });
+      expect(doneRes.status).toBe(200);
+      const done = doneRes.body.plan as unknown as Plan;
+
+      const res = await patch({
+        path: inbox.path,
+        anchor: { kind: "day", date: "2026-03-16" },
+        expectedMtime: done.mtime,
+      });
+      expect(res.status).toBe(200);
+      const moved = res.body.plan as unknown as Plan;
+      paths.push(moved.path);
+
+      expect(moved.path).toBe(`2026-03/2026-03-16-${uid}.md`);
+      expect(moved.anchor).toEqual({ kind: "day", date: "2026-03-16" });
+      expect(moved.title).toBe(uid);
+      expect(moved.createdAt).toBe(done.createdAt);
+      expect(moved.done).toBe(true);
+      expect(moved.doneAt).toBe(done.doneAt);
+      expect(moved.note).toBe("顺路取号");
+
+      // The old location leaves no residue and the list moves the plan out of
+      // 收件箱 into the section its new anchor decides.
+      expect(existsSync(planAbs(inbox.path))).toBe(false);
+      expect(existsSync(planAbs(moved.path))).toBe(true);
+      const data = await list();
+      expect(findPlan(data, inbox.path)).toBeUndefined();
+      expect(sectionOf(data, "inbox").plans.some((p) => p.path === moved.path)).toBe(false);
+      expect(sectionOf(data, "upcoming").plans.some((p) => p.path === moved.path)).toBe(true);
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("moves a plan to another month and leaves the bytes untouched", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(uid, { kind: "day", date: TODAY }, "带上租房合同");
+      paths.push(original.path);
+      const before = readFileSync(planAbs(original.path), "utf8");
+
+      const res = await patch({
+        path: original.path,
+        anchor: { kind: "day", date: "2026-04-10" },
+        expectedMtime: original.mtime,
+      });
+      expect(res.status).toBe(200);
+      const moved = res.body.plan as unknown as Plan;
+      paths.push(moved.path);
+
+      expect(moved.path).toBe(`2026-04/2026-04-10-${uid}.md`);
+      expect(moved.createdAt).toBe(original.createdAt);
+      expect(moved.note).toBe("带上租房合同");
+      expect(moved.done).toBe(false);
+      expect(existsSync(planAbs(original.path))).toBe(false);
+      // A pure re-schedule is a rename: the file is byte-for-byte the same.
+      expect(readFileSync(planAbs(moved.path), "utf8")).toBe(before);
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("returns a plan to the inbox when the anchor is cleared", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(uid, { kind: "day", date: TODAY }, "先放一放");
+      paths.push(original.path);
+
+      const res = await patch({
+        path: original.path,
+        anchor: { kind: "inbox" },
+        expectedMtime: original.mtime,
+      });
+      expect(res.status).toBe(200);
+      const moved = res.body.plan as unknown as Plan;
+      paths.push(moved.path);
+
+      expect(moved.path).toBe(`inbox/${uid}.md`);
+      expect(moved.anchor).toEqual({ kind: "inbox" });
+      expect(moved.createdAt).toBe(original.createdAt);
+      expect(moved.note).toBe("先放一放");
+      expect(existsSync(planAbs(original.path))).toBe(false);
+
+      const data = await list();
+      expect(sectionOf(data, "inbox").plans.some((p) => p.path === moved.path)).toBe(true);
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("refuses to overwrite a plan that already has the target name", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(uid, { kind: "day", date: TODAY }, "我原来的备注");
+      const other = await create(uid, { kind: "day", date: "2026-04-10" }, "别人的备注");
+      paths.push(original.path, other.path);
+      const otherBytes = readFileSync(planAbs(other.path), "utf8");
+
+      const res = await patch({
+        path: original.path,
+        anchor: { kind: "day", date: "2026-04-10" },
+        expectedMtime: original.mtime,
+      });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("name-taken");
+      expect(res.body.target).toBe(other.path);
+
+      // Neither file moved and neither was rewritten.
+      expect(existsSync(planAbs(original.path))).toBe(true);
+      expect(readFileSync(planAbs(other.path), "utf8")).toBe(otherBytes);
+      expect(readFileSync(planAbs(original.path), "utf8")).toContain("我原来的备注");
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("reports a taken target even when the view is also stale", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(uid, { kind: "day", date: TODAY });
+      const other = await create(uid, { kind: "day", date: "2026-04-10" });
+      paths.push(original.path, other.path);
+      // The source is stale *and* the target is occupied: the occupied target is
+      // what the user must hear about, since 「覆盖」 must not clobber the other
+      // plan. Pinned so the check order (before the mtime guard) cannot drift.
+      const abs = planAbs(original.path);
+      writeFileSync(abs, `${readFileSync(abs, "utf8")}\n外部备注\n`, "utf8");
+      const past = new Date(Date.now() - 60_000);
+      utimesSync(abs, past, past);
+
+      const res = await patch({
+        path: original.path,
+        anchor: { kind: "day", date: "2026-04-10" },
+        expectedMtime: original.mtime,
+      });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("name-taken");
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("never overwrites the target even when the user picks 覆盖", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(uid, { kind: "day", date: TODAY }, "我的备注");
+      const other = await create(uid, { kind: "day", date: "2026-04-10" }, "别人的备注");
+      paths.push(original.path, other.path);
+      const otherBytes = readFileSync(planAbs(other.path), "utf8");
+
+      const res = await patch({
+        path: original.path,
+        anchor: { kind: "day", date: "2026-04-10" },
+        force: true,
+      });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("name-taken");
+      expect(readFileSync(planAbs(other.path), "utf8")).toBe(otherBytes);
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("treats a PATCH that restates the anchor as no move", async () => {    const uid = uniqueId("plans");
+    let plan: Plan | null = null;
+    try {
+      plan = await create(uid, { kind: "day", date: TODAY });
+      const res = await patch({
+        path: plan.path,
+        anchor: { kind: "day", date: TODAY },
+        expectedMtime: plan.mtime,
+      });
+      expect(res.status).toBe(200);
+      expect((res.body.plan as unknown as Plan).path).toBe(plan.path);
+      expect(existsSync(planAbs(plan.path))).toBe(true);
+    } finally {
+      if (plan !== null) removePlanFiles([plan.path]);
+    }
+  });
+
+  it("rejects a malformed anchor before touching the filesystem", async () => {
+    const uid = uniqueId("plans");
+    let plan: Plan | null = null;
+    try {
+      plan = await create(uid, { kind: "day", date: TODAY });
+      const rejected: unknown[] = [
+        { kind: "week", date: "2026-03-15" }, // a Sunday, not a Monday
+        { kind: "month", month: "2026-13" },
+        { kind: "day", date: "2026-02-30" },
+        { kind: "day", date: "../../etc" },
+        "2026-03-16",
+      ];
+      for (const anchor of rejected) {
+        const res = await patch({ path: plan.path, anchor, expectedMtime: plan.mtime });
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("Invalid anchor");
+        expect(res.body.field).toBe("anchor");
+      }
+      expect(existsSync(planAbs(plan.path))).toBe(true);
+    } finally {
+      if (plan !== null) removePlanFiles([plan.path]);
+    }
+  });
+
+  it("refuses a re-schedule from a stale view and does not move the file", async () => {
+    const uid = uniqueId("plans");
+    let plan: Plan | null = null;
+    try {
+      plan = await create(uid, { kind: "day", date: TODAY });
+      // An editor (or the agent) touched the file after the panel read it.
+      const abs = planAbs(plan.path);
+      writeFileSync(abs, `${readFileSync(abs, "utf8")}\n外部备注\n`, "utf8");
+      const past = new Date(Date.now() - 60_000);
+      utimesSync(abs, past, past);
+
+      const res = await patch({
+        path: plan.path,
+        anchor: { kind: "day", date: "2026-04-10" },
+        expectedMtime: plan.mtime,
+      });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("modified");
+      expect(existsSync(abs)).toBe(true);
+      expect(existsSync(planAbs(`2026-04/2026-04-10-${uid}.md`))).toBe(false);
+    } finally {
+      if (plan !== null) removePlanFiles([plan.path]);
+    }
+  });
+
+  it("refuses to re-schedule a file that does not follow the plan format", async () => {
+    const uid = uniqueId("plans");
+    const rel = `2026-03/${uid}-随手记.md`;
+    const abs = seed(rel, "whatever the user wrote");
+    try {
+      const res = await patch({
+        path: rel,
+        anchor: { kind: "day", date: "2026-04-10" },
+        expectedMtime: statSync(abs).mtime.toISOString(),
+      });
+      expect(res.status).toBe(422);
+      expect(readFileSync(abs, "utf8")).toBe("whatever the user wrote");
+      expect(existsSync(planAbs(`2026-04/2026-04-10-${uid}-随手记.md`))).toBe(false);
+    } finally {
+      rmSync(abs, { force: true });
+    }
+  });
+
+  it("reflects a move made in the file manager on the next refresh", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(uid, { kind: "day", date: TODAY }, "外部改期");
+      paths.push(original.path);
+      // The user drags the file to another month in their file manager. The
+      // panel hears nothing (there is no watcher), so a refresh must re-read.
+      const movedRel = `2026-05/2026-05-20-${uid}.md`;
+      paths.push(movedRel);
+      mkdirSync(path.dirname(planAbs(movedRel)), { recursive: true });
+      renameSync(planAbs(original.path), planAbs(movedRel));
+
+      const data = await list(true);
+      expect(findPlan(data, original.path)).toBeUndefined();
+      expect(findPlan(data, movedRel)?.anchor).toEqual({ kind: "day", date: "2026-05-20" });
+      expect(findPlan(data, movedRel)?.note).toBe("外部改期");
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+});
+
 // ── Delete ────────────────────────────────────────────────────────────
 // Deletion is the one destructive operation the panel offers, so the API is
 // pinned on both halves: it really removes the plan, and it cannot be steered

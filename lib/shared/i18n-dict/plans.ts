@@ -9,7 +9,6 @@ export const plans = {
   "plans.week": "本周",
   "plans.month": "本月",
   "Tomorrow": "明天",
-  "Anchor for the next plan": "下一条计划的时间锚点",
   "{range} (in {month})": "{range}（属 {month}）",
   "Upcoming": "即将到来",
   "{n} overdue open plans": "过期未完成 {n} 项",
@@ -32,6 +31,12 @@ export const plans = {
   // notes and media dictionaries and are reused as-is.
   "Path copied": "路径已复制",
   "Copy path failed": "复制路径失败",
+  // Re-scheduling: a different anchor is a move, so the row's chips say where
+  // the plan goes and the server renames the file (ADR-0006).
+  "Reschedule": "改期",
+  "Move plan to": "改到",
+  "Failed to reschedule plan": "改期失败",
+  "A plan with that name already exists": "目标位置已有同名计划，未改动",
   "Delete plan?": "删除这条计划？",
   "This deletes the plan file permanently.": "这会永久删除该计划文件。",
   "Plan deleted": "已删除计划",
