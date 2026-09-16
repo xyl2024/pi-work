@@ -17,14 +17,18 @@ import {
   anchorChoiceOf,
   anchorForChoice,
   hideCompletedPlans,
+  planAnchorsEqual,
   toDateKey,
   type Plan,
+  type PlanAnchor,
   type PlanAnchorChoice,
   type PlanSectionId,
   type PlansResponse,
 } from "@/lib/shared/plans";
 import { PlanRow, type PlanConflictState, type PlanSaveStatus } from "./PlanRow";
 import { AnchorChips } from "./AnchorChips";
+import { MiniCalendar } from "./MiniCalendar";
+import { anchorDisplayText } from "./anchorText";
 
 interface PlansPanelProps {
   /** Bumped on every open; re-opening the tab refetches. */
@@ -69,9 +73,12 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   const [hideDone, setHideDone] = useState(false);
   const [title, setTitle] = useState("");
   // The anchor the next typed plan will get. "today" is the zero-friction
-  // default the pointer starts on; the chips move it. Resolved to a real
-  // anchor at submit time, against the browser's *then* today.
+  // default the pointer starts on; the chips move it. Resolved against the
+  // browser's local day here, in render — the server never picks a date.
   const [anchorChoice, setAnchorChoice] = useState<PlanAnchorChoice>("today");
+  // A day / week / month picked on the mini calendar. It overrides the chip
+  // choice until a chip is clicked again, and is what the list highlights.
+  const [pickedAnchor, setPickedAnchor] = useState<PlanAnchor | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<EditorTarget | null>(null);
   const [draft, setDraft] = useState("");
@@ -80,6 +87,8 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   // Which row's re-schedule chip menu is open (at most one).
   const [reschedulePath, setReschedulePath] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The scrollable list, so a calendar pick can bring its rows into view.
+  const listRef = useRef<HTMLDivElement>(null);
   // Latch for the in-flight create: `creating` is a state update, so two
   // Enter presses in the same tick would both read `false` and create twice.
   const creatingRef = useRef(false);
@@ -103,6 +112,15 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   // Latest `flushNote` closure, for the retry-after-save and unmount flushes.
   const flushRef = useRef<(notify?: boolean) => Promise<void>>(async () => {});
   const retrySaveRef = useRef(false);
+
+  // What the next typed plan will be anchored to: a mini-calendar pick wins
+  // over the one-tap chip choice until a chip is clicked again.
+  const today = toDateKey(new Date());
+  const newPlanAnchor = pickedAnchor ?? anchorForChoice(anchorChoice, today);
+  // A calendar pick that no chip names (a day a year out, say) still has to
+  // be visible in the create area, or the user cannot tell where it will land.
+  const pickedIsCustom =
+    pickedAnchor !== null && anchorChoiceOf(pickedAnchor, today) === null;
 
   const setEditorTarget = useCallback((next: EditorTarget | null) => {
     editorRef.current = next;
@@ -161,6 +179,16 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [load]);
+
+  // A calendar pick navigates the list: the rows on that anchor are marked by
+  // `renderRow` below, and this brings the first of them into view. A pick is
+  // explicit, so this never scrolls on its own (chip clicks do not navigate).
+  useEffect(() => {
+    if (pickedAnchor === null) return;
+    listRef.current
+      ?.querySelector<HTMLElement>('[data-plan-selected="true"]')
+      ?.scrollIntoView({ block: "nearest" });
+  }, [pickedAnchor]);
 
   /** Replace one plan in the list with the version the server just returned. */
   const applyPlan = useCallback((plan: Plan) => {
@@ -602,9 +630,10 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     creatingRef.current = true;
     setCreating(true);
     try {
-      // The chosen anchor is resolved against the browser's today here on the
-      // client; the server never picks a date for us.
-      await createPlan({ title: value, anchor: anchorForChoice(anchorChoice, toDateKey(new Date())) });
+      // The chosen anchor was resolved against the browser's local day when it
+      // was picked (chip click / calendar pick); the server never picks a
+      // date for us.
+      await createPlan({ title: value, anchor: newPlanAnchor });
       setTitle("");
       await load();
     } catch (err) {
@@ -619,7 +648,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       refocusPending.current = true;
       setCreating(false);
     }
-  }, [anchorChoice, title, load, toast, t]);
+  }, [newPlanAnchor, title, load, toast, t]);
 
   useEffect(() => {
     if (creating || !refocusPending.current) return;
@@ -630,6 +659,15 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   const sections = useMemo(
     () => hideCompletedPlans(data?.sections ?? [], hideDone),
     [data, hideDone],
+  );
+  // Every loaded plan, click-free: the mini calendar counts its badges from
+  // this list, so it never asks the server for anything of its own. Counts
+  // include completed plans even when 「隐藏已完成」 filters them out of the
+  // list — the badge answers "how full is this period", not "what does the
+  // filtered list show" (ADR-0006: done plans stay on the record).
+  const allPlans = useMemo(
+    () => data?.sections.flatMap((section) => section.plans) ?? [],
+    [data],
   );
   // The overdue section hides completed-only plans, so a lone done past plan
   // must still fall through to the empty state instead of a blank panel.
@@ -649,7 +687,8 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         showDate={showDate}
         expanded={editing?.path === plan.path}
         rescheduleOpen={reschedulePath === plan.path}
-        activeChoice={anchorChoiceOf(plan.anchor, toDateKey(new Date()))}
+        activeChoice={anchorChoiceOf(plan.anchor, today)}
+        selected={pickedAnchor !== null && planAnchorsEqual(plan.anchor, pickedAnchor)}
         draft={draft}
         saveStatus={saveStatus}
         conflict={conflict?.path === plan.path ? conflict : null}
@@ -673,11 +712,13 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       editing,
       flushNote,
       handleNoteChange,
+      pickedAnchor,
       removePlan,
       reschedule,
       reschedulePath,
       resolveConflict,
       saveStatus,
+      today,
       toggleDone,
       toggleExpand,
       toggleReschedule,
@@ -783,12 +824,28 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           />
         </div>
 
-        <div style={{ marginTop: 6 }}>
-          <AnchorChips activeChoice={anchorChoice} onSelect={setAnchorChoice} />
+        <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <AnchorChips
+            activeChoice={anchorChoiceOf(newPlanAnchor, today)}
+            onSelect={(choice) => {
+              // A chip is an explicit anchor choice again: drop the calendar
+              // pick so the two cannot disagree.
+              setPickedAnchor(null);
+              setAnchorChoice(choice);
+            }}
+          />
+          {pickedIsCustom && pickedAnchor !== null && (
+            <PickedAnchorToken anchor={pickedAnchor} onClear={() => setPickedAnchor(null)} />
+          )}
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 10px 24px" }}>
+      <MiniCalendar plans={allPlans} selected={newPlanAnchor} onSelect={setPickedAnchor} />
+
+      <div
+        ref={listRef}
+        style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 10px 24px" }}
+      >
         {error !== null ? (
           <div style={{ padding: "8px 4px", fontSize: 12, color: "var(--error)" }}>
             <div>{t("Failed to load plans")}</div>
@@ -842,6 +899,54 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         )}
       </div>
     </div>
+  );
+}
+
+/** The create anchor when it is *not* one of the one-tap chips — a day, week
+ *  or month picked on the mini calendar. It shows what the next plan will use
+ *  and gives a way back to the chips (which is also what clears the list
+ *  highlight the pick added). */
+function PickedAnchorToken({ anchor, onClear }: { anchor: PlanAnchor; onClear: () => void }) {
+  const { t, locale } = useI18n();
+  const text = anchorDisplayText(anchor, t, locale);
+  if (text === null) return null;
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 3,
+        padding: "2px 4px 2px 7px",
+        fontSize: 10.5,
+        color: "var(--text)",
+        background: "var(--bg-selected)",
+        border: "1px solid var(--accent)",
+        borderRadius: 999,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span style={{ fontSize: 9.5, color: "var(--text-dim)" }}>{t("New plan anchor")}</span>
+      <span style={{ fontFamily: "var(--font-mono)" }}>{text}</span>
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label={t("Clear")}
+        title={t("Clear")}
+        style={{
+          display: "inline-flex",
+          padding: 1,
+          color: "var(--text-dim)",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+        }}
+      >
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+    </span>
   );
 }
 

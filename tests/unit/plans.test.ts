@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   PLAN_TITLE_MAX_LENGTH,
   addDays,
+  addMonths,
   anchorChoiceOf,
   anchorEndKey,
   anchorForChoice,
   anchorStartKey,
+  countPlans,
   groupPlans,
   hideCompletedPlans,
+  isCrossMonthWeek,
   isDateKey,
   isMonday,
   isMonthKey,
+  monthCalendarWeeks,
   monthEndOf,
   monthKeyOf,
   movedPlanRelativePath,
@@ -25,6 +29,7 @@ import {
   planSectionOf,
   sanitizePlanTitle,
   serializePlanContent,
+  shortDateKey,
   toDateKey,
   toLocalTimestamp,
   uniquePlanFileName,
@@ -181,6 +186,101 @@ describe("plans calendar weeks", () => {
     expect(anchorForChoice("tomorrow", today)).toEqual({ kind: "day", date: "2026-10-02" });
     expect(anchorForChoice("week", today)).toEqual({ kind: "week", date: "2026-09-28" });
     expect(anchorForChoice("month", today)).toEqual({ kind: "month", month: "2026-10" });
+  });
+});
+
+describe("plans mini month calendar", () => {
+  it("formats a compact M/D date", () => {
+    expect(shortDateKey("2026-09-28")).toBe("9/28");
+    expect(shortDateKey("2026-01-05")).toBe("1/5");
+  });
+
+  it("pages a month key forwards and backwards across year ends", () => {
+    expect(addMonths("2026-09", 1)).toBe("2026-10");
+    expect(addMonths("2026-12", 1)).toBe("2027-01");
+    expect(addMonths("2026-01", -1)).toBe("2025-12");
+    expect(addMonths("2026-09", 12)).toBe("2027-09");
+    expect(addMonths("2026-03", -13)).toBe("2025-02");
+  });
+
+  it("builds Monday-first weeks that cover the whole month", () => {
+    // 2026-09-01 is a Tuesday, so the first row starts in August and the last
+    // ends in October.
+    const weeks = monthCalendarWeeks("2026-09");
+    expect(weeks.map((week) => week.start)).toEqual([
+      "2026-08-31",
+      "2026-09-07",
+      "2026-09-14",
+      "2026-09-21",
+      "2026-09-28",
+    ]);
+    expect(weeks[0].days[0]).toBe("2026-08-31"); // Monday
+    expect(weeks[0].days[6]).toBe("2026-09-06"); // Sunday
+    expect(weeks[4].days[6]).toBe("2026-10-04");
+    for (const week of weeks) {
+      expect(week.days).toHaveLength(7);
+      expect(isMonday(week.days[0])).toBe(true);
+    }
+  });
+
+  it("gives a 4 to 6 week grid whatever the month's shape", () => {
+    // June 2026 starts on a Monday: 5 tidy weeks.
+    const june = monthCalendarWeeks("2026-06");
+    expect(june[0].start).toBe("2026-06-01");
+    expect(june).toHaveLength(5);
+    // August 2026 starts on a Saturday and ends on a Monday: 6 rows.
+    expect(monthCalendarWeeks("2026-08")).toHaveLength(6);
+    // February 2026 starts on a Sunday and has 28 days: 5 rows.
+    expect(monthCalendarWeeks("2026-02")).toHaveLength(5);
+    for (const month of ["2026-01", "2026-02", "2026-06", "2026-08", "2026-12", "2024-02"]) {
+      const weeks = monthCalendarWeeks(month);
+      expect(weeks.length).toBeGreaterThanOrEqual(4);
+      expect(weeks.length).toBeLessThanOrEqual(6);
+      // Every day of the month appears exactly once.
+      const days = weeks.flatMap((week) => week.days);
+      for (let day = 1; day <= Number(monthEndOf(month).slice(8)); day += 1) {
+        const key = `${month}-${String(day).padStart(2, "0")}`;
+        expect(days.filter((candidate) => candidate === key)).toHaveLength(1);
+      }
+    }
+  });
+
+  it("flags the weeks that straddle a month boundary", () => {
+    const weeks = monthCalendarWeeks("2026-09");
+    expect(isCrossMonthWeek(weeks[0])).toBe(true); // 8/31 – 9/6
+    expect(isCrossMonthWeek(weeks[2])).toBe(false); // 9/14 – 9/20
+    expect(isCrossMonthWeek(weeks[4])).toBe(true); // 9/28 – 10/4
+    // A month starting on a Monday has no leading cross-month week.
+    expect(isCrossMonthWeek(monthCalendarWeeks("2026-06")[0])).toBe(false);
+  });
+
+  it("counts loaded plans by the period each anchor names", () => {
+    const counts = countPlans([
+      ...sample(),
+      plan({ path: "2026-09/2026-09-28W-整理书架.md", title: "整理书架", anchor: { kind: "week", date: "2026-09-28" } }),
+      plan({ path: "2026-09/2026-09-15W-第二件.md", title: "第二件", anchor: { kind: "week", date: "2026-09-15" } }),
+      plan({ path: "2026-09/2026-09-M-读完.md", title: "读完", anchor: { kind: "month", month: "2026-09" } }),
+      plan({ path: "2026-10/2026-10-01-下月.md", title: "下月", anchor: { kind: "day", date: "2026-10-01" } }),
+    ]);
+    // day anchors only; the inbox and the other granularities are not day counts
+    expect(counts.days.get("2026-09-15")).toBe(1);
+    expect(counts.days.get("2026-09-01")).toBe(1); // the done one still counts
+    expect(counts.days.get("2026-09-16")).toBe(1);
+    expect(counts.days.get("2026-10-01")).toBe(1);
+    expect(counts.days.get("2026-09-28")).toBeUndefined();
+    // week anchors count on their Monday
+    expect(counts.weeks.get("2026-09-28")).toBe(1);
+    expect(counts.weeks.get("2026-09-15")).toBe(1);
+    // month anchors count on their month
+    expect(counts.months.get("2026-09")).toBe(1);
+    expect(counts.months.get("2026-10")).toBeUndefined();
+  });
+
+  it("counts nothing for an empty or inbox-only list", () => {
+    const counts = countPlans([plan({ path: "inbox/随手记.md", title: "随手记", anchor: { kind: "inbox" } })]);
+    expect(counts.days.size).toBe(0);
+    expect(counts.weeks.size).toBe(0);
+    expect(counts.months.size).toBe(0);
   });
 });
 

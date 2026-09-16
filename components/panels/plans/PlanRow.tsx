@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { IconButton } from "@/components/ui/IconButton";
 import {
-  monthKeyOf,
   noteSummary,
   weekEndOf,
   type Plan,
@@ -12,6 +11,7 @@ import {
   type PlanAnchorChoice,
 } from "@/lib/shared/plans";
 import { AnchorChips } from "./AnchorChips";
+import { anchorDisplayText } from "./anchorText";
 
 /** Save state of the row's note, mirroring the notes editor's indicator. */
 export type PlanSaveStatus = "saved" | "unsaved" | "saving" | "error";
@@ -48,6 +48,9 @@ export interface PlanRowProps {
   rescheduleOpen: boolean;
   /** The one-tap choice this plan's anchor currently maps to, if any. */
   activeChoice: PlanAnchorChoice | null;
+  /** True when this plan sits on the anchor the mini calendar navigated to
+   *  — the row a calendar pick marked. */
+  selected: boolean;
   /** The note being edited (only meaningful while expanded). */
   draft: string;
   saveStatus: PlanSaveStatus;
@@ -78,6 +81,7 @@ export function PlanRow({
   expanded,
   rescheduleOpen,
   activeChoice,
+  selected,
   draft,
   saveStatus,
   conflict,
@@ -99,13 +103,21 @@ export function PlanRow({
 
   return (
     <div
+      data-plan-selected={selected ? "true" : undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setHovered(true)}
       onBlur={() => setHovered(false)}
       style={{
         borderRadius: 5,
-        background: hovered && !expanded ? "var(--bg-hover)" : "transparent",
+        background: selected
+          ? "var(--bg-selected)"
+          : hovered && !expanded
+            ? "var(--bg-hover)"
+            : "transparent",
+        // A left accent bar marks the row the mini calendar navigated to,
+        // without moving or recolouring the list.
+        boxShadow: selected ? "inset 2px 0 0 var(--accent)" : undefined,
         // Completed plans stay exactly where they were — this is a record, not
         // a cleanup — so they only fade.
         opacity: plan.done ? 0.55 : 1,
@@ -316,20 +328,6 @@ export function PlanRow({
   );
 }
 
-/** `2026-09-28` → `9/28`, for compact week ranges. */
-function numericDay(dateKey: string): string {
-  const [, month, day] = dateKey.split("-");
-  return `${Number(month)}/${Number(day)}`;
-}
-
-/** Localized month label for a `YYYY-MM` key (`2026年9月` / `Sep 2026`). */
-function monthLabel(monthKey: string, locale: string): string {
-  const [year, month] = monthKey.split("-").map(Number);
-  return new Intl.DateTimeFormat(locale, { year: "numeric", month: "short" }).format(
-    new Date(year, month - 1, 1),
-  );
-}
-
 /**
  * The anchor as a compact label: `09-15` for a day, `9/28–10/4` for a week
  * (plus which month owns it when the week straddles a month), `2026年9月` for
@@ -344,28 +342,10 @@ function AnchorLabel({ anchor, showDate }: { anchor: Plan["anchor"]; showDate: b
   const { t, locale } = useI18n();
   if (anchor.kind === "inbox") return null;
   if (anchor.kind === "day" && !showDate) return null;
-
-  let text: string;
-  let title: string | undefined;
-  if (anchor.kind === "day") {
-    text = anchor.date.slice(5);
-  } else if (anchor.kind === "week") {
-    const end = weekEndOf(anchor.date);
-    const range = `${numericDay(anchor.date)}–${numericDay(end)}`;
-    // A cross-month week is filed under its Monday's month, so name that
-    // month: otherwise `9/28–10/4` sitting in the 本周 section would not say
-    // which month owns it.
-    text =
-      monthKeyOf(anchor.date) === monthKeyOf(end)
-        ? range
-        : t("{range} (in {month})", {
-            range,
-            month: monthLabel(monthKeyOf(anchor.date), locale),
-          });
-    title = `${anchor.date} – ${end}`;
-  } else {
-    text = monthLabel(anchor.month, locale);
-  }
+  const text = anchorDisplayText(anchor, t, locale, "short");
+  if (text === null) return null;
+  const title =
+    anchor.kind === "week" ? `${anchor.date} – ${weekEndOf(anchor.date)}` : undefined;
 
   return (
     <span

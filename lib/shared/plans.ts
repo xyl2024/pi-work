@@ -98,6 +98,13 @@ export function isMonday(dateKey: string): boolean {
   return isDateKey(dateKey) && weekStartOf(dateKey) === dateKey;
 }
 
+/** Compact `M/D` for a date key (`2026-09-28` → `9/28`), for week ranges and
+ *  the mini calendar's day cells. */
+export function shortDateKey(dateKey: string): string {
+  const [, month, day] = dateKey.split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
 /** Last day of a `YYYY-MM` month, as a date key (2024-02 → 2024-02-29). */
 export function monthEndOf(monthKey: string): string {
   const [year, month] = monthKey.split("-").map(Number);
@@ -242,6 +249,85 @@ export function anchorChoiceOf(anchor: PlanAnchor, today: string): PlanAnchorCho
     case "month":
       return anchor.month === monthKeyOf(today) ? "month" : null;
   }
+}
+
+// ── Mini month calendar ──────────────────────────────────────────────────
+// The panel's resident calendar is a *projection* of the list it is already
+// showing: the grid comes from the calendar rules here, and the badges are
+// counted from the loaded plans — the calendar asks the server for nothing of
+// its own.
+
+/** One row of the mini month calendar: a Monday-first week plus the month the
+ *  week is filed under (its Monday's month, ADR-0006). */
+export interface PlanCalendarWeek {
+  /** Monday starting the week — the date a week anchor is named by. */
+  start: string;
+  /** Seven date keys, Monday → Sunday. */
+  days: string[];
+  /** Month the week belongs to: the Monday's month, which is also its filing
+   *  directory — the reason a cross-month week has to say so. */
+  month: string;
+}
+
+/** Month key shifted by whole months (`2026-01` − 1 → `2025-12`). */
+export function addMonths(monthKey: string, delta: number): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  const shifted = new Date(year, month - 1 + delta, 1);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * The rows a month's mini calendar shows: every Monday-first week that holds
+ * at least one day of the month, plus the neighbouring months' days that fill
+ * the first and last rows. 4–6 rows for a real month.
+ */
+export function monthCalendarWeeks(monthKey: string): PlanCalendarWeek[] {
+  const last = monthEndOf(monthKey);
+  const weeks: PlanCalendarWeek[] = [];
+  for (let start = weekStartOf(`${monthKey}-01`); start <= last; start = addDays(start, 7)) {
+    const days = Array.from({ length: 7 }, (_, index) => addDays(start, index));
+    weeks.push({ start, days, month: monthKeyOf(start) });
+  }
+  return weeks;
+}
+
+/** True when the week has days in two months, so the row must name the month
+ *  that owns it (the Monday's — not the month it ends in). */
+export function isCrossMonthWeek(week: PlanCalendarWeek): boolean {
+  return monthKeyOf(week.days[6]) !== week.month;
+}
+
+/** Counts of loaded plans per period, for the calendar's badges. A day anchor
+ *  counts on its date, a week anchor on its Monday, a month anchor on its
+ *  month; the inbox has no time and never appears on the calendar. */
+export interface PlanCounts {
+  days: ReadonlyMap<string, number>;
+  weeks: ReadonlyMap<string, number>;
+  months: ReadonlyMap<string, number>;
+}
+
+export function countPlans(plans: readonly Plan[]): PlanCounts {
+  const days = new Map<string, number>();
+  const weeks = new Map<string, number>();
+  const months = new Map<string, number>();
+  const bump = (counts: Map<string, number>, key: string) =>
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  for (const plan of plans) {
+    switch (plan.anchor.kind) {
+      case "day":
+        bump(days, plan.anchor.date);
+        break;
+      case "week":
+        bump(weeks, plan.anchor.date);
+        break;
+      case "month":
+        bump(months, plan.anchor.month);
+        break;
+      case "inbox":
+        break;
+    }
+  }
+  return { days, weeks, months };
 }
 
 // ── Parse problems (the 待整理 feed) ──────────────────────────────────────
