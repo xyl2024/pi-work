@@ -759,6 +759,16 @@ export function groupPlans(plans: readonly Plan[], today: string): PlanSection[]
 }
 
 /**
+ * The inverse of `groupPlans`: every plan a section list holds, in section
+ * order. The panel needs a flat view in three places (the total count, the
+ * mini calendar's badges, looking a plan up by path), and "walk the sections
+ * and flatten" is not a rule worth spelling out more than once.
+ */
+export function flattenPlanSections(sections: readonly PlanSection[]): Plan[] {
+  return sections.flatMap((section) => section.plans);
+}
+
+/**
  * Apply the panel's 「隐藏已完成」switch. Completed plans are records, not noise
  * to be deleted, so hiding them only drops them from the sections — the files
  * stay put and the switch is non-destructive.

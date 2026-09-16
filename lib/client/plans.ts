@@ -59,6 +59,40 @@ export class PlanConflictError extends Error {
 }
 
 /**
+ * What a failed plan write means for the panel. Three shapes, because the
+ * panel answers them three different ways:
+ *
+ * - `name-taken`  — nothing was written and there is nothing to overwrite, so
+ *                   the panel only reports the occupied `target`.
+ * - `conflict`    — the panel's view was stale; the user answers 「覆盖 / 重载」
+ *                   and the refused action is retried from `retry`.
+ * - `error`       — anything else (network, 500, unreadable file): a toast.
+ *
+ * Deciding this is the panel's most repeated branch, so it lives here once,
+ * next to the error it is classifying, instead of as an `instanceof` dance at
+ * every write site.
+ */
+export type PlanWriteFailure =
+  | { kind: "name-taken"; target: string | null; message: string }
+  | {
+      kind: "conflict";
+      code: Exclude<PlanConflictCode, "name-taken">;
+      movedTo: string | null;
+      message: string;
+    }
+  | { kind: "error"; message: string };
+
+/** Classify a rejected `updatePlan` / `deletePlan` call. Never throws. */
+export function planWriteFailure(err: unknown): PlanWriteFailure {
+  if (err instanceof PlanConflictError) {
+    const { code, movedTo, target, message } = err;
+    if (code === "name-taken") return { kind: "name-taken", target, message };
+    return { kind: "conflict", code, movedTo, message };
+  }
+  return { kind: "error", message: err instanceof Error ? err.message : String(err) };
+}
+
+/**
  * Update a plan in place (note, completion and/or anchor).
  *
  * `expectedMtime` is the file's `mtime` as the panel last saw it; a stale

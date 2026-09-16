@@ -10,14 +10,16 @@ import {
   createPlan,
   deletePlan,
   fetchPlans,
-  PlanConflictError,
+  planWriteFailure,
   updatePlan,
+  type PlanWriteFailure,
 } from "@/lib/client/plans";
 import { readPlanViewMode, writePlanViewMode } from "@/lib/client/plans-view-mode";
 import {
   DEFAULT_PLAN_VIEW_MODE,
   anchorChoiceOf,
   anchorForChoice,
+  flattenPlanSections,
   hideCompletedPlans,
   orderPlansForTimeline,
   planAnchorsEqual,
@@ -25,17 +27,21 @@ import {
   type Plan,
   type PlanAnchor,
   type PlanAnchorChoice,
-  type PlanSectionId,
   type PlansResponse,
   type PlanViewMode,
 } from "@/lib/shared/plans";
 import { PlanRow, type PlanConflictState, type PlanSaveStatus } from "./PlanRow";
 import { AnchorChips } from "./AnchorChips";
-import { Chevron } from "./Chevron";
 import { MiniCalendar } from "./MiniCalendar";
+import {
+  EmptyPlans,
+  LabeledSection,
+  OverdueSection,
+  PickedAnchorToken,
+  TimelineList,
+} from "./PlanSections";
 import { UnsortedPlans } from "./UnsortedPlans";
 import { ViewModeSwitch } from "./ViewModeSwitch";
-import { anchorDisplayText } from "./anchorText";
 
 interface PlansPanelProps {
   /** Bumped on every open; re-opening the tab refetches. */
@@ -212,6 +218,38 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       ?.scrollIntoView({ block: "nearest" });
   }, [pickedAnchor]);
 
+  /**
+   * If the open note editor sits on `fromPath`, re-point it at the plan the
+   * server just returned. A re-schedule renames the file, so the editor has to
+   * follow; a note or completion write keeps the path and only refreshes the
+   * `mtime` the next write guards on. Either way this is "the editor follows the
+   * plan it is editing", and it happens after every successful write.
+   */
+  const adoptEditor = useCallback(
+    (fromPath: string, plan: Plan) => {
+      if (editorRef.current?.path === fromPath) {
+        setEditorTarget({ path: plan.path, mtime: plan.mtime });
+      }
+    },
+    [setEditorTarget],
+  );
+
+  /**
+   * The one way the panel reports a re-schedule that landed on a plan already
+   * using that name: nothing was written, so there is nothing to overwrite or
+   * reload — the occupied path is the whole message.
+   */
+  const reportNameTaken = useCallback(
+    (failure: Extract<PlanWriteFailure, { kind: "name-taken" }>) => {
+      toast.show({
+        kind: "error",
+        message: t("A plan with that name already exists"),
+        description: failure.target ?? undefined,
+      });
+    },
+    [t, toast],
+  );
+
   /** Replace one plan in the list with the version the server just returned. */
   const applyPlan = useCallback((plan: Plan) => {
     setData((prev) =>
@@ -279,25 +317,28 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         // — switching rows mid-save hands the draft to the new one.
         if (editorRef.current?.path === target.path) {
           dirtyRef.current = false;
-          setEditorTarget({ path: plan.path, mtime: plan.mtime });
+          adoptEditor(target.path, plan);
           setSaveStatus("saved");
         }
         if (notify) toast.show({ kind: "success", message: t("Plan saved") });
       } catch (err) {
-        if (err instanceof PlanConflictError && err.code !== "name-taken") {
+        const failure = planWriteFailure(err);
+        if (failure.kind === "conflict") {
           setPendingConflict({
             path: target.path,
-            code: err.code,
-            movedTo: err.movedTo,
+            code: failure.code,
+            movedTo: failure.movedTo,
             retry: { kind: "note" },
           });
           if (editorRef.current?.path === target.path) setSaveStatus("unsaved");
         } else {
+          // A note save never renames, so a name collision cannot land here;
+          // if one somehow did it would read as an ordinary failure.
           if (editorRef.current?.path === target.path) setSaveStatus("error");
           toast.show({
             kind: "error",
             message: t("Failed to save plan"),
-            description: err instanceof Error ? err.message : String(err),
+            description: failure.message,
           });
         }
       } finally {
@@ -308,7 +349,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         }
       }
     },
-    [applyPlan, flushRef, setEditorTarget, setPendingConflict, t, toast],
+    [adoptEditor, applyPlan, flushRef, setPendingConflict, t, toast],
   );
 
   // Keep the unmount flush pointing at the latest closure without re-running
@@ -364,18 +405,17 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           expectedMtime: plan.mtime,
         });
         applyPlan(updated);
-        if (editorRef.current?.path === plan.path) {
-          setEditorTarget({ path: updated.path, mtime: updated.mtime });
-        }
+        adoptEditor(plan.path, updated);
       } catch (err) {
-        if (err instanceof PlanConflictError && err.code !== "name-taken") {
+        const failure = planWriteFailure(err);
+        if (failure.kind === "conflict") {
           // Show the conflict where the user is looking, and remember that
           // 「覆盖」 must redo the toggle, not save a note.
           if (editorRef.current?.path !== plan.path) openEditor(plan);
           setPendingConflict({
             path: plan.path,
-            code: err.code,
-            movedTo: err.movedTo,
+            code: failure.code,
+            movedTo: failure.movedTo,
             retry: { kind: "done", done: desired },
           });
           return;
@@ -383,11 +423,11 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         toast.show({
           kind: "error",
           message: t("Failed to update plan"),
-          description: err instanceof Error ? err.message : String(err),
+          description: failure.message,
         });
       }
     },
-    [applyPlan, openEditor, setEditorTarget, setPendingConflict, t, toast],
+    [adoptEditor, applyPlan, openEditor, setPendingConflict, t, toast],
   );
 
   /** Put the completion state the user asked for on the file as it is now. */
@@ -395,11 +435,9 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     async (path: string, done: boolean, mtime: string | undefined, force = false) => {
       const updated = await updatePlan({ path, done, expectedMtime: mtime, force });
       applyPlan(updated);
-      if (editorRef.current?.path === updated.path) {
-        setEditorTarget({ path: updated.path, mtime: updated.mtime });
-      }
+      adoptEditor(path, updated);
     },
-    [applyPlan, setEditorTarget],
+    [adoptEditor, applyPlan],
   );
 
   /**
@@ -427,28 +465,23 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           expectedMtime: plan.mtime,
         });
         // A moved plan takes the open note editor with it.
-        if (editorRef.current?.path === plan.path) {
-          setEditorTarget({ path: updated.path, mtime: updated.mtime });
-        }
+        adoptEditor(plan.path, updated);
         if (conflictRef.current?.path === plan.path) setPendingConflict(null);
         setReschedulePath(null);
         await reload();
       } catch (err) {
-        if (err instanceof PlanConflictError && err.code === "name-taken") {
+        const failure = planWriteFailure(err);
+        if (failure.kind === "name-taken") {
           // The target month already holds a plan of that name. Nothing was
           // written and there is nothing to overwrite, so just say so.
-          toast.show({
-            kind: "error",
-            message: t("A plan with that name already exists"),
-            description: err.target ?? undefined,
-          });
+          reportNameTaken(failure);
           return;
         }
-        if (err instanceof PlanConflictError && err.code !== "name-taken") {
+        if (failure.kind === "conflict") {
           setPendingConflict({
             path: plan.path,
-            code: err.code,
-            movedTo: err.movedTo,
+            code: failure.code,
+            movedTo: failure.movedTo,
             retry: { kind: "anchor", anchor },
           });
           return;
@@ -456,13 +489,13 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         toast.show({
           kind: "error",
           message: t("Failed to reschedule plan"),
-          description: err instanceof Error ? err.message : String(err),
+          description: failure.message,
         });
       } finally {
         reschedulingRef.current = false;
       }
     },
-    [reload, setEditorTarget, setPendingConflict, t, toast],
+    [adoptEditor, reload, reportNameTaken, setPendingConflict, t, toast],
   );
 
   const toggleReschedule = useCallback((plan: Plan) => {
@@ -487,9 +520,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
               anchor: pending.retry.anchor,
               force: true,
             });
-            if (editorRef.current?.path === pending.path) {
-              setEditorTarget({ path: updated.path, mtime: updated.mtime });
-            }
+            adoptEditor(pending.path, updated);
             await reload();
           } else {
             const updated = await updatePlan({
@@ -499,10 +530,8 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
             });
             dirtyRef.current = false;
             applyPlan(updated);
-            if (editorRef.current?.path === updated.path) {
-              setEditorTarget({ path: updated.path, mtime: updated.mtime });
-              setSaveStatus("saved");
-            }
+            if (editorRef.current?.path === updated.path) setSaveStatus("saved");
+            adoptEditor(pending.path, updated);
           }
           setPendingConflict(null);
           // A 「覆盖」 of a completion toggle can still leave a dirty note behind.
@@ -551,24 +580,17 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
             anchor: pending.retry.anchor,
             expectedMtime: found.mtime,
           });
-          if (editorRef.current?.path === pending.path) {
-            setEditorTarget({ path: updated.path, mtime: updated.mtime });
-          }
+          adoptEditor(pending.path, updated);
           await reload();
         } catch (err) {
-          if (err instanceof PlanConflictError && err.code === "name-taken") {
-            toast.show({
-              kind: "error",
-              message: t("A plan with that name already exists"),
-              description: err.target ?? undefined,
-            });
-          } else {
+          const failure = planWriteFailure(err);
+          if (failure.kind === "name-taken") reportNameTaken(failure);
+          else
             toast.show({
               kind: "error",
               message: t("Failed to reschedule plan"),
-              description: err instanceof Error ? err.message : String(err),
+              description: failure.message,
             });
-          }
         }
       } else if (pending.code === "modified") {
         openEditor(found);
@@ -578,25 +600,23 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       //    actually typed is written to the new path — the editor merely
       //    pointing at a plan is not a reason to rewrite it elsewhere. A
       //    re-schedule moved the editor itself in step 1.
-      if (
-        pending.retry.kind !== "anchor" &&
-        pending.code === "missing" &&
-        editorRef.current?.path === pending.path
-      ) {
-        setEditorTarget({ path: found.path, mtime: found.mtime });
-        if (noteWasDirty) {
+      if (pending.retry.kind !== "anchor" && pending.code === "missing") {
+        const editorOnOldPath = editorRef.current?.path === pending.path;
+        adoptEditor(pending.path, found);
+        if (editorOnOldPath && noteWasDirty) {
           dirtyRef.current = true;
           await flushNote();
         }
       }
     },
     [
+      adoptEditor,
       applyPlan,
       flushNote,
       openEditor,
       reload,
+      reportNameTaken,
       saveDone,
-      setEditorTarget,
       setPendingConflict,
       t,
       toast,
@@ -677,16 +697,13 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   // include completed plans even when 「隐藏已完成」 filters them out of the
   // list — the badge answers "how full is this period", not "what does the
   // filtered list show" (ADR-0006: done plans stay on the record).
-  const allPlans = useMemo(
-    () => data?.sections.flatMap((section) => section.plans) ?? [],
-    [data],
-  );
+  const allPlans = useMemo(() => flattenPlanSections(data?.sections ?? []), [data]);
   // 时间轴 mode's single ordered axis. It reuses the *same* filtered sections
   // the other two modes render, flattened — so the switch behaves identically
   // in every mode and only the arrangement differs (ADR-0006). Order within
   // the sections is irrelevant: `orderPlansForTimeline` re-sorts.
   const timelinePlans = useMemo(
-    () => orderPlansForTimeline(sections.flatMap((section) => section.plans), today),
+    () => orderPlansForTimeline(flattenPlanSections(sections), today),
     [sections, today],
   );
   // The overdue section hides completed-only plans, so a lone done past plan
@@ -696,8 +713,10 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       ? section.plans.some((plan) => !plan.done)
       : section.plans.length > 0,
   );
-  const total = data?.sections.reduce((n, section) => n + section.plans.length, 0) ?? 0;
-  const visibleCount = sections.reduce((n, section) => n + section.plans.length, 0);
+  // `total` counts what is on the record, `visibleCount` what the list shows:
+  // they differ only while 「隐藏已完成」 is on.
+  const total = allPlans.length;
+  const visibleCount = flattenPlanSections(sections).length;
 
   const renderRow = useCallback(
     (plan: Plan, showDate: boolean) => (
@@ -936,193 +955,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   );
 }
 
-/** The create anchor when it is *not* one of the one-tap chips — a day, week
- *  or month picked on the mini calendar. It shows what the next plan will use
- *  and gives a way back to the chips (which is also what clears the list
- *  highlight the pick added). */
-function PickedAnchorToken({ anchor, onClear }: { anchor: PlanAnchor; onClear: () => void }) {
-  const { t, locale } = useI18n();
-  const text = anchorDisplayText(anchor, t, locale);
-  if (text === null) return null;
-
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 3,
-        padding: "2px 4px 2px 7px",
-        fontSize: 10.5,
-        color: "var(--text)",
-        background: "var(--bg-selected)",
-        border: "1px solid var(--accent)",
-        borderRadius: 999,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span style={{ fontSize: 9.5, color: "var(--text-dim)" }}>{t("New plan anchor")}</span>
-      <span style={{ fontFamily: "var(--font-mono)" }}>{text}</span>
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label={t("Clear")}
-        title={t("Clear")}
-        style={{
-          display: "inline-flex",
-          padding: 1,
-          color: "var(--text-dim)",
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-        }}
-      >
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-          <path d="M6 6l12 12M18 6L6 18" />
-        </svg>
-      </button>
-    </span>
-  );
-}
-
 /** Look a plan up in a list payload by its plan-relative path. */
 function findPlan(data: PlansResponse | null, path: string): Plan | undefined {
-  return data?.sections.flatMap((section) => section.plans).find((plan) => plan.path === path);
+  return flattenPlanSections(data?.sections ?? []).find((plan) => plan.path === path);
 }
-
-type RenderRow = (plan: Plan, showDate: boolean) => React.ReactNode;
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        padding: "4px 4px",
-        fontSize: 11,
-        fontWeight: 600,
-        color: "var(--text-muted)",
-        letterSpacing: "0.02em",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** The shared empty state: with no plans at all it invites a first one, with
- *  plans on the record but none visible it says they are all done. */
-function EmptyPlans({ total }: { total: number }) {
-  const { t } = useI18n();
-  return (
-    <div
-      style={{
-        padding: "32px 12px",
-        textAlign: "center",
-        fontSize: 12,
-        color: "var(--text-dim)",
-      }}
-    >
-      {total > 0 ? t("All plans are completed") : t("No plans yet")}
-    </div>
-  );
-}
-
-/**
- * 时间轴 mode: no sections, one continuous axis. The inbox is pinned at the top
- * behind its own label — a plan without a time must not drift out of sight —
- * and every anchored plan below it is laid out past → today → future by
- * `orderPlansForTimeline`. Anchored rows always show their date so the axis
- * can be read; inbox rows have no time to show.
- */
-function TimelineList({ plans, renderRow }: { plans: Plan[]; renderRow: RenderRow }) {
-  const { t } = useI18n();
-  const inbox = plans.filter((plan) => plan.anchor.kind === "inbox");
-  const anchored = plans.filter((plan) => plan.anchor.kind !== "inbox");
-  return (
-    <>
-      {inbox.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <SectionLabel>{t("plans.inbox")}</SectionLabel>
-          {inbox.map((plan) => renderRow(plan, false))}
-        </div>
-      )}
-      {anchored.map((plan) => renderRow(plan, true))}
-    </>
-  );
-}
-
-function LabeledSection({
-  id,
-  plans,
-  renderRow,
-}: {
-  id: Exclude<PlanSectionId, "overdue">;
-  plans: Plan[];
-  renderRow: RenderRow;
-}) {
-  const { t } = useI18n();
-  if (plans.length === 0) return null;
-
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <SectionLabel>{t(SECTION_LABEL_KEY[id])}</SectionLabel>
-      {plans.map((plan) => renderRow(plan, id === "upcoming"))}
-    </div>
-  );
-}
-
-const SECTION_LABEL_KEY: Record<Exclude<PlanSectionId, "overdue">, string> = {
-  inbox: "plans.inbox",
-  today: "Today",
-  week: "plans.week",
-  month: "plans.month",
-  upcoming: "Upcoming",
-};
-
-/**
- * Overdue plans live behind one collapsed row. The row counts and lists only
- * the *open* ones — a plan with a past anchor that is already done is history,
- * not a reminder, and would otherwise read "0 open" while showing items.
- */
-function OverdueSection({
-  plans,
-  open,
-  onToggle,
-  renderRow,
-}: {
-  plans: Plan[];
-  open: boolean;
-  onToggle: () => void;
-  renderRow: RenderRow;
-}) {
-  const { t } = useI18n();
-  const openPlans = plans.filter((plan) => !plan.done);
-  if (openPlans.length === 0) return null;
-
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          width: "100%",
-          padding: "4px 4px",
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-          color: "var(--text-muted)",
-          fontSize: 11,
-          fontWeight: 600,
-          textAlign: "left",
-        }}
-      >
-        <Chevron open={open} />
-        <span>{t("{n} overdue open plans", { n: openPlans.length })}</span>
-      </button>
-      {open && openPlans.map((plan) => renderRow(plan, true))}
-    </div>
-  );
-}
-
