@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   PLAN_TITLE_MAX_LENGTH,
   groupPlans,
+  hideCompletedPlans,
   isDateKey,
   monthKeyOf,
+  noteSummary,
   parsePlanAnchor,
   parsePlanContent,
   parsePlanPath,
@@ -23,6 +25,7 @@ import {
 /** Minimal plan factory — every field not under test gets a stable value. */
 function plan(overrides: Partial<Plan> & Pick<Plan, "path" | "title" | "anchor">): Plan {
   return {
+    absPath: `/data/user-plans/${overrides.path}`,
     done: false,
     createdAt: null,
     doneAt: null,
@@ -30,6 +33,39 @@ function plan(overrides: Partial<Plan> & Pick<Plan, "path" | "title" | "anchor">
     mtime: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };
+}
+
+/** A mixed set of plans used by the grouping / filtering tests. */
+function sample(): Plan[] {
+  return [
+    plan({ path: "inbox/随手记.md", title: "随手记", anchor: { kind: "inbox" } }),
+    plan({
+      path: "2026-09/2026-09-10-旧事.md",
+      title: "旧事",
+      anchor: { kind: "day", date: "2026-09-10" },
+    }),
+    plan({
+      path: "2026-09/2026-09-01-做完的旧事.md",
+      title: "做完的旧事",
+      anchor: { kind: "day", date: "2026-09-01" },
+      done: true,
+    }),
+    plan({
+      path: "2026-09/2026-09-15-今天.md",
+      title: "今天",
+      anchor: { kind: "day", date: "2026-09-15" },
+    }),
+    plan({
+      path: "2026-09/2026-09-20-晚点.md",
+      title: "晚点",
+      anchor: { kind: "day", date: "2026-09-20" },
+    }),
+    plan({
+      path: "2026-09/2026-09-16-明天.md",
+      title: "明天",
+      anchor: { kind: "day", date: "2026-09-16" },
+    }),
+  ];
 }
 
 describe("plans date keys", () => {
@@ -311,38 +347,6 @@ describe("plans serialization", () => {
 });
 
 describe("plans sections", () => {
-  function sample(): Plan[] {
-    return [
-      plan({ path: "inbox/随手记.md", title: "随手记", anchor: { kind: "inbox" } }),
-      plan({
-        path: "2026-09/2026-09-10-旧事.md",
-        title: "旧事",
-        anchor: { kind: "day", date: "2026-09-10" },
-      }),
-      plan({
-        path: "2026-09/2026-09-01-做完的旧事.md",
-        title: "做完的旧事",
-        anchor: { kind: "day", date: "2026-09-01" },
-        done: true,
-      }),
-      plan({
-        path: "2026-09/2026-09-15-今天.md",
-        title: "今天",
-        anchor: { kind: "day", date: "2026-09-15" },
-      }),
-      plan({
-        path: "2026-09/2026-09-20-晚点.md",
-        title: "晚点",
-        anchor: { kind: "day", date: "2026-09-20" },
-      }),
-      plan({
-        path: "2026-09/2026-09-16-明天.md",
-        title: "明天",
-        anchor: { kind: "day", date: "2026-09-16" },
-      }),
-    ];
-  }
-
   it("assigns every plan to exactly one section by its anchor", () => {
     const today = "2026-09-15";
     const sections = groupPlans(sample(), today);
@@ -382,5 +386,59 @@ describe("plans sections", () => {
     const sections = groupPlans([], "2026-09-15");
     expect(sections.map((s) => s.id)).toEqual(["inbox", "overdue", "today", "upcoming"]);
     expect(sections.every((s) => s.plans.length === 0)).toBe(true);
+  });
+});
+
+describe("plans hide-completed filter", () => {
+  it("passes the sections through untouched when the switch is off", () => {
+    const sections = groupPlans(sample(), "2026-09-15");
+    expect(hideCompletedPlans(sections, false)).toEqual(sections);
+  });
+
+  it("drops completed plans from every section without touching the others", () => {
+    const sections = hideCompletedPlans(groupPlans(sample(), "2026-09-15"), true);
+
+    expect(sections.map((section) => section.id)).toEqual([
+      "inbox",
+      "overdue",
+      "today",
+      "upcoming",
+    ]);
+    // The completed plan lived in the overdue section and is the only one gone.
+    expect(sections.flatMap((section) => section.plans.map((p) => p.title))).toEqual([
+      "随手记",
+      "旧事",
+      "今天",
+      "明天",
+      "晚点",
+    ]);
+  });
+
+  it("hides a plan completed today, not just past ones", () => {
+    const completed = plan({
+      path: "2026-09/2026-09-15-做完.md",
+      title: "做完",
+      anchor: { kind: "day", date: "2026-09-15" },
+      done: true,
+    });
+    const hidden = hideCompletedPlans(groupPlans([completed], "2026-09-15"), true);
+    expect(hidden[2].id).toBe("today");
+    expect(hidden[2].plans).toHaveLength(0);
+    // …and the same list keeps it when the switch is off, because a completed
+    // plan is a record that stays where it was.
+    expect(hideCompletedPlans(groupPlans([completed], "2026-09-15"), false)[2].plans).toHaveLength(1);
+  });
+});
+
+describe("plans note summary", () => {
+  it("uses the first non-empty line, with runs of whitespace collapsed", () => {
+    expect(noteSummary("\n  \n  顺路去银行取号\t带上身份证 \n第二行")).toBe(
+      "顺路去银行取号 带上身份证",
+    );
+  });
+
+  it("is empty for an empty or whitespace-only note", () => {
+    expect(noteSummary("")).toBe("");
+    expect(noteSummary("\n \n\t")).toBe("");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ISOLATED_DATA_DIR } from "../config";
@@ -8,6 +8,7 @@ import {
   PLAN_TITLE_MAX_LENGTH,
   sanitizePlanTitle,
   type Plan,
+  type PlanAnchor,
   type PlansResponse,
   type PlanSection,
 } from "@/lib/shared/plans";
@@ -316,6 +317,318 @@ describe("POST /api/plans", () => {
     } finally {
       if (rel !== null) removePlanFiles([rel]);
       rmSync(escaped, { force: true });
+    }
+  });
+});
+
+// ── Update (note / done) ───────────────────────────────────────────────
+// The write half of the seam: one PATCH changes one file and the list must
+// agree. `expectedMtime` is the reason this endpoint exists separately from
+// the create one — it is what keeps a stale panel from silently clobbering an
+// agent's or another editor's work — so every branch of that guard (match,
+// mismatch, moved away) is pinned here.
+
+describe("PATCH /api/plans/file", () => {
+  const patch = (body: unknown) =>
+    api("/api/plans/file", { method: "PATCH", body: JSON.stringify(body) });
+  const planOf = (body: Record<string, unknown>) => body.plan as unknown as Plan;
+  const list = async () =>
+    (await api(`/api/plans?today=${TODAY}`)).body as unknown as PlansResponse;
+
+  /** Create one plan through the API and return it (with its mtime). */
+  async function create(title: string, anchor: PlanAnchor = { kind: "day", date: TODAY }): Promise<Plan> {
+    const res = await api("/api/plans", {
+      method: "POST",
+      body: JSON.stringify({ title, anchor }),
+    });
+    expect(res.status).toBe(201);
+    return res.body.plan as unknown as Plan;
+  }
+
+  it("saves a note, keeps the rest of the frontmatter and lists it back", async () => {
+    const uid = uniqueId("plans");
+    let plan: Plan | null = null;
+    try {
+      plan = await create(uid);
+      const note = "顺路去银行取号\n带上身份证和租房合同";
+      const res = await patch({ path: plan.path, note, expectedMtime: plan.mtime });
+      expect(res.status).toBe(200);
+
+      const saved = planOf(res.body);
+      expect(saved.note).toBe(note);
+      expect(saved.title).toBe(uid);
+      expect(saved.done).toBe(false);
+      expect(saved.doneAt).toBe(null);
+      expect(saved.createdAt).toBe(plan.createdAt);
+
+      // On disk: the three-field contract with the note as the body.
+      const text = readFileSync(planAbs(plan.path), "utf8");
+      expect(text).toContain(`created_at: ${plan.createdAt}`);
+      expect(text.endsWith(`---\n\n${note}\n`)).toBe(true);
+
+      // And the list the panel renders the grey summary from sees the note.
+      expect(findPlan(await list(), plan.path)?.note).toBe(note);
+      // Saving the same note through the returned mtime works again.
+      expect(
+        (await patch({ path: plan.path, note: `${note}\n第二行`, expectedMtime: saved.mtime })).status,
+      ).toBe(200);
+    } finally {
+      if (plan !== null) removePlanFiles([plan.path]);
+    }
+  });
+
+  it("stamps done_at when completing and clears it when un-completing", async () => {
+    const uid = uniqueId("plans");
+    let plan: Plan | null = null;
+    try {
+      plan = await create(uid);
+      const doneRes = await patch({ path: plan.path, done: true, expectedMtime: plan.mtime });
+      expect(doneRes.status).toBe(200);
+      const done = planOf(doneRes.body);
+      expect(done.done).toBe(true);
+      expect(done.doneAt).not.toBe(null);
+      expect(readFileSync(planAbs(plan.path), "utf8")).toContain(`done_at: ${done.doneAt}`);
+
+      // A completed plan stays in the section it was in: it is a record, not a
+      // removal (the panel fades it in place).
+      const afterDone = findPlan(await list(), plan.path);
+      expect(afterDone?.done).toBe(true);
+      expect(sectionOf(await list(), "today").plans.some((p) => p.path === plan!.path)).toBe(true);
+
+      const undoRes = await patch({ path: done.path, done: false, expectedMtime: done.mtime });
+      expect(undoRes.status).toBe(200);
+      const undo = planOf(undoRes.body);
+      expect(undo.done).toBe(false);
+      expect(undo.doneAt).toBe(null);
+      expect(readFileSync(planAbs(plan.path), "utf8")).toContain("done_at:\n");
+    } finally {
+      if (plan !== null) removePlanFiles([plan.path]);
+    }
+  });
+
+  it("refuses a stale save with 409 and writes nothing", async () => {
+    const uid = uniqueId("plans");
+    let plan: Plan | null = null;
+    try {
+      plan = await create(uid);
+      // An external editor (or the agent) rewrote the file one minute ago.
+      const external =
+        "---\ndone: true\ncreated_at: 2020-01-01T00:00:00+08:00\ndone_at:\n---\n\n别人写的备注\n";
+      writeFileSync(planAbs(plan.path), external, "utf8");
+      const past = new Date(Date.now() - 60_000);
+      utimesSync(planAbs(plan.path), past, past);
+
+      const res = await patch({ path: plan.path, note: "我的备注", expectedMtime: plan.mtime });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("modified");
+      expect(readFileSync(planAbs(plan.path), "utf8")).toBe(external);
+
+      // 「覆盖」 writes anyway, and still keeps the frontmatter that was on disk.
+      const forced = await patch({
+        path: plan.path,
+        note: "我的备注",
+        expectedMtime: plan.mtime,
+        force: true,
+      });
+      expect(forced.status).toBe(200);
+      const saved = planOf(forced.body);
+      expect(saved.note).toBe("我的备注");
+      expect(saved.done).toBe(true);
+      expect(saved.createdAt).toBe("2020-01-01T00:00:00+08:00");
+    } finally {
+      if (plan !== null) removePlanFiles([plan.path]);
+    }
+  });
+
+  it("reports where a moved plan went, and saves there after reload", async () => {
+    const uid = uniqueId("plans");
+    let oldRel: string | null = null;
+    let newRel: string | null = null;
+    try {
+      const plan = await create(uid);
+      oldRel = plan.path;
+      // The user (or the agent) moved the file to another month, keeping the
+      // title: the anchor lives in the path, so this is a re-schedule.
+      newRel = `2026-04/2026-04-10-${uid}.md`;
+      mkdirSync(path.dirname(planAbs(newRel)), { recursive: true });
+      renameSync(planAbs(oldRel), planAbs(newRel));
+
+      const res = await patch({ path: oldRel, note: "我的备注", expectedMtime: plan.mtime });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("missing");
+      expect(res.body.movedTo).toBe(newRel);
+
+      // 「重载到新位置」: re-read the list, then save against the new path — the
+      // note the user had typed is not lost.
+      const moved = findPlan(await list(), newRel);
+      expect(moved?.title).toBe(uid);
+      const saved = await patch({
+        path: newRel,
+        note: "我的备注",
+        expectedMtime: moved!.mtime,
+      });
+      expect(saved.status).toBe(200);
+      expect(planOf(saved.body).path).toBe(newRel);
+      expect(readFileSync(planAbs(newRel), "utf8")).toContain("我的备注");
+    } finally {
+      removePlanFiles([oldRel, newRel].filter((rel): rel is string => rel !== null));
+    }
+  });
+
+  it("does not guess a new location when more than one plan shares the title", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      // Two plans with the same title in different months: after one of them is
+      // moved, a title match is a coin flip rather than an answer.
+      const first = await create(uid);
+      const second = await create(uid, { kind: "day", date: "2026-04-10" });
+      paths.push(first.path, second.path);
+      const movedRel = `2026-04/2026-04-20-${uid}.md`;
+      paths.push(movedRel);
+      renameSync(planAbs(first.path), planAbs(movedRel));
+
+      const res = await patch({ path: first.path, note: "我的备注", expectedMtime: first.mtime });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("missing");
+      expect(res.body.movedTo).toBe(null);
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("recreates the old path when the user overwrites after a move", async () => {
+    const uid = uniqueId("plans");
+    let oldRel: string | null = null;
+    let newRel: string | null = null;
+    try {
+      const plan = await create(uid);
+      oldRel = plan.path;
+      newRel = `2026-04/2026-04-10-${uid}.md`;
+      mkdirSync(path.dirname(planAbs(newRel)), { recursive: true });
+      renameSync(planAbs(oldRel), planAbs(newRel));
+
+      const res = await patch({ path: oldRel, note: "我的备注", force: true });
+      expect(res.status).toBe(200);
+      expect(planOf(res.body).path).toBe(oldRel);
+      expect(readFileSync(planAbs(oldRel), "utf8")).toContain("我的备注");
+    } finally {
+      removePlanFiles([oldRel, newRel].filter((rel): rel is string => rel !== null));
+    }
+  });
+
+  it("refuses to rewrite a file that does not follow the plan format", async () => {
+    const uid = uniqueId("plans");
+    // A hand-written file whose name has no anchor prefix, and one whose
+    // frontmatter cannot be understood: both are 待整理, and serializing either
+    // would throw away whatever the parser could not read.
+    const byName = seed(`2026-03/${uid}-随手记.md`, "whatever the user wrote");
+    const byMeta = seed(`2026-03/2026-03-15-${uid}-badmeta.md`, "---\ndone: maybe\n---\nbody");
+    try {
+      for (const abs of [byName, byMeta]) {
+        const before = readFileSync(abs, "utf8");
+        const rel = path.relative(PLANS_ROOT, abs).split(path.sep).join("/");
+        const res = await patch({
+          path: rel,
+          note: "我的备注",
+          expectedMtime: statSync(abs).mtime.toISOString(),
+        });
+        expect(res.status).toBe(422);
+        expect(String(res.body.error)).toContain("plan format");
+        expect(readFileSync(abs, "utf8")).toBe(before);
+      }
+    } finally {
+      rmSync(byName, { force: true });
+      rmSync(byMeta, { force: true });
+    }
+  });
+
+  it("rejects a malformed request before touching the filesystem", async () => {
+    const uid = uniqueId("plans");
+    let plan: Plan | null = null;
+    try {
+      plan = await create(uid);
+      const cases: { body: unknown; error: string }[] = [
+        { body: { note: "x" }, error: "Missing 'path' field" },
+        { body: { path: plan.path, expectedMtime: plan.mtime }, error: "Nothing to update" },
+        { body: { path: plan.path, note: "x" }, error: "expectedMtime is required" },
+        { body: { path: plan.path, note: 5 }, error: "'note' must be a string" },
+        { body: { path: plan.path, done: "yes" }, error: "'done' must be a boolean" },
+      ];
+      for (const { body, error } of cases) {
+        const res = await patch(body);
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe(error);
+      }
+      expect((await api("/api/plans/file", { method: "PATCH", body: "not json" })).status).toBe(400);
+      // The file is untouched by any of it.
+      expect(findPlan(await list(), plan.path)?.note).toBe("");
+    } finally {
+      if (plan !== null) removePlanFiles([plan.path]);
+    }
+  });
+
+  it("keeps a traversal-shaped path inside the plans root", async () => {
+    const uid = uniqueId("plans");
+    const outside = path.join(expandTilde(ISOLATED_DATA_DIR), `escape-${uid}.md`);
+    writeFileSync(outside, "keep me", "utf8");
+    try {
+      for (const rel of [`../escape-${uid}.md`, `../../escape-${uid}.md`, "etc/passwd"]) {
+        const res = await patch({ path: rel, note: "我的备注", expectedMtime: "x", force: true });
+        expect(res.status).toBe(422);
+      }
+      expect(readFileSync(outside, "utf8")).toBe("keep me");
+    } finally {
+      rmSync(outside, { force: true });
+    }
+  });
+});
+
+// ── Delete ────────────────────────────────────────────────────────────
+// Deletion is the one destructive operation the panel offers, so the API is
+// pinned on both halves: it really removes the plan, and it cannot be steered
+// outside the plans root.
+
+describe("DELETE /api/plans/file", () => {
+  const del = (rel: string) =>
+    api(`/api/plans/file?path=${encodeURIComponent(rel)}`, { method: "DELETE" });
+
+  async function create(title: string): Promise<Plan> {
+    const res = await api("/api/plans", {
+      method: "POST",
+      body: JSON.stringify({ title, anchor: { kind: "day", date: TODAY } }),
+    });
+    expect(res.status).toBe(201);
+    return res.body.plan as unknown as Plan;
+  }
+
+  it("deletes the file and drops it from the list", async () => {
+    const uid = uniqueId("plans");
+    const plan = await create(uid);
+    try {
+      expect((await del(plan.path)).status).toBe(200);
+      expect(existsSync(planAbs(plan.path))).toBe(false);
+
+      const data = (await api(`/api/plans?today=${TODAY}`)).body as unknown as PlansResponse;
+      expect(findPlan(data, plan.path)).toBeUndefined();
+      // Deleting it again is a plain 404, not a silent success.
+      expect((await del(plan.path)).status).toBe(404);
+    } finally {
+      removePlanFiles([plan.path]);
+    }
+  });
+
+  it("requires a path and never reaches outside the plans root", async () => {
+    expect((await api("/api/plans/file", { method: "DELETE" })).status).toBe(400);
+    const uid = uniqueId("plans");
+    const outside = path.join(expandTilde(ISOLATED_DATA_DIR), `escape-${uid}.md`);
+    writeFileSync(outside, "keep me", "utf8");
+    try {
+      const res = await del(`../escape-${uid}.md`);
+      expect(res.status).toBe(404);
+      expect(existsSync(outside)).toBe(true);
+    } finally {
+      rmSync(outside, { force: true });
     }
   });
 });

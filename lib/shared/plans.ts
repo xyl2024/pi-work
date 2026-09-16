@@ -354,14 +354,29 @@ export function serializePlanContent(meta: PlanMeta, note = ""): string {
 export interface Plan {
   /** Path relative to the plans root, "/"-separated. */
   path: string;
+  /** Absolute path on disk — what the row's "copy path" hands to external tools. */
+  absPath: string;
   title: string;
   anchor: PlanAnchor;
   done: boolean;
   createdAt: string | null;
   doneAt: string | null;
   note: string;
-  /** ISO mtime, used later for write conflict detection. */
+  /** ISO mtime; the write guard compares it to the file's current mtime. */
   mtime: string;
+}
+
+/**
+ * One-line, greyed-out reminder of a note, shown in the list while the note
+ * is collapsed: the first non-empty line with runs of whitespace collapsed.
+ * Empty when the note is empty (or whitespace only).
+ */
+export function noteSummary(note: string): string {
+  for (const line of note.split(/\r?\n/)) {
+    const text = line.replace(/\s+/g, " ").trim();
+    if (text) return text;
+  }
+  return "";
 }
 
 /** A file that could not be read as a plan; shown in 待整理, never rewritten. */
@@ -411,6 +426,22 @@ export function groupPlans(plans: readonly Plan[], today: string): PlanSection[]
   );
   for (const plan of plans) buckets.get(planSectionOf(plan, today))!.push(plan);
   return PLAN_SECTION_IDS.map((id) => ({ id, plans: buckets.get(id)!.sort(comparePlans) }));
+}
+
+/**
+ * Apply the panel's 「隐藏已完成」switch. Completed plans are records, not noise
+ * to be deleted, so hiding them only drops them from the sections — the files
+ * stay put and the switch is non-destructive.
+ */
+export function hideCompletedPlans(
+  sections: readonly PlanSection[],
+  hide: boolean,
+): PlanSection[] {
+  if (!hide) return [...sections];
+  return sections.map((section) => ({
+    ...section,
+    plans: section.plans.filter((plan) => !plan.done),
+  }));
 }
 
 // ── HTTP payload ─────────────────────────────────────────────────────────

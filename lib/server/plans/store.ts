@@ -27,6 +27,7 @@ import {
   uniquePlanFileName,
   type Plan,
   type PlanAnchor,
+  type PlanMeta,
   type PlanProblem,
   type UnsortedPlan,
 } from "@/lib/shared/plans";
@@ -38,6 +39,25 @@ export class PlanStoreError extends Error {
   constructor(message: string, status: number) {
     super(message);
     this.status = status;
+  }
+}
+
+/**
+ * Why a write was refused because the panel's view of the file is stale.
+ * `modified`: the file is still there but its content/mtime changed.
+ * `missing`: the path is gone (moved, renamed or deleted outside the panel).
+ */
+export type PlanConflictCode = "modified" | "missing";
+
+/** A 409 the panel turns into 「覆盖 / 重载到新位置」 instead of a plain error. */
+export class PlanConflictError extends PlanStoreError {
+  code: PlanConflictCode;
+  /** For `missing`: where the same-titled plan lives now, when it can be found. */
+  movedTo: string | null;
+  constructor(code: PlanConflictCode, message: string, movedTo: string | null = null) {
+    super(message, 409);
+    this.code = code;
+    this.movedTo = movedTo;
   }
 }
 
@@ -101,6 +121,7 @@ function readCandidate(rel: string, abs: string, stat: fs.Stats): PlanFileRead {
         : {
             plan: {
               path: rel,
+              absPath: abs,
               title: parsedPath.title,
               anchor: parsedPath.anchor,
               done: parsed.meta.done,
@@ -203,6 +224,138 @@ export function createPlan(input: CreatePlanInput): Plan {
 export interface PlanScan {
   plans: Plan[];
   unsorted: UnsortedPlan[];
+}
+
+/**
+ * Where a plan with this title lives now, if it was moved or renamed in a way
+ * that kept the title.
+ *
+ * Deliberately conservative: only an unambiguous match counts. Title alone is
+ * not identity, so when two plans share it the answer would be a coin flip and
+ * the panel would offer to reload into someone else's plan — better to answer
+ * "no idea" and let the user overwrite or look for themselves.
+ */
+function findMovedPlan(oldRel: string, title: string): string | null {
+  const matches = listPlans()
+    .plans.filter((plan) => plan.path !== oldRel && plan.title === title)
+    .map((plan) => plan.path);
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/** A file that never parsed as a plan is never rewritten — serializing it would
+ *  drop whatever the parser could not understand (ADR-0006). */
+function unsortedWriteError(problems: readonly PlanProblem[]): PlanStoreError {
+  const detail = problems.map((problem) => problem.code).join(", ");
+  return new PlanStoreError(
+    `This file does not follow the plan format (${detail}) and will not be rewritten`,
+    422,
+  );
+}
+
+export interface UpdatePlanInput {
+  /** Plan-relative path of the file the panel has open. */
+  path: string;
+  /** New note body (the 备注); omitted leaves the body on disk alone. */
+  note?: string;
+  /** New completion state; the server owns `done_at` (stamp on done, clear on undo). */
+  done?: boolean;
+  /**
+   * The `mtime` the client last saw. Required unless `force` — this is what
+   * stops a stale editor from silently overwriting an agent's or another
+   * editor's work.
+   */
+  expectedMtime?: string;
+  /** The user picked 「覆盖」 after a 409: skip the guard and write anyway. */
+  force?: boolean;
+}
+
+/**
+ * Update a plan in place: the note, the completion state, or both.
+ *
+ * The file is read *at request time*, so a `done` toggle can never clobber an
+ * external note edit — only a stale body can, and that is exactly what
+ * `expectedMtime` guards. Writing to 待整理 files is refused instead of
+ * serialized, and a vanished path comes back as a 409 the panel can resolve by
+ * following the file to its new location (see `findMovedPlan`).
+ */
+export function updatePlanFile(input: UpdatePlanInput): Plan {
+  const rel = normalizeRel(input.path);
+  const abs = resolvePlanPath(rel);
+
+  if (input.done === undefined && input.note === undefined) {
+    throw new PlanStoreError("Nothing to update", 400);
+  }
+
+  let stat: fs.Stats | null = null;
+  try {
+    const found = fs.statSync(abs);
+    if (found.isFile()) stat = found;
+  } catch {
+    /* handled as "missing" below */
+  }
+
+  const parsedPath = parsePlanPath(rel);
+  if (!parsedPath.ok) throw unsortedWriteError(parsedPath.problems);
+
+  if (stat === null && !input.force) {
+    throw new PlanConflictError(
+      "missing",
+      "The plan file is gone",
+      findMovedPlan(rel, parsedPath.title),
+    );
+  }
+
+  let meta: PlanMeta;
+  let note: string;
+  if (stat === null) {
+    // 「覆盖」 on a path that no longer exists recreates the file there. The old
+    // bytes are gone, so `created_at` restarts now — the one field that cannot
+    // be restored.
+    meta = { done: false, createdAt: toLocalTimestamp(new Date()), doneAt: null };
+    note = input.note ?? "";
+  } else {
+    if (!input.force) {
+      if (typeof input.expectedMtime !== "string") {
+        throw new PlanStoreError("expectedMtime is required", 400);
+      }
+      if (input.expectedMtime !== stat.mtime.toISOString()) {
+        throw new PlanConflictError("modified", "The plan file changed on disk");
+      }
+    }
+    const parsed = parsePlanContent(fs.readFileSync(abs, "utf8"));
+    if (parsed.problems.length > 0) throw unsortedWriteError(parsed.problems);
+    meta = { ...parsed.meta };
+    note = input.note ?? parsed.note;
+  }
+
+  if (input.done !== undefined && input.done !== meta.done) {
+    meta.done = input.done;
+    meta.doneAt = input.done ? toLocalTimestamp(new Date()) : null;
+  }
+
+  writePlanFileAtomic(abs, serializePlanContent(meta, note));
+  cache.delete(abs);
+
+  const read = readPlanFile(rel);
+  if (!("plan" in read)) throw new PlanStoreError("Updated plan could not be read back", 500);
+  return read.plan;
+}
+
+/**
+ * Delete a plan file. Deletion is explicit — the panel asks for confirmation
+ * first — and it never rewrites bytes, so 待整理 files can be removed too.
+ */
+export function deletePlanFile(rel: string): void {
+  const abs = resolvePlanPath(rel);
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(abs);
+  } catch {
+    throw new PlanStoreError("Not found", 404);
+  }
+  if (!stat.isFile()) throw new PlanStoreError("Not found", 404);
+  fs.rmSync(abs, { force: true });
+  cache.delete(abs);
 }
 
 /**

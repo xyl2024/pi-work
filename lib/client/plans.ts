@@ -30,3 +30,61 @@ export async function createPlan(input: {
   const { plan } = await jsonOrThrow<{ plan: Plan }>(res);
   return plan;
 }
+
+/**
+ * The 409 the panel must answer with 「覆盖 / 重载到新位置」 rather than an error
+ * toast: `modified` = the file changed under us, `missing` = it was moved,
+ * renamed or deleted. `movedTo` is the server's best guess at the new path.
+ */
+export class PlanConflictError extends Error {
+  code: "modified" | "missing";
+  movedTo: string | null;
+
+  constructor(code: "modified" | "missing", message: string, movedTo: string | null) {
+    super(message);
+    this.code = code;
+    this.movedTo = movedTo;
+  }
+}
+
+/**
+ * Update a plan in place (note and/or completion).
+ *
+ * `expectedMtime` is the file's `mtime` as the panel last saw it; a stale
+ * value (or a path that is gone) throws `PlanConflictError` instead of writing.
+ * `force` is the user's 「覆盖」 answer to that conflict.
+ */
+export async function updatePlan(input: {
+  path: string;
+  note?: string;
+  done?: boolean;
+  expectedMtime?: string;
+  force?: boolean;
+}): Promise<Plan> {
+  const res = await fetch("/api/plans/file", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      code?: "modified" | "missing";
+      movedTo?: string | null;
+    };
+    throw new PlanConflictError(
+      body.code ?? "modified",
+      body.error ?? "The plan file changed on disk",
+      body.movedTo ?? null,
+    );
+  }
+  const { plan } = await jsonOrThrow<{ plan: Plan }>(res);
+  return plan;
+}
+
+/** Delete a plan file. The caller confirms with the user first. */
+export async function deletePlan(path: string): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/plans/file?path=${encodeURIComponent(path)}`, { method: "DELETE" }),
+  );
+}
