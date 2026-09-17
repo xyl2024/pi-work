@@ -8,7 +8,6 @@ import {
   weekEndOf,
   type Plan,
   type PlanAnchorChoice,
-  type PlanViewMode,
 } from "@/lib/shared/plans";
 import type { PlanConflictState } from "@/lib/client/plans";
 import { AnchorChips } from "./AnchorChips";
@@ -20,10 +19,6 @@ export type PlanSaveStatus = "saved" | "unsaved" | "saving" | "error";
 
 export interface PlanRowProps {
   plan: Plan;
-  /** Row shape: `compact` is the dense line (also used by 时间轴), `cards` the
-   *  lighter card of the 卡片 appearance mode (#48). Grouping is the panel's
-   *  job — this only changes the container. */
-  variant?: Extract<PlanViewMode, "compact" | "cards">;
   /** Show a day anchor's date on the row (overdue / upcoming sections). Week
    *  and month anchors always show their own label regardless. */
   showDate: boolean;
@@ -31,9 +26,11 @@ export interface PlanRowProps {
   rescheduleOpen: boolean;
   /** The one-tap choice this plan's anchor currently maps to, if any. */
   activeChoice: PlanAnchorChoice | null;
-  /** True when this plan sits on the anchor the mini calendar navigated to
-   *  — the row a calendar pick marked. */
-  selected: boolean;
+  /** True when this plan sits on the anchor the mini calendar navigated to.
+   *  The panel uses it to scroll that row into view; it is deliberately *not* a
+   *  visual state — a calendar pick chooses the next plan's anchor, it does not
+   *  select a row. */
+  anchorMatch: boolean;
   /** A refused completion / re-schedule waiting for 「覆盖 / 重载」. A refused
    *  *note* save never reaches the row: the detail dialog hosts that banner
    *  (`planConflictSurface`). */
@@ -63,11 +60,10 @@ export interface PlanRowProps {
  */
 export function PlanRow({
   plan,
-  variant = "compact",
   showDate,
   rescheduleOpen,
   activeChoice,
-  selected,
+  anchorMatch,
   conflict,
   onOpen,
   onToggleDone,
@@ -82,32 +78,20 @@ export function PlanRow({
   const [hovered, setHovered] = useState(false);
   const summary = noteSummary(plan.note);
   const actionsVisible = hovered || rescheduleOpen;
-  const card = variant === "cards";
 
   return (
     <div
-      data-plan-selected={selected ? "true" : undefined}
+      data-plan-anchor-match={anchorMatch ? "true" : undefined}
       onClick={onOpen}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setHovered(true)}
       onBlur={() => setHovered(false)}
       style={{
-        borderRadius: card ? 7 : 5,
-        // Cards keep a resting surface so the list reads as separate objects;
-        // compact rows sit directly on the panel background.
-        background: selected
-          ? "var(--bg-selected)"
-          : hovered
-            ? "var(--bg-hover)"
-            : card
-              ? "var(--bg-subtle)"
-              : "transparent",
-        border: card ? "1px solid var(--border)" : undefined,
-        marginBottom: card ? 6 : undefined,
-        // A left accent bar marks the row the mini calendar navigated to,
-        // without moving or recolouring the list.
-        boxShadow: selected ? "inset 2px 0 0 var(--accent)" : undefined,
+        borderRadius: 5,
+        // Rows sit directly on the panel background; only hover puts a surface
+        // under them.
+        background: hovered ? "var(--bg-hover)" : "transparent",
         // Completed plans stay exactly where they were — this is a record, not
         // a cleanup — so they only fade.
         opacity: plan.done ? 0.55 : 1,
@@ -120,7 +104,7 @@ export function PlanRow({
           display: "flex",
           alignItems: "center",
           gap: 8,
-          padding: card ? "7px 8px" : "5px 6px",
+          padding: "5px 6px",
         }}
       >
         <DoneCheckbox done={plan.done} label={t("Toggle done")} onToggle={onToggleDone} />
@@ -226,7 +210,7 @@ export function PlanRow({
       {rescheduleOpen && (
         <div
           onClick={(event) => event.stopPropagation()}
-          style={{ padding: card ? "0 8px 8px" : "0 6px 6px" }}
+          style={{ padding: "0 6px 6px" }}
         >
           <AnchorChips activeChoice={activeChoice} label={t("Move plan to")} onSelect={onReschedule} />
         </div>
@@ -239,7 +223,7 @@ export function PlanRow({
           conflict={conflict}
           onResolve={onResolveConflict}
           onDismiss={onDismissConflict}
-          style={{ margin: card ? "0 8px 8px" : "0 6px 6px" }}
+          style={{ margin: "0 6px 6px" }}
         />
       )}
     </div>

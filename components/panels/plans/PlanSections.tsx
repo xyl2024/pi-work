@@ -7,11 +7,10 @@ import { anchorDisplayText } from "./anchorText";
 
 /**
  * The panel's list presentation: the create area's anchor token, the empty
- * state, and the four list shapes (the sections of 紧凑 / 卡片, and 时间轴's
- * single axis). They are pure functions of the plans they are handed — every
- * decision (which plans, in what order, what a click does) stays in
- * `PlansPanel`, which is why these can be read top to bottom without following
- * a request.
+ * state, and the section shapes (labeled sections, the collapsed overdue
+ * one). They are pure functions of the plans they are handed — every decision
+ * (which plans, in what order, what a click does) stays in `PlansPanel`, which
+ * is why these can be read top to bottom without following a request.
  */
 
 /** Renders one plan row. Supplied by the panel, which owns the row's state. */
@@ -96,30 +95,6 @@ export function EmptyPlans({ total }: { total: number }) {
     >
       {total > 0 ? t("All plans are completed") : t("No plans yet")}
     </div>
-  );
-}
-
-/**
- * 时间轴 mode: no sections, one continuous axis. The inbox is pinned at the top
- * behind its own label — a plan without a time must not drift out of sight —
- * and every anchored plan below it is laid out past → today → future by
- * `orderPlansForTimeline`. Anchored rows always show their date so the axis
- * can be read; inbox rows have no time to show.
- */
-export function TimelineList({ plans, renderRow }: { plans: Plan[]; renderRow: RenderRow }) {
-  const { t } = useI18n();
-  const inbox = plans.filter((plan) => plan.anchor.kind === "inbox");
-  const anchored = plans.filter((plan) => plan.anchor.kind !== "inbox");
-  return (
-    <>
-      {inbox.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <SectionLabel>{t("plans.inbox")}</SectionLabel>
-          {inbox.map((plan) => renderRow(plan, false))}
-        </div>
-      )}
-      {anchored.map((plan) => renderRow(plan, true))}
-    </>
   );
 }
 

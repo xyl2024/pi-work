@@ -17,21 +17,17 @@ import {
   type PlanConflictSurface,
   type PlanWriteFailure,
 } from "@/lib/client/plans";
-import { readPlanViewMode, writePlanViewMode } from "@/lib/client/plans-view-mode";
 import {
-  DEFAULT_PLAN_VIEW_MODE,
   anchorChoiceOf,
   anchorForChoice,
   flattenPlanSections,
   hideCompletedPlans,
-  orderPlansForTimeline,
   planAnchorsEqual,
   toDateKey,
   type Plan,
   type PlanAnchor,
   type PlanAnchorChoice,
   type PlansResponse,
-  type PlanViewMode,
 } from "@/lib/shared/plans";
 import { PlanRow, type PlanSaveStatus } from "./PlanRow";
 import { PlanDetailDialog } from "./PlanDetailDialog";
@@ -42,10 +38,9 @@ import {
   LabeledSection,
   OverdueSection,
   PickedAnchorToken,
-  TimelineList,
 } from "./PlanSections";
 import { UnsortedPlans } from "./UnsortedPlans";
-import { ViewModeSwitch } from "./ViewModeSwitch";
+import { HideDoneToggle } from "./HideDoneToggle";
 
 interface PlansPanelProps {
   /** Bumped on every open; re-opening the tab refetches. */
@@ -90,10 +85,6 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [hideDone, setHideDone] = useState(false);
-  // Appearance mode (紧凑 / 卡片 / 时间轴). Presentational only: it is restored
-  // from localStorage after mount and never changes what is fetched, so
-  // switching re-renders the data already on screen (ADR-0006).
-  const [viewMode, setViewMode] = useState<PlanViewMode>(DEFAULT_PLAN_VIEW_MODE);
   const [title, setTitle] = useState("");
   // The anchor the next typed plan will get. "today" is the zero-friction
   // default the pointer starts on; the chips move it. Resolved against the
@@ -248,24 +239,14 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     return () => window.removeEventListener("focus", onFocus);
   }, [load]);
 
-  // Restore the appearance mode after mount, never during render: the server
-  // prerender has no localStorage, so reading it there would break hydration.
-  useEffect(() => {
-    setViewMode(readPlanViewMode());
-  }, []);
-
-  const changeViewMode = useCallback((mode: PlanViewMode) => {
-    setViewMode(mode);
-    writePlanViewMode(mode);
-  }, []);
-
   // A calendar pick navigates the list: the rows on that anchor are marked by
-  // `renderRow` below, and this brings the first of them into view. A pick is
-  // explicit, so this never scrolls on its own (chip clicks do not navigate).
+  // `renderRow` below (a data attribute, not a visual state), and this brings
+  // the first of them into view. A pick is explicit, so this never scrolls on
+  // its own (chip clicks do not navigate).
   useEffect(() => {
     if (pickedAnchor === null) return;
     listRef.current
-      ?.querySelector<HTMLElement>('[data-plan-selected="true"]')
+      ?.querySelector<HTMLElement>('[data-plan-anchor-match="true"]')
       ?.scrollIntoView({ block: "nearest" });
   }, [pickedAnchor]);
 
@@ -755,14 +736,6 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   // list — the badge answers "how full is this period", not "what does the
   // filtered list show" (ADR-0006: done plans stay on the record).
   const allPlans = useMemo(() => flattenPlanSections(data?.sections ?? []), [data]);
-  // 时间轴 mode's single ordered axis. It reuses the *same* filtered sections
-  // the other two modes render, flattened — so the switch behaves identically
-  // in every mode and only the arrangement differs (ADR-0006). Order within
-  // the sections is irrelevant: `orderPlansForTimeline` re-sorts.
-  const timelinePlans = useMemo(
-    () => orderPlansForTimeline(flattenPlanSections(sections), today),
-    [sections, today],
-  );
   // The plan behind the detail dialog, looked up from the *unfiltered* data on
   // every render: the header then shows the title and anchor the file has right
   // now, even after it was re-scheduled outside the panel, and 「隐藏已完成」
@@ -788,11 +761,10 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       <PlanRow
         key={plan.path}
         plan={plan}
-        variant={viewMode === "cards" ? "cards" : "compact"}
         showDate={showDate}
         rescheduleOpen={reschedulePath === plan.path}
         activeChoice={anchorChoiceOf(plan.anchor, today)}
-        selected={pickedAnchor !== null && planAnchorsEqual(plan.anchor, pickedAnchor)}
+        anchorMatch={pickedAnchor !== null && planAnchorsEqual(plan.anchor, pickedAnchor)}
         // Only the conflicts this row can answer: a refused note save is
         // rendered by the dialog instead (#51).
         conflict={pendingConflictFor(plan.path, "row")}
@@ -819,7 +791,6 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       today,
       toggleDone,
       toggleReschedule,
-      viewMode,
     ],
   );
 
@@ -843,25 +814,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{visibleCount}</span>
         )}
         <span style={{ flex: 1 }} />
-        <ViewModeSwitch value={viewMode} onChange={changeViewMode} />
-        <button
-          type="button"
-          onClick={() => setHideDone((value) => !value)}
-          aria-pressed={hideDone}
-          style={{
-            flexShrink: 0,
-            padding: "2px 7px",
-            fontSize: 10.5,
-            color: hideDone ? "var(--text)" : "var(--text-muted)",
-            background: hideDone ? "var(--bg-selected)" : "transparent",
-            border: "1px solid var(--border)",
-            borderRadius: 5,
-            cursor: "pointer",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {t(hideDone ? "Show completed" : "Hide completed")}
-        </button>
+        <HideDoneToggle hidden={hideDone} onToggle={() => setHideDone((value) => !value)} />
         <RefreshIconButton onClick={() => void load(true)} disabled={loading} />
       </div>
 
@@ -974,13 +927,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           </div>
         ) : (
           <>
-            {viewMode === "timeline" ? (
-              timelinePlans.length === 0 ? (
-                <EmptyPlans total={total} />
-              ) : (
-                <TimelineList plans={timelinePlans} renderRow={renderRow} />
-              )
-            ) : !hasVisible ? (
+            {!hasVisible ? (
               <EmptyPlans total={total} />
             ) : (
               sections.map((section) =>
