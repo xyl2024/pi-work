@@ -31,6 +31,7 @@ import {
   type PlanViewMode,
 } from "@/lib/shared/plans";
 import { PlanRow, type PlanConflictState, type PlanSaveStatus } from "./PlanRow";
+import { PlanPreviewOverlay } from "./PlanPreviewOverlay";
 import { AnchorChips } from "./AnchorChips";
 import { MiniCalendar } from "./MiniCalendar";
 import {
@@ -65,8 +66,8 @@ const AUTOSAVE_MS = 600;
  * that turns a title typed + Enter into one new plan file.
  *
  * Rows carry the whole editing loop: expand to write a note (600 ms debounce,
- * Ctrl/Cmd+S to save now), a round checkbox for 完成, and hover actions to copy
- * the file path or delete the file. It reads the filesystem on open, on window
+ * Ctrl/Cmd+S to save now), a round checkbox for 完成, and hover actions to
+ * preview the note as Markdown, copy the file path or delete the file. It reads the filesystem on open, on window
  * re-focus and on the manual refresh button; there is no polling and no watcher
  * (ADR-0006). The local date is computed here, in the browser, and sent to the
  * server.
@@ -103,6 +104,10 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   const [conflict, setConflict] = useState<PendingConflict | null>(null);
   // Which row's re-schedule chip menu is open (at most one).
   const [reschedulePath, setReschedulePath] = useState<string | null>(null);
+  // The plan whose read-only Markdown preview overlay is open, by path. Stored
+  // as a path (not the object) so an external refresh keeps the overlay in
+  // step with the list, and a plan that vanished closes it on its own.
+  const [previewPath, setPreviewPath] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // The scrollable list, so a calendar pick can bring its rows into view.
   const listRef = useRef<HTMLDivElement>(null);
@@ -706,6 +711,13 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     () => orderPlansForTimeline(flattenPlanSections(sections), today),
     [sections, today],
   );
+  // The plan behind the preview overlay. Looked up from the *unfiltered* data
+  // each render so a refresh (window refocus / manual) shows the current file,
+  // and a plan that was deleted or moved closes the overlay by resolving null.
+  const previewPlan = useMemo(
+    () => (previewPath === null ? null : (findPlan(data, previewPath) ?? null)),
+    [data, previewPath],
+  );
   // The overdue section hides completed-only plans, so a lone done past plan
   // must still fall through to the empty state instead of a blank panel.
   const hasVisible = sections.some((section) =>
@@ -736,6 +748,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         onToggleDone={() => void toggleDone(plan)}
         onToggleReschedule={() => toggleReschedule(plan)}
         onReschedule={(choice) => void reschedule(plan, choice)}
+        onPreview={() => setPreviewPath(plan.path)}
         onNoteChange={handleNoteChange}
         onSaveNote={() => void flushNote(true)}
         onResolveConflict={(choice) => void resolveConflict(choice)}
@@ -951,6 +964,16 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           </>
         )}
       </div>
+
+      {previewPlan !== null && (
+        <PlanPreviewOverlay
+          plan={previewPlan}
+          // While this plan is the open editor, preview what is typed now —
+          // not the last saved line — so the overlay never lags the textarea.
+          content={editing?.path === previewPlan.path ? draft : previewPlan.note}
+          onClose={() => setPreviewPath(null)}
+        />
+      )}
     </div>
   );
 }

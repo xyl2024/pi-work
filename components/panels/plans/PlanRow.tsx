@@ -64,6 +64,8 @@ export interface PlanRowProps {
   onToggleDone: () => void;
   onToggleReschedule: () => void;
   onReschedule: (choice: PlanAnchorChoice) => void;
+  /** Open the read-only Markdown preview of this plan's note. */
+  onPreview: () => void;
   onNoteChange: (value: string) => void;
   onSaveNote: () => void;
   onResolveConflict: (choice: "overwrite" | "reload") => void;
@@ -74,8 +76,10 @@ export interface PlanRowProps {
 
 /**
  * One plan line: round completion checkbox, title, a grey one-line note
- * summary, and the hover actions (copy path / delete). Expanding the row swaps
- * the summary for the multi-line note editor, where Ctrl/Cmd+S saves at once.
+ * summary, and the hover actions (preview / reschedule / copy path / delete).
+ * Expanding the row swaps the summary for the multi-line note editor, where
+ * Ctrl/Cmd+S saves at once; the preview action opens the note as rendered
+ * Markdown in the panel's overlay instead.
  *
  * The row is presentation plus a textarea — every decision (debounce, conflict
  * resolution, what gets written) stays in the panel above it.
@@ -95,6 +99,7 @@ export function PlanRow({
   onToggleDone,
   onToggleReschedule,
   onReschedule,
+  onPreview,
   onNoteChange,
   onSaveNote,
   onResolveConflict,
@@ -208,6 +213,12 @@ export function PlanRow({
             transition: "opacity 0.1s",
           }}
         >
+          <IconButton label={t("Preview")} size="xs" onClick={onPreview}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </IconButton>
           <IconButton
             label={t("Reschedule")}
             size="xs"

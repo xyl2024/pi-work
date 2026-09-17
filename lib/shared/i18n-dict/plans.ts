@@ -26,6 +26,10 @@ export const plans = {
   "Add a note…": "写点备注…",
   "Plan saved": "计划已保存",
   "Failed to save plan": "保存计划失败",
+  // Read-only Markdown preview of a plan's note (row action → overlay). "Preview"
+  // / "Close" already exist in the common / notes dictionaries and are reused.
+  "Plan preview": "计划预览",
+  "No note yet": "还没有备注",
   // Row actions. "Copy path" / "Copied" / "Delete" / "Cancel" / "Saved" /
   // "Saving" / "Unsaved changes" / "Save failed" already exist in the common,
   // notes and media dictionaries and are reused as-is.
