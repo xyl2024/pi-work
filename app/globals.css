@@ -1482,14 +1482,35 @@ span.linenumber {
   animation: tool-picker-check-pop 0.18s ease-out;
 }
 
-/* ── Notes editor (CodeMirror) ─────────────────────────────────────────
-   Keep the line-number gutter flush with the rest of the editor area
-   (and therefore the panel) instead of its default gray wash, so the
-   editing surface reads as one continuous background. */
+/* ── Markdown editor (CodeMirror) ──────────────────────────────────────
+   Shared by the notes panel and the plan detail dialog. Keep the line-number
+   gutter flush with the rest of the editor area (and therefore the panel)
+   instead of its default gray wash, so the editing surface reads as one
+   continuous background. */
 .cm-editor-scoped .cm-editor,
-.cm-editor-scoped .cm-scroller,
-.cm-editor-scoped .cm-content {
+.cm-editor-scoped .cm-scroller {
   background: var(--bg);
+}
+/* The content surface must stay transparent, and this is load-bearing:
+   `drawSelection` paints the selection rectangles on a layer that sits
+   *behind* the content (CodeMirror's layer z-index is -1 unless it is an
+   overlay), so an opaque background here hides every selection — the wash
+   and the selection become invisible together. The visible background comes
+   from `.cm-editor` / `.cm-scroller` above, which the layer still clears. */
+.cm-editor-scoped .cm-content {
+  background: transparent;
+}
+/* Selection: the global `::selection` rule never applies inside CodeMirror
+   (`drawSelection` draws the wash itself and disables the native one), so it
+   is repeated here on that layer. Same accent tint as the rest of the app,
+   stepped down while the editor is unfocused so the caret's home is still
+   readable — `!important` because the theme's own rules (`oneDark` sets
+   `#3E4451`) are more specific and are injected after this file. */
+.cm-editor-scoped .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 30%, transparent) !important;
+}
+.cm-editor-scoped .cm-editor:not(.cm-focused) .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 16%, transparent) !important;
 }
 .cm-editor-scoped .cm-gutters {
   background: transparent;
