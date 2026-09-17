@@ -26,9 +26,12 @@ export const plans = {
   "Add a note…": "写点备注…",
   "Plan saved": "计划已保存",
   "Failed to save plan": "保存计划失败",
-  // Read-only Markdown preview of a plan's note (row action → overlay). "Preview"
-  // / "Close" already exist in the common / notes dictionaries and are reused.
-  "Plan preview": "计划预览",
+  // Plan detail dialog (#51): the note is written on the left and previewed on
+  // the right, or one pane plus an 编辑 / 预览 switch when the dialog is narrow.
+  // "Plan details" is the dialog's accessible name. "Edit" / "Preview" / "Words"
+  // / "Characters" / "Close" already exist in the common and notes
+  // dictionaries and are reused.
+  "Plan details": "计划详情",
   "No note yet": "还没有备注",
   // Row actions. "Copy path" / "Copied" / "Delete" / "Cancel" / "Saved" /
   // "Saving" / "Unsaved changes" / "Save failed" already exist in the common,

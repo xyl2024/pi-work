@@ -10,8 +10,11 @@ import {
   createPlan,
   deletePlan,
   fetchPlans,
+  planConflictSurface,
   planWriteFailure,
   updatePlan,
+  type PlanConflictState,
+  type PlanConflictSurface,
   type PlanWriteFailure,
 } from "@/lib/client/plans";
 import { readPlanViewMode, writePlanViewMode } from "@/lib/client/plans-view-mode";
@@ -30,8 +33,8 @@ import {
   type PlansResponse,
   type PlanViewMode,
 } from "@/lib/shared/plans";
-import { PlanRow, type PlanConflictState, type PlanSaveStatus } from "./PlanRow";
-import { PlanPreviewOverlay } from "./PlanPreviewOverlay";
+import { PlanRow, type PlanSaveStatus } from "./PlanRow";
+import { PlanDetailDialog } from "./PlanDetailDialog";
 import { AnchorChips } from "./AnchorChips";
 import { MiniCalendar } from "./MiniCalendar";
 import {
@@ -65,9 +68,11 @@ const AUTOSAVE_MS = 600;
  * grouped into 收件箱 / 过期 / 今天 / 即将到来, plus the resident create input
  * that turns a title typed + Enter into one new plan file.
  *
- * Rows carry the whole editing loop: expand to write a note (600 ms debounce,
- * Ctrl/Cmd+S to save now), a round checkbox for 完成, and hover actions to
- * preview the note as Markdown, copy the file path or delete the file. It reads the filesystem on open, on window
+ * Rows are a display line: clicking one opens the plan's detail dialog, where
+ * the note is written and previewed as Markdown (600 ms debounce, Ctrl/Cmd+S to
+ * save now), and where the save state and length of the note are reported. The
+ * row itself keeps the completion checkbox and the hover actions (re-schedule /
+ * copy path / delete). The panel reads the filesystem on open, on window
  * re-focus and on the manual refresh button; there is no polling and no watcher
  * (ADR-0006). The local date is computed here, in the browser, and sent to the
  * server.
@@ -104,10 +109,6 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   const [conflict, setConflict] = useState<PendingConflict | null>(null);
   // Which row's re-schedule chip menu is open (at most one).
   const [reschedulePath, setReschedulePath] = useState<string | null>(null);
-  // The plan whose read-only Markdown preview overlay is open, by path. Stored
-  // as a path (not the object) so an external refresh keeps the overlay in
-  // step with the list, and a plan that vanished closes it on its own.
-  const [previewPath, setPreviewPath] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // The scrollable list, so a calendar pick can bring its rows into view.
   const listRef = useRef<HTMLDivElement>(null);
@@ -154,17 +155,62 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     setConflict(next);
   }, []);
 
-  const load = useCallback(async (refresh = false) => {
-    setLoading(true);
-    try {
-      setData(await fetchPlans(toDateKey(new Date()), refresh));
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  /**
+   * Hand the detail dialog a plan: its note becomes the draft, and it opens as
+   * the one edited plan. The target carries the `mtime` the note was read at,
+   * which every write guards on.
+   */
+  const openEditor = useCallback(
+    (plan: Plan) => {
+      draftRef.current = plan.note;
+      setDraft(plan.note);
+      dirtyRef.current = false;
+      setSaveStatus("saved");
+      setEditorTarget({ path: plan.path, mtime: plan.mtime });
+    },
+    [setEditorTarget],
+  );
+
+  const closeEditor = useCallback(() => {
+    setEditorTarget(null);
+    draftRef.current = "";
+    setDraft("");
+    dirtyRef.current = false;
+    setSaveStatus("saved");
+  }, [setEditorTarget]);
+
+  /**
+   * Read the list. `refresh` bypasses the server's mtime cache (the manual
+   * refresh button).
+   *
+   * A refresh is also when external drift becomes visible: if the plan behind
+   * the open dialog is no longer in the list (moved or deleted outside the
+   * panel), the dialog closes and says so rather than letting the user keep
+   * typing into a file that is not there. `reload` below deliberately does
+   * *not* do this — it runs inside conflict resolution, where the dialog is
+   * following the file to its new path.
+   */
+  const load = useCallback(
+    async (refresh = false) => {
+      setLoading(true);
+      try {
+        const fresh = await fetchPlans(toDateKey(new Date()), refresh);
+        setData(fresh);
+        setError(null);
+        const target = editorRef.current;
+        if (target !== null && findPlan(fresh, target.path) === undefined) {
+          closeEditor();
+          setPendingConflict(null);
+          toast.show({ kind: "error", message: t("The plan no longer exists") });
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [closeEditor, setPendingConflict, t, toast],
+  );
 
   /** Re-read the list without the spinner, for conflict resolution. */
   const reload = useCallback(async (): Promise<PlansResponse | null> => {
@@ -270,25 +316,6 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     );
   }, []);
 
-  const openEditor = useCallback(
-    (plan: Plan) => {
-      draftRef.current = plan.note;
-      setDraft(plan.note);
-      dirtyRef.current = false;
-      setSaveStatus("saved");
-      setEditorTarget({ path: plan.path, mtime: plan.mtime });
-    },
-    [setEditorTarget],
-  );
-
-  const closeEditor = useCallback(() => {
-    setEditorTarget(null);
-    draftRef.current = "";
-    setDraft("");
-    dirtyRef.current = false;
-    setSaveStatus("saved");
-  }, [setEditorTarget]);
-
   /**
    * Write the open note if it is dirty. A pending conflict blocks the write
    * until the user answers it, so a debounce that raced an external edit cannot
@@ -384,21 +411,32 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     [flushNote],
   );
 
-  const toggleExpand = useCallback(
+  /**
+   * Clicking a row opens the plan's detail dialog. Opening another plan saves
+   * the one being left first — the dialog is the only editor, so switching
+   * targets is switching rows, and nothing typed is dropped.
+   */
+  const openDialog = useCallback(
     (plan: Plan) => {
-      if (editorRef.current?.path === plan.path) {
-        void flushNote();
-        closeEditor();
-        setPendingConflict(null);
-        return;
-      }
-      // Switching rows saves the one being left first.
+      if (editorRef.current?.path === plan.path) return;
       void flushNote();
       setPendingConflict(null);
       openEditor(plan);
     },
-    [closeEditor, flushNote, openEditor, setPendingConflict],
+    [flushNote, openEditor, setPendingConflict],
   );
+
+  /**
+   * Closing saves: Esc, the backdrop, the ✕ and switching plans all flush the
+   * note and then close. There is no 「要保存吗」 question anywhere — the only
+   * thing that can block the write is a conflict, and dismissing the dialog is
+   * an answer to it.
+   */
+  const closeDialog = useCallback(() => {
+    void flushNote();
+    closeEditor();
+    setPendingConflict(null);
+  }, [closeEditor, flushNote, setPendingConflict]);
 
   const toggleDone = useCallback(
     async (plan: Plan) => {
@@ -414,9 +452,8 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       } catch (err) {
         const failure = planWriteFailure(err);
         if (failure.kind === "conflict") {
-          // Show the conflict where the user is looking, and remember that
-          // 「覆盖」 must redo the toggle, not save a note.
-          if (editorRef.current?.path !== plan.path) openEditor(plan);
+          // The conflict belongs on the row the checkbox is on: 「覆盖」 must redo
+          // the toggle, not save a note, so nothing here opens an editor.
           setPendingConflict({
             path: plan.path,
             code: failure.code,
@@ -432,7 +469,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         });
       }
     },
-    [adoptEditor, applyPlan, openEditor, setPendingConflict, t, toast],
+    [adoptEditor, applyPlan, setPendingConflict, t, toast],
   );
 
   /** Put the completion state the user asked for on the file as it is now. */
@@ -633,6 +670,21 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     setSaveStatus(dirtyRef.current ? "unsaved" : "saved");
   }, [setPendingConflict]);
 
+  /**
+   * The refused write waiting for an answer on a given surface, for a given
+   * plan: the conflict belongs to the plan that triggered it *and* to the place
+   * it was triggered from (#51).
+   */
+  const pendingConflictFor = useCallback(
+    (path: string, surface: PlanConflictSurface): PlanConflictState | null =>
+      conflict !== null &&
+      conflict.path === path &&
+      planConflictSurface(conflict.retry) === surface
+        ? conflict
+        : null,
+    [conflict],
+  );
+
   const copyPath = useCopyPath();
 
   const removePlan = useCallback(
@@ -711,12 +763,13 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     () => orderPlansForTimeline(flattenPlanSections(sections), today),
     [sections, today],
   );
-  // The plan behind the preview overlay. Looked up from the *unfiltered* data
-  // each render so a refresh (window refocus / manual) shows the current file,
-  // and a plan that was deleted or moved closes the overlay by resolving null.
-  const previewPlan = useMemo(
-    () => (previewPath === null ? null : (findPlan(data, previewPath) ?? null)),
-    [data, previewPath],
+  // The plan behind the detail dialog, looked up from the *unfiltered* data on
+  // every render: the header then shows the title and anchor the file has right
+  // now, even after it was re-scheduled outside the panel, and 「隐藏已完成」
+  // does not close the dialog on a plan the user just completed.
+  const editingPlan = useMemo(
+    () => (editing === null ? null : (findPlan(data, editing.path) ?? null)),
+    [data, editing],
   );
   // The overdue section hides completed-only plans, so a lone done past plan
   // must still fall through to the empty state instead of a blank panel.
@@ -737,20 +790,16 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         plan={plan}
         variant={viewMode === "cards" ? "cards" : "compact"}
         showDate={showDate}
-        expanded={editing?.path === plan.path}
         rescheduleOpen={reschedulePath === plan.path}
         activeChoice={anchorChoiceOf(plan.anchor, today)}
         selected={pickedAnchor !== null && planAnchorsEqual(plan.anchor, pickedAnchor)}
-        draft={draft}
-        saveStatus={saveStatus}
-        conflict={conflict?.path === plan.path ? conflict : null}
-        onToggleExpand={() => toggleExpand(plan)}
+        // Only the conflicts this row can answer: a refused note save is
+        // rendered by the dialog instead (#51).
+        conflict={pendingConflictFor(plan.path, "row")}
+        onOpen={() => openDialog(plan)}
         onToggleDone={() => void toggleDone(plan)}
         onToggleReschedule={() => toggleReschedule(plan)}
         onReschedule={(choice) => void reschedule(plan, choice)}
-        onPreview={() => setPreviewPath(plan.path)}
-        onNoteChange={handleNoteChange}
-        onSaveNote={() => void flushNote(true)}
         onResolveConflict={(choice) => void resolveConflict(choice)}
         onDismissConflict={dismissConflict}
         onCopyPath={() => void copyPath(plan.absPath)}
@@ -758,22 +807,17 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       />
     ),
     [
-      conflict,
       copyPath,
       dismissConflict,
-      draft,
-      editing,
-      flushNote,
-      handleNoteChange,
+      openDialog,
+      pendingConflictFor,
       pickedAnchor,
       removePlan,
       reschedule,
       reschedulePath,
       resolveConflict,
-      saveStatus,
       today,
       toggleDone,
-      toggleExpand,
       toggleReschedule,
       viewMode,
     ],
@@ -965,13 +1009,20 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         )}
       </div>
 
-      {previewPlan !== null && (
-        <PlanPreviewOverlay
-          plan={previewPlan}
-          // While this plan is the open editor, preview what is typed now —
-          // not the last saved line — so the overlay never lags the textarea.
-          content={editing?.path === previewPlan.path ? draft : previewPlan.note}
-          onClose={() => setPreviewPath(null)}
+      {editingPlan !== null && (
+        <PlanDetailDialog
+          // Keyed by path so switching plans re-mounts it: the narrow-mode pane
+          // choice and the measured width start fresh for the new plan.
+          key={editingPlan.path}
+          plan={editingPlan}
+          draft={draft}
+          saveStatus={saveStatus}
+          conflict={pendingConflictFor(editingPlan.path, "dialog")}
+          onChange={handleNoteChange}
+          onSave={() => void flushNote(true)}
+          onResolveConflict={(choice) => void resolveConflict(choice)}
+          onDismissConflict={dismissConflict}
+          onClose={closeDialog}
         />
       )}
     </div>

@@ -7,36 +7,16 @@ import {
   noteSummary,
   weekEndOf,
   type Plan,
-  type PlanAnchor,
   type PlanAnchorChoice,
   type PlanViewMode,
 } from "@/lib/shared/plans";
+import type { PlanConflictState } from "@/lib/client/plans";
 import { AnchorChips } from "./AnchorChips";
+import { PlanConflictBanner } from "./PlanConflictBanner";
 import { anchorDisplayText } from "./anchorText";
 
-/** Save state of the row's note, mirroring the notes editor's indicator. */
+/** Save state of the open note, mirroring the notes editor's indicator. */
 export type PlanSaveStatus = "saved" | "unsaved" | "saving" | "error";
-
-/**
- * What 「覆盖」 must redo after the user answers a conflict: the note save, the
- * completion state the checkbox was aiming for, or the re-schedule the chip
- * asked for. Carried as data instead of re-derived from the list, which is
- * stale exactly when a conflict happens.
- */
-export type PlanConflictRetry =
-  | { kind: "note" }
-  | { kind: "done"; done: boolean }
-  | { kind: "anchor"; anchor: PlanAnchor };
-
-/** A write the server refused with 409 because the panel's view was stale. */
-export interface PlanConflictState {
-  /** `modified` = content changed under us, `missing` = moved / renamed / gone. */
-  code: "modified" | "missing";
-  /** Where the same-titled plan lives now, when the server could tell. */
-  movedTo: string | null;
-  /** The action that was refused. */
-  retry: PlanConflictRetry;
-}
 
 export interface PlanRowProps {
   plan: Plan;
@@ -47,8 +27,6 @@ export interface PlanRowProps {
   /** Show a day anchor's date on the row (overdue / upcoming sections). Week
    *  and month anchors always show their own label regardless. */
   showDate: boolean;
-  /** True when this row's note editor is the open one. */
-  expanded: boolean;
   /** True when this row's re-schedule chip menu is open. */
   rescheduleOpen: boolean;
   /** The one-tap choice this plan's anchor currently maps to, if any. */
@@ -56,18 +34,16 @@ export interface PlanRowProps {
   /** True when this plan sits on the anchor the mini calendar navigated to
    *  — the row a calendar pick marked. */
   selected: boolean;
-  /** The note being edited (only meaningful while expanded). */
-  draft: string;
-  saveStatus: PlanSaveStatus;
+  /** A refused completion / re-schedule waiting for 「覆盖 / 重载」. A refused
+   *  *note* save never reaches the row: the detail dialog hosts that banner
+   *  (`planConflictSurface`). */
   conflict: PlanConflictState | null;
-  onToggleExpand: () => void;
+  /** Open this plan's detail dialog. The whole row except its controls is a
+   *  hit target for it. */
+  onOpen: () => void;
   onToggleDone: () => void;
   onToggleReschedule: () => void;
   onReschedule: (choice: PlanAnchorChoice) => void;
-  /** Open the read-only Markdown preview of this plan's note. */
-  onPreview: () => void;
-  onNoteChange: (value: string) => void;
-  onSaveNote: () => void;
   onResolveConflict: (choice: "overwrite" | "reload") => void;
   onDismissConflict: () => void;
   onCopyPath: () => void;
@@ -76,32 +52,27 @@ export interface PlanRowProps {
 
 /**
  * One plan line: round completion checkbox, title, a grey one-line note
- * summary, and the hover actions (preview / reschedule / copy path / delete).
- * Expanding the row swaps the summary for the multi-line note editor, where
- * Ctrl/Cmd+S saves at once; the preview action opens the note as rendered
- * Markdown in the panel's overlay instead.
+ * summary, and the hover actions (reschedule / copy path / delete).
  *
- * The row is presentation plus a textarea — every decision (debounce, conflict
- * resolution, what gets written) stays in the panel above it.
+ * Clicking the line — title, summary or the empty space around them — opens the
+ * plan's detail dialog, where the note is written and read (#51). The note
+ * itself is not edited here any more: the row is presentation plus the click
+ * target, and every decision (debounce, conflict resolution, what gets written)
+ * stays in the panel above it. The controls (checkbox, hover actions, the
+ * re-schedule chips) are the exceptions and keep their own click.
  */
 export function PlanRow({
   plan,
   variant = "compact",
   showDate,
-  expanded,
   rescheduleOpen,
   activeChoice,
   selected,
-  draft,
-  saveStatus,
   conflict,
-  onToggleExpand,
+  onOpen,
   onToggleDone,
   onToggleReschedule,
   onReschedule,
-  onPreview,
-  onNoteChange,
-  onSaveNote,
   onResolveConflict,
   onDismissConflict,
   onCopyPath,
@@ -110,12 +81,13 @@ export function PlanRow({
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const summary = noteSummary(plan.note);
-  const actionsVisible = hovered || expanded || rescheduleOpen;
+  const actionsVisible = hovered || rescheduleOpen;
   const card = variant === "cards";
 
   return (
     <div
       data-plan-selected={selected ? "true" : undefined}
+      onClick={onOpen}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setHovered(true)}
@@ -126,7 +98,7 @@ export function PlanRow({
         // compact rows sit directly on the panel background.
         background: selected
           ? "var(--bg-selected)"
-          : hovered && !expanded
+          : hovered
             ? "var(--bg-hover)"
             : card
               ? "var(--bg-subtle)"
@@ -139,6 +111,7 @@ export function PlanRow({
         // Completed plans stay exactly where they were — this is a record, not
         // a cleanup — so they only fade.
         opacity: plan.done ? 0.55 : 1,
+        cursor: "pointer",
         transition: "opacity 0.15s, background 0.1s",
       }}
     >
@@ -152,10 +125,16 @@ export function PlanRow({
       >
         <DoneCheckbox done={plan.done} label={t("Toggle done")} onToggle={onToggleDone} />
 
+        {/* The title is the row's keyboard entry point — Tab to it and Enter /
+            Space open the dialog, exactly like clicking the line does. Clicks
+            are handled here so the title never opens the dialog twice. */}
         <button
           type="button"
-          onClick={onToggleExpand}
-          aria-expanded={expanded}
+          aria-haspopup="dialog"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
           style={{
             flex: 1,
             minWidth: 0,
@@ -183,7 +162,7 @@ export function PlanRow({
           >
             {plan.title}
           </span>
-          {!expanded && summary && (
+          {summary && (
             <span
               style={{
                 overflow: "hidden",
@@ -201,24 +180,21 @@ export function PlanRow({
         <AnchorLabel anchor={plan.anchor} showDate={showDate} />
 
         <span
+          onClick={(event) => event.stopPropagation()}
           style={{
             display: "flex",
             alignItems: "center",
             gap: 0,
             flexShrink: 0,
             // Kept in the layout and focusable so the actions stay reachable by
-            // keyboard; only their visibility follows hover / expansion.
+            // keyboard; only their visibility follows hover / opening the
+            // re-schedule chips. `pointer-events: none` while hidden is what
+            // lets a click there fall through and open the dialog.
             opacity: actionsVisible ? 1 : 0,
             pointerEvents: actionsVisible ? "auto" : "none",
             transition: "opacity 0.1s",
           }}
         >
-          <IconButton label={t("Preview")} size="xs" onClick={onPreview}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </IconButton>
           <IconButton
             label={t("Reschedule")}
             size="xs"
@@ -248,112 +224,23 @@ export function PlanRow({
       </div>
 
       {rescheduleOpen && (
-        <div style={{ padding: card ? "0 8px 8px" : "0 6px 6px" }}>
+        <div
+          onClick={(event) => event.stopPropagation()}
+          style={{ padding: card ? "0 8px 8px" : "0 6px 6px" }}
+        >
           <AnchorChips activeChoice={activeChoice} label={t("Move plan to")} onSelect={onReschedule} />
         </div>
       )}
 
-      {expanded && (
-        <div style={{ padding: card ? "0 8px 8px" : "0 6px 6px" }}>
-          <textarea
-            autoFocus
-            value={draft}
-            onChange={(event) => onNoteChange(event.target.value)}
-            onKeyDown={(event) => {
-              // Ctrl/Cmd+S saves now instead of waiting out the debounce.
-              if ((event.metaKey || event.ctrlKey) && event.code === "KeyS") {
-                event.preventDefault();
-                onSaveNote();
-              }
-            }}
-            placeholder={t("Add a note…")}
-            aria-label={t("Add a note…")}
-            rows={3}
-            style={{
-              display: "block",
-              width: "100%",
-              minHeight: 54,
-              resize: "vertical",
-              padding: "5px 7px",
-              fontSize: 12,
-              fontFamily: "inherit",
-              lineHeight: 1.5,
-              color: "var(--text)",
-              background: "var(--bg-subtle)",
-              border: "1px solid var(--border)",
-              borderRadius: 5,
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "3px 2px 0",
-              fontSize: 10.5,
-              color: "var(--text-dim)",
-            }}
-          >
-            <span style={{ flex: 1 }} />
-            <SaveStatusLabel status={saveStatus} />
-          </div>
-        </div>
-      )}
-
+      {/* Only a refused completion / re-schedule lands here; a refused note save
+          is answered inside the detail dialog (#51). */}
       {conflict !== null && (
-        <div
-          role="status"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            flexWrap: "wrap",
-            margin: card ? "0 8px 8px" : "0 6px 6px",
-            padding: "6px 8px",
-            fontSize: 11,
-            color: "var(--text)",
-            background: "var(--bg-subtle)",
-            border: "1px solid var(--warning)",
-            borderRadius: 5,
-          }}
-        >
-          <span style={{ flex: 1, minWidth: 120 }}>
-            {conflict.code === "missing"
-              ? t("This plan was moved or renamed outside the panel")
-              : t("This plan changed outside the panel")}
-          </span>
-          <ConflictButton onClick={() => onResolveConflict("overwrite")}>
-            {t("Overwrite")}
-          </ConflictButton>
-          {/* A moved file has somewhere to reload *to*; a content change only has
-              the disk version, so the label says what the second choice does. */}
-          {conflict.code === "missing" && conflict.movedTo === null ? null : (
-            <ConflictButton onClick={() => onResolveConflict("reload")}>
-              {conflict.code === "missing"
-                ? t("Reload to the new location")
-                : t("Reload")}
-            </ConflictButton>
-          )}
-          <button
-            type="button"
-            onClick={onDismissConflict}
-            aria-label={t("Dismiss")}
-            style={{
-              display: "inline-flex",
-              padding: 2,
-              background: "transparent",
-              border: "none",
-              color: "var(--text-dim)",
-              cursor: "pointer",
-            }}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
-        </div>
+        <PlanConflictBanner
+          conflict={conflict}
+          onResolve={onResolveConflict}
+          onDismiss={onDismissConflict}
+          style={{ margin: card ? "0 8px 8px" : "0 6px 6px" }}
+        />
       )}
     </div>
   );
@@ -410,7 +297,11 @@ function DoneCheckbox({
       role="checkbox"
       aria-checked={done}
       aria-label={label}
-      onClick={onToggle}
+      onClick={(event) => {
+        // The checkbox is a control, not a hit target for the dialog.
+        event.stopPropagation();
+        onToggle();
+      }}
       style={{
         flexShrink: 0,
         width: 14,
@@ -450,7 +341,10 @@ const STATUS_KEY: Record<PlanSaveStatus, string> = {
   error: "Save failed",
 };
 
-function SaveStatusLabel({ status }: { status: PlanSaveStatus }) {
+/** The note's save state as a dot + label. Shared by the row and the detail
+ *  dialog's footer, so 「已保存 / 未保存 / 保存中 / 保存失败」 reads the same in
+ *  both, screen readers included. */
+export function SaveStatusLabel({ status }: { status: PlanSaveStatus }) {
   const { t } = useI18n();
   return (
     <span
@@ -473,32 +367,5 @@ function SaveStatusLabel({ status }: { status: PlanSaveStatus }) {
       />
       {t(STATUS_KEY[status])}
     </span>
-  );
-}
-
-function ConflictButton({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        flexShrink: 0,
-        padding: "2px 8px",
-        fontSize: 11,
-        color: "var(--text)",
-        background: "var(--bg-panel)",
-        border: "1px solid var(--border)",
-        borderRadius: 5,
-        cursor: "pointer",
-      }}
-    >
-      {children}
-    </button>
   );
 }

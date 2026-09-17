@@ -93,6 +93,61 @@ export function planWriteFailure(err: unknown): PlanWriteFailure {
 }
 
 /**
+ * What 「覆盖」 must redo after the user answers a conflict: the note save, the
+ * completion state the checkbox was aiming for, or the re-schedule the chip
+ * asked for. Carried as data instead of re-derived from the list, which is
+ * stale exactly when a conflict happens.
+ */
+export type PlanConflictRetry =
+  | { kind: "note" }
+  | { kind: "done"; done: boolean }
+  | { kind: "anchor"; anchor: PlanAnchor };
+
+/** A write the server refused with 409 because the panel's view was stale. */
+export interface PlanConflictState {
+  /** `modified` = content changed under us, `missing` = moved / renamed / gone. */
+  code: "modified" | "missing";
+  /** Where the same-titled plan lives now, when the server could tell. */
+  movedTo: string | null;
+  /** The action that was refused. */
+  retry: PlanConflictRetry;
+}
+
+/**
+ * Where a 409's 「覆盖 / 重载」 banner belongs: at the place that triggered it.
+ *
+ * A note save is asked for in the detail dialog, so its banner goes there. A
+ * completion toggle or a re-schedule is asked for on the row, and the dialog
+ * can only edit the note — pulling the user into it would lose the intent they
+ * actually expressed.
+ */
+export type PlanConflictSurface = "dialog" | "row";
+
+export function planConflictSurface(retry: PlanConflictRetry): PlanConflictSurface {
+  return retry.kind === "note" ? "dialog" : "row";
+}
+
+/** Width at which the detail dialog can afford two readable columns. */
+export const PLAN_DIALOG_SPLIT_MIN_WIDTH = 700;
+
+/**
+ * The detail dialog's layout for a given available width: edit and preview side
+ * by side when there is room, otherwise one pane plus a 编辑 / 预览 switch. The
+ * choice is component state only — it is re-derived on every open and never
+ * stored.
+ *
+ * It is the notes panel's answer to the same problem (a pane too narrow to hold
+ * both), but not the same mechanism: the notes panel switches on the right
+ * panel's expanded state, while this dialog measures its own width, so two
+ * columns can never end up as two slivers.
+ */
+export type PlanDialogLayout = "split" | "tabs";
+
+export function planDialogLayout(availableWidth: number): PlanDialogLayout {
+  return availableWidth >= PLAN_DIALOG_SPLIT_MIN_WIDTH ? "split" : "tabs";
+}
+
+/**
  * Update a plan in place (note, completion and/or anchor).
  *
  * `expectedMtime` is the file's `mtime` as the panel last saw it; a stale

@@ -15,6 +15,7 @@ import {
   fetchNotesTree,
   saveNote,
 } from "@/lib/client/notes";
+import { countWords } from "@/lib/client/text";
 import type { NoteNode } from "@/lib/shared/notes";
 import { NotePreview } from "./NotePreview";
 import { NotesEditor } from "./NotesEditor";
@@ -28,17 +29,6 @@ interface NotesPanelProps {
 }
 
 const AUTOSAVE_MS = 600;
-
-/** Word count that treats CJK characters as one "word" each and groups
- *  latin/digit runs into words — the usual convention for mixed text. */
-function countWords(content: string): number {
-  if (!content.trim()) return 0;
-  const cjk = content.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g)?.length ?? 0;
-  const latin = content.replace(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean).length;
-  return cjk + latin;
-}
 
 export function NotesPanel({ expanded }: NotesPanelProps) {
   const { t } = useI18n();
