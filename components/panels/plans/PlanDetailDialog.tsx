@@ -6,6 +6,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { MarkdownContent } from "@/components/renderers/MarkdownContent";
+import { MarkdownEditor } from "@/components/markdown-editor/MarkdownEditor";
 import { planDialogLayout, type PlanConflictState } from "@/lib/client/plans";
 import { countWords } from "@/lib/client/text";
 import type { Plan } from "@/lib/shared/plans";
@@ -34,10 +35,14 @@ export interface PlanDetailDialogProps {
 /**
  * A plan's detail dialog: the note is written and read in the same place (#51).
  *
- * Wide enough → the textarea and the rendered Markdown sit side by side, and
- * the preview follows every keystroke. Narrow → one pane plus an 编辑 / 预览
+ * Wide enough → the Markdown editor and the rendered Markdown sit side by side,
+ * and the preview follows every keystroke. Narrow → one pane plus an 编辑 / 预览
  * switch, the notes panel's answer to the same problem; it is held in component
  * state and never persisted.
+ *
+ * The editor is the notes panel's own (`MarkdownEditor`), so a plan note is
+ * written with the same toolbar and shortcuts as a note — the dialog used to
+ * pair this preview with a bare textarea.
  *
  * Closing is saving: Esc, the backdrop, the ✕ and switching to another plan all
  * flush the note first; there is no 「要保存吗」 question anywhere. A refused
@@ -64,7 +69,7 @@ export function PlanDetailDialog({
   // Narrow mode: which pane is shown. Opening on the preview is the same habit
   // the notes panel has — a document is shown before its editor — and the
   // dialog is only reached by clicking a plan, so reading it is what that click
-  // asked for. The textarea is one click away.
+  // asked for. The editor is one click away.
   const [pane, setPane] = useState<"edit" | "preview">("preview");
   // The card's measured width, which is what decides the layout. 0 until the
   // observer has run (a pane switch is the harmless wrong guess for one frame,
@@ -100,7 +105,16 @@ export function PlanDetailDialog({
 
   const layout = planDialogLayout(availableWidth);
   const anchorText = anchorDisplayText(plan.anchor, t, locale, "full");
-  const editor = <NoteTextarea value={draft} onChange={onChange} />;
+  const editor = (
+    <MarkdownEditor
+      value={draft}
+      onChange={onChange}
+      placeholder={t("Add a note…")}
+      ariaLabel={t("Add a note…")}
+      fontSize={12.5}
+      padding="12px 14px"
+    />
+  );
   const preview = <NotePreview content={draft} />;
 
   return createPortal(
@@ -285,41 +299,6 @@ export function PlanDetailDialog({
       </div>
     </div>,
     portalEl,
-  );
-}
-
-/** The note as typed, filling its column (it scrolls, the column does not). */
-function NoteTextarea({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <textarea
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      placeholder={t("Add a note…")}
-      aria-label={t("Add a note…")}
-      style={{
-        flex: 1,
-        width: "100%",
-        minWidth: 0,
-        minHeight: 0,
-        resize: "none",
-        padding: "12px 14px",
-        fontSize: 12.5,
-        fontFamily: "inherit",
-        lineHeight: 1.6,
-        color: "var(--text)",
-        background: "transparent",
-        border: "none",
-        outline: "none",
-        boxSizing: "border-box",
-      }}
-    />
   );
 }
 

@@ -32,6 +32,7 @@ pi-work/
 │   │                   #   Notes）+ TerminalPanel；right-bar/ 是按钮列，desc.tsx 注册描述符
 │   ├── settings/       # 设置弹窗与各配置区块（模型、Prompt、Skill、Profile、重试、Append System、
 │   │                   #   自定义工具、文件预览、右侧按钮、音效）
+│   ├── markdown-editor/ # 共用 Markdown 编辑器（CodeMirror + 工具栏 + 快捷键），笔记面板与计划详情弹窗共用
 │   ├── renderers/      # 消息中的代码块、ECharts、Mermaid、SVG 与图片渲染器
 │   ├── ui/             # 公共 UI 原语、图标与动画图标
 │   └── inbox/ rss/ scheduler/ kanban/ grokbot/ tools-market/ channels/ auth/ effects/
