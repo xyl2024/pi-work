@@ -1,10 +1,16 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
-import type { SessionTreeNode } from "@/lib/shared/types";
-import type { ContextComposition } from "@/lib/shared/context-composition";
+import type { SessionUiPublish } from "@/lib/shared/session-runtime-state";
 import type { AgentControls } from "@/lib/client/commands";
 import { isContentEqual } from "@/lib/client/shallowEqual";
+
+// The store's shape IS the publish projection's payload — declared once in the
+// shared layer (`deriveSessionUiPublish`) and aliased here, so a new published
+// field has exactly one place to be added. The two types are re-exported for
+// the components that imported them from this module before.
+export type { ContextUsage, SessionStats } from "@/lib/shared/session-runtime-state";
+export type SessionUiState = SessionUiPublish;
 
 /**
  * Session-level UI state that is owned by useAgentSession (in ChatWindow) but
@@ -24,67 +30,6 @@ import { isContentEqual } from "@/lib/client/shallowEqual";
  * The branch-leaf-change handler is held in a ref instead, exposed via
  * `useSessionLeafChange()` which returns a stable wrapper.
  */
-
-export type SessionStats = {
-  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
-  cost?: number;
-  /** Weighted prompt-cache hit rate across all assistant messages in the
-   *  active leaf path: Σ cacheRead / Σ (input + cacheRead), in [0, 1].
-   *  `undefined` when no message has reported cacheRead yet (provider with
-   *  no caching support), so the consumer can render "0% cached" vs hide. */
-  cachedHitRate?: number;
-} | null;
-
-export type ContextUsage = {
-  percent: number | null;
-  contextWindow: number;
-  tokens: number | null;
-} | null;
-
-/** What the context window is made of, locally estimated and anchored to the
- *  provider total (ADR-0005). The server computes it on `message_end` and hands
- *  it over in `get_state`; the UI only ever reads it. `null` before the first
- *  estimate lands (or when no provider anchor exists yet). */
-
-export interface SessionUiState {
-  branchTree: SessionTreeNode[];
-  branchActiveLeafId: string | null;
-  systemPrompt: string | null;
-  sessionStats: SessionStats;
-  contextUsage: ContextUsage;
-  contextComposition: ContextComposition | null;
-  /**
-   * Whether the active session's agent is currently streaming a response.
-   * Drives the streaming pulse dot in the conversation-tree panel and any
-   * other cross-cutting UI that wants to show live-agent state. This is a
-   * subset of `agentRunning` — it is only true while tokens are arriving,
-   * not while the agent is executing tool calls between LLM turns.
-   */
-  isStreaming: boolean;
-  /**
-   * Whether the active session's agent is busy with this turn — from
-   * `agent_start` until `agent_end`. Covers every phase of the round
-   * (waiting on the model, streaming tokens, running tools between LLM
-   * turns, retrying). The conversation-tree panel uses this to lock card
-   * clicks for the *entire* turn, since switching branches mid-round
-   * would race the in-flight response even during non-streaming gaps.
-   */
-  agentRunning: boolean;
-  /** Main session's current model snapshot — read by the BTW panel
-   *  to pick the same provider / model for its throwaway in-memory
-   *  agent. `null` until the chat controller publishes it (new session
-   *  draft, model not yet resolved, etc.). */
-  currentModel: { provider: string; modelId: string } | null;
-  /** Main session's current thinking level. */
-  thinkingLevel: string;
-  /** Main session's active tool names. */
-  toolNames: string[];
-  /** Main session's current message transcript — used by the BTW hook
-   *  on the FIRST send so the BTW agent boots with the same context
-   *  the user can see in the chat. Snapshotted at the moment
-   *  `useAgentSession` publishes it. */
-  mainSessionMessages: import("@/lib/shared/types").AgentMessage[];
-}
 
 const INITIAL: SessionUiState = {
   branchTree: [],

@@ -8,10 +8,12 @@ import {
 import type { SessionRuntimeInput } from "@/lib/shared/session-events";
 import {
   createSessionRuntimeState,
+  deriveSessionUiPublish,
   patchSessionRuntimeState,
   type SessionRuntimeState,
+  type SessionUiPublishSources,
 } from "@/lib/shared/session-runtime-state";
-import type { AgentMessage } from "@/lib/shared/types";
+import type { AgentMessage, SessionTreeNode, ToolInfo } from "@/lib/shared/types";
 
 // Pure unit tests for the client half of the reducer's input union (#74). The
 // REST snapshot used to be a second writer of the runtime state and the phase
@@ -182,5 +184,90 @@ describe("client context-usage input", () => {
       contextUsage: usage(90_000),
     });
     expect(second.state.contextUsage?.tokens).toBe(90_000);
+  });
+});
+
+const sources = (over: Partial<SessionUiPublishSources> = {}): SessionUiPublishSources => ({
+  systemPrompt: null,
+  sessionStats: null,
+  isStreaming: false,
+  diskTree: [],
+  toolSelection: "all",
+  availableTools: [],
+  isNew: false,
+  newSessionModel: null,
+  sessionModel: null,
+  ...over,
+});
+
+// SessionTreeNode carries a whole SessionEntry; the projection only ever picks
+// one of the two arrays by reference, so a sentinel is enough here.
+const tree = (label: string) => [{ label } as unknown as SessionTreeNode];
+const tool = (name: string): ToolInfo => ({ name, description: name });
+
+describe("session UI publish projection", () => {
+  it("publishes nothing from a background tab", () => {
+    expect(deriveSessionUiPublish(createSessionRuntimeState(), sources(), false)).toBeNull();
+  });
+
+  it("falls back to the disk tree when there is no live tree", () => {
+    const diskTree = tree("disk");
+    const publish = deriveSessionUiPublish(createSessionRuntimeState(), sources({ diskTree }), true);
+    expect(publish?.branchTree).toBe(diskTree);
+  });
+
+  it("prefers the live tree over the disk tree", () => {
+    const diskTree = tree("disk");
+    const liveTree = tree("live");
+    const state = patchSessionRuntimeState(createSessionRuntimeState(), "liveTree", liveTree);
+    const publish = deriveSessionUiPublish(state, sources({ diskTree }), true);
+    expect(publish?.branchTree).toBe(liveTree);
+  });
+
+  it("expands an 'all' selection into the available tool names", () => {
+    const publish = deriveSessionUiPublish(
+      createSessionRuntimeState(),
+      sources({ toolSelection: "all", availableTools: [tool("bash"), tool("edit")] }),
+      true,
+    );
+    expect(publish?.toolNames).toEqual(["bash", "edit"]);
+  });
+
+  it("passes a custom selection through verbatim", () => {
+    const publish = deriveSessionUiPublish(
+      createSessionRuntimeState(),
+      sources({ toolSelection: ["bash"], availableTools: [tool("bash"), tool("edit")] }),
+      true,
+    );
+    expect(publish?.toolNames).toEqual(["bash"]);
+  });
+
+  it("uses the draft model for a new session and the session model otherwise", () => {
+    const newSessionModel = { provider: "p", modelId: "draft" };
+    const sessionModel = { provider: "p", modelId: "live" };
+    const draft = deriveSessionUiPublish(
+      createSessionRuntimeState(),
+      sources({ isNew: true, newSessionModel, sessionModel }),
+      true,
+    );
+    expect(draft?.currentModel).toEqual(newSessionModel);
+    const existing = deriveSessionUiPublish(
+      createSessionRuntimeState(),
+      sources({ isNew: false, newSessionModel, sessionModel }),
+      true,
+    );
+    expect(existing?.currentModel).toEqual(sessionModel);
+  });
+
+  it("carries the runtime-state fields straight through", () => {
+    const messages: AgentMessage[] = [{ role: "user", content: "hi" }];
+    let state = patchSessionRuntimeState(createSessionRuntimeState(), "agentRunning", true);
+    state = patchSessionRuntimeState(state, "contextUsage", usage(12_000));
+    state = patchSessionRuntimeState(state, "messages", messages);
+    const publish = deriveSessionUiPublish(state, sources({ isStreaming: true }), true);
+    expect(publish?.agentRunning).toBe(true);
+    expect(publish?.isStreaming).toBe(true);
+    expect(publish?.contextUsage?.tokens).toBe(12_000);
+    expect(publish?.mainSessionMessages).toBe(messages);
   });
 });

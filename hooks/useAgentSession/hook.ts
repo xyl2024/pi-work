@@ -12,6 +12,7 @@ import { getPendingAskUserQuestions } from "../askUserQuestionsStore";
 import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import {
   createSessionRuntimeState,
+  deriveSessionUiPublish,
   inFlightToolResultsOf,
   patchSessionRuntimeState,
   type SessionRuntimeState,
@@ -31,14 +32,16 @@ import type {
   AgentRuntimeState,
   AttachedImage,
   SessionData,
+  SessionModelOption,
   ThinkingLevelOption,
   TransportRefs,
   UseAgentSessionOptions,
+  UseAgentSessionResult,
 } from "./types";
 
 
 
-export function useAgentSession(opts: UseAgentSessionOptions) {
+export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionResult {
   const {
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady,
     modelsRefreshKey, statsEmit,
@@ -151,7 +154,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [setSubagentRefreshKey]);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
-  const [modelList, setModelList] = useState<{ id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[]>([]);
+  const [modelList, setModelList] = useState<SessionModelOption[]>([]);
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [newSessionModel, setNewSessionModelState] = useState<{ provider: string; modelId: string } | null>(null);
@@ -809,15 +812,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     })();
   }, [loading, onEntryNavigated, scrollToEntryId, setActiveLeafId]);
 
+  // The ONE publish point. "Only the currently visible tab may publish" is a
+  // parameter of the pure projection now, not a guard copied next to every
+  // field: a background controller gets `null` and writes nothing.
   useEffect(() => {
-    if (isActive) setSessionUiState({ systemPrompt });
-  }, [isActive, systemPrompt]);
-
-  useEffect(() => {
-    if (isActive) {
-      setSessionUiState({ branchTree: runtimeState.liveTree ?? data?.tree ?? [], branchActiveLeafId: runtimeState.activeLeafId });
-    }
-  }, [isActive, data?.tree, runtimeState.activeLeafId, runtimeState.liveTree]);
+    const patch = deriveSessionUiPublish(runtimeState, {
+      systemPrompt,
+      sessionStats,
+      isStreaming: streamState.isStreaming,
+      diskTree: data?.tree ?? [],
+      toolSelection,
+      availableTools,
+      isNew,
+      newSessionModel,
+      sessionModel: currentModel,
+    }, isActive);
+    if (patch) setSessionUiState(patch);
+    // `sessionStats` is an IIFE with a fresh object identity each render; the
+    // content-equality guard inside `setSessionUiState` is what keeps that from
+    // re-rendering AppShell's top bar.
+  }, [runtimeState, systemPrompt, sessionStats, streamState.isStreaming, data?.tree, toolSelection, availableTools, isNew, newSessionModel, currentModel, isActive]);
 
   // Keep the store's leaf-change handler owned by the active controller only.
   // Background controllers remain fully live, but must never redirect a branch
@@ -830,7 +844,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   // Load model list
   useEffect(() => {
-    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]>; thinkingLevelMaps?: Record<string, Record<string, string | null>>; modelIcons?: Record<string, string> }) => {
+    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: SessionModelOption[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]>; thinkingLevelMaps?: Record<string, Record<string, string | null>>; modelIcons?: Record<string, string> }) => {
       setModelNames(d.models);
       if (d.modelIcons) setModelIcons(d.modelIcons);
       if (d.thinkingLevels) setModelThinkingLevels(d.thinkingLevels);
@@ -860,30 +874,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
     }).catch(() => {});
   }, [isNew, modelsRefreshKey, setNewSessionModel, setThinkingLevel]);
-
-  // Publish the remaining session-level state to the store. The shallow-equal
-  // guard inside setSessionUiState prevents re-rendering AppShell's top bar
-  // when an IIFE-derived value (sessionStats) gets a new object identity but
-  // the same scalar contents.
-  useEffect(() => { if (isActive) setSessionUiState({ sessionStats }); }, [isActive, sessionStats]);
-  useEffect(() => { if (isActive) setSessionUiState({ contextUsage: runtimeState.contextUsage }); }, [isActive, runtimeState.contextUsage]);
-  useEffect(() => { if (isActive) setSessionUiState({ contextComposition: runtimeState.contextComposition }); }, [isActive, runtimeState.contextComposition]);
-  useEffect(() => { if (isActive) setSessionUiState({ isStreaming: streamState.isStreaming }); }, [isActive, streamState.isStreaming]);
-  // Publish the wider "agent is busy with this turn" flag so the
-  // conversation-tree panel can lock card clicks for the entire turn,
-  // not just the streaming sub-window. (See SessionUiState.agentRunning.)
-  useEffect(() => { if (isActive) setSessionUiState({ agentRunning: runtimeState.agentRunning }); }, [isActive, runtimeState.agentRunning]);
-  // Publish the active model + message transcript for cross-tab panels
-  // (BTW reads both — `displayModel` to mirror the model and
-  // `mainSessionMessages` to feed the BTW agent's first send with the
-  // same context the user can see). The active-only filter mirrors the
-  // other sessionUi fields; a background controller's messages must
-  // never overwrite the visible chat's transcript.
-  useEffect(() => { if (isActive) setSessionUiState({ currentModel: displayModel }); }, [isActive, displayModel]);
-  useEffect(() => {
-    if (isActive) setSessionUiState({ thinkingLevel: runtimeState.thinkingLevel, toolNames: toolSelection === "all" ? availableTools.map((tool) => tool.name) : toolSelection });
-  }, [isActive, runtimeState.thinkingLevel, toolSelection, availableTools]);
-  useEffect(() => { if (isActive) setSessionUiState({ mainSessionMessages: runtimeState.messages }); }, [isActive, runtimeState.messages]);
 
   // Clear a controller's pending bot reaction when it moves to the
   // background (and again on final unmount). Background events must not
@@ -931,7 +921,5 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleSend, handleAbort, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     handleCompact,
-    setActiveLeafId, setData, setMessages,
-    dispatch,
   };
 }

@@ -14,4 +14,5 @@ export type {
   SessionData,
   ThinkingLevelOption,
   UseAgentSessionOptions,
+  UseAgentSessionResult,
 } from "./types";

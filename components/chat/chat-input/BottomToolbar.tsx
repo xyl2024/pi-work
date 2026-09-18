@@ -40,7 +40,7 @@ export interface BottomToolbarProps {
   onCwdChange?: (cwd: string) => void;
 
   // MIDDLE
-  contextUsage: ContextUsage;
+  contextUsage: ContextUsage | null;
   contextComposition: ContextComposition | null;
   sessionStats: SessionStats;
 
