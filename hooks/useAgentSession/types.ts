@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
-import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode, ToolSelection } from "@/lib/shared/types";
-import type { ContextComposition } from "@/lib/shared/context-composition";
+import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode } from "@/lib/shared/types";
+import type { SessionSnapshotPayload } from "@/lib/shared/session-runtime-state";
 // The session-event protocol is declared once, in the shared layer, and used by
 // both the client and the server — see lib/shared/session-events.ts.
 import type { SessionEvent } from "@/lib/shared/session-events";
@@ -38,25 +38,12 @@ export type StreamAction =
   | { type: "end" }
   | { type: "reset" };
 
-export interface AgentRuntimeState {
-  running: boolean;
-  state?: {
-    isStreaming?: boolean;
-    isCompacting?: boolean;
-    isRunning?: boolean;
-    phase?: "compacting" | "streaming" | null;
-    contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
-    /** Local context-composition estimate anchored to `contextUsage.tokens`
-     *  (ADR-0005). Computed server-side on `message_end`; absent on older
-     *  servers and `null` until the first estimate lands. */
-    contextComposition?: ContextComposition | null;
-    systemPrompt?: string;
-    thinkingLevel?: string;
-    /** Raw tool selection the live agent is using ("all" | string[], patterns
-     *  included). Absent on older servers; drives the tools button label. */
-    toolNames?: ToolSelection;
-  };
-}
+/**
+ * The REST `get_state` payload — the body of the `client_snapshot` runtime
+ * input. Declared once in the shared layer (the reducer consumes it); this is
+ * the hook-side name, kept so callers do not have to reach across layers.
+ */
+export type AgentRuntimeState = SessionSnapshotPayload;
 
 export type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 

@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
 import type { AgentMessage, SessionTreeNode, TextContent, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
-import type { ContextComposition } from "@/lib/shared/context-composition";
 import { sendAgentCommand } from "@/lib/client/agent-client";
 import { readLastUsedModel, writeLastUsedModel } from "@/lib/client/last-used-model";
 import { useToast } from "@/components/ui/Toast";
@@ -26,12 +25,11 @@ import {
 } from "../streamingMessageStore";
 import { useAgentSessionTransport } from "./transport";
 import { useAgentSessionData } from "./data";
-import type { SessionEvent } from "@/lib/shared/session-events";
+import type { SessionEvent, SessionRuntimeInput } from "@/lib/shared/session-events";
 import type {
   AgentPhase,
   AgentRuntimeState,
   AttachedImage,
-  ContextUsage,
   SessionData,
   ThinkingLevelOption,
   TransportRefs,
@@ -115,8 +113,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const setMessages = useCallback((value: StateUpdater<AgentMessage[]>) => patchRuntime("messages", value), [patchRuntime]);
   const setSubagentRefreshKey = useCallback((value: StateUpdater<number>) => patchRuntime("subagentRefreshKey", value), [patchRuntime]);
   const setAgentPhase = useCallback((value: StateUpdater<AgentPhase>) => patchRuntime("agentPhase", value), [patchRuntime]);
-  const setContextUsage = useCallback((value: StateUpdater<ContextUsage | null>) => patchRuntime("contextUsage", value), [patchRuntime]);
-  const setContextComposition = useCallback((value: StateUpdater<ContextComposition | null>) => patchRuntime("contextComposition", value), [patchRuntime]);
   const setThinkingLevel = useCallback((value: StateUpdater<ThinkingLevelOption>) => patchRuntime("thinkingLevel", value), [patchRuntime]);
   const setAgentRunningSync = useCallback((running: boolean) => patchRuntime("agentRunning", running), [patchRuntime]);
   const setCompactingSync = useCallback((compacting: boolean) => patchRuntime("isCompacting", compacting), [patchRuntime]);
@@ -316,15 +312,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   };
   const loadContextRef = useRef<(sid: string, leafId: string | null) => Promise<void>>(async () => {});
   const refreshAgentRuntimeStateRef = useRef<((sid?: string) => Promise<AgentRuntimeState | null>) | null>(null);
+  // The reducer's entry point lives in the event adapter, which is created
+  // after the data layer (it needs `loadSession` / `closeEvents`). The data
+  // layer reaches it through this ref, filled on the same render — the same
+  // bridge shape as `refreshAgentRuntimeStateRef` / `loadContextRef`.
+  const applyRuntimeInputRef = useRef<(input: SessionRuntimeInput) => void>(() => {});
   const {
     loadSession,
     loadContext: loadContextBound,
     ensureAvailableTools: ensureAvailableToolsImpl,
-    applyAgentRuntimeState,
     refreshAgentRuntimeState,
   } = useAgentSessionData({
     sessionIdRef,
-    streamingKey,
     modelThinkingLevels,
     setData,
     setActiveLeafId,
@@ -334,14 +333,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setCompactionPoints,
     setCurrentModelOverride,
     setThinkingLevel,
-    setToolSelection,
-    setContextUsage,
-    setContextComposition,
-    setSystemPrompt,
-    setAgentPhase,
-    setAgentRunningSync,
-    setCompactingSync,
-    dispatch,
+    applyRuntimeInput: (input) => applyRuntimeInputRef.current(input),
     setLoading,
     setError,
     setToolsLoading,
@@ -390,7 +382,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // activation so we re-register the owner for the now-active session.
   }, [isActive, refreshSystemPrompt]);
 
-  const { handleAgentEvent } = useAgentSessionEvents({
+  const { handleAgentEvent, applyRuntimeInput } = useAgentSessionEvents({
     controllerId: streamingKey,
     isActive,
     session,
@@ -406,6 +398,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     dispatch,
     botRevertTimerRef,
     refreshSystemPrompt,
+    setSystemPrompt,
+    setToolSelection,
     loadSession,
     refreshAgentRuntimeStateRef,
     closeEvents,
@@ -419,6 +413,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // which owns the EventSource and therefore `closeEvents` — and the adapter,
   // which needs `closeEvents` to perform an effect.
   handleAgentEventRef.current = handleAgentEvent;
+  applyRuntimeInputRef.current = applyRuntimeInput;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     if (!message.trim() && !images?.length) return;
@@ -752,7 +747,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionIdRef.current = session.id;
       loadSession(session.id, true, true).then(async (agentState) => {
         if (disposedRef.current) return;
-        applyAgentRuntimeState(agentState);
+        // The REST snapshot is one more input to the one reducer.
+        applyRuntimeInputRef.current({ type: "client_snapshot", snapshot: agentState });
         // Backstop for a wrapper that wasn't alive at includeState time (e.g.
         // right after server boot): GET /api/agent/[id] lazily boots the RPC
         // session, so one re-fetch publishes systemPrompt/contextUsage without

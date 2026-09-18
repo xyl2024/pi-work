@@ -25,7 +25,7 @@
  *     leak ADR-0003 recorded (`seenCelebrateToolEndIds`).
  */
 
-import type { AgentMessage, SessionTreeNode, ToolResultMessage } from "./types";
+import type { AgentMessage, SessionTreeNode, ToolSelection, ToolResultMessage } from "./types";
 import type { ContextComposition } from "./context-composition";
 import type { ThinkingLevelOption } from "./thinking-level-utils";
 
@@ -43,6 +43,35 @@ export interface ContextUsage {
   percent: number | null;
   contextWindow: number;
   tokens: number | null;
+}
+
+/**
+ * The payload of the REST `get_state` round trip — what `GET /api/agent/[id]`
+ * answers, and the body of the `client_snapshot` runtime input.
+ *
+ * It is declared here (not next to the hook) because the reducer consumes it:
+ * the snapshot used to be a second writer of the runtime state, and it is now
+ * one more input to the one writer, so its shape belongs to the shared module
+ * like the wire events do. `AgentRuntimeState` in the hook is an alias of this.
+ */
+export interface SessionSnapshotPayload {
+  running: boolean;
+  state?: {
+    isStreaming?: boolean;
+    isCompacting?: boolean;
+    isRunning?: boolean;
+    phase?: "compacting" | "streaming" | null;
+    contextUsage?: ContextUsage | null;
+    /** Local context-composition estimate anchored to `contextUsage.tokens`
+     *  (ADR-0005). Computed server-side on `message_end`; absent on older
+     *  servers and `null` until the first estimate lands. */
+    contextComposition?: ContextComposition | null;
+    systemPrompt?: string;
+    thinkingLevel?: string;
+    /** Raw tool selection the live agent is using ("all" | string[], patterns
+     *  included). Absent on older servers; drives the tools button label. */
+    toolNames?: ToolSelection;
+  };
 }
 
 export interface RetryInfo {

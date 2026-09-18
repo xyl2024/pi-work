@@ -1,24 +1,20 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
-import type { AgentMessage, CompactionPoint, ToolInfo, ToolSelection } from "@/lib/shared/types";
-import type { ContextComposition } from "@/lib/shared/context-composition";
+import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/shared/types";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
-import { endStreaming as endStreamingStore, getStreamingSnapshot } from "../streamingMessageStore";
+import type { SessionRuntimeInput } from "@/lib/shared/session-events";
 import type {
-  AgentPhase,
   AgentRuntimeState,
   LoadContextRef,
   RuntimeStateRef,
   SessionData,
   SessionIdRef,
   StateSetter,
-  StreamAction,
   ThinkingLevelOption,
 } from "./types";
 
 type UseAgentSessionDataOptions = {
   sessionIdRef: SessionIdRef;
-  streamingKey: string;
   modelThinkingLevels: Record<string, string[]>;
   setData: StateSetter<SessionData | null>;
   setActiveLeafId: StateSetter<string | null>;
@@ -28,16 +24,9 @@ type UseAgentSessionDataOptions = {
   setCompactionPoints: StateSetter<CompactionPoint[]>;
   setCurrentModelOverride: StateSetter<{ provider: string; modelId: string } | null>;
   setThinkingLevel: StateSetter<ThinkingLevelOption>;
-  /** Syncs the raw tool selection reported by the live agent into the chat
-   *  input's local state (existing sessions restore it from `get_state`). */
-  setToolSelection: StateSetter<ToolSelection>;
-  setContextUsage: StateSetter<{ percent: number | null; contextWindow: number; tokens: number | null } | null>;
-  setContextComposition: StateSetter<ContextComposition | null>;
-  setSystemPrompt: StateSetter<string | null>;
-  setAgentPhase: StateSetter<AgentPhase>;
-  setAgentRunningSync: (running: boolean) => void;
-  setCompactingSync: (compacting: boolean) => void;
-  dispatch: React.Dispatch<StreamAction>;
+  /** Feeds one input to the one reducer (the session-event adapter owns it).
+   *  The REST snapshot is an input, not a second writer of the runtime state. */
+  applyRuntimeInput: (input: SessionRuntimeInput) => void;
   setLoading: StateSetter<boolean>;
   setError: StateSetter<string | null>;
   setToolsLoading: StateSetter<boolean>;
@@ -52,36 +41,9 @@ type UseAgentSessionDataOptions = {
   refreshAgentRuntimeStateRef: RuntimeStateRef;
 };
 
-type RunningToolHint = { id: string; name: string; args?: Record<string, unknown> }[];
-
-/** Tool calls issued since the last user prompt that have no toolResult yet
- *  — i.e. the calls a re-attached session is (or was) executing. Used to
- *  seed the loading indicator with "running tool X" instead of "waiting for
- *  model" when the UI attaches to an already-running turn. */
-function derivePendingToolCalls(messages: AgentMessage[]): RunningToolHint {
-  const lastUserIdx = messages.findLastIndex((m) => m.role === "user");
-  if (lastUserIdx === -1) return [];
-  const pending: RunningToolHint = [];
-  for (let i = lastUserIdx; i < messages.length; i++) {
-    const message = messages[i];
-    if (message.role === "assistant" && Array.isArray(message.content)) {
-      for (const block of message.content) {
-        if (block.type === "toolCall") {
-          pending.push({ id: block.toolCallId, name: block.toolName, args: block.input });
-        }
-      }
-    } else if (message.role === "toolResult") {
-      const idx = pending.findIndex((tool) => tool.id === message.toolCallId);
-      if (idx !== -1) pending.splice(idx, 1);
-    }
-  }
-  return pending;
-}
-
 export function useAgentSessionData(options: UseAgentSessionDataOptions) {
   const {
     sessionIdRef,
-    streamingKey,
     modelThinkingLevels,
     setData,
     setActiveLeafId,
@@ -91,14 +53,7 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     setCompactionPoints,
     setCurrentModelOverride,
     setThinkingLevel,
-    setToolSelection,
-    setContextUsage,
-    setContextComposition,
-    setSystemPrompt,
-    setAgentPhase,
-    setAgentRunningSync,
-    setCompactingSync,
-    dispatch,
+    applyRuntimeInput,
     setLoading,
     setError,
     setToolsLoading,
@@ -110,11 +65,6 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     loadContextRef,
     refreshAgentRuntimeStateRef,
   } = options;
-
-  // Set by loadSession from the freshly loaded message tail; consumed by
-  // applyAgentRuntimeState so a re-attach to a running turn shows the
-  // executing tool instead of "waiting for model".
-  const runningToolsHintRef = useRef<RunningToolHint>([]);
 
   const loadSession = useCallback(async (sid: string, showLoading = false, includeState = false) => {
     try {
@@ -145,7 +95,6 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
       setCompactionPoints(d.context.compactionPoints ?? []);
       setCurrentModelOverride(null);
       setError(null);
-      runningToolsHintRef.current = derivePendingToolCalls(d.context.messages);
       // Helper: pick the highest thinking level the current model supports, or
       // fall back to the raw value if it isn't the legacy "auto" sentinel.
       // Older sessions may persist "auto" — a frontend-only sentinel that
@@ -243,65 +192,16 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     }
   }, [isNew, newSessionCwd, sessionIdRef, setAvailableTools, setToolsError, setToolsLoading]);
 
-  const applyAgentRuntimeState = useCallback((agentState: AgentRuntimeState | null | undefined) => {
-    const state = agentState?.state;
-    if (state?.contextUsage !== undefined) setContextUsage(state.contextUsage ?? null);
-    if (state?.contextComposition !== undefined) setContextComposition(state.contextComposition ?? null);
-    if (state?.systemPrompt !== undefined) setSystemPrompt(state.systemPrompt ?? null);
-    // Adopt the live raw selection so re-opening an existing session shows the
-    // preset it actually runs with (the local default is "all"). Skipped when
-    // the server doesn't report one, and identity-stable when unchanged so it
-    // can't loop through re-renders on every runtime-state refresh.
-    if (state?.toolNames !== undefined) {
-      const next = state.toolNames;
-      setToolSelection((prev) =>
-        prev === next || (Array.isArray(prev) && Array.isArray(next)
-          && prev.length === next.length && prev.every((name, i) => name === next[i]))
-          ? prev
-          : next,
-      );
-    }
-
-    const compacting = state?.isCompacting === true || state?.phase === "compacting";
-    const running = Boolean(
-      compacting ||
-      state?.isRunning === true ||
-      state?.isStreaming === true ||
-      (agentState?.running === true && !state),
-    );
-
-    if (compacting) {
-      setAgentRunningSync(true);
-      setCompactingSync(true);
-      setAgentPhase({ kind: "compacting" });
-    } else if (running) {
-      setAgentRunningSync(true);
-      setCompactingSync(false);
-      const hint = runningToolsHintRef.current;
-      // Deliberately not cleared here: the mount backstop re-fetches runtime
-      // state (`refreshAgentRuntimeState`) which calls this again, and should
-      // keep showing the executing tool. Cleared when the turn ends instead.
-      setAgentPhase(hint.length > 0 ? { kind: "running_tools", tools: hint } : { kind: "waiting_model" });
-    } else {
-      setAgentRunningSync(false);
-      setCompactingSync(false);
-      setAgentPhase(null);
-      runningToolsHintRef.current = [];
-      dispatch({ type: "end" });
-      const streamingMessage = getStreamingSnapshot(streamingKey).streamingMessage;
-      const modelCallFailed = streamingMessage?.role === "assistant" && streamingMessage.stopReason === "error";
-      endStreamingStore(streamingKey, modelCallFailed);
-    }
-  }, [dispatch, setAgentPhase, setAgentRunningSync, setCompactingSync, setContextUsage, setContextComposition, setSystemPrompt, setToolSelection, streamingKey]);
-
   const refreshAgentRuntimeState = useCallback(async (sid = sessionIdRef.current) => {
     if (!sid) return null;
     const res = await fetch(`/api/agent/${encodeURIComponent(sid)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const runtimeState = await res.json() as AgentRuntimeState;
-    applyAgentRuntimeState(runtimeState);
-    return runtimeState;
-  }, [applyAgentRuntimeState, sessionIdRef]);
+    const snapshot = await res.json() as AgentRuntimeState;
+    // The fetch only *retrieves* the snapshot; the reducer derives the next
+    // runtime state from it like it does for any wire event.
+    applyRuntimeInput({ type: "client_snapshot", snapshot });
+    return snapshot;
+  }, [applyRuntimeInput, sessionIdRef]);
 
   // Keep refs in sync so the SSE transport layer can call into us.
   loadContextRef.current = loadContext;
@@ -312,7 +212,6 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
     loadContext,
     loadContextRef,
     ensureAvailableTools,
-    applyAgentRuntimeState,
     refreshAgentRuntimeState,
     refreshAgentRuntimeStateRef,
   };
