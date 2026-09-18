@@ -188,6 +188,11 @@ export function patchSessionRuntimeState<K extends keyof SessionRuntimeState>(
  * wrote unconditionally too. The accumulated partial `result` is preserved
  * when the call is already in flight, so a replayed start cannot wipe output
  * that already streamed in.
+ *
+ * The placeholder result carries no `timestamp`: this runs inside the pure
+ * event reduction, and nothing reads a partial's timestamp. Stamping
+ * `Date.now()` here would put a clock read on the reducer's path for a value
+ * that is never rendered.
  */
 export function upsertInFlightTool(
   inFlightTools: ReadonlyMap<string, InFlightToolCall>,
@@ -205,8 +210,31 @@ export function upsertInFlightTool(
       toolCallId: id,
       toolName: name,
       content: [],
-      timestamp: Date.now(),
     },
+  });
+  return next;
+}
+
+/**
+ * Merge a streamed partial result into an in-flight tool call.
+ *
+ * Returns `null` when the call is not in flight, so the caller can leave the
+ * state untouched rather than fabricating an entry out of an update for a call
+ * it never saw start. The `patch` replaces the accumulated content when it
+ * carries any and merges `details` alongside it — pi re-sends the whole
+ * partial snapshot, so "merge" here means "take the newest observation".
+ */
+export function mergeInFlightToolPartialResult(
+  inFlightTools: ReadonlyMap<string, InFlightToolCall>,
+  id: string,
+  patch: { content?: ToolResultMessage["content"]; details?: unknown },
+): Map<string, InFlightToolCall> | null {
+  const existing = inFlightTools.get(id);
+  if (!existing) return null;
+  const next = new Map(inFlightTools);
+  next.set(id, {
+    ...existing,
+    result: { ...existing.result, ...patch } as ToolResultMessage,
   });
   return next;
 }

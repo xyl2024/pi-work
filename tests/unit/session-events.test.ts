@@ -7,10 +7,15 @@ import {
   isPortedSessionEvent,
   reduceSessionEvent,
 } from "@/lib/shared/session-events";
-import type { PortedSessionEvent, SessionEvent } from "@/lib/shared/session-events";
+import type {
+  PortedSessionEvent,
+  SessionEvent,
+  SessionEventEffect,
+} from "@/lib/shared/session-events";
 import {
   createSessionRuntimeState,
   patchSessionRuntimeState,
+  type SessionRuntimeState,
 } from "@/lib/shared/session-runtime-state";
 
 // Pure unit tests for the session-event protocol (#58). The module is types +
@@ -193,5 +198,299 @@ describe("session event reducer", () => {
     }
     expect(isPortedSessionEvent({ type: "agent_start" })).toBe(false);
     expect(isPortedSessionEvent({ type: "connected", sessionId: "s" })).toBe(false);
+  });
+});
+
+// ── The tool-execution group (#61) ───────────────────────────────────────
+//
+// Start / partial result / end, and every side effect they used to fire
+// inline. The load-bearing test here is the git one: the end event carries no
+// arguments, so "did this bash touch git?" can only be answered from the
+// arguments recorded when the call started. That rule had no test before the
+// port and is the easiest thing to break silently while moving code.
+
+type StartEvent = Extract<PortedSessionEvent, { type: "tool_execution_start" }>;
+type UpdateEvent = Extract<PortedSessionEvent, { type: "tool_execution_update" }>;
+type EndEvent = Extract<PortedSessionEvent, { type: "tool_execution_end" }>;
+
+function toolStart(toolCallId: string, toolName: string, args: unknown = {}): StartEvent {
+  return { type: "tool_execution_start", toolCallId, toolName, args };
+}
+
+function toolUpdate(toolCallId: string, toolName: string, partialResult: unknown): UpdateEvent {
+  return { type: "tool_execution_update", toolCallId, toolName, args: {}, partialResult };
+}
+
+function toolEnd(toolCallId: string, toolName: string, result: unknown = undefined, isError = false): EndEvent {
+  return { type: "tool_execution_end", toolCallId, toolName, result, isError };
+}
+
+/** Fold a whole event sequence, collecting every requested effect in order. */
+function reduceAll(state: SessionRuntimeState, events: PortedSessionEvent[]) {
+  let current = state;
+  const effects: SessionEventEffect[] = [];
+  for (const event of events) {
+    const reduction = reduceSessionEvent(current, event);
+    current = reduction.state;
+    effects.push(...reduction.effects);
+  }
+  return { state: current, effects };
+}
+
+function kindsOf(effects: SessionEventEffect[]): string[] {
+  return effects.map((effect) => effect.kind);
+}
+
+describe("session event reducer: tool execution", () => {
+  it("remembers the tool call's name and args while it is in flight", () => {
+    const state = createSessionRuntimeState();
+
+    const reduction = reduceSessionEvent(state, toolStart("call-1", "bash", { command: "ls -la" }));
+
+    expect(reduction.state.inFlightTools.get("call-1")?.name).toBe("bash");
+    expect(reduction.state.inFlightTools.get("call-1")?.args).toEqual({ command: "ls -la" });
+    expect(reduction.state.agentPhase).toEqual({
+      kind: "running_tools",
+      tools: [{ id: "call-1", name: "bash", args: { command: "ls -la" } }],
+    });
+    expect(reduction.effects).toEqual([{
+      kind: "report_tool_call_stats",
+      report: { type: "tool_start", toolCallId: "call-1", toolName: "bash", args: { command: "ls -la" } },
+    }]);
+  });
+
+  it("reports no args for a non-object argument bag", () => {
+    const state = createSessionRuntimeState();
+
+    const reduction = reduceSessionEvent(state, toolStart("call-1", "bash", [1, 2, 3]));
+
+    expect(reduction.state.agentPhase).toEqual({
+      kind: "running_tools",
+      tools: [{ id: "call-1", name: "bash", args: undefined }],
+    });
+  });
+
+  it("keeps the accumulated partial output when a start is replayed", () => {
+    const start = toolStart("call-1", "bash", { command: "ls" });
+    const once = reduceSessionEvent(createSessionRuntimeState(), start);
+    const streaming = reduceSessionEvent(
+      once.state,
+      toolUpdate("call-1", "bash", { content: [{ type: "text", text: "partial" }] }),
+    );
+
+    // SSE reconnect replays the start; the output that already streamed in
+    // must survive it, and the phase chip must not gain a duplicate entry.
+    const replayed = reduceSessionEvent(streaming.state, start);
+
+    expect(replayed.state.inFlightTools.get("call-1")?.result?.content)
+      .toEqual([{ type: "text", text: "partial" }]);
+    expect(replayed.state.agentPhase).toEqual({
+      kind: "running_tools",
+      tools: [{ id: "call-1", name: "bash", args: { command: "ls" } }],
+    });
+  });
+
+  it("keeps the phase chip in step as several tools run and finish", () => {
+    const events: PortedSessionEvent[] = [
+      toolStart("a", "bash", {}),
+      toolStart("b", "edit", {}),
+      toolEnd("a", "bash"),
+    ];
+
+    const running = reduceAll(createSessionRuntimeState(), events);
+
+    expect(running.state.agentPhase).toEqual({
+      kind: "running_tools",
+      tools: [{ id: "b", name: "edit", args: {} }],
+    });
+
+    const idle = reduceSessionEvent(running.state, toolEnd("b", "edit"));
+    expect(idle.state.agentPhase).toEqual({ kind: "waiting_model" });
+    expect(idle.state.inFlightTools.size).toBe(0);
+  });
+
+  it("merges the partial results of one call instead of stacking them", () => {
+    const first = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "bash", {}));
+    const second = reduceSessionEvent(
+      first.state,
+      toolUpdate("call-1", "bash", { content: [{ type: "text", text: "part 1" }] }),
+    );
+    const third = reduceSessionEvent(
+      second.state,
+      toolUpdate("call-1", "bash", {
+        content: [{ type: "text", text: "part 1 part 2" }],
+        details: { taskId: "task-1" },
+      }),
+    );
+
+    const result = third.state.inFlightTools.get("call-1")?.result;
+    expect(result?.content).toEqual([{ type: "text", text: "part 1 part 2" }]);
+    expect(result?.details).toEqual({ taskId: "task-1" });
+    expect(kindsOf(third.effects)).toEqual([]);
+  });
+
+  it("keeps details that arrived before the latest content snapshot", () => {
+    const started = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "spawn_subagent", {}));
+    const withDetails = reduceSessionEvent(
+      started.state,
+      toolUpdate("call-1", "spawn_subagent", { details: { taskId: "task-1" } }),
+    );
+    const withText = reduceSessionEvent(
+      withDetails.state,
+      toolUpdate("call-1", "spawn_subagent", { content: [{ type: "text", text: "running" }] }),
+    );
+
+    const result = withText.state.inFlightTools.get("call-1")?.result;
+    expect(result?.content).toEqual([{ type: "text", text: "running" }]);
+    expect(result?.details).toEqual({ taskId: "task-1" });
+  });
+
+  it("ignores an empty partial result and an update for an unknown call", () => {
+    const started = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "bash", {}));
+
+    const empty = reduceSessionEvent(started.state, toolUpdate("call-1", "bash", {}));
+    expect(empty.state).toBe(started.state);
+    expect(empty.effects).toEqual([]);
+
+    const unknown = reduceSessionEvent(started.state, toolUpdate("call-9", "bash", {
+      content: [{ type: "text", text: "stray" }],
+    }));
+    expect(unknown.state).toBe(started.state);
+    expect(unknown.effects).toEqual([]);
+  });
+
+  it("decides git invalidation from the args recorded at start, not from the end event", () => {
+    // `tool_execution_end` carries no args at all — this is the whole point.
+    const committed = reduceAll(createSessionRuntimeState(), [
+      toolStart("call-1", "bash", { command: "git commit -m wip" }),
+      toolEnd("call-1", "bash", { content: [{ type: "text", text: "done" }] }),
+    ]);
+
+    expect(committed.effects).toContainEqual({ kind: "invalidate_git_status", force: true });
+  });
+
+  it("leaves git alone for a bash call that never mentioned git", () => {
+    const plain = reduceAll(createSessionRuntimeState(), [
+      toolStart("call-1", "bash", { command: "ls -la" }),
+      toolEnd("call-1", "bash"),
+    ]);
+
+    expect(kindsOf(plain.effects)).not.toContain("invalidate_git_status");
+  });
+
+  it("invalidates git without forcing for edit / write", () => {
+    const edited = reduceAll(createSessionRuntimeState(), [
+      toolStart("call-1", "edit", { path: "a.ts" }),
+      toolEnd("call-1", "edit"),
+    ]);
+
+    expect(edited.effects).toContainEqual({ kind: "invalidate_git_status", force: false });
+  });
+
+  it("celebrates once per celebrate call, even when the end event is replayed", () => {
+    const details = { style: "grand", resolvedStyle: "grand", durationMs: 4000 } as const;
+    const first = reduceAll(createSessionRuntimeState(), [
+      toolStart("call-1", "celebrate", {}),
+      toolEnd("call-1", "celebrate", { details }, false),
+    ]);
+
+    expect(first.effects).toContainEqual({ kind: "celebrate", details });
+
+    // SSE reconnect replays the same end event: the ledger already holds the
+    // id, so the overlay must not fire a second time.
+    const replay = reduceSessionEvent(first.state, toolEnd("call-1", "celebrate", { details }, false));
+    expect(kindsOf(replay.effects)).not.toContain("celebrate");
+  });
+
+  it("isolates the celebrate ledger per session", () => {
+    const end = toolEnd("call-1", "celebrate", undefined, false);
+    const inA = reduceSessionEvent(createSessionRuntimeState(), end);
+    const inB = reduceSessionEvent(createSessionRuntimeState(), end);
+
+    expect(kindsOf(inA.effects)).toContain("celebrate");
+    expect(kindsOf(inB.effects)).toContain("celebrate");
+  });
+
+  it("refreshes the subagent panel once per spawn_subagent call", () => {
+    const startOnce = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "spawn_subagent", {}));
+    expect(kindsOf(startOnce.effects)).toContain("refresh_subagent_panel");
+
+    const startAgain = reduceSessionEvent(startOnce.state, toolStart("call-1", "spawn_subagent", {}));
+    expect(kindsOf(startAgain.effects)).not.toContain("refresh_subagent_panel");
+
+    const endOnce = reduceSessionEvent(startAgain.state, toolEnd("call-1", "spawn_subagent"));
+    expect(kindsOf(endOnce.effects)).toContain("refresh_subagent_panel");
+
+    const endAgain = reduceSessionEvent(endOnce.state, toolEnd("call-1", "spawn_subagent"));
+    expect(kindsOf(endAgain.effects)).not.toContain("refresh_subagent_panel");
+  });
+
+  it("publishes a show_media result for the session library", () => {
+    const files = [{ path: "/tmp/a.png", exists: true, category: "image" }];
+    const started = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "show_media", {}));
+
+    const reduction = reduceSessionEvent(
+      started.state,
+      toolEnd("call-1", "show_media", { details: { files, summary: "1 file" } }),
+    );
+
+    expect(reduction.effects).toContainEqual({ kind: "show_file_result", toolCallId: "call-1", files });
+  });
+
+  it("publishes a result from the legacy show_file name too", () => {
+    const files = [{ path: "/tmp/old.png", exists: true }];
+    const started = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "show_file", {}));
+
+    const reduction = reduceSessionEvent(
+      started.state,
+      toolEnd("call-1", "show_file", { details: { files } }),
+    );
+
+    expect(kindsOf(reduction.effects)).toContain("show_file_result");
+  });
+
+  it("flashes the bot only for a failed tool call", () => {
+    const failed = reduceSessionEvent(createSessionRuntimeState(), toolEnd("call-1", "bash", undefined, true));
+    expect(failed.effects).toContainEqual({ kind: "flash_bot_state", stateKey: "suspicious" });
+
+    const ok = reduceSessionEvent(createSessionRuntimeState(), toolEnd("call-2", "bash", undefined, false));
+    expect(kindsOf(ok.effects)).not.toContain("flash_bot_state");
+  });
+
+  it("reports the end with the first text block, truncated for the stats store", () => {
+    const long = "x".repeat(2000);
+    const started = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "bash", { command: "ls" }));
+
+    const reduction = reduceSessionEvent(
+      started.state,
+      toolEnd("call-1", "bash", { content: [{ type: "text", text: long }], details: { exitCode: 1 } }, true),
+    );
+
+    const report = reduction.effects.find((effect) => effect.kind === "report_tool_call_stats");
+    expect(report).toEqual({
+      kind: "report_tool_call_stats",
+      report: {
+        type: "tool_end",
+        toolCallId: "call-1",
+        isError: true,
+        resultText: `${"x".repeat(1024)}…`,
+        resultDetails: { exitCode: 1 },
+      },
+    });
+  });
+
+  it("retires the in-flight tool once it ends", () => {
+    const started = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "bash", {}));
+
+    const ended = reduceSessionEvent(started.state, toolEnd("call-1", "bash"));
+
+    expect(ended.state.inFlightTools.size).toBe(0);
+    expect(ended.state.agentPhase).toEqual({ kind: "waiting_model" });
+  });
+
+  it("routes the three tool events to the reducer", () => {
+    expect(isPortedSessionEvent(toolStart("call-1", "bash"))).toBe(true);
+    expect(isPortedSessionEvent(toolUpdate("call-1", "bash", {}))).toBe(true);
+    expect(isPortedSessionEvent(toolEnd("call-1", "bash"))).toBe(true);
   });
 });

@@ -1,21 +1,14 @@
 import { useCallback, useRef, type Dispatch } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage } from "@/lib/shared/types";
+import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/shared/types";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
 import type { ContextComposition } from "@/lib/shared/context-composition";
-import {
-  removeInFlightTool,
-  upsertInFlightTool,
-  type SessionRuntimeState,
-  type StateUpdater,
-} from "@/lib/shared/session-runtime-state";
+import type { SessionRuntimeState, StateUpdater } from "@/lib/shared/session-runtime-state";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
-import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
-import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "@/lib/shared/celebrate-tool-types";
-import { triggerCelebration } from "@/lib/client/celebrate-store";
 import { notifyMutated } from "@/lib/client/git-status-store";
 import { playUiSoundEvent } from "@/lib/client/ui-sounds";
 import { setGrokbotConfig } from "@/lib/client/grokbot-store";
 import { setShowFileResult } from "../showFileResultsStore";
+import { triggerCelebration } from "@/lib/client/celebrate-store";
 import { setPendingAskUserQuestions } from "../askUserQuestionsStore";
 import {
   scheduleStreamingUpdate,
@@ -23,7 +16,7 @@ import {
   startStreaming as startStreamingStore,
   endStreaming as endStreamingStore,
 } from "../streamingMessageStore";
-import { bashCommandTouchesGit, isBodyMessage, sameCompletedMessage } from "./utils";
+import { isBodyMessage, sameCompletedMessage } from "./utils";
 import {
   isPortedSessionEvent,
   reduceSessionEvent,
@@ -45,7 +38,6 @@ function getSpawnSubagentToolCallIds(message: unknown): string[] {
   });
 }
 
-const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
 const BOT_BASELINE_STATE = "searching";
 const BOT_REVERT_MS = 8000;
 
@@ -173,6 +165,51 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           return;
         case "play_ui_sound":
           playUiSoundEvent(effect.sound);
+          return;
+        case "report_tool_call_stats": {
+          // The reducer states *what* happened; the clock is read here.
+          const timestamp = Date.now();
+          const report = effect.report;
+          switch (report.type) {
+            case "tool_start":
+              statsEmitRef.current?.({
+                type: "tool_start",
+                toolCallId: report.toolCallId,
+                toolName: report.toolName,
+                args: report.args,
+                timestamp,
+              });
+              return;
+            case "tool_end":
+              statsEmitRef.current?.({
+                type: "tool_end",
+                toolCallId: report.toolCallId,
+                isError: report.isError,
+                resultText: report.resultText,
+                resultDetails: report.resultDetails,
+                timestamp,
+              });
+              return;
+          }
+          return;
+        }
+        case "invalidate_git_status": {
+          const cwd = session?.cwd ?? newSessionCwd;
+          if (cwd) notifyMutated(cwd, effect.force);
+          return;
+        }
+        case "show_file_result":
+          setShowFileResult(effect.toolCallId, effect.files);
+          return;
+        case "celebrate":
+          triggerCelebration(effect.details);
+          return;
+        case "refresh_subagent_panel":
+          patchRuntime("subagentRefreshKey", (key) => key + 1);
+          scheduleSubagentRefresh(effect.toolCallId);
+          return;
+        case "flash_bot_state":
+          fireDiscreteBot(effect.stateKey);
           return;
       }
     };
@@ -314,113 +351,6 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         if (Array.isArray(event.tree)) patchRuntime("liveTree", event.tree as SessionTreeNode[]);
         if (typeof event.leafId === "string") patchRuntime("activeLeafId", event.leafId);
         break;
-      case "tool_execution_start": {
-        const id = event.toolCallId as string;
-        const name = event.toolName as string;
-        const args = event.args;
-        patchRuntime("inFlightTools", (previous) => upsertInFlightTool(previous, id, name, args));
-        if (name === "spawn_subagent" && id && runtime().seenSubagentToolStartIds.claim(id)) {
-          patchRuntime("subagentRefreshKey", (key) => key + 1);
-          scheduleSubagentRefresh(id);
-        }
-        statsEmitRef.current?.({
-          type: "tool_start",
-          toolCallId: id,
-          toolName: name,
-          timestamp: Date.now(),
-          args: args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : undefined,
-        });
-        patchRuntime("agentPhase", (previous) => {
-          const tools = previous?.kind === "running_tools" ? [...previous.tools] : [];
-          if (!tools.some((tool) => tool.id === id)) {
-            tools.push({
-              id,
-              name,
-              args: args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : undefined,
-            });
-          }
-          return { kind: "running_tools", tools };
-        });
-        break;
-      }
-      case "tool_execution_update": {
-        const id = event.toolCallId as string;
-        const partial = event.partialResult as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
-        if (!id || !partial) break;
-        const content: TextContent[] = [];
-        if (Array.isArray(partial.content)) {
-          for (const block of partial.content) {
-            if (block?.type === "text" && typeof block.text === "string") content.push({ type: "text", text: block.text });
-          }
-        }
-        // Details (e.g. spawn_subagent's running taskId/child sessionId) are
-        // merged alongside the streaming content so in-flight blocks can
-        // react to them before the final result arrives.
-        if (content.length === 0 && partial.details === undefined) break;
-        patchRuntime("inFlightTools", (previous) => {
-          const existing = previous.get(id);
-          if (!existing) return previous;
-          const next = new Map(previous);
-          next.set(id, {
-            ...existing,
-            result: {
-              ...existing.result,
-              ...(content.length > 0 ? { content } : {}),
-              ...(partial.details !== undefined ? { details: partial.details } : {}),
-            } as ToolResultMessage,
-          });
-          return next;
-        });
-        break;
-      }
-      case "tool_execution_end": {
-        const id = event.toolCallId as string;
-        const isError = event.isError === true;
-        if (isError) fireDiscreteBot("suspicious");
-        const result = event.result as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
-        // `tool_execution_end` repeats only the tool name and carries no args:
-        // both come from the in-flight record written at start.
-        const inFlight = runtime().inFlightTools.get(id);
-        const toolName = inFlight?.name ?? (typeof event.toolName === "string" ? event.toolName : undefined);
-        if (toolName === "spawn_subagent" && id && runtime().seenSubagentToolEndIds.claim(id)) {
-          patchRuntime("subagentRefreshKey", (key) => key + 1);
-          scheduleSubagentRefresh(id);
-        }
-        const gitCwd = session?.cwd ?? newSessionCwd;
-        if (toolName && WORKTREE_MUTATING_TOOL_NAMES.has(toolName) && gitCwd) notifyMutated(gitCwd);
-        // bash can also mutate the worktree when the command runs a git
-        // subcommand. The end event doesn't carry args, so we read them
-        // from the scratchpad we populated on _start. Read-only commands
-        // (git status, git log) match too, but the wasted fetch is
-        // negligible. We pass `force = true` so git-level changes (`git
-        // add` / `git commit` / `git stash`) are reflected immediately
-        // instead of falling into the server's 2s status cache behind an
-        // earlier edit-triggered fetch.
-        if (toolName === "bash" && gitCwd && bashCommandTouchesGit(inFlight?.args)) {
-          notifyMutated(gitCwd, true);
-        }
-        if (toolName && isShowFileToolName(toolName) && result?.details) {
-          const files = (result.details as { files?: unknown }).files;
-          if (Array.isArray(files)) setShowFileResult(id, files as Parameters<typeof setShowFileResult>[1]);
-        }
-        if (toolName === CELEBRATE_TOOL_NAME && id && runtime().seenCelebrateToolEndIds.claim(id)) {
-          const details = result?.details as CelebrateDetails | undefined;
-          triggerCelebration(details);
-        }
-        let resultText: string | undefined;
-        if (result && Array.isArray(result.content)) {
-          const firstText = result.content.find((content) => content?.type === "text" && typeof content.text === "string");
-          if (firstText && typeof firstText.text === "string") resultText = firstText.text.length > 1024 ? `${firstText.text.slice(0, 1024)}…` : firstText.text;
-        }
-        statsEmitRef.current?.({ type: "tool_end", toolCallId: id, isError, timestamp: Date.now(), resultText, resultDetails: result?.details });
-        patchRuntime("inFlightTools", (previous) => removeInFlightTool(previous, id));
-        patchRuntime("agentPhase", (previous) => {
-          if (previous?.kind !== "running_tools") return previous;
-          const tools = previous.tools.filter((tool) => tool.id !== id);
-          return tools.length === 0 ? { kind: "waiting_model" } : { kind: "running_tools", tools };
-        });
-        break;
-      }
       case "auto_retry_start":
         patchRuntime("retryInfo", { attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
         break;

@@ -60,10 +60,3 @@ export function isBodyMessage(msg: AgentMessage): boolean {
   }
   return hasText && !hasToolUse;
 }
-
-export function bashCommandTouchesGit(args: unknown): boolean {
-  if (!args || typeof args !== "object") return false;
-  const command = (args as { command?: unknown }).command;
-  if (typeof command !== "string" || command.length === 0) return false;
-  return /\bgit\b/.test(command);
-}

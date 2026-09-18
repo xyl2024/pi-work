@@ -34,8 +34,17 @@
  */
 
 import type { AskUserQuestion, AskUserQuestionsRequestPayload } from "./ask-user-questions-tool-types";
+import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "./celebrate-tool-types";
 import type { UiSoundEventId } from "./config-types";
-import type { SessionRuntimeState } from "./session-runtime-state";
+import {
+  mergeInFlightToolPartialResult,
+  patchSessionRuntimeState,
+  removeInFlightTool,
+  upsertInFlightTool,
+  type SessionRuntimeState,
+} from "./session-runtime-state";
+import { isShowFileToolName, type ShowFileEntry } from "./show-file-tool-types";
+import type { ToolCallReport } from "./tool-call-stats-types";
 
 /** Why pi decided to compact the context. */
 export type SessionCompactionReason = "manual" | "threshold" | "overflow";
@@ -204,9 +213,9 @@ export const REDUCED_SESSION_EVENTS: Record<ReducedSessionEventType, string> = {
   message_update: "Feeds a streamed token snapshot into the streaming view.",
   message_end: "Commits the finished message, records a model error, requests a context-usage refresh.",
   session_tree_update: "Replaces the live conversation tree and the active leaf.",
-  tool_execution_start: "Adds an in-flight tool call (name + args) and reports it to the tool-call stats.",
+  tool_execution_start: "Adds an in-flight tool call (name + args), reports it to the tool-call stats, and refreshes the subagent panel for a spawning call.",
   tool_execution_update: "Merges a partial tool result into the in-flight tool call.",
-  tool_execution_end: "Retires the in-flight tool call; the args recorded at start decide git invalidation.",
+  tool_execution_end: "Retires the in-flight tool call; the args recorded at start decide git invalidation and the result drives the celebration, the file preview and the stats.",
   auto_retry_start: "Shows the auto-retry counter.",
   auto_retry_end: "Clears the retry counter, or surfaces the final error.",
   prompt_failed: "Closes the turn with an error and drops the event stream.",
@@ -318,6 +327,9 @@ export type SessionEventTypesAreComplete = AssertTrue<
 export const PORTED_SESSION_EVENT_TYPES = [
   "permission_request",
   "ask_user_questions_request",
+  "tool_execution_start",
+  "tool_execution_update",
+  "tool_execution_end",
 ] as const satisfies readonly ReducedSessionEventType[];
 
 export type PortedSessionEventType = (typeof PORTED_SESSION_EVENT_TYPES)[number];
@@ -339,12 +351,89 @@ export function isPortedSessionEvent(event: SessionEvent): event is PortedSessio
 export type SessionEventEffect =
   | { kind: "enqueue_permission_request"; toolCallId: string; ruleName: string; command: string }
   | { kind: "set_pending_ask_user_questions"; request: AskUserQuestionsRequestPayload }
-  | { kind: "play_ui_sound"; sound: UiSoundEventId };
+  | { kind: "play_ui_sound"; sound: UiSoundEventId }
+  /** Feed the tool-call statistics store. The report carries no `timestamp`:
+   *  the adapter stamps `Date.now()` when it performs it. */
+  | { kind: "report_tool_call_stats"; report: ToolCallReport }
+  /** The worktree's git status may have changed. The adapter knows the
+   *  session's cwd; the reducer only decides that a mutation happened (and
+   *  whether it was a git-level one that must bypass the server's cache). */
+  | { kind: "invalidate_git_status"; force: boolean }
+  /** Publish a `show_media` result so the Session Library can render it. */
+  | { kind: "show_file_result"; toolCallId: string; files: ShowFileEntry[] }
+  /** Play one celebration animation. `details` is passed through verbatim;
+   *  the overlay ignores an absent one. */
+  | { kind: "celebrate"; details: CelebrateDetails | undefined }
+  /** Ask the subagent panel to refresh — now, and (in the adapter) once more
+   *  after a delay, so a long-running child eventually shows its result. */
+  | { kind: "refresh_subagent_panel"; toolCallId: string }
+  /** Flash a state on the sidebar Pi Bot (it reverts to its baseline itself). */
+  | { kind: "flash_bot_state"; stateKey: string };
 
 /** What one event does to the runtime state, and the effects it asks for. */
 export interface SessionEventReduction {
   state: SessionRuntimeState;
   effects: SessionEventEffect[];
+}
+
+/** Tools whose execution edits the worktree. `bash` is handled separately
+ *  below, because only its arguments reveal whether the command touched git. */
+const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
+
+/** The Pi Bot reaction to a failed tool call. */
+const TOOL_ERROR_BOT_STATE = "suspicious";
+
+/** A plain object argument bag, or `undefined` for anything else (`null`,
+ *  arrays, scalars) — the shape the tool-call stats store and the phase chip
+ *  accept. */
+function asArgumentRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+/**
+ * Whether a bash call is likely to have changed the worktree's git state.
+ *
+ * Read from the arguments recorded on `tool_execution_start`: the end event
+ * repeats only the tool *name*, so by the time we decide, the arguments from
+ * the start are the only evidence left. Read-only commands (`git status`,
+ * `git log`) match too — the wasted status fetch is negligible, and the caller
+ * pops the server's cache with `force` so a `git commit` is not hidden behind
+ * an earlier edit-triggered status.
+ */
+function bashCommandTouchesGit(args: unknown): boolean {
+  if (!args || typeof args !== "object") return false;
+  const command = (args as { command?: unknown }).command;
+  if (typeof command !== "string" || command.length === 0) return false;
+  return /\bgit\b/.test(command);
+}
+
+/** The text of every `{ type: "text" }` block of a tool-content array, in
+ *  order. Shared by the partial-result merge and the stats report so the two
+ *  cannot drift on what counts as a text block. */
+function textBlocksOf(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const texts: string[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const typed = block as { type?: unknown; text?: unknown };
+    if (typed.type === "text" && typeof typed.text === "string") texts.push(typed.text);
+  }
+  return texts;
+}
+
+/** The text + details of a streamed partial result, in the shape the in-flight
+ *  table and the tool-call stats store expect. `null` = nothing worth merging. */
+function partialToolResultPatch(partial: unknown): { content?: { type: "text"; text: string }[]; details?: unknown } | null {
+  if (!partial || typeof partial !== "object") return null;
+  const value = partial as { content?: unknown; details?: unknown };
+  const content = textBlocksOf(value.content).map((text) => ({ type: "text" as const, text }));
+  if (content.length === 0 && value.details === undefined) return null;
+  return {
+    ...(content.length > 0 ? { content } : {}),
+    ...(value.details !== undefined ? { details: value.details } : {}),
+  };
 }
 
 /** The structural question guard the previous inline handler used: a malformed
@@ -382,6 +471,100 @@ export function reduceSessionEvent(
           command: event.command,
         }],
       };
+    case "tool_execution_start": {
+      const { toolCallId, toolName, args } = event;
+      const argsRecord = asArgumentRecord(args);
+      let next = patchSessionRuntimeState(state, "inFlightTools", (previous) =>
+        upsertInFlightTool(previous, toolCallId, toolName, args));
+      next = patchSessionRuntimeState(next, "agentPhase", (previous) => {
+        const tools = previous?.kind === "running_tools" ? [...previous.tools] : [];
+        if (!tools.some((tool) => tool.id === toolCallId)) {
+          tools.push({ id: toolCallId, name: toolName, args: argsRecord });
+        }
+        return { kind: "running_tools", tools };
+      });
+      const effects: SessionEventEffect[] = [];
+      // A spawning tool call is also spotted in the *message* that announces
+      // it; this end of the ledger covers a start event arriving without one
+      // (e.g. a reconnect mid-turn).
+      if (toolName === "spawn_subagent" && state.seenSubagentToolStartIds.claim(toolCallId)) {
+        effects.push({ kind: "refresh_subagent_panel", toolCallId });
+      }
+      effects.push({
+        kind: "report_tool_call_stats",
+        report: { type: "tool_start", toolCallId, toolName, args: argsRecord },
+      });
+      return { state: next, effects };
+    }
+    case "tool_execution_update": {
+      const patch = partialToolResultPatch(event.partialResult);
+      if (!patch) return { state, effects: [] };
+      const inFlightTools = mergeInFlightToolPartialResult(state.inFlightTools, event.toolCallId, patch);
+      // An update for a call that is not in flight is dropped, leaving the
+      // state object identical — a replayed frame changes nothing.
+      if (!inFlightTools) return { state, effects: [] };
+      return {
+        state: patchSessionRuntimeState(state, "inFlightTools", inFlightTools),
+        effects: [],
+      };
+    }
+    case "tool_execution_end": {
+      const { toolCallId, result } = event;
+      const isError = event.isError === true;
+      const resultParts = result && typeof result === "object"
+        ? result as { content?: unknown; details?: unknown }
+        : undefined;
+      // `tool_execution_end` repeats only the tool name and carries no args:
+      // name, args and the decision "did this touch git?" all come from the
+      // in-flight record written at start.
+      const inFlight = state.inFlightTools.get(toolCallId);
+      const toolName = inFlight?.name ?? event.toolName;
+      const effects: SessionEventEffect[] = [];
+      if (isError) effects.push({ kind: "flash_bot_state", stateKey: TOOL_ERROR_BOT_STATE });
+      if (toolName === "spawn_subagent" && state.seenSubagentToolEndIds.claim(toolCallId)) {
+        effects.push({ kind: "refresh_subagent_panel", toolCallId });
+      }
+      if (toolName && WORKTREE_MUTATING_TOOL_NAMES.has(toolName)) {
+        effects.push({ kind: "invalidate_git_status", force: false });
+      }
+      // A git-level change (`git add` / `commit` / `stash`) must not fall into
+      // the server's status cache behind an earlier edit-triggered fetch.
+      if (toolName === "bash" && bashCommandTouchesGit(inFlight?.args)) {
+        effects.push({ kind: "invalidate_git_status", force: true });
+      }
+      if (toolName && isShowFileToolName(toolName) && resultParts?.details) {
+        const files = (resultParts.details as { files?: unknown }).files;
+        if (Array.isArray(files)) {
+          effects.push({ kind: "show_file_result", toolCallId, files: files as ShowFileEntry[] });
+        }
+      }
+      if (toolName === CELEBRATE_TOOL_NAME && state.seenCelebrateToolEndIds.claim(toolCallId)) {
+        effects.push({ kind: "celebrate", details: resultParts?.details as CelebrateDetails | undefined });
+      }
+      let resultText: string | undefined;
+      const firstText = textBlocksOf(resultParts?.content)[0];
+      if (firstText !== undefined) {
+        resultText = firstText.length > 1024 ? `${firstText.slice(0, 1024)}…` : firstText;
+      }
+      effects.push({
+        kind: "report_tool_call_stats",
+        report: {
+          type: "tool_end",
+          toolCallId,
+          isError,
+          resultText,
+          resultDetails: resultParts?.details,
+        },
+      });
+      let next = patchSessionRuntimeState(state, "inFlightTools", (previous) =>
+        removeInFlightTool(previous, toolCallId));
+      next = patchSessionRuntimeState(next, "agentPhase", (previous) => {
+        if (previous?.kind !== "running_tools") return previous;
+        const tools = previous.tools.filter((tool) => tool.id !== toolCallId);
+        return tools.length === 0 ? { kind: "waiting_model" } : { kind: "running_tools", tools };
+      });
+      return { state: next, effects };
+    }
     case "ask_user_questions_request": {
       const questions = Array.isArray(event.questions)
         ? event.questions.filter(isValidAskUserQuestion)
