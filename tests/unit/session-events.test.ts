@@ -1,14 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   IGNORED_SESSION_EVENTS,
-  PORTED_SESSION_EVENT_TYPES,
   REDUCED_SESSION_EVENTS,
   SESSION_EVENT_TYPES,
-  isPortedSessionEvent,
+  isReducedSessionEvent,
   reduceSessionEvent,
 } from "@/lib/shared/session-events";
 import type {
-  PortedSessionEvent,
   SessionEvent,
   SessionEventEffect,
 } from "@/lib/shared/session-events";
@@ -81,9 +79,9 @@ const permissionEvent = {
   toolCallId: "call-1",
   ruleName: "rm",
   command: "rm -rf /tmp/x",
-} satisfies PortedSessionEvent;
+} satisfies SessionEvent;
 
-function askEvent(toolCallId: string, ts = 1_700_000_000_000): Extract<PortedSessionEvent, { type: "ask_user_questions_request" }> {
+function askEvent(toolCallId: string, ts = 1_700_000_000_000): Extract<SessionEvent, { type: "ask_user_questions_request" }> {
   return {
     type: "ask_user_questions_request",
     toolCallId,
@@ -107,7 +105,7 @@ const malformedAskEvent = {
   toolCallId: "ask-bad",
   ts: 1,
   questions: [{ question: "no options", header: "Bad" }],
-} as unknown as PortedSessionEvent;
+} as unknown as SessionEvent;
 
 describe("session event reducer", () => {
   it("reduces a permission request into an effect and leaves state untouched", () => {
@@ -192,18 +190,16 @@ describe("session event reducer", () => {
     expect(reduction.state.messages).toEqual([]);
   });
 
-  it("routes only the ported events to the reducer", () => {
-    for (const type of PORTED_SESSION_EVENT_TYPES) {
-      expect(isPortedSessionEvent({ type } as SessionEvent)).toBe(true);
+  it("recognises exactly the reduced events as reduced", () => {
+    // The reducer's routing question: yes for every reduced type, no for every
+    // deliberately-ignored one. That is also the partition the total
+    // `reduceSessionEvent` relies on, so no ignored event can reach a branch.
+    for (const type of reducedTypes) {
+      expect(isReducedSessionEvent({ type } as SessionEvent)).toBe(true);
     }
-    expect(isPortedSessionEvent({ type: "agent_settled" })).toBe(false);
-    expect(isPortedSessionEvent({ type: "connected", sessionId: "s" })).toBe(false);
-  });
-
-  it("routes every reduced event to the reducer", () => {
-    // #63 completed the port: the routing list and the reduced list are the
-    // same set, so no reduced event can reach the (now empty) legacy switch.
-    expect(new Set(PORTED_SESSION_EVENT_TYPES)).toEqual(new Set(reducedTypes));
+    for (const type of ignoredTypes) {
+      expect(isReducedSessionEvent({ type } as SessionEvent)).toBe(false);
+    }
   });
 });
 
@@ -215,9 +211,9 @@ describe("session event reducer", () => {
 // arguments recorded when the call started. That rule had no test before the
 // port and is the easiest thing to break silently while moving code.
 
-type StartEvent = Extract<PortedSessionEvent, { type: "tool_execution_start" }>;
-type UpdateEvent = Extract<PortedSessionEvent, { type: "tool_execution_update" }>;
-type EndEvent = Extract<PortedSessionEvent, { type: "tool_execution_end" }>;
+type StartEvent = Extract<SessionEvent, { type: "tool_execution_start" }>;
+type UpdateEvent = Extract<SessionEvent, { type: "tool_execution_update" }>;
+type EndEvent = Extract<SessionEvent, { type: "tool_execution_end" }>;
 
 function toolStart(toolCallId: string, toolName: string, args: unknown = {}): StartEvent {
   return { type: "tool_execution_start", toolCallId, toolName, args };
@@ -232,7 +228,7 @@ function toolEnd(toolCallId: string, toolName: string, result: unknown = undefin
 }
 
 /** Fold a whole event sequence, collecting every requested effect in order. */
-function reduceAll(state: SessionRuntimeState, events: PortedSessionEvent[]) {
+function reduceAll(state: SessionRuntimeState, events: SessionEvent[]) {
   let current = state;
   const effects: SessionEventEffect[] = [];
   for (const event of events) {
@@ -297,7 +293,7 @@ describe("session event reducer: tool execution", () => {
   });
 
   it("keeps the phase chip in step as several tools run and finish", () => {
-    const events: PortedSessionEvent[] = [
+    const events: SessionEvent[] = [
       toolStart("a", "bash", {}),
       toolStart("b", "edit", {}),
       toolEnd("a", "bash"),
@@ -494,10 +490,10 @@ describe("session event reducer: tool execution", () => {
     expect(ended.state.agentPhase).toEqual({ kind: "waiting_model" });
   });
 
-  it("routes the three tool events to the reducer", () => {
-    expect(isPortedSessionEvent(toolStart("call-1", "bash"))).toBe(true);
-    expect(isPortedSessionEvent(toolUpdate("call-1", "bash", {}))).toBe(true);
-    expect(isPortedSessionEvent(toolEnd("call-1", "bash"))).toBe(true);
+  it("counts the three tool events among the reduced events", () => {
+    expect(isReducedSessionEvent(toolStart("call-1", "bash"))).toBe(true);
+    expect(isReducedSessionEvent(toolUpdate("call-1", "bash", {}))).toBe(true);
+    expect(isReducedSessionEvent(toolEnd("call-1", "bash"))).toBe(true);
   });
 });
 
@@ -512,10 +508,10 @@ describe("session event reducer: tool execution", () => {
 // once. The context refresh is an *effect* — the reducer asks for it, the
 // adapter performs it.
 
-type MessageStartEvent = Extract<PortedSessionEvent, { type: "message_start" }>;
-type MessageUpdateEvent = Extract<PortedSessionEvent, { type: "message_update" }>;
-type MessageEndEvent = Extract<PortedSessionEvent, { type: "message_end" }>;
-type TreeUpdateEvent = Extract<PortedSessionEvent, { type: "session_tree_update" }>;
+type MessageStartEvent = Extract<SessionEvent, { type: "message_start" }>;
+type MessageUpdateEvent = Extract<SessionEvent, { type: "message_update" }>;
+type MessageEndEvent = Extract<SessionEvent, { type: "message_end" }>;
+type TreeUpdateEvent = Extract<SessionEvent, { type: "session_tree_update" }>;
 
 /** A pi-shaped assistant message (raw blocks, before normalization). */
 function assistantMessage(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -766,11 +762,11 @@ describe("session event reducer: messages and the conversation tree", () => {
     expect(reduction.state.contextComposition).toBe(state.contextComposition);
   });
 
-  it("routes the message and conversation-tree events to the reducer", () => {
-    expect(isPortedSessionEvent(messageStart(assistantMessage()))).toBe(true);
-    expect(isPortedSessionEvent(messageUpdate(assistantMessage()))).toBe(true);
-    expect(isPortedSessionEvent(messageEnd(assistantMessage()))).toBe(true);
-    expect(isPortedSessionEvent(treeUpdate([], null))).toBe(true);
+  it("counts the message and conversation-tree events among the reduced events", () => {
+    expect(isReducedSessionEvent(messageStart(assistantMessage()))).toBe(true);
+    expect(isReducedSessionEvent(messageUpdate(assistantMessage()))).toBe(true);
+    expect(isReducedSessionEvent(messageEnd(assistantMessage()))).toBe(true);
+    expect(isReducedSessionEvent(treeUpdate([], null))).toBe(true);
   });
 });
 
@@ -784,11 +780,11 @@ describe("session event reducer: messages and the conversation tree", () => {
 // on `agent_end` (ADR-0004 revisits that separately), and `agent_settled`
 // stays deliberately ignored.
 
-type AgentStartEvent = Extract<PortedSessionEvent, { type: "agent_start" }>;
-type AgentEndEvent = Extract<PortedSessionEvent, { type: "agent_end" }>;
-type PromptFailedEvent = Extract<PortedSessionEvent, { type: "prompt_failed" }>;
-type AutoRetryEndEvent = Extract<PortedSessionEvent, { type: "auto_retry_end" }>;
-type CompactionEndEvent = Extract<PortedSessionEvent, { type: "compaction_end" }>;
+type AgentStartEvent = Extract<SessionEvent, { type: "agent_start" }>;
+type AgentEndEvent = Extract<SessionEvent, { type: "agent_end" }>;
+type PromptFailedEvent = Extract<SessionEvent, { type: "prompt_failed" }>;
+type AutoRetryEndEvent = Extract<SessionEvent, { type: "auto_retry_end" }>;
+type CompactionEndEvent = Extract<SessionEvent, { type: "compaction_end" }>;
 
 const agentStart: AgentStartEvent = { type: "agent_start" };
 
@@ -1036,10 +1032,207 @@ describe("session event reducer: turn and phase", () => {
     expect(reduction.effects).toEqual([]);
   });
 
-  it("routes the turn and phase events to the reducer", () => {
-    expect(isPortedSessionEvent(agentStart)).toBe(true);
-    expect(isPortedSessionEvent(agentEnd())).toBe(true);
-    expect(isPortedSessionEvent(compactionEnd())).toBe(true);
-    expect(isPortedSessionEvent({ type: "thinking_level_changed", level: "off" })).toBe(true);
+  it("counts the turn and phase events among the reduced events", () => {
+    expect(isReducedSessionEvent(agentStart)).toBe(true);
+    expect(isReducedSessionEvent(agentEnd())).toBe(true);
+    expect(isReducedSessionEvent(compactionEnd())).toBe(true);
+    expect(isReducedSessionEvent({ type: "thinking_level_changed", level: "off" })).toBe(true);
+  });
+});
+
+// ── The protocol tail (#64) ──────────────────────────────────────────────
+//
+// #64 closes the port. The adapter holds no routing guard and no per-event
+// `switch` any more: `reduceSessionEvent` is total over the protocol, so the
+// 11 events the client deliberately ignores come back with the state untouched
+// instead of being filtered out before the reducer. The three properties
+// ADR-0007 asks the unit layer to pin live here — protocol completeness (the
+// compiler plus the two disposition lists), replay idempotency, and the
+// terminal migration from "start" through "running" to "closed".
+
+/**
+ * One sample of every deliberately-ignored event, i.e. of every protocol type
+ * that is not in `REDUCED_SESSION_EVENTS`.
+ *
+ * The sample-per-type table is what keeps the written omission from becoming a
+ * lie: moving a type between the two halves, or adding a new one to the ignored
+ * list, fails the completeness assertion below until a sample is added — at
+ * which point this test feeds it and asserts that nothing moves.
+ */
+const IGNORED_EVENT_SAMPLES: SessionEvent[] = [
+  { type: "agent_settled" },
+  { type: "turn_start" },
+  { type: "turn_end", message: { role: "assistant" }, toolResults: [] },
+  { type: "entry_appended", entry: { id: "e1" } },
+  { type: "queue_update", steering: ["steer"], followUp: ["follow"] },
+  { type: "session_info_changed", name: "renamed" },
+  { type: "summarization_retry_scheduled", attempt: 1, maxAttempts: 3, delayMs: 250, errorMessage: "x" },
+  { type: "summarization_retry_attempt_start", source: "compaction", reason: "threshold" },
+  { type: "summarization_retry_finished" },
+  { type: "bash_execution_update", id: "bash-1", delta: "partial output" },
+  { type: "connected", sessionId: "session-1" },
+];
+
+describe("session event protocol: the deliberately-ignored half", () => {
+  it("has a sample for every ignored event, and none for a reduced one", () => {
+    expect(IGNORED_EVENT_SAMPLES.map((event) => event.type).sort()).toEqual([...ignoredTypes].sort());
+  });
+
+  it("changes neither the state nor the effects, whatever the session was doing", () => {
+    // A session in the middle of everything the ignored events could plausibly
+    // have touched: running, compacting, with a message, a tool in flight and a
+    // context estimate. If any ignored branch ever grows an opinion, one of
+    // these fields moves and this test fails.
+    const busy = midTurn({
+      isCompacting: true,
+      agentPhase: { kind: "running_tools", tools: [{ id: "call-1", name: "bash", args: { command: "ls" } }] },
+      messages: [assistantMessage()] as unknown as SessionRuntimeState["messages"],
+      inFlightTools: new Map([["call-1", { name: "bash", args: { command: "ls" } }]]),
+      contextUsage: { percent: 10, contextWindow: 1000, tokens: 100 },
+    });
+
+    for (const event of IGNORED_EVENT_SAMPLES) {
+      const reduction = reduceSessionEvent(busy, event);
+      // Identity, not just equality: an ignored frame must not even churn the
+      // state object, or every one of them would re-render the chat.
+      expect(reduction.state, event.type).toBe(busy);
+      expect(reduction.effects, event.type).toEqual([]);
+    }
+  });
+});
+
+describe("session event reducer: replay idempotency", () => {
+  it("leaves the state, and the effects, where they were when any reduced event is fed twice", () => {
+    const started = reduceSessionEvent(midTurn(), toolStart("call-1", "bash", { command: "ls" })).state;
+    /** `replay: "silent"` marks the one event type whose replay must produce no
+     *  effect at all, because re-asking would be user-visible twice; every other
+     *  type re-asks for the same (idempotent) observations. */
+    const cases: { name: string; state: SessionRuntimeState; event: SessionEvent; replay?: "silent" }[] = [
+      { name: "permission_request", state: createSessionRuntimeState(), event: permissionEvent },
+      {
+        name: "ask_user_questions_request",
+        state: createSessionRuntimeState(),
+        event: askEvent("ask-1"),
+        // The route re-sends a pending question on reconnect; re-emitting
+        // `set_pending_ask_user_questions` + `play_ui_sound` would ring twice.
+        replay: "silent",
+      },
+      { name: "tool_execution_start", state: midTurn(), event: toolStart("call-1", "bash", { command: "ls" }) },
+      {
+        name: "tool_execution_update",
+        state: started,
+        event: toolUpdate("call-1", "bash", { content: [{ type: "text", text: "partial" }] }),
+      },
+      {
+        name: "tool_execution_end",
+        state: started,
+        event: toolEnd("call-1", "bash", { content: [{ type: "text", text: "done" }] }),
+      },
+      { name: "message_start", state: midTurn(), event: messageStart(assistantMessage()) },
+      { name: "message_update", state: midTurn(), event: messageUpdate(assistantMessage()) },
+      { name: "message_end", state: midTurn(), event: messageEnd(assistantMessage()) },
+      {
+        name: "session_tree_update",
+        state: midTurn(),
+        event: treeUpdate([{ type: "message", id: "e1", parentId: null, timestamp: "t" }], "e1"),
+      },
+      { name: "agent_start", state: midTurn(), event: agentStart },
+      { name: "agent_end", state: midTurn({ lastAssistantIsBody: true }), event: agentEnd() },
+      {
+        name: "auto_retry_start",
+        state: midTurn(),
+        event: { type: "auto_retry_start", attempt: 2, maxAttempts: 5, delayMs: 1000, errorMessage: "rate limited" },
+      },
+      { name: "auto_retry_end", state: midTurn(), event: { type: "auto_retry_end", success: true, attempt: 2 } },
+      { name: "prompt_failed", state: midTurn(), event: { type: "prompt_failed", error: "no api key" } },
+      { name: "compaction_start", state: midTurn(), event: { type: "compaction_start", reason: "threshold" } },
+      {
+        name: "compaction_end",
+        state: midTurn({ isCompacting: true, agentPhase: { kind: "compacting" } }),
+        event: compactionEnd(),
+      },
+      { name: "thinking_level_changed", state: midTurn(), event: { type: "thinking_level_changed", level: "high" } },
+    ];
+
+    // One row per reduced type: a new reduced event has to bring its own row, so
+    // the property cannot be claimed for a type nobody fed twice.
+    expect(cases.map((entry) => entry.name).sort()).toEqual([...reducedTypes].sort());
+
+    for (const entry of cases) {
+      const first = reduceSessionEvent(entry.state, entry.event);
+
+      // An SSE reconnect (and a compaction replay) re-delivers frames; the same
+      // frame twice must leave the same belief and ask for the same work, not a
+      // second one.
+      const replay = reduceSessionEvent(first.state, entry.event);
+
+      expect(replay.state, entry.name).toEqual(first.state);
+      if (entry.replay === "silent") {
+        expect(replay.effects, entry.name).toEqual([]);
+      } else {
+        expect(replay.effects, entry.name).toEqual(first.effects);
+      }
+    }
+  });
+
+  it("re-asks for the same observations when message_end is replayed, without committing twice", () => {
+    const first = reduceSessionEvent(createSessionRuntimeState(), messageEnd(assistantMessage()));
+
+    const replay = reduceSessionEvent(first.state, messageEnd(assistantMessage()));
+
+    expect(replay.state.messages).toEqual(first.state.messages);
+    // The effects are the same observations: the streaming store flushes the
+    // same final snapshot and the context refresh simply repeats. What must not
+    // happen — and does not — is a second committed message or a second ring.
+    expect(replay.effects).toEqual(first.effects);
+  });
+
+  it("does not move the tree when session_tree_update is replayed", () => {
+    const tree = [{ type: "message", id: "e1", parentId: null, timestamp: "t" }];
+    const first = reduceSessionEvent(createSessionRuntimeState(), treeUpdate(tree, "e1"));
+
+    const replay = reduceSessionEvent(first.state, treeUpdate(tree, "e1"));
+
+    expect(replay.state).toBe(first.state);
+    expect(replay.effects).toEqual([]);
+  });
+});
+
+describe("session event reducer: a turn from start to close", () => {
+  it("walks 起 → 跑 → 收 and leaves nothing in flight", () => {
+    let state = createSessionRuntimeState();
+
+    // 起 — a new turn opens clean and running.
+    state = reduceSessionEvent(state, agentStart).state;
+    expect(state.agentRunning).toBe(true);
+    expect(state.isCompacting).toBe(false);
+    expect(state.agentPhase).toEqual({ kind: "waiting_model" });
+
+    // 跑 — the assistant streams, a tool runs and finishes, the message settles.
+    state = reduceSessionEvent(state, messageStart(assistantMessage())).state;
+    expect(state.agentPhase).toBeNull();
+
+    state = reduceSessionEvent(state, toolStart("call-1", "bash", { command: "ls" })).state;
+    expect(state.inFlightTools.size).toBe(1);
+    expect(state.agentPhase).toEqual({
+      kind: "running_tools",
+      tools: [{ id: "call-1", name: "bash", args: { command: "ls" } }],
+    });
+
+    state = reduceSessionEvent(state, toolEnd("call-1", "bash", { content: [{ type: "text", text: "ok" }] })).state;
+    expect(state.inFlightTools.size).toBe(0);
+    expect(state.agentPhase).toEqual({ kind: "waiting_model" });
+
+    state = reduceSessionEvent(state, messageEnd(assistantMessage())).state;
+    expect(state.messages).toHaveLength(1);
+    expect(state.agentRunning).toBe(true);
+
+    // 收 — agent_end closes every stage flag and leaves no tool behind.
+    state = reduceSessionEvent(state, agentEnd()).state;
+    expect(state.agentRunning).toBe(false);
+    expect(state.isCompacting).toBe(false);
+    expect(state.agentPhase).toBeNull();
+    expect(state.retryInfo).toBeNull();
+    expect(state.inFlightTools.size).toBe(0);
   });
 });

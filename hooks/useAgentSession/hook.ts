@@ -390,7 +390,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // activation so we re-register the owner for the now-active session.
   }, [isActive, refreshSystemPrompt]);
 
-  const { handleAgentEventRef: eventHandlerRef } = useAgentSessionEvents({
+  const { handleAgentEvent } = useAgentSessionEvents({
     controllerId: streamingKey,
     isActive,
     session,
@@ -414,7 +414,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     showToast,
     t,
   });
-  handleAgentEventRef.current = eventHandlerRef.current;
+  // The adapter's handler is stable (it reads its options through a ref), so
+  // this bridge ref is only what breaks the cycle between the transport —
+  // which owns the EventSource and therefore `closeEvents` — and the adapter,
+  // which needs `closeEvents` to perform an effect.
+  handleAgentEventRef.current = handleAgentEvent;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     if (!message.trim() && !images?.length) return;
@@ -933,7 +937,5 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleCompact,
     setActiveLeafId, setData, setMessages,
     dispatch,
-    // Subscriptions
-    handleAgentEventRef,
   };
 }

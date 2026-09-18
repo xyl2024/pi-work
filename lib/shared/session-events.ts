@@ -315,10 +315,9 @@ export type SessionEventTypesAreComplete = AssertTrue<
 // adapter would otherwise do inline comes back as data in `effects`, and the
 // adapter is the only thing that performs it.
 //
-// The port is complete (#60–#63): every reduced event has a branch here, and
-// `PORTED_SESSION_EVENT_TYPES` now equals `ReducedSessionEventType`. The
-// hook's `isPortedSessionEvent` guard and its (now empty) legacy `switch` are
-// the only scaffolding left; #64 removes them.
+// The port is complete (#60–#63): every reduced event has a branch here, the
+// switch has no `default:`, and the ignored half of the protocol is handled by
+// the total wrapper below rather than by an adapter-side guard.
 //
 // Replay: on SSE reconnect the route re-delivers only `session_tree_update`
 // and any pending `ask_user_questions_request`, never a turn-boundary event
@@ -326,40 +325,24 @@ export type SessionEventTypesAreComplete = AssertTrue<
 // therefore not a property this group needs — but no branch below churns the
 // state gratuitously either.
 
+/** The reduced half of the protocol, as protocol members. */
+export type ReducedSessionEvent = Extract<SessionEvent, { type: ReducedSessionEventType }>;
+
+/** The reduced type names, derived from the disposition record so the two can
+ *  never drift — the record is the declaration, this is its runtime index. */
+const REDUCED_SESSION_EVENT_TYPE_SET: ReadonlySet<string> = new Set(Object.keys(REDUCED_SESSION_EVENTS));
+
 /**
- * The events `reduceSessionEvent` already reduces.
+ * Whether the reducer has an opinion about this event.
  *
- * #63 completed the port: this list now equals `ReducedSessionEventType`. #64
- * makes that official by folding the two together and deleting the guard.
+ * The protocol partitions by construction — every type is either in
+ * `REDUCED_SESSION_EVENTS` or in `IGNORED_SESSION_EVENTS` (the `Exclude`) — so
+ * asking the reduced record is the same question as "is this one of the
+ * deliberately-ignored ones?". A `Set` derived from the record rather than an
+ * `in` check keeps `Object.prototype` keys (`constructor`…) out of the answer.
  */
-export const PORTED_SESSION_EVENT_TYPES = [
-  "permission_request",
-  "ask_user_questions_request",
-  "tool_execution_start",
-  "tool_execution_update",
-  "tool_execution_end",
-  "message_start",
-  "message_update",
-  "message_end",
-  "session_tree_update",
-  "agent_start",
-  "agent_end",
-  "auto_retry_start",
-  "auto_retry_end",
-  "prompt_failed",
-  "compaction_start",
-  "compaction_end",
-  "thinking_level_changed",
-] as const satisfies readonly ReducedSessionEventType[];
-
-export type PortedSessionEventType = (typeof PORTED_SESSION_EVENT_TYPES)[number];
-
-/** The ported events, as protocol members. */
-export type PortedSessionEvent = Extract<SessionEvent, { type: PortedSessionEventType }>;
-
-/** Runtime guard the adapter uses to route an SSE frame to the reducer. */
-export function isPortedSessionEvent(event: SessionEvent): event is PortedSessionEvent {
-  return (PORTED_SESSION_EVENT_TYPES as readonly SessionEventType[]).includes(event.type);
+export function isReducedSessionEvent(event: SessionEvent): event is ReducedSessionEvent {
+  return REDUCED_SESSION_EVENT_TYPE_SET.has(event.type);
 }
 
 /**
@@ -625,12 +608,35 @@ function closeTurn(state: SessionRuntimeState): SessionRuntimeState {
 /**
  * Reduce one session event into the runtime state plus the effects to run.
  *
+ * Total over the protocol: a reduced event runs its branch below, and every
+ * deliberately-ignored event returns the state untouched with no effects. That
+ * is what makes the written "we know about it and do nothing" list executable —
+ * the unit tests feed all 11 ignored events and assert nothing moves — and it
+ * lets a test hand the reducer any frame the server can actually send.
+ *
  * Nothing here is time- or I/O-dependent, so a test can feed an event sequence
  * and assert both the resulting state and the requested effects.
  */
 export function reduceSessionEvent(
   state: SessionRuntimeState,
-  event: PortedSessionEvent,
+  event: SessionEvent,
+): SessionEventReduction {
+  if (!isReducedSessionEvent(event)) {
+    // Deliberately ignored; see IGNORED_SESSION_EVENTS for the per-event
+    // reason. Neither the state nor the effects move.
+    return { state, effects: [] };
+  }
+  return reduceReducedSessionEvent(state, event);
+}
+
+/**
+ * The reduced half. A `switch` over the reduced union with no `default:` —
+ * completeness is the type system's job, not a fallback branch's: dropping a
+ * branch from `ReducedSessionEventType` (or adding one) stops this compiling.
+ */
+function reduceReducedSessionEvent(
+  state: SessionRuntimeState,
+  event: ReducedSessionEvent,
 ): SessionEventReduction {
   switch (event.type) {
     case "permission_request":

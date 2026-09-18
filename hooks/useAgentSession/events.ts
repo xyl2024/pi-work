@@ -16,7 +16,6 @@ import {
   endStreaming as endStreamingStore,
 } from "../streamingMessageStore";
 import {
-  isPortedSessionEvent,
   reduceSessionEvent,
   type SessionEvent,
   type SessionEventEffect,
@@ -72,45 +71,52 @@ type AgentSessionEventsOptions = {
 /**
  * The session-event adapter.
  *
- * It is deliberately thin: with #63 every event the protocol reduces goes
- * through the pure `reduceSessionEvent`, and this file only
+ * It is deliberately thin: every frame the protocol can carry goes through the
+ * one pure `reduceSessionEvent`, and this file only
  *
  *   1. translates the SSE frame into the module's vocabulary (the one i18n
  *      fallback lives here, because the reducer cannot translate), and
  *   2. performs the effects the reducer returned — sounds, celebrations, Pi
  *      Bot flashes, toasts, stores, requests, host callbacks.
  *
- * The legacy `switch` that used to hold these branches is empty now; #64
- * deletes it together with the `isPortedSessionEvent` guard.
+ * There is no per-event `switch` here and no routing guard: the reducer is total
+ * over the protocol, so a frame can never fall through unhandled, and the
+ * "deliberately ignored" events come back with the state untouched.
  */
 export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
-  const handlerRef = useRef<((event: SessionEvent) => void) | null>(null);
-  const {
-    controllerId,
-    isActive,
-    session,
-    newSessionCwd,
-    onAgentEnd,
-    onFirstAssistantReady,
-    permissionsRef,
-    statsEmitRef,
-    sessionIdRef,
-    runtimeStateRef,
-    patchRuntime,
-    commitRuntime,
-    dispatch,
-    botRevertTimerRef,
-    refreshSystemPrompt,
-    loadSession,
-    refreshAgentRuntimeStateRef,
-    closeEvents,
-    scheduleSubagentRefresh,
-    compactInFlightRef,
-    showToast,
-    t,
-  } = options;
+  // The handler runs from the SSE callback, never while React renders. It must
+  // not be rebuilt when one of its twenty-odd dependencies gets a new identity:
+  // the adapter is the stable identity the transport holds, and the latest
+  // options are read through this ref at call time — the same render-phase ref
+  // write the hook already uses for `isActiveRef` / `statsEmitRef`.
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   const handleAgentEvent = useCallback((rawEvent: SessionEvent) => {
+    const {
+      controllerId,
+      isActive,
+      session,
+      newSessionCwd,
+      onAgentEnd,
+      onFirstAssistantReady,
+      permissionsRef,
+      statsEmitRef,
+      sessionIdRef,
+      runtimeStateRef,
+      patchRuntime,
+      commitRuntime,
+      dispatch,
+      botRevertTimerRef,
+      refreshSystemPrompt,
+      loadSession,
+      refreshAgentRuntimeStateRef,
+      closeEvents,
+      scheduleSubagentRefresh,
+      compactInFlightRef,
+      showToast,
+      t,
+    } = optionsRef.current;
     const fireDiscreteBot = (stateKey: string) => {
       if (!isActive) return;
       if (botRevertTimerRef.current !== null) clearTimeout(botRevertTimerRef.current);
@@ -311,45 +317,13 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
       ? { ...rawEvent, error: t("Failed to send message") }
       : rawEvent;
 
-    // Every event the protocol reduces goes through the pure reducer; the
-    // deliberately-ignored events fall through the guard and do nothing.
-    if (isPortedSessionEvent(event)) {
-      const reduction = reduceSessionEvent(runtime(), event);
-      commitRuntime(reduction.state);
-      for (const effect of reduction.effects) runEffect(effect);
-      return;
-    }
+    // Every frame goes through the one reducer: the reduced half moves the
+    // state and asks for the effects to run, the deliberately-ignored half
+    // comes back with the state untouched and nothing to do.
+    const reduction = reduceSessionEvent(runtime(), event);
+    commitRuntime(reduction.state);
+    for (const effect of reduction.effects) runEffect(effect);
+  }, []);
 
-    // Nothing left to switch on: #63 moved the last group (turn start/end,
-    // compaction, auto-retry, send failure, thinking level) onto the reducer.
-    // #64 deletes this empty statement together with the guard above.
-    switch (event.type) {
-    }
-  }, [
-    botRevertTimerRef,
-    closeEvents,
-    commitRuntime,
-    compactInFlightRef,
-    controllerId,
-    dispatch,
-    isActive,
-    loadSession,
-    newSessionCwd,
-    onAgentEnd,
-    onFirstAssistantReady,
-    patchRuntime,
-    permissionsRef,
-    refreshAgentRuntimeStateRef,
-    refreshSystemPrompt,
-    runtimeStateRef,
-    scheduleSubagentRefresh,
-    session?.cwd,
-    sessionIdRef,
-    showToast,
-    statsEmitRef,
-    t,
-  ]);
-
-  handlerRef.current = handleAgentEvent;
-  return { handleAgentEvent, handleAgentEventRef: handlerRef };
+  return { handleAgentEvent };
 }
