@@ -125,6 +125,11 @@ export interface SessionRuntimeState {
   seenSubagentToolStartIds: SeenLedger;
   seenSubagentToolEndIds: SeenLedger;
   seenCelebrateToolEndIds: SeenLedger;
+  /** The ask-user-questions requests already announced. A request replayed on
+   *  SSE reconnect claims an id it already claimed, so it neither re-rings nor
+   *  re-opens the card. Seeded from the module store on mount so a remount
+   *  while a question is pending does not ring again either. */
+  seenAskUserQuestionsToolCallIds: SeenLedger;
 }
 
 /**
@@ -152,6 +157,7 @@ export function createSessionRuntimeState(
     seenSubagentToolStartIds: createSeenLedger(),
     seenSubagentToolEndIds: createSeenLedger(),
     seenCelebrateToolEndIds: createSeenLedger(),
+    seenAskUserQuestionsToolCallIds: createSeenLedger(),
     ...overrides,
   };
 }

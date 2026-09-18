@@ -26,12 +26,16 @@
  * none in the reducer either: an unknown event must fail to compile instead of
  * being swallowed.
  *
- * Nothing here has runtime behaviour — only types, constants and the
- * completeness assertions below. This module lives in the shared layer, so it
- * must stay free of React, DOM, Node and pi SDK imports.
+ * The second half of the module is the reducer itself, `reduceSessionEvent`.
+ * It is pure — no React, no DOM, no timers, no `fetch`, no store writes — and
+ * returns the side effects it decided on as data for the client adapter to
+ * perform. This module lives in the shared layer, so it must stay free of
+ * React, DOM, Node and pi SDK imports.
  */
 
-import type { AskUserQuestionsRequestPayload } from "./ask-user-questions-tool-types";
+import type { AskUserQuestion, AskUserQuestionsRequestPayload } from "./ask-user-questions-tool-types";
+import type { UiSoundEventId } from "./config-types";
+import type { SessionRuntimeState } from "./session-runtime-state";
 
 /** Why pi decided to compact the context. */
 export type SessionCompactionReason = "manual" | "threshold" | "overflow";
@@ -292,3 +296,119 @@ export type ReducedSessionEventsAreProtocolTypes = AssertTrue<
 export type SessionEventTypesAreComplete = AssertTrue<
   Equal<SessionEventType, (typeof SESSION_EVENT_TYPES)[number]>
 >;
+
+// ── The reducer ──────────────────────────────────────────────────────────
+//
+// `(state, event) → { state, effects }`, pure: no React, no DOM, no timers,
+// no `fetch`, no toast, no store writes, no logging. Everything the client
+// adapter would otherwise do inline comes back as data in `effects`, and the
+// adapter is the only thing that performs it.
+//
+// The port is incremental (#60–#63): this reducer only has a branch for the
+// event types in `PORTED_SESSION_EVENT_TYPES`, and the hook's legacy `switch`
+// still owns the rest until #64 deletes it.
+
+/**
+ * The events `reduceSessionEvent` already reduces.
+ *
+ * Each slice widens this list and deletes the matching legacy `switch` case;
+ * #64 finishes the port, at which point this becomes `ReducedSessionEventType`
+ * and the guard below disappears.
+ */
+export const PORTED_SESSION_EVENT_TYPES = [
+  "permission_request",
+  "ask_user_questions_request",
+] as const satisfies readonly ReducedSessionEventType[];
+
+export type PortedSessionEventType = (typeof PORTED_SESSION_EVENT_TYPES)[number];
+
+/** The ported events, as protocol members. */
+export type PortedSessionEvent = Extract<SessionEvent, { type: PortedSessionEventType }>;
+
+/** Runtime guard the adapter uses to route an SSE frame to the reducer. */
+export function isPortedSessionEvent(event: SessionEvent): event is PortedSessionEvent {
+  return (PORTED_SESSION_EVENT_TYPES as readonly SessionEventType[]).includes(event.type);
+}
+
+/**
+ * A side effect the reducer decided on, as data. The adapter knows how to
+ * perform each kind; the reducer knows none of them. Keeping this a closed
+ * union is what makes "does a replayed event ring twice?" assertable in a
+ * unit test instead of only audible in a browser.
+ */
+export type SessionEventEffect =
+  | { kind: "enqueue_permission_request"; toolCallId: string; ruleName: string; command: string }
+  | { kind: "set_pending_ask_user_questions"; request: AskUserQuestionsRequestPayload }
+  | { kind: "play_ui_sound"; sound: UiSoundEventId };
+
+/** What one event does to the runtime state, and the effects it asks for. */
+export interface SessionEventReduction {
+  state: SessionRuntimeState;
+  effects: SessionEventEffect[];
+}
+
+/** The structural question guard the previous inline handler used: a malformed
+ *  question is dropped rather than rendered. */
+function isValidAskUserQuestion(question: unknown): question is AskUserQuestion {
+  if (!question || typeof question !== "object") return false;
+  const value = question as Partial<AskUserQuestion>;
+  return typeof value.question === "string"
+    && typeof value.header === "string"
+    && typeof value.multiSelect === "boolean"
+    && typeof value.required === "boolean"
+    && Array.isArray(value.options);
+}
+
+/**
+ * Reduce one session event into the runtime state plus the effects to run.
+ *
+ * Nothing here is time- or I/O-dependent, so a test can feed an event sequence
+ * and assert both the resulting state and the requested effects.
+ */
+export function reduceSessionEvent(
+  state: SessionRuntimeState,
+  event: PortedSessionEvent,
+): SessionEventReduction {
+  switch (event.type) {
+    case "permission_request":
+      // No state: the confirmation queue lives in the adapter and is already
+      // keyed by toolCallId, so a reconnect replay is a no-op there too.
+      return {
+        state,
+        effects: [{
+          kind: "enqueue_permission_request",
+          toolCallId: event.toolCallId,
+          ruleName: event.ruleName,
+          command: event.command,
+        }],
+      };
+    case "ask_user_questions_request": {
+      const questions = Array.isArray(event.questions)
+        ? event.questions.filter(isValidAskUserQuestion)
+        : [];
+      if (typeof event.toolCallId !== "string" || questions.length === 0) {
+        return { state, effects: [] };
+      }
+      // Claiming the tool-call id is the dedupe: on SSE reconnect the server
+      // re-sends a pending request, which claims an id already claimed here, so
+      // it neither re-opens the card nor rings a second time. The ledger is a
+      // per-session, in-place set (like the other four), so the state object
+      // identity does not change and no consumer re-renders for it.
+      if (!state.seenAskUserQuestionsToolCallIds.claim(event.toolCallId)) {
+        return { state, effects: [] };
+      }
+      const request: AskUserQuestionsRequestPayload = {
+        toolCallId: event.toolCallId,
+        questions,
+        ts: event.ts,
+      };
+      return {
+        state,
+        effects: [
+          { kind: "set_pending_ask_user_questions", request },
+          { kind: "play_ui_sound", sound: "ask_user_questions" },
+        ],
+      };
+    }
+  }
+}

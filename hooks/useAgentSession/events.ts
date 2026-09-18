@@ -16,8 +16,7 @@ import { notifyMutated } from "@/lib/client/git-status-store";
 import { playUiSoundEvent } from "@/lib/client/ui-sounds";
 import { setGrokbotConfig } from "@/lib/client/grokbot-store";
 import { setShowFileResult } from "../showFileResultsStore";
-import { setPendingAskUserQuestions, getPendingAskUserQuestions } from "../askUserQuestionsStore";
-import type { AskUserQuestion } from "@/lib/shared/ask-user-questions-tool-types";
+import { setPendingAskUserQuestions } from "../askUserQuestionsStore";
 import {
   scheduleStreamingUpdate,
   flushStreamingUpdateSync,
@@ -25,7 +24,12 @@ import {
   endStreaming as endStreamingStore,
 } from "../streamingMessageStore";
 import { bashCommandTouchesGit, isBodyMessage, sameCompletedMessage } from "./utils";
-import type { SessionEvent } from "@/lib/shared/session-events";
+import {
+  isPortedSessionEvent,
+  reduceSessionEvent,
+  type SessionEvent,
+  type SessionEventEffect,
+} from "@/lib/shared/session-events";
 import type { AgentRuntimeState, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
 
 function getSpawnSubagentToolCallIds(message: unknown): string[] {
@@ -75,6 +79,8 @@ type AgentSessionEventsOptions = {
     key: K,
     value: StateUpdater<SessionRuntimeState[K]>,
   ) => void;
+  /** Commits a whole runtime state object produced by the pure reducer. */
+  commitRuntime: (next: SessionRuntimeState) => void;
   pendingAssistantErrorRef: { current: string | null };
   lastAssistantIsBodyRef: { current: boolean };
   botRevertTimerRef: { current: ReturnType<typeof setTimeout> | null };
@@ -103,6 +109,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     sessionIdRef,
     runtimeStateRef,
     patchRuntime,
+    commitRuntime,
     dispatch,
     pendingAssistantErrorRef,
     lastAssistantIsBodyRef,
@@ -140,6 +147,44 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     /** The runtime state as of this event. Reads (ledgers, in-flight tools,
      *  the running flag) go through here so there is one source of truth. */
     const runtime = () => runtimeStateRef.current;
+
+    /** Perform one effect the pure reducer asked for. This is the only place
+     *  the ported paths touch a confirmation dialog, a store or the sound
+     *  player — the reducer itself knows none of them. */
+    const runEffect = (effect: SessionEventEffect) => {
+      const sid = sessionIdRef.current;
+      switch (effect.kind) {
+        case "enqueue_permission_request":
+          if (!sid) return;
+          permissionsRef.current?.addRequest({
+            toolCallId: effect.toolCallId,
+            ruleName: effect.ruleName,
+            command: effect.command,
+            sessionId: sid,
+          });
+          return;
+        case "set_pending_ask_user_questions":
+          if (!sid) return;
+          setPendingAskUserQuestions(sid, {
+            toolCallId: effect.request.toolCallId,
+            questions: effect.request.questions,
+            ts: effect.request.ts,
+          });
+          return;
+        case "play_ui_sound":
+          playUiSoundEvent(effect.sound);
+          return;
+      }
+    };
+
+    // The ported paths (#60–#63) run through the pure reducer; every other
+    // event still goes to the legacy switch below until #64 deletes it.
+    if (isPortedSessionEvent(event)) {
+      const reduction = reduceSessionEvent(runtimeStateRef.current, event);
+      commitRuntime(reduction.state);
+      for (const effect of reduction.effects) runEffect(effect);
+      return;
+    }
 
     switch (event.type) {
       case "agent_start":
@@ -404,38 +449,6 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           }
         }
         break;
-      case "permission_request": {
-        const sid = sessionIdRef.current;
-        if (!sid) break;
-        permissionsRef.current?.addRequest({
-          toolCallId: event.toolCallId as string,
-          ruleName: event.ruleName as string,
-          command: event.command as string,
-          sessionId: sid,
-        });
-        break;
-      }
-      case "ask_user_questions_request": {
-        const sid = sessionIdRef.current;
-        if (!sid) break;
-        const questions = event.questions;
-        const toolCallId = event.toolCallId;
-        if (typeof toolCallId !== "string" || !Array.isArray(questions)) break;
-        const validQuestions: AskUserQuestion[] = [];
-        for (const question of questions) {
-          if (question && typeof question.question === "string" && typeof question.header === "string" && typeof question.multiSelect === "boolean" && typeof question.required === "boolean" && Array.isArray(question.options)) {
-            validQuestions.push(question as AskUserQuestion);
-          }
-        }
-        if (validQuestions.length === 0) break;
-        // Fire the notification sound only for a genuinely new request. On SSE
-        // reconnect the server re-emits every pending request; those share the
-        // same toolCallId, so skip the sound to avoid replaying it.
-        const hadSameRequest = getPendingAskUserQuestions(sid)?.toolCallId === toolCallId;
-        setPendingAskUserQuestions(sid, { toolCallId, questions: validQuestions, ts: typeof event.ts === "number" ? event.ts : Date.now() });
-        if (!hadSameRequest) playUiSoundEvent("ask_user_questions");
-        break;
-      }
       case "compaction_start":
         patchRuntime("agentRunning", true);
         patchRuntime("isCompacting", true);
@@ -472,6 +485,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
   }, [
     botRevertTimerRef,
     closeEvents,
+    commitRuntime,
     compactInFlightRef,
     controllerId,
     dispatch,

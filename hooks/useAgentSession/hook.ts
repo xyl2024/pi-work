@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
 import { setSessionUiState, setLeafChangeHandler, setSystemPromptRefreshHandler } from "../sessionUiStore";
+import { getPendingAskUserQuestions } from "../askUserQuestionsStore";
 import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import {
   createSessionRuntimeState,
@@ -79,17 +80,31 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // event adapter and the transport can read it synchronously, while
   // `runtimeState` is what makes React re-render. See
   // lib/shared/session-runtime-state.ts for why this is a shared pure module.
-  const [runtimeState, setRuntimeState] = useState<SessionRuntimeState>(createSessionRuntimeState);
+  const [runtimeState, setRuntimeState] = useState<SessionRuntimeState>(() => {
+    // A pending ask-user-questions request outlives this controller: the agent
+    // is blocked on it and the entry lives in the module store. Mark it as
+    // already announced so remounting the tab (reload / close and reopen) does
+    // not make the server's reconnect re-emit ring again.
+    const state = createSessionRuntimeState();
+    const pending = session ? getPendingAskUserQuestions(session.id) : null;
+    if (pending) state.seenAskUserQuestionsToolCallIds.claim(pending.toolCallId);
+    return state;
+  });
   const runtimeStateRef = useRef(runtimeState);
-  const patchRuntime = useCallback(<K extends keyof SessionRuntimeState>(
-    key: K,
-    value: StateUpdater<SessionRuntimeState[K]>,
-  ) => {
-    const next = patchSessionRuntimeState(runtimeStateRef.current, key, value);
+  // The one write path into the runtime state object: identity-preserving (a
+  // no-op write does not re-render), and used both by single-field patches and
+  // by the pure event reducer, which returns a whole next state.
+  const commitRuntime = useCallback((next: SessionRuntimeState) => {
     if (next === runtimeStateRef.current) return;
     runtimeStateRef.current = next;
     setRuntimeState(next);
   }, []);
+  const patchRuntime = useCallback(<K extends keyof SessionRuntimeState>(
+    key: K,
+    value: StateUpdater<SessionRuntimeState[K]>,
+  ) => {
+    commitRuntime(patchSessionRuntimeState(runtimeStateRef.current, key, value));
+  }, [commitRuntime]);
   // Field setters with the same `StateSetter<T>` shape the old useState
   // setters had — the event switch's read/write shape is unchanged, it just
   // writes into the one object now. Stable identities so the data layer's
@@ -394,6 +409,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sessionIdRef,
     runtimeStateRef,
     patchRuntime,
+    commitRuntime,
     dispatch,
     pendingAssistantErrorRef,
     lastAssistantIsBodyRef,
