@@ -94,14 +94,15 @@ export function planWriteFailure(err: unknown): PlanWriteFailure {
 
 /**
  * What 「覆盖」 must redo after the user answers a conflict: the note save, the
- * completion state the checkbox was aiming for, or the re-schedule the chip
- * asked for. Carried as data instead of re-derived from the list, which is
- * stale exactly when a conflict happens.
+ * completion state the checkbox was aiming for, the re-schedule the chip asked
+ * for, or the rename the row's title input asked for. Carried as data instead
+ * of re-derived from the list, which is stale exactly when a conflict happens.
  */
 export type PlanConflictRetry =
   | { kind: "note" }
   | { kind: "done"; done: boolean }
-  | { kind: "anchor"; anchor: PlanAnchor };
+  | { kind: "anchor"; anchor: PlanAnchor }
+  | { kind: "rename"; title: string };
 
 /** A write the server refused with 409 because the panel's view was stale. */
 export interface PlanConflictState {
@@ -117,9 +118,9 @@ export interface PlanConflictState {
  * Where a 409's 「覆盖 / 重载」 banner belongs: at the place that triggered it.
  *
  * A note save is asked for in the detail dialog, so its banner goes there. A
- * completion toggle or a re-schedule is asked for on the row, and the dialog
- * can only edit the note — pulling the user into it would lose the intent they
- * actually expressed.
+ * completion toggle, a re-schedule or a rename is asked for on the row, and the
+ * dialog can only edit the note — pulling the user into it would lose the intent
+ * they actually expressed.
  */
 export type PlanConflictSurface = "dialog" | "row";
 
@@ -148,18 +149,21 @@ export function planDialogLayout(availableWidth: number): PlanDialogLayout {
 }
 
 /**
- * Update a plan in place (note, completion and/or anchor).
+ * Update a plan in place (note, completion, anchor and/or title).
  *
  * `expectedMtime` is the file's `mtime` as the panel last saw it; a stale
  * value (or a path that is gone) throws `PlanConflictError` instead of writing.
  * `force` is the user's 「覆盖」 answer to that conflict. A different `anchor`
- * makes the server move / rename the file, which is what re-scheduling *is*.
+ * makes the server move / rename the file, which is what re-scheduling *is*; a
+ * different `title` makes it rename the file in place, leaving the anchor (and
+ * therefore the date) exactly where it was.
  */
 export async function updatePlan(input: {
   path: string;
   note?: string;
   done?: boolean;
   anchor?: PlanAnchor;
+  title?: string;
   expectedMtime?: string;
   force?: boolean;
 }): Promise<Plan> {

@@ -34,6 +34,7 @@ interface UpdateBody {
   note?: unknown;
   done?: unknown;
   anchor?: unknown;
+  title?: unknown;
   expectedMtime?: unknown;
   force?: unknown;
 }
@@ -41,16 +42,18 @@ interface UpdateBody {
 /**
  * PATCH /api/plans/file → update one plan in place.
  *
- * body: `{ path, note?, done?, anchor?, expectedMtime?, force? }`. At least one
- * of `note` / `done` / `anchor` must be present. `expectedMtime` is the `mtime`
- * the client last saw the file with; a mismatch (or a path that no longer
- * exists) is a `409` carrying `code` (`modified` | `missing`) and, for a moved
- * file, the `movedTo` the panel can reload into. `force: true` is the user's
- * 「覆盖」 answer to that 409 and skips the guard.
+ * body: `{ path, note?, done?, anchor?, title?, expectedMtime?, force? }`. At
+ * least one of `note` / `done` / `anchor` / `title` must be present.
+ * `expectedMtime` is the `mtime` the client last saw the file with; a mismatch
+ * (or a path that no longer exists) is a `409` carrying `code` (`modified` |
+ * `missing`) and, for a moved file, the `movedTo` the panel can reload into.
+ * `force: true` is the user's 「覆盖」 answer to that 409 and skips the guard.
  *
  * `anchor` is a re-schedule: the server moves / renames the file to the new
  * month directory (the anchor lives in the path — ADR-0006), preserving
- * `created_at`, the note and the completion state. A target name that is
+ * `created_at`, the note and the completion state. `title` is a rename: the
+ * server renames the file *in place*, keeping the anchor prefix, so the date
+ * cannot move. Giving both is one move to the new name. A target name that is
  * already taken is a `409` with `code: "name-taken"` and never overwrites.
  *
  * `done` is applied by the server, which stamps / clears `done_at`; the client
@@ -72,6 +75,9 @@ export async function PATCH(request: NextRequest) {
   }
   if (body.done !== undefined && typeof body.done !== "boolean") {
     return NextResponse.json({ error: "'done' must be a boolean", field: "done" }, { status: 400 });
+  }
+  if (body.title !== undefined && typeof body.title !== "string") {
+    return NextResponse.json({ error: "'title' must be a string", field: "title" }, { status: 400 });
   }
   if (body.expectedMtime !== undefined && typeof body.expectedMtime !== "string") {
     return NextResponse.json(
@@ -97,6 +103,7 @@ export async function PATCH(request: NextRequest) {
       note: body.note,
       done: body.done,
       anchor,
+      title: body.title,
       expectedMtime: body.expectedMtime,
       force: body.force === true,
     });

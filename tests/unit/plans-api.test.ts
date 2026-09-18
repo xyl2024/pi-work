@@ -1096,6 +1096,207 @@ describe("PATCH /api/plans/file — re-schedule", () => {
   });
 });
 
+// ── Rename (title) ────────────────────────────────────────────────────
+// The title is the second half of the file name and the anchor the first
+// (ADR-0006), so renaming is a rename *in place*: the date must not move, the
+// section must not change, and `created_at` / the note / the completion state
+// must survive. It is guarded by the same `expectedMtime` as every other write.
+
+describe("PATCH /api/plans/file — rename", () => {
+  const patch = (body: unknown) =>
+    api("/api/plans/file", { method: "PATCH", body: JSON.stringify(body) });
+  const list = async () =>
+    (await api(`/api/plans?today=${TODAY}`)).body as unknown as PlansResponse;
+
+  async function create(title: string, anchor: PlanAnchor, note?: string): Promise<Plan> {
+    const res = await api("/api/plans", {
+      method: "POST",
+      body: JSON.stringify({ title, anchor, note }),
+    });
+    expect(res.status).toBe(201);
+    return res.body.plan as unknown as Plan;
+  }
+
+  it("renames a plan in place, keeping its date, section and metadata", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(`${uid}-旧名`, { kind: "day", date: TODAY }, "带上身份证");
+      paths.push(original.path);
+
+      const res = await patch({
+        path: original.path,
+        title: `${uid}-新名字`,
+        expectedMtime: original.mtime,
+      });
+      expect(res.status).toBe(200);
+      const renamed = res.body.plan as unknown as Plan;
+      paths.push(renamed.path);
+
+      expect(renamed.path).toBe(`2026-03/2026-03-15-${uid}-新名字.md`);
+      expect(renamed.title).toBe(`${uid}-新名字`);
+      // The anchor is the *other* half of the name, so it did not move — which
+      // is the whole point of a rename as opposed to a re-schedule.
+      expect(renamed.anchor).toEqual(original.anchor);
+      expect(renamed.createdAt).toBe(original.createdAt);
+      expect(renamed.done).toBe(false);
+      expect(renamed.note).toBe("带上身份证");
+
+      // The old name leaves no residue and the plan stays in the section its
+      // (unchanged) anchor decides.
+      expect(existsSync(planAbs(original.path))).toBe(false);
+      const data = await list();
+      expect(findPlan(data, original.path)).toBeUndefined();
+      expect(sectionOf(data, "today").plans.some((plan) => plan.path === renamed.path)).toBe(true);
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("sanitizes a typed title instead of handing it to the filesystem", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(`${uid}-旧名`, { kind: "inbox" }, "先放一放");
+      paths.push(original.path);
+
+      const res = await patch({
+        path: original.path,
+        title: `去办 ${uid}/护照`,
+        expectedMtime: original.mtime,
+      });
+      expect(res.status).toBe(200);
+      const renamed = res.body.plan as unknown as Plan;
+      paths.push(renamed.path);
+
+      expect(renamed.title).toBe(`去办 ${uid}-护照`);
+      // An inbox plan stays in the inbox: a rename never touches the anchor
+      // half of the name, and the sanitizer cannot invent a path segment.
+      expect(renamed.path).toBe(`inbox/去办 ${uid}-护照.md`);
+      expect(renamed.note).toBe("先放一放");
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("refuses a name another plan in the same folder already has", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(`${uid}-旧名`, { kind: "day", date: TODAY }, "我的备注");
+      // The same day, so the target name collides on the whole file name: the
+      // anchor prefix is identical and only the title half would change.
+      const other = await create(`${uid}-占用`, { kind: "day", date: TODAY }, "别人的备注");
+      paths.push(original.path, other.path);
+      const otherBytes = readFileSync(planAbs(other.path), "utf8");
+
+      const res = await patch({
+        path: original.path,
+        title: `${uid}-占用`,
+        expectedMtime: original.mtime,
+      });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("name-taken");
+      expect(res.body.target).toBe(other.path);
+
+      // 「覆盖」 must not let one plan eat another, and neither file was
+      // renamed or rewritten.
+      const forced = await patch({ path: original.path, title: `${uid}-占用`, force: true });
+      expect(forced.status).toBe(409);
+      expect(existsSync(planAbs(original.path))).toBe(true);
+      expect(readFileSync(planAbs(other.path), "utf8")).toBe(otherBytes);
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("rejects an empty, blank or all-illegal title before writing", async () => {
+    const uid = uniqueId("plans");
+    let plan: Plan | null = null;
+    try {
+      plan = await create(`${uid}-旧名`, { kind: "day", date: TODAY });
+      for (const title of ["", "   ", "///"]) {
+        const res = await patch({ path: plan.path, title, expectedMtime: plan.mtime });
+        expect(res.status).toBe(400);
+      }
+      const notString = await patch({ path: plan.path, title: 42, expectedMtime: plan.mtime });
+      expect(notString.status).toBe(400);
+      expect(notString.body.field).toBe("title");
+      expect(existsSync(planAbs(plan.path))).toBe(true);
+    } finally {
+      if (plan !== null) removePlanFiles([plan.path]);
+    }
+  });
+
+  it("applies a rename and a re-schedule in one write", async () => {
+    const uid = uniqueId("plans");
+    const paths: string[] = [];
+    try {
+      const original = await create(`${uid}-旧名`, { kind: "day", date: TODAY }, "一起改");
+      paths.push(original.path);
+
+      const res = await patch({
+        path: original.path,
+        title: `${uid}-新名字`,
+        anchor: { kind: "day", date: "2026-04-10" },
+        expectedMtime: original.mtime,
+      });
+      expect(res.status).toBe(200);
+      const updated = res.body.plan as unknown as Plan;
+      paths.push(updated.path);
+
+      expect(updated.path).toBe(`2026-04/2026-04-10-${uid}-新名字.md`);
+      expect(updated.anchor).toEqual({ kind: "day", date: "2026-04-10" });
+      expect(updated.createdAt).toBe(original.createdAt);
+      expect(updated.note).toBe("一起改");
+    } finally {
+      removePlanFiles(paths);
+    }
+  });
+
+  it("refuses a rename from a stale view and does not touch the file", async () => {
+    const uid = uniqueId("plans");
+    let plan: Plan | null = null;
+    try {
+      plan = await create(`${uid}-旧名`, { kind: "day", date: TODAY });
+      // An editor (or the agent) touched the file after the panel read it.
+      const abs = planAbs(plan.path);
+      writeFileSync(abs, `${readFileSync(abs, "utf8")}\n外部备注\n`, "utf8");
+      const past = new Date(Date.now() - 60_000);
+      utimesSync(abs, past, past);
+
+      const res = await patch({
+        path: plan.path,
+        title: `${uid}-新名字`,
+        expectedMtime: plan.mtime,
+      });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("modified");
+      expect(existsSync(abs)).toBe(true);
+      expect(existsSync(planAbs(`2026-03/2026-03-15-${uid}-新名字.md`))).toBe(false);
+    } finally {
+      if (plan !== null) removePlanFiles([plan.path]);
+    }
+  });
+
+  it("refuses to rename a file that does not follow the plan format", async () => {
+    const uid = uniqueId("plans");
+    const rel = `2026-03/${uid}-随手记.md`;
+    const abs = seed(rel, "whatever the user wrote");
+    try {
+      const res = await patch({
+        path: rel,
+        title: `${uid}-新名字`,
+        expectedMtime: statSync(abs).mtime.toISOString(),
+      });
+      expect(res.status).toBe(422);
+      expect(readFileSync(abs, "utf8")).toBe("whatever the user wrote");
+    } finally {
+      rmSync(abs, { force: true });
+    }
+  });
+});
+
 // ── Delete ────────────────────────────────────────────────────────────
 // Deletion is the one destructive operation the panel offers, so the API is
 // pinned on both halves: it really removes the plan, and it cannot be steered

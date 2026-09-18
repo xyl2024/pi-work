@@ -66,11 +66,11 @@ const AUTOSAVE_MS = 600;
  * Rows are a display line: clicking one opens the plan's detail dialog, where
  * the note is written and previewed as Markdown (600 ms debounce, Ctrl/Cmd+S to
  * save now), and where the save state and length of the note are reported. The
- * row itself keeps the completion checkbox and the hover actions (re-schedule /
- * copy path / delete). The panel reads the filesystem on open, on window
- * re-focus and on the manual refresh button; there is no polling and no watcher
- * (ADR-0006). The local date is computed here, in the browser, and sent to the
- * server.
+ * row itself keeps the completion checkbox and the hover actions (rename /
+ * re-schedule / copy path / delete). The panel reads the filesystem on open, on
+ * window re-focus and on the manual refresh button; there is no polling and no
+ * watcher (ADR-0006). The local date is computed here, in the browser, and sent
+ * to the server.
  *
  * Every write carries the `mtime` the panel last saw. When that no longer
  * matches — an agent or another editor touched the file — the server answers
@@ -525,6 +525,52 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     setReschedulePath((prev) => (prev === plan.path ? null : plan.path));
   }, []);
 
+  /**
+   * Rename a plan: the title is the second half of the file name, so this is a
+   * write to the same anchor — the server renames the file in place and the
+   * date cannot move. Like a re-schedule the path changes, so the editor (and
+   * the list, whose rows are keyed by path) follows through the server's
+   * answer rather than a local patch.
+   */
+  const rename = useCallback(
+    async (plan: Plan, title: string) => {
+      try {
+        const updated = await updatePlan({
+          path: plan.path,
+          title,
+          expectedMtime: plan.mtime,
+        });
+        adoptEditor(plan.path, updated);
+        if (conflictRef.current?.path === plan.path) setPendingConflict(null);
+        await reload();
+      } catch (err) {
+        const failure = planWriteFailure(err);
+        if (failure.kind === "name-taken") {
+          // Another plan in the same folder already carries that name (the
+          // anchor is not part of what the user typed). Nothing was written,
+          // so there is nothing to overwrite — just say which name is taken.
+          reportNameTaken(failure);
+          return;
+        }
+        if (failure.kind === "conflict") {
+          setPendingConflict({
+            path: plan.path,
+            code: failure.code,
+            movedTo: failure.movedTo,
+            retry: { kind: "rename", title },
+          });
+          return;
+        }
+        toast.show({
+          kind: "error",
+          message: t("Failed to rename plan"),
+          description: failure.message,
+        });
+      }
+    },
+    [adoptEditor, reload, reportNameTaken, setPendingConflict, t, toast],
+  );
+
   const resolveConflict = useCallback(
     async (choice: "overwrite" | "reload") => {
       const pending = conflictRef.current;
@@ -541,6 +587,15 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
             const updated = await updatePlan({
               path: pending.path,
               anchor: pending.retry.anchor,
+              force: true,
+            });
+            adoptEditor(pending.path, updated);
+            await reload();
+          } else if (pending.retry.kind === "rename") {
+            // Rename the file as it is on disk to the name the user typed.
+            const updated = await updatePlan({
+              path: pending.path,
+              title: pending.retry.title,
               force: true,
             });
             adoptEditor(pending.path, updated);
@@ -612,6 +667,25 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
             toast.show({
               kind: "error",
               message: t("Failed to reschedule plan"),
+              description: failure.message,
+            });
+        }
+      } else if (pending.retry.kind === "rename") {
+        try {
+          const updated = await updatePlan({
+            path: found.path,
+            title: pending.retry.title,
+            expectedMtime: found.mtime,
+          });
+          adoptEditor(pending.path, updated);
+          await reload();
+        } catch (err) {
+          const failure = planWriteFailure(err);
+          if (failure.kind === "name-taken") reportNameTaken(failure);
+          else
+            toast.show({
+              kind: "error",
+              message: t("Failed to rename plan"),
               description: failure.message,
             });
         }
@@ -772,6 +846,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         onToggleDone={() => void toggleDone(plan)}
         onToggleReschedule={() => toggleReschedule(plan)}
         onReschedule={(choice) => void reschedule(plan, choice)}
+        onRename={(next) => void rename(plan, next)}
         onResolveConflict={(choice) => void resolveConflict(choice)}
         onDismissConflict={dismissConflict}
         onCopyPath={() => void copyPath(plan.absPath)}
@@ -785,6 +860,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       pendingConflictFor,
       pickedAnchor,
       removePlan,
+      rename,
       reschedule,
       reschedulePath,
       resolveConflict,

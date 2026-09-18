@@ -25,6 +25,12 @@ describe("planConflictSurface", () => {
       planConflictSurface({ kind: "anchor", anchor: { kind: "inbox" } }),
     ).toBe("row");
   });
+
+  it("keeps a refused rename on the row", () => {
+    // The rename input lives in the row, and the dialog cannot rename — so the
+    // 「覆盖 / 重载」 answer must appear where the new name was typed.
+    expect(planConflictSurface({ kind: "rename", title: "新名字" })).toBe("row");
+  });
 });
 
 describe("planDialogLayout", () => {

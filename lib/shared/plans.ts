@@ -498,13 +498,17 @@ export function planRelativePath(anchor: PlanAnchor, title: string): string {
 }
 
 /**
- * Path a plan moves to when its anchor changes.
+ * Path a plan moves to when its anchor changes — and the path a *rename* lands
+ * on, where only the title half of the name changes (the anchor is the other
+ * half, ADR-0006). Both callers hand in an anchor and a title; what differs is
+ * where the title came from.
  *
- * The title goes in **verbatim**: it came out of a filename that already
- * passed the contract, so re-sanitizing it could silently change what the plan
- * is called. No `-2` de-duplication either — a target that is already taken is
- * an error the user has to answer, not a rename behind their back (see
- * `updatePlanFile`).
+ * The title goes in **verbatim**: for a move it came out of a filename that
+ * already passed the contract, and for a rename the caller sanitizes the typed
+ * title *before* calling — so re-sanitizing here could only silently change
+ * what the plan is called. No `-2` de-duplication either — a target that is
+ * already taken is an error the user has to answer, not a rename behind their
+ * back (see `updatePlanFile`).
  */
 export function movedPlanRelativePath(anchor: PlanAnchor, title: string): string {
   return `${planDirOf(anchor)}/${planFilePrefix(anchor)}${title}.md`;

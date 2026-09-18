@@ -273,6 +273,12 @@ export interface UpdatePlanInput {
    */
   anchor?: PlanAnchor;
   /**
+   * New title; a change renames the file in place, keeping the anchor prefix —
+   * the title is the second half of the name and the anchor the first, so
+   * renaming must never touch the date. Sanitized like a create title.
+   */
+  title?: string;
+  /**
    * The `mtime` the client last saw. Required unless `force` — this is what
    * stops a stale editor from silently overwriting an agent's or another
    * editor's work.
@@ -294,7 +300,10 @@ export interface UpdatePlanInput {
  *
  * A changed `anchor` is a move: the file is renamed into the new month
  * directory, which carries `created_at`, the note and the completion state over
- * untouched. A pure re-schedule does not even rewrite the bytes. If the target
+ * untouched. A changed `title` is a rename *in place*: the anchor prefix and the
+ * month directory stay exactly as they were, so changing the name can never
+ * change the date. A pure re-schedule or rename does not even rewrite the
+ * bytes; giving both at once is a single move to the new name. If the target
  * name is already taken the write is refused — the other plan is never the one
  * that loses (see `PlanConflictError`).
  */
@@ -302,19 +311,40 @@ export function updatePlanFile(input: UpdatePlanInput): Plan {
   const rel = normalizeRel(input.path);
   const abs = resolvePlanPath(rel);
 
-  if (input.done === undefined && input.note === undefined && input.anchor === undefined) {
+  if (
+    input.done === undefined &&
+    input.note === undefined &&
+    input.anchor === undefined &&
+    input.title === undefined
+  ) {
     throw new PlanStoreError("Nothing to update", 400);
   }
 
   const parsedPath = parsePlanPath(rel);
   if (!parsedPath.ok) throw unsortedWriteError(parsedPath.problems);
 
-  // A PATCH that restates the anchor already on the file is not a move; only a
-  // *different* anchor renames anything. The title comes from the filename, so
-  // the target path is the same contract the file already satisfied.
-  const moving = input.anchor !== undefined && !planAnchorsEqual(input.anchor, parsedPath.anchor);
-  const targetRel = moving ? movedPlanRelativePath(input.anchor!, parsedPath.title) : rel;
-  const targetAbs = moving ? resolvePlanPath(targetRel) : abs;
+  // The typed title goes through the same sanitizer as create, so an illegal
+  // character or a path separator can never reach the filesystem. A title that
+  // is nothing but illegal characters is refused instead of silently leaving
+  // the name alone — the user asked for a rename, not for nothing.
+  let title = parsedPath.title;
+  if (input.title !== undefined) {
+    title = sanitizePlanTitle(input.title);
+    if (!title) throw new PlanStoreError("Title is required", 400);
+  }
+
+  // A PATCH that restates the anchor already on the file is not a move, and a
+  // title equal to the one the name already carries is not a rename; only a
+  // real difference repaths anything. Either way the target is the same
+  // contract the file already satisfied.
+  const anchor = input.anchor ?? parsedPath.anchor;
+  const moving = !planAnchorsEqual(anchor, parsedPath.anchor);
+  const renaming = title !== parsedPath.title;
+  // Both halves of the name live in the path (ADR-0006), so changing either one
+  // is a rename — and changing both is still one rename, not two.
+  const repathed = moving || renaming;
+  const targetRel = repathed ? movedPlanRelativePath(anchor, title) : rel;
+  const targetAbs = repathed ? resolvePlanPath(targetRel) : abs;
 
   // Never land on another plan. Case-insensitive for the same reason the create
   // path is: a case-blind filesystem must not let one plan silently eat another.
@@ -322,7 +352,7 @@ export function updatePlanFile(input: UpdatePlanInput): Plan {
   // Deliberately checked *before* the mtime guard below: an occupied target is
   // a hard stop, and the panel's 「覆盖」 (`force`) must not clobber the other
   // plan either. A stale view only changes which error the user is shown.
-  if (moving) {
+  if (repathed) {
     const targetDir = path.dirname(targetAbs);
     const wanted = path.basename(targetAbs).toLowerCase();
     if (
@@ -331,7 +361,7 @@ export function updatePlanFile(input: UpdatePlanInput): Plan {
     ) {
       throw new PlanConflictError(
         "name-taken",
-        "A plan with that name already exists in the target month",
+        "A plan with that name already exists",
         null,
         targetRel,
       );
@@ -391,10 +421,11 @@ export function updatePlanFile(input: UpdatePlanInput): Plan {
     if (input.note !== undefined || doneChanged) {
       writePlanFileAtomic(abs, serializePlanContent(meta, note));
     }
-    if (moving) {
-      // A pure re-schedule is a rename of untouched bytes, so `created_at`, the
-      // note and the completion state survive by construction. `rename` is
-      // atomic on one filesystem, which the plans root is.
+    if (repathed) {
+      // A pure re-schedule or rename is a rename of untouched bytes, so
+      // `created_at`, the note and the completion state survive by
+      // construction. `rename` is atomic on one filesystem, which the plans
+      // root is.
       fs.mkdirSync(path.dirname(targetAbs), { recursive: true });
       fs.renameSync(abs, targetAbs);
     }

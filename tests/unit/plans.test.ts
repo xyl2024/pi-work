@@ -483,6 +483,21 @@ describe("plans re-scheduling paths", () => {
     );
   });
 
+  it("renames by rebuilding the name from the same anchor", () => {
+    // A rename is the same rebuild as a move, with the anchor unchanged: the
+    // prefix and the month directory survive, and only the title half changes.
+    // A *typed* title is sanitized first, so the caller (the store) ends up
+    // with a name that parses back to the same anchor and the new title.
+    const anchor: PlanAnchor = { kind: "day", date: "2026-09-15" };
+    const renamed = movedPlanRelativePath(anchor, sanitizePlanTitle("去办 居住证/护照"));
+    expect(renamed).toBe("2026-09/2026-09-15-去办 居住证-护照.md");
+    expect(parsePlanPath(renamed)).toEqual({
+      ok: true,
+      anchor,
+      title: "去办 居住证-护照",
+    });
+  });
+
   it("round-trips a moved path straight back to the same anchor and title", () => {
     const anchor: PlanAnchor = { kind: "week", date: "2026-09-28" };
     expect(parsePlanPath(movedPlanRelativePath(anchor, "整理书架"))).toEqual({

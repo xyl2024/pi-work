@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { IconButton } from "@/components/ui/IconButton";
 import {
@@ -41,6 +41,10 @@ export interface PlanRowProps {
   onToggleDone: () => void;
   onToggleReschedule: () => void;
   onReschedule: (choice: PlanAnchorChoice) => void;
+  /** Rename this plan. The title is the second half of the file name, so the
+   *  panel renames the file in place: the request is resolved against the
+   *  plan's own anchor, never against the create input's. */
+  onRename: (title: string) => void;
   onResolveConflict: (choice: "overwrite" | "reload") => void;
   onDismissConflict: () => void;
   onCopyPath: () => void;
@@ -49,14 +53,15 @@ export interface PlanRowProps {
 
 /**
  * One plan line: round completion checkbox, title, a grey one-line note
- * summary, and the hover actions (reschedule / copy path / delete).
+ * summary, and the hover actions (rename / reschedule / copy path / delete).
  *
  * Clicking the line — title, summary or the empty space around them — opens the
  * plan's detail dialog, where the note is written and read (#51). The note
  * itself is not edited here any more: the row is presentation plus the click
  * target, and every decision (debounce, conflict resolution, what gets written)
  * stays in the panel above it. The controls (checkbox, hover actions, the
- * re-schedule chips) are the exceptions and keep their own click.
+ * re-schedule chips, the rename input) are the exceptions and keep their own
+ * click.
  */
 export function PlanRow({
   plan,
@@ -69,6 +74,7 @@ export function PlanRow({
   onToggleDone,
   onToggleReschedule,
   onReschedule,
+  onRename,
   onResolveConflict,
   onDismissConflict,
   onCopyPath,
@@ -76,8 +82,34 @@ export function PlanRow({
 }: PlanRowProps) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
+  // Renaming turns the title into an input *in the row*, so the new name is
+  // typed where the old one is shown — the same rename the session list offers.
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(plan.title);
+  const renameInputRef = useRef<HTMLInputElement>(null);
   const summary = noteSummary(plan.note);
   const actionsVisible = hovered || rescheduleOpen;
+
+  /** Start a rename with the current name selected, so typing replaces it. */
+  const beginRename = useCallback(() => {
+    setRenameValue(plan.title);
+    setRenaming(true);
+    // The input is rendered by the state update above; select it once mounted.
+    setTimeout(() => renameInputRef.current?.select(), 0);
+  }, [plan.title]);
+
+  /**
+   * Enter / losing focus commits, Escape cancels. An empty or unchanged name is
+   * not a write: the file name *is* the title, so "no change" means no rename
+   * at all (and the server would refuse an empty one anyway).
+   */
+  const commitRename = useCallback(() => {
+    if (!renaming) return;
+    setRenaming(false);
+    const next = renameValue.trim();
+    if (!next || next === plan.title) return;
+    onRename(next);
+  }, [onRename, plan.title, renameValue, renaming]);
 
   return (
     <div
@@ -111,55 +143,96 @@ export function PlanRow({
 
         {/* The title is the row's keyboard entry point — Tab to it and Enter /
             Space open the dialog, exactly like clicking the line does. Clicks
-            are handled here so the title never opens the dialog twice. */}
-        <button
-          type="button"
-          aria-haspopup="dialog"
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen();
-          }}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "stretch",
-            gap: 1,
-            padding: 0,
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            textAlign: "left",
-          }}
-        >
-          <span
+            are handled here so the title never opens the dialog twice. While
+            renaming it is replaced by an input, which is not a button and does
+            not open anything. */}
+        {renaming ? (
+          <input
+            ref={renameInputRef}
+            value={renameValue}
+            aria-label={t("Rename plan")}
+            autoFocus
+            onChange={(event) => setRenameValue(event.target.value)}
+            onBlur={commitRename}
+            // The input sits inside the row's click target: its own clicks must
+            // not reach it, or renaming would open the dialog on every keystroke.
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              // `isComposing` lets Enter that commits an IME candidate (Chinese
+              // input) through untouched — the same guard the create box uses.
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitRename();
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                setRenaming(false);
+              }
+            }}
             style={{
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              flex: 1,
+              minWidth: 0,
+              height: 20,
+              padding: "0 6px",
               fontSize: 12.5,
               color: "var(--text)",
-              textDecoration: plan.done ? "line-through" : "none",
-              textDecorationColor: "var(--text-dim)",
+              background: "var(--bg)",
+              border: "1px solid var(--accent)",
+              borderRadius: 5,
+              outline: "none",
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            aria-haspopup="dialog"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen();
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: 1,
+              padding: 0,
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              textAlign: "left",
             }}
           >
-            {plan.title}
-          </span>
-          {summary && (
             <span
               style={{
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                fontSize: 11,
-                color: "var(--text-dim)",
+                fontSize: 12.5,
+                color: "var(--text)",
+                textDecoration: plan.done ? "line-through" : "none",
+                textDecorationColor: "var(--text-dim)",
               }}
             >
-              {summary}
+              {plan.title}
             </span>
-          )}
-        </button>
+            {summary && (
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  fontSize: 11,
+                  color: "var(--text-dim)",
+                }}
+              >
+                {summary}
+              </span>
+            )}
+          </button>
+        )}
 
         <AnchorLabel anchor={plan.anchor} showDate={showDate} />
 
@@ -179,6 +252,17 @@ export function PlanRow({
             transition: "opacity 0.1s",
           }}
         >
+          <IconButton
+            label={t("Rename plan")}
+            size="xs"
+            active={renaming}
+            onClick={beginRename}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </IconButton>
           <IconButton
             label={t("Reschedule")}
             size="xs"
@@ -216,8 +300,8 @@ export function PlanRow({
         </div>
       )}
 
-      {/* Only a refused completion / re-schedule lands here; a refused note save
-          is answered inside the detail dialog (#51). */}
+      {/* Only a refused completion / re-schedule / rename lands here; a refused
+          note save is answered inside the detail dialog (#51). */}
       {conflict !== null && (
         <PlanConflictBanner
           conflict={conflict}

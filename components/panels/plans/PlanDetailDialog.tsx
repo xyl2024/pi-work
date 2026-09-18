@@ -176,8 +176,10 @@ export function PlanDetailDialog({
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
-            {/* The title is the file name — read-only here. Renaming a plan is
-                moving it, which the row's re-schedule chips still own. */}
+            {/* The title is the file name — read-only here: renaming is a move
+                of the title half of the name, which the row's rename action
+                owns (a path-changing write belongs where the row's other path
+                actions are). */}
             <div
               style={{
                 fontSize: 13.5,

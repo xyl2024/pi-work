@@ -38,6 +38,12 @@ export const plans = {
   // notes and media dictionaries and are reused as-is.
   "Path copied": "路径已复制",
   "Copy path failed": "复制路径失败",
+  // Renaming: the title is the second half of the file name and the anchor is
+  // the first, so renaming renames the file *in place* and never moves the
+  // date (ADR-0006). It lives on the row, next to the other path-changing
+  // action (re-schedule).
+  "Rename plan": "重命名计划",
+  "Failed to rename plan": "重命名计划失败",
   // Re-scheduling: a different anchor is a move, so the row's chips say where
   // the plan goes and the server renames the file (ADR-0006).
   "Reschedule": "改期",
