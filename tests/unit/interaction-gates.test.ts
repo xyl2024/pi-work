@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   InteractionGates,
   type PermissionGateRequest,
+  type UserInputGateRequest,
 } from "@/lib/server/interaction-gates";
+import type { AskUserQuestion } from "@/lib/shared/ask-user-questions-tool-types";
 import type { SessionEvent } from "@/lib/shared/session-events";
 
 /**
@@ -28,6 +30,26 @@ const bashGate = (over: Partial<PermissionGateRequest> = {}): PermissionGateRequ
   rule: "rm-rf",
   command: "rm -rf /",
   what: 'the dangerous-command rule "rm-rf"',
+  timeoutMs: null,
+  ...over,
+});
+
+const questions: AskUserQuestion[] = [
+  {
+    question: "Where should the new file go?",
+    header: "Location",
+    multiSelect: false,
+    required: true,
+    options: [
+      { label: "src", description: "Next to the rest of the source." },
+      { label: "tests", description: "In the test tree." },
+    ],
+  },
+];
+
+const inputGate = (over: Partial<UserInputGateRequest> = {}): UserInputGateRequest => ({
+  toolCallId: "question-1",
+  questions,
   timeoutMs: null,
   ...over,
 });
@@ -166,6 +188,133 @@ describe("deadlines", () => {
       reason: "Denied by user",
     });
   });
+
+  it("never reaps a question gate that was given no deadline", async () => {
+    vi.useFakeTimers();
+    const { gates } = makeGates();
+    const pending = gates.requestUserInput(inputGate({ timeoutMs: null }));
+
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    // Still on the table: the card is still waiting for the user.
+    expect(gates.snapshot()).toHaveLength(1);
+    expect(gates.resolveUserInput("question-1", { cancelled: true })).toBe(true);
+    await expect(pending).resolves.toEqual({ kind: "cancelled" });
+  });
+});
+
+describe("the question gate on the same table", () => {
+  const answers = [{ questionIndex: 0, selectedLabels: ["src"], otherText: null }];
+
+  it("emits the question event and hands the payload and decision back unchanged", async () => {
+    const { gates, emitted } = makeGates();
+    const pending = gates.requestUserInput(inputGate());
+
+    expect(emitted).toEqual([
+      {
+        type: "ask_user_questions_request",
+        toolCallId: "question-1",
+        questions,
+        ts: expect.any(Number),
+      },
+    ]);
+
+    expect(gates.resolveUserInput("question-1", { answers })).toBe(true);
+    await expect(pending).resolves.toEqual({ kind: "answered", answers });
+  });
+
+  it("round-trips a cancel", async () => {
+    const { gates } = makeGates();
+    const pending = gates.requestUserInput(inputGate());
+
+    expect(gates.resolveUserInput("question-1", { cancelled: true })).toBe(true);
+    await expect(pending).resolves.toEqual({ kind: "cancelled" });
+  });
+
+  it("round-trips a submit with no selected answers", async () => {
+    const { gates } = makeGates();
+    const pending = gates.requestUserInput(inputGate());
+
+    const empty = [{ questionIndex: 0, selectedLabels: [], otherText: null }];
+    expect(gates.resolveUserInput("question-1", { answers: empty })).toBe(true);
+    await expect(pending).resolves.toEqual({ kind: "answered", answers: empty });
+  });
+
+  it("returns false for a gate that does not exist instead of throwing", () => {
+    const { gates } = makeGates();
+    expect(gates.resolveUserInput("never-opened", { cancelled: true })).toBe(false);
+  });
+
+  it("does not open a second gate for the same id, and settles every waiter", async () => {
+    const { gates, emitted } = makeGates();
+    const first = gates.requestUserInput(inputGate());
+    const second = gates.requestUserInput(inputGate({ questions: [] }));
+
+    expect(emitted).toHaveLength(1);
+
+    gates.resolveUserInput("question-1", { cancelled: true });
+    await expect(first).resolves.toEqual({ kind: "cancelled" });
+    await expect(second).resolves.toEqual({ kind: "cancelled" });
+  });
+});
+
+describe("one table, two adapters", () => {
+  it("does not settle a permission gate with a question decision", async () => {
+    const { gates } = makeGates();
+    const permission = gates.runPermissionGate(bashGate());
+
+    // The ids share one table now, so the owning adapter is checked on the way
+    // out: before the move, a question decision simply missed the permission
+    // map. Same outcome, now by kind rather than by two maps.
+    expect(gates.resolveUserInput("call-1", { cancelled: true })).toBe(false);
+
+    expect(gates.resolvePermission("call-1", "allow_once")).toBe(true);
+    await expect(permission).resolves.toEqual({ decision: "allow" });
+  });
+
+  it("does not settle a question gate with a permission decision", async () => {
+    const { gates } = makeGates();
+    const question = gates.requestUserInput(inputGate());
+
+    expect(gates.resolvePermission("question-1", "allow_once")).toBe(false);
+
+    expect(gates.resolveUserInput("question-1", { cancelled: true })).toBe(true);
+    await expect(question).resolves.toEqual({ kind: "cancelled" });
+  });
+});
+
+describe("snapshot", () => {
+  it("hands back the wire events of both gates and nothing internal", async () => {
+    const { gates, emitted } = makeGates();
+    const permission = gates.runPermissionGate(bashGate());
+    const question = gates.requestUserInput(inputGate());
+
+    // The snapshot *is* what went out over the wire — same shape, same
+    // vocabulary, no promise / settle / memo / timer fields in it.
+    const snapshot = gates.snapshot();
+    expect(snapshot).toEqual(emitted);
+    expect(snapshot.map((event) => event.type)).toEqual([
+      "permission_request",
+      "ask_user_questions_request",
+    ]);
+    expect(Object.keys(snapshot[0]).sort()).toEqual([
+      "command",
+      "ruleName",
+      "toolCallId",
+      "type",
+    ]);
+    expect(Object.keys(snapshot[1]).sort()).toEqual([
+      "questions",
+      "toolCallId",
+      "ts",
+      "type",
+    ]);
+
+    gates.resolvePermission("call-1", "allow_once");
+    gates.resolveUserInput("question-1", { cancelled: true });
+    await permission;
+    await question;
+    expect(gates.snapshot()).toEqual([]);
+  });
 });
 
 describe("tearing down with the session", () => {
@@ -198,5 +347,18 @@ describe("tearing down with the session", () => {
       decision: "deny",
       reason: "Denied by user",
     });
+  });
+
+  it("invalidates a question gate too, and forgets it", async () => {
+    const { gates } = makeGates();
+    const permission = gates.runPermissionGate(bashGate());
+    const question = gates.requestUserInput(inputGate());
+
+    gates.invalidateAll();
+    // The question tool has always seen the same bare "destroyed" rejection.
+    await expect(permission).rejects.toBe("destroyed");
+    await expect(question).rejects.toBe("destroyed");
+    expect(gates.resolveUserInput("question-1", { cancelled: true })).toBe(false);
+    expect(gates.snapshot()).toEqual([]);
   });
 });
