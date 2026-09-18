@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
-import type { AgentMessage, SessionTreeNode, TextContent, ToolResultMessage, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
+import type { AgentMessage, SessionTreeNode, TextContent, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
 import type { ContextComposition } from "@/lib/shared/context-composition";
 import { sendAgentCommand } from "@/lib/client/agent-client";
 import { readLastUsedModel, writeLastUsedModel } from "@/lib/client/last-used-model";
@@ -10,6 +10,13 @@ import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
 import { setSessionUiState, setLeafChangeHandler, setSystemPromptRefreshHandler } from "../sessionUiStore";
 import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
+import {
+  createSessionRuntimeState,
+  inFlightToolResultsOf,
+  patchSessionRuntimeState,
+  type SessionRuntimeState,
+  type StateUpdater,
+} from "@/lib/shared/session-runtime-state";
 import { streamReducer } from "./utils";
 import { useAgentSessionEvents } from "./events";
 import {
@@ -23,6 +30,7 @@ import type {
   AgentPhase,
   AgentRuntimeState,
   AttachedImage,
+  ContextUsage,
   SessionData,
   ThinkingLevelOption,
   TransportRefs,
@@ -61,15 +69,56 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // the synthetic session_tree_update SSE event), so the conversation-tree
   // panel renders new cards without waiting for the whole turn to finish.
   // null = not initialized — falls back to data.tree (loaded from disk).
-  const [liveTree, setLiveTree] = useState<SessionTreeNode[] | null>(null);
+  //
+  // ── The one session runtime state object ────────────────────────────────
+  // "What does the client believe this session looks like right now" lives
+  // here in a single object — the running flag, phase, retry info, messages,
+  // live tree, context usage, the in-flight tool table (name + args + partial
+  // result) and the dedupe ledgers. There is deliberately no second ref or
+  // useState for any of it: `runtimeStateRef` mirrors the same object so the
+  // event adapter and the transport can read it synchronously, while
+  // `runtimeState` is what makes React re-render. See
+  // lib/shared/session-runtime-state.ts for why this is a shared pure module.
+  const [runtimeState, setRuntimeState] = useState<SessionRuntimeState>(createSessionRuntimeState);
+  const runtimeStateRef = useRef(runtimeState);
+  const patchRuntime = useCallback(<K extends keyof SessionRuntimeState>(
+    key: K,
+    value: StateUpdater<SessionRuntimeState[K]>,
+  ) => {
+    const next = patchSessionRuntimeState(runtimeStateRef.current, key, value);
+    if (next === runtimeStateRef.current) return;
+    runtimeStateRef.current = next;
+    setRuntimeState(next);
+  }, []);
+  // Field setters with the same `StateSetter<T>` shape the old useState
+  // setters had — the event switch's read/write shape is unchanged, it just
+  // writes into the one object now. Stable identities so the data layer's
+  // useCallback deps don't churn.
+  const setRuntimeError = useCallback((value: StateUpdater<string | null>) => patchRuntime("runtimeError", value), [patchRuntime]);
+  const setActiveLeafId = useCallback((value: StateUpdater<string | null>) => patchRuntime("activeLeafId", value), [patchRuntime]);
+  const setLiveTree = useCallback((value: StateUpdater<SessionTreeNode[] | null>) => patchRuntime("liveTree", value), [patchRuntime]);
+  const setMessages = useCallback((value: StateUpdater<AgentMessage[]>) => patchRuntime("messages", value), [patchRuntime]);
+  const setSubagentRefreshKey = useCallback((value: StateUpdater<number>) => patchRuntime("subagentRefreshKey", value), [patchRuntime]);
+  const setAgentPhase = useCallback((value: StateUpdater<AgentPhase>) => patchRuntime("agentPhase", value), [patchRuntime]);
+  const setContextUsage = useCallback((value: StateUpdater<ContextUsage | null>) => patchRuntime("contextUsage", value), [patchRuntime]);
+  const setContextComposition = useCallback((value: StateUpdater<ContextComposition | null>) => patchRuntime("contextComposition", value), [patchRuntime]);
+  const setThinkingLevel = useCallback((value: StateUpdater<ThinkingLevelOption>) => patchRuntime("thinkingLevel", value), [patchRuntime]);
+  const setAgentRunningSync = useCallback((running: boolean) => patchRuntime("agentRunning", running), [patchRuntime]);
+  const setCompactingSync = useCallback((compacting: boolean) => patchRuntime("isCompacting", compacting), [patchRuntime]);
+  const isAgentRunning = useCallback(() => runtimeStateRef.current.agentRunning, []);
+  // Derived view of the in-flight tool table: the partial tool results the
+  // chat overlays while a call is still running. Identity tracks the tool
+  // table only, so a message-only change does not invalidate consumers.
+  const inFlightTools = runtimeState.inFlightTools;
+  const inFlightToolResults = useMemo(
+    () => inFlightToolResultsOf(inFlightTools),
+    [inFlightTools],
+  );
   // Only existing sessions load from disk — the new-session page (no session
   // yet, cwd possibly still being picked) must never sit in the loading
   // state, otherwise first entry would spin forever on "Loading session...".
   const [loading, setLoading] = useState(session !== null);
   const [error, setError] = useState<string | null>(null);
-  const [runtimeError, setRuntimeError] = useState<string | null>(null);
-  const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
   // Parallel to entryIds: the entry-level persistence timestamp (ms) for each
   // message, when present. Feeds the per-turn duration display.
@@ -77,34 +126,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // Compaction points on the visible message path (see SessionContext.compactionPoints).
   // The chat list inserts a divider right before each point's first kept message.
   const [compactionPoints, setCompactionPoints] = useState<CompactionPoint[]>([]);
-  // In-flight partial tool results keyed by toolCallId. Populated on
-  // tool_execution_start, updated on each tool_execution_update (bash's
-  // 100ms-throttled streaming output), and cleared on tool_execution_end.
-  // ChatWindow overlays this map over the settled `messages` array so a
-  // long-running bash command renders output as it streams, instead of
-  // showing nothing until the final message_end lands.
-  const [inFlightToolResults, setInFlightToolResults] = useState<Map<string, ToolResultMessage>>(
-    () => new Map(),
-  );
-  // toolCallId → toolName scratchpad for the duration of a session. Populated
-  // on tool_execution_start, consulted on tool_execution_end (the end event
-  // doesn't carry the tool name, so we can't tell e.g. `show_file` apart from
-  // `read` without this). The ref belongs to this tab controller.
-  const toolCallNameRef = useRef<Map<string, string>>(new Map());
-  // Parallel scratchpad for tool args, used to inspect bash command strings
-  // on tool_execution_end (the end event doesn't carry args). Same
-  // lifecycle as toolCallNameRef: populated on _start, consumed+cleared
-  // on _end. It remains isolated to this tab controller.
-  const toolCallArgsRef = useRef<Map<string, unknown>>(new Map());
   const [streamState, dispatch] = useReducer(streamReducer, { isStreaming: false, streamingMessage: null });
-  const [agentRunning, setAgentRunning] = useState(false);
-  const [, setIsCompacting] = useState(false);
-  const [subagentRefreshKey, setSubagentRefreshKey] = useState(0);
   const subagentRefreshTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const scheduledSubagentRefreshIdsRef = useRef<Set<string>>(new Set());
-  const seenSubagentToolCallIdsRef = useRef<Set<string>>(new Set());
-  const seenSubagentToolStartIdsRef = useRef<Set<string>>(new Set());
-  const seenSubagentToolEndIdsRef = useRef<Set<string>>(new Set());
   const scheduleSubagentRefresh = useCallback((toolCallId: string) => {
     if (scheduledSubagentRefreshIdsRef.current.has(toolCallId)) return;
     scheduledSubagentRefreshIdsRef.current.add(toolCallId);
@@ -113,7 +137,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setSubagentRefreshKey((key) => key + 1);
     }, 30_000);
     subagentRefreshTimersRef.current.set(toolCallId, timer);
-  }, []);
+  }, [setSubagentRefreshKey]);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<{ id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[]>([]);
@@ -158,14 +182,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // surfaced to the UI. Cleared on every successful fetch.
   const [toolsLoading, setToolsLoading] = useState(false);
   const [toolsError, setToolsError] = useState<string | null>(null);
-  const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevelOption>("off");
-  const [retryInfo, setRetryInfo] = useState<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>(null);
-  const [contextUsage, setContextUsage] = useState<{ percent: number | null; contextWindow: number; tokens: number | null } | null>(null);
-  const [contextComposition, setContextComposition] = useState<ContextComposition | null>(null);
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [currentModelOverride, setCurrentModelOverride] = useState<{ provider: string; modelId: string } | null>(null);
   const [pendingModel, setPendingModel] = useState<{ provider: string; modelId: string } | null>(null);
-  const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const eventSourceSessionRef = useRef<string | null>(null);
@@ -174,15 +193,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const reconnectAttemptRef = useRef(0);
   const disposedRef = useRef(false);
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
-  const agentRunningRef = useRef(false);
   const compactInFlightRef = useRef(false);
-  const setAgentRunningSync = useCallback((running: boolean) => {
-    agentRunningRef.current = running;
-    setAgentRunning(running);
-  }, []);
-  const setCompactingSync = useCallback((compacting: boolean) => {
-    setIsCompacting(compacting);
-  }, []);
   // Holds the most recent assistant error message during a turn, so
   // agent_end can toast it. Cleared after the toast (or when the next
   // message_start arrives). auto_retry_end with success=false also
@@ -242,7 +253,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // display prefix is stripped so the recalled text is plain.
   const userMessageHistory = useMemo(() => {
     const out: string[] = [];
-    for (const m of messages) {
+    for (const m of runtimeState.messages) {
       if (m.role !== "user") continue;
       const userMsg = m as UserMessage;
       let text: string;
@@ -258,13 +269,13 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (text.trim()) out.push(text);
     }
     return out.length > 100 ? out.slice(-100) : out;
-  }, [messages]);
+  }, [runtimeState.messages]);
   const currentSessionId: string | null = data?.sessionId ?? sessionIdRef.current ?? null;
 
   const sessionStats = (() => {
     const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     let cost = 0;
-    for (const msg of messages) {
+    for (const msg of runtimeState.messages) {
       if (msg.role !== "assistant") continue;
       const u = (msg as import("@/lib/shared/types").AssistantMessage).usage;
       if (!u) continue;
@@ -293,7 +304,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     reconnectAttempt: reconnectAttemptRef,
     disposed: disposedRef,
     sessionId: sessionIdRef,
-    agentRunning: agentRunningRef,
+    isAgentRunning,
   };
   const loadContextRef = useRef<(sid: string, leafId: string | null) => Promise<void>>(async () => {});
   const refreshAgentRuntimeStateRef = useRef<((sid?: string) => Promise<AgentRuntimeState | null>) | null>(null);
@@ -349,10 +360,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     t,
   });
 
-  useEffect(() => {
-    agentRunningRef.current = agentRunning;
-  }, [agentRunning]);
-
   const refreshSystemPrompt = useCallback(() => {
     const sid = sessionIdRef.current;
     if (!sid) return;
@@ -385,9 +392,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     permissionsRef,
     statsEmitRef,
     sessionIdRef,
-    agentRunningRef,
-    toolCallNameRef,
-    toolCallArgsRef,
+    runtimeStateRef,
+    patchRuntime,
+    dispatch,
     pendingAssistantErrorRef,
     lastAssistantIsBodyRef,
     botRevertTimerRef,
@@ -396,24 +403,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     loadSession,
     refreshAgentRuntimeStateRef,
     closeEvents,
-    setRuntimeError,
-    setAgentRunningSync,
-    setCompactingSync,
-    setRetryInfo,
-    setAgentPhase,
-    dispatch,
-    setMessages,
-    setLiveTree,
-    setActiveLeafId,
-    setInFlightToolResults,
-    setSubagentRefreshKey,
     scheduleSubagentRefresh,
-    seenSubagentToolCallIds: seenSubagentToolCallIdsRef.current,
-    seenSubagentToolStartIds: seenSubagentToolStartIdsRef.current,
-    seenSubagentToolEndIds: seenSubagentToolEndIdsRef.current,
-    setContextUsage,
-    setContextComposition,
-    setThinkingLevel,
     compactInFlightRef,
     showToast,
     t,
@@ -422,7 +412,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     if (!message.trim() && !images?.length) return;
-    if (agentRunningRef.current) return;
+    if (isAgentRunning()) return;
     // New-session page with no cwd picked yet — can't create a session.
     if (isNew && !newSessionCwd) {
       showToast({ kind: "error", message: t("Select a project first") });
@@ -473,7 +463,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             toolNames,
             ...(piImages?.length ? { images: piImages } : {}),
             ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
-            thinkingLevel,
+            thinkingLevel: runtimeState.thinkingLevel,
           }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -521,7 +511,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       endStreamingStore(streamingKey);
       closeEvents();
     }
-  }, [isNew, newSessionCwd, newSessionModel, currentModel, toolSelection, thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, onSessionCreated, refreshSystemPrompt, setAgentRunningSync, setCompactingSync, showToast, streamingKey, t]);
+  }, [isNew, newSessionCwd, newSessionModel, currentModel, toolSelection, runtimeState.thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, onSessionCreated, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -540,7 +530,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     sendAgentCommand(sid, { type: "navigate_tree", targetId: entryId }).catch(() => {});
     setActiveLeafId(entryId);
     await loadContext(sid, entryId);
-  }, [loadContext]);
+  }, [loadContext, setActiveLeafId]);
 
   const handleLeafChange = useCallback(async (leafId: string | null) => {
     setActiveLeafId(leafId);
@@ -550,7 +540,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (leafId) {
       sendAgentCommand(sid, { type: "navigate_tree", targetId: leafId }).catch(() => {});
     }
-  }, [loadContext]);
+  }, [loadContext, setActiveLeafId]);
 
   const handleModelChange = useCallback(async (provider: string, modelId: string) => {
     // Sync the thinking level to whatever the freshly-selected model
@@ -569,8 +559,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const newModelLevels = modelThinkingLevels[`${provider}:${modelId}`] ?? null;
     const nextLevel = isNew
       ? "off"
-      : pickClosestAvailableThinkingLevel(thinkingLevel, newModelLevels);
-    const levelChanged = nextLevel !== thinkingLevel;
+      : pickClosestAvailableThinkingLevel(runtimeState.thinkingLevel, newModelLevels);
+    const levelChanged = nextLevel !== runtimeState.thinkingLevel;
     if (levelChanged) {
       setThinkingLevel(nextLevel);
     }
@@ -610,7 +600,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       console.error("Failed to set model:", e);
       showToast({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to switch model") });
     }
-  }, [isNew, modelThinkingLevels, thinkingLevel, setNewSessionModel, showToast, t]);
+  }, [isNew, modelThinkingLevels, runtimeState.thinkingLevel, setNewSessionModel, setThinkingLevel, showToast, t]);
 
   const handleThinkingLevelChange = useCallback(async (level: ThinkingLevelOption) => {
     // Clamp to the current model's advertised levels before applying. When
@@ -632,7 +622,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       console.error("Failed to set thinking level:", e);
       showToast({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to change thinking level") });
     }
-  }, [isNew, newSessionModel, currentModel, modelThinkingLevels, showToast, t]);
+  }, [isNew, newSessionModel, currentModel, modelThinkingLevels, setThinkingLevel, showToast, t]);
 
   // Apply a new tool selection. For existing sessions, the change is sent
   // straight to the agent (`set_tools`); for new sessions we only update
@@ -677,7 +667,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleCompact = useCallback(async () => {
     const sid = sessionIdRef.current;
     if (!sid) return;
-    if (agentRunningRef.current || compactInFlightRef.current) {
+    if (isAgentRunning() || compactInFlightRef.current) {
       showToast({ kind: "error", message: t("Wait for the current turn to end before compacting.") });
       return;
     }
@@ -714,7 +704,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     } finally {
       compactInFlightRef.current = false;
       setCompactingSync(false);
-      if (!agentRunningRef.current) {
+      if (!isAgentRunning()) {
         setAgentRunningSync(false);
         setAgentPhase(null);
         closeEvents();
@@ -723,8 +713,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [
     closeEvents,
     ensureEventsConnected,
+    isAgentRunning,
     loadSession,
     refreshAgentRuntimeState,
+    setAgentPhase,
     setAgentRunningSync,
     setCompactingSync,
     showToast,
@@ -734,9 +726,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // Load session on mount
   useEffect(() => {
     disposedRef.current = false;
-    seenSubagentToolCallIdsRef.current.clear();
-    seenSubagentToolStartIdsRef.current.clear();
-    seenSubagentToolEndIdsRef.current.clear();
+    // A fresh mount means a fresh belief about the session: drop the dedupe
+    // ledgers. The ledgers live in the runtime state object, so this is the
+    // only place they need clearing (it used to clear three refs).
+    const mounted = runtimeStateRef.current;
+    mounted.seenSubagentToolCallIds.clear();
+    mounted.seenSubagentToolStartIds.clear();
+    mounted.seenSubagentToolEndIds.clear();
+    mounted.seenCelebrateToolEndIds.clear();
     for (const timer of subagentRefreshTimersRef.current.values()) clearTimeout(timer);
     subagentRefreshTimersRef.current.clear();
     scheduledSubagentRefreshIdsRef.current.clear();
@@ -778,12 +775,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // Runtime show-file results are keyed by globally unique toolCallId and
       // intentionally survive individual tab closes; clearing the shared map
       // here would erase the active tab's previews when a background tab closes.
-      // toolCallNameRef.current is read here only as a defensive flush; the
-      // ref is component-scoped and disappears with the next mount anyway.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      toolCallNameRef.current.clear();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      toolCallArgsRef.current.clear();
+      // The in-flight tool table lives in the runtime state object, which is
+      // dropped with the mount — no defensive flush needed.
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -807,7 +800,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       // back to the shell) is a scroll concern: `useScrollFollow` owns it.
       onEntryNavigated?.();
     })();
-  }, [loading, onEntryNavigated, scrollToEntryId]);
+  }, [loading, onEntryNavigated, scrollToEntryId, setActiveLeafId]);
 
   useEffect(() => {
     if (isActive) setSessionUiState({ systemPrompt });
@@ -815,9 +808,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   useEffect(() => {
     if (isActive) {
-      setSessionUiState({ branchTree: liveTree ?? data?.tree ?? [], branchActiveLeafId: activeLeafId });
+      setSessionUiState({ branchTree: runtimeState.liveTree ?? data?.tree ?? [], branchActiveLeafId: runtimeState.activeLeafId });
     }
-  }, [isActive, data?.tree, activeLeafId, liveTree]);
+  }, [isActive, data?.tree, runtimeState.activeLeafId, runtimeState.liveTree]);
 
   // Keep the store's leaf-change handler owned by the active controller only.
   // Background controllers remain fully live, but must never redirect a branch
@@ -859,20 +852,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
       }
     }).catch(() => {});
-  }, [isNew, modelsRefreshKey, setNewSessionModel]);
+  }, [isNew, modelsRefreshKey, setNewSessionModel, setThinkingLevel]);
 
   // Publish the remaining session-level state to the store. The shallow-equal
   // guard inside setSessionUiState prevents re-rendering AppShell's top bar
   // when an IIFE-derived value (sessionStats) gets a new object identity but
   // the same scalar contents.
   useEffect(() => { if (isActive) setSessionUiState({ sessionStats }); }, [isActive, sessionStats]);
-  useEffect(() => { if (isActive) setSessionUiState({ contextUsage }); }, [isActive, contextUsage]);
-  useEffect(() => { if (isActive) setSessionUiState({ contextComposition }); }, [isActive, contextComposition]);
+  useEffect(() => { if (isActive) setSessionUiState({ contextUsage: runtimeState.contextUsage }); }, [isActive, runtimeState.contextUsage]);
+  useEffect(() => { if (isActive) setSessionUiState({ contextComposition: runtimeState.contextComposition }); }, [isActive, runtimeState.contextComposition]);
   useEffect(() => { if (isActive) setSessionUiState({ isStreaming: streamState.isStreaming }); }, [isActive, streamState.isStreaming]);
   // Publish the wider "agent is busy with this turn" flag so the
   // conversation-tree panel can lock card clicks for the entire turn,
   // not just the streaming sub-window. (See SessionUiState.agentRunning.)
-  useEffect(() => { if (isActive) setSessionUiState({ agentRunning }); }, [isActive, agentRunning]);
+  useEffect(() => { if (isActive) setSessionUiState({ agentRunning: runtimeState.agentRunning }); }, [isActive, runtimeState.agentRunning]);
   // Publish the active model + message transcript for cross-tab panels
   // (BTW reads both — `displayModel` to mirror the model and
   // `mainSessionMessages` to feed the BTW agent's first send with the
@@ -881,9 +874,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // never overwrite the visible chat's transcript.
   useEffect(() => { if (isActive) setSessionUiState({ currentModel: displayModel }); }, [isActive, displayModel]);
   useEffect(() => {
-    if (isActive) setSessionUiState({ thinkingLevel, toolNames: toolSelection === "all" ? availableTools.map((tool) => tool.name) : toolSelection });
-  }, [isActive, thinkingLevel, toolSelection, availableTools]);
-  useEffect(() => { if (isActive) setSessionUiState({ mainSessionMessages: messages }); }, [isActive, messages]);
+    if (isActive) setSessionUiState({ thinkingLevel: runtimeState.thinkingLevel, toolNames: toolSelection === "all" ? availableTools.map((tool) => tool.name) : toolSelection });
+  }, [isActive, runtimeState.thinkingLevel, toolSelection, availableTools]);
+  useEffect(() => { if (isActive) setSessionUiState({ mainSessionMessages: runtimeState.messages }); }, [isActive, runtimeState.messages]);
 
   // Clear a controller's pending bot reaction when it moves to the
   // background (and again on final unmount). Background events must not
@@ -906,15 +899,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   return {
-    // State
-    data, loading, error, runtimeError, activeLeafId, messages, entryIds, entryTimestamps, compactionPoints, inFlightToolResults, streamState,
-    agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel,
+    // State (projected out of the one session runtime state object)
+    data, loading, error, entryIds, entryTimestamps, compactionPoints, inFlightToolResults, streamState,
+    runtimeError: runtimeState.runtimeError,
+    activeLeafId: runtimeState.activeLeafId,
+    messages: runtimeState.messages,
+    agentRunning: runtimeState.agentRunning,
+    agentPhase: runtimeState.agentPhase,
+    retryInfo: runtimeState.retryInfo,
+    contextUsage: runtimeState.contextUsage,
+    subagentRefreshKey: runtimeState.subagentRefreshKey,
+    modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel,
     toolSelection, availableTools, toolsLoading, toolsError,
-    thinkingLevel,
-    retryInfo, contextUsage, systemPrompt,
+    thinkingLevel: runtimeState.thinkingLevel,
+    systemPrompt,
     currentModel, displayModel, sessionStats,
-    agentPhase,
-    subagentRefreshKey,
     isNew,
     currentSessionId,
     userMessageHistory,
@@ -926,7 +925,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     handleCompact,
     setActiveLeafId, setData, setMessages,
-    dispatch, setAgentRunning,
+    dispatch,
     // Subscriptions
     handleAgentEventRef,
   };

@@ -2,6 +2,12 @@ import { useCallback, useRef, type Dispatch } from "react";
 import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage } from "@/lib/shared/types";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
 import type { ContextComposition } from "@/lib/shared/context-composition";
+import {
+  removeInFlightTool,
+  upsertInFlightTool,
+  type SessionRuntimeState,
+  type StateUpdater,
+} from "@/lib/shared/session-runtime-state";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
 import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "@/lib/shared/celebrate-tool-types";
@@ -20,7 +26,7 @@ import {
 } from "../streamingMessageStore";
 import { bashCommandTouchesGit, isBodyMessage, sameCompletedMessage } from "./utils";
 import type { SessionEvent } from "@/lib/shared/session-events";
-import type { AgentPhase, AgentRuntimeState, StateSetter, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
+import type { AgentRuntimeState, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
 
 function getSpawnSubagentToolCallIds(message: unknown): string[] {
   if (!message || typeof message !== "object") return [];
@@ -36,10 +42,6 @@ function getSpawnSubagentToolCallIds(message: unknown): string[] {
 }
 
 const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
-// `celebrate` triggers a one-shot frontend animation; SSE reconnects can
-// replay tool_execution_end events, so remember handled ids (module-level:
-// toolCallIds are globally unique across sessions).
-const seenCelebrateToolEndIds = new Set<string>();
 const BOT_BASELINE_STATE = "searching";
 const BOT_REVERT_MS = 8000;
 
@@ -64,9 +66,15 @@ type AgentSessionEventsOptions = {
   permissionsRef: PermissionRef;
   statsEmitRef: { current: ToolCallStatsDispatch | undefined };
   sessionIdRef: { current: string | null };
-  agentRunningRef: { current: boolean };
-  toolCallNameRef: { current: Map<string, string> };
-  toolCallArgsRef: { current: Map<string, unknown> };
+  dispatch: Dispatch<StreamAction>;
+  /** The one session runtime state object this controller holds. The switch
+   *  reads ledgers / in-flight tools / the running flag from here, and writes
+   *  every state change through `patchRuntime`. */
+  runtimeStateRef: { current: SessionRuntimeState };
+  patchRuntime: <K extends keyof SessionRuntimeState>(
+    key: K,
+    value: StateUpdater<SessionRuntimeState[K]>,
+  ) => void;
   pendingAssistantErrorRef: { current: string | null };
   lastAssistantIsBodyRef: { current: boolean };
   botRevertTimerRef: { current: ReturnType<typeof setTimeout> | null };
@@ -75,24 +83,7 @@ type AgentSessionEventsOptions = {
   loadSession: (sid: string, showLoading?: boolean, includeState?: boolean) => Promise<AgentRuntimeState | null>;
   refreshAgentRuntimeStateRef: { current: ((sid?: string) => Promise<AgentRuntimeState | null>) | null };
   closeEvents: () => void;
-  setRuntimeError: StateSetter<string | null>;
-  setAgentRunningSync: (running: boolean) => void;
-  setCompactingSync: (compacting: boolean) => void;
-  setRetryInfo: StateSetter<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>;
-  setAgentPhase: StateSetter<AgentPhase>;
-  dispatch: Dispatch<StreamAction>;
-  setMessages: StateSetter<AgentMessage[]>;
-  setLiveTree: StateSetter<SessionTreeNode[] | null>;
-  setActiveLeafId: StateSetter<string | null>;
-  setInFlightToolResults: StateSetter<Map<string, ToolResultMessage>>;
-  setSubagentRefreshKey: StateSetter<number>;
   scheduleSubagentRefresh: (toolCallId: string) => void;
-  seenSubagentToolCallIds: Set<string>;
-  seenSubagentToolStartIds: Set<string>;
-  seenSubagentToolEndIds: Set<string>;
-  setContextUsage: StateSetter<{ percent: number | null; contextWindow: number; tokens: number | null } | null>;
-  setContextComposition: StateSetter<ContextComposition | null>;
-  setThinkingLevel: StateSetter<ThinkingLevelOption>;
   compactInFlightRef: { current: boolean };
   showToast: (notification: ToastNotification) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
@@ -110,9 +101,9 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     permissionsRef,
     statsEmitRef,
     sessionIdRef,
-    agentRunningRef,
-    toolCallNameRef,
-    toolCallArgsRef,
+    runtimeStateRef,
+    patchRuntime,
+    dispatch,
     pendingAssistantErrorRef,
     lastAssistantIsBodyRef,
     botRevertTimerRef,
@@ -121,24 +112,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     loadSession,
     refreshAgentRuntimeStateRef,
     closeEvents,
-    setRuntimeError,
-    setAgentRunningSync,
-    setCompactingSync,
-    setRetryInfo,
-    setAgentPhase,
-    dispatch,
-    setMessages,
-    setLiveTree,
-    setActiveLeafId,
-    setInFlightToolResults,
-    setSubagentRefreshKey,
     scheduleSubagentRefresh,
-    seenSubagentToolCallIds,
-    seenSubagentToolStartIds,
-    seenSubagentToolEndIds,
-    setContextUsage,
-    setContextComposition,
-    setThinkingLevel,
     compactInFlightRef,
     showToast,
     t,
@@ -163,12 +137,16 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
       setGrokbotConfig({ stateKey: BOT_BASELINE_STATE });
     };
 
+    /** The runtime state as of this event. Reads (ledgers, in-flight tools,
+     *  the running flag) go through here so there is one source of truth. */
+    const runtime = () => runtimeStateRef.current;
+
     switch (event.type) {
       case "agent_start":
-        setRuntimeError(null);
-        setAgentRunningSync(true);
-        setCompactingSync(false);
-        setAgentPhase({ kind: "waiting_model" });
+        patchRuntime("runtimeError", null);
+        patchRuntime("agentRunning", true);
+        patchRuntime("isCompacting", false);
+        patchRuntime("agentPhase", { kind: "waiting_model" });
         dispatch({ type: "start" });
         startStreamingStore(controllerId);
         statsEmitRef.current?.({ type: "reset" });
@@ -177,10 +155,10 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         setBaselineBot();
         break;
       case "agent_end":
-        setAgentRunningSync(false);
-        setCompactingSync(false);
-        setAgentPhase(null);
-        setRetryInfo(null);
+        patchRuntime("agentRunning", false);
+        patchRuntime("isCompacting", false);
+        patchRuntime("agentPhase", null);
+        patchRuntime("retryInfo", null);
         dispatch({ type: "end" });
         const hadAssistantError = pendingAssistantErrorRef.current !== null;
         // A failed model call is still part of the active turn. Keep the
@@ -188,7 +166,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         // while the caller decides whether to retry.
         endStreamingStore(controllerId, hadAssistantError);
         if (pendingAssistantErrorRef.current) {
-          setRuntimeError(pendingAssistantErrorRef.current);
+          patchRuntime("runtimeError", pendingAssistantErrorRef.current);
           showToast({ kind: "error", message: pendingAssistantErrorRef.current });
           pendingAssistantErrorRef.current = null;
         }
@@ -211,7 +189,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           void (async () => {
             await loadSession(endedSessionId);
             try { await refreshAgentRuntimeStateRef.current?.(endedSessionId); } catch { /* best effort */ }
-            if (!agentRunningRef.current) closeEvents();
+            if (!runtime().agentRunning) closeEvents();
           })();
         } else {
           closeEvents();
@@ -222,9 +200,8 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
       case "message_update": {
         const message = event.message as Partial<AgentMessage> | undefined;
         for (const toolCallId of getSpawnSubagentToolCallIds(message)) {
-          if (seenSubagentToolCallIds.has(toolCallId)) continue;
-          seenSubagentToolCallIds.add(toolCallId);
-          setSubagentRefreshKey((key) => key + 1);
+          if (!runtime().seenSubagentToolCallIds.claim(toolCallId)) continue;
+          patchRuntime("subagentRefreshKey", (key) => key + 1);
           scheduleSubagentRefresh(toolCallId);
         }
         if (message && message.role !== "user") {
@@ -238,15 +215,14 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           // rAF-coalesced: many tokens per frame → at most one snapshot flip.
           scheduleStreamingUpdate(controllerId, normalized);
         }
-        setAgentPhase(null);
+        patchRuntime("agentPhase", null);
         break;
       }
       case "message_end": {
         const completed = event.message as AgentMessage | undefined;
         for (const toolCallId of getSpawnSubagentToolCallIds(completed)) {
-          if (seenSubagentToolCallIds.has(toolCallId)) continue;
-          seenSubagentToolCallIds.add(toolCallId);
-          setSubagentRefreshKey((key) => key + 1);
+          if (!runtime().seenSubagentToolCallIds.claim(toolCallId)) continue;
+          patchRuntime("subagentRefreshKey", (key) => key + 1);
           scheduleSubagentRefresh(toolCallId);
         }
         if (completed && completed.role !== "user") {
@@ -255,7 +231,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           // stream flag, so the final state isn't lost if a token arrived
           // in the same frame as message_end.
           flushStreamingUpdateSync(controllerId, normalized);
-          setMessages((previous) => previous.some((message) => sameCompletedMessage(message, normalized))
+          patchRuntime("messages", (previous) => previous.some((message) => sameCompletedMessage(message, normalized))
             ? previous
             : [...previous, normalized]);
         }
@@ -271,18 +247,18 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         // retried, and the user should keep seeing the current assistant
         // message instead of a blank gap until the next stream starts.
         endStreamingStore(controllerId, completed?.role === "assistant" && completed.stopReason === "error");
-        setAgentPhase({ kind: "waiting_model" });
+        patchRuntime("agentPhase", { kind: "waiting_model" });
         if (completed?.role === "assistant") {
           lastAssistantIsBodyRef.current = isBodyMessage(completed);
           if (sessionIdRef.current) {
             fetch(`/api/agent/${encodeURIComponent(sessionIdRef.current)}`)
               .then((response) => response.json())
               .then((data: { state?: { contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; contextComposition?: ContextComposition | null } }) => {
-                if (data.state?.contextUsage !== undefined) setContextUsage(data.state.contextUsage ?? null);
+                if (data.state?.contextUsage !== undefined) patchRuntime("contextUsage", data.state.contextUsage ?? null);
                 // The server recomputes the composition on this same
                 // `message_end`, so the round trip that fetches `contextUsage`
                 // usually brings the fresh estimate along with it.
-                if (data.state?.contextComposition !== undefined) setContextComposition(data.state.contextComposition ?? null);
+                if (data.state?.contextComposition !== undefined) patchRuntime("contextComposition", data.state.contextComposition ?? null);
               })
               .catch(() => {});
           }
@@ -290,18 +266,16 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         break;
       }
       case "session_tree_update":
-        if (Array.isArray(event.tree)) setLiveTree(event.tree as SessionTreeNode[]);
-        if (typeof event.leafId === "string") setActiveLeafId(event.leafId);
+        if (Array.isArray(event.tree)) patchRuntime("liveTree", event.tree as SessionTreeNode[]);
+        if (typeof event.leafId === "string") patchRuntime("activeLeafId", event.leafId);
         break;
       case "tool_execution_start": {
         const id = event.toolCallId as string;
         const name = event.toolName as string;
         const args = event.args;
-        toolCallNameRef.current.set(id, name);
-        toolCallArgsRef.current.set(id, args);
-        if (name === "spawn_subagent" && id && !seenSubagentToolStartIds.has(id)) {
-          seenSubagentToolStartIds.add(id);
-          setSubagentRefreshKey((key) => key + 1);
+        patchRuntime("inFlightTools", (previous) => upsertInFlightTool(previous, id, name, args));
+        if (name === "spawn_subagent" && id && runtime().seenSubagentToolStartIds.claim(id)) {
+          patchRuntime("subagentRefreshKey", (key) => key + 1);
           scheduleSubagentRefresh(id);
         }
         statsEmitRef.current?.({
@@ -311,13 +285,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           timestamp: Date.now(),
           args: args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : undefined,
         });
-        setInFlightToolResults((previous) => {
-          if (previous.has(id)) return previous;
-          const next = new Map(previous);
-          next.set(id, { role: "toolResult", toolCallId: id, toolName: name, content: [], timestamp: Date.now() });
-          return next;
-        });
-        setAgentPhase((previous) => {
+        patchRuntime("agentPhase", (previous) => {
           const tools = previous?.kind === "running_tools" ? [...previous.tools] : [];
           if (!tools.some((tool) => tool.id === id)) {
             tools.push({
@@ -344,14 +312,17 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         // merged alongside the streaming content so in-flight blocks can
         // react to them before the final result arrives.
         if (content.length === 0 && partial.details === undefined) break;
-        setInFlightToolResults((previous) => {
+        patchRuntime("inFlightTools", (previous) => {
           const existing = previous.get(id);
           if (!existing) return previous;
           const next = new Map(previous);
           next.set(id, {
             ...existing,
-            ...(content.length > 0 ? { content } : {}),
-            ...(partial.details !== undefined ? { details: partial.details } : {}),
+            result: {
+              ...existing.result,
+              ...(content.length > 0 ? { content } : {}),
+              ...(partial.details !== undefined ? { details: partial.details } : {}),
+            } as ToolResultMessage,
           });
           return next;
         });
@@ -362,10 +333,12 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         const isError = event.isError === true;
         if (isError) fireDiscreteBot("suspicious");
         const result = event.result as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
-        const toolName = toolCallNameRef.current.get(id) ?? (typeof event.toolName === "string" ? event.toolName : undefined);
-        if (toolName === "spawn_subagent" && id && !seenSubagentToolEndIds.has(id)) {
-          seenSubagentToolEndIds.add(id);
-          setSubagentRefreshKey((key) => key + 1);
+        // `tool_execution_end` repeats only the tool name and carries no args:
+        // both come from the in-flight record written at start.
+        const inFlight = runtime().inFlightTools.get(id);
+        const toolName = inFlight?.name ?? (typeof event.toolName === "string" ? event.toolName : undefined);
+        if (toolName === "spawn_subagent" && id && runtime().seenSubagentToolEndIds.claim(id)) {
+          patchRuntime("subagentRefreshKey", (key) => key + 1);
           scheduleSubagentRefresh(id);
         }
         const gitCwd = session?.cwd ?? newSessionCwd;
@@ -378,16 +351,14 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         // add` / `git commit` / `git stash`) are reflected immediately
         // instead of falling into the server's 2s status cache behind an
         // earlier edit-triggered fetch.
-        if (toolName === "bash" && gitCwd && bashCommandTouchesGit(toolCallArgsRef.current.get(id))) {
+        if (toolName === "bash" && gitCwd && bashCommandTouchesGit(inFlight?.args)) {
           notifyMutated(gitCwd, true);
         }
-        toolCallArgsRef.current.delete(id);
         if (toolName && isShowFileToolName(toolName) && result?.details) {
           const files = (result.details as { files?: unknown }).files;
           if (Array.isArray(files)) setShowFileResult(id, files as Parameters<typeof setShowFileResult>[1]);
         }
-        if (toolName === CELEBRATE_TOOL_NAME && id && !seenCelebrateToolEndIds.has(id)) {
-          seenCelebrateToolEndIds.add(id);
+        if (toolName === CELEBRATE_TOOL_NAME && id && runtime().seenCelebrateToolEndIds.claim(id)) {
           const details = result?.details as CelebrateDetails | undefined;
           triggerCelebration(details);
         }
@@ -397,14 +368,8 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           if (firstText && typeof firstText.text === "string") resultText = firstText.text.length > 1024 ? `${firstText.text.slice(0, 1024)}…` : firstText.text;
         }
         statsEmitRef.current?.({ type: "tool_end", toolCallId: id, isError, timestamp: Date.now(), resultText, resultDetails: result?.details });
-        setInFlightToolResults((previous) => {
-          if (!previous.has(id)) return previous;
-          const next = new Map(previous);
-          next.delete(id);
-          return next;
-        });
-        toolCallNameRef.current.delete(id);
-        setAgentPhase((previous) => {
+        patchRuntime("inFlightTools", (previous) => removeInFlightTool(previous, id));
+        patchRuntime("agentPhase", (previous) => {
           if (previous?.kind !== "running_tools") return previous;
           const tools = previous.tools.filter((tool) => tool.id !== id);
           return tools.length === 0 ? { kind: "waiting_model" } : { kind: "running_tools", tools };
@@ -412,27 +377,27 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         break;
       }
       case "auto_retry_start":
-        setRetryInfo({ attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
+        patchRuntime("retryInfo", { attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
         break;
       case "prompt_failed": {
-        setAgentRunningSync(false);
-        setCompactingSync(false);
-        setAgentPhase(null);
-        setRetryInfo(null);
+        patchRuntime("agentRunning", false);
+        patchRuntime("isCompacting", false);
+        patchRuntime("agentPhase", null);
+        patchRuntime("retryInfo", null);
         dispatch({ type: "end" });
         endStreamingStore(controllerId);
         const errorMessage = event.error as string | undefined || t("Failed to send message");
-        setRuntimeError(errorMessage);
+        patchRuntime("runtimeError", errorMessage);
         showToast({ kind: "error", message: errorMessage });
         closeEvents();
         break;
       }
       case "auto_retry_end":
-        setRetryInfo(null);
+        patchRuntime("retryInfo", null);
         if (event.success === false) {
           const finalError = event.finalError as string | undefined;
           if (finalError) {
-            setRuntimeError(finalError);
+            patchRuntime("runtimeError", finalError);
             showToast({ kind: "error", message: finalError });
             pendingAssistantErrorRef.current = null;
             playUiSoundEvent("agent_failure");
@@ -472,19 +437,19 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         break;
       }
       case "compaction_start":
-        setAgentRunningSync(true);
-        setCompactingSync(true);
-        setAgentPhase({ kind: "compacting" });
+        patchRuntime("agentRunning", true);
+        patchRuntime("isCompacting", true);
+        patchRuntime("agentPhase", { kind: "compacting" });
         break;
       case "compaction_end": {
         const willRetry = event.willRetry === true;
-        setCompactingSync(false);
+        patchRuntime("isCompacting", false);
         if (willRetry) {
-          setAgentRunningSync(true);
-          setAgentPhase({ kind: "waiting_model" });
+          patchRuntime("agentRunning", true);
+          patchRuntime("agentPhase", { kind: "waiting_model" });
         } else {
-          setAgentRunningSync(false);
-          setAgentPhase(null);
+          patchRuntime("agentRunning", false);
+          patchRuntime("agentPhase", null);
           dispatch({ type: "end" });
           endStreamingStore(controllerId);
         }
@@ -493,19 +458,18 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         if (!willRetry) {
           void (async () => {
             if (!event.aborted && compactSessionId) await loadSession(compactSessionId);
-            if (!agentRunningRef.current) closeEvents();
+            if (!runtime().agentRunning) closeEvents();
           })();
         }
         break;
       }
       case "thinking_level_changed": {
         const level = event.level;
-        if (typeof level === "string") setThinkingLevel(level as ThinkingLevelOption);
+        if (typeof level === "string") patchRuntime("thinkingLevel", level as ThinkingLevelOption);
         break;
       }
     }
   }, [
-    agentRunningRef,
     botRevertTimerRef,
     closeEvents,
     compactInFlightRef,
@@ -517,35 +481,19 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     newSessionCwd,
     onAgentEnd,
     onFirstAssistantReady,
+    patchRuntime,
     pendingAssistantErrorRef,
     pendingNewSessionFirstAssistantRef,
     permissionsRef,
     refreshAgentRuntimeStateRef,
     refreshSystemPrompt,
+    runtimeStateRef,
+    scheduleSubagentRefresh,
     session?.cwd,
     sessionIdRef,
-    setActiveLeafId,
-    setAgentPhase,
-    setAgentRunningSync,
-    setSubagentRefreshKey,
-    setCompactingSync,
-    setContextComposition,
-    setContextUsage,
-    setInFlightToolResults,
-    setLiveTree,
-    setMessages,
-    setRetryInfo,
-    setRuntimeError,
-    setThinkingLevel,
-    scheduleSubagentRefresh,
-    seenSubagentToolCallIds,
-    seenSubagentToolEndIds,
-    seenSubagentToolStartIds,
     showToast,
     statsEmitRef,
     t,
-    toolCallArgsRef,
-    toolCallNameRef,
   ]);
 
   handlerRef.current = handleAgentEvent;

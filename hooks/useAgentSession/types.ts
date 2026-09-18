@@ -4,7 +4,12 @@ import type { ContextComposition } from "@/lib/shared/context-composition";
 // The session-event protocol is declared once, in the shared layer, and used by
 // both the client and the server — see lib/shared/session-events.ts.
 import type { SessionEvent } from "@/lib/shared/session-events";
+// The session runtime state lives in the shared layer so it stays pure and
+// testable; the hook holds one instance of it (see
+// lib/shared/session-runtime-state.ts).
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
+
+export type { AgentPhase, ContextUsage, RetryInfo } from "@/lib/shared/session-runtime-state";
 
 export interface SessionData {
   sessionId: string;
@@ -53,13 +58,7 @@ export interface AgentRuntimeState {
   };
 }
 
-export type AgentPhase =
-  | { kind: "waiting_model" }
-  | { kind: "running_tools"; tools: { id: string; name: string; args?: Record<string, unknown> }[] }
-  | { kind: "compacting" }
-  | null;
-
-export type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 
 export interface ChatInputHandle {
   insertText: (text: string) => void;
@@ -113,8 +112,6 @@ export type SessionIdRef = Ref<string | null>;
 export type EventHandlerRef = Ref<((event: SessionEvent) => void) | null>;
 export type RuntimeStateRef = Ref<((sid?: string) => Promise<AgentRuntimeState | null>) | null>;
 export type LoadContextRef = Ref<(sid: string, leafId: string | null) => Promise<void>>;
-export type ToolCallNameRef = Ref<Map<string, string>>;
-export type ToolCallArgsRef = Ref<Map<string, unknown>>;
 
 export interface TransportRefs {
   eventSource: Ref<EventSource | null>;
@@ -124,7 +121,10 @@ export interface TransportRefs {
   reconnectAttempt: Ref<number>;
   disposed: Ref<boolean>;
   sessionId: SessionIdRef;
-  agentRunning: Ref<boolean>;
+  /** Reads the current runtime state's `agentRunning` synchronously — the
+   *  transport needs it before the next render, and it is derived from the
+   *  one runtime state object rather than a second ref. */
+  isAgentRunning: () => boolean;
 }
 
 export interface SessionDataLoaderRefs {
@@ -132,7 +132,7 @@ export interface SessionDataLoaderRefs {
   loadContext: LoadContextRef;
   refreshAgentRuntimeState: RuntimeStateRef;
   /** Triggered on connect to refresh agent runtime state from the server. */
-  agentRunning: Ref<boolean>;
+  isAgentRunning: () => boolean;
 }
 
 export type SessionRuntimeStatus =
