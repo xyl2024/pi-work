@@ -30,3 +30,11 @@
 - 重播只有一条路径：route 调 `snapshot()` 并把返回的事件 encode 一遍。客户端侧无需新逻辑——提问靠 reducer 的 `seenAskUserQuestionsToolCallIds.claim` 幂等，权限靠 `hooks/usePendingPermissions.tsx:33-38` 按 `toolCallId` 去重，且 reducer 对 `permission_request` 不写状态（`lib/shared/session-events.ts:642-653`）。
 - 探查中发现的一条**未修**缺陷：`resolvePermission` 不校验决定载荷（`dispatch` 里是 `command.decision as PermissionDecision`，`:909`），而调用点只把 `"deny"` 当作拒绝（`:1363`）——一个未知字符串因此等价于**放行**。闸门的默认值不该是放行；本 ADR 只记录它，修它另开一刀。
 - 「同一会话至多一个闸门」没有任何代码在守。以后 pi 若并行执行 `ask_user_questions`，两个闸门会同时挂在客户端的两个面上——这是本 ADR 明确接受的风险。
+
+## 修订 2026-09-18（交付拆分：#67 / #68 / #69）
+
+上文描述的是这条决定的**终局形状**，它的交付拆成三票，每票自带 PR 与检查清单：
+
+- **#67**：`permission` 那一半——module、挂起表、会话级备忘，以及两处调用点的闸门序列。它**没有可见行为变更**，因此不携带下面那条漂移 1 的行为变更。
+- **#68**：把提问的闸门搬进同一张表（表因此对载荷泛型化）。
+- **#69**：重播收成一条路径——`snapshot()` 与 SSE 路由接线；「顺手修掉漂移 1」的可见行为变更（刷新后挂着的权限确认会重新出现）随这一票交付，并由那一票的 PR 显式列出，而不是声称「什么都没变」。
