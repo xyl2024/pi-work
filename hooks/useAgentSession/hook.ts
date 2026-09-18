@@ -18,8 +18,8 @@ import {
 } from "../streamingMessageStore";
 import { useAgentSessionTransport } from "./transport";
 import { useAgentSessionData } from "./data";
+import type { SessionEvent } from "@/lib/shared/session-events";
 import type {
-  AgentEvent,
   AgentPhase,
   AgentRuntimeState,
   AttachedImage,
@@ -207,7 +207,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // full BOT_REVERT_MS window. Cleared on unmount so a stale timer from
   // an unmounted session can't snap the sidebar bot to "searching".
   const botRevertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handleAgentEventRef = useRef<((event: AgentEvent) => void) | null>(null);
+  const handleAgentEventRef = useRef<((event: SessionEvent) => void) | null>(null);
   // Set when POST /api/agent/new returns for a brand-new session. Cleared on
   // the first assistant message_end — pi persists the .jsonl lazily at that
   // moment (openSync "wx" in SessionManager._persist), which is the earliest

@@ -1,6 +1,7 @@
 import { resolveSessionPath } from "@/lib/server/session-reader";
 import { getRpcSession, startRpcSession } from "@/lib/server/rpc-manager";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import type { SessionEvent } from "@/lib/shared/session-events";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +43,8 @@ export async function GET(
       };
 
       // Send initial connected event
-      encode({ type: "connected", sessionId: id });
+      const connected: SessionEvent = { type: "connected", sessionId: id };
+      encode(connected);
 
       const unsubscribe = session.onEvent((event) => {
         encode(event);
@@ -65,12 +67,13 @@ export async function GET(
       try {
         const pending = session.snapshotPendingUserInputs();
         for (const entry of pending) {
-          encode({
+          const request: SessionEvent = {
             type: "ask_user_questions_request",
             toolCallId: entry.toolCallId,
             questions: entry.questions,
             ts: entry.ts,
-          });
+          };
+          encode(request);
         }
       } catch {
         // best-effort

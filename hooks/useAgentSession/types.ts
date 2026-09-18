@@ -1,6 +1,9 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode, ToolSelection } from "@/lib/shared/types";
 import type { ContextComposition } from "@/lib/shared/context-composition";
+// The session-event protocol is declared once, in the shared layer, and used by
+// both the client and the server — see lib/shared/session-events.ts.
+import type { SessionEvent } from "@/lib/shared/session-events";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 
 export interface SessionData {
@@ -29,11 +32,6 @@ export type StreamAction =
   | { type: "update"; message: Partial<AgentMessage> }
   | { type: "end" }
   | { type: "reset" };
-
-export interface AgentEvent {
-  type: string;
-  [key: string]: unknown;
-}
 
 export interface AgentRuntimeState {
   running: boolean;
@@ -112,7 +110,7 @@ export type StateSetter<T> = Dispatch<SetStateAction<T>>;
 export type Ref<T> = MutableRefObject<T>;
 
 export type SessionIdRef = Ref<string | null>;
-export type EventHandlerRef = Ref<((event: AgentEvent) => void) | null>;
+export type EventHandlerRef = Ref<((event: SessionEvent) => void) | null>;
 export type RuntimeStateRef = Ref<((sid?: string) => Promise<AgentRuntimeState | null>) | null>;
 export type LoadContextRef = Ref<(sid: string, leafId: string | null) => Promise<void>>;
 export type ToolCallNameRef = Ref<Map<string, string>>;

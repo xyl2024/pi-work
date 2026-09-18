@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import type { AgentEvent, EventHandlerRef, TransportRefs } from "./types";
+import type { SessionEvent } from "@/lib/shared/session-events";
+import type { EventHandlerRef, TransportRefs } from "./types";
 
 type Translator = (key: string, params?: Record<string, string | number>) => string;
 
@@ -64,7 +65,7 @@ export function useAgentSessionTransport(options: UseAgentSessionTransportOption
     es.onmessage = (e) => {
       if (eventSourceRef.current !== es || transportGenerationRef.current !== generation) return;
       try {
-        const event = JSON.parse(e.data) as AgentEvent;
+        const event = JSON.parse(e.data) as SessionEvent;
         handleAgentEventRef.current?.(event);
       } catch {
         // ignore malformed events

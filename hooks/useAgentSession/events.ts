@@ -19,7 +19,8 @@ import {
   endStreaming as endStreamingStore,
 } from "../streamingMessageStore";
 import { bashCommandTouchesGit, isBodyMessage, sameCompletedMessage } from "./utils";
-import type { AgentEvent, AgentPhase, AgentRuntimeState, StateSetter, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
+import type { SessionEvent } from "@/lib/shared/session-events";
+import type { AgentPhase, AgentRuntimeState, StateSetter, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
 
 function getSpawnSubagentToolCallIds(message: unknown): string[] {
   if (!message || typeof message !== "object") return [];
@@ -98,7 +99,7 @@ type AgentSessionEventsOptions = {
 };
 
 export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
-  const handlerRef = useRef<((event: AgentEvent) => void) | null>(null);
+  const handlerRef = useRef<((event: SessionEvent) => void) | null>(null);
   const {
     controllerId,
     isActive,
@@ -143,7 +144,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     t,
   } = options;
 
-  const handleAgentEvent = useCallback((event: AgentEvent) => {
+  const handleAgentEvent = useCallback((event: SessionEvent) => {
     const fireDiscreteBot = (stateKey: string) => {
       if (!isActive) return;
       if (botRevertTimerRef.current !== null) clearTimeout(botRevertTimerRef.current);
@@ -471,13 +472,11 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         break;
       }
       case "compaction_start":
-      case "auto_compaction_start":
         setAgentRunningSync(true);
         setCompactingSync(true);
         setAgentPhase({ kind: "compacting" });
         break;
-      case "compaction_end":
-      case "auto_compaction_end": {
+      case "compaction_end": {
         const willRetry = event.willRetry === true;
         setCompactingSync(false);
         if (willRetry) {
