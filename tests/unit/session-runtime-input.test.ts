@@ -139,3 +139,48 @@ describe("client snapshot input", () => {
     expect(second.effects).toEqual(first.effects);
   });
 });
+
+const usage = (tokens: number) => ({ percent: tokens / 1000, contextWindow: 200_000, tokens });
+
+describe("client context-usage input", () => {
+  it("adopts a reported usage and composition", () => {
+    const next = snapshot(createSessionRuntimeState(), {
+      type: "client_context_usage",
+      contextUsage: usage(120_000),
+      contextComposition: null,
+    });
+    expect(next.state.contextUsage?.tokens).toBe(120_000);
+    expect(next.state.contextComposition).toBeNull();
+    expect(next.effects).toEqual([]);
+  });
+
+  it("leaves a field the response did not report alone", () => {
+    const withUsage = patchSessionRuntimeState(
+      createSessionRuntimeState(),
+      "contextUsage",
+      usage(50_000),
+    );
+    const next = snapshot(withUsage, { type: "client_context_usage", contextComposition: null });
+    expect(next.state.contextUsage?.tokens).toBe(50_000);
+  });
+
+  it("is idempotent", () => {
+    const input: SessionRuntimeInput = { type: "client_context_usage", contextUsage: usage(10_000) };
+    const first = snapshot(createSessionRuntimeState(), input);
+    const second = snapshot(first.state, input);
+    expect(second.state).toBe(first.state);
+  });
+
+  it("has one result when interleaved with wire events", () => {
+    const first = snapshot(createSessionRuntimeState(), {
+      type: "client_context_usage",
+      contextUsage: usage(10_000),
+    });
+    const afterEvent = reduceSessionInput(first.state, { type: "agent_start" });
+    const second = snapshot(afterEvent.state, {
+      type: "client_context_usage",
+      contextUsage: usage(90_000),
+    });
+    expect(second.state.contextUsage?.tokens).toBe(90_000);
+  });
+});

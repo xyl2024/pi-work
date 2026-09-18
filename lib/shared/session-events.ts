@@ -43,12 +43,14 @@ import {
   removeInFlightTool,
   upsertInFlightTool,
   type AgentPhase,
+  type ContextUsage,
   type SessionRuntimeState,
   type SessionSnapshotPayload,
 } from "./session-runtime-state";
 import { isShowFileToolName, type ShowFileEntry } from "./show-file-tool-types";
 import type { ToolCallReport } from "./tool-call-stats-types";
 import type { AgentMessage, AssistantMessage, SessionTreeNode, ToolSelection } from "./types";
+import type { ContextComposition } from "./context-composition";
 
 /** Why pi decided to compact the context. */
 export type SessionCompactionReason = "manual" | "threshold" | "overflow";
@@ -368,11 +370,26 @@ export interface ClientSnapshotInput {
 }
 
 /**
+ * The context-usage refresh, as an input. This used to write
+ * `contextUsage`/`contextComposition` directly from inside the event adapter's
+ * inline `fetch`, racing the event-driven value; it is one more input to the
+ * one reducer now.
+ *
+ * An absent field means "the response did not report it" and leaves the state
+ * alone (the server only sends `contextComposition` on newer versions).
+ */
+export interface ClientContextUsageInput {
+  type: "client_context_usage";
+  contextUsage?: ContextUsage | null;
+  contextComposition?: ContextComposition | null;
+}
+
+/**
  * One client-originated input. Closed union: a new member has to be handled by
  * `reduceClientSessionInput` (no `default:`) and listed in
  * `CLIENT_SESSION_INPUT_TYPES`.
  */
-export type ClientSessionInput = ClientSnapshotInput;
+export type ClientSessionInput = ClientSnapshotInput | ClientContextUsageInput;
 
 /** What the one reducer accepts: every wire event or one client input. */
 export type SessionRuntimeInput = SessionEvent | ClientSessionInput;
@@ -380,6 +397,7 @@ export type SessionRuntimeInput = SessionEvent | ClientSessionInput;
 /** The client-input type names, enumerable for the disjointness test. */
 export const CLIENT_SESSION_INPUT_TYPES = [
   "client_snapshot",
+  "client_context_usage",
 ] as const satisfies readonly ClientSessionInput["type"][];
 
 /** Compile-time proof that the runtime list is exactly the union. */
@@ -788,6 +806,18 @@ function reduceClientSessionInput(
         sameAgentPhase(previous, phase) ? previous : phase);
       if (!running) effects.push({ kind: "end_streaming_view" });
       return { state: next, effects };
+    }
+    case "client_context_usage": {
+      // Only the fields the response reported move: an absent one leaves the
+      // state untouched (and keeps a replay a no-op on the object identity).
+      let next = state;
+      if (input.contextUsage !== undefined) {
+        next = patchSessionRuntimeState(next, "contextUsage", input.contextUsage ?? null);
+      }
+      if (input.contextComposition !== undefined) {
+        next = patchSessionRuntimeState(next, "contextComposition", input.contextComposition ?? null);
+      }
+      return { state: next, effects: [] };
     }
   }
 }

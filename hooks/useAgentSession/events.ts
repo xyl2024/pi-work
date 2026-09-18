@@ -81,7 +81,11 @@ type AgentSessionEventsOptions = {
  * ported paths touch a confirmation dialog, a store or the sound player — the
  * reducer itself knows none of them.
  */
-function performEffect(options: AgentSessionEventsOptions, effect: SessionEventEffect): void {
+function performEffect(
+  options: AgentSessionEventsOptions,
+  effect: SessionEventEffect,
+  feedInput: (input: SessionRuntimeInput) => void,
+): void {
   const {
     controllerId,
     isActive,
@@ -271,11 +275,16 @@ function performEffect(options: AgentSessionEventsOptions, effect: SessionEventE
       fetch(`/api/agent/${encodeURIComponent(sid)}`)
         .then((response) => response.json())
         .then((data: { state?: { contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; contextComposition?: ContextComposition | null } }) => {
-          if (data.state?.contextUsage !== undefined) patchRuntime("contextUsage", data.state.contextUsage ?? null);
-          // The server recomputes the composition on this same
-          // `message_end`, so the round trip that fetches `contextUsage`
+          // The response is fed to the one reducer like any other input — the
+          // refresh no longer has a direct write path that could race the
+          // event-driven value. The server recomputes the composition on this
+          // same `message_end`, so the round trip that fetches `contextUsage`
           // usually brings the fresh estimate along with it.
-          if (data.state?.contextComposition !== undefined) patchRuntime("contextComposition", data.state.contextComposition ?? null);
+          feedInput({
+            type: "client_context_usage",
+            contextUsage: data.state?.contextUsage,
+            contextComposition: data.state?.contextComposition,
+          });
         })
         .catch(() => {});
       return;
@@ -344,6 +353,11 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
+  // One effect (the context-usage refresh result) feeds a new input back into
+  // the reducer, so `performEffect` needs the entry point. The ref breaks the
+  // cycle without putting the callback in its own dependency list.
+  const applyRuntimeInputRef = useRef<(input: SessionRuntimeInput) => void>(() => {});
+
   /**
    * Feed one input to the one reducer, commit the next state and perform the
    * effects. This is the single write path into the runtime state: wire events
@@ -353,8 +367,11 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     const { runtimeStateRef, commitRuntime } = optionsRef.current;
     const reduction = reduceSessionInput(runtimeStateRef.current, input);
     commitRuntime(reduction.state);
-    for (const effect of reduction.effects) performEffect(optionsRef.current, effect);
+    for (const effect of reduction.effects) {
+      performEffect(optionsRef.current, effect, (next) => applyRuntimeInputRef.current(next));
+    }
   }, []);
+  applyRuntimeInputRef.current = applyRuntimeInput;
 
   const handleAgentEvent = useCallback((rawEvent: SessionEvent) => {
     // The reducer is pure and cannot translate, so the one user-facing i18n
