@@ -1,44 +1,27 @@
 import { useCallback, useRef, type Dispatch } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode, TextContent, ToolResultMessage } from "@/lib/shared/types";
-import { normalizeToolCalls } from "@/lib/shared/normalize";
+import type { SessionInfo } from "@/lib/shared/types";
 import type { ContextComposition } from "@/lib/shared/context-composition";
+import type { SessionRuntimeState, StateUpdater } from "@/lib/shared/session-runtime-state";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
-import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
-import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "@/lib/shared/celebrate-tool-types";
-import { triggerCelebration } from "@/lib/client/celebrate-store";
 import { notifyMutated } from "@/lib/client/git-status-store";
 import { playUiSoundEvent } from "@/lib/client/ui-sounds";
 import { setGrokbotConfig } from "@/lib/client/grokbot-store";
 import { setShowFileResult } from "../showFileResultsStore";
-import { setPendingAskUserQuestions, getPendingAskUserQuestions } from "../askUserQuestionsStore";
-import type { AskUserQuestion } from "@/lib/shared/ask-user-questions-tool-types";
+import { triggerCelebration } from "@/lib/client/celebrate-store";
+import { setPendingAskUserQuestions } from "../askUserQuestionsStore";
 import {
   scheduleStreamingUpdate,
   flushStreamingUpdateSync,
   startStreaming as startStreamingStore,
   endStreaming as endStreamingStore,
 } from "../streamingMessageStore";
-import { bashCommandTouchesGit, isBodyMessage, sameCompletedMessage } from "./utils";
-import type { AgentEvent, AgentPhase, AgentRuntimeState, StateSetter, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
+import {
+  reduceSessionEvent,
+  type SessionEvent,
+  type SessionEventEffect,
+} from "@/lib/shared/session-events";
+import type { AgentRuntimeState, StreamAction, ToastNotification } from "./types";
 
-function getSpawnSubagentToolCallIds(message: unknown): string[] {
-  if (!message || typeof message !== "object") return [];
-  const content = (message as { content?: unknown }).content;
-  if (!Array.isArray(content)) return [];
-  return content.flatMap((block) => {
-    if (!block || typeof block !== "object") return [];
-    const value = block as { type?: unknown; toolName?: unknown; toolCallId?: unknown };
-    return value.type === "toolCall" && value.toolName === "spawn_subagent" && typeof value.toolCallId === "string"
-      ? [value.toolCallId]
-      : [];
-  });
-}
-
-const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
-// `celebrate` triggers a one-shot frontend animation; SSE reconnects can
-// replay tool_execution_end events, so remember handled ids (module-level:
-// toolCallIds are globally unique across sessions).
-const seenCelebrateToolEndIds = new Set<string>();
 const BOT_BASELINE_STATE = "searching";
 const BOT_REVERT_MS = 8000;
 
@@ -63,87 +46,77 @@ type AgentSessionEventsOptions = {
   permissionsRef: PermissionRef;
   statsEmitRef: { current: ToolCallStatsDispatch | undefined };
   sessionIdRef: { current: string | null };
-  agentRunningRef: { current: boolean };
-  toolCallNameRef: { current: Map<string, string> };
-  toolCallArgsRef: { current: Map<string, unknown> };
-  pendingAssistantErrorRef: { current: string | null };
-  lastAssistantIsBodyRef: { current: boolean };
+  dispatch: Dispatch<StreamAction>;
+  /** The one session runtime state object this controller holds. The adapter
+   *  reads (ledgers / in-flight tools / the running flag) from here, and writes
+   *  every state change through `patchRuntime` / `commitRuntime`. */
+  runtimeStateRef: { current: SessionRuntimeState };
+  patchRuntime: <K extends keyof SessionRuntimeState>(
+    key: K,
+    value: StateUpdater<SessionRuntimeState[K]>,
+  ) => void;
+  /** Commits a whole runtime state object produced by the pure reducer. */
+  commitRuntime: (next: SessionRuntimeState) => void;
   botRevertTimerRef: { current: ReturnType<typeof setTimeout> | null };
-  pendingNewSessionFirstAssistantRef: { current: boolean };
   refreshSystemPrompt: () => void;
   loadSession: (sid: string, showLoading?: boolean, includeState?: boolean) => Promise<AgentRuntimeState | null>;
   refreshAgentRuntimeStateRef: { current: ((sid?: string) => Promise<AgentRuntimeState | null>) | null };
   closeEvents: () => void;
-  setRuntimeError: StateSetter<string | null>;
-  setAgentRunningSync: (running: boolean) => void;
-  setCompactingSync: (compacting: boolean) => void;
-  setRetryInfo: StateSetter<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>;
-  setAgentPhase: StateSetter<AgentPhase>;
-  dispatch: Dispatch<StreamAction>;
-  setMessages: StateSetter<AgentMessage[]>;
-  setLiveTree: StateSetter<SessionTreeNode[] | null>;
-  setActiveLeafId: StateSetter<string | null>;
-  setInFlightToolResults: StateSetter<Map<string, ToolResultMessage>>;
-  setSubagentRefreshKey: StateSetter<number>;
   scheduleSubagentRefresh: (toolCallId: string) => void;
-  seenSubagentToolCallIds: Set<string>;
-  seenSubagentToolStartIds: Set<string>;
-  seenSubagentToolEndIds: Set<string>;
-  setContextUsage: StateSetter<{ percent: number | null; contextWindow: number; tokens: number | null } | null>;
-  setContextComposition: StateSetter<ContextComposition | null>;
-  setThinkingLevel: StateSetter<ThinkingLevelOption>;
   compactInFlightRef: { current: boolean };
   showToast: (notification: ToastNotification) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 };
 
+/**
+ * The session-event adapter.
+ *
+ * It is deliberately thin: every frame the protocol can carry goes through the
+ * one pure `reduceSessionEvent`, and this file only
+ *
+ *   1. translates the SSE frame into the module's vocabulary (the one i18n
+ *      fallback lives here, because the reducer cannot translate), and
+ *   2. performs the effects the reducer returned — sounds, celebrations, Pi
+ *      Bot flashes, toasts, stores, requests, host callbacks.
+ *
+ * There is no per-event `switch` here and no routing guard: the reducer is total
+ * over the protocol, so a frame can never fall through unhandled, and the
+ * "deliberately ignored" events come back with the state untouched.
+ */
 export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
-  const handlerRef = useRef<((event: AgentEvent) => void) | null>(null);
-  const {
-    controllerId,
-    isActive,
-    session,
-    newSessionCwd,
-    onAgentEnd,
-    onFirstAssistantReady,
-    permissionsRef,
-    statsEmitRef,
-    sessionIdRef,
-    agentRunningRef,
-    toolCallNameRef,
-    toolCallArgsRef,
-    pendingAssistantErrorRef,
-    lastAssistantIsBodyRef,
-    botRevertTimerRef,
-    pendingNewSessionFirstAssistantRef,
-    refreshSystemPrompt,
-    loadSession,
-    refreshAgentRuntimeStateRef,
-    closeEvents,
-    setRuntimeError,
-    setAgentRunningSync,
-    setCompactingSync,
-    setRetryInfo,
-    setAgentPhase,
-    dispatch,
-    setMessages,
-    setLiveTree,
-    setActiveLeafId,
-    setInFlightToolResults,
-    setSubagentRefreshKey,
-    scheduleSubagentRefresh,
-    seenSubagentToolCallIds,
-    seenSubagentToolStartIds,
-    seenSubagentToolEndIds,
-    setContextUsage,
-    setContextComposition,
-    setThinkingLevel,
-    compactInFlightRef,
-    showToast,
-    t,
-  } = options;
+  // The handler runs from the SSE callback, never while React renders. It must
+  // not be rebuilt when one of its twenty-odd dependencies gets a new identity:
+  // the adapter is the stable identity the transport holds, and the latest
+  // options are read through this ref at call time — the same render-phase ref
+  // write the hook already uses for `isActiveRef` / `statsEmitRef`.
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
-  const handleAgentEvent = useCallback((event: AgentEvent) => {
+  const handleAgentEvent = useCallback((rawEvent: SessionEvent) => {
+    const {
+      controllerId,
+      isActive,
+      session,
+      newSessionCwd,
+      onAgentEnd,
+      onFirstAssistantReady,
+      permissionsRef,
+      statsEmitRef,
+      sessionIdRef,
+      runtimeStateRef,
+      patchRuntime,
+      commitRuntime,
+      dispatch,
+      botRevertTimerRef,
+      refreshSystemPrompt,
+      loadSession,
+      refreshAgentRuntimeStateRef,
+      closeEvents,
+      scheduleSubagentRefresh,
+      compactInFlightRef,
+      showToast,
+      t,
+    } = optionsRef.current;
     const fireDiscreteBot = (stateKey: string) => {
       if (!isActive) return;
       if (botRevertTimerRef.current !== null) clearTimeout(botRevertTimerRef.current);
@@ -162,393 +135,195 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
       setGrokbotConfig({ stateKey: BOT_BASELINE_STATE });
     };
 
-    switch (event.type) {
-      case "agent_start":
-        setRuntimeError(null);
-        setAgentRunningSync(true);
-        setCompactingSync(false);
-        setAgentPhase({ kind: "waiting_model" });
-        dispatch({ type: "start" });
-        startStreamingStore(controllerId);
-        statsEmitRef.current?.({ type: "reset" });
-        refreshSystemPrompt();
-        lastAssistantIsBodyRef.current = false;
-        setBaselineBot();
-        break;
-      case "agent_end":
-        setAgentRunningSync(false);
-        setCompactingSync(false);
-        setAgentPhase(null);
-        setRetryInfo(null);
-        dispatch({ type: "end" });
-        const hadAssistantError = pendingAssistantErrorRef.current !== null;
-        // A failed model call is still part of the active turn. Keep the
-        // final streaming snapshot mounted so the view does not disappear
-        // while the caller decides whether to retry.
-        endStreamingStore(controllerId, hadAssistantError);
-        if (pendingAssistantErrorRef.current) {
-          setRuntimeError(pendingAssistantErrorRef.current);
-          showToast({ kind: "error", message: pendingAssistantErrorRef.current });
-          pendingAssistantErrorRef.current = null;
+    /** The runtime state as of this event. Reads (ledgers, in-flight tools,
+     *  the running flag) go through here so there is one source of truth. */
+    const runtime = () => runtimeStateRef.current;
+
+    /** Perform one effect the pure reducer asked for. This is the only place
+     *  the ported paths touch a confirmation dialog, a store or the sound
+     *  player — the reducer itself knows none of them. */
+    const runEffect = (effect: SessionEventEffect) => {
+      const sid = sessionIdRef.current;
+      switch (effect.kind) {
+        case "enqueue_permission_request":
+          if (!sid) return;
+          permissionsRef.current?.addRequest({
+            toolCallId: effect.toolCallId,
+            ruleName: effect.ruleName,
+            command: effect.command,
+            sessionId: sid,
+          });
+          return;
+        case "set_pending_ask_user_questions":
+          if (!sid) return;
+          setPendingAskUserQuestions(sid, {
+            toolCallId: effect.request.toolCallId,
+            questions: effect.request.questions,
+            ts: effect.request.ts,
+          });
+          return;
+        case "play_ui_sound":
+          playUiSoundEvent(effect.sound);
+          return;
+        case "report_tool_call_stats": {
+          // The reducer states *what* happened; the clock is read here.
+          const timestamp = Date.now();
+          const report = effect.report;
+          switch (report.type) {
+            case "tool_start":
+              statsEmitRef.current?.({
+                type: "tool_start",
+                toolCallId: report.toolCallId,
+                toolName: report.toolName,
+                args: report.args,
+                timestamp,
+              });
+              return;
+            case "tool_end":
+              statsEmitRef.current?.({
+                type: "tool_end",
+                toolCallId: report.toolCallId,
+                isError: report.isError,
+                resultText: report.resultText,
+                resultDetails: report.resultDetails,
+                timestamp,
+              });
+              return;
+          }
+          return;
         }
-        // Fire the completion/failure sound regardless of which workspace
-        // tab the user is currently looking at. Toasts stay gated by
-        // `isActive` (so a background tab's error doesn't overlay the
-        // foreground content), but the sound is a pure notification — if
-        // the user has switched away to another session tab, they still
-        // need to know the background agent finished. Without this, an
-        // `agent_end` arriving while a non-active tab is focused would be
-        // silent.
-        if (hadAssistantError) {
-          playUiSoundEvent("agent_failure");
-        } else if (lastAssistantIsBodyRef.current) {
-          playUiSoundEvent("agent_success");
+        case "invalidate_git_status": {
+          const cwd = session?.cwd ?? newSessionCwd;
+          if (cwd) notifyMutated(cwd, effect.force);
+          return;
         }
-        fireDiscreteBot(lastAssistantIsBodyRef.current ? "happy" : "waking");
-        if (sessionIdRef.current) {
-          const endedSessionId = sessionIdRef.current;
-          void (async () => {
-            await loadSession(endedSessionId);
-            try { await refreshAgentRuntimeStateRef.current?.(endedSessionId); } catch { /* best effort */ }
-            if (!agentRunningRef.current) closeEvents();
-          })();
-        } else {
-          closeEvents();
-        }
-        onAgentEnd?.();
-        break;
-      case "message_start":
-      case "message_update": {
-        const message = event.message as Partial<AgentMessage> | undefined;
-        for (const toolCallId of getSpawnSubagentToolCallIds(message)) {
-          if (seenSubagentToolCallIds.has(toolCallId)) continue;
-          seenSubagentToolCallIds.add(toolCallId);
-          setSubagentRefreshKey((key) => key + 1);
-          scheduleSubagentRefresh(toolCallId);
-        }
-        if (message && message.role !== "user") {
-          const normalized = normalizeToolCalls(message as AgentMessage);
-          // Both flags flip to true here. We never publish the actual
-          // message through the reducer — it lives in the standalone
-          // streaming store, so per-token updates only re-render
-          // StreamingBubble (not the whole ChatWindowContent tree).
+        case "show_file_result":
+          setShowFileResult(effect.toolCallId, effect.files);
+          return;
+        case "celebrate":
+          triggerCelebration(effect.details);
+          return;
+        case "refresh_subagent_panel":
+          patchRuntime("subagentRefreshKey", (key) => key + 1);
+          scheduleSubagentRefresh(effect.toolCallId);
+          return;
+        case "flash_bot_state":
+          fireDiscreteBot(effect.stateKey);
+          return;
+        case "set_bot_baseline":
+          setBaselineBot();
+          return;
+        case "stream_message":
+          // The streamed content deliberately lives in its own store so a
+          // per-token update re-renders only the streaming bubble, not the
+          // whole ChatWindowContent tree. The store coalesces with rAF: many
+          // tokens per frame → at most one snapshot flip.
           dispatch({ type: "start" });
           startStreamingStore(controllerId);
-          // rAF-coalesced: many tokens per frame → at most one snapshot flip.
-          scheduleStreamingUpdate(controllerId, normalized);
+          scheduleStreamingUpdate(controllerId, effect.message);
+          return;
+        case "begin_stream":
+          // A new turn opens the live view before the first token arrives.
+          dispatch({ type: "start" });
+          startStreamingStore(controllerId);
+          return;
+        case "settle_stream":
+          // Force-flush any pending streaming snapshot before clearing the
+          // stream flag, so the final state is not lost if a token arrived in
+          // the same frame as message_end.
+          if (effect.message) flushStreamingUpdateSync(controllerId, effect.message);
+          dispatch({ type: "reset" });
+          // Do not tear down the live view for a model error: the turn can be
+          // retried, and the user should keep seeing the current assistant
+          // message instead of a blank gap until the next stream starts.
+          endStreamingStore(controllerId, effect.keepForError);
+          return;
+        case "reset_tool_call_stats":
+          statsEmitRef.current?.({ type: "reset" });
+          return;
+        case "refresh_system_prompt":
+          refreshSystemPrompt();
+          return;
+        case "show_error_toast":
+          // `showToast` is gated on the active tab (a background tab's error
+          // must not overlay the foreground content).
+          showToast({ kind: "error", message: effect.message });
+          return;
+        case "show_compaction_error_toast":
+          // A manual compaction the user started reports its own failure
+          // through the RPC reply; suppress the duplicate SSE toast while that
+          // request is still in flight.
+          if (!compactInFlightRef.current) showToast({ kind: "error", message: effect.message });
+          return;
+        case "refresh_context_usage": {
+          // The reducer asked for the refresh; the request itself happens here,
+          // at the same moment the old inline fetch ran (a finished assistant
+          // message).
+          if (!sid) return;
+          fetch(`/api/agent/${encodeURIComponent(sid)}`)
+            .then((response) => response.json())
+            .then((data: { state?: { contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; contextComposition?: ContextComposition | null } }) => {
+              if (data.state?.contextUsage !== undefined) patchRuntime("contextUsage", data.state.contextUsage ?? null);
+              // The server recomputes the composition on this same
+              // `message_end`, so the round trip that fetches `contextUsage`
+              // usually brings the fresh estimate along with it.
+              if (data.state?.contextComposition !== undefined) patchRuntime("contextComposition", data.state.contextComposition ?? null);
+            })
+            .catch(() => {});
+          return;
         }
-        setAgentPhase(null);
-        break;
-      }
-      case "message_end": {
-        const completed = event.message as AgentMessage | undefined;
-        for (const toolCallId of getSpawnSubagentToolCallIds(completed)) {
-          if (seenSubagentToolCallIds.has(toolCallId)) continue;
-          seenSubagentToolCallIds.add(toolCallId);
-          setSubagentRefreshKey((key) => key + 1);
-          scheduleSubagentRefresh(toolCallId);
-        }
-        if (completed && completed.role !== "user") {
-          const normalized = normalizeToolCalls(completed);
-          // Force-flush any pending streaming message before clearing the
-          // stream flag, so the final state isn't lost if a token arrived
-          // in the same frame as message_end.
-          flushStreamingUpdateSync(controllerId, normalized);
-          setMessages((previous) => previous.some((message) => sameCompletedMessage(message, normalized))
-            ? previous
-            : [...previous, normalized]);
-        }
-        if (completed?.role === "assistant" && pendingNewSessionFirstAssistantRef.current) {
-          pendingNewSessionFirstAssistantRef.current = false;
+        case "first_assistant_ready":
           onFirstAssistantReady?.();
-        }
-        dispatch({ type: "reset" });
-        if (completed?.role === "assistant" && completed.stopReason === "error") {
-          pendingAssistantErrorRef.current = completed.errorMessage ?? "Model call failed";
-        }
-        // Do not tear down the live view for a model error. The turn can be
-        // retried, and the user should keep seeing the current assistant
-        // message instead of a blank gap until the next stream starts.
-        endStreamingStore(controllerId, completed?.role === "assistant" && completed.stopReason === "error");
-        setAgentPhase({ kind: "waiting_model" });
-        if (completed?.role === "assistant") {
-          lastAssistantIsBodyRef.current = isBodyMessage(completed);
-          if (sessionIdRef.current) {
-            fetch(`/api/agent/${encodeURIComponent(sessionIdRef.current)}`)
-              .then((response) => response.json())
-              .then((data: { state?: { contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; contextComposition?: ContextComposition | null } }) => {
-                if (data.state?.contextUsage !== undefined) setContextUsage(data.state.contextUsage ?? null);
-                // The server recomputes the composition on this same
-                // `message_end`, so the round trip that fetches `contextUsage`
-                // usually brings the fresh estimate along with it.
-                if (data.state?.contextComposition !== undefined) setContextComposition(data.state.contextComposition ?? null);
-              })
-              .catch(() => {});
+          return;
+        case "record_assistant_outcome":
+          // The two facts the turn-end branches read: whether the last
+          // assistant message was a plain body answer, and the model error it
+          // recorded. The error only overwrites when there is one — the old
+          // scratchpad behaved the same, so a later clean message does not
+          // erase an earlier failure.
+          patchRuntime("lastAssistantIsBody", effect.isBody);
+          if (effect.pendingError !== null) patchRuntime("pendingAssistantError", effect.pendingError);
+          return;
+        case "reload_session_after_turn": {
+          if (!sid) {
+            closeEvents();
+            return;
           }
-        }
-        break;
-      }
-      case "session_tree_update":
-        if (Array.isArray(event.tree)) setLiveTree(event.tree as SessionTreeNode[]);
-        if (typeof event.leafId === "string") setActiveLeafId(event.leafId);
-        break;
-      case "tool_execution_start": {
-        const id = event.toolCallId as string;
-        const name = event.toolName as string;
-        const args = event.args;
-        toolCallNameRef.current.set(id, name);
-        toolCallArgsRef.current.set(id, args);
-        if (name === "spawn_subagent" && id && !seenSubagentToolStartIds.has(id)) {
-          seenSubagentToolStartIds.add(id);
-          setSubagentRefreshKey((key) => key + 1);
-          scheduleSubagentRefresh(id);
-        }
-        statsEmitRef.current?.({
-          type: "tool_start",
-          toolCallId: id,
-          toolName: name,
-          timestamp: Date.now(),
-          args: args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : undefined,
-        });
-        setInFlightToolResults((previous) => {
-          if (previous.has(id)) return previous;
-          const next = new Map(previous);
-          next.set(id, { role: "toolResult", toolCallId: id, toolName: name, content: [], timestamp: Date.now() });
-          return next;
-        });
-        setAgentPhase((previous) => {
-          const tools = previous?.kind === "running_tools" ? [...previous.tools] : [];
-          if (!tools.some((tool) => tool.id === id)) {
-            tools.push({
-              id,
-              name,
-              args: args && typeof args === "object" && !Array.isArray(args) ? args as Record<string, unknown> : undefined,
-            });
-          }
-          return { kind: "running_tools", tools };
-        });
-        break;
-      }
-      case "tool_execution_update": {
-        const id = event.toolCallId as string;
-        const partial = event.partialResult as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
-        if (!id || !partial) break;
-        const content: TextContent[] = [];
-        if (Array.isArray(partial.content)) {
-          for (const block of partial.content) {
-            if (block?.type === "text" && typeof block.text === "string") content.push({ type: "text", text: block.text });
-          }
-        }
-        // Details (e.g. spawn_subagent's running taskId/child sessionId) are
-        // merged alongside the streaming content so in-flight blocks can
-        // react to them before the final result arrives.
-        if (content.length === 0 && partial.details === undefined) break;
-        setInFlightToolResults((previous) => {
-          const existing = previous.get(id);
-          if (!existing) return previous;
-          const next = new Map(previous);
-          next.set(id, {
-            ...existing,
-            ...(content.length > 0 ? { content } : {}),
-            ...(partial.details !== undefined ? { details: partial.details } : {}),
-          });
-          return next;
-        });
-        break;
-      }
-      case "tool_execution_end": {
-        const id = event.toolCallId as string;
-        const isError = event.isError === true;
-        if (isError) fireDiscreteBot("suspicious");
-        const result = event.result as { content?: Array<{ type?: string; text?: string }>; details?: unknown } | undefined;
-        const toolName = toolCallNameRef.current.get(id) ?? (typeof event.toolName === "string" ? event.toolName : undefined);
-        if (toolName === "spawn_subagent" && id && !seenSubagentToolEndIds.has(id)) {
-          seenSubagentToolEndIds.add(id);
-          setSubagentRefreshKey((key) => key + 1);
-          scheduleSubagentRefresh(id);
-        }
-        const gitCwd = session?.cwd ?? newSessionCwd;
-        if (toolName && WORKTREE_MUTATING_TOOL_NAMES.has(toolName) && gitCwd) notifyMutated(gitCwd);
-        // bash can also mutate the worktree when the command runs a git
-        // subcommand. The end event doesn't carry args, so we read them
-        // from the scratchpad we populated on _start. Read-only commands
-        // (git status, git log) match too, but the wasted fetch is
-        // negligible. We pass `force = true` so git-level changes (`git
-        // add` / `git commit` / `git stash`) are reflected immediately
-        // instead of falling into the server's 2s status cache behind an
-        // earlier edit-triggered fetch.
-        if (toolName === "bash" && gitCwd && bashCommandTouchesGit(toolCallArgsRef.current.get(id))) {
-          notifyMutated(gitCwd, true);
-        }
-        toolCallArgsRef.current.delete(id);
-        if (toolName && isShowFileToolName(toolName) && result?.details) {
-          const files = (result.details as { files?: unknown }).files;
-          if (Array.isArray(files)) setShowFileResult(id, files as Parameters<typeof setShowFileResult>[1]);
-        }
-        if (toolName === CELEBRATE_TOOL_NAME && id && !seenCelebrateToolEndIds.has(id)) {
-          seenCelebrateToolEndIds.add(id);
-          const details = result?.details as CelebrateDetails | undefined;
-          triggerCelebration(details);
-        }
-        let resultText: string | undefined;
-        if (result && Array.isArray(result.content)) {
-          const firstText = result.content.find((content) => content?.type === "text" && typeof content.text === "string");
-          if (firstText && typeof firstText.text === "string") resultText = firstText.text.length > 1024 ? `${firstText.text.slice(0, 1024)}…` : firstText.text;
-        }
-        statsEmitRef.current?.({ type: "tool_end", toolCallId: id, isError, timestamp: Date.now(), resultText, resultDetails: result?.details });
-        setInFlightToolResults((previous) => {
-          if (!previous.has(id)) return previous;
-          const next = new Map(previous);
-          next.delete(id);
-          return next;
-        });
-        toolCallNameRef.current.delete(id);
-        setAgentPhase((previous) => {
-          if (previous?.kind !== "running_tools") return previous;
-          const tools = previous.tools.filter((tool) => tool.id !== id);
-          return tools.length === 0 ? { kind: "waiting_model" } : { kind: "running_tools", tools };
-        });
-        break;
-      }
-      case "auto_retry_start":
-        setRetryInfo({ attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
-        break;
-      case "prompt_failed": {
-        setAgentRunningSync(false);
-        setCompactingSync(false);
-        setAgentPhase(null);
-        setRetryInfo(null);
-        dispatch({ type: "end" });
-        endStreamingStore(controllerId);
-        const errorMessage = event.error as string | undefined || t("Failed to send message");
-        setRuntimeError(errorMessage);
-        showToast({ kind: "error", message: errorMessage });
-        closeEvents();
-        break;
-      }
-      case "auto_retry_end":
-        setRetryInfo(null);
-        if (event.success === false) {
-          const finalError = event.finalError as string | undefined;
-          if (finalError) {
-            setRuntimeError(finalError);
-            showToast({ kind: "error", message: finalError });
-            pendingAssistantErrorRef.current = null;
-            playUiSoundEvent("agent_failure");
-          }
-        }
-        break;
-      case "permission_request": {
-        const sid = sessionIdRef.current;
-        if (!sid) break;
-        permissionsRef.current?.addRequest({
-          toolCallId: event.toolCallId as string,
-          ruleName: event.ruleName as string,
-          command: event.command as string,
-          sessionId: sid,
-        });
-        break;
-      }
-      case "ask_user_questions_request": {
-        const sid = sessionIdRef.current;
-        if (!sid) break;
-        const questions = event.questions;
-        const toolCallId = event.toolCallId;
-        if (typeof toolCallId !== "string" || !Array.isArray(questions)) break;
-        const validQuestions: AskUserQuestion[] = [];
-        for (const question of questions) {
-          if (question && typeof question.question === "string" && typeof question.header === "string" && typeof question.multiSelect === "boolean" && typeof question.required === "boolean" && Array.isArray(question.options)) {
-            validQuestions.push(question as AskUserQuestion);
-          }
-        }
-        if (validQuestions.length === 0) break;
-        // Fire the notification sound only for a genuinely new request. On SSE
-        // reconnect the server re-emits every pending request; those share the
-        // same toolCallId, so skip the sound to avoid replaying it.
-        const hadSameRequest = getPendingAskUserQuestions(sid)?.toolCallId === toolCallId;
-        setPendingAskUserQuestions(sid, { toolCallId, questions: validQuestions, ts: typeof event.ts === "number" ? event.ts : Date.now() });
-        if (!hadSameRequest) playUiSoundEvent("ask_user_questions");
-        break;
-      }
-      case "compaction_start":
-      case "auto_compaction_start":
-        setAgentRunningSync(true);
-        setCompactingSync(true);
-        setAgentPhase({ kind: "compacting" });
-        break;
-      case "compaction_end":
-      case "auto_compaction_end": {
-        const willRetry = event.willRetry === true;
-        setCompactingSync(false);
-        if (willRetry) {
-          setAgentRunningSync(true);
-          setAgentPhase({ kind: "waiting_model" });
-        } else {
-          setAgentRunningSync(false);
-          setAgentPhase(null);
-          dispatch({ type: "end" });
-          endStreamingStore(controllerId);
-        }
-        if (event.errorMessage && !compactInFlightRef.current) showToast({ kind: "error", message: event.errorMessage as string });
-        const compactSessionId = sessionIdRef.current;
-        if (!willRetry) {
           void (async () => {
-            if (!event.aborted && compactSessionId) await loadSession(compactSessionId);
-            if (!agentRunningRef.current) closeEvents();
+            await loadSession(sid);
+            try { await refreshAgentRuntimeStateRef.current?.(sid); } catch { /* best effort */ }
+            if (!runtime().agentRunning) closeEvents();
           })();
+          return;
         }
-        break;
+        case "reload_session_after_compaction":
+          void (async () => {
+            if (!effect.aborted && sid) await loadSession(sid);
+            if (!runtime().agentRunning) closeEvents();
+          })();
+          return;
+        case "notify_agent_end":
+          onAgentEnd?.();
+          return;
+        case "close_events":
+          closeEvents();
+          return;
       }
-      case "thinking_level_changed": {
-        const level = event.level;
-        if (typeof level === "string") setThinkingLevel(level as ThinkingLevelOption);
-        break;
-      }
-    }
-  }, [
-    agentRunningRef,
-    botRevertTimerRef,
-    closeEvents,
-    compactInFlightRef,
-    controllerId,
-    dispatch,
-    isActive,
-    lastAssistantIsBodyRef,
-    loadSession,
-    newSessionCwd,
-    onAgentEnd,
-    onFirstAssistantReady,
-    pendingAssistantErrorRef,
-    pendingNewSessionFirstAssistantRef,
-    permissionsRef,
-    refreshAgentRuntimeStateRef,
-    refreshSystemPrompt,
-    session?.cwd,
-    sessionIdRef,
-    setActiveLeafId,
-    setAgentPhase,
-    setAgentRunningSync,
-    setSubagentRefreshKey,
-    setCompactingSync,
-    setContextComposition,
-    setContextUsage,
-    setInFlightToolResults,
-    setLiveTree,
-    setMessages,
-    setRetryInfo,
-    setRuntimeError,
-    setThinkingLevel,
-    scheduleSubagentRefresh,
-    seenSubagentToolCallIds,
-    seenSubagentToolEndIds,
-    seenSubagentToolStartIds,
-    showToast,
-    statsEmitRef,
-    t,
-    toolCallArgsRef,
-    toolCallNameRef,
-  ]);
+    };
 
-  handlerRef.current = handleAgentEvent;
-  return { handleAgentEvent, handleAgentEventRef: handlerRef };
+    // The reducer is pure and cannot translate, so the one user-facing i18n
+    // fallback is resolved here, at the boundary, before the event is reduced.
+    const event: SessionEvent = rawEvent.type === "prompt_failed" && !rawEvent.error
+      ? { ...rawEvent, error: t("Failed to send message") }
+      : rawEvent;
+
+    // Every frame goes through the one reducer: the reduced half moves the
+    // state and asks for the effects to run, the deliberately-ignored half
+    // comes back with the state untouched and nothing to do.
+    const reduction = reduceSessionEvent(runtime(), event);
+    commitRuntime(reduction.state);
+    for (const effect of reduction.effects) runEffect(effect);
+  }, []);
+
+  return { handleAgentEvent };
 }

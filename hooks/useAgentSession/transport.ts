@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import type { AgentEvent, EventHandlerRef, TransportRefs } from "./types";
+import type { SessionEvent } from "@/lib/shared/session-events";
+import type { EventHandlerRef, TransportRefs } from "./types";
 
 type Translator = (key: string, params?: Record<string, string | number>) => string;
 
@@ -23,7 +24,7 @@ export function useAgentSessionTransport(options: UseAgentSessionTransportOption
   const reconnectTimerRef = refs.reconnectTimer;
   const reconnectAttemptRef = refs.reconnectAttempt;
   const disposedRef = refs.disposed;
-  const agentRunningRef = refs.agentRunning;
+  const isAgentRunning = refs.isAgentRunning;
 
   const closeEvents = useCallback(() => {
     transportGenerationRef.current += 1;
@@ -58,13 +59,13 @@ export function useAgentSessionTransport(options: UseAgentSessionTransportOption
       if (!compensate) return;
       void (async () => {
         await onConnectCompensate(sid);
-        if (!agentRunningRef.current && eventSourceRef.current === es) closeEvents();
+        if (!isAgentRunning() && eventSourceRef.current === es) closeEvents();
       })();
     };
     es.onmessage = (e) => {
       if (eventSourceRef.current !== es || transportGenerationRef.current !== generation) return;
       try {
-        const event = JSON.parse(e.data) as AgentEvent;
+        const event = JSON.parse(e.data) as SessionEvent;
         handleAgentEventRef.current?.(event);
       } catch {
         // ignore malformed events
@@ -75,17 +76,17 @@ export function useAgentSessionTransport(options: UseAgentSessionTransportOption
       es.close();
       eventSourceRef.current = null;
       eventSourceSessionRef.current = null;
-      if (!agentRunningRef.current) return;
+      if (!isAgentRunning()) return;
       const attempt = reconnectAttemptRef.current++;
       const delay = Math.min(1000 * 2 ** Math.min(attempt, 4), 15000);
       reconnectTimerRef.current = setTimeout(() => {
         reconnectTimerRef.current = null;
-        if (agentRunningRef.current && transportGenerationRef.current === generation) {
+        if (isAgentRunning() && transportGenerationRef.current === generation) {
           connectEvents(sid, true);
         }
       }, delay);
     };
-  }, [agentRunningRef, closeEvents, disposedRef, eventSourceRef, eventSourceSessionRef, handleAgentEventRef, reconnectAttemptRef, reconnectTimerRef, transportGenerationRef, onConnectCompensate]);
+  }, [isAgentRunning, closeEvents, disposedRef, eventSourceRef, eventSourceSessionRef, handleAgentEventRef, reconnectAttemptRef, reconnectTimerRef, transportGenerationRef, onConnectCompensate]);
 
   const ensureEventsConnected = useCallback(async (sid: string) => {
     connectEvents(sid);

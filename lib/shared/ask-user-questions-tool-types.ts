@@ -104,14 +104,19 @@ export interface AskUserQuestionsCancel {
   cancelled: true;
 }
 
-/** Server-side payload attached to the `ask_user_questions_request` SSE event. */
-export interface AskUserQuestionsRequestPayload {
+/** Server-side payload attached to the `ask_user_questions_request` SSE event.
+ *
+ * A `type` alias, not an `interface`, on purpose: the session-event protocol
+ * intersects it, and an interface intersection carries no implicit index
+ * signature — which would make the protocol unassignable to the loose reader
+ * types other server modules declare for the same event stream. */
+export type AskUserQuestionsRequestPayload = {
   toolCallId: string;
   questions: AskUserQuestion[];
   /** Epoch ms when the request was emitted. Useful for ordering and for
    *  showing "asked N seconds ago" in the UI. */
   ts: number;
-}
+};
 
 /** Detect whether the given option label triggers free-text mode. */
 export function isOtherOptionLabel(label: string): boolean {

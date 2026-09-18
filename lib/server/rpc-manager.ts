@@ -1,6 +1,7 @@
-import { createAgentSession, DefaultResourceLoader, isToolCallEventType, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, DefaultResourceLoader, isToolCallEventType, ModelRuntime, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ContextUsage, ToolInfo } from "./pi-types";
+import type { SessionEvent } from "../shared/session-events";
 import type { ToolSelection } from "../shared/types";
 import { expandToolSelection } from "../shared/tool-selection";
 import type { ToolMarketId } from "../shared/tools-market";
@@ -54,12 +55,8 @@ interface PendingPermission {
   timeoutHandle: ReturnType<typeof setTimeout>;
 }
 
-export interface PermissionRequestEvent {
-  type: "permission_request";
-  toolCallId: string;
-  ruleName: string;
-  command: string;
-}
+/** The wrapper-synthesised permission event, as the protocol declares it. */
+export type PermissionRequestEvent = Extract<SessionEvent, { type: "permission_request" }>;
 
 // ============================================================================
 // Ask user questions (parallel to the permission queue above)
@@ -85,23 +82,14 @@ interface PendingUserInput {
   ts: number;
 }
 
-export interface AskUserQuestionsRequestEvent {
-  type: "ask_user_questions_request";
-  toolCallId: string;
-  questions: AskUserQuestion[];
-  ts: number;
-}
+/** The wrapper-synthesised question event, as the protocol declares it. */
+export type AskUserQuestionsRequestEvent = Extract<SessionEvent, { type: "ask_user_questions_request" }>;
 
 // ============================================================================
 // Types
 // ============================================================================
 
-export interface AgentEvent {
-  type: string;
-  [key: string]: unknown;
-}
-
-type EventListener = (event: AgentEvent) => void;
+type EventListener = (event: SessionEvent) => void;
 
 // ============================================================================
 // AgentSessionWrapper
@@ -205,7 +193,11 @@ export class AgentSessionWrapper {
       sessionId: this.sessionId,
       sessionFile: this.sessionFile || undefined,
     });
-    this.unsubscribe = this.inner.subscribe((event: AgentEvent) => {
+    // The listener is annotated with pi's own event type on purpose: handing
+    // the event to our `SessionEvent`-typed listeners below is what proves, at
+    // compile time, that every SDK event is part of the protocol (see
+    // `PiSessionEventsAreKnownToProtocol` in ./pi-types).
+    this.unsubscribe = this.inner.subscribe((event: AgentSessionEvent) => {
       // A running turn may legitimately spend far longer than the idle TTL in
       // one model request or tool call. Update state first so the idle reaper
       // is suspended for the entire active turn instead of detaching its SSE
@@ -339,7 +331,7 @@ export class AgentSessionWrapper {
   emitTreeUpdate(): void {
     try {
       const sm = this.inner.sessionManager;
-      const treeEvent: AgentEvent = {
+      const treeEvent: SessionEvent = {
         type: "session_tree_update",
         // Apply the same session_info cleanup the /api/sessions/[id] GET
         // performs, so the live tree matches the disk-loaded one. Without
@@ -347,7 +339,7 @@ export class AgentSessionWrapper {
         // leaf) becomes a side-branch that misroutes buildConversationTree's
         // per-round children[0] walk — the round's final assistant gets
         // locked early and every intermediate message renders as a card.
-        tree: stripSessionInfoNodes(sm.getTree()) as unknown,
+        tree: stripSessionInfoNodes(sm.getTree()),
         leafId: fallbackSessionLeafId(sm, sm.getLeafId()),
       };
       for (const l of this.listeners) {
@@ -371,7 +363,7 @@ export class AgentSessionWrapper {
    * paired with llm-audit's SSE-terminal log this makes the next occurrence
    * attributable without logging prompts, replies, or tool arguments.
    */
-  private logEmptyTerminalReply(event: AgentEvent): void {
+  private logEmptyTerminalReply(event: Extract<SessionEvent, { type: "agent_end" }>): void {
     const messages = Array.isArray(event.messages) ? event.messages : [];
     const lastAssistant = [...messages].reverse().find((message) => (
       !!message && typeof message === "object" && (message as { role?: unknown }).role === "assistant"
@@ -441,11 +433,10 @@ export class AgentSessionWrapper {
     }
   }
 
-  private updateRunningState(event: AgentEvent): void {
+  private updateRunningState(event: SessionEvent): void {
     switch (event.type) {
       case "agent_start":
       case "compaction_start":
-      case "auto_compaction_start":
         this._running = true;
         break;
       case "agent_end":
@@ -454,7 +445,6 @@ export class AgentSessionWrapper {
         break;
       case "agent_settled":
       case "compaction_end":
-      case "auto_compaction_end":
         this._running = false;
         break;
     }
@@ -533,7 +523,7 @@ export class AgentSessionWrapper {
     };
     for (const l of this.listeners) {
       try {
-        l(event as unknown as AgentEvent);
+        l(event);
       } catch {
         // listener errors must not break permission flow
       }
@@ -598,7 +588,7 @@ export class AgentSessionWrapper {
     };
     for (const l of this.listeners) {
       try {
-        l(event as unknown as AgentEvent);
+        l(event);
       } catch {
         // listener errors must not break the request flow
       }
@@ -698,7 +688,7 @@ export class AgentSessionWrapper {
             log.warn("prompt failed", { sessionId: this.sessionId, error });
             for (const l of this.listeners) {
               try {
-                l({ type: "prompt_failed", error: message } as unknown as AgentEvent);
+                l({ type: "prompt_failed", error: message });
               } catch {
                 // listener errors must not break the dispatch loop
               }

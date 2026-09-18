@@ -1,10 +1,31 @@
 import type { SessionManager, SettingsManager, AgentSessionEvent, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import type { ToolInfo } from "../shared/types";
+import type { SessionEventType } from "../shared/session-events";
 
 // Re-exported so the existing `import type { ToolInfo } from "./pi-types"`
 // call site in rpc-manager.ts keeps working. Single source of truth lives
 // in lib/types.ts.
 export type { ToolInfo };
+
+type AssertTrue<T extends true> = T;
+
+/**
+ * Compile-time proof that the session-event protocol knows every event the pi
+ * SDK can push: the SDK's event-type set must be a subset of ours.
+ *
+ * When a pi upgrade adds an event, this alias resolves to `never` and the file
+ * stops compiling — which is the point. The fix is to add the type to
+ * `lib/shared/session-events.ts` and decide whether the client reduces it or
+ * deliberately ignores it (ADR-0007). Nothing is mapped at runtime: events
+ * still pass through verbatim, so this assertion is the *only* thing that has
+ * to be kept honest on the SDK side.
+ *
+ * It lives here, not in the shared layer, because `lib/shared` may not import
+ * the pi SDK.
+ */
+export type PiSessionEventsAreKnownToProtocol = AssertTrue<
+  AgentSessionEvent["type"] extends SessionEventType ? true : false
+>;
 
 export interface ContextUsage {
   percent: number | null;

@@ -12,7 +12,8 @@
  * session that belongs to a review_test / done card.
  */
 
-import type { AgentSessionWrapper, AgentEvent } from "@/lib/server/rpc-manager";
+import type { AgentSessionWrapper } from "@/lib/server/rpc-manager";
+import type { SessionEvent } from "@/lib/shared/session-events";
 import { markRunEnd } from "./store";
 
 interface TextBlock { type: string; text?: string }
@@ -71,11 +72,9 @@ export function attachSessionSyncWatcher(
   if (existing === session) return; // already watching this wrapper
 
   watchedSessions.set(sessionId, session);
-  session.onEvent((event: AgentEvent) => {
+  session.onEvent((event: SessionEvent) => {
     if (event.type !== "agent_end") return;
-    const messages = Array.isArray((event as Record<string, unknown>).messages)
-      ? ((event as Record<string, unknown>).messages as AssistantMsg[])
-      : null;
+    const messages = Array.isArray(event.messages) ? (event.messages as AssistantMsg[]) : null;
     if (!messages) return;
     const { text, error } = extractFinalAssistantText(messages);
     if (error) {
