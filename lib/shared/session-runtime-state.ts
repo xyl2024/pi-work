@@ -130,6 +130,12 @@ export interface SessionRuntimeState {
    *  re-opens the card. Seeded from the module store on mount so a remount
    *  while a question is pending does not ring again either. */
   seenAskUserQuestionsToolCallIds: SeenLedger;
+  /** A brand-new session is waiting for its first assistant message: the
+   *  sidebar can only be refreshed once that message is persisted, and the
+   *  callback must fire exactly once even if a replayed `message_end`
+   *  arrives. Read *and* cleared by the event reducer, so it belongs in the
+   *  state rather than in an adapter ref. */
+  awaitingFirstAssistant: boolean;
 }
 
 /**
@@ -158,6 +164,7 @@ export function createSessionRuntimeState(
     seenSubagentToolEndIds: createSeenLedger(),
     seenCelebrateToolEndIds: createSeenLedger(),
     seenAskUserQuestionsToolCallIds: createSeenLedger(),
+    awaitingFirstAssistant: false,
     ...overrides,
   };
 }

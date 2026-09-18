@@ -36,6 +36,7 @@
 import type { AskUserQuestion, AskUserQuestionsRequestPayload } from "./ask-user-questions-tool-types";
 import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "./celebrate-tool-types";
 import type { UiSoundEventId } from "./config-types";
+import { normalizeToolCalls } from "./normalize";
 import {
   mergeInFlightToolPartialResult,
   patchSessionRuntimeState,
@@ -45,6 +46,7 @@ import {
 } from "./session-runtime-state";
 import { isShowFileToolName, type ShowFileEntry } from "./show-file-tool-types";
 import type { ToolCallReport } from "./tool-call-stats-types";
+import type { AgentMessage, AssistantMessage, SessionTreeNode } from "./types";
 
 /** Why pi decided to compact the context. */
 export type SessionCompactionReason = "manual" | "threshold" | "overflow";
@@ -330,6 +332,10 @@ export const PORTED_SESSION_EVENT_TYPES = [
   "tool_execution_start",
   "tool_execution_update",
   "tool_execution_end",
+  "message_start",
+  "message_update",
+  "message_end",
+  "session_tree_update",
 ] as const satisfies readonly ReducedSessionEventType[];
 
 export type PortedSessionEventType = (typeof PORTED_SESSION_EVENT_TYPES)[number];
@@ -368,7 +374,28 @@ export type SessionEventEffect =
    *  after a delay, so a long-running child eventually shows its result. */
   | { kind: "refresh_subagent_panel"; toolCallId: string }
   /** Flash a state on the sidebar Pi Bot (it reverts to its baseline itself). */
-  | { kind: "flash_bot_state"; stateKey: string };
+  | { kind: "flash_bot_state"; stateKey: string }
+  /** Publish the newest snapshot of the in-flight assistant message to the
+   *  live streaming view (its own store — per-token updates must re-render
+   *  only the streaming bubble, not the whole chat tree). */
+  | { kind: "stream_message"; message: AgentMessage }
+  /** Close the live streaming view for a message that just settled.
+   *  `message` is the final snapshot to flush, or `null` when nothing was
+   *  streaming (a user message); `keepForError` keeps a failed assistant
+   *  snapshot mounted so a retryable error does not blank the view. */
+  | { kind: "settle_stream"; message: AgentMessage | null; keepForError: boolean }
+  /** Ask for a fresh context usage / composition estimate. The reducer never
+   *  issues the request itself; the adapter does, at the same moment the old
+   *  inline `fetch` ran (a finished assistant message). */
+  | { kind: "refresh_context_usage" }
+  /** The brand-new session's first assistant message landed: the session file
+   *  now exists, so the sidebar can be refreshed. Fires at most once — the
+   *  reducer clears `awaitingFirstAssistant` on the way out. */
+  | { kind: "first_assistant_ready" }
+  /** What the end of the turn (#63) reads off the assistant message that just
+   *  settled: whether it was a plain body answer, and the model error to
+   *  surface at `agent_end` (`null` = none). */
+  | { kind: "record_assistant_outcome"; isBody: boolean; pendingError: string | null };
 
 /** What one event does to the runtime state, and the effects it asks for. */
 export interface SessionEventReduction {
@@ -383,6 +410,47 @@ const WORKTREE_MUTATING_TOOL_NAMES = new Set(["edit", "write"]);
 /** The Pi Bot reaction to a failed tool call. */
 const TOOL_ERROR_BOT_STATE = "suspicious";
 
+/** The error text the end of the turn toasts when pi reports a failed model
+ *  call without a message of its own. */
+const FALLBACK_ASSISTANT_ERROR = "Model call failed";
+
+/**
+ * The `spawn_subagent` tool-call ids inside a message.
+ *
+ * Read from the raw pi message shape (`{ type: "toolCall", toolName }`), before
+ * normalization: this is how the subagent panel learns a child was spawned
+ * without waiting for the whole turn to finish.
+ */
+function spawnSubagentToolCallIdsOf(message: unknown): string[] {
+  if (!message || typeof message !== "object") return [];
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((block) => {
+    if (!block || typeof block !== "object") return [];
+    const value = block as { type?: unknown; toolName?: unknown; toolCallId?: unknown };
+    return value.type === "toolCall" && value.toolName === "spawn_subagent" && typeof value.toolCallId === "string"
+      ? [value.toolCallId]
+      : [];
+  });
+}
+
+/**
+ * Claim the `spawn_subagent` ids announced by one message, asking for a panel
+ * refresh the first time each id is seen and staying silent on the replays
+ * that every later token (or an SSE reconnect) brings.
+ */
+function pushSubagentRefreshes(
+  state: SessionRuntimeState,
+  message: unknown,
+  effects: SessionEventEffect[],
+): void {
+  for (const toolCallId of spawnSubagentToolCallIdsOf(message)) {
+    if (state.seenSubagentToolCallIds.claim(toolCallId)) {
+      effects.push({ kind: "refresh_subagent_panel", toolCallId });
+    }
+  }
+}
+
 /** A plain object argument bag, or `undefined` for anything else (`null`,
  *  arrays, scalars) — the shape the tool-call stats store and the phase chip
  *  accept. */
@@ -390,6 +458,56 @@ function asArgumentRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : undefined;
+}
+
+/**
+ * Whether `candidate` is already in the committed message list.
+ *
+ * The comparison is structural (plus role and, for tool results, the
+ * tool-call id) because a replayed `message_end` — SSE reconnect or a
+ * compaction replay — delivers an equal but not identical object, and the
+ * same assistant message must not be queued twice.
+ */
+function sameCompletedMessage(a: AgentMessage, b: AgentMessage): boolean {
+  if (a.role !== b.role) return false;
+  if (a.role === "toolResult" && b.role === "toolResult" && a.toolCallId !== b.toolCallId) return false;
+  const aTimestamp = "timestamp" in a ? a.timestamp : undefined;
+  const bTimestamp = "timestamp" in b ? b.timestamp : undefined;
+  if (aTimestamp !== undefined && bTimestamp !== undefined && aTimestamp !== bTimestamp) return false;
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether an assistant message is a plain body answer: non-empty text and not
+ * a failed model call. The end of the turn reads this to pick the sidebar Pi
+ * Bot reaction (`happy` for a body answer, `waking` otherwise).
+ *
+ * NOTE (ported verbatim in #62): the tool-call half of the check looks for a
+ * `toolUse` block, a type neither pi nor this project emits (both use
+ * `toolCall`), so in practice this is "has text and is not an error". The
+ * check is left untouched to keep the port behaviour-frozen; the drift is a
+ * finding for a follow-up slice, not something this move may fix.
+ */
+function isBodyMessage(msg: AgentMessage): boolean {
+  if (msg.role !== "assistant") return false;
+  if ((msg as AssistantMessage).stopReason === "error") return false;
+  const content = (msg as { content?: unknown }).content;
+  if (!Array.isArray(content)) return false;
+  let hasText = false;
+  let hasToolUse = false;
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const typedBlock = block as { type?: unknown; text?: unknown };
+    if (typedBlock.type === "text" && typeof typedBlock.text === "string" && typedBlock.text.trim().length > 0) {
+      hasText = true;
+    }
+    if (typedBlock.type === "toolUse") hasToolUse = true;
+  }
+  return hasText && !hasToolUse;
 }
 
 /**
@@ -592,6 +710,71 @@ export function reduceSessionEvent(
           { kind: "play_ui_sound", sound: "ask_user_questions" },
         ],
       };
+    }
+    case "message_start":
+    case "message_update": {
+      // Both events carry the whole partial message; the streamed content
+      // itself lives in the streaming store, so the state only moves the
+      // phase back to "assembling an answer". The `undefined` arm mirrors the
+      // old handler, which tolerated a frame without a message.
+      const message = event.message as AgentMessage | undefined;
+      const effects: SessionEventEffect[] = [];
+      pushSubagentRefreshes(state, message, effects);
+      if (message && message.role !== "user") {
+        effects.push({ kind: "stream_message", message: normalizeToolCalls(message) });
+      }
+      return { state: patchSessionRuntimeState(state, "agentPhase", null), effects };
+    }
+    case "message_end": {
+      const completed = event.message as AgentMessage | undefined;
+      const isAssistant = completed?.role === "assistant";
+      const effects: SessionEventEffect[] = [];
+      pushSubagentRefreshes(state, completed, effects);
+      // A replayed `message_end` (SSE reconnect, compaction replay) carries an
+      // equal-but-new object; `sameCompletedMessage` is what keeps the same
+      // assistant message from being appended twice.
+      let next = state;
+      let settled: AgentMessage | null = null;
+      if (completed && completed.role !== "user") {
+        const normalized = normalizeToolCalls(completed);
+        settled = normalized;
+        next = patchSessionRuntimeState(next, "messages", (previous) =>
+          previous.some((existing) => sameCompletedMessage(existing, normalized))
+            ? previous
+            : [...previous, normalized]);
+      }
+      if (isAssistant && state.awaitingFirstAssistant) {
+        // One shot: clearing the flag here is what makes a replay silent.
+        next = patchSessionRuntimeState(next, "awaitingFirstAssistant", false);
+        effects.push({ kind: "first_assistant_ready" });
+      }
+      const keepForError = isAssistant && completed?.stopReason === "error";
+      effects.push({ kind: "settle_stream", message: settled, keepForError });
+      if (completed && isAssistant) {
+        effects.push({
+          kind: "record_assistant_outcome",
+          isBody: isBodyMessage(completed),
+          pendingError: keepForError ? (completed.errorMessage ?? FALLBACK_ASSISTANT_ERROR) : null,
+        });
+        // The refresh is an effect: the reducer neither waits for it nor
+        // issues it, but the moment matches the old inline `fetch` exactly —
+        // on every finished assistant message, before the turn ends.
+        effects.push({ kind: "refresh_context_usage" });
+      }
+      next = patchSessionRuntimeState(next, "agentPhase", { kind: "waiting_model" });
+      return { state: next, effects };
+    }
+    case "session_tree_update": {
+      let next = state;
+      if (Array.isArray(event.tree)) {
+        next = patchSessionRuntimeState(next, "liveTree", event.tree as SessionTreeNode[]);
+      }
+      // A `null` leaf is deliberately not applied: the tree panel falls back
+      // to the leaf loaded from disk, which is what the previous handler did.
+      if (typeof event.leafId === "string") {
+        next = patchSessionRuntimeState(next, "activeLeafId", event.leafId);
+      }
+      return { state: next, effects: [] };
     }
   }
 }

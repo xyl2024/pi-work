@@ -234,11 +234,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // an unmounted session can't snap the sidebar bot to "searching".
   const botRevertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleAgentEventRef = useRef<((event: SessionEvent) => void) | null>(null);
-  // Set when POST /api/agent/new returns for a brand-new session. Cleared on
-  // the first assistant message_end — pi persists the .jsonl lazily at that
-  // moment (openSync "wx" in SessionManager._persist), which is the earliest
-  // point the session becomes listable by the sidebar.
-  const pendingNewSessionFirstAssistantRef = useRef(false);
   const handledScrollEntryRef = useRef<string | null>(null);
   // Chat scroll targets, owned here because the send path needs them
   // (`pendingScrollToUserRef` is set by handleSend). The scroll rules and the
@@ -414,7 +409,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     pendingAssistantErrorRef,
     lastAssistantIsBodyRef,
     botRevertTimerRef,
-    pendingNewSessionFirstAssistantRef,
     refreshSystemPrompt,
     loadSession,
     refreshAgentRuntimeStateRef,
@@ -494,8 +488,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         refreshSystemPrompt();
         // Defer the sidebar refresh until the first assistant message lands:
         // the .jsonl does not exist before that, so a refresh right now would
-        // not find the session.
-        pendingNewSessionFirstAssistantRef.current = true;
+        // not find the session. The event reducer clears this on the first
+        // assistant `message_end` and asks the host to refresh exactly once.
+        patchRuntime("awaitingFirstAssistant", true);
         onSessionCreated?.({
           id: realId,
           path: "",
@@ -527,7 +522,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       endStreamingStore(streamingKey);
       closeEvents();
     }
-  }, [isNew, newSessionCwd, newSessionModel, currentModel, toolSelection, runtimeState.thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, onSessionCreated, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
+  }, [isNew, newSessionCwd, newSessionModel, currentModel, toolSelection, runtimeState.thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, onSessionCreated, patchRuntime, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;

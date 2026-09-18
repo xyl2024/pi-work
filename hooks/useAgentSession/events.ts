@@ -1,6 +1,5 @@
 import { useCallback, useRef, type Dispatch } from "react";
-import type { AgentMessage, SessionInfo, SessionTreeNode } from "@/lib/shared/types";
-import { normalizeToolCalls } from "@/lib/shared/normalize";
+import type { SessionInfo } from "@/lib/shared/types";
 import type { ContextComposition } from "@/lib/shared/context-composition";
 import type { SessionRuntimeState, StateUpdater } from "@/lib/shared/session-runtime-state";
 import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
@@ -16,7 +15,6 @@ import {
   startStreaming as startStreamingStore,
   endStreaming as endStreamingStore,
 } from "../streamingMessageStore";
-import { isBodyMessage, sameCompletedMessage } from "./utils";
 import {
   isPortedSessionEvent,
   reduceSessionEvent,
@@ -24,19 +22,6 @@ import {
   type SessionEventEffect,
 } from "@/lib/shared/session-events";
 import type { AgentRuntimeState, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
-
-function getSpawnSubagentToolCallIds(message: unknown): string[] {
-  if (!message || typeof message !== "object") return [];
-  const content = (message as { content?: unknown }).content;
-  if (!Array.isArray(content)) return [];
-  return content.flatMap((block) => {
-    if (!block || typeof block !== "object") return [];
-    const value = block as { type?: unknown; toolName?: unknown; toolCallId?: unknown };
-    return value.type === "toolCall" && value.toolName === "spawn_subagent" && typeof value.toolCallId === "string"
-      ? [value.toolCallId]
-      : [];
-  });
-}
 
 const BOT_BASELINE_STATE = "searching";
 const BOT_REVERT_MS = 8000;
@@ -76,7 +61,6 @@ type AgentSessionEventsOptions = {
   pendingAssistantErrorRef: { current: string | null };
   lastAssistantIsBodyRef: { current: boolean };
   botRevertTimerRef: { current: ReturnType<typeof setTimeout> | null };
-  pendingNewSessionFirstAssistantRef: { current: boolean };
   refreshSystemPrompt: () => void;
   loadSession: (sid: string, showLoading?: boolean, includeState?: boolean) => Promise<AgentRuntimeState | null>;
   refreshAgentRuntimeStateRef: { current: ((sid?: string) => Promise<AgentRuntimeState | null>) | null };
@@ -106,7 +90,6 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     pendingAssistantErrorRef,
     lastAssistantIsBodyRef,
     botRevertTimerRef,
-    pendingNewSessionFirstAssistantRef,
     refreshSystemPrompt,
     loadSession,
     refreshAgentRuntimeStateRef,
@@ -211,6 +194,53 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         case "flash_bot_state":
           fireDiscreteBot(effect.stateKey);
           return;
+        case "stream_message":
+          // The streamed content deliberately lives in its own store so a
+          // per-token update re-renders only the streaming bubble, not the
+          // whole ChatWindowContent tree. The store coalesces with rAF: many
+          // tokens per frame → at most one snapshot flip.
+          dispatch({ type: "start" });
+          startStreamingStore(controllerId);
+          scheduleStreamingUpdate(controllerId, effect.message);
+          return;
+        case "settle_stream":
+          // Force-flush any pending streaming snapshot before clearing the
+          // stream flag, so the final state is not lost if a token arrived in
+          // the same frame as message_end.
+          if (effect.message) flushStreamingUpdateSync(controllerId, effect.message);
+          dispatch({ type: "reset" });
+          // Do not tear down the live view for a model error: the turn can be
+          // retried, and the user should keep seeing the current assistant
+          // message instead of a blank gap until the next stream starts.
+          endStreamingStore(controllerId, effect.keepForError);
+          return;
+        case "refresh_context_usage": {
+          // The reducer asked for the refresh; the request itself happens here,
+          // at the same moment the old inline fetch ran (a finished assistant
+          // message).
+          if (!sid) return;
+          fetch(`/api/agent/${encodeURIComponent(sid)}`)
+            .then((response) => response.json())
+            .then((data: { state?: { contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; contextComposition?: ContextComposition | null } }) => {
+              if (data.state?.contextUsage !== undefined) patchRuntime("contextUsage", data.state.contextUsage ?? null);
+              // The server recomputes the composition on this same
+              // `message_end`, so the round trip that fetches `contextUsage`
+              // usually brings the fresh estimate along with it.
+              if (data.state?.contextComposition !== undefined) patchRuntime("contextComposition", data.state.contextComposition ?? null);
+            })
+            .catch(() => {});
+          return;
+        }
+        case "first_assistant_ready":
+          onFirstAssistantReady?.();
+          return;
+        case "record_assistant_outcome":
+          // Scratchpads for the still-legacy agent_end (#63): whether this turn
+          // ended on a body answer, and the model error to surface when the
+          // turn closes.
+          lastAssistantIsBodyRef.current = effect.isBody;
+          if (effect.pendingError !== null) pendingAssistantErrorRef.current = effect.pendingError;
+          return;
       }
     };
 
@@ -277,79 +307,6 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           closeEvents();
         }
         onAgentEnd?.();
-        break;
-      case "message_start":
-      case "message_update": {
-        const message = event.message as Partial<AgentMessage> | undefined;
-        for (const toolCallId of getSpawnSubagentToolCallIds(message)) {
-          if (!runtime().seenSubagentToolCallIds.claim(toolCallId)) continue;
-          patchRuntime("subagentRefreshKey", (key) => key + 1);
-          scheduleSubagentRefresh(toolCallId);
-        }
-        if (message && message.role !== "user") {
-          const normalized = normalizeToolCalls(message as AgentMessage);
-          // Both flags flip to true here. We never publish the actual
-          // message through the reducer — it lives in the standalone
-          // streaming store, so per-token updates only re-render
-          // StreamingBubble (not the whole ChatWindowContent tree).
-          dispatch({ type: "start" });
-          startStreamingStore(controllerId);
-          // rAF-coalesced: many tokens per frame → at most one snapshot flip.
-          scheduleStreamingUpdate(controllerId, normalized);
-        }
-        patchRuntime("agentPhase", null);
-        break;
-      }
-      case "message_end": {
-        const completed = event.message as AgentMessage | undefined;
-        for (const toolCallId of getSpawnSubagentToolCallIds(completed)) {
-          if (!runtime().seenSubagentToolCallIds.claim(toolCallId)) continue;
-          patchRuntime("subagentRefreshKey", (key) => key + 1);
-          scheduleSubagentRefresh(toolCallId);
-        }
-        if (completed && completed.role !== "user") {
-          const normalized = normalizeToolCalls(completed);
-          // Force-flush any pending streaming message before clearing the
-          // stream flag, so the final state isn't lost if a token arrived
-          // in the same frame as message_end.
-          flushStreamingUpdateSync(controllerId, normalized);
-          patchRuntime("messages", (previous) => previous.some((message) => sameCompletedMessage(message, normalized))
-            ? previous
-            : [...previous, normalized]);
-        }
-        if (completed?.role === "assistant" && pendingNewSessionFirstAssistantRef.current) {
-          pendingNewSessionFirstAssistantRef.current = false;
-          onFirstAssistantReady?.();
-        }
-        dispatch({ type: "reset" });
-        if (completed?.role === "assistant" && completed.stopReason === "error") {
-          pendingAssistantErrorRef.current = completed.errorMessage ?? "Model call failed";
-        }
-        // Do not tear down the live view for a model error. The turn can be
-        // retried, and the user should keep seeing the current assistant
-        // message instead of a blank gap until the next stream starts.
-        endStreamingStore(controllerId, completed?.role === "assistant" && completed.stopReason === "error");
-        patchRuntime("agentPhase", { kind: "waiting_model" });
-        if (completed?.role === "assistant") {
-          lastAssistantIsBodyRef.current = isBodyMessage(completed);
-          if (sessionIdRef.current) {
-            fetch(`/api/agent/${encodeURIComponent(sessionIdRef.current)}`)
-              .then((response) => response.json())
-              .then((data: { state?: { contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null; contextComposition?: ContextComposition | null } }) => {
-                if (data.state?.contextUsage !== undefined) patchRuntime("contextUsage", data.state.contextUsage ?? null);
-                // The server recomputes the composition on this same
-                // `message_end`, so the round trip that fetches `contextUsage`
-                // usually brings the fresh estimate along with it.
-                if (data.state?.contextComposition !== undefined) patchRuntime("contextComposition", data.state.contextComposition ?? null);
-              })
-              .catch(() => {});
-          }
-        }
-        break;
-      }
-      case "session_tree_update":
-        if (Array.isArray(event.tree)) patchRuntime("liveTree", event.tree as SessionTreeNode[]);
-        if (typeof event.leafId === "string") patchRuntime("activeLeafId", event.leafId);
         break;
       case "auto_retry_start":
         patchRuntime("retryInfo", { attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
@@ -427,7 +384,6 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     onFirstAssistantReady,
     patchRuntime,
     pendingAssistantErrorRef,
-    pendingNewSessionFirstAssistantRef,
     permissionsRef,
     refreshAgentRuntimeStateRef,
     refreshSystemPrompt,

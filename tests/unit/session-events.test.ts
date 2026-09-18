@@ -494,3 +494,276 @@ describe("session event reducer: tool execution", () => {
     expect(isPortedSessionEvent(toolEnd("call-1", "bash"))).toBe(true);
   });
 });
+
+// ── The message / conversation-tree group (#62) ──────────────────────────
+//
+// What the user stares at the longest: the streaming bubble, the message once
+// it settles, the conversation tree and its active leaf, and the context-usage
+// ring after each assistant message. Two rules here are easy to break silently
+// and therefore have their own tests: a replayed `message_end` (SSE reconnect
+// or a compaction replay) must not enqueue the same assistant message twice,
+// and the brand-new-session "first assistant landed" callback must fire exactly
+// once. The context refresh is an *effect* — the reducer asks for it, the
+// adapter performs it.
+
+type MessageStartEvent = Extract<PortedSessionEvent, { type: "message_start" }>;
+type MessageUpdateEvent = Extract<PortedSessionEvent, { type: "message_update" }>;
+type MessageEndEvent = Extract<PortedSessionEvent, { type: "message_end" }>;
+type TreeUpdateEvent = Extract<PortedSessionEvent, { type: "session_tree_update" }>;
+
+/** A pi-shaped assistant message (raw blocks, before normalization). */
+function assistantMessage(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    role: "assistant",
+    content: [{ type: "text", text: "hello" }],
+    model: "m",
+    provider: "p",
+    timestamp: 1,
+    ...overrides,
+  };
+}
+
+function messageStart(message: unknown): MessageStartEvent {
+  return { type: "message_start", message: message as MessageStartEvent["message"] };
+}
+
+function messageUpdate(message: unknown): MessageUpdateEvent {
+  return { type: "message_update", message: message as MessageUpdateEvent["message"] };
+}
+
+function messageEnd(message: unknown): MessageEndEvent {
+  return { type: "message_end", message: message as MessageEndEvent["message"] };
+}
+
+function treeUpdate(tree: unknown, leafId: string | null): TreeUpdateEvent {
+  return { type: "session_tree_update", tree, leafId };
+}
+
+describe("session event reducer: messages and the conversation tree", () => {
+  it("mirrors the pushed tree and its active leaf", () => {
+    const tree = [{ type: "message", id: "e1", parentId: null, timestamp: "t" }];
+
+    const reduction = reduceSessionEvent(createSessionRuntimeState(), treeUpdate(tree, "e1"));
+
+    expect(reduction.state.liveTree).toBe(tree);
+    expect(reduction.state.activeLeafId).toBe("e1");
+    expect(reduction.effects).toEqual([]);
+  });
+
+  it("leaves the leaf alone when the update carries a null leaf", () => {
+    const anchored = patchSessionRuntimeState(createSessionRuntimeState(), "activeLeafId", "e1");
+
+    // A null leaf is deliberately not applied: the tree panel falls back to
+    // the leaf loaded from disk, exactly as the previous handler did.
+    const reduction = reduceSessionEvent(anchored, treeUpdate(undefined, null));
+
+    expect(reduction.state).toBe(anchored);
+    expect(reduction.state.activeLeafId).toBe("e1");
+  });
+
+  it("changes nothing when the same tree is pushed again", () => {
+    const tree = [{ type: "message", id: "e1", parentId: null, timestamp: "t" }];
+    const first = reduceSessionEvent(createSessionRuntimeState(), treeUpdate(tree, "e1"));
+
+    const replay = reduceSessionEvent(first.state, treeUpdate(tree, "e1"));
+
+    expect(replay.state).toBe(first.state);
+    expect(replay.effects).toEqual([]);
+  });
+
+  it("streams a non-user message into the live view without committing it", () => {
+    const state = createSessionRuntimeState();
+
+    const reduction = reduceSessionEvent(state, messageUpdate(assistantMessage()));
+
+    // The streamed snapshot goes to the streaming store (its own module), not
+    // into the committed message list.
+    expect(reduction.effects).toEqual([{ kind: "stream_message", message: assistantMessage() }]);
+    expect(reduction.state.messages).toEqual([]);
+    expect(reduction.state.agentPhase).toBeNull();
+  });
+
+  it("normalizes a streamed tool call into the render shape", () => {
+    const reduction = reduceSessionEvent(
+      createSessionRuntimeState(),
+      messageUpdate(assistantMessage({ content: [{ type: "toolCall", id: "c1", name: "bash", arguments: { command: "ls" } }] })),
+    );
+
+    expect(reduction.effects).toEqual([{
+      kind: "stream_message",
+      message: assistantMessage({
+        content: [{ type: "toolCall", toolCallId: "c1", toolName: "bash", input: { command: "ls" } }],
+      }),
+    }]);
+  });
+
+  it("does not stream a user message", () => {
+    const reduction = reduceSessionEvent(
+      createSessionRuntimeState(),
+      messageStart({ role: "user", content: "hi" }),
+    );
+
+    expect(reduction.effects).toEqual([]);
+  });
+
+  it("refreshes the subagent panel once while a spawn_subagent message streams", () => {
+    const raw = assistantMessage({
+      content: [{ type: "toolCall", toolCallId: "c1", toolName: "spawn_subagent", input: {} }],
+    });
+
+    const start = reduceSessionEvent(createSessionRuntimeState(), messageStart(raw));
+    expect(kindsOf(start.effects)).toContain("refresh_subagent_panel");
+
+    // Every subsequent token re-announces the same tool call; the ledger must
+    // absorb it.
+    const update = reduceSessionEvent(start.state, messageUpdate(raw));
+    expect(kindsOf(update.effects)).not.toContain("refresh_subagent_panel");
+  });
+
+  it("commits a settled assistant message and asks for the context refresh", () => {
+    const state = createSessionRuntimeState();
+
+    const reduction = reduceSessionEvent(state, messageEnd(assistantMessage()));
+
+    expect(reduction.state.messages).toEqual([assistantMessage()]);
+    expect(reduction.state.agentPhase).toEqual({ kind: "waiting_model" });
+    expect(reduction.effects).toEqual([
+      { kind: "settle_stream", message: assistantMessage(), keepForError: false },
+      { kind: "record_assistant_outcome", isBody: true, pendingError: null },
+      { kind: "refresh_context_usage" },
+    ]);
+  });
+
+  it("does not enqueue the same assistant message twice when message_end is replayed", () => {
+    // SSE reconnect and compaction both replay the end of a message; the
+    // replayed payload is equal but not identical.
+    const message = assistantMessage();
+    const first = reduceSessionEvent(createSessionRuntimeState(), messageEnd(message));
+
+    const replay = reduceSessionEvent(
+      first.state,
+      messageEnd(JSON.parse(JSON.stringify(message)) as Record<string, unknown>),
+    );
+
+    expect(replay.state.messages).toHaveLength(1);
+    expect(replay.state.messages).toEqual([assistantMessage()]);
+  });
+
+  it("keeps two genuinely different settled messages apart", () => {
+    // The dedupe is identity, not a one-slot guard: a multi-step turn's
+    // successive assistant messages (different timestamps) and a turn's
+    // several tool results (different tool-call ids) all have to land.
+    const first = reduceSessionEvent(createSessionRuntimeState(), messageEnd(assistantMessage()));
+    const second = reduceSessionEvent(first.state, messageEnd(assistantMessage({ timestamp: 2 })));
+    expect(second.state.messages).toHaveLength(2);
+
+    const toolA = reduceSessionEvent(createSessionRuntimeState(), messageEnd({ role: "toolResult", toolCallId: "a", content: [] }));
+    const toolB = reduceSessionEvent(toolA.state, messageEnd({ role: "toolResult", toolCallId: "b", content: [] }));
+    expect(toolB.state.messages).toHaveLength(2);
+  });
+
+  it("settles a user message without committing it or refreshing context", () => {
+    const reduction = reduceSessionEvent(
+      createSessionRuntimeState(),
+      messageEnd({ role: "user", content: "hi" }),
+    );
+
+    expect(reduction.state.messages).toEqual([]);
+    expect(reduction.effects).toEqual([{ kind: "settle_stream", message: null, keepForError: false }]);
+  });
+
+  it("fires the first-assistant callback exactly once", () => {
+    const awaiting = patchSessionRuntimeState(createSessionRuntimeState(), "awaitingFirstAssistant", true);
+
+    const first = reduceSessionEvent(awaiting, messageEnd(assistantMessage()));
+    expect(kindsOf(first.effects)).toContain("first_assistant_ready");
+    expect(first.state.awaitingFirstAssistant).toBe(false);
+
+    // A second assistant message (or a replay of the first) sees the flag
+    // cleared and stays silent.
+    const second = reduceSessionEvent(first.state, messageEnd(assistantMessage({ timestamp: 2 })));
+    expect(kindsOf(second.effects)).not.toContain("first_assistant_ready");
+  });
+
+  it("does not fire the first-assistant callback for a user message", () => {
+    const awaiting = patchSessionRuntimeState(createSessionRuntimeState(), "awaitingFirstAssistant", true);
+
+    const reduction = reduceSessionEvent(awaiting, messageEnd({ role: "user", content: "hi" }));
+
+    expect(kindsOf(reduction.effects)).not.toContain("first_assistant_ready");
+    expect(reduction.state.awaitingFirstAssistant).toBe(true);
+  });
+
+  it("keeps a failed assistant snapshot and records the error for the end of the turn", () => {
+    const failed = assistantMessage({ stopReason: "error", errorMessage: "boom" });
+
+    const reduction = reduceSessionEvent(createSessionRuntimeState(), messageEnd(failed));
+
+    expect(reduction.effects).toContainEqual({
+      kind: "settle_stream",
+      message: reduction.state.messages[0],
+      keepForError: true,
+    });
+    expect(reduction.effects).toContainEqual({
+      kind: "record_assistant_outcome",
+      isBody: false,
+      pendingError: "boom",
+    });
+  });
+
+  it("falls back to a generic error text when pi reports none", () => {
+    const reduction = reduceSessionEvent(
+      createSessionRuntimeState(),
+      messageEnd(assistantMessage({ stopReason: "error" })),
+    );
+
+    expect(reduction.effects).toContainEqual({
+      kind: "record_assistant_outcome",
+      isBody: false,
+      pendingError: "Model call failed",
+    });
+  });
+
+  it("classifies a plain body answer as a body message", () => {
+    const reduction = reduceSessionEvent(createSessionRuntimeState(), messageEnd(assistantMessage()));
+
+    expect(reduction.effects).toContainEqual({
+      kind: "record_assistant_outcome",
+      isBody: true,
+      pendingError: null,
+    });
+  });
+
+  it("does not classify a tool-only answer as a body message", () => {
+    const reduction = reduceSessionEvent(
+      createSessionRuntimeState(),
+      messageEnd(assistantMessage({
+        content: [{ type: "toolCall", toolCallId: "c1", toolName: "bash", input: {} }],
+      })),
+    );
+
+    expect(reduction.effects).toContainEqual({
+      kind: "record_assistant_outcome",
+      isBody: false,
+      pendingError: null,
+    });
+  });
+
+  it("asks for the context refresh instead of performing it", () => {
+    const state = createSessionRuntimeState();
+
+    const reduction = reduceSessionEvent(state, messageEnd(assistantMessage()));
+
+    // The request is the adapter's job; the reducer only decides it is time.
+    expect(kindsOf(reduction.effects)).toContain("refresh_context_usage");
+    expect(reduction.state.contextUsage).toBe(state.contextUsage);
+    expect(reduction.state.contextComposition).toBe(state.contextComposition);
+  });
+
+  it("routes the message and conversation-tree events to the reducer", () => {
+    expect(isPortedSessionEvent(messageStart(assistantMessage()))).toBe(true);
+    expect(isPortedSessionEvent(messageUpdate(assistantMessage()))).toBe(true);
+    expect(isPortedSessionEvent(messageEnd(assistantMessage()))).toBe(true);
+    expect(isPortedSessionEvent(treeUpdate([], null))).toBe(true);
+  });
+});
