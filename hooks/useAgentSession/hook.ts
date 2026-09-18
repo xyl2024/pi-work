@@ -279,7 +279,11 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   }, [runtimeState.messages]);
   const currentSessionId: string | null = data?.sessionId ?? sessionIdRef.current ?? null;
 
-  const sessionStats = (() => {
+  // Memoised on the transcript: it is a publish *source*, not runtime belief,
+  // and a fresh identity every render would both recompute the publish
+  // projection on every render and force `setSessionUiState` to content-compare
+  // the whole payload each time.
+  const sessionStats = useMemo(() => {
     const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     let cost = 0;
     for (const msg of runtimeState.messages) {
@@ -301,7 +305,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     const inputDenom = tokens.input + tokens.cacheRead;
     const cachedHitRate = inputDenom > 0 ? tokens.cacheRead / inputDenom : 0;
     return { tokens, cost, cachedHitRate };
-  })();
+  }, [runtimeState.messages]);
 
   const transportRefs: TransportRefs = {
     eventSource: eventSourceRef,
@@ -828,9 +832,9 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
       sessionModel: currentModel,
     }, isActive);
     if (patch) setSessionUiState(patch);
-    // `sessionStats` is an IIFE with a fresh object identity each render; the
-    // content-equality guard inside `setSessionUiState` is what keeps that from
-    // re-rendering AppShell's top bar.
+    // Every source is memoised, so this only runs when a published field can
+    // actually have changed; the content-equality guard inside
+    // `setSessionUiState` then suppresses identity-only churn.
   }, [runtimeState, systemPrompt, sessionStats, streamState.isStreaming, data?.tree, toolSelection, availableTools, isNew, newSessionModel, currentModel, isActive]);
 
   // Keep the store's leaf-change handler owned by the active controller only.
