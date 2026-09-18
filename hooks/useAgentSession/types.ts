@@ -1,6 +1,13 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
-import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode, ToolSelection } from "@/lib/shared/types";
-import type { ContextComposition } from "@/lib/shared/context-composition";
+import type { AgentMessage, CompactionPoint, SessionInfo, SessionTreeNode, ToolInfo, ToolResultMessage, ToolSelection } from "@/lib/shared/types";
+import type {
+  AgentPhase,
+  ContextUsage,
+  RetryInfo,
+  SessionSnapshotPayload,
+  SessionStats,
+} from "@/lib/shared/session-runtime-state";
+import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 // The session-event protocol is declared once, in the shared layer, and used by
 // both the client and the server — see lib/shared/session-events.ts.
 import type { SessionEvent } from "@/lib/shared/session-events";
@@ -38,25 +45,12 @@ export type StreamAction =
   | { type: "end" }
   | { type: "reset" };
 
-export interface AgentRuntimeState {
-  running: boolean;
-  state?: {
-    isStreaming?: boolean;
-    isCompacting?: boolean;
-    isRunning?: boolean;
-    phase?: "compacting" | "streaming" | null;
-    contextUsage?: { percent: number | null; contextWindow: number; tokens: number | null } | null;
-    /** Local context-composition estimate anchored to `contextUsage.tokens`
-     *  (ADR-0005). Computed server-side on `message_end`; absent on older
-     *  servers and `null` until the first estimate lands. */
-    contextComposition?: ContextComposition | null;
-    systemPrompt?: string;
-    thinkingLevel?: string;
-    /** Raw tool selection the live agent is using ("all" | string[], patterns
-     *  included). Absent on older servers; drives the tools button label. */
-    toolNames?: ToolSelection;
-  };
-}
+/**
+ * The REST `get_state` payload — the body of the `client_snapshot` runtime
+ * input. Declared once in the shared layer (the reducer consumes it); this is
+ * the hook-side name, kept so callers do not have to reach across layers.
+ */
+export type AgentRuntimeState = SessionSnapshotPayload;
 
 export type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 
@@ -139,3 +133,80 @@ export type SessionRuntimeStatus =
   | { kind: "idle" }
   | { kind: "running" }
   | { kind: "compacting" };
+
+/** One entry of the model catalog `/api/models` reports. */
+export interface SessionModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  reasoning?: boolean;
+  input?: string[];
+  contextWindow?: number;
+  maxTokens?: number;
+  cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+}
+
+/**
+ * The hook's named return interface — the module's public surface, so it is
+ * documented by its type rather than by a 50-key inline object literal.
+ *
+ * The raw runtime-state setters (`setActiveLeafId` / `setData` / `setMessages`)
+ * and the streaming reducer's `dispatch` are deliberately absent: their only
+ * consumer was the hook's own adapter, and handing them out let a caller change
+ * state behind the reducer's back. Actions are the only way to move it.
+ */
+export interface UseAgentSessionResult {
+  // Runtime state, projected out of the one state object.
+  data: SessionData | null;
+  loading: boolean;
+  error: string | null;
+  entryIds: string[];
+  entryTimestamps: (number | undefined)[];
+  compactionPoints: CompactionPoint[];
+  inFlightToolResults: Map<string, ToolResultMessage>;
+  streamState: StreamingState;
+  runtimeError: string | null;
+  activeLeafId: string | null;
+  messages: AgentMessage[];
+  agentRunning: boolean;
+  agentPhase: AgentPhase;
+  retryInfo: RetryInfo | null;
+  contextUsage: ContextUsage | null;
+  subagentRefreshKey: number;
+  // Models and tools.
+  modelNames: Record<string, string>;
+  modelIcons: Record<string, string>;
+  modelList: SessionModelOption[];
+  modelThinkingLevels: Record<string, string[]>;
+  modelThinkingLevelMaps: Record<string, Record<string, string | null>>;
+  newSessionModel: { provider: string; modelId: string } | null;
+  toolSelection: ToolSelection;
+  availableTools: ToolInfo[];
+  toolsLoading: boolean;
+  toolsError: string | null;
+  thinkingLevel: ThinkingLevelOption;
+  systemPrompt: string | null;
+  currentModel: { provider: string; modelId: string } | null;
+  displayModel: { provider: string; modelId: string } | null;
+  sessionStats: SessionStats;
+  isNew: boolean;
+  currentSessionId: string | null;
+  userMessageHistory: string[];
+  // Refs the chat window wires into scroll follow / drag & drop.
+  sessionIdRef: MutableRefObject<string | null>;
+  eventSourceRef: MutableRefObject<EventSource | null>;
+  messagesEndRef: RefObject<HTMLDivElement | null>;
+  scrollContainerRef: RefObject<HTMLDivElement | null>;
+  lastUserMsgRef: RefObject<HTMLDivElement | null>;
+  pendingScrollToUserRef: MutableRefObject<boolean>;
+  userJustSentRef: MutableRefObject<boolean>;
+  // Actions.
+  handleSend: (message: string, images?: AttachedImage[]) => Promise<void>;
+  handleAbort: () => Promise<void>;
+  handleNavigate: (entryId: string) => Promise<void>;
+  handleModelChange: (provider: string, modelId: string) => Promise<void>;
+  handleToolSelectionChange: (selection: ToolSelection) => Promise<void>;
+  ensureAvailableTools: () => Promise<void>;
+  handleThinkingLevelChange: (level: ThinkingLevelOption) => Promise<void>;
+  handleCompact: () => Promise<void>;
+}

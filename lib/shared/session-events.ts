@@ -42,11 +42,15 @@ import {
   patchSessionRuntimeState,
   removeInFlightTool,
   upsertInFlightTool,
+  type AgentPhase,
+  type ContextUsage,
   type SessionRuntimeState,
+  type SessionSnapshotPayload,
 } from "./session-runtime-state";
 import { isShowFileToolName, type ShowFileEntry } from "./show-file-tool-types";
 import type { ToolCallReport } from "./tool-call-stats-types";
-import type { AgentMessage, AssistantMessage, SessionTreeNode } from "./types";
+import type { AgentMessage, AssistantMessage, SessionTreeNode, ToolSelection } from "./types";
+import type { ContextComposition } from "./context-composition";
 
 /** Why pi decided to compact the context. */
 export type SessionCompactionReason = "manual" | "threshold" | "overflow";
@@ -345,6 +349,75 @@ export function isReducedSessionEvent(event: SessionEvent): event is ReducedSess
   return REDUCED_SESSION_EVENT_TYPE_SET.has(event.type);
 }
 
+// ── Client inputs ─────────────────────────────────────────────────────────
+//
+// The wire protocol above is one half of the reducer's input. The other half
+// is the two things the client learns out of band: the REST snapshot re-sync
+// and (later) the context-usage refresh. Both used to write the runtime state
+// directly, which is exactly how the same field ended up with several writers;
+// they are inputs now, so the reducer stays the one writer.
+//
+// The names are deliberately prefixed `client_` so they can never collide with
+// a wire event type, and `ClientInputTypesAreDisjoint` below proves it at
+// compile time. Adding a client input therefore cannot silently shadow one of
+// the protocol events.
+
+/** The REST `get_state` re-sync, as an input. A `null` snapshot is the "no
+ *  session / the re-fetch failed" answer and reduces to idle. */
+export interface ClientSnapshotInput {
+  type: "client_snapshot";
+  snapshot: SessionSnapshotPayload | null;
+}
+
+/**
+ * The context-usage refresh, as an input. This used to write
+ * `contextUsage`/`contextComposition` directly from inside the event adapter's
+ * inline `fetch`, racing the event-driven value; it is one more input to the
+ * one reducer now.
+ *
+ * An absent field means "the response did not report it" and leaves the state
+ * alone (the server only sends `contextComposition` on newer versions).
+ */
+export interface ClientContextUsageInput {
+  type: "client_context_usage";
+  contextUsage?: ContextUsage | null;
+  contextComposition?: ContextComposition | null;
+}
+
+/**
+ * One client-originated input. Closed union: a new member has to be handled by
+ * `reduceClientSessionInput` (no `default:`) and listed in
+ * `CLIENT_SESSION_INPUT_TYPES`.
+ */
+export type ClientSessionInput = ClientSnapshotInput | ClientContextUsageInput;
+
+/** What the one reducer accepts: every wire event or one client input. */
+export type SessionRuntimeInput = SessionEvent | ClientSessionInput;
+
+/** The client-input type names, enumerable for the disjointness test. */
+export const CLIENT_SESSION_INPUT_TYPES = [
+  "client_snapshot",
+  "client_context_usage",
+] as const satisfies readonly ClientSessionInput["type"][];
+
+/** Compile-time proof that the runtime list is exactly the union. */
+export type ClientInputTypesAreComplete = AssertTrue<
+  Equal<ClientSessionInput["type"], (typeof CLIENT_SESSION_INPUT_TYPES)[number]>
+>;
+
+/** Compile-time proof that no client input can shadow a wire event: the two
+ *  vocabularies are disjoint by name. */
+export type ClientInputTypesAreDisjoint = AssertTrue<
+  Extract<ClientSessionInput["type"], SessionEventType> extends never ? true : false
+>;
+
+const CLIENT_SESSION_INPUT_TYPE_SET: ReadonlySet<string> = new Set(CLIENT_SESSION_INPUT_TYPES);
+
+/** Whether `input` came from the client rather than the wire. */
+export function isClientSessionInput(input: SessionRuntimeInput): input is ClientSessionInput {
+  return CLIENT_SESSION_INPUT_TYPE_SET.has(input.type);
+}
+
 /**
  * A side effect the reducer decided on, as data. The adapter knows how to
  * perform each kind; the reducer knows none of them. Keeping this a closed
@@ -421,7 +494,17 @@ export type SessionEventEffect =
   /** Tell the host the turn ended (it owns the sidebar / notify refresh). */
   | { kind: "notify_agent_end" }
   /** Drop the event stream. */
-  | { kind: "close_events" };
+  | { kind: "close_events" }
+  /** Adopt the system prompt a REST snapshot reported into the adapter's own
+   *  `systemPrompt` state. It is not part of the runtime state: it is one of
+   *  the publish projection's external inputs. */
+  | { kind: "adopt_system_prompt"; value: string | null }
+  /** Adopt the raw tool selection a REST snapshot reported (`"all"` | names). */
+  | { kind: "adopt_tool_selection"; selection: ToolSelection }
+  /** Close the live streaming view. The snapshot's idle branch cannot see the
+   *  streaming store, so the `keepForError` decision stays with the adapter
+   *  that owns it (today's `dispatch("end")` + `endStreamingStore`). */
+  | { kind: "end_streaming_view" };
 
 /** What one event does to the runtime state, and the effects it asks for. */
 export interface SessionEventReduction {
@@ -603,6 +686,140 @@ function closeTurn(state: SessionRuntimeState): SessionRuntimeState {
   next = patchSessionRuntimeState(next, "isCompacting", false);
   next = patchSessionRuntimeState(next, "agentPhase", null);
   return patchSessionRuntimeState(next, "retryInfo", null);
+}
+
+/**
+ * The tool calls a re-attached running turn is (or was) executing: every call
+ * issued since the last user prompt that has no tool result yet.
+ *
+ * Lives here rather than next to the REST layer because it feeds the one
+ * reducer: a `client_snapshot` that reports "running" with no phase uses it to
+ * decide between `running_tools` and `waiting_model`. It derives the hint from
+ * the messages the state already holds — `loadSession` writes the disk
+ * transcript into the state before the snapshot is fed, so this is the same
+ * hint the adapter used to keep in a ref.
+ */
+export function derivePendingToolCalls(
+  messages: readonly AgentMessage[],
+): { id: string; name: string; args?: Record<string, unknown> }[] {
+  const lastUserIdx = messages.findLastIndex((message) => message.role === "user");
+  if (lastUserIdx === -1) return [];
+  const pending: { id: string; name: string; args?: Record<string, unknown> }[] = [];
+  for (let i = lastUserIdx; i < messages.length; i++) {
+    const message = messages[i];
+    if (message.role === "assistant" && Array.isArray(message.content)) {
+      for (const block of message.content) {
+        if (block.type === "toolCall") {
+          pending.push({ id: block.toolCallId, name: block.toolName, args: block.input });
+        }
+      }
+    } else if (message.role === "toolResult") {
+      const idx = pending.findIndex((tool) => tool.id === message.toolCallId);
+      if (idx !== -1) pending.splice(idx, 1);
+    }
+  }
+  return pending;
+}
+
+/**
+ * Whether two phases say the same thing. The snapshot branch re-derives the
+ * phase from scratch on every re-sync (SSE reconnect, window refocus, mount
+ * backstop), and a replayed snapshot must not churn the state object: a fresh
+ * `{ kind: "waiting_model" }` that only *looks* equal would re-render every
+ * consumer. Wire-event branches do not need this — they are the only ones that
+ * move the phase during a turn.
+ */
+function sameAgentPhase(a: AgentPhase, b: AgentPhase): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.kind !== b.kind) return false;
+  if (a.kind !== "running_tools" || b.kind !== "running_tools") return true;
+  if (a.tools.length !== b.tools.length) return false;
+  return a.tools.every((tool, i) => {
+    const other = b.tools[i];
+    return tool.id === other.id && tool.name === other.name && tool.args === other.args;
+  });
+}
+
+/**
+ * The one entry point to the reducer: a wire event OR a client input in, the
+ * next runtime state plus the effects to perform out. Wire events keep going
+ * through `reduceSessionEvent`; the client half has its own branch below.
+ */
+export function reduceSessionInput(
+  state: SessionRuntimeState,
+  input: SessionRuntimeInput,
+): SessionEventReduction {
+  if (isClientSessionInput(input)) return reduceClientSessionInput(state, input);
+  return reduceSessionEvent(state, input);
+}
+
+/**
+ * The client half of the input union. A `switch` with no `default:` over the
+ * closed union — adding a client input without handling it stops this
+ * compiling, exactly like the wire half.
+ */
+function reduceClientSessionInput(
+  state: SessionRuntimeState,
+  input: ClientSessionInput,
+): SessionEventReduction {
+  switch (input.type) {
+    case "client_snapshot": {
+      // Moved verbatim from the adapter's old `applyAgentRuntimeState`: the
+      // REST snapshot is one more input to the one writer, not a second one.
+      // The order of the derivation is load-bearing — compaction wins over
+      // "running", and a running snapshot with unknown phase waits on the
+      // model unless the transcript shows an in-flight tool call.
+      const snapshot = input.snapshot;
+      const live = snapshot?.state;
+      let next = state;
+      if (live?.contextUsage !== undefined) {
+        next = patchSessionRuntimeState(next, "contextUsage", live.contextUsage ?? null);
+      }
+      if (live?.contextComposition !== undefined) {
+        next = patchSessionRuntimeState(next, "contextComposition", live.contextComposition ?? null);
+      }
+      const effects: SessionEventEffect[] = [];
+      if (live?.systemPrompt !== undefined) {
+        effects.push({ kind: "adopt_system_prompt", value: live.systemPrompt ?? null });
+      }
+      if (live?.toolNames !== undefined) {
+        effects.push({ kind: "adopt_tool_selection", selection: live.toolNames });
+      }
+
+      const compacting = live?.isCompacting === true || live?.phase === "compacting";
+      const running = Boolean(
+        compacting ||
+        live?.isRunning === true ||
+        live?.isStreaming === true ||
+        (snapshot?.running === true && !live),
+      );
+
+      const hint = running && !compacting ? derivePendingToolCalls(next.messages) : [];
+      const phase: AgentPhase = compacting
+        ? { kind: "compacting" }
+        : running
+          ? (hint.length > 0 ? { kind: "running_tools", tools: hint } : { kind: "waiting_model" })
+          : null;
+      next = patchSessionRuntimeState(next, "agentRunning", running);
+      next = patchSessionRuntimeState(next, "isCompacting", compacting);
+      next = patchSessionRuntimeState(next, "agentPhase", (previous) =>
+        sameAgentPhase(previous, phase) ? previous : phase);
+      if (!running) effects.push({ kind: "end_streaming_view" });
+      return { state: next, effects };
+    }
+    case "client_context_usage": {
+      // Only the fields the response reported move: an absent one leaves the
+      // state untouched (and keeps a replay a no-op on the object identity).
+      let next = state;
+      if (input.contextUsage !== undefined) {
+        next = patchSessionRuntimeState(next, "contextUsage", input.contextUsage ?? null);
+      }
+      if (input.contextComposition !== undefined) {
+        next = patchSessionRuntimeState(next, "contextComposition", input.contextComposition ?? null);
+      }
+      return { state: next, effects: [] };
+    }
+  }
 }
 
 /**

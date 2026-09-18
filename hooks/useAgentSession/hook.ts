@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "react";
 import type { AgentMessage, SessionTreeNode, TextContent, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
-import type { ContextComposition } from "@/lib/shared/context-composition";
 import { sendAgentCommand } from "@/lib/client/agent-client";
 import { readLastUsedModel, writeLastUsedModel } from "@/lib/client/last-used-model";
 import { useToast } from "@/components/ui/Toast";
@@ -13,6 +12,7 @@ import { getPendingAskUserQuestions } from "../askUserQuestionsStore";
 import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import {
   createSessionRuntimeState,
+  deriveSessionUiPublish,
   inFlightToolResultsOf,
   patchSessionRuntimeState,
   type SessionRuntimeState,
@@ -26,21 +26,22 @@ import {
 } from "../streamingMessageStore";
 import { useAgentSessionTransport } from "./transport";
 import { useAgentSessionData } from "./data";
-import type { SessionEvent } from "@/lib/shared/session-events";
+import type { SessionEvent, SessionRuntimeInput } from "@/lib/shared/session-events";
 import type {
   AgentPhase,
   AgentRuntimeState,
   AttachedImage,
-  ContextUsage,
   SessionData,
+  SessionModelOption,
   ThinkingLevelOption,
   TransportRefs,
   UseAgentSessionOptions,
+  UseAgentSessionResult,
 } from "./types";
 
 
 
-export function useAgentSession(opts: UseAgentSessionOptions) {
+export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionResult {
   const {
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady,
     modelsRefreshKey, statsEmit,
@@ -115,8 +116,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const setMessages = useCallback((value: StateUpdater<AgentMessage[]>) => patchRuntime("messages", value), [patchRuntime]);
   const setSubagentRefreshKey = useCallback((value: StateUpdater<number>) => patchRuntime("subagentRefreshKey", value), [patchRuntime]);
   const setAgentPhase = useCallback((value: StateUpdater<AgentPhase>) => patchRuntime("agentPhase", value), [patchRuntime]);
-  const setContextUsage = useCallback((value: StateUpdater<ContextUsage | null>) => patchRuntime("contextUsage", value), [patchRuntime]);
-  const setContextComposition = useCallback((value: StateUpdater<ContextComposition | null>) => patchRuntime("contextComposition", value), [patchRuntime]);
   const setThinkingLevel = useCallback((value: StateUpdater<ThinkingLevelOption>) => patchRuntime("thinkingLevel", value), [patchRuntime]);
   const setAgentRunningSync = useCallback((running: boolean) => patchRuntime("agentRunning", running), [patchRuntime]);
   const setCompactingSync = useCallback((compacting: boolean) => patchRuntime("isCompacting", compacting), [patchRuntime]);
@@ -155,7 +154,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [setSubagentRefreshKey]);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
-  const [modelList, setModelList] = useState<{ id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[]>([]);
+  const [modelList, setModelList] = useState<SessionModelOption[]>([]);
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [newSessionModel, setNewSessionModelState] = useState<{ provider: string; modelId: string } | null>(null);
@@ -280,7 +279,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [runtimeState.messages]);
   const currentSessionId: string | null = data?.sessionId ?? sessionIdRef.current ?? null;
 
-  const sessionStats = (() => {
+  // Memoised on the transcript: it is a publish *source*, not runtime belief,
+  // and a fresh identity every render would both recompute the publish
+  // projection on every render and force `setSessionUiState` to content-compare
+  // the whole payload each time.
+  const sessionStats = useMemo(() => {
     const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     let cost = 0;
     for (const msg of runtimeState.messages) {
@@ -302,7 +305,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const inputDenom = tokens.input + tokens.cacheRead;
     const cachedHitRate = inputDenom > 0 ? tokens.cacheRead / inputDenom : 0;
     return { tokens, cost, cachedHitRate };
-  })();
+  }, [runtimeState.messages]);
 
   const transportRefs: TransportRefs = {
     eventSource: eventSourceRef,
@@ -316,15 +319,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   };
   const loadContextRef = useRef<(sid: string, leafId: string | null) => Promise<void>>(async () => {});
   const refreshAgentRuntimeStateRef = useRef<((sid?: string) => Promise<AgentRuntimeState | null>) | null>(null);
+  // The reducer's entry point lives in the event adapter, which is created
+  // after the data layer (it needs `loadSession` / `closeEvents`). The data
+  // layer reaches it through this ref, filled on the same render — the same
+  // bridge shape as `refreshAgentRuntimeStateRef` / `loadContextRef`.
+  const applyRuntimeInputRef = useRef<(input: SessionRuntimeInput) => void>(() => {});
   const {
     loadSession,
     loadContext: loadContextBound,
     ensureAvailableTools: ensureAvailableToolsImpl,
-    applyAgentRuntimeState,
     refreshAgentRuntimeState,
   } = useAgentSessionData({
     sessionIdRef,
-    streamingKey,
     modelThinkingLevels,
     setData,
     setActiveLeafId,
@@ -334,14 +340,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setCompactionPoints,
     setCurrentModelOverride,
     setThinkingLevel,
-    setToolSelection,
-    setContextUsage,
-    setContextComposition,
-    setSystemPrompt,
-    setAgentPhase,
-    setAgentRunningSync,
-    setCompactingSync,
-    dispatch,
+    applyRuntimeInput: (input) => applyRuntimeInputRef.current(input),
     setLoading,
     setError,
     setToolsLoading,
@@ -390,7 +389,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     // activation so we re-register the owner for the now-active session.
   }, [isActive, refreshSystemPrompt]);
 
-  const { handleAgentEvent } = useAgentSessionEvents({
+  const { handleAgentEvent, applyRuntimeInput } = useAgentSessionEvents({
     controllerId: streamingKey,
     isActive,
     session,
@@ -406,6 +405,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     dispatch,
     botRevertTimerRef,
     refreshSystemPrompt,
+    setSystemPrompt,
+    setToolSelection,
     loadSession,
     refreshAgentRuntimeStateRef,
     closeEvents,
@@ -419,6 +420,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   // which owns the EventSource and therefore `closeEvents` — and the adapter,
   // which needs `closeEvents` to perform an effect.
   handleAgentEventRef.current = handleAgentEvent;
+  applyRuntimeInputRef.current = applyRuntimeInput;
 
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     if (!message.trim() && !images?.length) return;
@@ -752,7 +754,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionIdRef.current = session.id;
       loadSession(session.id, true, true).then(async (agentState) => {
         if (disposedRef.current) return;
-        applyAgentRuntimeState(agentState);
+        // The REST snapshot is one more input to the one reducer.
+        applyRuntimeInputRef.current({ type: "client_snapshot", snapshot: agentState });
         // Backstop for a wrapper that wasn't alive at includeState time (e.g.
         // right after server boot): GET /api/agent/[id] lazily boots the RPC
         // session, so one re-fetch publishes systemPrompt/contextUsage without
@@ -813,15 +816,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     })();
   }, [loading, onEntryNavigated, scrollToEntryId, setActiveLeafId]);
 
+  // The ONE publish point. "Only the currently visible tab may publish" is a
+  // parameter of the pure projection now, not a guard copied next to every
+  // field: a background controller gets `null` and writes nothing.
   useEffect(() => {
-    if (isActive) setSessionUiState({ systemPrompt });
-  }, [isActive, systemPrompt]);
-
-  useEffect(() => {
-    if (isActive) {
-      setSessionUiState({ branchTree: runtimeState.liveTree ?? data?.tree ?? [], branchActiveLeafId: runtimeState.activeLeafId });
-    }
-  }, [isActive, data?.tree, runtimeState.activeLeafId, runtimeState.liveTree]);
+    const patch = deriveSessionUiPublish(runtimeState, {
+      systemPrompt,
+      sessionStats,
+      isStreaming: streamState.isStreaming,
+      diskTree: data?.tree ?? [],
+      toolSelection,
+      availableTools,
+      isNew,
+      newSessionModel,
+      sessionModel: currentModel,
+    }, isActive);
+    if (patch) setSessionUiState(patch);
+    // Every source is memoised, so this only runs when a published field can
+    // actually have changed; the content-equality guard inside
+    // `setSessionUiState` then suppresses identity-only churn.
+  }, [runtimeState, systemPrompt, sessionStats, streamState.isStreaming, data?.tree, toolSelection, availableTools, isNew, newSessionModel, currentModel, isActive]);
 
   // Keep the store's leaf-change handler owned by the active controller only.
   // Background controllers remain fully live, but must never redirect a branch
@@ -834,7 +848,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   // Load model list
   useEffect(() => {
-    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]>; thinkingLevelMaps?: Record<string, Record<string, string | null>>; modelIcons?: Record<string, string> }) => {
+    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: SessionModelOption[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]>; thinkingLevelMaps?: Record<string, Record<string, string | null>>; modelIcons?: Record<string, string> }) => {
       setModelNames(d.models);
       if (d.modelIcons) setModelIcons(d.modelIcons);
       if (d.thinkingLevels) setModelThinkingLevels(d.thinkingLevels);
@@ -864,30 +878,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
     }).catch(() => {});
   }, [isNew, modelsRefreshKey, setNewSessionModel, setThinkingLevel]);
-
-  // Publish the remaining session-level state to the store. The shallow-equal
-  // guard inside setSessionUiState prevents re-rendering AppShell's top bar
-  // when an IIFE-derived value (sessionStats) gets a new object identity but
-  // the same scalar contents.
-  useEffect(() => { if (isActive) setSessionUiState({ sessionStats }); }, [isActive, sessionStats]);
-  useEffect(() => { if (isActive) setSessionUiState({ contextUsage: runtimeState.contextUsage }); }, [isActive, runtimeState.contextUsage]);
-  useEffect(() => { if (isActive) setSessionUiState({ contextComposition: runtimeState.contextComposition }); }, [isActive, runtimeState.contextComposition]);
-  useEffect(() => { if (isActive) setSessionUiState({ isStreaming: streamState.isStreaming }); }, [isActive, streamState.isStreaming]);
-  // Publish the wider "agent is busy with this turn" flag so the
-  // conversation-tree panel can lock card clicks for the entire turn,
-  // not just the streaming sub-window. (See SessionUiState.agentRunning.)
-  useEffect(() => { if (isActive) setSessionUiState({ agentRunning: runtimeState.agentRunning }); }, [isActive, runtimeState.agentRunning]);
-  // Publish the active model + message transcript for cross-tab panels
-  // (BTW reads both — `displayModel` to mirror the model and
-  // `mainSessionMessages` to feed the BTW agent's first send with the
-  // same context the user can see). The active-only filter mirrors the
-  // other sessionUi fields; a background controller's messages must
-  // never overwrite the visible chat's transcript.
-  useEffect(() => { if (isActive) setSessionUiState({ currentModel: displayModel }); }, [isActive, displayModel]);
-  useEffect(() => {
-    if (isActive) setSessionUiState({ thinkingLevel: runtimeState.thinkingLevel, toolNames: toolSelection === "all" ? availableTools.map((tool) => tool.name) : toolSelection });
-  }, [isActive, runtimeState.thinkingLevel, toolSelection, availableTools]);
-  useEffect(() => { if (isActive) setSessionUiState({ mainSessionMessages: runtimeState.messages }); }, [isActive, runtimeState.messages]);
 
   // Clear a controller's pending bot reaction when it moves to the
   // background (and again on final unmount). Background events must not
@@ -935,7 +925,5 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleSend, handleAbort, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
     handleCompact,
-    setActiveLeafId, setData, setMessages,
-    dispatch,
   };
 }

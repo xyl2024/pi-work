@@ -25,7 +25,7 @@
  *     leak ADR-0003 recorded (`seenCelebrateToolEndIds`).
  */
 
-import type { AgentMessage, SessionTreeNode, ToolResultMessage } from "./types";
+import type { AgentMessage, SessionTreeNode, ToolInfo, ToolSelection, ToolResultMessage } from "./types";
 import type { ContextComposition } from "./context-composition";
 import type { ThinkingLevelOption } from "./thinking-level-utils";
 
@@ -43,6 +43,35 @@ export interface ContextUsage {
   percent: number | null;
   contextWindow: number;
   tokens: number | null;
+}
+
+/**
+ * The payload of the REST `get_state` round trip — what `GET /api/agent/[id]`
+ * answers, and the body of the `client_snapshot` runtime input.
+ *
+ * It is declared here (not next to the hook) because the reducer consumes it:
+ * the snapshot used to be a second writer of the runtime state, and it is now
+ * one more input to the one writer, so its shape belongs to the shared module
+ * like the wire events do. `AgentRuntimeState` in the hook is an alias of this.
+ */
+export interface SessionSnapshotPayload {
+  running: boolean;
+  state?: {
+    isStreaming?: boolean;
+    isCompacting?: boolean;
+    isRunning?: boolean;
+    phase?: "compacting" | "streaming" | null;
+    contextUsage?: ContextUsage | null;
+    /** Local context-composition estimate anchored to `contextUsage.tokens`
+     *  (ADR-0005). Computed server-side on `message_end`; absent on older
+     *  servers and `null` until the first estimate lands. */
+    contextComposition?: ContextComposition | null;
+    systemPrompt?: string;
+    thinkingLevel?: string;
+    /** Raw tool selection the live agent is using ("all" | string[], patterns
+     *  included). Absent on older servers; drives the tools button label. */
+    toolNames?: ToolSelection;
+  };
 }
 
 export interface RetryInfo {
@@ -283,5 +312,98 @@ export function inFlightToolResultsOf(
     if (call.result) out.set(id, call.result);
   }
   return out;
+}
+
+// ── The publish projection ─────────────────────────────────────────────────
+//
+// "Given this runtime state, what should the session UI store see?" is a pure
+// function, and it is the ONLY place the "only the currently visible tab may
+// publish" rule lives. Before this it was inlined fourteen times in the hook
+// under four different spellings; a new field had to remember to copy the
+// `isActive` guard, and a background tab could leak its state into the visible
+// right-hand panels.
+
+/** Per-session token / cost totals, derived from the transcript by the hook
+ *  (a publish source, not runtime belief). `null` before any assistant message
+ *  reports usage. */
+export type SessionStats = {
+  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  cost?: number;
+  /** Weighted prompt-cache hit rate across all assistant messages in the
+   *  active leaf path: Σ cacheRead / Σ (input + cacheRead), in [0, 1].
+   *  `undefined` when no message has reported cacheRead yet (provider with
+   *  no caching support), so the consumer can render "0% cached" vs hide. */
+  cachedHitRate?: number;
+} | null;
+
+/**
+ * The payload a session controller publishes into `hooks/sessionUiStore.ts`:
+ * everything AppShell renders about the *active* session. The store's state is
+ * exactly this shape (it aliases it), so there is one declaration.
+ */
+export interface SessionUiPublish {
+  branchTree: SessionTreeNode[];
+  branchActiveLeafId: string | null;
+  systemPrompt: string | null;
+  sessionStats: SessionStats;
+  contextUsage: ContextUsage | null;
+  contextComposition: ContextComposition | null;
+  /** A subset of `agentRunning`: true only while tokens are arriving. */
+  isStreaming: boolean;
+  /** Busy with the turn, from `agent_start` to `agent_end`. */
+  agentRunning: boolean;
+  currentModel: { provider: string; modelId: string } | null;
+  thinkingLevel: string;
+  toolNames: string[];
+  mainSessionMessages: AgentMessage[];
+}
+
+/**
+ * The publish inputs that are NOT part of the runtime state. They are the
+ * sources the adapter owns (its own `useState`es, the disk tree, the tool
+ * catalog); keeping them explicit is what lets the projection stay pure.
+ */
+export interface SessionUiPublishSources {
+  systemPrompt: string | null;
+  sessionStats: SessionStats;
+  isStreaming: boolean;
+  /** The tree loaded from disk; `state.liveTree` wins over it when present. */
+  diskTree: SessionTreeNode[];
+  toolSelection: ToolSelection;
+  availableTools: ToolInfo[];
+  /** New-session draft (no session id yet) vs. an existing session. */
+  isNew: boolean;
+  newSessionModel: { provider: string; modelId: string } | null;
+  sessionModel: { provider: string; modelId: string } | null;
+}
+
+/**
+ * Derive what the session UI store should see, or `null` when this controller
+ * is not the visible tab. `isActive` is just another parameter of the
+ * projection, so "a background tab publishes nothing" is assertable in a unit
+ * test instead of depending on fourteen copied guards.
+ */
+export function deriveSessionUiPublish(
+  state: SessionRuntimeState,
+  sources: SessionUiPublishSources,
+  isActive: boolean,
+): SessionUiPublish | null {
+  if (!isActive) return null;
+  return {
+    branchTree: state.liveTree ?? sources.diskTree,
+    branchActiveLeafId: state.activeLeafId,
+    systemPrompt: sources.systemPrompt,
+    sessionStats: sources.sessionStats,
+    contextUsage: state.contextUsage,
+    contextComposition: state.contextComposition,
+    isStreaming: sources.isStreaming,
+    agentRunning: state.agentRunning,
+    currentModel: sources.isNew ? sources.newSessionModel : sources.sessionModel,
+    thinkingLevel: state.thinkingLevel,
+    toolNames: sources.toolSelection === "all"
+      ? sources.availableTools.map((tool) => tool.name)
+      : sources.toolSelection,
+    mainSessionMessages: state.messages,
+  };
 }
 
