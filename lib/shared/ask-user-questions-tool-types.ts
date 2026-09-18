@@ -104,6 +104,13 @@ export interface AskUserQuestionsCancel {
   cancelled: true;
 }
 
+/** Public shape of the Promise `requestUserInput` resolves with: the user's
+ *  answers, or a cancel. Lives here (not in the server-only tool file) so the
+ *  interaction-gate module can speak it without importing the pi SDK. */
+export type UserInputResolution =
+  | { kind: "answered"; answers: AskUserQuestionAnswer[] }
+  | { kind: "cancelled" };
+
 /** Server-side payload attached to the `ask_user_questions_request` SSE event.
  *
  * A `type` alias, not an `interface`, on purpose: the session-event protocol

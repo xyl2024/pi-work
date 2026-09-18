@@ -41,6 +41,7 @@ import {
   type AskUserQuestion,
   type AskUserQuestionAnswer,
   type AskUserQuestionsDetails,
+  type UserInputResolution,
 } from "../shared/ask-user-questions-tool-types";
 import { createLogger } from "./logger";
 
@@ -49,6 +50,7 @@ export type {
   AskUserQuestion,
   AskUserQuestionAnswer,
   AskUserQuestionsDetails,
+  UserInputResolution,
 } from "../shared/ask-user-questions-tool-types";
 export {
   ASK_USER_QUESTIONS_MAX_QUESTIONS,
@@ -115,11 +117,6 @@ const AskUserQuestionsParamsSchema = Type.Object({
 });
 
 type AskUserQuestionsParamsType = Static<typeof AskUserQuestionsParamsSchema>;
-
-/** Public shape of the resolved Promise returned by `requestUserInput`. */
-export type UserInputResolution =
-  | { kind: "answered"; answers: AskUserQuestionAnswer[] }
-  | { kind: "cancelled" };
 
 /** Function the wrapper exposes to the tool to register a pending question
  *  and wait for the user's answer. Bound by `startRpcSession` per session. */

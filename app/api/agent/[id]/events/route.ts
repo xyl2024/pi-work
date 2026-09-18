@@ -61,20 +61,15 @@ export async function GET(
         // best-effort — tree emission failures must not break the stream
       }
 
-      // Re-emit any in-flight ask_user_questions requests so a page refresh
-      // mid-question doesn't strand the user. Same ordering rule as the
-      // tree push above: subscription must already be live.
+      // Replay every gate still waiting — a permission confirmation as well as
+      // a question — so a page refresh mid-gate brings the surface back rather
+      // than silently dropping it (ADR-0008). The gate module decides what a
+      // reconnecting client is told; this route just encodes it. Same ordering
+      // rule as the tree push above: subscription must already be live. Both
+      // client surfaces are idempotent by tool call id, so a replay never
+      // rings or stacks twice.
       try {
-        const pending = session.snapshotPendingUserInputs();
-        for (const entry of pending) {
-          const request: SessionEvent = {
-            type: "ask_user_questions_request",
-            toolCallId: entry.toolCallId,
-            questions: entry.questions,
-            ts: entry.ts,
-          };
-          encode(request);
-        }
+        for (const event of session.snapshotPendingGates()) encode(event);
       } catch {
         // best-effort
       }

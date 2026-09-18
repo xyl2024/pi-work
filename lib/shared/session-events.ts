@@ -319,11 +319,11 @@ export type SessionEventTypesAreComplete = AssertTrue<
 // switch has no `default:`, and the ignored half of the protocol is handled by
 // the total wrapper below rather than by an adapter-side guard.
 //
-// Replay: on SSE reconnect the route re-delivers only `session_tree_update`
-// and any pending `ask_user_questions_request`, never a turn-boundary event
-// (`app/api/agent/[id]/events/route.ts`). The idempotency those two carry is
-// therefore not a property this group needs — but no branch below churns the
-// state gratuitously either.
+// Replay: on SSE reconnect the route re-delivers only `session_tree_update`, a
+// pending `permission_request` and a pending `ask_user_questions_request`,
+// never a turn-boundary event (`app/api/agent/[id]/events/route.ts`). The
+// idempotency those carry is therefore not a property this group needs — but
+// no branch below churns the state gratuitously either.
 
 /** The reduced half of the protocol, as protocol members. */
 export type ReducedSessionEvent = Extract<SessionEvent, { type: ReducedSessionEventType }>;

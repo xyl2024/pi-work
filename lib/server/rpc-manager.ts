@@ -20,7 +20,7 @@ import {
   writeSessionToolSelection,
 } from "./session-tools-config";
 import { readCwdToolSelection } from "./cwd-tools-config";
-import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK, type UserInputResolution } from "./ask-user-questions-tool";
+import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } from "./ask-user-questions-tool";
 import { celebrateTool, CELEBRATE_SYSTEM_PROMPT_BLOCK } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
@@ -31,7 +31,7 @@ import {
 import { spawnSubagentTool, SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK } from "./subagent-tool";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
 import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
-import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
+import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { matchSelfKillCommand } from "./self-protection";
@@ -42,45 +42,25 @@ import { computeContextComposition, type ContextComposition } from "../shared/co
 import { getContextTokenCounter, type TokenCounter } from "./context-tokenizer";
 import { getChannel } from "./channels/db";
 import type { NotificationPayload, TaskNotification } from "../shared/notifications";
+import { InteractionGates, type PermissionDecision } from "./interaction-gates";
 
 const log = createLogger("rpc-manager");
 
-export type PermissionDecision = "allow_once" | "allow_similar" | "deny";
-
-interface PendingPermission {
-  resolve: (decision: PermissionDecision) => void;
-  reject: (reason: string) => void;
-  ruleName: string;
-  command: string;
-  timeoutHandle: ReturnType<typeof setTimeout>;
-}
-
-/** The wrapper-synthesised permission event, as the protocol declares it. */
-export type PermissionRequestEvent = Extract<SessionEvent, { type: "permission_request" }>;
-
 // ============================================================================
-// Ask user questions (parallel to the permission queue above)
+// Ask user questions
 //
 // The `ask_user_questions` custom tool blocks until the user answers a
-// batch of structured questions or cancels. The tool calls
-// `requestUserInput(toolCallId, questions)` (closure-bound per session);
-// the wrapper emits a synthetic `ask_user_questions_request` SSE event,
-// stores a Promise in `pendingUserInputs`, and resolves it when the
-// client POSTs back an `ask_user_questions_decision` command.
+// batch of structured questions or cancels. Its gate lives on the wrapper's
+// `gates` (lib/server/interaction-gates.ts, ADR-0008) together with the
+// permission gates: the module emits the synthetic
+// `ask_user_questions_request` SSE event, keeps the wait on its table, and
+// settles it when the client POSTs back an `ask_user_questions_decision`
+// command. This wrapper holds no question state of its own.
 //
-// Distinct from `pendingPermissions` because the data shape, lifecycle,
-// and front-end renderer are entirely different. We do NOT impose a
-// timeout — the wrapper's idle timer (10 min) reaps abandoned requests
-// on destroy, and the tool's AbortSignal handles explicit aborts.
+// No deadline is imposed (the gate is opened with `timeoutMs: null`), so an
+// abandoned question stays on the table until the session is destroyed or the
+// tool's AbortSignal fires — same as before the move.
 // ============================================================================
-
-interface PendingUserInput {
-  resolve: (resolution: UserInputResolution) => void;
-  reject: (reason: string) => void;
-  questions: AskUserQuestion[];
-  /** Epoch ms when the request was emitted (used by the UI for ordering). */
-  ts: number;
-}
 
 /** The wrapper-synthesised question event, as the protocol declares it. */
 export type AskUserQuestionsRequestEvent = Extract<SessionEvent, { type: "ask_user_questions_request" }>;
@@ -110,9 +90,10 @@ export class AgentSessionWrapper {
   // state is not observable until compact() advances past its initial abort,
   // so this closes the same-tick race between concurrent compact requests.
   private compactInFlight = false;
-  private pendingPermissions: Map<string, PendingPermission> = new Map();
-  private allowedThisSession: Set<string> = new Set();
-  private pendingUserInputs: Map<string, PendingUserInput> = new Map();
+  /** This session's interaction gates (ADR-0008): the pending permission
+   *  confirmations, the pending questions and the "always allow" memo all
+   *  live on that one module now. */
+  readonly gates: InteractionGates;
   // Text of the latest assistant body reply of the current turn — used by
   // per-session reply notifications (see start() + deliverSessionNotify).
   // Reset on agent_start, updated on each assistant message_end.
@@ -147,7 +128,24 @@ export class AgentSessionWrapper {
     public readonly inner: AgentSessionLike,
     public readonly source: LlmAuditSource = "user",
     public readonly cwd: string | null = null,
-  ) {}
+  ) {
+    this.gates = new InteractionGates({
+      source,
+      emit: (event) => this.emit(event),
+    });
+  }
+
+  /** Fan a synthesized event out to the wrapper's listeners without letting a
+   *  listener error break the emitting path. */
+  private emit(event: SessionEvent): void {
+    for (const l of this.listeners) {
+      try {
+        l(event);
+      } catch {
+        // listener errors must not break the emitting flow
+      }
+    }
+  }
 
   get sessionId(): string {
     return this.inner.sessionId;
@@ -483,170 +481,16 @@ export class AgentSessionWrapper {
     return () => this.destroyCallbacks.delete(cb);
   }
 
-  /**
-   * Block a tool call until the user makes a decision. Emits a synthetic
-   * permission_request event to subscribers and returns a promise that
-   * resolves with the user's decision (or 'deny' on timeout / destroy).
-   */
-  requestPermission(toolCallId: string, ruleName: string, command: string): Promise<PermissionDecision> {
-    if (this.pendingPermissions.has(toolCallId)) {
-      // Idempotent: a re-entry shouldn't happen, but if it does, return the existing promise.
-      return new Promise<PermissionDecision>((resolve, reject) => {
-        const existing = this.pendingPermissions.get(toolCallId)!;
-        existing.resolve = (d) => { resolve(d); existing.resolve = () => {}; };
-        existing.reject = (r) => { reject(r); existing.reject = () => {}; };
-      });
-    }
-    const timeoutMs = getDangerousPatternTimeoutMs();
-    const promise = new Promise<PermissionDecision>((resolve, reject) => {
-      const timeoutHandle = setTimeout(() => {
-        const pending = this.pendingPermissions.get(toolCallId);
-        if (!pending) return;
-        this.pendingPermissions.delete(toolCallId);
-        log.warn("permission request timed out, auto-denying", { toolCallId, ruleName });
-        resolve("deny");
-      }, timeoutMs);
-      const entry: PendingPermission = {
-        resolve,
-        reject,
-        ruleName,
-        command,
-        timeoutHandle,
-      };
-      this.pendingPermissions.set(toolCallId, entry);
-    });
-    const event: PermissionRequestEvent = {
-      type: "permission_request",
-      toolCallId,
-      ruleName,
-      command,
-    };
-    for (const l of this.listeners) {
-      try {
-        l(event);
-      } catch {
-        // listener errors must not break permission flow
-      }
-    }
-    log.info("permission requested", { toolCallId, ruleName });
-    return promise;
-  }
-
-  resolvePermission(toolCallId: string, decision: PermissionDecision): boolean {
-    const pending = this.pendingPermissions.get(toolCallId);
-    if (!pending) return false;
-    this.pendingPermissions.delete(toolCallId);
-    clearTimeout(pending.timeoutHandle);
-    if (decision === "allow_similar") this.allowedThisSession.add(pending.ruleName);
-    pending.resolve(decision);
-    log.info("permission resolved", { toolCallId, decision });
-    return true;
-  }
-
-  isRuleAllowedThisSession(ruleName: string): boolean {
-    return this.allowedThisSession.has(ruleName);
-  }
-
-  /**
-   * Block the calling tool until the user answers the given batch of
-   * questions (or cancels). Emits a synthetic `ask_user_questions_request`
-   * SSE event and returns a Promise that resolves with the user's
-   * answers — or `{kind: "cancelled"}` if they clicked Cancel.
+  /** What a reconnecting client must still be told: the line-protocol events
+   *  of every gate this session has waiting, both kinds. The
+   *  /api/agent/[id]/events route encodes them verbatim after an SSE reconnect,
+   *  so a page refresh mid-confirmation or mid-question brings the surface
+   *  back instead of stranding the user.
    *
-   * No timeout is imposed: the tool's AbortSignal handles explicit aborts,
-   * and `destroy()` rejects pending entries when the wrapper is reaped.
-   * The tool wrapper treats either rejection as an error result for the
-   * agent (no hangs).
-   */
-  requestUserInput(
-    toolCallId: string,
-    questions: AskUserQuestion[],
-  ): Promise<UserInputResolution> {
-    if (this.pendingUserInputs.has(toolCallId)) {
-      // Idempotent: return the existing promise for a re-entry (shouldn't
-      // happen for a unique toolCallId, but defensive).
-      return new Promise<UserInputResolution>((resolve, reject) => {
-        const existing = this.pendingUserInputs.get(toolCallId)!;
-        existing.resolve = (r) => { resolve(r); existing.resolve = () => {}; };
-        existing.reject = (reason) => { reject(reason); existing.reject = () => {}; };
-      });
-    }
-    const promise = new Promise<UserInputResolution>((resolve, reject) => {
-      const entry: PendingUserInput = {
-        resolve,
-        reject,
-        questions,
-        ts: Date.now(),
-      };
-      this.pendingUserInputs.set(toolCallId, entry);
-    });
-    const event: AskUserQuestionsRequestEvent = {
-      type: "ask_user_questions_request",
-      toolCallId,
-      questions,
-      ts: Date.now(),
-    };
-    for (const l of this.listeners) {
-      try {
-        l(event);
-      } catch {
-        // listener errors must not break the request flow
-      }
-    }
-    log.info("ask_user_questions request emitted", {
-      toolCallId,
-      questionCount: questions.length,
-    });
-    return promise;
-  }
-
-  /**
-   * Resolve a pending ask_user_questions request. Called when the client
-   * POSTs back an `ask_user_questions_decision` command.
-   *
-   * The decision is either `{cancelled: true}` (user clicked Cancel) or
-   * `{answers: AskUserQuestionAnswer[]}` (user submitted answers, possibly
-   * empty for non-required questions they skipped).
-   */
-  resolveUserInput(
-    toolCallId: string,
-    decision: AskUserQuestionsDecision | AskUserQuestionsCancel,
-  ): boolean {
-    const pending = this.pendingUserInputs.get(toolCallId);
-    if (!pending) return false;
-    this.pendingUserInputs.delete(toolCallId);
-    if ("cancelled" in decision && decision.cancelled) {
-      pending.resolve({ kind: "cancelled" });
-      log.info("ask_user_questions cancelled", { toolCallId });
-    } else if ("answers" in decision) {
-      pending.resolve({ kind: "answered", answers: decision.answers });
-      log.info("ask_user_questions answered", {
-        toolCallId,
-        answerCount: decision.answers.filter((a) => a.selectedLabels.length > 0).length,
-      });
-    } else {
-      // Defensive: unknown decision shape — treat as cancel to unblock.
-      pending.resolve({ kind: "cancelled" });
-      log.warn("ask_user_questions unknown decision shape, treated as cancel", {
-        toolCallId,
-      });
-    }
-    return true;
-  }
-
-  /** Snapshot of pending ask_user_questions requests for this wrapper.
-   *  Used by the /api/agent/[id]/events route to re-emit after SSE
-   *  reconnect so a refresh-mid-question doesn't lose the question. */
-  snapshotPendingUserInputs(): AskUserQuestionsRequestPayload[] {
-    const out: AskUserQuestionsRequestPayload[] = [];
-    for (const [toolCallId, pending] of this.pendingUserInputs) {
-      out.push({
-        toolCallId,
-        questions: pending.questions,
-        ts: pending.ts,
-      });
-    }
-    return out;
+   *  The gate module owns both the table and the wire shapes (ADR-0008), so
+   *  this is a bare pass-through — the route filters nothing. */
+  snapshotPendingGates(): SessionEvent[] {
+    return this.gates.snapshot();
   }
 
   async send(command: Record<string, unknown>): Promise<unknown> {
@@ -907,7 +751,7 @@ export class AgentSessionWrapper {
       case "permission_decision": {
         const toolCallId = command.toolCallId as string;
         const decision = command.decision as PermissionDecision;
-        const resolved = this.resolvePermission(toolCallId, decision);
+        const resolved = this.gates.resolvePermission(toolCallId, decision);
         return { resolved };
       }
 
@@ -916,7 +760,7 @@ export class AgentSessionWrapper {
         const decision = command.decision as
           | AskUserQuestionsDecision
           | AskUserQuestionsCancel;
-        const resolved = this.resolveUserInput(toolCallId, decision);
+        const resolved = this.gates.resolveUserInput(toolCallId, decision);
         return { resolved };
       }
 
@@ -942,16 +786,8 @@ export class AgentSessionWrapper {
       }
     }
     this.destroyCallbacks.clear();
-    for (const [, pending] of this.pendingPermissions) {
-      clearTimeout(pending.timeoutHandle);
-      pending.reject("destroyed");
-    }
-    this.pendingPermissions.clear();
-    this.allowedThisSession.clear();
-    for (const [, pending] of this.pendingUserInputs) {
-      pending.reject("destroyed");
-    }
-    this.pendingUserInputs.clear();
+    // One teardown for every gate: permissions and questions share the table.
+    this.gates.invalidateAll();
     log.info("agent wrapper destroyed", {
       sessionId: this.sessionId,
       sessionFile: this.sessionFile || undefined,
@@ -1053,20 +889,6 @@ function stripPiDocumentationSection(prompt: string): string {
  * per-session sidecar so restarts are cache-stable.
  */
 type RpcThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-
-/**
- * Subagent sessions are attached to no UI (their SSE stream is only read when
- * the child session is opened manually), so a permission prompt raised there
- * can only time out — dangerous_patterns.timeout_ms, 5 minutes by default —
- * and be auto-denied anyway. Refuse immediately with a reason the child can
- * act on. See docs/adr/0001-subagent-toolsets-must-not-need-a-permission-prompt.md.
- */
-function subagentPermissionBlock(what: string) {
-  return {
-    block: true,
-    reason: `Blocked: ${what} requires the user's confirmation, which is unavailable inside a subagent session. Don't retry it; use a read-only alternative and tell the user what you need.`,
-  };
-}
 
 export interface StartRpcSessionOptions {
   /** Use a specific model for a newly-created session. */
@@ -1323,17 +1145,19 @@ export async function startRpcSession(
               if (mode === "sync") return;
               const w = wrapperRef.current;
               if (!w) return;
-              if (w.isRuleAllowedThisSession(`codegraph_${mode}`)) return;
-              if (capturedSource === "subagent") {
-                return subagentPermissionBlock(`codegraph_build mode=${mode}`);
-              }
-              const command =
-                mode === "init"
-                  ? `codegraph init ${event.input?.path ?? "<cwd>"}`
-                  : `codegraph index ${event.input?.path ?? "<cwd>"}`;
-              const decision = await w.requestPermission(event.toolCallId, `codegraph_${mode}`, command);
-              if (decision === "deny") {
-                return { block: true, reason: `Denied by user: ${mode === "init" ? "index creation" : "index rebuild"}` };
+              const outcome = await w.gates.runPermissionGate({
+                toolCallId: event.toolCallId,
+                rule: `codegraph_${mode}`,
+                command:
+                  mode === "init"
+                    ? `codegraph init ${event.input?.path ?? "<cwd>"}`
+                    : `codegraph index ${event.input?.path ?? "<cwd>"}`,
+                what: `codegraph_build mode=${mode}`,
+                deniedSubject: mode === "init" ? "index creation" : "index rebuild",
+                timeoutMs: getDangerousPatternTimeoutMs(),
+              });
+              if (outcome.decision === "deny") {
+                return { block: true, reason: outcome.reason };
               }
               return undefined;
             }
@@ -1355,16 +1179,18 @@ export async function startRpcSession(
             if (!match) return;
             const w = wrapperRef.current;
             if (!w) return;
-            if (w.isRuleAllowedThisSession(match.ruleName)) return;
-            if (capturedSource === "subagent") {
-              return subagentPermissionBlock(`the dangerous-command rule "${match.ruleName}"`);
-            }
-            const decision = await w.requestPermission(event.toolCallId, match.ruleName, command);
-            if (decision === "deny") {
-              return { block: true, reason: "Denied by user" };
+            const outcome = await w.gates.runPermissionGate({
+              toolCallId: event.toolCallId,
+              rule: match.ruleName,
+              command,
+              what: `the dangerous-command rule "${match.ruleName}"`,
+              timeoutMs: getDangerousPatternTimeoutMs(),
+            });
+            if (outcome.decision === "deny") {
+              return { block: true, reason: outcome.reason };
             }
             // 'allow_once' and 'allow_similar' both let the tool run.
-            // 'allow_similar' was already recorded on the wrapper.
+            // 'allow_similar' was already recorded on the session gates.
             return undefined;
           });
         },
@@ -1485,7 +1311,9 @@ export async function startRpcSession(
                     new Error("ask_user_questions wrapper not initialized"),
                   );
                 }
-                return w.requestUserInput(toolCallId, questions);
+                // The gate module owns the wait (ADR-0008). No deadline:
+                // today a question never expires (#66 keeps that out of scope).
+                return w.gates.requestUserInput({ toolCallId, questions, timeoutMs: null });
               },
               source: capturedSource,
             })
