@@ -117,6 +117,15 @@ export interface SessionRuntimeState {
   retryInfo: RetryInfo | null;
   contextUsage: ContextUsage | null;
   contextComposition: ContextComposition | null;
+  /** The model error recorded by the last assistant message that failed,
+   *  held until `agent_end` surfaces it (or an auto-retry reports a final
+   *  failure, which clears it). Written by the `record_assistant_outcome`
+   *  effect, read by the reducer when it closes the turn. */
+  pendingAssistantError: string | null;
+  /** Whether the most recent assistant message of this turn was a plain body
+   *  answer. `agent_end` reads it to pick the completion sound and the Pi Bot
+   *  reaction, so it cannot stay an adapter ref. Reset by `agent_start`. */
+  lastAssistantIsBody: boolean;
   // ── Dedupe ledgers ─────────────────────────────────────────────────────
   // Per-session by construction: each `createSessionRuntimeState()` call makes
   // its own ledgers, so a tool-call id seen in one session can never suppress
@@ -159,6 +168,8 @@ export function createSessionRuntimeState(
     retryInfo: null,
     contextUsage: null,
     contextComposition: null,
+    pendingAssistantError: null,
+    lastAssistantIsBody: false,
     seenSubagentToolCallIds: createSeenLedger(),
     seenSubagentToolStartIds: createSeenLedger(),
     seenSubagentToolEndIds: createSeenLedger(),

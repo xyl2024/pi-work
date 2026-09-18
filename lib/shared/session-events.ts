@@ -315,16 +315,22 @@ export type SessionEventTypesAreComplete = AssertTrue<
 // adapter would otherwise do inline comes back as data in `effects`, and the
 // adapter is the only thing that performs it.
 //
-// The port is incremental (#60–#63): this reducer only has a branch for the
-// event types in `PORTED_SESSION_EVENT_TYPES`, and the hook's legacy `switch`
-// still owns the rest until #64 deletes it.
+// The port is complete (#60–#63): every reduced event has a branch here, and
+// `PORTED_SESSION_EVENT_TYPES` now equals `ReducedSessionEventType`. The
+// hook's `isPortedSessionEvent` guard and its (now empty) legacy `switch` are
+// the only scaffolding left; #64 removes them.
+//
+// Replay: on SSE reconnect the route re-delivers only `session_tree_update`
+// and any pending `ask_user_questions_request`, never a turn-boundary event
+// (`app/api/agent/[id]/events/route.ts`). The idempotency those two carry is
+// therefore not a property this group needs — but no branch below churns the
+// state gratuitously either.
 
 /**
  * The events `reduceSessionEvent` already reduces.
  *
- * Each slice widens this list and deletes the matching legacy `switch` case;
- * #64 finishes the port, at which point this becomes `ReducedSessionEventType`
- * and the guard below disappears.
+ * #63 completed the port: this list now equals `ReducedSessionEventType`. #64
+ * makes that official by folding the two together and deleting the guard.
  */
 export const PORTED_SESSION_EVENT_TYPES = [
   "permission_request",
@@ -336,6 +342,14 @@ export const PORTED_SESSION_EVENT_TYPES = [
   "message_update",
   "message_end",
   "session_tree_update",
+  "agent_start",
+  "agent_end",
+  "auto_retry_start",
+  "auto_retry_end",
+  "prompt_failed",
+  "compaction_start",
+  "compaction_end",
+  "thinking_level_changed",
 ] as const satisfies readonly ReducedSessionEventType[];
 
 export type PortedSessionEventType = (typeof PORTED_SESSION_EVENT_TYPES)[number];
@@ -394,8 +408,37 @@ export type SessionEventEffect =
   | { kind: "first_assistant_ready" }
   /** What the end of the turn (#63) reads off the assistant message that just
    *  settled: whether it was a plain body answer, and the model error to
-   *  surface at `agent_end` (`null` = none). */
-  | { kind: "record_assistant_outcome"; isBody: boolean; pendingError: string | null };
+   *  surface at `agent_end` (`null` = none). The adapter records the two onto
+   *  the runtime state, where the turn-end branches read them. */
+  | { kind: "record_assistant_outcome"; isBody: boolean; pendingError: string | null }
+  /** Open the live streaming view for a new turn, before the first token. */
+  | { kind: "begin_stream" }
+  /** Clear the per-turn tool-call statistics. */
+  | { kind: "reset_tool_call_stats" }
+  /** Re-fetch the session's system prompt (a new turn may have changed it). */
+  | { kind: "refresh_system_prompt" }
+  /** Return the sidebar Pi Bot to its baseline, cancelling a pending flash. */
+  | { kind: "set_bot_baseline" }
+  /** Show an error toast. The adapter gates it on the session being the
+   *  visible tab, so a background tab cannot cover the foreground content. */
+  | { kind: "show_error_toast"; message: string }
+  /** The end of a compaction reported an error. Kept apart from
+   *  `show_error_toast` because the adapter suppresses it while a manual
+   *  compaction the user started is still in flight — that path reports its
+   *  own failure. */
+  | { kind: "show_compaction_error_toast"; message: string }
+  /** Re-read the session from disk after the turn ended, resync the runtime
+   *  state, then stop watching if nothing is running. A composite on purpose:
+   *  the steps are ordered and asynchronous, and "is anything running?" has to
+   *  be asked *after* the reload. `close_events` when there is no session. */
+  | { kind: "reload_session_after_turn" }
+  /** The same resync at the end of a compaction. An `aborted` compaction is
+   *  not re-read (pi never wrote the entry). */
+  | { kind: "reload_session_after_compaction"; aborted: boolean }
+  /** Tell the host the turn ended (it owns the sidebar / notify refresh). */
+  | { kind: "notify_agent_end" }
+  /** Drop the event stream. */
+  | { kind: "close_events" };
 
 /** What one event does to the runtime state, and the effects it asks for. */
 export interface SessionEventReduction {
@@ -564,6 +607,19 @@ function isValidAskUserQuestion(question: unknown): question is AskUserQuestion 
     && typeof value.multiSelect === "boolean"
     && typeof value.required === "boolean"
     && Array.isArray(value.options);
+}
+
+/**
+ * Take every "a turn is running" flag down: not running, not compacting, no
+ * phase, no retry counter. Both turn-terminal events (`agent_end`,
+ * `prompt_failed`) open by closing the turn. `compaction_end` is deliberately
+ * not folded in here: it leaves `retryInfo` alone.
+ */
+function closeTurn(state: SessionRuntimeState): SessionRuntimeState {
+  let next = patchSessionRuntimeState(state, "agentRunning", false);
+  next = patchSessionRuntimeState(next, "isCompacting", false);
+  next = patchSessionRuntimeState(next, "agentPhase", null);
+  return patchSessionRuntimeState(next, "retryInfo", null);
 }
 
 /**
@@ -776,5 +832,130 @@ export function reduceSessionEvent(
       }
       return { state: next, effects: [] };
     }
+    case "agent_start": {
+      // A new turn starts clean: the previous turn's error is gone, the
+      // session is running again, and the turn's body-answer scratchpad is
+      // reset. `pendingAssistantError` is deliberately *not* cleared — the
+      // previous handler did not either; it is only cleared once surfaced.
+      let next = patchSessionRuntimeState(state, "runtimeError", null);
+      next = patchSessionRuntimeState(next, "agentRunning", true);
+      next = patchSessionRuntimeState(next, "isCompacting", false);
+      next = patchSessionRuntimeState(next, "agentPhase", { kind: "waiting_model" });
+      next = patchSessionRuntimeState(next, "lastAssistantIsBody", false);
+      return {
+        state: next,
+        effects: [
+          { kind: "begin_stream" },
+          { kind: "reset_tool_call_stats" },
+          { kind: "refresh_system_prompt" },
+          { kind: "set_bot_baseline" },
+        ],
+      };
+    }
+    case "agent_end": {
+      // Closing the turn: every stage flag off, then the model error the
+      // turn's assistant messages recorded, if any, is surfaced. Note that
+      // "a pending error exists" is deliberately not the same as "the error
+      // has text": an empty message still counts as a failed turn for the
+      // kept streaming snapshot and the sound, exactly as the previous
+      // handler had it.
+      const pendingError = state.pendingAssistantError;
+      const hadAssistantError = pendingError !== null;
+      const isBody = state.lastAssistantIsBody;
+      let next = closeTurn(state);
+      const effects: SessionEventEffect[] = [
+        { kind: "settle_stream", message: null, keepForError: hadAssistantError },
+      ];
+      if (pendingError) {
+        next = patchSessionRuntimeState(next, "runtimeError", pendingError);
+        next = patchSessionRuntimeState(next, "pendingAssistantError", null);
+        effects.push({ kind: "show_error_toast", message: pendingError });
+      }
+      // The completion / failure sound fires whichever tab is visible: a
+      // background turn still has to announce itself. The Pi Bot flash and the
+      // toast are gated by the adapter on the visible tab.
+      if (hadAssistantError) effects.push({ kind: "play_ui_sound", sound: "agent_failure" });
+      else if (isBody) effects.push({ kind: "play_ui_sound", sound: "agent_success" });
+      effects.push({ kind: "flash_bot_state", stateKey: isBody ? "happy" : "waking" });
+      effects.push({ kind: "reload_session_after_turn" });
+      effects.push({ kind: "notify_agent_end" });
+      return { state: next, effects };
+    }
+    case "auto_retry_start":
+      return {
+        state: patchSessionRuntimeState(state, "retryInfo", {
+          attempt: event.attempt,
+          maxAttempts: event.maxAttempts,
+          errorMessage: event.errorMessage,
+        }),
+        effects: [],
+      };
+    case "auto_retry_end": {
+      let next = patchSessionRuntimeState(state, "retryInfo", null);
+      const effects: SessionEventEffect[] = [];
+      if (event.success === false) {
+        const finalError = event.finalError;
+        if (finalError) {
+          next = patchSessionRuntimeState(next, "runtimeError", finalError);
+          next = patchSessionRuntimeState(next, "pendingAssistantError", null);
+          effects.push({ kind: "show_error_toast", message: finalError });
+          effects.push({ kind: "play_ui_sound", sound: "agent_failure" });
+        }
+      }
+      return { state: next, effects };
+    }
+    case "prompt_failed": {
+      // A prompt that never started the turn: the same close-down as
+      // `agent_end`, but with the error text the server reported and the event
+      // stream dropped. The adapter has already resolved the i18n fallback.
+      const next = patchSessionRuntimeState(closeTurn(state), "runtimeError", event.error);
+      return {
+        state: next,
+        effects: [
+          { kind: "settle_stream", message: null, keepForError: false },
+          { kind: "show_error_toast", message: event.error },
+          { kind: "close_events" },
+        ],
+      };
+    }
+    case "compaction_start": {
+      let next = patchSessionRuntimeState(state, "agentRunning", true);
+      next = patchSessionRuntimeState(next, "isCompacting", true);
+      next = patchSessionRuntimeState(next, "agentPhase", { kind: "compacting" });
+      return { state: next, effects: [] };
+    }
+    case "compaction_end": {
+      const willRetry = event.willRetry === true;
+      let next = patchSessionRuntimeState(state, "isCompacting", false);
+      const effects: SessionEventEffect[] = [];
+      if (willRetry) {
+        // The retry keeps the turn alive, so the session is still busy and the
+        // next thing that happens is another model call.
+        next = patchSessionRuntimeState(next, "agentRunning", true);
+        next = patchSessionRuntimeState(next, "agentPhase", { kind: "waiting_model" });
+      } else {
+        next = patchSessionRuntimeState(next, "agentRunning", false);
+        next = patchSessionRuntimeState(next, "agentPhase", null);
+        effects.push({ kind: "settle_stream", message: null, keepForError: false });
+      }
+      if (event.errorMessage) {
+        effects.push({ kind: "show_compaction_error_toast", message: event.errorMessage });
+      }
+      if (!willRetry) {
+        effects.push({ kind: "reload_session_after_compaction", aborted: event.aborted });
+      }
+      return { state: next, effects };
+    }
+    case "thinking_level_changed":
+      // The protocol types the level, so the old `typeof === "string"` guard
+      // could never fail; the cast maps the wire value onto the badge.
+      return {
+        state: patchSessionRuntimeState(
+          state,
+          "thinkingLevel",
+          event.level as SessionRuntimeState["thinkingLevel"],
+        ),
+        effects: [],
+      };
   }
 }

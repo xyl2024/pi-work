@@ -196,8 +196,14 @@ describe("session event reducer", () => {
     for (const type of PORTED_SESSION_EVENT_TYPES) {
       expect(isPortedSessionEvent({ type } as SessionEvent)).toBe(true);
     }
-    expect(isPortedSessionEvent({ type: "agent_start" })).toBe(false);
+    expect(isPortedSessionEvent({ type: "agent_settled" })).toBe(false);
     expect(isPortedSessionEvent({ type: "connected", sessionId: "s" })).toBe(false);
+  });
+
+  it("routes every reduced event to the reducer", () => {
+    // #63 completed the port: the routing list and the reduced list are the
+    // same set, so no reduced event can reach the (now empty) legacy switch.
+    expect(new Set(PORTED_SESSION_EVENT_TYPES)).toEqual(new Set(reducedTypes));
   });
 });
 
@@ -765,5 +771,275 @@ describe("session event reducer: messages and the conversation tree", () => {
     expect(isPortedSessionEvent(messageUpdate(assistantMessage()))).toBe(true);
     expect(isPortedSessionEvent(messageEnd(assistantMessage()))).toBe(true);
     expect(isPortedSessionEvent(treeUpdate([], null))).toBe(true);
+  });
+});
+
+// ── The turn / phase group (#63) ─────────────────────────────────────────
+//
+// The last group: when a turn starts and ends, when compaction starts and
+// ends, auto-retry, a send failure, and the thinking level. These decide the
+// "still running / compacting / waiting for the model / retrying" indicators
+// the user waits on, plus the sound, Pi Bot reaction and error toast at the
+// end of a turn. The port is behaviour-frozen: the chat still closes its turn
+// on `agent_end` (ADR-0004 revisits that separately), and `agent_settled`
+// stays deliberately ignored.
+
+type AgentStartEvent = Extract<PortedSessionEvent, { type: "agent_start" }>;
+type AgentEndEvent = Extract<PortedSessionEvent, { type: "agent_end" }>;
+type PromptFailedEvent = Extract<PortedSessionEvent, { type: "prompt_failed" }>;
+type AutoRetryEndEvent = Extract<PortedSessionEvent, { type: "auto_retry_end" }>;
+type CompactionEndEvent = Extract<PortedSessionEvent, { type: "compaction_end" }>;
+
+const agentStart: AgentStartEvent = { type: "agent_start" };
+
+function agentEnd(): AgentEndEvent {
+  return { type: "agent_end", messages: [], willRetry: false };
+}
+
+function compactionEnd(overrides: Partial<CompactionEndEvent> = {}): CompactionEndEvent {
+  return { type: "compaction_end", reason: "threshold", result: undefined, aborted: false, willRetry: false, ...overrides };
+}
+
+/** A session that was mid-turn with the turn's body-answer scratchpad set. */
+function midTurn(overrides: Partial<SessionRuntimeState> = {}): SessionRuntimeState {
+  return createSessionRuntimeState({
+    agentRunning: true,
+    agentPhase: { kind: "waiting_model" },
+    retryInfo: { attempt: 1, maxAttempts: 3, errorMessage: "rate limited" },
+    ...overrides,
+  });
+}
+
+describe("session event reducer: turn and phase", () => {
+  it("opens a fresh turn on agent_start", () => {
+    const state = createSessionRuntimeState({
+      runtimeError: "previous failure",
+      agentRunning: false,
+      isCompacting: true,
+      lastAssistantIsBody: true,
+    });
+
+    const reduction = reduceSessionEvent(state, agentStart);
+
+    expect(reduction.state.runtimeError).toBeNull();
+    expect(reduction.state.agentRunning).toBe(true);
+    expect(reduction.state.isCompacting).toBe(false);
+    expect(reduction.state.agentPhase).toEqual({ kind: "waiting_model" });
+    expect(reduction.state.lastAssistantIsBody).toBe(false);
+    expect(kindsOf(reduction.effects)).toEqual([
+      "begin_stream",
+      "reset_tool_call_stats",
+      "refresh_system_prompt",
+      "set_bot_baseline",
+    ]);
+  });
+
+  it("does not clear a pending error when a new turn starts", () => {
+    // The old handler only reset the body-answer scratchpad here; a pending
+    // error survives until it is surfaced (or an auto-retry gives up).
+    const state = createSessionRuntimeState({ pendingAssistantError: "boom" });
+
+    const reduction = reduceSessionEvent(state, agentStart);
+
+    expect(reduction.state.pendingAssistantError).toBe("boom");
+  });
+
+  it("closes a clean body turn with the success sound and a happy bot", () => {
+    const reduction = reduceSessionEvent(midTurn({ lastAssistantIsBody: true }), agentEnd());
+
+    expect(reduction.state.agentRunning).toBe(false);
+    expect(reduction.state.isCompacting).toBe(false);
+    expect(reduction.state.agentPhase).toBeNull();
+    expect(reduction.state.retryInfo).toBeNull();
+    expect(reduction.state.runtimeError).toBeNull();
+    expect(reduction.effects).toEqual([
+      { kind: "settle_stream", message: null, keepForError: false },
+      { kind: "play_ui_sound", sound: "agent_success" },
+      { kind: "flash_bot_state", stateKey: "happy" },
+      { kind: "reload_session_after_turn" },
+      { kind: "notify_agent_end" },
+    ]);
+  });
+
+  it("surfaces a pending model error at the end of the turn", () => {
+    const state = midTurn({ pendingAssistantError: "boom" });
+
+    const reduction = reduceSessionEvent(state, agentEnd());
+
+    expect(reduction.state.runtimeError).toBe("boom");
+    expect(reduction.state.pendingAssistantError).toBeNull();
+    expect(reduction.effects).toEqual([
+      { kind: "settle_stream", message: null, keepForError: true },
+      { kind: "show_error_toast", message: "boom" },
+      { kind: "play_ui_sound", sound: "agent_failure" },
+      { kind: "flash_bot_state", stateKey: "waking" },
+      { kind: "reload_session_after_turn" },
+      { kind: "notify_agent_end" },
+    ]);
+  });
+
+  it("stays silent when a tool-only turn ends without an error", () => {
+    const reduction = reduceSessionEvent(midTurn({ lastAssistantIsBody: false }), agentEnd());
+
+    expect(kindsOf(reduction.effects)).not.toContain("play_ui_sound");
+    expect(reduction.effects).toContainEqual({ kind: "flash_bot_state", stateKey: "waking" });
+  });
+
+  it("counts an empty pending error as a failed turn but shows no toast", () => {
+    // The old handler treated "a pending error exists" and "the error has
+    // text" separately: an empty message still kept the streaming snapshot and
+    // rang the failure sound, but produced no runtime error and no toast.
+    const state = midTurn({ pendingAssistantError: "", lastAssistantIsBody: true });
+
+    const reduction = reduceSessionEvent(state, agentEnd());
+
+    expect(reduction.state.runtimeError).toBeNull();
+    expect(reduction.state.pendingAssistantError).toBe("");
+    expect(reduction.effects).toContainEqual({ kind: "settle_stream", message: null, keepForError: true });
+    expect(kindsOf(reduction.effects)).not.toContain("show_error_toast");
+    expect(kindsOf(reduction.effects)).toContain("play_ui_sound");
+  });
+
+  it("shows the auto-retry counter while a retry is pending", () => {
+    const reduction = reduceSessionEvent(createSessionRuntimeState(), {
+      type: "auto_retry_start",
+      attempt: 2,
+      maxAttempts: 5,
+      delayMs: 1000,
+      errorMessage: "rate limited",
+    });
+
+    expect(reduction.state.retryInfo).toEqual({ attempt: 2, maxAttempts: 5, errorMessage: "rate limited" });
+    expect(reduction.effects).toEqual([]);
+  });
+
+  it("clears the retry counter once a retry succeeds", () => {
+    const reduction = reduceSessionEvent(midTurn(), { type: "auto_retry_end", success: true, attempt: 2 });
+
+    expect(reduction.state.retryInfo).toBeNull();
+    expect(reduction.effects).toEqual([]);
+  });
+
+  it("surfaces the final error when the retries are exhausted", () => {
+    const state = midTurn({ pendingAssistantError: "boom" });
+    const event: AutoRetryEndEvent = { type: "auto_retry_end", success: false, attempt: 3, finalError: "gave up" };
+
+    const reduction = reduceSessionEvent(state, event);
+
+    expect(reduction.state.retryInfo).toBeNull();
+    expect(reduction.state.runtimeError).toBe("gave up");
+    expect(reduction.state.pendingAssistantError).toBeNull();
+    expect(reduction.effects).toEqual([
+      { kind: "show_error_toast", message: "gave up" },
+      { kind: "play_ui_sound", sound: "agent_failure" },
+    ]);
+  });
+
+  it("only clears the counter when a failed retry reported no final error", () => {
+    const state = midTurn({ pendingAssistantError: "boom" });
+
+    const reduction = reduceSessionEvent(state, { type: "auto_retry_end", success: false, attempt: 3 });
+
+    expect(reduction.state.retryInfo).toBeNull();
+    expect(reduction.state.runtimeError).toBeNull();
+    expect(reduction.state.pendingAssistantError).toBe("boom");
+    expect(reduction.effects).toEqual([]);
+  });
+
+  it("closes the turn and drops the stream on a send failure", () => {
+    const event: PromptFailedEvent = { type: "prompt_failed", error: "no api key" };
+
+    const reduction = reduceSessionEvent(midTurn(), event);
+
+    expect(reduction.state.agentRunning).toBe(false);
+    expect(reduction.state.isCompacting).toBe(false);
+    expect(reduction.state.agentPhase).toBeNull();
+    expect(reduction.state.retryInfo).toBeNull();
+    expect(reduction.state.runtimeError).toBe("no api key");
+    expect(reduction.effects).toEqual([
+      { kind: "settle_stream", message: null, keepForError: false },
+      { kind: "show_error_toast", message: "no api key" },
+      { kind: "close_events" },
+    ]);
+  });
+
+  it("marks the session as compacting while compaction runs", () => {
+    const reduction = reduceSessionEvent(
+      createSessionRuntimeState({ agentRunning: false }),
+      { type: "compaction_start", reason: "threshold" },
+    );
+
+    expect(reduction.state.agentRunning).toBe(true);
+    expect(reduction.state.isCompacting).toBe(true);
+    expect(reduction.state.agentPhase).toEqual({ kind: "compacting" });
+    expect(reduction.effects).toEqual([]);
+  });
+
+  it("keeps the session running when a compaction retries", () => {
+    const state = midTurn({ isCompacting: true, agentPhase: { kind: "compacting" } });
+
+    const reduction = reduceSessionEvent(state, compactionEnd({ willRetry: true }));
+
+    expect(reduction.state.isCompacting).toBe(false);
+    expect(reduction.state.agentRunning).toBe(true);
+    expect(reduction.state.agentPhase).toEqual({ kind: "waiting_model" });
+    expect(reduction.effects).toEqual([]);
+  });
+
+  it("closes the turn and resyncs from disk when compaction finishes", () => {
+    const state = midTurn({ isCompacting: true, agentPhase: { kind: "compacting" } });
+
+    const reduction = reduceSessionEvent(state, compactionEnd());
+
+    expect(reduction.state.isCompacting).toBe(false);
+    expect(reduction.state.agentRunning).toBe(false);
+    expect(reduction.state.agentPhase).toBeNull();
+    expect(reduction.effects).toEqual([
+      { kind: "settle_stream", message: null, keepForError: false },
+      { kind: "reload_session_after_compaction", aborted: false },
+    ]);
+  });
+
+  it("does not re-read an aborted compaction", () => {
+    const reduction = reduceSessionEvent(midTurn({ isCompacting: true }), compactionEnd({ aborted: true }));
+
+    expect(reduction.effects).toContainEqual({ kind: "reload_session_after_compaction", aborted: true });
+  });
+
+  it("reports a compaction error without tearing the retry down", () => {
+    const retrying = reduceSessionEvent(
+      midTurn({ isCompacting: true }),
+      compactionEnd({ willRetry: true, errorMessage: "summary failed" }),
+    );
+
+    expect(retrying.state.agentRunning).toBe(true);
+    expect(retrying.effects).toEqual([{ kind: "show_compaction_error_toast", message: "summary failed" }]);
+
+    const done = reduceSessionEvent(
+      midTurn({ isCompacting: true }),
+      compactionEnd({ errorMessage: "summary failed" }),
+    );
+    expect(kindsOf(done.effects)).toEqual([
+      "settle_stream",
+      "show_compaction_error_toast",
+      "reload_session_after_compaction",
+    ]);
+  });
+
+  it("mirrors the model's thinking level", () => {
+    const reduction = reduceSessionEvent(createSessionRuntimeState(), {
+      type: "thinking_level_changed",
+      level: "high",
+    });
+
+    expect(reduction.state.thinkingLevel).toBe("high");
+    expect(reduction.effects).toEqual([]);
+  });
+
+  it("routes the turn and phase events to the reducer", () => {
+    expect(isPortedSessionEvent(agentStart)).toBe(true);
+    expect(isPortedSessionEvent(agentEnd())).toBe(true);
+    expect(isPortedSessionEvent(compactionEnd())).toBe(true);
+    expect(isPortedSessionEvent({ type: "thinking_level_changed", level: "off" })).toBe(true);
   });
 });

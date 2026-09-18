@@ -21,7 +21,7 @@ import {
   type SessionEvent,
   type SessionEventEffect,
 } from "@/lib/shared/session-events";
-import type { AgentRuntimeState, StreamAction, ToastNotification, ThinkingLevelOption } from "./types";
+import type { AgentRuntimeState, StreamAction, ToastNotification } from "./types";
 
 const BOT_BASELINE_STATE = "searching";
 const BOT_REVERT_MS = 8000;
@@ -48,9 +48,9 @@ type AgentSessionEventsOptions = {
   statsEmitRef: { current: ToolCallStatsDispatch | undefined };
   sessionIdRef: { current: string | null };
   dispatch: Dispatch<StreamAction>;
-  /** The one session runtime state object this controller holds. The switch
-   *  reads ledgers / in-flight tools / the running flag from here, and writes
-   *  every state change through `patchRuntime`. */
+  /** The one session runtime state object this controller holds. The adapter
+   *  reads (ledgers / in-flight tools / the running flag) from here, and writes
+   *  every state change through `patchRuntime` / `commitRuntime`. */
   runtimeStateRef: { current: SessionRuntimeState };
   patchRuntime: <K extends keyof SessionRuntimeState>(
     key: K,
@@ -58,8 +58,6 @@ type AgentSessionEventsOptions = {
   ) => void;
   /** Commits a whole runtime state object produced by the pure reducer. */
   commitRuntime: (next: SessionRuntimeState) => void;
-  pendingAssistantErrorRef: { current: string | null };
-  lastAssistantIsBodyRef: { current: boolean };
   botRevertTimerRef: { current: ReturnType<typeof setTimeout> | null };
   refreshSystemPrompt: () => void;
   loadSession: (sid: string, showLoading?: boolean, includeState?: boolean) => Promise<AgentRuntimeState | null>;
@@ -71,6 +69,20 @@ type AgentSessionEventsOptions = {
   t: (key: string, params?: Record<string, string | number>) => string;
 };
 
+/**
+ * The session-event adapter.
+ *
+ * It is deliberately thin: with #63 every event the protocol reduces goes
+ * through the pure `reduceSessionEvent`, and this file only
+ *
+ *   1. translates the SSE frame into the module's vocabulary (the one i18n
+ *      fallback lives here, because the reducer cannot translate), and
+ *   2. performs the effects the reducer returned — sounds, celebrations, Pi
+ *      Bot flashes, toasts, stores, requests, host callbacks.
+ *
+ * The legacy `switch` that used to hold these branches is empty now; #64
+ * deletes it together with the `isPortedSessionEvent` guard.
+ */
 export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
   const handlerRef = useRef<((event: SessionEvent) => void) | null>(null);
   const {
@@ -87,8 +99,6 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     patchRuntime,
     commitRuntime,
     dispatch,
-    pendingAssistantErrorRef,
-    lastAssistantIsBodyRef,
     botRevertTimerRef,
     refreshSystemPrompt,
     loadSession,
@@ -100,7 +110,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     t,
   } = options;
 
-  const handleAgentEvent = useCallback((event: SessionEvent) => {
+  const handleAgentEvent = useCallback((rawEvent: SessionEvent) => {
     const fireDiscreteBot = (stateKey: string) => {
       if (!isActive) return;
       if (botRevertTimerRef.current !== null) clearTimeout(botRevertTimerRef.current);
@@ -194,6 +204,9 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
         case "flash_bot_state":
           fireDiscreteBot(effect.stateKey);
           return;
+        case "set_bot_baseline":
+          setBaselineBot();
+          return;
         case "stream_message":
           // The streamed content deliberately lives in its own store so a
           // per-token update re-renders only the streaming bubble, not the
@@ -202,6 +215,11 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           dispatch({ type: "start" });
           startStreamingStore(controllerId);
           scheduleStreamingUpdate(controllerId, effect.message);
+          return;
+        case "begin_stream":
+          // A new turn opens the live view before the first token arrives.
+          dispatch({ type: "start" });
+          startStreamingStore(controllerId);
           return;
         case "settle_stream":
           // Force-flush any pending streaming snapshot before clearing the
@@ -213,6 +231,23 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           // retried, and the user should keep seeing the current assistant
           // message instead of a blank gap until the next stream starts.
           endStreamingStore(controllerId, effect.keepForError);
+          return;
+        case "reset_tool_call_stats":
+          statsEmitRef.current?.({ type: "reset" });
+          return;
+        case "refresh_system_prompt":
+          refreshSystemPrompt();
+          return;
+        case "show_error_toast":
+          // `showToast` is gated on the active tab (a background tab's error
+          // must not overlay the foreground content).
+          showToast({ kind: "error", message: effect.message });
+          return;
+        case "show_compaction_error_toast":
+          // A manual compaction the user started reports its own failure
+          // through the RPC reply; suppress the duplicate SSE toast while that
+          // request is still in flight.
+          if (!compactInFlightRef.current) showToast({ kind: "error", message: effect.message });
           return;
         case "refresh_context_usage": {
           // The reducer asked for the refresh; the request itself happens here,
@@ -235,139 +270,60 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
           onFirstAssistantReady?.();
           return;
         case "record_assistant_outcome":
-          // Scratchpads for the still-legacy agent_end (#63): whether this turn
-          // ended on a body answer, and the model error to surface when the
-          // turn closes.
-          lastAssistantIsBodyRef.current = effect.isBody;
-          if (effect.pendingError !== null) pendingAssistantErrorRef.current = effect.pendingError;
+          // The two facts the turn-end branches read: whether the last
+          // assistant message was a plain body answer, and the model error it
+          // recorded. The error only overwrites when there is one — the old
+          // scratchpad behaved the same, so a later clean message does not
+          // erase an earlier failure.
+          patchRuntime("lastAssistantIsBody", effect.isBody);
+          if (effect.pendingError !== null) patchRuntime("pendingAssistantError", effect.pendingError);
+          return;
+        case "reload_session_after_turn": {
+          if (!sid) {
+            closeEvents();
+            return;
+          }
+          void (async () => {
+            await loadSession(sid);
+            try { await refreshAgentRuntimeStateRef.current?.(sid); } catch { /* best effort */ }
+            if (!runtime().agentRunning) closeEvents();
+          })();
+          return;
+        }
+        case "reload_session_after_compaction":
+          void (async () => {
+            if (!effect.aborted && sid) await loadSession(sid);
+            if (!runtime().agentRunning) closeEvents();
+          })();
+          return;
+        case "notify_agent_end":
+          onAgentEnd?.();
+          return;
+        case "close_events":
+          closeEvents();
           return;
       }
     };
 
-    // The ported paths (#60–#63) run through the pure reducer; every other
-    // event still goes to the legacy switch below until #64 deletes it.
+    // The reducer is pure and cannot translate, so the one user-facing i18n
+    // fallback is resolved here, at the boundary, before the event is reduced.
+    const event: SessionEvent = rawEvent.type === "prompt_failed" && !rawEvent.error
+      ? { ...rawEvent, error: t("Failed to send message") }
+      : rawEvent;
+
+    // Every event the protocol reduces goes through the pure reducer; the
+    // deliberately-ignored events fall through the guard and do nothing.
     if (isPortedSessionEvent(event)) {
-      const reduction = reduceSessionEvent(runtimeStateRef.current, event);
+      const reduction = reduceSessionEvent(runtime(), event);
       commitRuntime(reduction.state);
       for (const effect of reduction.effects) runEffect(effect);
       return;
     }
 
+    // Nothing left to switch on: #63 moved the last group (turn start/end,
+    // compaction, auto-retry, send failure, thinking level) onto the reducer.
+    // #64 deletes this empty statement together with the guard above.
     switch (event.type) {
-      case "agent_start":
-        patchRuntime("runtimeError", null);
-        patchRuntime("agentRunning", true);
-        patchRuntime("isCompacting", false);
-        patchRuntime("agentPhase", { kind: "waiting_model" });
-        dispatch({ type: "start" });
-        startStreamingStore(controllerId);
-        statsEmitRef.current?.({ type: "reset" });
-        refreshSystemPrompt();
-        lastAssistantIsBodyRef.current = false;
-        setBaselineBot();
-        break;
-      case "agent_end":
-        patchRuntime("agentRunning", false);
-        patchRuntime("isCompacting", false);
-        patchRuntime("agentPhase", null);
-        patchRuntime("retryInfo", null);
-        dispatch({ type: "end" });
-        const hadAssistantError = pendingAssistantErrorRef.current !== null;
-        // A failed model call is still part of the active turn. Keep the
-        // final streaming snapshot mounted so the view does not disappear
-        // while the caller decides whether to retry.
-        endStreamingStore(controllerId, hadAssistantError);
-        if (pendingAssistantErrorRef.current) {
-          patchRuntime("runtimeError", pendingAssistantErrorRef.current);
-          showToast({ kind: "error", message: pendingAssistantErrorRef.current });
-          pendingAssistantErrorRef.current = null;
-        }
-        // Fire the completion/failure sound regardless of which workspace
-        // tab the user is currently looking at. Toasts stay gated by
-        // `isActive` (so a background tab's error doesn't overlay the
-        // foreground content), but the sound is a pure notification — if
-        // the user has switched away to another session tab, they still
-        // need to know the background agent finished. Without this, an
-        // `agent_end` arriving while a non-active tab is focused would be
-        // silent.
-        if (hadAssistantError) {
-          playUiSoundEvent("agent_failure");
-        } else if (lastAssistantIsBodyRef.current) {
-          playUiSoundEvent("agent_success");
-        }
-        fireDiscreteBot(lastAssistantIsBodyRef.current ? "happy" : "waking");
-        if (sessionIdRef.current) {
-          const endedSessionId = sessionIdRef.current;
-          void (async () => {
-            await loadSession(endedSessionId);
-            try { await refreshAgentRuntimeStateRef.current?.(endedSessionId); } catch { /* best effort */ }
-            if (!runtime().agentRunning) closeEvents();
-          })();
-        } else {
-          closeEvents();
-        }
-        onAgentEnd?.();
-        break;
-      case "auto_retry_start":
-        patchRuntime("retryInfo", { attempt: event.attempt as number, maxAttempts: event.maxAttempts as number, errorMessage: event.errorMessage as string | undefined });
-        break;
-      case "prompt_failed": {
-        patchRuntime("agentRunning", false);
-        patchRuntime("isCompacting", false);
-        patchRuntime("agentPhase", null);
-        patchRuntime("retryInfo", null);
-        dispatch({ type: "end" });
-        endStreamingStore(controllerId);
-        const errorMessage = event.error as string | undefined || t("Failed to send message");
-        patchRuntime("runtimeError", errorMessage);
-        showToast({ kind: "error", message: errorMessage });
-        closeEvents();
-        break;
-      }
-      case "auto_retry_end":
-        patchRuntime("retryInfo", null);
-        if (event.success === false) {
-          const finalError = event.finalError as string | undefined;
-          if (finalError) {
-            patchRuntime("runtimeError", finalError);
-            showToast({ kind: "error", message: finalError });
-            pendingAssistantErrorRef.current = null;
-            playUiSoundEvent("agent_failure");
-          }
-        }
-        break;
-      case "compaction_start":
-        patchRuntime("agentRunning", true);
-        patchRuntime("isCompacting", true);
-        patchRuntime("agentPhase", { kind: "compacting" });
-        break;
-      case "compaction_end": {
-        const willRetry = event.willRetry === true;
-        patchRuntime("isCompacting", false);
-        if (willRetry) {
-          patchRuntime("agentRunning", true);
-          patchRuntime("agentPhase", { kind: "waiting_model" });
-        } else {
-          patchRuntime("agentRunning", false);
-          patchRuntime("agentPhase", null);
-          dispatch({ type: "end" });
-          endStreamingStore(controllerId);
-        }
-        if (event.errorMessage && !compactInFlightRef.current) showToast({ kind: "error", message: event.errorMessage as string });
-        const compactSessionId = sessionIdRef.current;
-        if (!willRetry) {
-          void (async () => {
-            if (!event.aborted && compactSessionId) await loadSession(compactSessionId);
-            if (!runtime().agentRunning) closeEvents();
-          })();
-        }
-        break;
-      }
-      case "thinking_level_changed": {
-        const level = event.level;
-        if (typeof level === "string") patchRuntime("thinkingLevel", level as ThinkingLevelOption);
-        break;
-      }
     }
   }, [
     botRevertTimerRef,
@@ -377,13 +333,11 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
     controllerId,
     dispatch,
     isActive,
-    lastAssistantIsBodyRef,
     loadSession,
     newSessionCwd,
     onAgentEnd,
     onFirstAssistantReady,
     patchRuntime,
-    pendingAssistantErrorRef,
     permissionsRef,
     refreshAgentRuntimeStateRef,
     refreshSystemPrompt,

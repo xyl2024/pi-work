@@ -209,25 +209,23 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const disposedRef = useRef(false);
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
   const compactInFlightRef = useRef(false);
-  // Holds the most recent assistant error message during a turn, so
-  // agent_end can toast it. Cleared after the toast (or when the next
-  // message_start arrives). auto_retry_end with success=false also
-  // clears it to avoid double-toasting.
-  const pendingAssistantErrorRef = useRef<string | null>(null);
-  // Sidebar Pi Bot trigger (event-based, see Pi Bot Lab for visuals):
-  //   lastAssistantIsBodyRef — the most recent assistant message in this
-  //                            turn had text content with no toolUse;
-  //                            agent_end uses this to pick happy vs
-  //                            waking. Reset in agent_start so each turn
-  //                            starts fresh. Tool failures are NOT tracked
-  //                            here: a tool failure triggers "suspicious"
-  //                            on the spot (with its own 8s revert), but
-  //                            it must not suppress the final happy/waking
-  //                            reaction at agent_end — a turn can recover
-  //                            from a failed tool and end with a clean
-  //                            body-text response, and the bot should
-  //                            reflect that.
-  const lastAssistantIsBodyRef = useRef(false);
+  // Sidebar Pi Bot trigger (event-based, see Pi Bot Lab for visuals): the
+  // bot's per-turn reaction is chosen by the pure reducer from the session
+  // runtime state (`lastAssistantIsBody` / `pendingAssistantError`), which the
+  // `record_assistant_outcome` effect writes and `agent_end` reads. Only the
+  // revert timer stays a ref — it is imperative I/O, not session belief.
+  //
+  //   lastAssistantIsBody — the most recent assistant message in this turn had
+  //                         text content with no toolUse; agent_end uses this
+  //                         to pick happy vs waking. Reset in agent_start so
+  //                         each turn starts fresh. Tool failures are NOT
+  //                         tracked here: a tool failure triggers "suspicious"
+  //                         on the spot (with its own 8s revert), but it must
+  //                         not suppress the final happy/waking reaction at
+  //                         agent_end — a turn can recover from a failed tool
+  //                         and end with a clean body-text response.
+  //   pendingAssistantError — the most recent assistant error, surfaced by
+  //                         agent_end.
   // setTimeout handle for the bot's revert-to-baseline timer. Cancel on
   // every new discrete trigger so the latest reaction always gets the
   // full BOT_REVERT_MS window. Cleared on unmount so a stale timer from
@@ -406,8 +404,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     patchRuntime,
     commitRuntime,
     dispatch,
-    pendingAssistantErrorRef,
-    lastAssistantIsBodyRef,
     botRevertTimerRef,
     refreshSystemPrompt,
     loadSession,
