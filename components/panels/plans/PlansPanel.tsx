@@ -60,7 +60,7 @@ const AUTOSAVE_MS = 600;
 
 /**
  * Plans panel view — the Markdown files under `<dataRoot>/user-plans/`,
- * grouped into 收件箱 / 过期 / 今天 / 即将到来, plus the resident create input
+ * grouped into 过期 / 今天 / 本周 / 本月 / 即将到来 / 收件箱, plus the resident create input
  * that turns a title typed + Enter into one new plan file.
  *
  * Rows are a display line: clicking one opens the plan's detail dialog, where

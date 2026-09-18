@@ -37,6 +37,8 @@ import {
   weekStartOf,
   type Plan,
   type PlanAnchor,
+  type PlanSection,
+  type PlanSectionId,
 } from "@/lib/shared/plans";
 
 /** Minimal plan factory — every field not under test gets a stable value. */
@@ -50,6 +52,14 @@ function plan(overrides: Partial<Plan> & Pick<Plan, "path" | "title" | "anchor">
     mtime: "2026-01-01T00:00:00.000Z",
     ...overrides,
   };
+}
+
+/** A section by id — the section order is asserted once, above, so the tests
+ *  about what a section holds do not have to know its position. */
+function sectionById(sections: PlanSection[], id: PlanSectionId): PlanSection {
+  const section = sections.find((item) => item.id === id);
+  if (section === undefined) throw new Error(`no section ${id}`);
+  return section;
 }
 
 /** A mixed set of plans used by the grouping / filtering tests. */
@@ -706,19 +716,19 @@ describe("plans sections", () => {
     const sections = groupPlans(sample(), today);
 
     expect(sections.map((section) => section.id)).toEqual([
-      "inbox",
       "overdue",
       "today",
       "week",
       "month",
       "upcoming",
+      "inbox",
     ]);
-    expect(sections[0].plans.map((p) => p.title)).toEqual(["随手记"]);
-    expect(sections[1].plans.map((p) => p.title)).toEqual(["做完的旧事", "旧事"]);
-    expect(sections[2].plans.map((p) => p.title)).toEqual(["今天"]);
+    expect(sections[0].plans.map((p) => p.title)).toEqual(["做完的旧事", "旧事"]);
+    expect(sections[1].plans.map((p) => p.title)).toEqual(["今天"]);
+    expect(sections[2].plans).toEqual([]);
     expect(sections[3].plans).toEqual([]);
-    expect(sections[4].plans).toEqual([]);
-    expect(sections[5].plans.map((p) => p.title)).toEqual(["明天", "晚点"]);
+    expect(sections[4].plans.map((p) => p.title)).toEqual(["明天", "晚点"]);
+    expect(sections[5].plans.map((p) => p.title)).toEqual(["随手记"]);
   });
 
   it("puts a day, week and month anchor each in its own period section, never two", () => {
@@ -742,12 +752,12 @@ describe("plans sections", () => {
     const sections = groupPlans(plans, today);
 
     expect(sections.map((section) => [section.id, section.plans.map((p) => p.title)])).toEqual([
-      ["inbox", []],
       ["overdue", []],
       ["today", ["今天"]],
       ["week", ["本周"]],
       ["month", ["本月"]],
       ["upcoming", []],
+      ["inbox", []],
     ]);
     const seen = sections.flatMap((section) => section.plans.map((p) => p.path));
     expect(new Set(seen).size).toBe(seen.length);
@@ -831,18 +841,18 @@ describe("plans sections", () => {
       done: true,
     });
     expect(planSectionOf(target, today)).toBe("today");
-    expect(groupPlans([target], today)[2].plans).toHaveLength(1);
+    expect(sectionById(groupPlans([target], today), "today").plans).toHaveLength(1);
   });
 
   it("returns all sections even when there are no plans", () => {
     const sections = groupPlans([], "2026-09-15");
     expect(sections.map((s) => s.id)).toEqual([
-      "inbox",
       "overdue",
       "today",
       "week",
       "month",
       "upcoming",
+      "inbox",
     ]);
     expect(sections.every((s) => s.plans.length === 0)).toBe(true);
   });
@@ -858,20 +868,21 @@ describe("plans hide-completed filter", () => {
     const sections = hideCompletedPlans(groupPlans(sample(), "2026-09-15"), true);
 
     expect(sections.map((section) => section.id)).toEqual([
-      "inbox",
       "overdue",
       "today",
       "week",
       "month",
       "upcoming",
+      "inbox",
     ]);
     // The completed plan lived in the overdue section and is the only one gone.
+    // Sections are read top to bottom, so the inbox's own plan comes last.
     expect(sections.flatMap((section) => section.plans.map((p) => p.title))).toEqual([
-      "随手记",
       "旧事",
       "今天",
       "明天",
       "晚点",
+      "随手记",
     ]);
   });
 
@@ -883,11 +894,13 @@ describe("plans hide-completed filter", () => {
       done: true,
     });
     const hidden = hideCompletedPlans(groupPlans([completed], "2026-09-15"), true);
-    expect(hidden[2].id).toBe("today");
-    expect(hidden[2].plans).toHaveLength(0);
+    expect(sectionById(hidden, "today").plans).toHaveLength(0);
     // …and the same list keeps it when the switch is off, because a completed
     // plan is a record that stays where it was.
-    expect(hideCompletedPlans(groupPlans([completed], "2026-09-15"), false)[2].plans).toHaveLength(1);
+    expect(
+      sectionById(hideCompletedPlans(groupPlans([completed], "2026-09-15"), false), "today")
+        .plans,
+    ).toHaveLength(1);
   });
 });
 

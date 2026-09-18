@@ -53,7 +53,9 @@ export interface PlanRowProps {
 
 /**
  * One plan line: round completion checkbox, title, a grey one-line note
- * summary, and the hover actions (rename / reschedule / copy path / delete).
+ * summary, and — at the right edge — the anchor's date, which the hover actions
+ * (rename / reschedule / copy path / delete) swap in for as long as the pointer
+ * is on the row.
  *
  * Clicking the line — title, summary or the empty space around them — opens the
  * plan's detail dialog, where the note is written and read (#51). The note
@@ -234,60 +236,81 @@ export function PlanRow({
           </button>
         )}
 
-        <AnchorLabel anchor={plan.anchor} showDate={showDate} />
+        {/* The row's right edge is one box holding two things in the same
+            grid cell: the anchor's date, which is what the row normally ends
+            with, and the hover actions, which take its place under the
+            pointer. Stacking them in one cell means the box is as wide as the
+            wider of the two and never resizes — the title keeps its width
+            whether the pointer is on the row or not. */}
+        <span style={{ flexShrink: 0, display: "grid", alignItems: "center", justifyItems: "end" }}>
+          <span
+            style={{
+              gridArea: "1 / 1",
+              display: "flex",
+              alignItems: "center",
+              // Decoration, not a control: a click on the date belongs to the
+              // row (and opening the dialog is what the row does).
+              pointerEvents: "none",
+              opacity: actionsVisible ? 0 : 1,
+              transition: "opacity 0.1s",
+            }}
+          >
+            <AnchorLabel anchor={plan.anchor} showDate={showDate} />
+          </span>
 
-        <span
-          onClick={(event) => event.stopPropagation()}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 0,
-            flexShrink: 0,
-            // Kept in the layout and focusable so the actions stay reachable by
-            // keyboard; only their visibility follows hover / opening the
-            // re-schedule chips. `pointer-events: none` while hidden is what
-            // lets a click there fall through and open the dialog.
-            opacity: actionsVisible ? 1 : 0,
-            pointerEvents: actionsVisible ? "auto" : "none",
-            transition: "opacity 0.1s",
-          }}
-        >
-          <IconButton
-            label={t("Rename plan")}
-            size="xs"
-            active={renaming}
-            onClick={beginRename}
+          <span
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              gridArea: "1 / 1",
+              display: "flex",
+              alignItems: "center",
+              gap: 0,
+              // Kept in the layout and focusable so the actions stay reachable by
+              // keyboard; only their visibility follows hover / opening the
+              // re-schedule chips. `pointer-events: none` while hidden is what
+              // lets a click there fall through and open the dialog.
+              opacity: actionsVisible ? 1 : 0,
+              pointerEvents: actionsVisible ? "auto" : "none",
+              transition: "opacity 0.1s",
+            }}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-            </svg>
-          </IconButton>
-          <IconButton
-            label={t("Reschedule")}
-            size="xs"
-            active={rescheduleOpen}
-            onClick={onToggleReschedule}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="5" width="18" height="16" rx="2" />
-              <path d="M8 3v4M16 3v4M3 10h18" />
-            </svg>
-          </IconButton>
-          <IconButton label={t("Copy path")} size="xs" onClick={onCopyPath}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="9" width="12" height="12" rx="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-          </IconButton>
-          <IconButton label={t("Delete")} size="xs" onClick={onDelete}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 6h18" />
-              <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6M14 11v6" />
-            </svg>
-          </IconButton>
+            <IconButton
+              label={t("Rename plan")}
+              size="xs"
+              active={renaming}
+              onClick={beginRename}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </IconButton>
+            <IconButton
+              label={t("Reschedule")}
+              size="xs"
+              active={rescheduleOpen}
+              onClick={onToggleReschedule}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="5" width="18" height="16" rx="2" />
+                <path d="M8 3v4M16 3v4M3 10h18" />
+              </svg>
+            </IconButton>
+            <IconButton label={t("Copy path")} size="xs" onClick={onCopyPath}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="12" height="12" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </IconButton>
+            <IconButton label={t("Delete")} size="xs" onClick={onDelete}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18" />
+                <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+              </svg>
+            </IconButton>
+          </span>
         </span>
       </div>
 

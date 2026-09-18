@@ -695,14 +695,19 @@ export interface UnsortedPlan {
 
 export type PlanSectionId = "inbox" | "overdue" | "today" | "week" | "month" | "upcoming";
 
-/** Section order the panel renders, top to bottom. */
+/**
+ * Section order the panel renders, top to bottom: what is already late, then
+ * the three periods the user is inside right now (今天 / 本周 / 本月), then the
+ * future, and the inbox last — it is the pile of plans without a date, not a
+ * period to work through at the top.
+ */
 export const PLAN_SECTION_IDS: readonly PlanSectionId[] = [
-  "inbox",
   "overdue",
   "today",
   "week",
   "month",
   "upcoming",
+  "inbox",
 ];
 
 export interface PlanSection {

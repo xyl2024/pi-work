@@ -80,12 +80,12 @@ describe("GET /api/plans", () => {
 
       expect(data.today).toBe(TODAY);
       expect(data.sections.map((section) => section.id)).toEqual([
-        "inbox",
         "overdue",
         "today",
         "week",
         "month",
         "upcoming",
+        "inbox",
       ]);
       expect(sectionOf(data, "today").plans.map((p) => p.title)).toContain(`${uid}-today`);
       expect(sectionOf(data, "overdue").plans.map((p) => p.title)).toContain(`${uid}-past`);
