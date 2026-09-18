@@ -31,7 +31,7 @@ import {
 import { spawnSubagentTool, SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK } from "./subagent-tool";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
 import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
-import type { AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
+import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { matchSelfKillCommand } from "./self-protection";
@@ -481,24 +481,16 @@ export class AgentSessionWrapper {
     return () => this.destroyCallbacks.delete(cb);
   }
 
-  /** Snapshot of pending ask_user_questions requests for this wrapper. Used
-   *  by the /api/agent/[id]/events route to re-emit after SSE reconnect so a
-   *  refresh-mid-question doesn't lose the question.
+  /** What a reconnecting client must still be told: the line-protocol events
+   *  of every gate this session has waiting, both kinds. The
+   *  /api/agent/[id]/events route encodes them verbatim after an SSE reconnect,
+   *  so a page refresh mid-confirmation or mid-question brings the surface
+   *  back instead of stranding the user.
    *
-   *  The gate module owns the table now (ADR-0008), so this is only a filter
-   *  over `gates.snapshot()`: the route still replays questions and nothing
-   *  else (#69 folds the replay itself into `snapshot()`). */
-  snapshotPendingUserInputs(): AskUserQuestionsRequestPayload[] {
-    const out: AskUserQuestionsRequestPayload[] = [];
-    for (const event of this.gates.snapshot()) {
-      if (event.type !== "ask_user_questions_request") continue;
-      out.push({
-        toolCallId: event.toolCallId,
-        questions: event.questions,
-        ts: event.ts,
-      });
-    }
-    return out;
+   *  The gate module owns both the table and the wire shapes (ADR-0008), so
+   *  this is a bare pass-through — the route filters nothing. */
+  snapshotPendingGates(): SessionEvent[] {
+    return this.gates.snapshot();
   }
 
   async send(command: Record<string, unknown>): Promise<unknown> {

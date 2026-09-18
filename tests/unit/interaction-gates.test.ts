@@ -315,6 +315,34 @@ describe("snapshot", () => {
     await question;
     expect(gates.snapshot()).toEqual([]);
   });
+
+  it("has nothing to replay before any gate opens", () => {
+    const { gates } = makeGates();
+    expect(gates.snapshot()).toEqual([]);
+  });
+
+  it("drops only the gate that was decided, whichever kind it is", async () => {
+    const { gates } = makeGates();
+    const permission = gates.runPermissionGate(bashGate());
+    const question = gates.requestUserInput(inputGate());
+
+    // The question is answered first; a refresh after that still replays the
+    // permission confirmation, which is the behaviour this ticket delivers.
+    gates.resolveUserInput("question-1", { cancelled: true });
+    await question;
+    expect(gates.snapshot()).toEqual([
+      {
+        type: "permission_request",
+        toolCallId: "call-1",
+        ruleName: "rm-rf",
+        command: "rm -rf /",
+      },
+    ]);
+
+    gates.resolvePermission("call-1", "allow_once");
+    await permission;
+    expect(gates.snapshot()).toEqual([]);
+  });
 });
 
 describe("tearing down with the session", () => {
