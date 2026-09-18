@@ -20,7 +20,7 @@ import {
   writeSessionToolSelection,
 } from "./session-tools-config";
 import { readCwdToolSelection } from "./cwd-tools-config";
-import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK, type UserInputResolution } from "./ask-user-questions-tool";
+import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } from "./ask-user-questions-tool";
 import { celebrateTool, CELEBRATE_SYSTEM_PROMPT_BLOCK } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
@@ -31,7 +31,7 @@ import {
 import { spawnSubagentTool, SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK } from "./subagent-tool";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
 import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
-import type { AskUserQuestion, AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
+import type { AskUserQuestionsCancel, AskUserQuestionsDecision, AskUserQuestionsRequestPayload } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { matchSelfKillCommand } from "./self-protection";
@@ -50,26 +50,17 @@ const log = createLogger("rpc-manager");
 // Ask user questions
 //
 // The `ask_user_questions` custom tool blocks until the user answers a
-// batch of structured questions or cancels. The tool calls
-// `requestUserInput(toolCallId, questions)` (closure-bound per session);
-// the wrapper emits a synthetic `ask_user_questions_request` SSE event,
-// stores a Promise in `pendingUserInputs`, and resolves it when the
-// client POSTs back an `ask_user_questions_decision` command.
+// batch of structured questions or cancels. Its gate lives on the wrapper's
+// `gates` (lib/server/interaction-gates.ts, ADR-0008) together with the
+// permission gates: the module emits the synthetic
+// `ask_user_questions_request` SSE event, keeps the wait on its table, and
+// settles it when the client POSTs back an `ask_user_questions_decision`
+// command. This wrapper holds no question state of its own.
 //
-// This is the second kind of interaction gate and still sits on the wrapper:
-// moving it onto the same table as the permission gates is its own change
-// (docs/adr/0008-interaction-gates-are-one-module.md). We do NOT impose a
-// timeout — the wrapper's idle timer (10 min) reaps abandoned requests on
-// destroy, and the tool's AbortSignal handles explicit aborts.
+// No deadline is imposed (the gate is opened with `timeoutMs: null`), so an
+// abandoned question stays on the table until the session is destroyed or the
+// tool's AbortSignal fires — same as before the move.
 // ============================================================================
-
-interface PendingUserInput {
-  resolve: (resolution: UserInputResolution) => void;
-  reject: (reason: string) => void;
-  questions: AskUserQuestion[];
-  /** Epoch ms when the request was emitted (used by the UI for ordering). */
-  ts: number;
-}
 
 /** The wrapper-synthesised question event, as the protocol declares it. */
 export type AskUserQuestionsRequestEvent = Extract<SessionEvent, { type: "ask_user_questions_request" }>;
@@ -100,9 +91,9 @@ export class AgentSessionWrapper {
   // so this closes the same-tick race between concurrent compact requests.
   private compactInFlight = false;
   /** This session's interaction gates (ADR-0008): the pending permission
-   *  confirmations and the "always allow" memo both live here now. */
+   *  confirmations, the pending questions and the "always allow" memo all
+   *  live on that one module now. */
   readonly gates: InteractionGates;
-  private pendingUserInputs: Map<string, PendingUserInput> = new Map();
   // Text of the latest assistant body reply of the current turn — used by
   // per-session reply notifications (see start() + deliverSessionNotify).
   // Reset on agent_start, updated on each assistant message_end.
@@ -490,103 +481,21 @@ export class AgentSessionWrapper {
     return () => this.destroyCallbacks.delete(cb);
   }
 
-  /**
-   * Block the calling tool until the user answers the given batch of
-   * questions (or cancels). Emits a synthetic `ask_user_questions_request`
-   * SSE event and returns a Promise that resolves with the user's
-   * answers — or `{kind: "cancelled"}` if they clicked Cancel.
+  /** Snapshot of pending ask_user_questions requests for this wrapper. Used
+   *  by the /api/agent/[id]/events route to re-emit after SSE reconnect so a
+   *  refresh-mid-question doesn't lose the question.
    *
-   * No timeout is imposed: the tool's AbortSignal handles explicit aborts,
-   * and `destroy()` rejects pending entries when the wrapper is reaped.
-   * The tool wrapper treats either rejection as an error result for the
-   * agent (no hangs).
-   */
-  requestUserInput(
-    toolCallId: string,
-    questions: AskUserQuestion[],
-  ): Promise<UserInputResolution> {
-    if (this.pendingUserInputs.has(toolCallId)) {
-      // Idempotent: return the existing promise for a re-entry (shouldn't
-      // happen for a unique toolCallId, but defensive).
-      return new Promise<UserInputResolution>((resolve, reject) => {
-        const existing = this.pendingUserInputs.get(toolCallId)!;
-        existing.resolve = (r) => { resolve(r); existing.resolve = () => {}; };
-        existing.reject = (reason) => { reject(reason); existing.reject = () => {}; };
-      });
-    }
-    const promise = new Promise<UserInputResolution>((resolve, reject) => {
-      const entry: PendingUserInput = {
-        resolve,
-        reject,
-        questions,
-        ts: Date.now(),
-      };
-      this.pendingUserInputs.set(toolCallId, entry);
-    });
-    const event: AskUserQuestionsRequestEvent = {
-      type: "ask_user_questions_request",
-      toolCallId,
-      questions,
-      ts: Date.now(),
-    };
-    for (const l of this.listeners) {
-      try {
-        l(event);
-      } catch {
-        // listener errors must not break the request flow
-      }
-    }
-    log.info("ask_user_questions request emitted", {
-      toolCallId,
-      questionCount: questions.length,
-    });
-    return promise;
-  }
-
-  /**
-   * Resolve a pending ask_user_questions request. Called when the client
-   * POSTs back an `ask_user_questions_decision` command.
-   *
-   * The decision is either `{cancelled: true}` (user clicked Cancel) or
-   * `{answers: AskUserQuestionAnswer[]}` (user submitted answers, possibly
-   * empty for non-required questions they skipped).
-   */
-  resolveUserInput(
-    toolCallId: string,
-    decision: AskUserQuestionsDecision | AskUserQuestionsCancel,
-  ): boolean {
-    const pending = this.pendingUserInputs.get(toolCallId);
-    if (!pending) return false;
-    this.pendingUserInputs.delete(toolCallId);
-    if ("cancelled" in decision && decision.cancelled) {
-      pending.resolve({ kind: "cancelled" });
-      log.info("ask_user_questions cancelled", { toolCallId });
-    } else if ("answers" in decision) {
-      pending.resolve({ kind: "answered", answers: decision.answers });
-      log.info("ask_user_questions answered", {
-        toolCallId,
-        answerCount: decision.answers.filter((a) => a.selectedLabels.length > 0).length,
-      });
-    } else {
-      // Defensive: unknown decision shape — treat as cancel to unblock.
-      pending.resolve({ kind: "cancelled" });
-      log.warn("ask_user_questions unknown decision shape, treated as cancel", {
-        toolCallId,
-      });
-    }
-    return true;
-  }
-
-  /** Snapshot of pending ask_user_questions requests for this wrapper.
-   *  Used by the /api/agent/[id]/events route to re-emit after SSE
-   *  reconnect so a refresh-mid-question doesn't lose the question. */
+   *  The gate module owns the table now (ADR-0008), so this is only a filter
+   *  over `gates.snapshot()`: the route still replays questions and nothing
+   *  else (#69 folds the replay itself into `snapshot()`). */
   snapshotPendingUserInputs(): AskUserQuestionsRequestPayload[] {
     const out: AskUserQuestionsRequestPayload[] = [];
-    for (const [toolCallId, pending] of this.pendingUserInputs) {
+    for (const event of this.gates.snapshot()) {
+      if (event.type !== "ask_user_questions_request") continue;
       out.push({
-        toolCallId,
-        questions: pending.questions,
-        ts: pending.ts,
+        toolCallId: event.toolCallId,
+        questions: event.questions,
+        ts: event.ts,
       });
     }
     return out;
@@ -859,7 +768,7 @@ export class AgentSessionWrapper {
         const decision = command.decision as
           | AskUserQuestionsDecision
           | AskUserQuestionsCancel;
-        const resolved = this.resolveUserInput(toolCallId, decision);
+        const resolved = this.gates.resolveUserInput(toolCallId, decision);
         return { resolved };
       }
 
@@ -885,11 +794,8 @@ export class AgentSessionWrapper {
       }
     }
     this.destroyCallbacks.clear();
+    // One teardown for every gate: permissions and questions share the table.
     this.gates.invalidateAll();
-    for (const [, pending] of this.pendingUserInputs) {
-      pending.reject("destroyed");
-    }
-    this.pendingUserInputs.clear();
     log.info("agent wrapper destroyed", {
       sessionId: this.sessionId,
       sessionFile: this.sessionFile || undefined,
@@ -1413,7 +1319,9 @@ export async function startRpcSession(
                     new Error("ask_user_questions wrapper not initialized"),
                   );
                 }
-                return w.requestUserInput(toolCallId, questions);
+                // The gate module owns the wait (ADR-0008). No deadline:
+                // today a question never expires (#66 keeps that out of scope).
+                return w.gates.requestUserInput({ toolCallId, questions, timeoutMs: null });
               },
               source: capturedSource,
             })
