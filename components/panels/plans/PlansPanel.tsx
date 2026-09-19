@@ -7,16 +7,14 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { RefreshIconButton } from "@/components/ui/RefreshIconButton";
 import { useCopyPath } from "./useCopyPath";
 import {
-  createPlan,
   deletePlan,
   fetchPlans,
   planConflictSurface,
-  planWriteFailure,
-  updatePlan,
   type PlanConflictState,
   type PlanConflictSurface,
-  type PlanWriteFailure,
 } from "@/lib/client/plans";
+import type { PlanToast, PlanToastKey } from "@/lib/client/plan-write-session";
+import { usePlanWriteSession } from "./usePlanWriteSession";
 import {
   anchorChoiceOf,
   anchorForChoice,
@@ -29,7 +27,7 @@ import {
   type PlanAnchorChoice,
   type PlansResponse,
 } from "@/lib/shared/plans";
-import { PlanRow, type PlanSaveStatus } from "./PlanRow";
+import { PlanRow } from "./PlanRow";
 import { PlanDetailDialog } from "./PlanDetailDialog";
 import { AnchorChips } from "./AnchorChips";
 import { MiniCalendar } from "./MiniCalendar";
@@ -47,16 +45,20 @@ interface PlansPanelProps {
   openCount: number;
 }
 
-/** Which note editor is open, and the `mtime` its content was loaded at. */
-interface EditorTarget {
-  path: string;
-  mtime: string;
-}
-
-/** A 409 waiting for the user's 「覆盖 / 重载到新位置」 answer. */
-type PendingConflict = PlanConflictState & { path: string };
-
-const AUTOSAVE_MS = 600;
+/**
+ * The panel's wording for every toast the write session can pick. The session
+ * decides *which* toast (a rule); the words are the panel's (`useI18n`).
+ */
+const PLAN_TOAST_MESSAGE_KEYS: Record<PlanToastKey, string> = {
+  plan_saved: "Plan saved",
+  save_failed: "Failed to save plan",
+  update_failed: "Failed to update plan",
+  reschedule_failed: "Failed to reschedule plan",
+  rename_failed: "Failed to rename plan",
+  create_failed: "Failed to create plan",
+  name_taken: "A plan with that name already exists",
+  plan_missing: "The plan no longer exists",
+};
 
 /**
  * Plans panel view — the Markdown files under `<dataRoot>/user-plans/`,
@@ -75,6 +77,12 @@ const AUTOSAVE_MS = 600;
  * Every write carries the `mtime` the panel last saw. When that no longer
  * matches — an agent or another editor touched the file — the server answers
  * 409 and the row shows 「覆盖 / 重载到新位置」 instead of silently overwriting.
+ *
+ * The writes themselves — the debounce, the five requests, the conflict
+ * lifecycle, the flush when the dialog closes or the panel goes away — are
+ * performed by `usePlanWriteSession`; this component translates its own events
+ * into that session's intents and renders the situation it reports back. See
+ * `lib/client/plan-write-session.ts` for the rules (#78, #79).
  */
 export function PlansPanel({ openCount }: PlansPanelProps) {
   const { t } = useI18n();
@@ -93,39 +101,15 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   // A day / week / month picked on the mini calendar. It overrides the chip
   // choice until a chip is clicked again, and is what the list highlights.
   const [pickedAnchor, setPickedAnchor] = useState<PlanAnchor | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [editing, setEditing] = useState<EditorTarget | null>(null);
-  const [draft, setDraft] = useState("");
-  const [saveStatus, setSaveStatus] = useState<PlanSaveStatus>("saved");
-  const [conflict, setConflict] = useState<PendingConflict | null>(null);
   // Which row's re-schedule chip menu is open (at most one).
   const [reschedulePath, setReschedulePath] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // The scrollable list, so a calendar pick can bring its rows into view.
   const listRef = useRef<HTMLDivElement>(null);
-  // Latch for the in-flight create: `creating` is a state update, so two
-  // Enter presses in the same tick would both read `false` and create twice.
-  const creatingRef = useRef(false);
-  // Same latch for a re-schedule: the move is a write, so a double-click must
-  // not send two of them.
-  const reschedulingRef = useRef(false);
   // The input is disabled while a create is in flight and a disabled control
   // cannot take focus, so the caret is restored once the re-enable has been
   // committed — by the effect below, not by the request handler.
   const refocusPending = useRef(false);
-
-  // The editing loop reads and writes through refs: the debounce timer, the
-  // unmount flush and the save callbacks must all see the *current* draft and
-  // target, not the ones captured when they were created.
-  const editorRef = useRef<EditorTarget | null>(null);
-  const draftRef = useRef("");
-  const dirtyRef = useRef(false);
-  const savingRef = useRef(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const conflictRef = useRef<PendingConflict | null>(null);
-  // Latest `flushNote` closure, for the retry-after-save and unmount flushes.
-  const flushRef = useRef<(notify?: boolean) => Promise<void>>(async () => {});
-  const retrySaveRef = useRef(false);
 
   // What the next typed plan will be anchored to: a mini-calendar pick wins
   // over the one-tap chip choice until a chip is clicked again.
@@ -136,150 +120,35 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   const pickedIsCustom =
     pickedAnchor !== null && anchorChoiceOf(pickedAnchor, today) === null;
 
-  const setEditorTarget = useCallback((next: EditorTarget | null) => {
-    editorRef.current = next;
-    setEditing(next);
-  }, []);
-
-  const setPendingConflict = useCallback((next: PendingConflict | null) => {
-    conflictRef.current = next;
-    setConflict(next);
-  }, []);
-
   /**
-   * Hand the detail dialog a plan: its note becomes the draft, and it opens as
-   * the one edited plan. The target carries the `mtime` the note was read at,
-   * which every write guards on.
+   * Read the list into the panel's own state. `spinner` is the visible read
+   * (the panel's 「加载中」 and its error surface); `bypassCache` drops the
+   * server's mtime cache (the manual refresh button). Returns the plans the
+   * write session reasons about, or `null` when the read failed — the error is
+   * already on screen, so the session is told nothing.
    */
-  const openEditor = useCallback(
-    (plan: Plan) => {
-      draftRef.current = plan.note;
-      setDraft(plan.note);
-      dirtyRef.current = false;
-      setSaveStatus("saved");
-      setEditorTarget({ path: plan.path, mtime: plan.mtime });
-    },
-    [setEditorTarget],
-  );
-
-  const closeEditor = useCallback(() => {
-    setEditorTarget(null);
-    draftRef.current = "";
-    setDraft("");
-    dirtyRef.current = false;
-    setSaveStatus("saved");
-  }, [setEditorTarget]);
-
-  /**
-   * Read the list. `refresh` bypasses the server's mtime cache (the manual
-   * refresh button).
-   *
-   * A refresh is also when external drift becomes visible: if the plan behind
-   * the open dialog is no longer in the list (moved or deleted outside the
-   * panel), the dialog closes and says so rather than letting the user keep
-   * typing into a file that is not there. `reload` below deliberately does
-   * *not* do this — it runs inside conflict resolution, where the dialog is
-   * following the file to its new path.
-   */
-  const load = useCallback(
-    async (refresh = false) => {
-      setLoading(true);
+  const readPlans = useCallback(
+    async ({
+      spinner,
+      bypassCache,
+    }: {
+      spinner: boolean;
+      bypassCache: boolean;
+    }): Promise<Plan[] | null> => {
+      if (spinner) setLoading(true);
       try {
-        const fresh = await fetchPlans(toDateKey(new Date()), refresh);
+        const fresh = await fetchPlans(toDateKey(new Date()), bypassCache);
         setData(fresh);
         setError(null);
-        const target = editorRef.current;
-        if (target !== null && findPlan(fresh, target.path) === undefined) {
-          closeEditor();
-          setPendingConflict(null);
-          toast.show({ kind: "error", message: t("The plan no longer exists") });
-        }
+        return flattenPlanSections(fresh.sections);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
+        return null;
       } finally {
-        setLoading(false);
+        if (spinner) setLoading(false);
       }
     },
-    [closeEditor, setPendingConflict, t, toast],
-  );
-
-  /** Re-read the list without the spinner, for conflict resolution. */
-  const reload = useCallback(async (): Promise<PlansResponse | null> => {
-    try {
-      const fresh = await fetchPlans(toDateKey(new Date()), true);
-      setData(fresh);
-      setError(null);
-      return fresh;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return null;
-    }
-  }, []);
-
-  // Fetch whenever the view is opened, including a re-open of an already
-  // mounted tab (openCount changes; the body may have stayed alive while the
-  // panel was collapsed).
-  useEffect(() => {
-    if (openCount > 0) void load();
-  }, [openCount, load]);
-
-  // Opening the view also hands the keyboard to the entry input: recording a
-  // plan is the panel's one action, and this is the same openCount-as-focus
-  // handoff the BTW panel uses for `/btw`. It is what makes the palette's
-  // "New plan" entry land the caret in the box.
-  useEffect(() => {
-    if (openCount > 0) inputRef.current?.focus();
-  }, [openCount]);
-
-  // …and when the window regains focus, which is the usual way to notice an
-  // external editor's or the agent's change.
-  useEffect(() => {
-    const onFocus = () => void load();
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [load]);
-
-  // A calendar pick navigates the list: the rows on that anchor are marked by
-  // `renderRow` below (a data attribute, not a visual state), and this brings
-  // the first of them into view. A pick is explicit, so this never scrolls on
-  // its own (chip clicks do not navigate).
-  useEffect(() => {
-    if (pickedAnchor === null) return;
-    listRef.current
-      ?.querySelector<HTMLElement>('[data-plan-anchor-match="true"]')
-      ?.scrollIntoView({ block: "nearest" });
-  }, [pickedAnchor]);
-
-  /**
-   * If the open note editor sits on `fromPath`, re-point it at the plan the
-   * server just returned. A re-schedule renames the file, so the editor has to
-   * follow; a note or completion write keeps the path and only refreshes the
-   * `mtime` the next write guards on. Either way this is "the editor follows the
-   * plan it is editing", and it happens after every successful write.
-   */
-  const adoptEditor = useCallback(
-    (fromPath: string, plan: Plan) => {
-      if (editorRef.current?.path === fromPath) {
-        setEditorTarget({ path: plan.path, mtime: plan.mtime });
-      }
-    },
-    [setEditorTarget],
-  );
-
-  /**
-   * The one way the panel reports a re-schedule that landed on a plan already
-   * using that name: nothing was written, so there is nothing to overwrite or
-   * reload — the occupied path is the whole message.
-   */
-  const reportNameTaken = useCallback(
-    (failure: Extract<PlanWriteFailure, { kind: "name-taken" }>) => {
-      toast.show({
-        kind: "error",
-        message: t("A plan with that name already exists"),
-        description: failure.target ?? undefined,
-      });
-    },
-    [t, toast],
+    [],
   );
 
   /** Replace one plan in the list with the version the server just returned. */
@@ -297,433 +166,53 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     );
   }, []);
 
-  /**
-   * Write the open note if it is dirty. A pending conflict blocks the write
-   * until the user answers it, so a debounce that raced an external edit cannot
-   * spin against the server.
-   */
-  const flushNote = useCallback(
-    async (notify = false) => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      const target = editorRef.current;
-      if (target === null || !dirtyRef.current) return;
-      if (conflictRef.current !== null) return;
-      if (savingRef.current) {
-        // A save is already in flight; run again once it settles so nothing
-        // typed during the round trip is left unwritten.
-        retrySaveRef.current = true;
-        return;
-      }
-      savingRef.current = true;
-      setSaveStatus("saving");
-      try {
-        const plan = await updatePlan({
-          path: target.path,
-          note: draftRef.current,
-          expectedMtime: target.mtime,
-        });
-        applyPlan(plan);
-        // Only touch the shared editor state if the user is still on this row
-        // — switching rows mid-save hands the draft to the new one.
-        if (editorRef.current?.path === target.path) {
-          dirtyRef.current = false;
-          adoptEditor(target.path, plan);
-          setSaveStatus("saved");
-        }
-        if (notify) toast.show({ kind: "success", message: t("Plan saved") });
-      } catch (err) {
-        const failure = planWriteFailure(err);
-        if (failure.kind === "conflict") {
-          setPendingConflict({
-            path: target.path,
-            code: failure.code,
-            movedTo: failure.movedTo,
-            retry: { kind: "note" },
-          });
-          if (editorRef.current?.path === target.path) setSaveStatus("unsaved");
-        } else {
-          // A note save never renames, so a name collision cannot land here;
-          // if one somehow did it would read as an ordinary failure.
-          if (editorRef.current?.path === target.path) setSaveStatus("error");
-          toast.show({
-            kind: "error",
-            message: t("Failed to save plan"),
-            description: failure.message,
-          });
-        }
-      } finally {
-        savingRef.current = false;
-        if (retrySaveRef.current) {
-          retrySaveRef.current = false;
-          void flushRef.current();
-        }
-      }
+  /** Show the toast the session asked for, in the panel's own words. */
+  const notify = useCallback(
+    ({ key, level, description }: PlanToast) => {
+      toast.show({ kind: level, message: t(PLAN_TOAST_MESSAGE_KEYS[key]), description });
     },
-    [adoptEditor, applyPlan, flushRef, setPendingConflict, t, toast],
-  );
-
-  // Keep the unmount flush pointing at the latest closure without re-running
-  // it: a cleanup that flushes on every state change would save mid-typing.
-  useEffect(() => {
-    flushRef.current = flushNote;
-  }, [flushNote]);
-  useEffect(
-    () => () => {
-      void flushRef.current();
-    },
-    [],
-  );
-
-  const handleNoteChange = useCallback(
-    (value: string) => {
-      draftRef.current = value;
-      setDraft(value);
-      dirtyRef.current = true;
-      setSaveStatus("unsaved");
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        timerRef.current = null;
-        void flushNote();
-      }, AUTOSAVE_MS);
-    },
-    [flushNote],
+    [t, toast],
   );
 
   /**
-   * Clicking a row opens the plan's detail dialog. Opening another plan saves
-   * the one being left first — the dialog is the only editor, so switching
-   * targets is switching rows, and nothing typed is dropped.
+   * A create settled: landed → the box is cleared and the caret comes back, so
+   * the next one can be recorded straight away; refused → what was typed stays
+   * where it is and the toast says why.
    */
-  const openDialog = useCallback(
-    (plan: Plan) => {
-      if (editorRef.current?.path === plan.path) return;
-      void flushNote();
-      setPendingConflict(null);
-      openEditor(plan);
-    },
-    [flushNote, openEditor, setPendingConflict],
-  );
-
-  /**
-   * Closing saves: Esc, the backdrop, the ✕ and switching plans all flush the
-   * note and then close. There is no 「要保存吗」 question anywhere — the only
-   * thing that can block the write is a conflict, and dismissing the dialog is
-   * an answer to it.
-   */
-  const closeDialog = useCallback(() => {
-    void flushNote();
-    closeEditor();
-    setPendingConflict(null);
-  }, [closeEditor, flushNote, setPendingConflict]);
-
-  const toggleDone = useCallback(
-    async (plan: Plan) => {
-      const desired = !plan.done;
-      try {
-        const updated = await updatePlan({
-          path: plan.path,
-          done: desired,
-          expectedMtime: plan.mtime,
-        });
-        applyPlan(updated);
-        adoptEditor(plan.path, updated);
-      } catch (err) {
-        const failure = planWriteFailure(err);
-        if (failure.kind === "conflict") {
-          // The conflict belongs on the row the checkbox is on: 「覆盖」 must redo
-          // the toggle, not save a note, so nothing here opens an editor.
-          setPendingConflict({
-            path: plan.path,
-            code: failure.code,
-            movedTo: failure.movedTo,
-            retry: { kind: "done", done: desired },
-          });
-          return;
-        }
-        toast.show({
-          kind: "error",
-          message: t("Failed to update plan"),
-          description: failure.message,
-        });
-      }
-    },
-    [adoptEditor, applyPlan, setPendingConflict, t, toast],
-  );
-
-  /** Put the completion state the user asked for on the file as it is now. */
-  const saveDone = useCallback(
-    async (path: string, done: boolean, mtime: string | undefined, force = false) => {
-      const updated = await updatePlan({ path, done, expectedMtime: mtime, force });
-      applyPlan(updated);
-      adoptEditor(path, updated);
-    },
-    [adoptEditor, applyPlan],
-  );
-
-  /**
-   * Re-schedule a plan: a different anchor is a different path, so this is a
-   * move (the server renames the file) and the list is re-read rather than
-   * patched in place — the row changes section anyway.
-   */
-  const reschedule = useCallback(
-    async (plan: Plan, choice: PlanAnchorChoice) => {
-      if (reschedulingRef.current) return;
-      // The chosen chip is resolved against the browser's today here on the
-      // client; the server never picks a date for us. A chip the plan already
-      // sits on is a no-op, not a write.
-      const today = toDateKey(new Date());
-      if (anchorChoiceOf(plan.anchor, today) === choice) {
-        setReschedulePath(null);
-        return;
-      }
-      reschedulingRef.current = true;
-      const anchor = anchorForChoice(choice, today);
-      try {
-        const updated = await updatePlan({
-          path: plan.path,
-          anchor,
-          expectedMtime: plan.mtime,
-        });
-        // A moved plan takes the open note editor with it.
-        adoptEditor(plan.path, updated);
-        if (conflictRef.current?.path === plan.path) setPendingConflict(null);
-        setReschedulePath(null);
-        await reload();
-      } catch (err) {
-        const failure = planWriteFailure(err);
-        if (failure.kind === "name-taken") {
-          // The target month already holds a plan of that name. Nothing was
-          // written and there is nothing to overwrite, so just say so.
-          reportNameTaken(failure);
-          return;
-        }
-        if (failure.kind === "conflict") {
-          setPendingConflict({
-            path: plan.path,
-            code: failure.code,
-            movedTo: failure.movedTo,
-            retry: { kind: "anchor", anchor },
-          });
-          return;
-        }
-        toast.show({
-          kind: "error",
-          message: t("Failed to reschedule plan"),
-          description: failure.message,
-        });
-      } finally {
-        reschedulingRef.current = false;
-      }
-    },
-    [adoptEditor, reload, reportNameTaken, setPendingConflict, t, toast],
-  );
-
-  const toggleReschedule = useCallback((plan: Plan) => {
-    setReschedulePath((prev) => (prev === plan.path ? null : plan.path));
+  const handleCreateSettled = useCallback((ok: boolean) => {
+    if (ok) setTitle("");
+    refocusPending.current = true;
   }, []);
 
-  /**
-   * Rename a plan: the title is the second half of the file name, so this is a
-   * write to the same anchor — the server renames the file in place and the
-   * date cannot move. Like a re-schedule the path changes, so the editor (and
-   * the list, whose rows are keyed by path) follows through the server's
-   * answer rather than a local patch.
-   */
-  const rename = useCallback(
-    async (plan: Plan, title: string) => {
-      try {
-        const updated = await updatePlan({
-          path: plan.path,
-          title,
-          expectedMtime: plan.mtime,
-        });
-        adoptEditor(plan.path, updated);
-        if (conflictRef.current?.path === plan.path) setPendingConflict(null);
-        await reload();
-      } catch (err) {
-        const failure = planWriteFailure(err);
-        if (failure.kind === "name-taken") {
-          // Another plan in the same folder already carries that name (the
-          // anchor is not part of what the user typed). Nothing was written,
-          // so there is nothing to overwrite — just say which name is taken.
-          reportNameTaken(failure);
-          return;
-        }
-        if (failure.kind === "conflict") {
-          setPendingConflict({
-            path: plan.path,
-            code: failure.code,
-            movedTo: failure.movedTo,
-            retry: { kind: "rename", title },
-          });
-          return;
-        }
-        toast.show({
-          kind: "error",
-          message: t("Failed to rename plan"),
-          description: failure.message,
-        });
-      }
-    },
-    [adoptEditor, reload, reportNameTaken, setPendingConflict, t, toast],
-  );
-
-  const resolveConflict = useCallback(
-    async (choice: "overwrite" | "reload") => {
-      const pending = conflictRef.current;
-      if (pending === null) return;
-
-      if (choice === "overwrite") {
-        try {
-          if (pending.retry.kind === "done") {
-            // `force` skips the guard, so no mtime is needed — and none of the
-            // list's (stale) data has to be trusted.
-            await saveDone(pending.path, pending.retry.done, undefined, true);
-          } else if (pending.retry.kind === "anchor") {
-            // Move the file as it is on disk to the anchor the user picked.
-            const updated = await updatePlan({
-              path: pending.path,
-              anchor: pending.retry.anchor,
-              force: true,
-            });
-            adoptEditor(pending.path, updated);
-            await reload();
-          } else if (pending.retry.kind === "rename") {
-            // Rename the file as it is on disk to the name the user typed.
-            const updated = await updatePlan({
-              path: pending.path,
-              title: pending.retry.title,
-              force: true,
-            });
-            adoptEditor(pending.path, updated);
-            await reload();
-          } else {
-            const updated = await updatePlan({
-              path: pending.path,
-              note: draftRef.current,
-              force: true,
-            });
-            dirtyRef.current = false;
-            applyPlan(updated);
-            if (editorRef.current?.path === updated.path) setSaveStatus("saved");
-            adoptEditor(pending.path, updated);
-          }
-          setPendingConflict(null);
-          // A 「覆盖」 of a completion toggle can still leave a dirty note behind.
-          void flushNote();
-        } catch (err) {
-          toast.show({
-            kind: "error",
-            message: t("Failed to save plan"),
-            description: err instanceof Error ? err.message : String(err),
-          });
-        }
-        return;
-      }
-
-      // 「重载」: re-read the list and follow the file — then re-apply what the
-      // user was doing, so nothing they did is dropped. For a content change
-      // (same path, fresher bytes) the disk version is the truth and the draft
-      // is replaced by what is actually in the file.
-      const fresh = await reload();
-      const target = pending.code === "missing" ? pending.movedTo : pending.path;
-      const found = target === null ? undefined : findPlan(fresh, target);
-      if (!found) {
-        // Gone for good (or the reload failed): keep the notice up, so 「覆盖」
-        // is still there to recreate the file where it used to be.
-        toast.show({ kind: "error", message: t("The plan no longer exists") });
-        return;
-      }
-      const noteWasDirty = dirtyRef.current;
-      setPendingConflict(null);
-
-      // 1. The refused action, applied to the file as it is now.
-      if (pending.retry.kind === "done") {
-        try {
-          await saveDone(found.path, pending.retry.done, found.mtime);
-        } catch (err) {
-          toast.show({
-            kind: "error",
-            message: t("Failed to update plan"),
-            description: err instanceof Error ? err.message : String(err),
-          });
-        }
-      } else if (pending.retry.kind === "anchor") {
-        try {
-          const updated = await updatePlan({
-            path: found.path,
-            anchor: pending.retry.anchor,
-            expectedMtime: found.mtime,
-          });
-          adoptEditor(pending.path, updated);
-          await reload();
-        } catch (err) {
-          const failure = planWriteFailure(err);
-          if (failure.kind === "name-taken") reportNameTaken(failure);
-          else
-            toast.show({
-              kind: "error",
-              message: t("Failed to reschedule plan"),
-              description: failure.message,
-            });
-        }
-      } else if (pending.retry.kind === "rename") {
-        try {
-          const updated = await updatePlan({
-            path: found.path,
-            title: pending.retry.title,
-            expectedMtime: found.mtime,
-          });
-          adoptEditor(pending.path, updated);
-          await reload();
-        } catch (err) {
-          const failure = planWriteFailure(err);
-          if (failure.kind === "name-taken") reportNameTaken(failure);
-          else
-            toast.show({
-              kind: "error",
-              message: t("Failed to rename plan"),
-              description: failure.message,
-            });
-        }
-      } else if (pending.code === "modified") {
-        openEditor(found);
-      }
-
-      // 2. A moved plan takes the open editor with it. Only a note the user
-      //    actually typed is written to the new path — the editor merely
-      //    pointing at a plan is not a reason to rewrite it elsewhere. A
-      //    re-schedule moved the editor itself in step 1.
-      if (pending.retry.kind !== "anchor" && pending.code === "missing") {
-        const editorOnOldPath = editorRef.current?.path === pending.path;
-        adoptEditor(pending.path, found);
-        if (editorOnOldPath && noteWasDirty) {
-          dirtyRef.current = true;
-          await flushNote();
-        }
-      }
-    },
-    [
-      adoptEditor,
-      applyPlan,
-      flushNote,
-      openEditor,
-      reload,
-      reportNameTaken,
-      saveDone,
-      setPendingConflict,
-      t,
-      toast,
-    ],
-  );
-
-  const dismissConflict = useCallback(() => {
-    setPendingConflict(null);
-    setSaveStatus(dirtyRef.current ? "unsaved" : "saved");
-  }, [setPendingConflict]);
+  // The write session owns the situation and performs every effect; everything
+  // below is the panel reading that situation and translating its events into
+  // intents. The two halves it does not own are handed over: the list state
+  // (`readPlans` / `applyPlan`) and the wording of the toasts.
+  const {
+    target,
+    draft,
+    saveStatus,
+    conflict: pendingConflict,
+    creating,
+    openPlan,
+    closeDialog,
+    noteEdited,
+    saveNow,
+    toggleDone,
+    reschedule: reschedulePlan,
+    rename: renamePlan,
+    createSubmitted,
+    planRemoved,
+    resolveConflict,
+    dismissConflict,
+    refresh,
+  } = usePlanWriteSession({
+    readPlans,
+    applyPlan,
+    notify,
+    openCount,
+    onCreateSettled: handleCreateSettled,
+  });
 
   /**
    * The refused write waiting for an answer on a given surface, for a given
@@ -732,12 +221,12 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
    */
   const pendingConflictFor = useCallback(
     (path: string, surface: PlanConflictSurface): PlanConflictState | null =>
-      conflict !== null &&
-      conflict.path === path &&
-      planConflictSurface(conflict.retry) === surface
-        ? conflict
+      pendingConflict !== null &&
+      pendingConflict.path === path &&
+      planConflictSurface(pendingConflict.retry) === surface
+        ? pendingConflict
         : null,
-    [conflict],
+    [pendingConflict],
   );
 
   const copyPath = useCopyPath();
@@ -753,10 +242,12 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
       if (!ok) return;
       try {
         await deletePlan(plan.path);
-        if (editorRef.current?.path === plan.path) closeEditor();
-        if (conflictRef.current?.path === plan.path) setPendingConflict(null);
         toast.show({ kind: "success", message: t("Plan deleted") });
-        await load();
+        // The file is gone for good: whatever pointed at it — the detail
+        // dialog, a notice, a note still owed — stops pointing at it, and the
+        // list is re-read. Deleting itself carries no `mtime` and cannot
+        // conflict, so it is ordinary I/O and stays here.
+        planRemoved(plan.path);
       } catch (err) {
         toast.show({
           kind: "error",
@@ -765,35 +256,38 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         });
       }
     },
-    [closeEditor, confirm, load, setPendingConflict, t, toast],
+    [confirm, planRemoved, t, toast],
   );
 
-  const submit = useCallback(async () => {
+  /**
+   * Record the plan in the box. The chosen anchor was resolved against the
+   * browser's local day when it was picked (chip click / calendar pick); the
+   * server never picks a date for us. The session holds the in-flight latch for
+   * the create, so two Enters in one keystroke still make one plan.
+   */
+  const submit = useCallback(() => {
     const value = title.trim();
-    if (!value || creatingRef.current) return;
-    creatingRef.current = true;
-    setCreating(true);
-    try {
-      // The chosen anchor was resolved against the browser's local day when it
-      // was picked (chip click / calendar pick); the server never picks a
-      // date for us.
-      await createPlan({ title: value, anchor: newPlanAnchor });
-      setTitle("");
-      await load();
-    } catch (err) {
-      toast.show({
-        kind: "error",
-        message: t("Failed to create plan"),
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      creatingRef.current = false;
-      // Keep the flow going: clear the box, keep the caret, record another.
-      refocusPending.current = true;
-      setCreating(false);
-    }
-  }, [newPlanAnchor, title, load, toast, t]);
+    if (!value || creating) return;
+    createSubmitted(value, newPlanAnchor);
+  }, [creating, createSubmitted, newPlanAnchor, title]);
 
+  /** Re-schedule a plan from its row's chips. The chip is resolved against the
+   *  browser's today here on the client; whether that is actually a move (a
+   *  chip the plan already sits on is not one) is the session's decision. */
+  const reschedule = useCallback(
+    (plan: Plan, choice: PlanAnchorChoice) => {
+      reschedulePlan(plan, choice, today);
+    },
+    [reschedulePlan, today],
+  );
+
+  const toggleReschedule = useCallback((plan: Plan) => {
+    setReschedulePath((prev) => (prev === plan.path ? null : plan.path));
+  }, []);
+
+  // The input is disabled while a create is in flight and a disabled control
+  // cannot take focus, so the caret is restored once the re-enable has been
+  // committed — by this effect, not by the request handler.
   useEffect(() => {
     if (creating || !refocusPending.current) return;
     refocusPending.current = false;
@@ -815,8 +309,8 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
   // now, even after it was re-scheduled outside the panel, and 「隐藏已完成」
   // does not close the dialog on a plan the user just completed.
   const editingPlan = useMemo(
-    () => (editing === null ? null : (findPlan(data, editing.path) ?? null)),
-    [data, editing],
+    () => (target === null ? null : (findPlan(data, target.path) ?? null)),
+    [data, target],
   );
   // The overdue section hides completed-only plans, so a lone done past plan
   // must still fall through to the empty state instead of a blank panel.
@@ -842,11 +336,11 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         // Only the conflicts this row can answer: a refused note save is
         // rendered by the dialog instead (#51).
         conflict={pendingConflictFor(plan.path, "row")}
-        onOpen={() => openDialog(plan)}
+        onOpen={() => openPlan(plan)}
         onToggleDone={() => void toggleDone(plan)}
         onToggleReschedule={() => toggleReschedule(plan)}
         onReschedule={(choice) => void reschedule(plan, choice)}
-        onRename={(next) => void rename(plan, next)}
+        onRename={(next) => void renamePlan(plan, next)}
         onResolveConflict={(choice) => void resolveConflict(choice)}
         onDismissConflict={dismissConflict}
         onCopyPath={() => void copyPath(plan.absPath)}
@@ -856,11 +350,11 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
     [
       copyPath,
       dismissConflict,
-      openDialog,
+      openPlan,
       pendingConflictFor,
       pickedAnchor,
       removePlan,
-      rename,
+      renamePlan,
       reschedule,
       reschedulePath,
       resolveConflict,
@@ -891,7 +385,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
         )}
         <span style={{ flex: 1 }} />
         <HideDoneToggle hidden={hideDone} onToggle={() => setHideDone((value) => !value)} />
-        <RefreshIconButton onClick={() => void load(true)} disabled={loading} />
+        <RefreshIconButton onClick={() => refresh(true)} disabled={loading} />
       </div>
 
       <div style={{ padding: "8px 10px", flexShrink: 0 }}>
@@ -933,7 +427,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
               if (event.nativeEvent.isComposing) return;
               if (event.key === "Enter") {
                 event.preventDefault();
-                void submit();
+                submit();
               } else if (event.key === "Escape") {
                 setTitle("");
               }
@@ -982,7 +476,7 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
             <div style={{ marginTop: 4, color: "var(--text-dim)", wordBreak: "break-word" }}>{error}</div>
             <button
               type="button"
-              onClick={() => void load(true)}
+              onClick={() => refresh(true)}
               style={{
                 marginTop: 8,
                 padding: "3px 10px",
@@ -1041,9 +535,9 @@ export function PlansPanel({ openCount }: PlansPanelProps) {
           draft={draft}
           saveStatus={saveStatus}
           conflict={pendingConflictFor(editingPlan.path, "dialog")}
-          onChange={handleNoteChange}
-          onSave={() => void flushNote(true)}
-          onResolveConflict={(choice) => void resolveConflict(choice)}
+          onChange={noteEdited}
+          onSave={saveNow}
+          onResolveConflict={resolveConflict}
           onDismissConflict={dismissConflict}
           onClose={closeDialog}
         />
