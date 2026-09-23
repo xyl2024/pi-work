@@ -34,6 +34,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import * as pty from "node-pty";
 import { createLogger } from "@/lib/server/logger";
 import { sanitizeChildEnv } from "@/lib/server/env-sanitize";
+import { currentInteractiveShell } from "@/lib/server/interactive-shell";
 
 const log = createLogger("terminal/server");
 
@@ -77,13 +78,6 @@ const g = globalThis as unknown as { __piTerminalRuntime?: TerminalRuntime };
 /** Info the frontend needs to connect: the WS port plus the auth token. */
 export function getTerminalInfo(): TerminalServerInfo | null {
   return g.__piTerminalRuntime?.info ?? null;
-}
-
-function resolveShell(): string {
-  if (process.platform === "win32") {
-    return process.env.COMSPEC ?? "powershell.exe";
-  }
-  return process.env.SHELL || "bash";
 }
 
 /** Expand a leading "~" to the home dir; reject non-absolute, missing or non-dir paths. */
@@ -163,10 +157,11 @@ function handleConnection(ws: WebSocket): void {
     // front-end xterm.js advertises; preserving the host's TERM
     // can mislead the shell into 16-colour mode.
     let ptyProcess: pty.IPty;
+    const shell = currentInteractiveShell();
     try {
       const ptyEnv = sanitizeChildEnv(process.env);
       ptyEnv.TERM = "xterm-256color";
-      ptyProcess = pty.spawn(resolveShell(), [], {
+      ptyProcess = pty.spawn(shell, [], {
         name: "xterm-256color",
         cols: 80,
         rows: 24,
@@ -197,7 +192,7 @@ function handleConnection(ws: WebSocket): void {
       session.clients.clear();
       send({ type: "exit", code: exitCode });
     });
-    log.info("pty started", { sessionId, cwd: cwdPath, shell: resolveShell() });
+    log.info("pty started", { sessionId, cwd: cwdPath, shell });
     return session;
   };
 
