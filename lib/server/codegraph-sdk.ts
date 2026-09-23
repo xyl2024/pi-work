@@ -26,10 +26,25 @@ import { createRequire } from "node:module";
 
 declare const __non_webpack_require__: NodeRequire | undefined;
 
-const target = `${process.platform}-${process.arch}`;
+/**
+ * The per-platform bundle package this module requires, e.g.
+ * `@colbymchenry/codegraph-linux-x64` — the same name next.config.ts
+ * externalises (`lib/shared/codegraph-platform.ts` builds it from an explicit
+ * platform, and `tests/unit/codegraph-externals.test.ts` pins the two
+ * together).
+ *
+ * Spelled out inline rather than delegated to that shared helper on purpose:
+ * Turbopack resolves the deep require below *at build time* by folding
+ * `process.platform`/`process.arch` into the template literal. Route the name
+ * through a function call and the specifier stops being statically knowable,
+ * and Turbopack replaces the require with a stub that throws
+ * `Cannot find module 'unknown'` — which is exactly the "CodeGraph tools are
+ * broken" failure this loader exists to avoid.
+ */
+export const CODEGRAPH_PLATFORM_PACKAGE = `@colbymchenry/codegraph-${process.platform}-${process.arch}`;
 
-const TOOL_HANDLER_PATH = `@colbymchenry/codegraph-${target}/lib/dist/mcp/tools.js`;
-const INDEX_PATH = `@colbymchenry/codegraph-${target}/lib/dist/index.js`;
+const TOOL_HANDLER_PATH = `${CODEGRAPH_PLATFORM_PACKAGE}/lib/dist/mcp/tools.js`;
+const INDEX_PATH = `${CODEGRAPH_PLATFORM_PACKAGE}/lib/dist/index.js`;
 
 /**
  * Resolve the Node `require` needed to reach the compiled bundle's deep
