@@ -8,9 +8,10 @@
  *
  * Security: every connection is gated by a per-process random token. The
  * token is exposed only through the authenticated-enough `/api/terminal`
- * route (same trust boundary as the rest of Pi Work). Default bind host is
- * 0.0.0.0 so LAN clients can reach it with the token; set
- * PI_WORK_TERMINAL_HOST=127.0.0.1 to restrict to localhost only.
+ * route (same trust boundary as the rest of Pi Work). The default bind host is
+ * loopback; set PI_WORK_TERMINAL_HOST=0.0.0.0 to let LAN clients reach it with
+ * the token. Desktop mode (PI_WORK_DESKTOP) forces loopback regardless — see
+ * lib/shared/trust-boundary.ts.
  *
  * Protocol (JSON text frames):
  *   client → server: { type: "start", cwd, sessionId? } | { type: "data", data }
@@ -35,11 +36,12 @@ import * as pty from "node-pty";
 import { createLogger } from "@/lib/server/logger";
 import { sanitizeChildEnv } from "@/lib/server/env-sanitize";
 import { currentInteractiveShell } from "@/lib/server/interactive-shell";
+import { currentTerminalHost } from "@/lib/server/trust-boundary";
 
 const log = createLogger("terminal/server");
 
 const DEFAULT_PORT = 30142;
-const HOST = process.env.PI_WORK_TERMINAL_HOST ?? "0.0.0.0";
+const HOST = currentTerminalHost();
 const PORT = Number(process.env.PI_WORK_TERMINAL_PORT ?? DEFAULT_PORT);
 
 export interface TerminalServerInfo {

@@ -76,7 +76,8 @@ pi-work/
 - `lib/client`、`hooks` 和客户端组件不得依赖 `lib/server`；不要把 `better-sqlite3`、`node-pty`、服务端配置/日志等传入浏览器 bundle。
 - 服务端文件/API 操作必须复用 `lib/server/file-access.ts` 的允许根目录校验，不能仅凭用户传入路径读写任意文件。
 - 危险命令权限由 `lib/server/dangerous-patterns.ts` 和 RPC 会话处理；不要绕过确认流程或把密钥写入日志。
-- 终端连接依赖随机 token；修改终端 host/port、鉴权或 cwd 校验时同时检查 `/api/terminal` 和 WebSocket 服务。
+- 终端连接依赖随机 token；修改终端 host/port、鉴权或 cwd 校验时同时检查 `/api/terminal` 和 WebSocket 服务。终端默认只绑 loopback（`PI_WORK_TERMINAL_HOST` 可放开）。
+- 信任边界收在 `lib/shared/trust-boundary.ts`（纯规则）与 `proxy.ts` / `lib/server/auth.ts` / `lib/server/trust-boundary.ts`：服务器轨道用 `PI_WORK_AUTH_*`；桌面轨道（`PI_WORK_DESKTOP`）由 Electron 外壳每次启动生成 `PI_WORK_DESKTOP_SECRET` 并签发注入 cookie，登录页关闭、服务端与终端只绑 loopback。改这里等于改「谁能进来」，不要绕过。
 - `~/.pi/agent/`、`~/.pi-work/` 以及环境变量可能含有密钥和用户数据，未经明确要求不要读取、修改或提交。
 - SQLite 存储和迁移应保持幂等、向后兼容；不要把 `~/.pi-work/*.db`、会话 JSONL、上传文件或构建产物提交到仓库。
 

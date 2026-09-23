@@ -37,7 +37,16 @@ const { values: cliArgs } = parseArgs({
 });
 
 const port     = cliArgs.port     ?? process.env.PORT     ?? "30141";
-const hostname = cliArgs.hostname ?? process.env.HOSTNAME ?? null;
+
+// Desktop mode is owned by the Electron shell and must never be reachable from
+// the LAN: bind loopback no matter what the caller asked for. Any non-empty
+// PI_WORK_DESKTOP counts here — deliberately stricter than the parser in
+// lib/shared/trust-boundary.ts (which this plain-CommonJS file cannot import),
+// so the two can only disagree towards loopback, never away from it.
+const isDesktop = (process.env.PI_WORK_DESKTOP ?? "").trim() !== "";
+const hostname = isDesktop
+  ? "127.0.0.1"
+  : cliArgs.hostname ?? process.env.HOSTNAME ?? null;
 
 if (!fs.existsSync(nextDir)) {
   console.error("Build artifacts not found. Please report this issue.");

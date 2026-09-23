@@ -14,6 +14,16 @@ _Avoid_: space、project、项目
 侧栏中按 cwd 聚合的一组会话，是 `/api/workspaces` 返回的单元。
 _Avoid_: 用 Workspace 指代磁盘路径
 
+### 运行环境与信任
+
+**信任边界（Trust boundary）**：
+决定「谁可以访问这个进程、谁签发会话」的那一处规则，对应代码中的 `lib/shared/trust-boundary.ts`（纯 module）。两条轨道共用同一套 cookie、路由与客户端调用，只有签发方不同：**服务器轨道**（默认）的会话密钥来自 `PI_WORK_AUTH_*`，登录页可用；**桌面轨道**（`PI_WORK_DESKTOP`）由外壳每次启动生成的随机值（`PI_WORK_DESKTOP_SECRET`）签发并注入 cookie，登录页关闭、服务只绑 loopback。
+_Avoid_: 把它当作登录页（那只是服务器轨道签发信任的一个入口）；用「鉴权」泛指它（那只是 401 与登录那一层）
+
+**桌面轨道（Desktop track）**：
+Pi Work 由 Electron 外壳拥有并拉起的那条运行方式（`PI_WORK_DESKTOP`）：服务端原生跑在 Windows 上、只监听 loopback、信任凭据每次启动随机生成、没有登录页。它与**服务器轨道**（用户自己部署的 Linux 服务器，保留登录页与 `PI_WORK_AUTH_*`）共用同一份代码。
+_Avoid_: 把它当作「桌面版 UI」或第二条代码分支；用「本地模式」指代它
+
 ### 界面
 
 **会话标签页（Session tab）**：

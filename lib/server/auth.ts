@@ -1,17 +1,31 @@
-// Username/password authentication for the Pi Work web UI.
-//
-// Credentials come from environment variables:
-//   PI_WORK_AUTH_USERNAME — login username (default: "admin")
-//   PI_WORK_AUTH_PASSWORD — login password (default: "admin")
+// Session authentication for the Pi Work web UI.
 //
 // The session cookie is stateless: `<expiresAtMs>.<hmac>` where the HMAC key
-// is derived from the credentials, so a password change instantly invalidates
-// all existing sessions and the token can be verified anywhere in this
-// process (route handlers AND the proxy/middleware bundle) without shared
-// mutable state. Web UI auth only — never used for the pi agent session,
-// terminal WS (has its own random token) or LLM provider credentials.
+// is derived from whatever the trust boundary says signs this process, so
+// changing that key instantly invalidates all existing sessions and the token
+// can be verified anywhere in this process (route handlers AND the
+// proxy/middleware bundle) without shared mutable state.
+//
+// Two issuers (see lib/shared/trust-boundary.ts):
+//
+//   - server track: the key comes from PI_WORK_AUTH_USERNAME /
+//     PI_WORK_AUTH_PASSWORD (defaults: admin/admin) and the login page issues
+//     the cookie;
+//   - desktop track (PI_WORK_DESKTOP): the Electron shell is the issuer. It
+//     mints PI_WORK_DESKTOP_SECRET once per launch and signs the cookie itself:
+//         key = sha256("pi-work-desktop:" + secret)
+//         token = `${Date.now() + AUTH_SESSION_TTL_MS}.${hmacSha256(key, expiresAtMs)}`
+//     The shell injects that token as the `pi-work-auth` cookie before the
+//     window loads; there is no login page to mint one. The shell half of this
+//     contract is built with the shell — this file is the server half, which
+//     only verifies what the shell signed.
+//
+// Web UI auth only — never used for the pi agent session, terminal WS (has its
+// own random token) or LLM provider credentials.
 
 import { createHmac, createHash, timingSafeEqual } from "crypto";
+import { isDesktopMode } from "@/lib/server/trust-boundary";
+import { trustBoundary } from "@/lib/shared/trust-boundary";
 
 export const AUTH_COOKIE_NAME = "pi-work-auth";
 /** Clone of the session cookie with SameSite=None; Secure. The Electron shell
@@ -42,18 +56,37 @@ export function getAuthPassword(): string {
 
 /** True when the operator hasn't overridden the built-in admin/admin pair. */
 export function isUsingDefaultCredentials(): boolean {
+  // Desktop mode has no credential pair at all; nothing to warn about.
+  if (isDesktopMode()) return false;
   return !process.env.PI_WORK_AUTH_PASSWORD?.trim() && !process.env.PI_WORK_AUTH_USERNAME?.trim();
 }
 
-/** Derive the signing key from the credentials so password changes revoke sessions. */
-function authSecret(): Buffer {
-  return createHash("sha256")
-    .update(`pi-work-auth:${getAuthUsername()}:${getAuthPassword()}`)
-    .digest();
+/** The trust boundary in effect for this process. */
+function currentTrustBoundary() {
+  return trustBoundary({
+    desktop: isDesktopMode(),
+    desktopSecret: process.env.PI_WORK_DESKTOP_SECRET,
+    credentials: { username: getAuthUsername(), password: getAuthPassword() },
+  });
 }
 
-function sign(expiresAtMs: number): string {
-  return createHmac("sha256", authSecret()).update(String(expiresAtMs)).digest("hex");
+/** Whether the login page and the credential login endpoint exist at all. */
+export function isLoginEnabled(): boolean {
+  return currentTrustBoundary().loginEnabled;
+}
+
+/**
+ * Derive the signing key from the trust boundary so changing it revokes every
+ * session. `null` means nothing can be signed or verified (desktop mode
+ * without a secret).
+ */
+function authSecret(): Buffer | null {
+  const material = currentTrustBoundary().sessionKeyMaterial;
+  return material === null ? null : createHash("sha256").update(material).digest();
+}
+
+function sign(expiresAtMs: number, secret: Buffer): string {
+  return createHmac("sha256", secret).update(String(expiresAtMs)).digest("hex");
 }
 
 /** Constant-time string equality; false on length mismatch. */
@@ -70,8 +103,16 @@ export function verifyCredentials(username: string, password: string): boolean {
 
 /** Create a signed session token valid for AUTH_SESSION_TTL_MS from now. */
 export function createSessionToken(now = Date.now()): string {
+  const secret = authSecret();
+  if (!secret) {
+    // Desktop mode without PI_WORK_DESKTOP_SECRET: the shell mints the cookie,
+    // this process has nothing to sign with.
+    throw new Error(
+      "no session signer: PI_WORK_DESKTOP is set but PI_WORK_DESKTOP_SECRET is empty",
+    );
+  }
   const expiresAtMs = now + AUTH_SESSION_TTL_MS;
-  return `${expiresAtMs}.${sign(expiresAtMs)}`;
+  return `${expiresAtMs}.${sign(expiresAtMs, secret)}`;
 }
 
 /** Verify a signed session token; returns true when valid and unexpired. */
@@ -83,7 +124,9 @@ export function verifySessionToken(token: string | undefined | null): boolean {
   const sig = token.slice(dot + 1);
   const expiresAtMs = Number(expiresRaw);
   if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= Date.now()) return false;
-  return safeEqual(sig, sign(expiresAtMs));
+  const secret = authSecret();
+  if (!secret) return false;
+  return safeEqual(sig, sign(expiresAtMs, secret));
 }
 
 function extractCookie(header: string, name: string): string | undefined {

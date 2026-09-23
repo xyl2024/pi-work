@@ -12,6 +12,13 @@
   如 `api-smoke.test.ts`、`settings.test.ts`。
 - **纯单元测试**：直接 import `lib/shared` 等纯模块，不发请求、不用 cookie，
   如 `panel-tabs.test.ts`、`subagent-profiles.test.ts`。
+- **服务端模块测试**：直接 import 服务端模块本身，用真实的 `Request` /
+  `NextRequest` 驱动它，如 `auth-proxy.test.ts`（`proxy.ts`）、
+  `auth-desktop.test.ts`（三个 auth session route handler 与 `lib/server/auth.ts`）。
+  它存在的原因是**隔离实例无法被配置成另一种形态**：接口测试打的实例永远跑在服务器
+  轨道（`PI_WORK_AUTH_*` + 登录页），而桌面轨道（`PI_WORK_DESKTOP`）的规则必须
+  在进程内才能被驱动。断言仍只落在外部行为（状态码、响应体、重定向目标），
+  不 mock 依赖袋、不断言内部调用次数。
 
 ## 隔离原则（红线）
 

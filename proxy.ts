@@ -11,8 +11,15 @@
 // signed token: a SameSite=Lax one for normal browsers and a
 // SameSite=None;Secure one for the Electron shell (the app runs in an
 // iframe of a file:// page, where Lax cookies are third-party and not sent).
+//
+// Desktop mode (PI_WORK_DESKTOP) has no login page: the shell signs the cookie
+// and injects it into the window before the app loads. There, /login is not a
+// route and an unauthenticated page visit is never redirected to it — that
+// redirect would loop with the one below. Every /api call is still 401
+// without a valid cookie.
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_COOKIE_NAME, AUTH_COOKIE_NAME_NONE, verifySessionToken } from "@/lib/server/auth";
+import { isDesktopMode } from "@/lib/server/trust-boundary";
 
 const LOGIN_PATH = "/login";
 
@@ -42,6 +49,13 @@ function clearBothCookies(res: NextResponse): NextResponse {
 
 export default function authProxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const desktop = isDesktopMode();
+
+  // Desktop mode has no login page. Bounce it before anything else so the
+  // login form is never rendered there, cookie or no cookie.
+  if (desktop && pathname === LOGIN_PATH) {
+    return NextResponse.redirect(new URL("/", req.url));
+  }
 
   // Fast path without touching crypto: no auth cookie at all can't be a
   // session.
@@ -50,6 +64,9 @@ export default function authProxy(req: NextRequest) {
     if (isApiPath(pathname)) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
+    // Desktop pages are served without a login redirect; the shell injects the
+    // cookie, and the app's own gate reports whatever the session really is.
+    if (desktop) return NextResponse.next();
     return NextResponse.redirect(new URL(LOGIN_PATH, req.url));
   }
 
@@ -67,6 +84,7 @@ export default function authProxy(req: NextRequest) {
   if (isApiPath(pathname)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  if (desktop) return NextResponse.next();
   return NextResponse.redirect(new URL(LOGIN_PATH, req.url));
 }
 
