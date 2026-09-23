@@ -35,7 +35,8 @@ import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { matchSelfKillCommand } from "./self-protection";
-import { createPiWorkBashTool } from "./pi-bash-tool";
+import { createPiWorkBashTool, createPiWorkPowerShellTool } from "./pi-shell-tools";
+import { unavailableAgentShellTools } from "../shared/agent-shell-tools";
 import { notify } from "./notifications";
 import { readSessionNotify } from "./session-notify";
 import { computeContextComposition, type ContextComposition } from "../shared/context-composition";
@@ -1162,6 +1163,10 @@ export async function startRpcSession(
               return undefined;
             }
 
+            // Only bash is matched against the dangerous-command rules: the
+            // gate is keyed by shell tool name. A platform that offers a second
+            // shell (Windows runs the `powershell` tool too) needs its own branch
+            // here, or that shell runs commands no rule can match.
             if (!isToolCallEventType("bash", event)) return;
             const command = event.input.command;
             // Self-protection (hard, code-level): commands that would kill
@@ -1288,6 +1293,11 @@ export async function startRpcSession(
         // Override the SDK built-in bash definition. Its hook runs after
         // session PI_* variables are injected and does not mutate process.env.
         createPiWorkBashTool(cwd),
+        // Same override for PowerShell. It is registered on every platform and
+        // the platform denylist below drops it where the machine cannot run it
+        // (`excludeTools` filters custom definitions too), so "which shells
+        // exist here" stays one decision (lib/shared/agent-shell-tools.ts).
+        createPiWorkPowerShellTool(cwd),
         ...(enabledTools.has("show_media")
           ? buildShowFileTool()
           : []),
@@ -1336,6 +1346,12 @@ export async function startRpcSession(
       // passed to AgentSession.allowedToolNames. This is intentionally used
       // for specialized sessions rather than relying only on active tools.
       ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
+      // Shells this platform cannot run never enter the registry: pi offers
+      // `powershell` on every platform but its `getPowerShellConfig()` throws
+      // off Windows, so a session that lists it is a turn waiting to die.
+      // Denylisting here (rather than only hiding it in the UI) is what makes
+      // `get_tools`, the tool picker and an "all tools" selection agree.
+      excludeTools: [...unavailableAgentShellTools(process.platform)],
     });
     capturedSessionId = inner.sessionId as string;
 
