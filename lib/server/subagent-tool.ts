@@ -40,11 +40,11 @@ const SUBAGENT_CODEGRAPH_TOOLS: readonly string[] = CODEGRAPH_TOOL_IDS.filter(
  * pi's own resolution) plus `powershell`; elsewhere just `bash` — so exploration
  * can always inspect history, diffs and existing read-only checks.
  *
- * The profile's system prompt keeps those shells inspection-only. A `bash`
- * command matching a dangerous-pattern rule is refused outright instead of
- * prompting — a subagent session has no prompt UI (see docs/adr/0001) — and the
- * same branch for `powershell` still has to be added to the gate in
- * `rpc-manager.ts`, which matches bash only today.
+ * The profile's system prompt keeps those shells inspection-only. A shell
+ * command matching a dangerous-command rule is refused outright instead of
+ * prompting — a subagent session has no prompt UI (see docs/adr/0001) — and
+ * the gate in `rpc-manager.ts` matches both shells, so `powershell` is covered
+ * exactly like `bash`.
  */
 const SUBAGENT_READ_ONLY_TOOLS: readonly string[] = [
   "read",

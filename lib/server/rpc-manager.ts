@@ -1163,21 +1163,28 @@ export async function startRpcSession(
               return undefined;
             }
 
-            // Only bash is matched against the dangerous-command rules: the
-            // gate is keyed by shell tool name. A platform that offers a second
-            // shell (Windows runs the `powershell` tool too) needs its own branch
-            // here, or that shell runs commands no rule can match.
-            if (!isToolCallEventType("bash", event)) return;
+            // Both agent shells are matched against the dangerous-command
+            // rules. The gate used to key on `bash` alone, which left the
+            // Windows-only `powershell` tool as a shell no rule could match —
+            // the confirmation gate silently off on the one platform whose
+            // commands the user's bash rules do not describe.
+            const isShellCall =
+              isToolCallEventType("bash", event) || isToolCallEventType("powershell", event);
+            if (!isShellCall) return;
             const command = event.input.command;
             // Self-protection (hard, code-level): commands that would kill
             // this very server are blocked unconditionally — no permission
-            // prompt, no per-session allowance, not user-configurable.
+            // prompt, no per-session allowance, not user-configurable. Its
+            // process-kill patterns are POSIX-shaped (`pkill`, `fuser`,
+            // `$PPID`) and never match PowerShell syntax; its system-down ones
+            // (`shutdown`, `reboot`) apply to both shells, which is why this
+            // runs before the per-shell branches rather than inside one.
             const selfKill = matchSelfKillCommand(command);
             if (selfKill) {
-              log.warn("self-protection blocked bash command", { command, reason: selfKill.reason });
+              log.warn("self-protection blocked shell command", { command, reason: selfKill.reason });
               return {
                 block: true,
-                reason: "The bash command was blocked. Don't try it again and tell the user what you want to do.",
+                reason: "The command was blocked. Don't try it again and tell the user what you want to do.",
               };
             }
             const match = matchDangerousPattern(command);

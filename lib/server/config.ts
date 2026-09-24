@@ -42,6 +42,12 @@ import { PANEL_TAB_SPEC_BY_KIND } from "../shared/panelTabs";
 // every session. Disabling here passes `appendSystemPrompt: []` to the
 // loader, which short-circuits `discoverAppendSystemPromptFile()` — the
 // file is left untouched on disk so re-enabling just flips the flag.
+
+// ── Dangerous-command confirmation rules ────────────────────────────────
+// Empty `rules` means "no user rules": the built-in bash / PowerShell sets in
+// `lib/shared/dangerous-commands.ts` are always enforced underneath, so the
+// confirmation gate is never silently off (a Windows box has no user bash
+// rule that could match a PowerShell command).
 const DEFAULT_DANGEROUS_PATTERNS: DangerousPatternsConfig = {
   rules: [],
   timeout_ms: 300_000,
@@ -125,7 +131,11 @@ function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
     if (!r || typeof r !== "object") continue;
     const rule = r as Record<string, unknown>;
     if (typeof rule.name === "string" && typeof rule.pattern === "string") {
-      rules.push({ name: rule.name, pattern: rule.pattern });
+      rules.push({
+        name: rule.name,
+        pattern: rule.pattern,
+        ...(typeof rule.ignoreCase === "boolean" ? { ignoreCase: rule.ignoreCase } : {}),
+      });
     }
   }
   const timeoutRaw = obj.timeout_ms;
