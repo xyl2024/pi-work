@@ -28,13 +28,6 @@ import { isDesktopMode } from "@/lib/server/trust-boundary";
 import { trustBoundary } from "@/lib/shared/trust-boundary";
 
 export const AUTH_COOKIE_NAME = "pi-work-auth";
-/** Clone of the session cookie with SameSite=None; Secure. The Electron shell
- *  embeds the web app in an <iframe> of a file:// page, so Chromium treats
- *  every request from it as third-party and SameSite=Lax cookies are not
- *  sent. http://localhost is a trustworthy origin, so Chromium accepts this
- *  Secure cookie and attaches it inside the iframe. Normal browsers keep
- *  using the Lax cookie (works even over plain http LAN access). */
-export const AUTH_COOKIE_NAME_NONE = "pi-work-auth-n";
 /** Session lifetime: 7 days, matching the cookie Max-Age. */
 export const AUTH_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -140,33 +133,27 @@ function extractCookie(header: string, name: string): string | undefined {
   return undefined;
 }
 
-/** Read both auth cookies from a Request's Cookie header (no next/headers
+/** Read the auth cookie from a Request's Cookie header (no next/headers
  *  dep; accepts NextRequest-style objects with cookie()/get). */
 export function readAuthToken(req: { headers: { get(name: string): string | null } }): string | undefined {
   const header = req.headers.get("cookie");
   if (!header) return undefined;
-  return extractCookie(header, AUTH_COOKIE_NAME) ?? extractCookie(header, AUTH_COOKIE_NAME_NONE);
+  return extractCookie(header, AUTH_COOKIE_NAME);
 }
 
-/** Whether this request carries a valid signed auth session (either cookie). */
+/** Whether this request carries a valid signed auth session. */
 export function isRequestAuthenticated(req: Request): boolean {
   return verifySessionToken(readAuthToken(req));
 }
 
-/** Set-Cookie header values for a fresh login session (Lax + None/Secure). */
+/** Set-Cookie header values for a fresh login session. */
 export function authCookieHeaders(): string[] {
   const token = encodeURIComponent(createSessionToken());
   const maxAge = Math.floor(AUTH_SESSION_TTL_MS / 1000);
-  return [
-    `${AUTH_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`,
-    `${AUTH_COOKIE_NAME_NONE}=${token}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${maxAge}`,
-  ];
+  return [`${AUTH_COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`];
 }
 
-/** Set-Cookie header values that clear both session cookies. */
+/** Set-Cookie header values that clear the session cookie. */
 export function authClearCookieHeaders(): string[] {
-  return [
-    `${AUTH_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-    `${AUTH_COOKIE_NAME_NONE}=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0`,
-  ];
+  return [`${AUTH_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`];
 }

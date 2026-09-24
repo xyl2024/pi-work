@@ -7,10 +7,9 @@
 //   - /login and /api/auth/session/** (login/logout/status) → always pass
 //
 // Verification is pure cookie + HMAC (see lib/server/auth.ts), so no Node
-// APIs or shared session state are needed here. Two cookies carry the same
-// signed token: a SameSite=Lax one for normal browsers and a
-// SameSite=None;Secure one for the Electron shell (the app runs in an
-// iframe of a file:// page, where Lax cookies are third-party and not sent).
+// APIs or shared session state are needed here. The signed token travels in a
+// single SameSite=Lax cookie: the app is loaded as a top-level page both in a
+// browser and in the Electron shell, so it is first-party in both.
 //
 // Desktop mode (PI_WORK_DESKTOP) has no login page: the shell signs the cookie
 // and injects it into the window before the app loads. There, /login is not a
@@ -18,7 +17,7 @@
 // redirect would loop with the one below. Every /api call is still 401
 // without a valid cookie.
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE_NAME, AUTH_COOKIE_NAME_NONE, verifySessionToken } from "@/lib/server/auth";
+import { AUTH_COOKIE_NAME, verifySessionToken } from "@/lib/server/auth";
 import { isDesktopMode } from "@/lib/server/trust-boundary";
 
 const LOGIN_PATH = "/login";
@@ -35,15 +34,11 @@ function isApiPath(pathname: string): boolean {
 }
 
 function tokenAccepted(req: NextRequest): boolean {
-  return (
-    verifySessionToken(req.cookies.get(AUTH_COOKIE_NAME)?.value) ||
-    verifySessionToken(req.cookies.get(AUTH_COOKIE_NAME_NONE)?.value)
-  );
+  return verifySessionToken(req.cookies.get(AUTH_COOKIE_NAME)?.value);
 }
 
-function clearBothCookies(res: NextResponse): NextResponse {
+function clearSessionCookie(res: NextResponse): NextResponse {
   res.cookies.set(AUTH_COOKIE_NAME, "", { path: "/", maxAge: 0 });
-  res.cookies.set(AUTH_COOKIE_NAME_NONE, "", { path: "/", maxAge: 0, sameSite: "none", secure: true });
   return res;
 }
 
@@ -59,7 +54,7 @@ export default function authProxy(req: NextRequest) {
 
   // Fast path without touching crypto: no auth cookie at all can't be a
   // session.
-  if (!req.cookies.get(AUTH_COOKIE_NAME) && !req.cookies.get(AUTH_COOKIE_NAME_NONE)) {
+  if (!req.cookies.get(AUTH_COOKIE_NAME)) {
     if (isPublicPath(pathname)) return NextResponse.next();
     if (isApiPath(pathname)) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -77,9 +72,9 @@ export default function authProxy(req: NextRequest) {
   }
 
   // Stale/invalid cookie: treat like no session, but make sure the page that
-  // renders /login clears the useless cookies first.
+  // renders /login clears the useless cookie first.
   if (isPublicPath(pathname)) {
-    return clearBothCookies(NextResponse.next());
+    return clearSessionCookie(NextResponse.next());
   }
   if (isApiPath(pathname)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });

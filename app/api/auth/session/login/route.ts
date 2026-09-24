@@ -40,7 +40,6 @@ export async function POST(req: Request) {
     username: getAuthUsername(),
     usingDefaultCredentials: isUsingDefaultCredentials(),
   });
-  // Two cookies: Lax (normal browser) + None/Secure (Electron iframe).
   for (const c of authCookieHeaders()) res.headers.append("Set-Cookie", c);
   return res;
 }
