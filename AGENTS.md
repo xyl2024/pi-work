@@ -59,7 +59,8 @@ pi-work/
 ├── public/             # 静态资源
 ├── instrumentation.ts  # Node.js 服务启动入口：wechat 监控、Scheduler、Kanban、RSS 刷新循环、
 │                       # 终端 WebSocket 服务的 bootstrap；改启停逻辑要检查幂等性、退出清理与热重载
-├── electron-shell/     # 可选 Electron 外壳：自己拉起并回收服务端进程（独立 Node 运行时），非核心 Web 应用
+├── electron-shell/     # 可选 Electron 外壳：自己拉起并回收服务端进程（独立 Node 运行时），非核心 Web 应用；
+│                       # 关窗只是隐藏到托盘、服务端与后台循环继续，只有托盘「退出」才结束进程树
 └── 顶层配置            # next.config.ts、tailwind.config.ts、postcss.config.mjs、tsconfig.json、
                         # eslint.config.mjs、vitest.config.ts、proxy.ts（全局鉴权网关）、
                         # .npmrc / pnpm-workspace.yaml、Dockerfile + docker-compose.yml

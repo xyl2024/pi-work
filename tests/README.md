@@ -16,7 +16,10 @@
   `electron-shell-window-rules.test.ts`。外壳的服务端决策（`electron-shell/server-process.js`：
   是否由外壳拉起、用什么命令与环境、如何签名注入 cookie、如何结束进程树、何时算就绪）
   同理（`electron-shell-server-process.test.ts`），其中 cookie 名/TTL 与 token 格式这一条
-  刻意跨到服务端：用 `lib/server/auth.ts` 的验证器验外壳签的 token。
+  刻意跨到服务端：用 `lib/server/auth.ts` 的验证器验外壳签的 token。外壳的生命周期规则
+  （`electron-shell/lifecycle.js`：关窗是隐藏还是真关、应用是否比窗口活得久、托盘菜单
+  有什么）同理（`electron-shell-lifecycle.test.ts`），其中「托盘标签与动作不许各说各话」
+  与「结束服务端的调用点只有两处」是源码守卫：Electron 主进程无法被 vitest 驱动。
 - **服务端模块测试**：直接 import 服务端模块本身，用真实的 `Request` /
   `NextRequest` 驱动它，如 `auth-proxy.test.ts`（`proxy.ts`）、
   `auth-desktop.test.ts`（三个 auth session route handler 与 `lib/server/auth.ts`）。

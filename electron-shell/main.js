@@ -17,7 +17,9 @@
 //
 // The server-process decisions (whether to spawn, with what command and env,
 // how to sign the session, how to kill the tree, when it counts as ready) live
-// in server-process.js, which is unit-tested without Electron.
+// in server-process.js, which is unit-tested without Electron. So do the
+// lifetime rules (closing hides into the tray, the app outlives its windows,
+// what the tray menu offers) — lifecycle.js, same treatment.
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, session, shell } = require("electron");
@@ -27,6 +29,8 @@ const { execFileSync, spawn } = require("node:child_process");
 const path = require("path");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { RETRY_COMMAND, isAppUrl, isExternalNavigation, isShellCommand, resolveAppUrl } = require("./window-rules.js");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { TRAY_ITEM, keepsRunningWithoutWindow, trayMenu, windowCloseAction, windowShowsOnStart, windowToggleAction } = require("./lifecycle.js");
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { AUTH_COOKIE_NAME, SESSION_TTL_MS, buildServerEnv, findFreePort, killPlan, mintSecret, shouldSpawnServer, serverCommand, signSessionToken, waitForServer } = require("./server-process.js");
 
@@ -64,12 +68,15 @@ const CONTROLS_OVERLAY_COLOR = "#00000000";
 const CONTROLS_OVERLAY_SYMBOL = "#808080";
 
 // ── CLI flags ────────────────────────────────────────────────────────
-const startHidden = process.argv.includes("--hidden");
+/** `--hidden` (autostart) starts without showing the window — the first start only. */
+const LAUNCH_HIDDEN = process.argv.includes("--hidden");
 
 // ── State ───────────────────────────────────────────────────────────
 let win = null;
 let tray = null;
 let isQuitting = false;
+/** Whether startApp has run before (only a launch may stay hidden). */
+let hasStarted = false;
 /** The server this launch owns; null when it does not own one (dev, PI_PORT). */
 let server = null;
 /** In-flight start/retry, so a double-clicked retry cannot spawn twice. */
@@ -200,6 +207,14 @@ async function startServer() {
     if (!isQuitting && win) showErrorPage(`服务端已退出（code=${code ?? signal}）`);
   });
 
+  // A quit that landed while we were spawning ran stopServer() when there was
+  // still nothing to stop: without this the child would outlive the shell as an
+  // orphan, holding its port and its background loops.
+  if (isQuitting) {
+    stopServer();
+    return;
+  }
+
   console.log(`[Pi Shell] server pid ${child.pid} listening on ${appUrl}`);
 }
 
@@ -275,6 +290,10 @@ function startApp() {
   startInFlight = (async () => {
     try {
       const failure = await ensureServer();
+      // A quit that landed while the server was starting owns the shutdown: no
+      // window is created for it (the server it may have spawned is reaped in
+      // startServer).
+      if (isQuitting) return;
       if (!win) createWindow();
       if (failure) showErrorPage(failure);
       else {
@@ -282,7 +301,8 @@ function startApp() {
         loadApp();
       }
       if (tray) tray.setToolTip(trayTooltip());
-      if (!startHidden) win.show();
+      if (windowShowsOnStart({ launchHidden: LAUNCH_HIDDEN, hasStarted })) win.show();
+      hasStarted = true;
     } catch (err) {
       // Nothing here may reject silently: startApp is fired and forgotten by
       // the tray, the retry command and app-ready alike.
@@ -319,6 +339,32 @@ function stopServer() {
   } catch (err) {
     console.warn(`[Pi Shell] could not stop server pid ${child.pid}: ${err.message}`);
   }
+}
+
+// ── Window presence ─────────────────────────────────────────────────
+// The window can be hidden while the app — and the server under it — keeps
+// running (see lifecycle.js), so "bring it back" is an operation with several
+// callers: the tray's toggle, the tray's reload, the global shortcut, a second
+// launch. Hiding is what the close button does; nothing here touches `server`.
+/** Show and focus the window, creating it if it is gone. */
+function showWindow() {
+  if (!win) {
+    startApp();
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+/** Apply the toggle rule to the state the window is in right now. */
+function toggleWindow() {
+  if (!win) {
+    startApp();
+    return;
+  }
+  if (windowToggleAction({ windowVisible: win.isVisible() }) === "hide") win.hide();
+  else showWindow();
 }
 
 // ── BrowserWindow ───────────────────────────────────────────────────
@@ -422,16 +468,22 @@ function createWindow() {
     }
   });
 
-  // Hide to tray instead of closing
-  win.on("close", (e) => {
-    if (!isQuitting) {
-      e.preventDefault();
+  // Close hides to the tray (lifecycle.js): the server, and the 定时任务 / RSS
+  // / 看板 / 频道 loops ticking inside it, must outlive the window.
+  win.on("close", (event) => {
+    if (windowCloseAction({ isQuitting, hasTray: tray !== null }) === "hide") {
+      event.preventDefault();
       win.hide();
     }
   });
 
+  // The tray's toggle item says what the next click does, so it follows.
+  win.on("show", refreshTrayMenu);
+  win.on("hide", refreshTrayMenu);
+
   win.on("closed", () => {
     win = null;
+    refreshTrayMenu();
   });
 }
 
@@ -440,57 +492,51 @@ function trayTooltip() {
   return isDev ? `Pi Work (dev · ${appPort()})` : `Pi Work (${appPort()})`;
 }
 
+/** The tray's Electron menu, from lifecycle.js' model (one place for wording). */
+function trayMenuItems() {
+  return trayMenu({ windowVisible: Boolean(win?.isVisible()) }).map((item) => {
+    if (item.type === "separator") return { type: "separator" };
+    switch (item.id) {
+      case TRAY_ITEM.TOGGLE_WINDOW:
+        return { label: item.label, click: () => toggleWindow() };
+      case TRAY_ITEM.RELOAD:
+        // Also the recovery path when the window sits on the error page.
+        return {
+          label: item.label,
+          click: () => {
+            console.log("[Pi Shell] Tray reload...");
+            showWindow();
+            reloadApp();
+          },
+        };
+      case TRAY_ITEM.QUIT:
+        return {
+          label: item.label,
+          click: () => {
+            console.log("[Pi Shell] Tray quit...");
+            isQuitting = true;
+            app.quit();
+          },
+        };
+      default:
+        throw new Error(`unknown tray item: ${item.id}`);
+    }
+  });
+}
+
+/** Rebuild the tray menu, so its toggle item matches the window right now. */
+function refreshTrayMenu() {
+  if (!tray) return;
+  tray.setContextMenu(Menu.buildFromTemplate(trayMenuItems()));
+}
+
 function createTray() {
   const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
   tray = new Tray(trayIcon);
   tray.setToolTip(trayTooltip());
+  refreshTrayMenu();
 
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: "显示窗口",
-      click: () => {
-        if (!win) {
-          startApp();
-          return;
-        }
-        win.show();
-        win.focus();
-      },
-    },
-    {
-      // Also the recovery path when the window sits on the error page.
-      label: "重新加载",
-      click: () => {
-        if (!win) {
-          startApp();
-          return;
-        }
-        win.show();
-        win.focus();
-        console.log("[Pi Shell] Tray reload...");
-        reloadApp();
-      },
-    },
-    { type: "separator" },
-    {
-      label: "退出",
-      click: () => {
-        isQuitting = true;
-        app.quit();
-      },
-    },
-  ]);
-
-  tray.setContextMenu(contextMenu);
-
-  tray.on("double-click", () => {
-    if (!win) {
-      startApp();
-      return;
-    }
-    win.show();
-    win.focus();
-  });
+  tray.on("double-click", () => showWindow());
 }
 
 // ── App Lifecycle ───────────────────────────────────────────────────
@@ -499,13 +545,7 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    if (win) {
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
-    }
-  });
+  app.on("second-instance", () => showWindow());
 
   // Replace Electron's default application menu (which binds Ctrl+R / F5 to
   // its own "Reload" role and Ctrl+Shift+I to DevTools) with a minimal one
@@ -537,28 +577,33 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     installAppMenu();
-    createTray();
+    // The tray is the way back to a hidden window, so a shell that cannot have
+    // one must not pretend: with no tray, closing really quits (lifecycle.js)
+    // rather than hiding into an app the user can never reach again.
+    try {
+      createTray();
+    } catch (err) {
+      console.warn(
+        `[Pi Shell] no tray icon: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
     startApp();
 
-    const registered = globalShortcut.register(
-      "CommandOrControl+Shift+P",
-      () => {
-        if (win) {
-          if (win.isVisible()) {
-            win.hide();
-          } else {
-            win.show();
-            win.focus();
-          }
-        }
-      }
-    );
+    const registered = globalShortcut.register("CommandOrControl+Shift+P", () => toggleWindow());
 
     if (!registered) {
       console.warn(
         "[Pi Shell] Failed to register global shortcut Ctrl+Shift+P (may be taken by another app)"
       );
     }
+  });
+
+  // The app outlives its window, as long as the tray can bring the window back
+  // (lifecycle.js): a window that is merely gone must not take the server
+  // process — and the loops ticking inside it — down with it.
+  app.on("window-all-closed", () => {
+    if (keepsRunningWithoutWindow({ isQuitting, hasTray: tray !== null })) return;
+    app.quit();
   });
 
   app.on("before-quit", () => {
