@@ -13,7 +13,10 @@
 - **纯单元测试**：直接 import `lib/shared` 等纯模块，不发请求、不用 cookie，
   如 `panel-tabs.test.ts`、`subagent-profiles.test.ts`。`electron-shell/window-rules.js`
   （外壳窗口的 URL 与「什么算离开应用」两条规则）也走这条路：
-  `electron-shell-window-rules.test.ts`。
+  `electron-shell-window-rules.test.ts`。外壳的服务端决策（`electron-shell/server-process.js`：
+  是否由外壳拉起、用什么命令与环境、如何签名注入 cookie、如何结束进程树、何时算就绪）
+  同理（`electron-shell-server-process.test.ts`），其中 cookie 名/TTL 与 token 格式这一条
+  刻意跨到服务端：用 `lib/server/auth.ts` 的验证器验外壳签的 token。
 - **服务端模块测试**：直接 import 服务端模块本身，用真实的 `Request` /
   `NextRequest` 驱动它，如 `auth-proxy.test.ts`（`proxy.ts`）、
   `auth-desktop.test.ts`（三个 auth session route handler 与 `lib/server/auth.ts`）。

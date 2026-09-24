@@ -21,7 +21,7 @@ _Avoid_: 用 Workspace 指代磁盘路径
 _Avoid_: 把它当作登录页（那只是服务器轨道签发信任的一个入口）；用「鉴权」泛指它（那只是 401 与登录那一层）
 
 **桌面轨道（Desktop track）**：
-Pi Work 由 Electron 外壳拥有并拉起的那条运行方式（`PI_WORK_DESKTOP`）：服务端原生跑在 Windows 上、只监听 loopback、信任凭据每次启动随机生成、没有登录页。它与**服务器轨道**（用户自己部署的 Linux 服务器，保留登录页与 `PI_WORK_AUTH_*`）共用同一份代码。
+Pi Work 由 Electron 外壳拥有并拉起的那条运行方式（`PI_WORK_DESKTOP`）：服务端原生跑在 Windows 上、只监听 loopback、信任凭据每次启动随机生成、没有登录页。外壳用自己捆绑的独立 Node 运行时跑生产服务端（不是 Electron 自带的 Node，原生模块不必按 Electron ABI 重编译），端口每次启动随机，退出时结束整个进程树；决策在 `electron-shell/server-process.js`。它与**服务器轨道**（用户自己部署的 Linux 服务器，保留登录页与 `PI_WORK_AUTH_*`）共用同一份代码。
 _Avoid_: 把它当作「桌面版 UI」或第二条代码分支；用「本地模式」指代它
 
 ### 界面

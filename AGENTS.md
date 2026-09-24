@@ -59,7 +59,7 @@ pi-work/
 ├── public/             # 静态资源
 ├── instrumentation.ts  # Node.js 服务启动入口：wechat 监控、Scheduler、Kanban、RSS 刷新循环、
 │                       # 终端 WebSocket 服务的 bootstrap；改启停逻辑要检查幂等性、退出清理与热重载
-├── electron-shell/     # 可选 Electron 外壳，非核心 Web 应用
+├── electron-shell/     # 可选 Electron 外壳：自己拉起并回收服务端进程（独立 Node 运行时），非核心 Web 应用
 └── 顶层配置            # next.config.ts、tailwind.config.ts、postcss.config.mjs、tsconfig.json、
                         # eslint.config.mjs、vitest.config.ts、proxy.ts（全局鉴权网关）、
                         # .npmrc / pnpm-workspace.yaml、Dockerfile + docker-compose.yml
@@ -77,7 +77,7 @@ pi-work/
 - 服务端文件/API 操作必须复用 `lib/server/file-access.ts` 的允许根目录校验，不能仅凭用户传入路径读写任意文件。
 - 危险命令权限由 `lib/server/dangerous-patterns.ts` 和 RPC 会话处理；不要绕过确认流程或把密钥写入日志。
 - 终端连接依赖随机 token；修改终端 host/port、鉴权或 cwd 校验时同时检查 `/api/terminal` 和 WebSocket 服务。终端默认只绑 loopback（`PI_WORK_TERMINAL_HOST` 可放开）。
-- 信任边界收在 `lib/shared/trust-boundary.ts`（纯规则）与 `proxy.ts` / `lib/server/auth.ts` / `lib/server/trust-boundary.ts`：服务器轨道用 `PI_WORK_AUTH_*`；桌面轨道（`PI_WORK_DESKTOP`）由 Electron 外壳每次启动生成 `PI_WORK_DESKTOP_SECRET` 并签发注入 cookie，登录页关闭、服务端与终端只绑 loopback。改这里等于改「谁能进来」，不要绕过。
+- 信任边界收在 `lib/shared/trust-boundary.ts`（纯规则）与 `proxy.ts` / `lib/server/auth.ts` / `lib/server/trust-boundary.ts`：服务器轨道用 `PI_WORK_AUTH_*`；桌面轨道（`PI_WORK_DESKTOP`）由 Electron 外壳每次启动生成 `PI_WORK_DESKTOP_SECRET` 并签发注入 cookie，登录页关闭、服务端与终端只绑 loopback。改这里等于改「谁能进来」，不要绕过。外壳侧的发凭方在 `electron-shell/server-process.js`（token 格式与 cookie 名刻意重写了一份，由 `tests/unit/electron-shell-server-process.test.ts` 对着服务端的验证器钉住）；打包时服务端必须跑在 `resources/runtime/` 的独立 Node 运行时上（不能用 Electron 的 Node，也不能用 `ELECTRON_RUN_AS_NODE`）。
 - `~/.pi/agent/`、`~/.pi-work/` 以及环境变量可能含有密钥和用户数据，未经明确要求不要读取、修改或提交。
 - SQLite 存储和迁移应保持幂等、向后兼容；不要把 `~/.pi-work/*.db`、会话 JSONL、上传文件或构建产物提交到仓库。
 

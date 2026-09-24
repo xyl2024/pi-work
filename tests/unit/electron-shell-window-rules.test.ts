@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { DEV_PORT, PROD_PORT, isAppUrl, isExternalNavigation, resolveAppUrl } from "../../electron-shell/window-rules.js";
+import { DEV_PORT, PROD_PORT, RETRY_COMMAND, isAppUrl, isExternalNavigation, isShellCommand, resolveAppUrl } from "../../electron-shell/window-rules.js";
 
 const APP_ORIGIN = "http://127.0.0.1:30141";
 
@@ -92,6 +92,23 @@ describe("isAppUrl", () => {
     expect(isAppUrl("http://localhost:30141/", APP_ORIGIN)).toBe(false);
     expect(isAppUrl("", APP_ORIGIN)).toBe(false);
     expect(isAppUrl(undefined, APP_ORIGIN)).toBe(false);
+  });
+});
+
+describe("isShellCommand", () => {
+  it("recognizes the shell's own commands", () => {
+    expect(isShellCommand(RETRY_COMMAND)).toBe(true);
+    expect(RETRY_COMMAND).toBe("pi-work://retry");
+  });
+
+  it("leaves real targets alone", () => {
+    // Anything a link could carry: `pi-work:` must never swallow it, and the
+    // retry command must never be handed to an OS handler.
+    for (const url of [`${APP_ORIGIN}/`, "https://github.com/xyl2024/pi-work", "pi-workx://retry", "not a url", ""]) {
+      expect(isShellCommand(url)).toBe(false);
+    }
+    expect(isShellCommand(undefined)).toBe(false);
+    expect(isExternalNavigation(RETRY_COMMAND, APP_ORIGIN)).toBe(false);
   });
 });
 

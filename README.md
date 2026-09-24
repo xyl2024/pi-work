@@ -158,13 +158,14 @@ PI_WORK_LOG_FILE=off pnpm run dev
 
 ```bash
 cd electron-shell && npm install
-npm start        # 指向生产实例 http://127.0.0.1:30141
+npm start        # 自己拉起服务端（随机 loopback 端口 + 本次启动随机凭据）
 npm run dev      # 指向隔离开发实例 http://127.0.0.1:30143（先跑 pnpm run dev:isolated）
 ```
 
-- `npm run dev` 即 `electron . --dev`，只连隔离实例，不会碰生产数据。
-- `PI_PORT` 覆盖上面两个默认端口（外壳自己拉起服务端时由外壳传入实际端口）。
-- 服务端不可达时窗口显示可手动重试的错误页；外部链接交给默认浏览器，应用窗口不会被导航走；重复启动只保留一个实例。
+- `npm start` 启动的是**外壳自己的服务端进程**：用 `resources/runtime/` 下的独立 Node 运行时（不是 Electron 自带的 Node，因此 `better-sqlite3` / tree-sitter 等原生模块不需要按 Electron ABI 重编译）跑 `bin/pi-work.js`，端口每次启动随机、只绑 `127.0.0.1`，凭据（`PI_WORK_DESKTOP_SECRET`）每次启动随机生成并由外壳签名注入 cookie（见“信任边界”）。决策在 `electron-shell/server-process.js`（纯 module，单测在 `tests/unit/electron-shell-server-process.test.ts`）。
+- 退出时按平台结束整个进程树（POSIX 信号进程组 / Windows `taskkill /T /F`）；关窗只是隐藏到托盘，服务端继续跑。
+- 两个“不拉起服务端”的口子：`npm run dev`（即 `electron . --dev`，只连隔离实例，不碰生产数据）、显式 `PI_PORT`（表示“服务端我自己已经起好了，连这个端口”）。源码检出里没有打包运行时，用 `PI_WORK_NODE=$(which node) npm start` 指定。
+- 服务端不可达或起不来时窗口显示可手动重试的错误页；外部链接交给默认浏览器，应用窗口不会被导航走；重复启动只保留一个实例。
 - Windows 上使用原生窗口控件（`titleBarStyle: "hidden"` + Window Controls Overlay），应用顶部用 `env(titlebar-area-height, 0px)` 预留条带（`app/globals.css` 的 `.pi-shell-titlebar`），因此没有自绘标题栏也不会有双重标题栏；该变量在浏览器里恒为 0，不影响 Web 形态。
 
 ## 当前目录结构

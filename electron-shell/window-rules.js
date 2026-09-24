@@ -22,8 +22,23 @@ const DEV_PORT = "30143";
 const HOST = "127.0.0.1";
 /** Schemes the OS itself knows how to open (mail client, dialer, …). */
 const OS_HANDLED_SCHEMES = new Set(["mailto:", "tel:"]);
+/**
+ * Scheme the shell's own pages use to talk to the main process, and the one
+ * command it carries: "restart the server, then load the app". It exists so
+ * the error page's retry button needs no preload/IPC bridge (there is none).
+ * Chromium would refuse to navigate to it anyway — the main process cancels
+ * that navigation and runs the command itself.
+ */
+const SHELL_COMMAND_SCHEME = "pi-work:";
+const RETRY_COMMAND = "pi-work://retry";
 
-/** `PI_PORT` as a usable port string, or `null` when absent / malformed. */
+/**
+ * `PI_PORT` as a usable port string, or `null` when absent / malformed.
+ *
+ * Exported because it is also the shell's "a server already exists" signal: a
+ * usable PI_PORT means the operator pointed the shell at their own server, so
+ * it must not spawn one (see server-process.js' `shouldSpawnServer`).
+ */
 function portOverride(env) {
   const raw = (env.PI_PORT ?? "").trim();
   if (!raw) return null;
@@ -73,6 +88,16 @@ function isExternalNavigation(url, appOrigin) {
 }
 
 /**
+ * Whether a navigation target is one of the shell's own pages' commands rather
+ * than a page to load. Checked before `isExternalNavigation`, which would
+ * otherwise classify it as "not external" and let Chromium fail the navigation.
+ */
+function isShellCommand(url) {
+  if (typeof url !== "string") return false;
+  return url.startsWith(SHELL_COMMAND_SCHEME);
+}
+
+/**
  * Whether the window currently shows the app itself rather than the shell's
  * error page. Used to decide what Ctrl+R and the tray's "重新加载" should do:
  * reloading the error page would just show it again.
@@ -86,4 +111,13 @@ function isAppUrl(url, appOrigin) {
   }
 }
 
-module.exports = { resolveAppUrl, isExternalNavigation, isAppUrl, PROD_PORT, DEV_PORT };
+module.exports = {
+  resolveAppUrl,
+  isExternalNavigation,
+  isAppUrl,
+  isShellCommand,
+  portOverride,
+  RETRY_COMMAND,
+  PROD_PORT,
+  DEV_PORT,
+};

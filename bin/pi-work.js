@@ -32,6 +32,9 @@ const { values: cliArgs } = parseArgs({
   options: {
     port:     { type: "string", short: "p" },
     hostname: { type: "string", short: "H" },
+    // Only meaningful for the Electron shell, which spawns this entry: it
+    // already owns the window, so a browser tab would be a second, worse UI.
+    "no-open": { type: "boolean" },
   },
   strict: false,
 });
@@ -65,13 +68,15 @@ const child = spawn(process.execPath, [nextBin, ...nextArgs], {
   env: { ...process.env },
 });
 
+const openBrowser = cliArgs["no-open"] !== true;
+
 let browserOpened = false;
 const url = `http://${hostname ?? "localhost"}:${port}`;
 
 child.stdout.on("data", (chunk) => {
   const text = chunk.toString();
   process.stdout.write(text);
-  if (!browserOpened && text.includes("Ready")) {
+  if (openBrowser && !browserOpened && text.includes("Ready")) {
     browserOpened = true;
     const isWindows = process.platform === "win32";
     const isMac = process.platform === "darwin";
