@@ -497,35 +497,6 @@ export function AppShell() {
     initCwdList();
   }, []);
 
-  useEffect(() => {
-    if (window.parent === window) return;
-
-    const styles = getComputedStyle(document.documentElement);
-    window.parent.postMessage({
-      type: "pi-theme",
-      colors: {
-        background: styles.getPropertyValue("--bg-panel").trim(),
-        border: styles.getPropertyValue("--border").trim(),
-        text: styles.getPropertyValue("--text").trim(),
-      },
-    }, "*");
-  }, [theme.preset]);
-
-  // When running inside the Electron shell iframe, subscribe to the shell's
-  // refresh signal: the shell intercepts Ctrl+R and, instead of reloading the
-  // whole shell (which would bounce the app back to "/"), asks this app to
-  // reload itself in place — so the current route / ?session= stays intact.
-  useEffect(() => {
-    if (window.parent === window) return undefined;
-    const onMessage = (e: MessageEvent) => {
-      if (e.source === window.parent && e.data && e.data.type === "pi-reload") {
-        window.location.reload();
-      }
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
-
   const [initialSessionId] = useState<string | null>(() => searchParams.get("session"));
   const [workspace, dispatchWorkspace] = useReducer(
     sessionWorkspaceReducer,
@@ -1630,7 +1601,7 @@ export function AppShell() {
 
   return (
     <>
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", padding: "var(--panel-padding)", paddingBottom: 4, border: "1px solid var(--border)", borderTop: "none", background: "var(--bg)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - env(titlebar-area-height, 0px))", overflow: "hidden", padding: "var(--panel-padding)", paddingBottom: 4, border: "1px solid var(--border)", borderTop: "none", background: "var(--bg)" }}>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", flex: 1, flexDirection: "column", minWidth: 0, minHeight: 0 }}>
       <div style={{ display: "flex", flex: 1, minHeight: 0 }}>

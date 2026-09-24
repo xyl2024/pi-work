@@ -39,6 +39,9 @@ export default function RootLayout({
         />
       </head>
       <body style={{ height: "100dvh", display: "flex", flexDirection: "column" }}>
+        {/* Drag region for the Electron shell's native window controls; zero
+            height outside the shell (see globals.css). */}
+        <div className="pi-shell-titlebar" aria-hidden />
         {children}
       </body>
     </html>

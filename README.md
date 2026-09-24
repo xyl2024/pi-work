@@ -152,6 +152,21 @@ PI_WORK_LOG_DIR=/tmp/pi-work-logs pnpm run dev
 PI_WORK_LOG_FILE=off pnpm run dev
 ```
 
+### Electron 外壳（可选）
+
+`electron-shell/` 是独立的 Electron 包（不在 pnpm workspace 内，用 npm 装依赖），窗口**直接加载** Pi Work：没有 iframe、没有自绘标题栏、没有 preload 桥。
+
+```bash
+cd electron-shell && npm install
+npm start        # 指向生产实例 http://127.0.0.1:30141
+npm run dev      # 指向隔离开发实例 http://127.0.0.1:30143（先跑 pnpm run dev:isolated）
+```
+
+- `npm run dev` 即 `electron . --dev`，只连隔离实例，不会碰生产数据。
+- `PI_PORT` 覆盖上面两个默认端口（外壳自己拉起服务端时由外壳传入实际端口）。
+- 服务端不可达时窗口显示可手动重试的错误页；外部链接交给默认浏览器，应用窗口不会被导航走；重复启动只保留一个实例。
+- Windows 上使用原生窗口控件（`titleBarStyle: "hidden"` + Window Controls Overlay），应用顶部用 `env(titlebar-area-height, 0px)` 预留条带（`app/globals.css` 的 `.pi-shell-titlebar`），因此没有自绘标题栏也不会有双重标题栏；该变量在浏览器里恒为 0，不影响 Web 形态。
+
 ## 当前目录结构
 
 ```text

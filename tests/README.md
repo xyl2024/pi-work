@@ -11,7 +11,9 @@
 - **接口测试**：用 `tests/unit/helpers.ts` 的 `api()` 打隔离实例的 HTTP 接口，
   如 `api-smoke.test.ts`、`settings.test.ts`。
 - **纯单元测试**：直接 import `lib/shared` 等纯模块，不发请求、不用 cookie，
-  如 `panel-tabs.test.ts`、`subagent-profiles.test.ts`。
+  如 `panel-tabs.test.ts`、`subagent-profiles.test.ts`。`electron-shell/window-rules.js`
+  （外壳窗口的 URL 与「什么算离开应用」两条规则）也走这条路：
+  `electron-shell-window-rules.test.ts`。
 - **服务端模块测试**：直接 import 服务端模块本身，用真实的 `Request` /
   `NextRequest` 驱动它，如 `auth-proxy.test.ts`（`proxy.ts`）、
   `auth-desktop.test.ts`（三个 auth session route handler 与 `lib/server/auth.ts`）。
