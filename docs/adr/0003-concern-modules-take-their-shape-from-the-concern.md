@@ -8,7 +8,7 @@ We decided three rules that every extraction from the chat window — and later,
 
 **1. A concern module takes its shape from the nature of the concern.**
 
-- A concern whose core is *rules* (which messages are visible, what a search jump resolves to, whether auto-naming may run now) becomes a pure module in the shared layer — no React, no DOM, no client hooks, no server imports — with a thin client hook over it.
+- A concern whose core is *rules* (which messages are visible, what a search jump resolves to, whether auto-naming may run now) becomes a pure module in the shared layer — no React, no DOM, no client hooks, no server imports — with a thin client hook over it. (The deciding question was narrowed to *whether the concern's input is pure domain fact* by the 修订 at the end of this file: a rule-shaped concern whose input carries client-transport facts is a pure module in `lib/client` instead.)
 - A concern whose core is *I/O or imperative DOM* (timers and requests, scroll positioning) becomes a client hook that receives its dependencies (refs, the active-tab flag, callbacks) as parameters. It never creates a ref or reads the environment itself.
 - A concern gets a module-level store only when its state must be shared across session tabs. None of the chat-window concerns qualify.
 
@@ -31,3 +31,22 @@ We decided three rules that every extraction from the chat window — and later,
 - Behaviour-frozen restructuring leans on a per-PR manual checklist. The repository has no end-to-end suite to fall back on, and this ADR does not add one back.
 - The auto-naming ledger is the one deliberate granularity change: it moves from an instance ref to a module-level, session-keyed ledger, because the per-tab granularity was demonstrably wrong (a session, not a tab, is named once).
 - `useAgentSession`'s 45-key return interface, the convergence of the four "only the visible tab may publish into a global store" sites, and the message renderer's parameter shape are all out of scope here and tracked separately.
+
+## 修订 2026-09-19（#78）：规则型的关切可以住在客户端层
+
+规则 1 说「核心是规则的关切 ⇒ 纯 module 放共享层」。计划写入会话（`lib/client/plan-write-session.ts`）是一处**有意的宽松读法**：它仍然是一条规则型的关切——它比任何一条都更像「规则」——但它不住在共享层。
+
+理由在**输入**那一侧。这台状态机的处境由客户端传输事实构成：「服务端回了 409、`code` 是 `missing`、`movedTo` 是那条路径」，承载它的是传输层抛出的 `PlanConflictError`；而共享层那份 `lib/shared/plans.ts` 是本项目与服务端共用的领域契约（808 行：文件名语法、时间锚点、分区、frontmatter 解析）。把状态机放进共享层，要么让共享层开始认识客户端的传输错误，要么让服务端 bundle 里多出一份它用不到的会话状态机。
+
+判定的问句因此从「它的核心是不是规则」细化为「**它的输入是不是纯领域事实**」：
+
+- 是（哪些消息可见、搜索跳转会落在哪、文件名与时间锚点、分区、自动命名账本）⇒ 共享层，服务端可能也读它；
+- 否（输入里带着传输、I/O 或客户端会话的事实）⇒ **客户端层，但仍是纯 module**。
+
+这条宽松读法不豁免规则 1 的实质，只挪动落点；落在客户端层的 module 仍须满足：
+
+- 不 import React、DOM、`fetch`、任何服务端模块（只 import `lib/shared` 的类型与纯函数）；
+- 没有自己的 store：一个面板、一个打开的弹窗，没有跨标签页共享面（ADR-0002 与规则 1 的第三条）；
+- 判定与顺序都能在 `tests/unit` 里被直接驱动：`reducePlanWriteSession(state, intent)` 是纯归约器，执行待办的那段循环（`runPlanWriteEffects(effects, port, dispatch)`）照 `runTurn(spec, factory)` 的先例把依赖当参数收进来，因此接线层不需要 mock，也不需要浏览器。
+
+规则 3 的口径不变：规则与顺序都被推到纯 module 与依赖袋 seam 之后，人工清单只剩 DOM 接线（焦点、`Esc`、遮罩、滚动、连按）。

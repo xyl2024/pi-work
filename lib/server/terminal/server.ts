@@ -8,9 +8,10 @@
  *
  * Security: every connection is gated by a per-process random token. The
  * token is exposed only through the authenticated-enough `/api/terminal`
- * route (same trust boundary as the rest of Pi Work). Default bind host is
- * 0.0.0.0 so LAN clients can reach it with the token; set
- * PI_WORK_TERMINAL_HOST=127.0.0.1 to restrict to localhost only.
+ * route (same trust boundary as the rest of Pi Work). The default bind host is
+ * loopback; set PI_WORK_TERMINAL_HOST=0.0.0.0 to let LAN clients reach it with
+ * the token. Desktop mode (PI_WORK_DESKTOP) forces loopback regardless — see
+ * lib/shared/trust-boundary.ts.
  *
  * Protocol (JSON text frames):
  *   client → server: { type: "start", cwd, sessionId? } | { type: "data", data }
@@ -34,11 +35,13 @@ import { WebSocketServer, WebSocket } from "ws";
 import * as pty from "node-pty";
 import { createLogger } from "@/lib/server/logger";
 import { sanitizeChildEnv } from "@/lib/server/env-sanitize";
+import { currentInteractiveShell } from "@/lib/server/interactive-shell";
+import { currentTerminalHost } from "@/lib/server/trust-boundary";
 
 const log = createLogger("terminal/server");
 
 const DEFAULT_PORT = 30142;
-const HOST = process.env.PI_WORK_TERMINAL_HOST ?? "0.0.0.0";
+const HOST = currentTerminalHost();
 const PORT = Number(process.env.PI_WORK_TERMINAL_PORT ?? DEFAULT_PORT);
 
 export interface TerminalServerInfo {
@@ -77,13 +80,6 @@ const g = globalThis as unknown as { __piTerminalRuntime?: TerminalRuntime };
 /** Info the frontend needs to connect: the WS port plus the auth token. */
 export function getTerminalInfo(): TerminalServerInfo | null {
   return g.__piTerminalRuntime?.info ?? null;
-}
-
-function resolveShell(): string {
-  if (process.platform === "win32") {
-    return process.env.COMSPEC ?? "powershell.exe";
-  }
-  return process.env.SHELL || "bash";
 }
 
 /** Expand a leading "~" to the home dir; reject non-absolute, missing or non-dir paths. */
@@ -163,10 +159,11 @@ function handleConnection(ws: WebSocket): void {
     // front-end xterm.js advertises; preserving the host's TERM
     // can mislead the shell into 16-colour mode.
     let ptyProcess: pty.IPty;
+    const shell = currentInteractiveShell();
     try {
       const ptyEnv = sanitizeChildEnv(process.env);
       ptyEnv.TERM = "xterm-256color";
-      ptyProcess = pty.spawn(resolveShell(), [], {
+      ptyProcess = pty.spawn(shell, [], {
         name: "xterm-256color",
         cols: 80,
         rows: 24,
@@ -197,7 +194,7 @@ function handleConnection(ws: WebSocket): void {
       session.clients.clear();
       send({ type: "exit", code: exitCode });
     });
-    log.info("pty started", { sessionId, cwd: cwdPath, shell: resolveShell() });
+    log.info("pty started", { sessionId, cwd: cwdPath, shell });
     return session;
   };
 

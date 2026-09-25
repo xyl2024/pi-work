@@ -4,10 +4,23 @@ import type { RightSideBarConfig } from "./right-bar";
 /** Browser-safe contract for ~/.pi-work/config.yaml. */
 export interface DangerousPatternRule {
   name: string;
+  /** JavaScript regex source, compiled as written. */
   pattern: string;
+  /**
+   * Match the pattern case-insensitively. The built-in PowerShell rules set
+   * this (PowerShell is a case-insensitive language); bash rules and user
+   * rules keep the historical case-sensitive behaviour unless they opt in.
+   */
+  ignoreCase?: boolean;
 }
 
 export interface DangerousPatternsConfig {
+  /**
+   * The user's own rules, checked before the platform's built-in set. An empty
+   * list means "no user rules" — the built-ins in
+   * `lib/shared/dangerous-commands.ts` are still enforced, so the confirmation
+   * gate is never silently off.
+   */
   rules: DangerousPatternRule[];
   timeout_ms: number;
 }

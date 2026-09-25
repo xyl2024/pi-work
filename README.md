@@ -152,6 +152,22 @@ PI_WORK_LOG_DIR=/tmp/pi-work-logs pnpm run dev
 PI_WORK_LOG_FILE=off pnpm run dev
 ```
 
+### Electron 外壳（可选）
+
+`electron-shell/` 是独立的 Electron 包（不在 pnpm workspace 内，用 npm 装依赖），窗口**直接加载** Pi Work：没有 iframe、没有自绘标题栏、没有 preload 桥。
+
+```bash
+cd electron-shell && npm install
+npm start        # 自己拉起服务端（随机 loopback 端口 + 本次启动随机凭据）
+npm run dev      # 指向隔离开发实例 http://127.0.0.1:30143（先跑 pnpm run dev:isolated）
+```
+
+- `npm start` 启动的是**外壳自己的服务端进程**：用 `resources/runtime/` 下的独立 Node 运行时（不是 Electron 自带的 Node，因此 `better-sqlite3` / tree-sitter 等原生模块不需要按 Electron ABI 重编译）跑 `bin/pi-work.js`，端口每次启动随机、只绑 `127.0.0.1`，凭据（`PI_WORK_DESKTOP_SECRET`）每次启动随机生成并由外壳签名注入 cookie（见“信任边界”）。决策在 `electron-shell/server-process.js`（纯 module，单测在 `tests/unit/electron-shell-server-process.test.ts`）。
+- 退出时按平台结束整个进程树（POSIX 信号进程组 / Windows `taskkill /T /F`）；关窗只是隐藏到托盘，服务端继续跑。托盘菜单能显示/隐藏窗口、重新加载应用、退出；关窗后到点的定时任务 / RSS / 看板 / 频道照常执行，只有托盘「退出」才停。窗口可见性与应用寿命是两条规则，在 `electron-shell/lifecycle.js`（纯 module，单测在 `tests/unit/electron-shell-lifecycle.test.ts`）。
+- 两个“不拉起服务端”的口子：`npm run dev`（即 `electron . --dev`，只连隔离实例，不碰生产数据）、显式 `PI_PORT`（表示“服务端我自己已经起好了，连这个端口”）。源码检出里没有打包运行时，用 `PI_WORK_NODE=$(which node) npm start` 指定。
+- 服务端不可达或起不来时窗口显示可手动重试的错误页；外部链接交给默认浏览器，应用窗口不会被导航走；重复启动只保留一个实例。
+- Windows 上使用原生窗口控件（`titleBarStyle: "hidden"` + Window Controls Overlay），应用顶部用 `env(titlebar-area-height, 0px)` 预留条带（`app/globals.css` 的 `.pi-shell-titlebar`），因此没有自绘标题栏也不会有双重标题栏；该变量在浏览器里恒为 0，不影响 Web 形态。
+
 ## 当前目录结构
 
 ```text

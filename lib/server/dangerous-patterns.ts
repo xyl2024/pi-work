@@ -1,64 +1,59 @@
+/**
+ * The server-side face of the dangerous-command gate: read the user's rules
+ * out of `config.yaml`, put this platform's built-in set underneath them
+ * (`lib/shared/dangerous-commands.ts`), compile the result, and match a shell
+ * command against it. The rule *content*, the matching and the invalid-pattern
+ * policy all live in the pure shared module; this file only supplies the
+ * config, the platform, and one log line for a broken pattern.
+ */
 import type { DangerousPatternsConfig } from "../shared/config-types";
+import {
+  compileDangerousRules,
+  matchDangerousCommand,
+  resolveDangerousRules,
+  type CompiledDangerousRule,
+} from "../shared/dangerous-commands";
 import { readConfig } from "./config";
 import { createLogger } from "./logger";
 
 const log = createLogger("dangerous-patterns");
 
-interface CompiledRule {
-  name: string;
-  regex: RegExp;
-}
+/**
+ * Compiled rules for the config they came from. `readConfig()` builds a fresh
+ * object on every call, so the cache is keyed by the rules' own content (and
+ * the platform) rather than by object identity — otherwise it would never hit,
+ * as the pre-existing identity-keyed cache never did. Its real job is to keep
+ * the "invalid pattern" warning to once per config change instead of once per
+ * matched command.
+ */
+let cachedKey: string | null = null;
+let cachedRules: CompiledDangerousRule[] = [];
 
-let compiledCache: CompiledRule[] | null = null;
-let compiledFromConfig: DangerousPatternsConfig | null = null;
+function effectiveRules(): CompiledDangerousRule[] {
+  const cfg: DangerousPatternsConfig = readConfig().dangerous_patterns;
+  const key = `${process.platform}\u0000${JSON.stringify(cfg.rules)}`;
+  if (key === cachedKey) return cachedRules;
 
-function compileRules(cfg: DangerousPatternsConfig): CompiledRule[] {
-  const out: CompiledRule[] = [];
-  for (const rule of cfg.rules) {
-    try {
-      out.push({ name: rule.name, regex: new RegExp(rule.pattern) });
-    } catch (err) {
-      log.warn("invalid dangerous pattern, skipping", { name: rule.name, error: String(err) });
-    }
+  const { compiled, invalid } = compileDangerousRules(resolveDangerousRules(process.platform, cfg.rules));
+  for (const rule of invalid) {
+    log.warn("invalid dangerous pattern, skipping", { ...rule });
   }
-  return out;
-}
-
-function getCompiled(): { cfg: DangerousPatternsConfig; compiled: CompiledRule[] } {
-  const cfg = readConfig().dangerous_patterns;
-  if (compiledCache && compiledFromConfig === cfg) {
-    return { cfg, compiled: compiledCache };
-  }
-  const compiled = compileRules(cfg);
-  compiledCache = compiled;
-  compiledFromConfig = cfg;
-  return { cfg, compiled };
+  cachedKey = key;
+  cachedRules = compiled;
+  return cachedRules;
 }
 
 /**
- * Load dangerous-pattern config and match a bash command against it.
- * Returns the rule name of the first match, or null if no rule matched.
- * When no rules are configured this returns null and the caller should pass.
+ * Match a command against the dangerous-command rules in force. Returns the
+ * rule name of the first match, or null if no rule matched.
  */
 export function matchDangerousPattern(command: string): { ruleName: string } | null {
-  const { compiled } = getCompiled();
-  if (compiled.length === 0) return null;
-  for (const c of compiled) {
-    if (c.regex.test(command)) return { ruleName: c.name };
-  }
-  return null;
+  return matchDangerousCommand(command, effectiveRules());
 }
 
 /**
  * Get the configured timeout (ms) for permission requests.
  */
 export function getDangerousPatternTimeoutMs(): number {
-  const { cfg } = getCompiled();
-  return cfg.timeout_ms;
-}
-
-// Exposed for tests / debugging
-export function _resetDangerousPatternsCache(): void {
-  compiledCache = null;
-  compiledFromConfig = null;
+  return readConfig().dangerous_patterns.timeout_ms;
 }

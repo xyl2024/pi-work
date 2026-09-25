@@ -10,14 +10,22 @@ import { LoginForm } from "./LoginForm";
 //   - authenticated → children (AppShell etc.)
 // The proxy.ts gateway independently blocks API/page access, so this is
 // primarily a UX layer that avoids flashing the app before the 401 lands.
+//
+// Desktop mode has no login page (the shell signs and injects the cookie), so
+// a missing session there is not something signing in could fix — mount the
+// app and let it report whatever the server says. The proxy still guards every
+// /api call. (The alternative — rendering the login form — is a dead end:
+// /api/auth/session/login refuses to mint anything on the desktop track.)
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<"checking" | "login" | "authed">("checking");
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/auth/session/status")
-      .then((res) => res.json() as Promise<{ authenticated?: boolean }>)
-      .then((data) => { if (!cancelled) setState(data.authenticated ? "authed" : "login"); })
+      .then((res) => res.json() as Promise<{ authenticated?: boolean; desktop?: boolean }>)
+      .then((data) => {
+        if (!cancelled) setState(data.authenticated || data.desktop ? "authed" : "login");
+      })
       .catch(() => { if (!cancelled) setState("login"); });
     return () => { cancelled = true; };
   }, []);

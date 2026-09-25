@@ -3,8 +3,8 @@
  *
  * Shows the prompt in a monospace, preformatted block so users can read
  * what the agent will receive. A copy button puts the text on the
- * clipboard; the iframe-allowed clipboard write is documented at the
- * top-level (see project AGENTS.md "Clipboard in the Electron Shell").
+ * clipboard; `copyText` falls back to `execCommand` when the async
+ * Clipboard API refuses (unfocused window, insecure context).
  */
 
 import { useState } from "react";

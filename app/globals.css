@@ -182,6 +182,24 @@ html, body {
 
 body {
   height: 100dvh;
+  /* Electron shell (Windows Window Controls Overlay): the native caption
+     buttons are drawn on top of a strip the app reserves here, so the app
+     never runs under them. `env(titlebar-area-height)` is 0px in a normal
+     browser and in any window without the overlay, which makes this a no-op
+     everywhere else — it is a browser feature, not a platform fork. */
+  padding-top: env(titlebar-area-height, 0px);
+  box-sizing: border-box;
+}
+
+/* The reserved strip itself: draws nothing, exists only to be the window's
+   drag region (the app owns the title bar; the buttons stay native). Zero
+   height — and therefore invisible and unclickable — outside the shell. */
+.pi-shell-titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: env(titlebar-area-height, 0px);
+  -webkit-app-region: drag;
+  z-index: 100;
 }
 
 ::-webkit-scrollbar {

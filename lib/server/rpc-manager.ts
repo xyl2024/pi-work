@@ -35,7 +35,8 @@ import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared
 import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { matchSelfKillCommand } from "./self-protection";
-import { createPiWorkBashTool } from "./pi-bash-tool";
+import { createPiWorkBashTool, createPiWorkPowerShellTool } from "./pi-shell-tools";
+import { unavailableAgentShellTools } from "../shared/agent-shell-tools";
 import { notify } from "./notifications";
 import { readSessionNotify } from "./session-notify";
 import { computeContextComposition, type ContextComposition } from "../shared/context-composition";
@@ -1162,17 +1163,28 @@ export async function startRpcSession(
               return undefined;
             }
 
-            if (!isToolCallEventType("bash", event)) return;
+            // Both agent shells are matched against the dangerous-command
+            // rules. The gate used to key on `bash` alone, which left the
+            // Windows-only `powershell` tool as a shell no rule could match —
+            // the confirmation gate silently off on the one platform whose
+            // commands the user's bash rules do not describe.
+            const isShellCall =
+              isToolCallEventType("bash", event) || isToolCallEventType("powershell", event);
+            if (!isShellCall) return;
             const command = event.input.command;
             // Self-protection (hard, code-level): commands that would kill
             // this very server are blocked unconditionally — no permission
-            // prompt, no per-session allowance, not user-configurable.
+            // prompt, no per-session allowance, not user-configurable. Its
+            // process-kill patterns are POSIX-shaped (`pkill`, `fuser`,
+            // `$PPID`) and never match PowerShell syntax; its system-down ones
+            // (`shutdown`, `reboot`) apply to both shells, which is why this
+            // runs before the per-shell branches rather than inside one.
             const selfKill = matchSelfKillCommand(command);
             if (selfKill) {
-              log.warn("self-protection blocked bash command", { command, reason: selfKill.reason });
+              log.warn("self-protection blocked shell command", { command, reason: selfKill.reason });
               return {
                 block: true,
-                reason: "The bash command was blocked. Don't try it again and tell the user what you want to do.",
+                reason: "The command was blocked. Don't try it again and tell the user what you want to do.",
               };
             }
             const match = matchDangerousPattern(command);
@@ -1288,6 +1300,11 @@ export async function startRpcSession(
         // Override the SDK built-in bash definition. Its hook runs after
         // session PI_* variables are injected and does not mutate process.env.
         createPiWorkBashTool(cwd),
+        // Same override for PowerShell. It is registered on every platform and
+        // the platform denylist below drops it where the machine cannot run it
+        // (`excludeTools` filters custom definitions too), so "which shells
+        // exist here" stays one decision (lib/shared/agent-shell-tools.ts).
+        createPiWorkPowerShellTool(cwd),
         ...(enabledTools.has("show_media")
           ? buildShowFileTool()
           : []),
@@ -1336,6 +1353,12 @@ export async function startRpcSession(
       // passed to AgentSession.allowedToolNames. This is intentionally used
       // for specialized sessions rather than relying only on active tools.
       ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
+      // Shells this platform cannot run never enter the registry: pi offers
+      // `powershell` on every platform but its `getPowerShellConfig()` throws
+      // off Windows, so a session that lists it is a turn waiting to die.
+      // Denylisting here (rather than only hiding it in the UI) is what makes
+      // `get_tools`, the tool picker and an "all tools" selection agree.
+      excludeTools: [...unavailableAgentShellTools(process.platform)],
     });
     capturedSessionId = inner.sessionId as string;
 

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import path from "node:path";
 import { readFileSync } from "node:fs";
 import { getRepoStatus } from "@/lib/server/git-diff";
 import { summarize } from "@/lib/server/token-audit-store";
 import { listChannels } from "@/lib/server/channels";
+import { currentInteractiveShellName } from "@/lib/server/interactive-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -55,13 +55,6 @@ function getOsName(): string {
   }
 }
 
-function getShellName(): string {
-  const shell = process.platform === "win32"
-    ? process.env.COMSPEC ?? "powershell.exe"
-    : process.env.SHELL ?? "bash";
-  return path.basename(shell);
-}
-
 export async function GET(request: Request) {
   const cwd = new URL(request.url).searchParams.get("cwd");
   let git: { branch: string | null; changedFiles: number; additions: number; deletions: number } = {
@@ -88,7 +81,7 @@ export async function GET(request: Request) {
     os: getOsName(),
     cpu: getProcessCpuUsage(),
     memory: getServerMemory(),
-    shell: getShellName(),
+    shell: currentInteractiveShellName(),
     channels: activeChannels,
     git,
     today: {

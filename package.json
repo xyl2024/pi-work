@@ -32,6 +32,7 @@
   },
   "files": [
     "bin",
+    "scripts/copy-pdf-worker.mjs",
     ".next",
     "!.next/cache",
     "!.next/dev",
@@ -46,7 +47,7 @@
     "clean:stale-build-types": "node scripts/clean-stale-build-types.mjs",
     "prebuild": "node scripts/clean-stale-build-types.mjs",
     "build": "next build --webpack",
-    "postinstall": "find node_modules -path '*/pdfjs-dist/build/pdf.worker.min.mjs' -not -path '*/legacy/*' | head -1 | xargs -I{} cp {} public/pdf.worker.min.mjs",
+    "postinstall": "node scripts/copy-pdf-worker.mjs",
     "start": "next start -p 30141",
     "lint": "eslint .",
     "test": "vitest run",

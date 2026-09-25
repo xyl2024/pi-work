@@ -8,6 +8,7 @@ import { readSessionDetails } from "./session-reader";
 import { readConfig } from "./config";
 import { writeSessionName } from "./session-names";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
+import { agentShellTools } from "../shared/agent-shell-tools";
 import { MAX_CONCURRENT_SUBAGENT_RUNS, type SubagentType } from "../shared/types";
 import {
   completeSubagentTask,
@@ -32,27 +33,35 @@ const SUBAGENT_CODEGRAPH_TOOLS: readonly string[] = CODEGRAPH_TOOL_IDS.filter(
 );
 
 /**
- * Read-only exploration tools for the `codebase_explorer` profile. `bash` is
- * included so exploration can inspect history, diffs and existing read-only
- * checks; the profile's system prompt keeps it inspection-only, and a command
- * matching a dangerous-pattern rule is refused outright instead of prompting —
- * a subagent session has no prompt UI.
+ * Read-only exploration tools every subagent profile gets, on every platform.
+ * The shells are NOT part of this list: which shell a machine has, and whether
+ * it has two, is one platform decision (`lib/shared/agent-shell-tools.ts`),
+ * composed in by `subagentTools` below. On Windows that means `bash` (Git Bash,
+ * pi's own resolution) plus `powershell`; elsewhere just `bash` — so exploration
+ * can always inspect history, diffs and existing read-only checks.
+ *
+ * The profile's system prompt keeps those shells inspection-only. A shell
+ * command matching a dangerous-command rule is refused outright instead of
+ * prompting — a subagent session has no prompt UI (see docs/adr/0001) — and
+ * the gate in `rpc-manager.ts` matches both shells, so `powershell` is covered
+ * exactly like `bash`.
  */
-export const CODEBASE_EXPLORER_TOOLS: readonly string[] = [
+const SUBAGENT_READ_ONLY_TOOLS: readonly string[] = [
   "read",
   "grep",
   "ls",
   "find",
-  "bash",
   ...SUBAGENT_CODEGRAPH_TOOLS,
 ];
 
 /**
- * `code_reviewer` shares the exploration tool set and differs only in its
- * system prompt (grounding findings in evidence, separating confirmed problems
- * from suspicions).
+ * The tool set every subagent profile is created with on `platform`: the shared
+ * read-only core plus the shells that platform actually has. Both profiles use
+ * the same set and differ only in their system prompt.
  */
-export const CODE_REVIEWER_TOOLS: readonly string[] = [...CODEBASE_EXPLORER_TOOLS];
+export function subagentTools(platform: string): readonly string[] {
+  return [...SUBAGENT_READ_ONLY_TOOLS, ...agentShellTools(platform)];
+}
 
 const MAX_PROMPT_LENGTH = 50_000;
 const MAX_DESCRIPTION_LENGTH = 200;
@@ -236,20 +245,19 @@ Your current working directory is ${cwd}`;
 }
 
 /**
- * Per-`subagent_type` profile: the tool set the child session is created with,
- * and the system prompt it starts from. Adding a profile means adding one entry
- * here plus one literal in `SpawnSubagentParams`.
+ * Per-`subagent_type` profile: the system prompt a child session starts from.
+ * The tool set is shared by every profile and is not stored here — it is
+ * `subagentTools(platform)` below. Adding a profile means adding one entry here
+ * plus one literal in `SpawnSubagentParams`.
  */
 const SUBAGENT_PROFILES: Record<
   SubagentType,
-  { tools: readonly string[]; systemPrompt: (cwd: string) => string }
+  { systemPrompt: (cwd: string) => string }
 > = {
   [CODEBASE_EXPLORER_TYPE]: {
-    tools: CODEBASE_EXPLORER_TOOLS,
     systemPrompt: getCodebaseExplorerSystemPrompt,
   },
   [CODE_REVIEWER_TYPE]: {
-    tools: CODE_REVIEWER_TOOLS,
     systemPrompt: getCodeReviewerSystemPrompt,
   },
 };
@@ -337,7 +345,10 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
       // parent does not leave a child starting up for nothing.
       releaseSlot = await acquireSubagentSlot([signal, parentStop.signal]);
 
-      const tools = [...profile.tools];
+      // Read-only core plus this machine's shells: a child keeps `bash`
+      // everywhere and `powershell` on Windows (never a shell that is not
+      // there — see lib/shared/agent-shell-tools.ts).
+      const tools = [...subagentTools(process.platform)];
       const displayName = `[Subagent] ${description}`;
       const registryKey = `__subagent__${taskId}`;
 
