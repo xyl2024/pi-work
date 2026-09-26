@@ -5,6 +5,13 @@ export const settings = {
   // System prompt replacements
   "Settings": "设置",
   "Settings sections": "设置项导航",
+  // Settings modal groups (registry.ts)
+  "Personal": "个人",
+  "Interface & appearance": "界面与外观",
+  "Agent": "Agent",
+  "Integrations & network": "集成与网络",
+  "Developer": "开发者",
+  "Debugging helpers. Not needed for normal use.": "调试辅助工具，日常使用不需要。",
   "System Prompt Replacements": "系统提示词替换",
   "Replace literal strings in the system prompt. Changes take effect on new sessions. Existing sessions are unaffected.": "替换系统提示词中的字面量字符串。对新建会话生效，已有会话不受影响。",
   "Enable replacements": "启用替换",

@@ -23,24 +23,3 @@ export const FILE_VIEWER_UI: Array<{ kind: FileViewerKind; labelKey: string }> =
   { kind: "image", labelKey: "Max size for image files" },
   { kind: "pdf",   labelKey: "Max size for PDF files" },
 ];
-
-// Sidebar nav entries for the modal body. The id is the value of
-// `data-settings-section` on each section's wrapper div; clicking an entry
-// scrolls the body to that section. Order here is the display order in
-// the sidebar (same as the body's top-to-bottom order) — keep them in
-// sync if you reorder sections.
-export const NAV_ITEMS: Array<{ id: string; labelKey: string }> = [
-  { id: "settings-section-profile",       labelKey: "Profile" },
-  { id: "settings-section-appearance",    labelKey: "Appearance" },
-  { id: "settings-section-append-system", labelKey: "Append System Prompt" },
-  { id: "settings-section-pi-documentation", labelKey: "Pi documentation" },
-  { id: "settings-section-right-bar",     labelKey: "Right-side buttons" },
-  { id: "settings-section-inbox-test",    labelKey: "Inbox Test" },
-  { id: "settings-section-toast-test",    labelKey: "Toast Test" },
-  { id: "settings-section-file-preview",  labelKey: "File preview limits" },
-  { id: "settings-section-retry",         labelKey: "Agent retry" },
-  { id: "settings-section-network-proxy", labelKey: "Network proxy" },
-  { id: "settings-section-subagent",      labelKey: "Subagent settings" },
-  { id: "settings-section-ui-sounds",     labelKey: "UI Sounds" },
-  { id: "settings-section-web-access",     labelKey: "Web Access" },
-];

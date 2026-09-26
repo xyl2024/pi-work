@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { InboxTestSection } from "./InboxTestSection";
 import { setSettings, useSettings } from "@/hooks/settingsStore";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
-import { NAV_ITEMS } from "./constants";
+import {
+  SETTINGS_GROUPS,
+  SETTINGS_SECTION_IDS,
+  sectionsForGroup,
+  type SettingsSectionId,
+} from "./registry";
 import { SettingsSection } from "./SettingsSection";
 import { useSettingsWrite } from "./use-settings-write";
 import { useUnsavedChanges, type DirtyReporter } from "./use-unsaved-changes";
@@ -24,27 +29,18 @@ import { ToastTestSection } from "./sections/ToastTestSection";
 import { WebAccessSection } from "./sections/WebAccessSection";
 
 /**
- * Settings modal shell. Holds the global `config` state machine and the
- * modal chrome (backdrop, header, sidebar nav, scroll-spy). All
- * settings sections live under `components/settings/sections/`.
+ * Settings modal shell. Holds the modal chrome (backdrop, header,
+ * sidebar nav, scroll-spy) and mounts one section per registry entry.
  *
- * Section layout (sidebar ↔ body, identical order to NAV_ITEMS):
- *   0  Profile             (own save flow; onDirtyChange → modal)
- *   1  Appearance          (no save — hooks apply immediately)
- *   2  Append System Prompt(textarea save + immediate-apply toggle;
- *                          onDirtyChange → modal)
- *   4  Right-side buttons  (immediate-apply; visibility / order /
- *                          alignment)
- *   5  Inbox Test          (<InboxTestSection />)
- *   6  Toast Test          (<ToastTestSection />, client-side preview)
- *   7  File preview limits (immediate-apply per kind)
- *   8  Agent retry         (independent state machine; lives in
- *                          ~/.pi/agent/settings.json, not config.yaml)
- *   9  Network proxy       (draft url + save; enable toggle immediate-apply;
- *                          hot-swaps the process fetch dispatcher)
- *   10 Subagent            (immediate-apply model + thinking level)
- *   11 UI Sounds           (immediate-apply master volume + per-event recipes)
- *   12 Web Access          (toggle + Tavily key)
+ * Groups and sections come from `./registry` — the sidebar and the body's
+ * group headings both derive from it in the same order, so the two cannot
+ * drift. A section = one scroll target (`data-settings-section`) = one
+ * sidebar entry.
+ *
+ * The modal owns no second copy of the config: it reads the settings store,
+ * re-reads disk once on open, and writes through the single `useSettingsWrite`
+ * entry. Staged sections report their dirty-ness to one unsaved-changes
+ * registry, which is the only input to the close-confirm prompt.
  */
 export function SettingsModal({
   onClose,
@@ -60,7 +56,7 @@ export function SettingsModal({
   // Re-read disk every time the modal opens so the fields show the current
   // config.yaml, not a snapshot from whenever the store was last written
   // (another tab, a hand edit). There is exactly one mirror: the settings
-  // store. The modal does not keep a second copy of the config.
+  // store.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/settings")
@@ -76,10 +72,9 @@ export function SettingsModal({
   const { apply, submit } = useSettingsWrite();
 
   // ── Unsaved-changes registry ───────────────────────────────────────
-  // Every staged setting (append system prompt, network proxy, profile, …)
-  // reports its dirty-ness here. The close-confirm prompt has one input: the
-  // registry's selector. Sections never keep their own dirty flag for the
-  // modal to collect.
+  // Every staged setting reports its dirty-ness here. The close-confirm
+  // prompt has one input: the registry's selector. Sections never keep their
+  // own dirty flag for the modal to collect.
   const unsaved = useUnsavedChanges();
   const { markDirty, markSaved, closeConfirmKey } = unsaved;
   const reportDirty = useCallback<DirtyReporter>((key, dirty) => {
@@ -88,18 +83,16 @@ export function SettingsModal({
   }, [markDirty, markSaved]);
 
   // ── Sidebar nav: active section + scroll-spy ───────────────────────
-  // Default to the first nav item so the sidebar shows a highlighted
-  // item before the user has scrolled. The IntersectionObserver
-  // below updates this as the user scrolls past each section's top
-  // edge into the trigger zone (top 40% of the scroll container).
-  const [activeSectionId, setActiveSectionId] = useState<string>(NAV_ITEMS[0].id);
+  // Default to the first registry section so the sidebar shows a highlighted
+  // item before the user has scrolled. The IntersectionObserver below updates
+  // this as the user scrolls past each section's top edge into the trigger
+  // zone (top 40% of the scroll container).
+  const firstSectionId = `settings-section-${SETTINGS_SECTION_IDS[0]}`;
+  const [activeSectionId, setActiveSectionId] = useState<string>(firstSectionId);
   const bodyRef = useRef<HTMLDivElement | null>(null);
 
-  // Depend on `config` so the observer is set up the first time the
-  // body div actually mounts (the loading screen renders before it).
-  // The cleanup disconnect + re-observe cost is negligible — there
-  // are ~10 targets and the body div's identity is stable across
-  // re-renders, so the observer's `root` reference stays valid.
+  // Depend on `config` so the observer is set up the first time the body div
+  // actually mounts (the loading screen renders before it).
   useEffect(() => {
     const root = bodyRef.current;
     if (!root) return;
@@ -110,10 +103,7 @@ export function SettingsModal({
     const observer = new IntersectionObserver(
       (entries) => {
         // Of the entries that just crossed into the trigger zone, the
-        // topmost one (lowest boundingClientRect.top) wins. Picking
-        // from the entries array (rather than re-querying all
-        // sections) keeps updates bounded to what actually changed
-        // this tick.
+        // topmost one (lowest boundingClientRect.top) wins.
         const intersecting = entries
           .filter((e) => e.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
@@ -139,13 +129,9 @@ export function SettingsModal({
   }, []);
 
   // ── Open/close animation ──────────────────────────────────────────
-  // Encapsulated in useModalAnimation — backdrop fades + panel
-  // slides on mount and on close. The hook drives a 220ms CSS
-  // transition between phases (entering → open → leaving) and calls
-  // `onClose` after the leaving animation finishes. The
-  // `shouldConfirm` hook returns a string to gate the close on a
-  // `window.confirm` prompt, `true` to close without prompting, or
-  // `false` to abort.
+  // `shouldConfirm` returns a string to gate the close on a confirm prompt,
+  // `true` to close without prompting. The unsaved-changes registry is the
+  // only thing it consults.
   const shouldConfirm = useCallback(() => {
     return closeConfirmKey ? t(closeConfirmKey) : true;
   }, [closeConfirmKey, t]);
@@ -170,12 +156,49 @@ export function SettingsModal({
     return (
       <div style={backdropStyle}
         onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-        <div style={{ ...panelStyle, width: 880, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "#ef4444" }}>
+        <div style={{ ...panelStyle, width: 880, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--error)" }}>
           {t("Failed to load settings")}
         </div>
       </div>
     );
   }
+
+  /** One registry section → its component (each renders its own wrapper). */
+  const renderSection = (id: SettingsSectionId): ReactNode => {
+    switch (id) {
+      case "profile":
+        return <ProfileSection onProfileSaved={onProfileSaved} onDirtyChange={reportDirty} />;
+      case "appearance":
+        return <AppearanceSection />;
+      case "right-bar":
+        return <RightBarSection config={config} apply={apply} />;
+      case "ui-sounds":
+        return <SoundSettingsSection config={config} apply={apply} />;
+      case "file-preview":
+        return <FilePreviewSection config={config} apply={apply} />;
+      case "append-system":
+        return <AppendSystemSection config={config} apply={apply} onDirtyChange={reportDirty} />;
+      case "pi-documentation":
+        return <PiDocumentationSection config={config} apply={apply} />;
+      case "subagent":
+        return <SubagentSection config={config} apply={apply} />;
+      case "retry":
+        return <RetrySection />;
+      case "network-proxy":
+        return <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />;
+      case "web-access":
+        return <WebAccessSection config={config} apply={apply} submit={submit} />;
+      case "inbox-test":
+        return (
+          <SettingsSection id="inbox-test">
+            <InboxTestSection />
+          </SettingsSection>
+        );
+      case "toast-test":
+        return <ToastTestSection />;
+    }
+  };
+
 
   return (
     <div style={backdropStyle}
@@ -202,8 +225,7 @@ export function SettingsModal({
           }}
         >
           {/* Sidebar nav — sticky so it stays in view while the content
-              column scrolls. alignSelf: start lets the nav shrink to its
-              own height instead of stretching to fill the grid row. */}
+              column scrolls. Group headings match the body's headings. */}
           <nav
             aria-label={t("Settings sections")}
             style={{
@@ -216,93 +238,94 @@ export function SettingsModal({
               maxHeight: "calc(100% - 0px)",
             }}
           >
-            {NAV_ITEMS.map((item) => {
-              const active = activeSectionId === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavClick(item.id)}
-                  aria-current={active ? "true" : undefined}
+            {SETTINGS_GROUPS.map((group) => (
+              <div key={group.id} style={{ marginBottom: 10 }}>
+                <div
                   style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "6px 10px",
-                    marginBottom: 2,
-                    background: active ? "var(--bg-selected)" : "transparent",
-                    border: "none",
-                    borderRadius: 6,
-                    color: active ? "var(--text)" : "var(--text-muted)",
-                    fontSize: 13,
-                    fontWeight: active ? 600 : 400,
-                    cursor: "pointer",
-                    transition: "background-color 0.15s, color 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active) e.currentTarget.style.background = "var(--bg-hover)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) e.currentTarget.style.background = "transparent";
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "var(--text-dim)",
+                    padding: "0 10px 4px",
                   }}
                 >
-                  {t(item.labelKey)}
-                </button>
-              );
-            })}
+                  {t(group.labelKey)}
+                </div>
+                {sectionsForGroup(group.id).map((section) => {
+                  const id = `settings-section-${section.id}`;
+                  const active = activeSectionId === id;
+                  return (
+                    <button
+                      key={section.id}
+                      onClick={() => handleNavClick(id)}
+                      aria-current={active ? "true" : undefined}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "6px 10px",
+                        marginBottom: 2,
+                        background: active ? "var(--bg-selected)" : "transparent",
+                        border: "none",
+                        borderRadius: 6,
+                        color: active ? "var(--text)" : "var(--text-muted)",
+                        fontSize: 13,
+                        fontWeight: active ? 600 : 400,
+                        cursor: "pointer",
+                        transition: "background-color 0.15s, color 0.15s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!active) e.currentTarget.style.background = "var(--bg-hover)";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!active) e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      {t(section.labelKey)}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
 
-          {/* Content column — all section wrappers go in here so the
-              grid layout only sees two columns (nav + content). */}
+          {/* Content column — group headings and sections, both derived from
+              the registry so the two columns read the same. */}
           <div>
-            {/* 0: Profile */}
-            <ProfileSection onProfileSaved={onProfileSaved} onDirtyChange={reportDirty} />
-
-            {/* 1: Appearance */}
-            <AppearanceSection />
-
-            {/* 2: Append System Prompt */}
-            <AppendSystemSection
-              config={config}
-              apply={apply}
-              onDirtyChange={reportDirty}
-            />
-
-            {/* 3: Pi documentation */}
-            <PiDocumentationSection config={config} apply={apply} />
-
-            {/* 5: Right-side buttons */}
-            <RightBarSection config={config} apply={apply} />
-
-            {/* 6: Inbox Test */}
-            <SettingsSection id="inbox-test" bottomGap={false}>
-              <InboxTestSection />
-            </SettingsSection>
-
-            {/* 7: Toast Test — sits next to Inbox Test so the user can
-                compare the two notification-style previews. Also purely
-                client-side; no /api/toast/test endpoint needed. */}
-            <SettingsSection id="toast-test" topGap>
-              <ToastTestSection />
-            </SettingsSection>
-
-            {/* 8: File preview limits */}
-            <FilePreviewSection config={config} apply={apply} />
-
-            {/* 9: Agent retry */}
-            <RetrySection />
-
-            {/* 10: Network proxy */}
-            <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />
-
-            {/* 10: Subagent */}
-            <SubagentSection config={config} apply={apply} />
-
-            {/* 11: UI Sounds */}
-            <SoundSettingsSection config={config} apply={apply} />
-
-            {/* 12: Web Access */}
-            <WebAccessSection config={config} apply={apply} submit={submit} />
-
+            {SETTINGS_GROUPS.map((group, groupIndex) => (
+              <div key={group.id}>
+                <div
+                  style={{
+                    marginTop: groupIndex === 0 ? 0 : 20,
+                    marginBottom: 8,
+                    paddingBottom: 6,
+                    borderBottom: "1px solid var(--border)",
+                  }}
+                >
+                  <h2
+                    style={{
+                      margin: 0,
+                      fontSize: group.developer ? 12 : 13,
+                      fontWeight: 700,
+                      letterSpacing: group.developer ? "0.04em" : undefined,
+                      textTransform: group.developer ? "uppercase" : undefined,
+                      color: group.developer ? "var(--text-dim)" : "var(--text)",
+                    }}
+                  >
+                    {t(group.labelKey)}
+                  </h2>
+                  {group.descriptionKey && (
+                    <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
+                      {t(group.descriptionKey)}
+                    </p>
+                  )}
+                </div>
+                {sectionsForGroup(group.id).map((section) => (
+                  <div key={section.id}>{renderSection(section.id)}</div>
+                ))}
+              </div>
+            ))}
           </div>
         </div>
       </div>

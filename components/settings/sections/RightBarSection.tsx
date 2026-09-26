@@ -19,7 +19,7 @@ import type { PiWorkConfig } from "@/lib/shared/config-types";
  * shared `apply` prop:
  *
  * - Visibility toggles (checkbox list)
- * - Button order (drag-list-style up/down buttons + Reset to default)
+ * - Button order (drag-list-style up/down buttons + Reset to defaults)
  * - Session-bound button alignment (top / bottom / inline radio group)
  *
  * The order list always reflects the user's override if present,
@@ -174,7 +174,7 @@ export function RightBarSection({
                 cursor: "pointer",
               }}
             >
-              {t("Reset to default")}
+              {t("Reset to defaults")}
             </button>
           )}
         </div>
