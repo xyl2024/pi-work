@@ -167,7 +167,7 @@ export function ProfileSection({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Profile")}</h3>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <UnsavedHint show={profileCanSave} />
+          <UnsavedHint show={profileDirty} />
           <SaveButton
             canSave={profileCanSave}
             saving={profileSaving}
