@@ -122,9 +122,9 @@ function PromptDetail({
                 lineHeight: 1.4,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(248,113,113,0.12)";
-                e.currentTarget.style.color = "#f87171";
-                e.currentTarget.style.borderColor = "#f87171";
+                e.currentTarget.style.background = "color-mix(in srgb, var(--error) 12%, transparent)";
+                e.currentTarget.style.color = "var(--error)";
+                e.currentTarget.style.borderColor = "var(--error)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = "none";
@@ -394,7 +394,7 @@ function PromptEditorPanel({
         />
       </label>
 
-      {error && <div style={{ fontSize: 12, color: "#f87171", wordBreak: "break-word" }}>{error}</div>}
+      {error && <div style={{ fontSize: 12, color: "var(--error)", wordBreak: "break-word" }}>{error}</div>}
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
@@ -595,7 +595,7 @@ export function PromptsConfig({
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("Loading...")}</div>
               ) : error ? (
-                <div style={{ padding: "10px 8px", fontSize: 11, color: "#f87171" }}>{error}</div>
+                <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--error)" }}>{error}</div>
               ) : prompts.length === 0 ? (
                 <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--text-dim)" }}>{t("No prompt templates found")}</div>
               ) : (

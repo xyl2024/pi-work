@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { SettingsSection } from "../SettingsSection";
+import { Check, SecondaryButton } from "../controls";
 import { RIGHT_BAR_BUTTON_IDS, RIGHT_BAR_DESCRIPTOR_BY_ID } from "@/components/panels/right-bar/desc";
 import {
   resolveSessionBoundAlignment,
@@ -19,7 +20,7 @@ import type { PiWorkConfig } from "@/lib/shared/config-types";
  * shared `apply` prop:
  *
  * - Visibility toggles (checkbox list)
- * - Button order (drag-list-style up/down buttons + Reset to default)
+ * - Button order (drag-list-style up/down buttons + Reset to defaults)
  * - Session-bound button alignment (top / bottom / inline radio group)
  *
  * The order list always reflects the user's override if present,
@@ -139,18 +140,12 @@ export function RightBarSection({
           const labelKey = RIGHT_BAR_DESCRIPTOR_BY_ID.get(id)?.labelKey ?? "";
           const checked = config.right_side_bar[id] !== false;
           return (
-            <label
+            <Check
               key={id}
-              style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--text)" }}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => handleRightBarToggle(id)}
-                style={{ width: 14, height: 14, accentColor: "var(--accent)", cursor: "pointer" }}
-              />
-              <span>{t(labelKey)}</span>
-            </label>
+              label={t(labelKey)}
+              checked={checked}
+              onChange={() => handleRightBarToggle(id)}
+            />
           );
         })}
       </div>
@@ -161,21 +156,12 @@ export function RightBarSection({
             {t("Button order")}
           </h4>
           {config.right_side_bar.order !== undefined && (
-            <button
-              type="button"
+            <SecondaryButton
               onClick={handleRightBarResetOrder}
-              style={{
-                background: "transparent",
-                border: "1px solid var(--border)",
-                color: "var(--text-muted)",
-                borderRadius: 4,
-                padding: "4px 10px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
+              style={{ height: 26, padding: "4px 10px" }}
             >
-              {t("Reset to default")}
-            </button>
+              {t("Reset to defaults")}
+            </SecondaryButton>
           )}
         </div>
         <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
@@ -205,42 +191,22 @@ export function RightBarSection({
                   {idx + 1}
                 </span>
                 <span style={{ flex: 1 }}>{t(labelKey)}</span>
-                <button
-                  type="button"
+                <SecondaryButton
                   onClick={() => handleRightBarMove(id, "up")}
                   disabled={isFirst}
-                  aria-label={t("Move up")}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--border)",
-                    borderRadius: 3,
-                    padding: "2px 8px",
-                    color: isFirst ? "var(--text-dim)" : "var(--text-muted)",
-                    cursor: isFirst ? "not-allowed" : "pointer",
-                    opacity: isFirst ? 0.5 : 1,
-                    fontSize: 11,
-                  }}
+                  ariaLabel={t("Move up")}
+                  style={{ height: 24, minWidth: 28, padding: "2px 8px", fontSize: 11 }}
                 >
                   ↑
-                </button>
-                <button
-                  type="button"
+                </SecondaryButton>
+                <SecondaryButton
                   onClick={() => handleRightBarMove(id, "down")}
                   disabled={isLast}
-                  aria-label={t("Move down")}
-                  style={{
-                    background: "transparent",
-                    border: "1px solid var(--border)",
-                    borderRadius: 3,
-                    padding: "2px 8px",
-                    color: isLast ? "var(--text-dim)" : "var(--text-muted)",
-                    cursor: isLast ? "not-allowed" : "pointer",
-                    opacity: isLast ? 0.5 : 1,
-                    fontSize: 11,
-                  }}
+                  ariaLabel={t("Move down")}
+                  style={{ height: 24, minWidth: 28, padding: "2px 8px", fontSize: 11 }}
                 >
                   ↓
-                </button>
+                </SecondaryButton>
               </li>
             );
           })}

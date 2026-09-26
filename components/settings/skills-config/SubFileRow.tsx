@@ -154,7 +154,7 @@ export function SubFileRow({
               {t("Loading...")}
             </span>
           ) : loadError ? (
-            <span style={{ fontSize: 11, color: "#f87171" }}>
+            <span style={{ fontSize: 11, color: "var(--error)" }}>
               {loadError === "binary file cannot be previewed"
                 ? t("Binary file cannot be previewed")
                 : loadError}

@@ -198,3 +198,71 @@ describe("settings api: right side bar", () => {
     }
   });
 });
+
+/**
+ * PUT /api/settings is a patch scoped to the keys it owns. A stale full-config
+ * snapshot submitted by an old page must not be able to reset a key another
+ * feature owns (here: `cwd_aliases`, planted through its own route). The
+ * ignored keys are skipped, not rejected.
+ */
+describe("settings api: PUT is a patch over owned keys", () => {
+  const cwd = `/tmp/${uniqueId("settings-sentinel")}`;
+  const alias = uniqueId("alias");
+
+  async function readAlias(): Promise<string | undefined> {
+    const res = await api("/api/cwd-aliases");
+    expect(res.status).toBe(200);
+    return res.body[cwd] as string | undefined;
+  }
+
+  it("leaves another feature's key untouched when a stale full snapshot is PUT", async () => {
+    // 1. Snapshot the config *before* the other feature writes its key.
+    const stale = (await api("/api/settings")).body;
+
+    // 2. The other feature writes cwd_aliases (sidebar-set alias).
+    const planted = await api("/api/cwd-aliases", {
+      method: "POST",
+      body: JSON.stringify({ cwd, alias }),
+    });
+    expect(planted.status).toBe(200);
+    expect(await readAlias()).toBe(alias);
+
+    const beforeLoadPiDocs = stale.load_pi_docs;
+    try {
+      // 3. An old page submits the whole config it remembers, without the alias.
+      const put = await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({ ...stale, load_pi_docs: !beforeLoadPiDocs }),
+      });
+      expect(put.status).toBe(200);
+      expect(((await api("/api/settings")).body as Json).load_pi_docs).toBe(!beforeLoadPiDocs);
+      // …and the sentinel is still there.
+      expect(await readAlias()).toBe(alias);
+
+      // 4. A single-key patch behaves the same.
+      const patch = await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({ load_pi_docs: beforeLoadPiDocs }),
+      });
+      expect(patch.status).toBe(200);
+      expect(await readAlias()).toBe(alias);
+      expect(((await api("/api/settings")).body as Json).load_pi_docs).toBe(beforeLoadPiDocs);
+    } finally {
+      await api("/api/cwd-aliases", {
+        method: "POST",
+        body: JSON.stringify({ cwd, alias: null }),
+      });
+    }
+  });
+
+  it("ignores non-owned keys without an error", async () => {
+    const sentinel = { [cwd]: [uniqueId("skill")] };
+    const put = await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ disabled_skills: sentinel, load_pi_docs: true }),
+    });
+    expect(put.status).toBe(200);
+    const after = await api("/api/settings");
+    expect((after.body as Json).disabled_skills).not.toEqual(sentinel);
+  });
+});

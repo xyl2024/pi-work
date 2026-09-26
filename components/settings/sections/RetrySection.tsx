@@ -6,6 +6,7 @@ import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { RetryNumberRow } from "../rows";
 import { SettingsSection } from "../SettingsSection";
+import { SecondaryButton } from "../controls";
 import {
   DEFAULT_AGENT_RETRY,
   RETRY_LIMITS,
@@ -164,30 +165,10 @@ export function RetrySection() {
     <SettingsSection id="retry" topGap>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Agent retry")}</h3>
-        <button
+        <SecondaryButton
           onClick={() => void handleRetryReset()}
           disabled={retryResetting || retryResetOk || !retryConfig}
-          style={{
-            padding: "4px 12px", height: 28,
-            background: retryResetOk ? "#16a34a" : retryResetting ? "var(--bg)" : "transparent",
-            border: `1px solid ${retryResetOk ? "#16a34a" : "var(--border)"}`,
-            borderRadius: 6,
-            color: retryResetOk ? "#fff" : retryResetting ? "var(--text-muted)" : "var(--text-muted)",
-            cursor: retryResetting || !retryConfig ? "default" : "pointer",
-            fontSize: 12, fontWeight: 500,
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            transition: "background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease",
-            opacity: retryResetting || !retryConfig ? 0.5 : 1,
-          }}
-          onMouseEnter={(e) => {
-            if (retryResetting || retryResetOk) return;
-            e.currentTarget.style.borderColor = "var(--accent)";
-            e.currentTarget.style.color = "var(--accent)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = retryResetOk ? "#16a34a" : "var(--border)";
-            e.currentTarget.style.color = retryResetOk ? "#fff" : "var(--text-muted)";
-          }}
+          style={retryResetOk ? { borderColor: "var(--success)", color: "var(--success)" } : undefined}
         >
           {retryResetOk && (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -195,7 +176,7 @@ export function RetrySection() {
             </svg>
           )}
           <span>{retryResetOk ? t("Saved") : t("Reset to defaults")}</span>
-        </button>
+        </SecondaryButton>
       </div>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0", lineHeight: 1.5 }}>
         {t("Auto-retry on transient LLM errors (overloaded, rate limit, 5xx, stream breaks). Takes effect on new sessions only.")}
@@ -204,7 +185,7 @@ export function RetrySection() {
       {retryLoading ? (
         <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("Loading...")}</div>
       ) : !retryConfig ? (
-        <div style={{ fontSize: 12, color: "#ef4444" }}>{t("Failed to load settings")}</div>
+        <div style={{ fontSize: 12, color: "var(--error)" }}>{t("Failed to load settings")}</div>
       ) : (
         <>
           {/* Master toggle */}

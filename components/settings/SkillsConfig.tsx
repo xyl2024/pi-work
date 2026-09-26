@@ -309,7 +309,7 @@ export function SkillsConfig({
                 {t("Loading...")}
               </div>
             ) : error ? (
-              <div style={{ padding: "10px 2px", fontSize: 12, color: "#f87171" }}>
+              <div style={{ padding: "10px 2px", fontSize: 12, color: "var(--error)" }}>
                 {error}
               </div>
             ) : skills.length === 0 ? (

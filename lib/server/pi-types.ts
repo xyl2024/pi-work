@@ -96,6 +96,12 @@ export interface AgentSessionLike {
   readonly sessionFile: string | undefined;
   readonly isStreaming: boolean;
   readonly isCompacting: boolean;
+  /** The session's current effective system prompt. Read it here, not from
+   *  `agent.state.systemPrompt`: since pi 0.86 the agent-level prompt is
+   *  replayed from the transcript's system messages, so it is empty until the
+   *  first turn is persisted. `AgentSession.systemPrompt` renders the current
+   *  prompt options and is correct from session creation onward. */
+  readonly systemPrompt: string;
   readonly model: ModelLike | undefined;
   readonly modelRuntime: Pick<ModelRuntime, "getModel" | "getModels">;
   readonly sessionManager: SessionManager;

@@ -12,6 +12,7 @@ import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { RefreshIconButton } from "../ui/RefreshIconButton";
 import { CHECK, CHEVRONS_UP } from "@/lib/client/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
+import { TodaySessionsList } from "./TodaySessionsList";
 import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "../ui/SidebarSection";
 import { GrokBotStage } from "../grokbot/GrokBotStage";
@@ -175,6 +176,8 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const cwdHeaderRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const [sessionsOpen, setSessionsOpen] = useState(true);
+  const [todayOpen, setTodayOpen] = useState(true);
+  const [todayRefreshSignal, setTodayRefreshSignal] = useState(0);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerCollapseKey, setExplorerCollapseKey] = useState(0);
@@ -724,6 +727,35 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       {/* GrokBot companion — always-on living bot at the top of the sidebar.
           Click the bot (or the gear) to open the full lab modal. */}
       <GrokBotStage onOpenLab={() => setLabOpen(true)} />
+
+      {/* Today's sessions — a flat, time-windowed view over the same rows
+          the grouped Sessions section below renders. Intrinsically sized
+          (grow: 0) and capped so a light day doesn't reserve blank space
+          and a heavy day scrolls inside its cap. */}
+      <SidebarSection
+        title={t("Today's Sessions")}
+        open={todayOpen}
+        onToggle={() => setTodayOpen((v) => !v)}
+        grow={0}
+        maxHeight="40vh"
+        actions={
+          <RefreshIconButton
+            onClick={() => setTodayRefreshSignal((n) => n + 1)}
+            label={t("Refresh today's sessions")}
+          />
+        }
+      >
+        <TodaySessionsList
+          selectedSessionId={selectedSessionId}
+          onSelectSession={onSelectSession}
+          favoriteIds={favoriteIds}
+          onToggleFavorite={onToggleFavorite}
+          onSessionRenamed={handleSessionRenamed}
+          onSessionDeleted={handleSessionDeleted}
+          refreshKey={refreshKey}
+          refreshSignal={todayRefreshSignal}
+        />
+      </SidebarSection>
 
       {/* Sessions section — cwd groups + their sessions. Collapsible via the
           shared SidebarSection (same flex-grow animation as Explorer). */}

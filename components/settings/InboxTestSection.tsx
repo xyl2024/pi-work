@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
+import { PrimaryButton, SegmentedControl, TextArea, TextInput } from "./controls";
 
 type Level = "info" | "warn" | "error";
 
@@ -10,8 +11,8 @@ const LEVELS: readonly Level[] = ["info", "warn", "error"] as const;
 
 const LEVEL_COLORS: Record<Level, string> = {
   info: "var(--text-muted)",
-  warn: "#f59e0b",
-  error: "#ef4444",
+  warn: "var(--warning)",
+  error: "var(--error)",
 };
 
 const LEVEL_LABELS: Record<Level, string> = {
@@ -111,155 +112,90 @@ export function InboxTestSection() {
       <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 6px 0" }}>
         {t("Test source")}
       </div>
-      <input
-        type="text"
+      <TextInput
         value={source}
-        onChange={(e) => setSource(e.target.value)}
+        onChange={setSource}
         maxLength={64}
         placeholder="test"
-        style={inputStyle(!sourceValid)}
+        invalid={!sourceValid}
       />
 
       {/* Level chips */}
       <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "14px 0 6px 0" }}>
         {t("Test level")}
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        {LEVELS.map((lv) => {
-          const selected = lv === level;
-          const color = LEVEL_COLORS[lv];
-          return (
-            <button
-              key={lv}
-              onClick={() => setLevel(lv)}
-              aria-pressed={selected}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 10px",
-                height: 30,
-                background: selected ? "var(--bg)" : "transparent",
-                border: selected ? "2px solid var(--accent)" : "1px solid var(--border)",
-                borderRadius: 6,
-                color: selected ? "var(--text)" : "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: selected ? 600 : 500,
-                transition: "border-color 0.12s, color 0.12s, background 0.12s",
-              }}
-            >
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 2,
-                  background: color,
-                  flexShrink: 0,
-                }}
-              />
+      <SegmentedControl
+        value={level}
+        onChange={(value) => setLevel(value as Level)}
+        ariaLabel={t("Test level")}
+        options={LEVELS.map((lv) => ({
+          value: lv,
+          label: (
+            <>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: LEVEL_COLORS[lv], flexShrink: 0 }} />
               {LEVEL_LABELS[lv]}
-            </button>
-          );
-        })}
-      </div>
+            </>
+          ),
+        }))}
+      />
 
       {/* Title */}
       <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "14px 0 6px 0" }}>
         {t("Test title")}
       </div>
-      <input
-        type="text"
+      <TextInput
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={setTitle}
         maxLength={300}
         placeholder={t("Test title placeholder")}
-        style={inputStyle(!titleValid)}
+        invalid={!titleValid}
       />
 
       {/* Body */}
       <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "14px 0 6px 0" }}>
         {t("Test body")} <span style={{ color: "var(--text-dim)" }}>({t("Test optional hint")})</span>
       </div>
-      <textarea
+      <TextArea
         value={body}
-        onChange={(e) => setBody(e.target.value)}
-        rows={3}
+        onChange={setBody}
         placeholder={t("Test optional body hint")}
-        style={{
-          ...inputStyle(false),
-          height: "auto",
-          padding: "8px 10px",
-          resize: "vertical",
-          fontFamily: "var(--font-sans)",
-          lineHeight: 1.5,
-        }}
+        style={{ minHeight: 72 }}
       />
 
       {/* Href */}
       <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "14px 0 6px 0" }}>
         {t("Test link URL")} <span style={{ color: "var(--text-dim)" }}>({t("Test optional hint")})</span>
       </div>
-      <input
-        type="text"
+      <TextInput
         value={href}
-        onChange={(e) => setHref(e.target.value)}
+        onChange={setHref}
         placeholder="https://example.com"
-        style={inputStyle(!hrefValid)}
+        invalid={!hrefValid}
       />
       {!hrefValid && (
-        <div style={{ fontSize: 11, color: "#ef4444", marginTop: 4 }}>
+        <div style={{ fontSize: 11, color: "var(--error)", marginTop: 4 }}>
           {t("Test must be a valid URL")}
         </div>
       )}
 
       {/* Send */}
       <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          onClick={handleSend}
-          disabled={!canSend}
-          style={{
-            padding: "6px 16px",
-            height: 32,
-            background: canSend ? "var(--accent)" : "var(--bg)",
-            border: "none",
-            borderRadius: 6,
-            color: canSend ? "#fff" : "var(--text-muted)",
-            cursor: canSend ? "pointer" : "default",
-            fontSize: 13,
-            fontWeight: 600,
-            transition: "background 0.12s, color 0.12s",
-          }}
-        >
+        <PrimaryButton onClick={() => void handleSend()} disabled={!canSend}>
           {sending ? t("Test sending") : t("Test send")}
-        </button>
+        </PrimaryButton>
         {lastSent && lastSent.ok && (
-          <span style={{ fontSize: 12, color: "#16a34a", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 12, color: "var(--success)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             ✓ {formatClock(lastSent.ts)} · {lastSent.source} · {lastSent.level} · “{truncate(lastSent.title, 60)}”
           </span>
         )}
         {lastSent && !lastSent.ok && (
-          <span style={{ fontSize: 12, color: "#ef4444", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 12, color: "var(--error)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             ✗ {formatClock(lastSent.ts)} · {lastSent.error}
           </span>
         )}
       </div>
     </div>
   );
-}
-
-function inputStyle(invalid: boolean): React.CSSProperties {
-  return {
-    width: "100%",
-    height: 32,
-    padding: "4px 10px",
-    background: "var(--bg)",
-    border: invalid ? "1px solid #ef4444" : "1px solid var(--border)",
-    borderRadius: 6,
-    color: "var(--text)",
-    fontSize: 13,
-    boxSizing: "border-box",
-  };
 }
 
 function truncate(s: string, n: number): string {

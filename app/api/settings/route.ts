@@ -7,6 +7,7 @@ import {
 } from "@/lib/shared/file-viewer-limits";
 import { UI_SOUND_EVENT_IDS } from "@/lib/shared/config-types";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
+import { isSettingsOwnedKey } from "@/lib/shared/settings-keys";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
@@ -159,73 +160,101 @@ export async function GET() {
 export async function PUT(req: Request) {
   const startedAt = Date.now();
   try {
-    const body = (await req.json()) as PiWorkConfig;
+    const rawBody = (await req.json()) as Record<string, unknown>;
 
-    const fileViewerCheck = validateFileViewer(body.file_viewer);
-    if (!fileViewerCheck.ok) {
-      log.warn("settings rejected: invalid file_viewer", {
-        error: fileViewerCheck.error,
-        durationMs: elapsedMs(startedAt),
-      });
-      return NextResponse.json(
-        { error: fileViewerCheck.error },
-        { status: 400 },
-      );
+    // The body is a *patch*: only the keys this route owns (the shared
+    // SETTINGS_OWNED_KEYS list) are considered. Anything else
+    // (cwd_aliases / cwd_icons / disabled_skills …) is ignored without an
+    // error, so an old client submitting a whole config snapshot is a
+    // harmless no-op for the keys another feature owns. Method stays PUT so
+    // upgrading clients never see a 405.
+    const body: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(rawBody)) {
+      if (isSettingsOwnedKey(key)) body[key] = value;
+    }
+    if (body.file_viewer !== undefined) {
+      const fileViewerCheck = validateFileViewer(body.file_viewer);
+      if (!fileViewerCheck.ok) {
+        log.warn("settings rejected: invalid file_viewer", {
+          error: fileViewerCheck.error,
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json({ error: fileViewerCheck.error }, { status: 400 });
+      }
     }
 
-    const webAccessCheck = validateWebAccess(body.web_access);
-    if (!webAccessCheck.ok) return NextResponse.json({ error: webAccessCheck.error }, { status: 400 });
-
-    const uiSoundsCheck = validateUiSounds(body.ui_sounds);
-    if (!uiSoundsCheck.ok) {
-      log.warn("settings rejected: invalid ui_sounds", {
-        error: uiSoundsCheck.error,
-        durationMs: elapsedMs(startedAt),
-      });
-      return NextResponse.json(
-        { error: uiSoundsCheck.error },
-        { status: 400 },
-      );
+    if (body.web_access !== undefined) {
+      const webAccessCheck = validateWebAccess(body.web_access);
+      if (!webAccessCheck.ok) return NextResponse.json({ error: webAccessCheck.error }, { status: 400 });
     }
 
-    const networkProxyCheck = validateNetworkProxy(body.network_proxy);
-    if (!networkProxyCheck.ok) {
-      log.warn("settings rejected: invalid network_proxy", {
-        error: networkProxyCheck.error,
-        durationMs: elapsedMs(startedAt),
-      });
-      return NextResponse.json(
-        { error: networkProxyCheck.error },
-        { status: 400 },
-      );
+    if (body.ui_sounds !== undefined) {
+      const uiSoundsCheck = validateUiSounds(body.ui_sounds);
+      if (!uiSoundsCheck.ok) {
+        log.warn("settings rejected: invalid ui_sounds", {
+          error: uiSoundsCheck.error,
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json({ error: uiSoundsCheck.error }, { status: 400 });
+      }
     }
 
-    // If the body omitted file_viewer (or any other field) entirely,
-    // merge it back from disk so we never write a partial PiWorkConfig
-    // — the parser's fail-open behavior is the only thing keeping
-    // missing fields from being misread, and we don't want to rely on
-    // it during a write that explicitly validates.
+    if (body.network_proxy !== undefined) {
+      const networkProxyCheck = validateNetworkProxy(body.network_proxy);
+      if (!networkProxyCheck.ok) {
+        log.warn("settings rejected: invalid network_proxy", {
+          error: networkProxyCheck.error,
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json({ error: networkProxyCheck.error }, { status: 400 });
+      }
+    }
+
+    // Start from what is on disk and overlay only the owned keys present in
+    // the patch; the write face is therefore exactly SETTINGS_OWNED_KEYS.
     const onDisk = readConfig();
-    const incomingWeb = body.web_access as (Partial<PiWorkConfig["web_access"]> & { tavily?: { api_key?: unknown; clear_api_key?: unknown } }) | undefined;
-    const incomingTavily = incomingWeb?.tavily;
-    const nextWebAccess = {
-      ...onDisk.web_access,
-      ...(incomingWeb?.enabled === undefined ? {} : { enabled: incomingWeb.enabled }),
-      tavily: { ...onDisk.web_access.tavily },
-    };
-    if (incomingTavily?.clear_api_key === true) delete nextWebAccess.tavily.api_key;
-    else if (typeof incomingTavily?.api_key === "string" && incomingTavily.api_key.trim()) nextWebAccess.tavily.api_key = incomingTavily.api_key.trim();
+
+    // Tavily key keeps its masked-read / explicit-clear semantics.
+    const incomingWeb = body.web_access as
+      | (Partial<PiWorkConfig["web_access"]> & {
+          tavily?: { api_key?: unknown; clear_api_key?: unknown };
+        })
+      | undefined;
+    let nextWebAccess = onDisk.web_access;
+    if (incomingWeb !== undefined) {
+      nextWebAccess = {
+        ...onDisk.web_access,
+        ...(incomingWeb.enabled === undefined ? {} : { enabled: incomingWeb.enabled }),
+        tavily: { ...onDisk.web_access.tavily },
+      };
+      const incomingTavily = incomingWeb.tavily;
+      if (incomingTavily?.clear_api_key === true) delete nextWebAccess.tavily.api_key;
+      else if (typeof incomingTavily?.api_key === "string" && incomingTavily.api_key.trim()) {
+        nextWebAccess.tavily.api_key = incomingTavily.api_key.trim();
+      }
+    }
+
+    const isObject = (v: unknown): v is Record<string, unknown> =>
+      Boolean(v) && typeof v === "object" && !Array.isArray(v);
 
     const next: PiWorkConfig = {
       ...onDisk,
-      ...body,
-      // Keep fields owned by newer server versions when an older client
-      // submits a partial config. Skill toggles must never be lost here.
-      file_viewer: body.file_viewer ?? onDisk.file_viewer,
-      ui_sounds: body.ui_sounds ?? onDisk.ui_sounds,
-      disabled_skills: body.disabled_skills ?? onDisk.disabled_skills,
+      ...(isObject(body.right_side_bar)
+        ? { right_side_bar: body.right_side_bar as unknown as PiWorkConfig["right_side_bar"] }
+        : {}),
+      ...(isObject(body.append_system)
+        ? { append_system: body.append_system as unknown as PiWorkConfig["append_system"] }
+        : {}),
+      ...(typeof body.load_pi_docs === "boolean" ? { load_pi_docs: body.load_pi_docs } : {}),
+      ...(isObject(body.file_viewer)
+        ? { file_viewer: body.file_viewer as unknown as PiWorkConfig["file_viewer"] }
+        : {}),
+      ...(isObject(body.ui_sounds) ? { ui_sounds: body.ui_sounds as unknown as PiWorkConfig["ui_sounds"] } : {}),
+      ...(isObject(body.subagent) ? { subagent: body.subagent as unknown as PiWorkConfig["subagent"] } : {}),
+      ...(isObject(body.network_proxy)
+        ? { network_proxy: body.network_proxy as unknown as PiWorkConfig["network_proxy"] }
+        : {}),
       web_access: nextWebAccess,
-      network_proxy: body.network_proxy ?? onDisk.network_proxy,
     };
 
     writeConfig(next);

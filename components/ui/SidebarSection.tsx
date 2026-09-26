@@ -22,6 +22,11 @@ interface Props {
    *  intrinsically-sized sections like the GrokBot stage — they only claim
    *  the height of their own header + content. */
   grow?: number;
+  /** Optional max height for the scrollable body (any CSS length). Only
+   *  meaningful for intrinsically-sized sections (grow: 0): a grow:1 section
+   *  already gets exactly its share of free space. A heavy list then scrolls
+   *  inside the cap instead of stretching the section past it. */
+  maxHeight?: number | string;
 }
 
 // Collapsible section for the left sidebar. Explorer today, future sections
@@ -41,7 +46,7 @@ interface Props {
 // header, open state is header + grow × free space, and the closed header can
 // never be compressed (flexShrink: 0 when closed, matching the previous
 // `flex: 0 0 auto` behavior).
-export function SidebarSection({ title, open, onToggle, actions, children, durationMs = 180, grow = 1 }: Props) {
+export function SidebarSection({ title, open, onToggle, actions, children, durationMs = 180, grow = 1, maxHeight }: Props) {
   // Keep the content mounted through the collapse animation (it must be in
   // the DOM to squeeze to zero), then unmount it after the transition
   // settles — same lifecycle as MultiCwdList's body. Unmounting releases
@@ -120,7 +125,7 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
       </div>
       {mounted && (
         <div style={{ flex: isFixedHeight ? "0 0 auto" : "1 1 0", minHeight: 0, overflow: "hidden" }}>
-          <div data-scroll-side style={{ height: isFixedHeight ? "auto" : "100%", overflowY: "auto", overflowX: "hidden" }}>
+          <div data-scroll-side style={{ height: isFixedHeight ? "auto" : "100%", maxHeight, overflowY: "auto", overflowX: "hidden" }}>
             {children}
           </div>
         </div>

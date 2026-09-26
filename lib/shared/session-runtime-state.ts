@@ -210,6 +210,38 @@ export function createSessionRuntimeState(
 }
 
 /**
+ * Adopt a transcript read back from disk over the one the client already
+ * holds.
+ *
+ * A disk read is a *resync*, not a truth that pre-empts the client: it is
+ * issued asynchronously (turn end, manual compaction) and the user can append
+ * to the transcript while it is in flight — `handleSend` pushes the prompt into
+ * the state synchronously, before the server has persisted it. That prompt is
+ * therefore present locally and absent from the snapshot, and a plain
+ * assignment would silently delete it (the transcript then falls back to the
+ * previous turn's prompt, which moves the live-turn boundary and renders the
+ * next assistant message under the previous turn).
+ *
+ * The rule is positional and deliberately content-free: the snapshot wins for
+ * everything it covers, and whatever the client holds *beyond* its length was
+ * appended after the read started, so it is kept. A snapshot that reaches
+ * further than the local transcript (another writer appended to the session,
+ * the client missed events) is adopted wholesale.
+ *
+ * Only the active-leaf reads go through this (the session transcript and an
+ * explicit `leafId: null` context read). A read for a *specific* leaf is a
+ * navigation, and there the snapshot must replace the transcript even when it
+ * is shorter.
+ */
+export function adoptDiskTranscript(
+  current: AgentMessage[],
+  disk: AgentMessage[],
+): AgentMessage[] {
+  if (current.length <= disk.length) return disk;
+  return [...disk, ...current.slice(disk.length)];
+}
+
+/**
  * Resolve one field of the runtime state, returning the *same* object when the
  * field is unchanged. The identity check is what keeps "no-op writes do not
  * re-render" — several event branches (a duplicate `message_end`, an

@@ -47,7 +47,7 @@ export function ThinkingLevelMapEditor({
           fontWeight: 600,
         };
         const btnActiveDisabled: React.CSSProperties = {
-          background: "#ef4444",
+          background: "var(--error)",
           color: "#fff",
           fontWeight: 600,
         };

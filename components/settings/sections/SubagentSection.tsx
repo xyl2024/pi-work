@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { THINKING_LEVELS, type ThinkingLevel } from "@/components/chat/ThinkingPicker";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { SettingsSection } from "../SettingsSection";
+import { GroupedSelect, Select } from "../controls";
 
 interface ModelOption {
   id: string;
@@ -12,16 +13,7 @@ interface ModelOption {
   provider: string;
 }
 
-const selectStyle: React.CSSProperties = {
-  minWidth: 260,
-  height: 34,
-  padding: "0 10px",
-  color: "var(--text)",
-  background: "var(--bg-panel)",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  fontSize: 13,
-};
+const MODEL_SELECT_STYLE: React.CSSProperties = { flex: 1, maxWidth: 360 };
 
 export function SubagentSection({
   config,
@@ -68,12 +60,19 @@ export function SubagentSection({
 
       <label style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, fontSize: 13 }}>
         <span style={{ minWidth: 150 }}>{t("Subagent model")}</span>
-        <select
+        <GroupedSelect
           value={selectedModel}
-          style={selectStyle}
+          style={MODEL_SELECT_STYLE}
           disabled={models.length === 0}
-          onChange={(event) => {
-            const value = event.target.value;
+          leadingOption={{ value: "inherit", label: t("Inherit parent model") }}
+          groups={groupedModels.map(([provider, providerModels]) => ({
+            label: provider,
+            options: providerModels.map((model) => ({
+              value: `${model.provider}:${model.id}`,
+              label: model.name,
+            })),
+          }))}
+          onChange={(value) => {
             void apply((prev) => ({
               ...prev,
               subagent: {
@@ -85,34 +84,21 @@ export function SubagentSection({
               },
             }));
           }}
-        >
-          <option value="inherit">{t("Inherit parent model")}</option>
-          {groupedModels.map(([provider, providerModels]) => (
-            <optgroup key={provider} label={provider}>
-              {providerModels.map((model) => (
-                <option key={`${model.provider}:${model.id}`} value={`${model.provider}:${model.id}`}>
-                  {model.name}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        />
       </label>
 
       <label style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, fontSize: 13 }}>
         <span style={{ minWidth: 150 }}>{t("Subagent thinking level")}</span>
-        <select
+        <Select
           value={config.subagent.thinking_level}
-          style={selectStyle}
-          onChange={(event) => void apply((prev) => ({
+          style={MODEL_SELECT_STYLE}
+          required
+          options={THINKING_LEVELS}
+          onChange={(value) => void apply((prev) => ({
             ...prev,
-            subagent: { ...prev.subagent, thinking_level: event.target.value as ThinkingLevel },
+            subagent: { ...prev.subagent, thinking_level: value as ThinkingLevel },
           }))}
-        >
-          {THINKING_LEVELS.map((level) => (
-            <option key={level} value={level}>{level}</option>
-          ))}
-        </select>
+        />
       </label>
     </SettingsSection>
   );

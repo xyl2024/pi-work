@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { SettingsSection } from "../SettingsSection";
+import { SecondaryButton, Select } from "../controls";
 import { SOUND_IDS, playNamedSound } from "@/lib/client/ui-sounds";
 import { DEFAULT_UI_SOUND_EVENTS } from "@/lib/shared/ui-sounds-defaults";
 import {
@@ -25,7 +27,7 @@ import {
  *   preview without committing to the setting.
  *
  * Lives in `components/settings/sections/`; shares the same
- * "immediate-apply" mechanism (`apply()` prop from `use-immediate-apply.ts`).
+ * "immediate-apply" mechanism (`apply()` prop from `use-settings-write.ts`).
  */
 
 const EVENT_LABEL_KEYS: Record<UiSoundEventId, string> = {
@@ -50,6 +52,18 @@ export function SoundSettingsSection({
   const { t } = useI18n();
   const toast = useToast();
   const sounds = config.ui_sounds;
+
+  // Master volume is an immediate setting, but the slider only writes once the
+  // drag is finished (pointerup / blur / keyboard commit). Dragging updates
+  // local state only, so one drag is one write instead of dozens.
+  const [volume, setVolume] = useState(Math.round(sounds.masterVolume * 100));
+  useEffect(() => {
+    setVolume(Math.round(sounds.masterVolume * 100));
+  }, [sounds.masterVolume]);
+  const commitVolume = () => {
+    const next = volume / 100;
+    if (next !== sounds.masterVolume) updateSounds({ masterVolume: next });
+  };
 
   const updateSounds = (patch: Partial<typeof sounds>) => {
     void apply((prev) => ({
@@ -125,14 +139,15 @@ export function SoundSettingsSection({
             min={0}
             max={100}
             step={1}
-            value={Math.round(sounds.masterVolume * 100)}
-            onChange={(event) =>
-              updateSounds({ masterVolume: Number(event.target.value) / 100 })
-            }
+            value={volume}
+            onChange={(event) => setVolume(Number(event.target.value))}
+            onPointerUp={commitVolume}
+            onBlur={commitVolume}
+            onKeyUp={commitVolume}
             style={{ flex: 1, accentColor: "var(--accent)" }}
           />
           <span style={{ fontSize: 12, color: "var(--text-muted)", width: 38, textAlign: "right" }}>
-            {Math.round(sounds.masterVolume * 100)}%
+            {volume}%
           </span>
         </div>
       </div>
@@ -154,26 +169,16 @@ export function SoundSettingsSection({
               <label htmlFor={`sound-event-${eventId}`} style={{ fontSize: 13, color: "var(--text)" }}>
                 {t(EVENT_LABEL_KEYS[eventId])}
               </label>
-              <select
+              <Select
                 id={`sound-event-${eventId}`}
                 value={current}
-                onChange={(event) => setEventSound(eventId, event.target.value)}
-                style={{
-                  background: "var(--bg)",
-                  color: "var(--text)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  padding: "6px 8px",
-                  fontSize: 13,
-                }}
-              >
-                <option value="">{t("No sound")}</option>
-                {SOUND_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {t(id)}
-                  </option>
-                ))}
-              </select>
+                required
+                options={[
+                  { value: "", label: t("No sound") },
+                  ...SOUND_IDS.map((id) => ({ value: id, label: t(id) })),
+                ]}
+                onChange={(value) => setEventSound(eventId, value)}
+              />
             </div>
           );
         })}
@@ -181,43 +186,22 @@ export function SoundSettingsSection({
 
       {/* Restore defaults + preview */}
       <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          onClick={restoreDefaults}
-          style={{
-            background: "var(--bg)",
-            color: "var(--text)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            padding: "6px 12px",
-            fontSize: 12,
-            cursor: "pointer",
-          }}
-        >
+        <SecondaryButton onClick={restoreDefaults}>
           {t("Restore sound defaults")}
-        </button>
+        </SecondaryButton>
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
           {t("Preview:")}
         </span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {SOUND_IDS.map((id) => (
-            <button
+            <SecondaryButton
               key={id}
-              type="button"
               onClick={() => playNamedSound(id)}
-              style={{
-                background: "var(--bg)",
-                color: "var(--text)",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                padding: "4px 10px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
+              style={{ height: 26, padding: "4px 10px", fontSize: 11 }}
             >
               <span style={{ marginRight: 6 }}>♪</span>
               {t(id)}
-            </button>
+            </SecondaryButton>
           ))}
         </div>
       </div>

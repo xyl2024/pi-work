@@ -48,19 +48,22 @@ const sum = (values: Array<number | null>) => values.reduce((total: number, valu
 
 const SYSTEM_PROMPT = `You are an expert coding assistant operating inside pi, a coding agent harness.
 
-Available tools:
+<tools>
 - read: Read the contents of a file
 - bash: Execute a bash command
+</tools>
 
-Guidelines:
+<rules>
 - Be concise in your responses
+</rules>
 
+<docs>
 Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):
 - Main documentation: /pi/README.md
 - Always read pi .md files completely and follow links to related docs
+</docs>
 
 <project_context>
-
 Project-specific instructions and guidelines:
 
 <project_instructions path="/repo/AGENTS.md">
@@ -68,9 +71,9 @@ Project-specific instructions and guidelines:
 
 Keep it short.
 </project_instructions>
-
 </project_context>
 
+<skills>
 The following skills provide specialized instructions for specific tasks.
 Use the read tool to load a skill's file when the task matches its description.
 
@@ -81,7 +84,11 @@ Use the read tool to load a skill's file when the task matches its description.
     <location>/skills/demo/SKILL.md</location>
   </skill>
 </available_skills>
-Current working directory: /repo`;
+</skills>
+
+<cwd>
+/repo
+</cwd>`;
 
 const TOOLS = [
   { name: "read", description: "Read a file", parameters: { type: "object", properties: { path: { type: "string" } } } },

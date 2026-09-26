@@ -103,7 +103,7 @@ function ResultCard({
             border: "1px solid var(--border)",
             cursor: blocked ? "not-allowed" : "pointer",
             background: isInstalled ? "rgba(34,197,94,0.1)" : "none",
-            color: isInstalled ? "#16a34a" : isInstalling ? "var(--accent)" : "var(--text-muted)",
+            color: isInstalled ? "var(--success)" : isInstalling ? "var(--accent)" : "var(--text-muted)",
             transition: "color 0.12s, background 0.12s",
           }}
         >
@@ -464,11 +464,11 @@ export function AddSkillPanel({
 
         {/* Errors */}
         {searchError && (
-          <div style={{ fontSize: 12, color: "#f87171" }}>{searchError}</div>
+          <div style={{ fontSize: 12, color: "var(--error)" }}>{searchError}</div>
         )}
         {installError && (
           <div
-            style={{ fontSize: 12, color: "#f87171", wordBreak: "break-word" }}
+            style={{ fontSize: 12, color: "var(--error)", wordBreak: "break-word" }}
           >
             {installError}
           </div>

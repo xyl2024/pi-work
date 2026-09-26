@@ -397,7 +397,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
           {!catalogOpen && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", flexShrink: 0 }}>
-              {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
+              {saveError && <span style={{ fontSize: 12, color: "var(--error)", flex: 1 }}>{saveError}</span>}
               <button onClick={requestClose} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
                 {t("Cancel")}
               </button>
@@ -408,7 +408,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                   position: "relative",
                   padding: "6px 16px",
                   minWidth: 92,
-                  background: savedOk ? "#16a34a" : saving ? "var(--bg)" : "var(--accent)",
+                  background: savedOk ? "var(--success)" : saving ? "var(--bg)" : "var(--accent)",
                   border: "none", borderRadius: 6,
                   color: savedOk ? "#fff" : saving ? "var(--text-muted)" : "#fff",
                   cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
