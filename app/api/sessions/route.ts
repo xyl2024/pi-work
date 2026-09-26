@@ -6,6 +6,7 @@ import {
 import { getRpcSession } from "@/lib/server/rpc-manager";
 import { listSubagentChildSessionIds } from "@/lib/server/subagent-store";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { isSessionActiveSince, parseModifiedSince } from "@/lib/shared/session-today";
 import type { SessionInfo } from "@/lib/shared/types";
 
 const log = createLogger("api/sessions");
@@ -52,6 +53,12 @@ function recentCwds(sessions: SessionInfo[], topN: number): string[] {
  *               workspace refresh, etc.). When present, `cursor` may follow.
  *   - `cursor`  base64url-encoded `{modified, id}` from the previous page's
  *               last row. The next page starts strictly AFTER this point.
+ *   - `modifiedSince` epoch-ms lower bound (inclusive) on a session's
+ *               `modified` (last activity) timestamp. Used by the sidebar's
+ *               "Today's sessions" view, which computes the local calendar-day
+ *               boundary client-side and sends it here so the server — not the
+ *               browser — narrows a potentially large list. Absent or
+ *               unparseable values mean "no bound" (backward compatible).
  *   - `q`       case-insensitive substring filter. Matches against the
  *               session name (`session_info` entry) AND against user /
  *               assistant message content. When present, the response
@@ -70,6 +77,7 @@ export async function GET(request: Request) {
   const limitRaw = url.searchParams.get("limit");
   const cursorRaw = url.searchParams.get("cursor");
   const q = url.searchParams.get("q")?.trim() || "";
+  const modifiedSince = parseModifiedSince(url.searchParams.get("modifiedSince"));
   const limit = limitRaw ? Math.max(1, parseInt(limitRaw, 10) || 0) : 0;
   const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
 
@@ -134,7 +142,10 @@ export async function GET(request: Request) {
     }
 
     // Filter the workspace subset the caller asked for, then enrich with running.
-    const filtered = cwd ? all.filter((s) => s.cwd === cwd) : all;
+    const inCwd = cwd ? all.filter((s) => s.cwd === cwd) : all;
+    const filtered = modifiedSince === null
+      ? inCwd
+      : inCwd.filter((s) => isSessionActiveSince(s, modifiedSince));
 
     let page = filtered;
     let nextCursor: string | null = null;
