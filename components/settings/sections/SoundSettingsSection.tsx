@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
@@ -50,6 +51,18 @@ export function SoundSettingsSection({
   const { t } = useI18n();
   const toast = useToast();
   const sounds = config.ui_sounds;
+
+  // Master volume is an immediate setting, but the slider only writes once the
+  // drag is finished (pointerup / blur / keyboard commit). Dragging updates
+  // local state only, so one drag is one write instead of dozens.
+  const [volume, setVolume] = useState(Math.round(sounds.masterVolume * 100));
+  useEffect(() => {
+    setVolume(Math.round(sounds.masterVolume * 100));
+  }, [sounds.masterVolume]);
+  const commitVolume = () => {
+    const next = volume / 100;
+    if (next !== sounds.masterVolume) updateSounds({ masterVolume: next });
+  };
 
   const updateSounds = (patch: Partial<typeof sounds>) => {
     void apply((prev) => ({
@@ -125,14 +138,15 @@ export function SoundSettingsSection({
             min={0}
             max={100}
             step={1}
-            value={Math.round(sounds.masterVolume * 100)}
-            onChange={(event) =>
-              updateSounds({ masterVolume: Number(event.target.value) / 100 })
-            }
+            value={volume}
+            onChange={(event) => setVolume(Number(event.target.value))}
+            onPointerUp={commitVolume}
+            onBlur={commitVolume}
+            onKeyUp={commitVolume}
             style={{ flex: 1, accentColor: "var(--accent)" }}
           />
           <span style={{ fontSize: 12, color: "var(--text-muted)", width: 38, textAlign: "right" }}>
-            {Math.round(sounds.masterVolume * 100)}%
+            {volume}%
           </span>
         </div>
       </div>

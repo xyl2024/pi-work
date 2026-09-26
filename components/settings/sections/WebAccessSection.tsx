@@ -2,14 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { useToast } from "@/components/ui/Toast";
 import { SettingsSection } from "../SettingsSection";
 import { SecretTextInput } from "../models-config/form-fields";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
+import type { SettingsApply, SettingsSubmit } from "../use-settings-write";
 
-export function WebAccessSection({ config, apply }: { config: PiWorkConfig; apply: (computeNext: (prev: PiWorkConfig) => PiWorkConfig) => Promise<boolean> }) {
+export function WebAccessSection({
+  config,
+  apply,
+  submit,
+}: {
+  config: PiWorkConfig;
+  apply: SettingsApply;
+  submit: SettingsSubmit;
+}) {
   const { t } = useI18n();
-  const toast = useToast();
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
   const [hasKey, setHasKey] = useState(Boolean(config.web_access.tavily.api_key));
@@ -18,20 +25,43 @@ export function WebAccessSection({ config, apply }: { config: PiWorkConfig; appl
     setHasKey(Boolean(config.web_access.tavily.api_key) || config.web_access.tavily.has_api_key === true);
   }, [config.web_access]);
 
+  // The Tavily key is a staged secret: it goes through the same write entry as
+  // every other setting (optimistic update + rollback + one success toast),
+  // with the server-only `clear_api_key` flag carried explicitly.
   const saveKey = () => {
     if (!key.trim()) return;
     setSaving(true);
-    void fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ web_access: { tavily: { api_key: key.trim() } } }) })
-      .then(async (response) => { if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error || `HTTP ${response.status}`); setKey(""); setHasKey(true); toast.show({ kind: "success", message: t("Settings saved") }); })
-      .catch((error) => toast.show({ kind: "error", message: error instanceof Error ? error.message : String(error) }))
+    void submit(
+      { web_access: { tavily: { api_key: key.trim() } } },
+      (prev) => ({
+        ...prev,
+        web_access: { enabled: prev.web_access.enabled, tavily: { has_api_key: true } },
+      }),
+    )
+      .then((ok) => {
+        if (ok) {
+          setKey("");
+          setHasKey(true);
+        }
+      })
       .finally(() => setSaving(false));
   };
 
   const clearKey = () => {
     setSaving(true);
-    void fetch("/api/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ web_access: { tavily: { clear_api_key: true } } }) })
-      .then(async (response) => { if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error || `HTTP ${response.status}`); setKey(""); setHasKey(false); toast.show({ kind: "success", message: t("Settings saved") }); })
-      .catch((error) => toast.show({ kind: "error", message: error instanceof Error ? error.message : String(error) }))
+    void submit(
+      { web_access: { tavily: { clear_api_key: true } } },
+      (prev) => ({
+        ...prev,
+        web_access: { enabled: prev.web_access.enabled, tavily: {} },
+      }),
+    )
+      .then((ok) => {
+        if (ok) {
+          setKey("");
+          setHasKey(false);
+        }
+      })
       .finally(() => setSaving(false));
   };
 

@@ -13,6 +13,7 @@ export const settings = {
   "Failed to load settings": "加载设置失败",
   "Failed to save settings": "保存设置失败",
   "Settings saved": "设置已保存",
+  "Unsaved changes": "有未保存的更改",
   "Subagent settings": "子代理设置",
   "Configure the model and thinking level used by new subagent sessions.": "配置新建子代理会话使用的模型和推理强度。",
   "Inherit parent model": "继承父会话模型",

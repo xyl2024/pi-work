@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { SettingsSection } from "../SettingsSection";
+import { SaveButton, UnsavedHint } from "../staged-save";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
@@ -31,7 +32,7 @@ export function AppendSystemSection({
 }: {
   config: PiWorkConfig;
   apply: (computeNext: (prev: PiWorkConfig) => PiWorkConfig) => Promise<boolean>;
-  onDirtyChange?: (dirty: boolean) => void;
+  onDirtyChange?: (key: string, dirty: boolean) => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -60,7 +61,7 @@ export function AppendSystemSection({
   const appendSystemDirty = !!appendSystem && appendSystem.content !== originalAppendSystem;
 
   useEffect(() => {
-    onDirtyChange?.(appendSystemDirty);
+    onDirtyChange?.("append-system", appendSystemDirty);
   }, [appendSystemDirty, onDirtyChange]);
 
   const handleAppendSystemSave = useCallback(async () => {
@@ -79,7 +80,7 @@ export function AppendSystemSection({
       setOriginalAppendSystem(appendSystem.content);
       setAppendSystem((prev) => (prev ? { ...prev, exists: true } : prev));
       flashAppendSystemSavedOk();
-      toast.show({ kind: "success", message: t("Append system prompt saved") });
+      toast.show({ kind: "success", message: t("Settings saved") });
     } catch (e) {
       toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to save append system prompt") });
     } finally {
@@ -91,28 +92,15 @@ export function AppendSystemSection({
     <SettingsSection id="append-system">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Append System Prompt")}</h3>
-        <button
-          onClick={handleAppendSystemSave}
-          disabled={!appendSystemDirty || appendSystemSaving || appendSystemSavedOk}
-          style={{
-            padding: "4px 14px", height: 28,
-            background: appendSystemSavedOk ? "#16a34a" : appendSystemSaving ? "var(--bg)" : "var(--accent)",
-            border: "none", borderRadius: 6,
-            color: appendSystemSavedOk ? "#fff" : appendSystemSaving ? "var(--text-muted)" : "#fff",
-            cursor: (!appendSystemDirty || appendSystemSaving || appendSystemSavedOk) ? "default" : "pointer",
-            fontSize: 12, fontWeight: 600,
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            transition: "background-color 0.2s ease, color 0.2s ease",
-            opacity: (!appendSystemDirty || appendSystemSaving || appendSystemSavedOk) ? 0.5 : 1,
-          }}
-        >
-          {appendSystemSavedOk && (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          )}
-          <span>{appendSystemSavedOk ? t("Saved") : appendSystemSaving ? t("Saving...") : t("Save")}</span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <UnsavedHint show={appendSystemDirty} />
+          <SaveButton
+            canSave={appendSystemDirty}
+            saving={appendSystemSaving}
+            saved={appendSystemSavedOk}
+            onClick={handleAppendSystemSave}
+          />
+        </div>
       </div>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px 0", lineHeight: 1.5 }}>
         {config.append_system.enabled

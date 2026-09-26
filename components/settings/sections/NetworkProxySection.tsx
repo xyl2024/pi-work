@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { SettingsSection } from "../SettingsSection";
+import { SaveButton, UnsavedHint } from "../staged-save";
 import { TextInput } from "../models-config/form-fields";
 import { ALWAYS_BYPASS_HOSTS, type PiWorkConfig } from "@/lib/shared/config-types";
+import type { DirtyReporter } from "../use-unsaved-changes";
 
 interface ProbeResult {
   ok: boolean;
@@ -34,9 +37,11 @@ interface ProbeResult {
 export function NetworkProxySection({
   config,
   apply,
+  onDirtyChange,
 }: {
   config: PiWorkConfig;
   apply: (computeNext: (prev: PiWorkConfig) => PiWorkConfig) => Promise<boolean>;
+  onDirtyChange?: DirtyReporter;
 }) {
   const { t } = useI18n();
   const saved = config.network_proxy;
@@ -45,6 +50,7 @@ export function NetworkProxySection({
   const [noProxy, setNoProxy] = useState(saved.no_proxy);
   const [testing, setTesting] = useState(false);
   const [probe, setProbe] = useState<ProbeResult | null>(null);
+  const [saveOk, flashSaveOk] = useTransientFlag();
 
   // Re-sync the drafts whenever the persisted value changes (first load, or a
   // write from another tab), so the fields never keep stale text after a save.
@@ -58,6 +64,10 @@ export function NetworkProxySection({
   const dirty = draftUrl !== saved.url || draftNoProxy !== saved.no_proxy;
   const canUseProxy = draftUrl.length > 0;
 
+  useEffect(() => {
+    onDirtyChange?.("network-proxy", dirty);
+  }, [dirty, onDirtyChange]);
+
   /** Persist the draft; optionally flip `enabled` in the same write. */
   const persist = (enabled?: boolean) => {
     void apply((prev) => ({
@@ -68,7 +78,10 @@ export function NetworkProxySection({
         no_proxy: draftNoProxy,
       },
     })).then((ok) => {
-      if (ok) setProbe(null);
+      if (ok) {
+        setProbe(null);
+        flashSaveOk();
+      }
     });
   };
 
@@ -158,25 +171,24 @@ export function NetworkProxySection({
           {t("Use proxy")}
         </label>
 
-        <button type="button" onClick={() => persist()} disabled={!dirty}>
-          {t("Save")}
-        </button>
+        <SaveButton
+          canSave={dirty}
+          saving={false}
+          saved={saveOk}
+          onClick={() => persist()}
+        />
         <button type="button" onClick={runTest} disabled={!canUseProxy || testing}>
           {testing ? t("Testing…") : t("Test connection")}
         </button>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, color: active ? "#22c55e" : "var(--text-dim)" }}>
+        <span style={{ fontSize: 12, color: active ? "var(--success)" : "var(--text-dim)" }}>
           {active
             ? t("Proxy enabled — {url}", { url: saved.url })
             : t("Proxy disabled")}
         </span>
-        {dirty && (
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            · {t("Unsaved changes")}
-          </span>
-        )}
+        <UnsavedHint show={dirty} />
       </div>
 
       {probeMessage && (
@@ -184,7 +196,7 @@ export function NetworkProxySection({
           style={{
             fontSize: 12,
             marginTop: 8,
-            color: probe?.ok ? "#22c55e" : "#ef4444",
+            color: probe?.ok ? "var(--success)" : "var(--error)",
             lineHeight: 1.5,
           }}
         >

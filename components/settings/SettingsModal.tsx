@@ -4,11 +4,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { InboxTestSection } from "./InboxTestSection";
-import { setSettings } from "@/hooks/settingsStore";
+import { setSettings, useSettings } from "@/hooks/settingsStore";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { NAV_ITEMS } from "./constants";
 import { SettingsSection } from "./SettingsSection";
-import { useImmediateApply } from "./use-immediate-apply";
+import { useSettingsWrite } from "./use-settings-write";
+import { useUnsavedChanges, type DirtyReporter } from "./use-unsaved-changes";
 import { AppearanceSection } from "./sections/AppearanceSection";
 import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
@@ -53,30 +54,38 @@ export function SettingsModal({
   onProfileSaved?: () => void;
 }) {
   const { t } = useI18n();
-  const [config, setConfig] = useState<PiWorkConfig | null>(null);
-  const [loading, setLoading] = useState(true);
+  const config = useSettings();
+  const [reloading, setReloading] = useState(true);
 
-  // ── Unsaved-changes tracking from child sections ───────────────────
-  // The textarea-backed AppendSystem section owns its own draft state
-  // and reports dirty-ness back here so the close-confirm prompt can
-  // warn before discarding those edits.
-  const [appendSystemDirty, setAppendSystemDirty] = useState(false);
-
-  // Initial load of /api/settings. Publish to the settings store so
-  // AppShell reflects the snapshot on first paint; the
-  // immediate-apply hook re-publishes on every PUT.
+  // Re-read disk every time the modal opens so the fields show the current
+  // config.yaml, not a snapshot from whenever the store was last written
+  // (another tab, a hand edit). There is exactly one mirror: the settings
+  // store. The modal does not keep a second copy of the config.
   useEffect(() => {
+    let cancelled = false;
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((d: PiWorkConfig) => {
-        setConfig(d);
-        setSettings(d);
-      })
+      .then((d: PiWorkConfig) => { if (!cancelled) setSettings(d); })
       .catch(() => { /* error shown in body via fallback rendering */ })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setReloading(false); });
+    return () => { cancelled = true; };
   }, []);
 
-  const apply = useImmediateApply({ config, setConfig });
+  const loading = reloading && config === null;
+
+  const { apply, submit } = useSettingsWrite();
+
+  // ── Unsaved-changes registry ───────────────────────────────────────
+  // Every staged setting (append system prompt, network proxy, profile, …)
+  // reports its dirty-ness here. The close-confirm prompt has one input: the
+  // registry's selector. Sections never keep their own dirty flag for the
+  // modal to collect.
+  const unsaved = useUnsavedChanges();
+  const { markDirty, markSaved, closeConfirmKey } = unsaved;
+  const reportDirty = useCallback<DirtyReporter>((key, dirty) => {
+    if (dirty) markDirty(key);
+    else markSaved(key);
+  }, [markDirty, markSaved]);
 
   // ── Sidebar nav: active section + scroll-spy ───────────────────────
   // Default to the first nav item so the sidebar shows a highlighted
@@ -138,11 +147,8 @@ export function SettingsModal({
   // `window.confirm` prompt, `true` to close without prompting, or
   // `false` to abort.
   const shouldConfirm = useCallback(() => {
-    if (appendSystemDirty) {
-      return t("Discard unsaved changes?");
-    }
-    return true;
-  }, [appendSystemDirty, t]);
+    return closeConfirmKey ? t(closeConfirmKey) : true;
+  }, [closeConfirmKey, t]);
   const { requestClose, backdropStyle, panelStyle } = useModalAnimation({
     isOpen: true,
     onClose,
@@ -249,7 +255,7 @@ export function SettingsModal({
               grid layout only sees two columns (nav + content). */}
           <div>
             {/* 0: Profile */}
-            <ProfileSection onProfileSaved={onProfileSaved} />
+            <ProfileSection onProfileSaved={onProfileSaved} onDirtyChange={reportDirty} />
 
             {/* 1: Appearance */}
             <AppearanceSection />
@@ -258,7 +264,7 @@ export function SettingsModal({
             <AppendSystemSection
               config={config}
               apply={apply}
-              onDirtyChange={setAppendSystemDirty}
+              onDirtyChange={reportDirty}
             />
 
             {/* 3: Pi documentation */}
@@ -286,7 +292,7 @@ export function SettingsModal({
             <RetrySection />
 
             {/* 10: Network proxy */}
-            <NetworkProxySection config={config} apply={apply} />
+            <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />
 
             {/* 10: Subagent */}
             <SubagentSection config={config} apply={apply} />
@@ -295,7 +301,7 @@ export function SettingsModal({
             <SoundSettingsSection config={config} apply={apply} />
 
             {/* 12: Web Access */}
-            <WebAccessSection config={config} apply={apply} />
+            <WebAccessSection config={config} apply={apply} submit={submit} />
 
           </div>
         </div>

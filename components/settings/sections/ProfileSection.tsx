@@ -6,6 +6,8 @@ import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { SettingsSection } from "../SettingsSection";
+import { SaveButton, UnsavedHint } from "../staged-save";
+import type { DirtyReporter } from "../use-unsaved-changes";
 
 const SUPPORTED_AVATAR_TYPES = [
   "image/png",
@@ -28,7 +30,13 @@ const AVATAR_ACCEPT = SUPPORTED_AVATAR_TYPES.join(",");
  * can refresh anything that depends on the avatar (e.g. the sidebar
  * avatar).
  */
-export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void }) {
+export function ProfileSection({
+  onProfileSaved,
+  onDirtyChange,
+}: {
+  onProfileSaved?: () => void;
+  onDirtyChange?: DirtyReporter;
+}) {
   const { t } = useI18n();
   const toast = useToast();
   const [profileUsername, setProfileUsername] = useState<string>("");
@@ -78,6 +86,10 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
   const profileDirty = profileUsername.trim() !== originalUsername || avatarRemoved;
   const profileCanSave = profileDirty && !profileSaving && !profileSavedOk;
 
+  useEffect(() => {
+    onDirtyChange?.("profile", profileDirty);
+  }, [profileDirty, onDirtyChange]);
+
   const handleProfileSave = useCallback(async () => {
     setProfileSaving(true);
     try {
@@ -97,7 +109,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
       }
       flashProfileSavedOk();
       onProfileSaved?.();
-      toast.show({ kind: "success", message: t("Profile saved") });
+      toast.show({ kind: "success", message: t("Settings saved") });
     } catch (e) {
       toast.show({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to save profile") });
     } finally {
@@ -153,28 +165,15 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
     <SettingsSection id="profile">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
         <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Profile")}</h3>
-        <button
-          onClick={handleProfileSave}
-          disabled={!profileCanSave}
-          style={{
-            padding: "4px 14px", height: 28,
-            background: profileSavedOk ? "#16a34a" : profileSaving ? "var(--bg)" : "var(--accent)",
-            border: "none", borderRadius: 6,
-            color: profileSavedOk ? "#fff" : profileSaving ? "var(--text-muted)" : "#fff",
-            cursor: profileCanSave ? "pointer" : "default",
-            fontSize: 12, fontWeight: 600,
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            transition: "background-color 0.2s ease, color 0.2s ease",
-            opacity: profileCanSave ? 1 : 0.5,
-          }}
-        >
-          {profileSavedOk && (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          )}
-          <span>{profileSavedOk ? t("Saved") : profileSaving ? t("Saving...") : t("Save")}</span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <UnsavedHint show={profileCanSave} />
+          <SaveButton
+            canSave={profileCanSave}
+            saving={profileSaving}
+            saved={profileSavedOk}
+            onClick={handleProfileSave}
+          />
+        </div>
       </div>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0", lineHeight: 1.5 }}>
         {t("Avatar and display name shown at the bottom of the sidebar.")}
@@ -250,7 +249,7 @@ export function ProfileSection({ onProfileSaved }: { onProfileSaved?: () => void
                 transition: "color 0.15s, border-color 0.15s",
                 alignSelf: "flex-start",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.borderColor = "#ef4444"; }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--error)"; e.currentTarget.style.borderColor = "var(--error)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border)"; }}
             >
               {t("Remove avatar")}
