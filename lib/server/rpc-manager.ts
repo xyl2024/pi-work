@@ -4,6 +4,10 @@ import type { AgentSessionLike, ContextUsage, ToolInfo } from "./pi-types";
 import type { SessionEvent } from "../shared/session-events";
 import type { ToolSelection } from "../shared/types";
 import { expandToolSelection } from "../shared/tool-selection";
+import {
+  stripDefaultSystemPromptSections,
+  stripPiDocumentationSection,
+} from "../shared/system-prompt-segments";
 import type { ToolMarketId } from "../shared/tools-market";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
@@ -274,7 +278,12 @@ export class AgentSessionWrapper {
       .then(async () => {
         if (refreshId !== this.compositionRefreshId || !this._alive) return;
         const agentState = this.inner.agent.state;
-        const systemPrompt = agentState?.systemPrompt ?? "";
+        // `AgentSession.systemPrompt`, not `agent.state.systemPrompt`: the
+        // agent-level field is replayed from the transcript's system messages
+        // and stays empty until the first turn is persisted (pi 0.86+), which
+        // would leave the panel with an empty system-prompt bucket on a fresh
+        // session.
+        const systemPrompt = this.inner.systemPrompt ?? "";
         const tools = agentState?.tools ?? [];
         const messages = agentState?.messages ?? [];
         const anchoredTotalTokens = this.getContextUsage()?.tokens ?? null;
@@ -635,7 +644,7 @@ export class AgentSessionWrapper {
           // exact total stays in `contextUsage` above; every classified number
           // is anchored to it. `null` until the first refresh lands.
           contextComposition: this.contextComposition,
-          systemPrompt: this.inner.agent.state?.systemPrompt ?? "",
+          systemPrompt: this.inner.systemPrompt ?? "",
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           // Raw selection (patterns included) — lets the UI render the active
           // preset label instead of re-deriving it from the expanded tool list.
@@ -666,10 +675,20 @@ export class AgentSessionWrapper {
         });
         return {
           model: model ? { provider: model.provider, id: model.id } : undefined,
-          systemPrompt: agentState?.systemPrompt ?? "",
+          systemPrompt: this.inner.systemPrompt ?? "",
           thinkingLevel: agentState?.thinkingLevel ?? "off",
           tools,
-          messages: agentState?.messages ?? [],
+          // Since pi 0.86 the transcript carries its own leading system
+          // message(s): the prompt and tool loadout are replayed from them.
+          // BTW replays the request as `{ systemPrompt, messages, tools }`,
+          // and pi-ai's `normalizeContext` folds that shorthand into a NEW
+          // leading system message. Leaving the transcript's system messages
+          // in would render the prompt twice — collapsing a transcript
+          // concatenates `content` and `sections` — doubling the prompt and
+          // destroying the very cache prefix this snapshot exists to preserve.
+          // The shorthand carries the same prompt and active tool set, so the
+          // system entries are dropped here.
+          messages: (agentState?.messages ?? []).filter((m) => m.role !== "system"),
         };
       }
 
@@ -843,41 +862,9 @@ function getLocks(): Map<string, Promise<{ session: AgentSessionWrapper; realSes
 export { getRpcSession, listRunningRpcSessions } from "./session-registry";
 export { runTurnRpcSession, type RunTurnRpcSpec } from "./turn/rpc-factory";
 
-/** Remove generic Pi sections while preserving tool-generated tools/guidelines. */
-function stripDefaultSystemPromptSections(prompt: string): string {
-  return prompt
-    .replace(
-      /^You are an expert coding assistant operating inside pi, a coding agent harness\. You help users by reading files, executing commands, editing code, and writing new files\.\s*/,
-      "",
-    )
-    .replace(
-      /\nIn addition to the tools above, you may have access to other custom tools depending on the project\./,
-      "",
-    )
-    .replace(
-      /\n\nPi documentation \(read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI\):[\s\S]*?(?=\n\n<project_context>|\n\nCurrent working directory:|\nCurrent working directory:)/,
-      "",
-    )
-    .trim();
-}
-
-/**
- * Remove ONLY pi's built-in "Pi documentation" section from a generated
- * system prompt, leaving everything else (append blocks, <project_context>,
- * skills, working directory, …) untouched. Unlike the lookahead-based regex
- * above, this anchors on the section's literal bullet lines, so it is safe
- * even when user content (e.g. APPEND_SYSTEM.md) sits right after the docs
- * block — it never over-consumes following sections.
- *
- * Backed by PiWorkConfig.load_pi_docs: when the toggle is off, new sessions
- * start without the model being pointed at the pi SDK README / docs paths.
- */
-const PI_DOCUMENTATION_SECTION_RE =
-  /\n\nPi documentation \(read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI\):\n- Main documentation: [^\n]+\n- Additional docs: [^\n]+\n- Examples: [^\n]+\n- When reading pi docs or examples, resolve docs\/\.\.\. under Additional docs and examples\/\.\.\. under Examples, not the current working directory\n- When asked about: [^\n]+\n- When working on pi topics, read the docs and examples, and follow \.md cross-references before implementing\n- Always read pi \.md files completely and follow links to related docs \(e\.g\., tui\.md for TUI API details\)/;
-
-function stripPiDocumentationSection(prompt: string): string {
-  return prompt.replace(PI_DOCUMENTATION_SECTION_RE, "").trimStart();
-}
+// `stripDefaultSystemPromptSections` / `stripPiDocumentationSection` live in
+// `lib/shared/system-prompt-segments` next to the rest of the knowledge about
+// pi's prompt section boundaries (and are unit-tested there).
 
 /**
  * Get or create an AgentSession for the given session.
@@ -1278,6 +1265,31 @@ export async function startRpcSession(
             }
           });
         },
+        // Clearing the system prompt when every tool is disabled. Since pi
+        // 0.87 the prompt is replayed from the transcript's system messages
+        // and `agent.state.systemPrompt` is read-only, so the old one-shot
+        // `agent.state.systemPrompt = ""` write is gone: the only way to
+        // truly clear the prompt (pi's buildSystemPrompt always renders a
+        // non-empty one) is to force an empty prompt per run from here.
+        // `systemPromptOptions.selectedTools` mirrors the live tool loadout
+        // (`setActiveToolsByName` rebuilds the base options), so an empty
+        // list means "no tools active". Registered last on purpose: the last
+        // handler to set `forceSystemPrompt` wins, so this must run after the
+        // prefix / pi-docs handlers above.
+        (pi) => {
+          pi.on("before_agent_start", (event) => {
+            // Only sessions opened with an explicit (non-"all") selection can
+            // legitimately end up with zero tools; an "all" session with an
+            // empty registry keeps pi's normal prompt.
+            if (
+              effectiveToolNames !== "all" &&
+              event.systemPromptOptions.selectedTools.length === 0
+            ) {
+              return { systemPrompt: "" };
+            }
+            return undefined;
+          });
+        },
       ],
     });
     await resourceLoader.reload();
@@ -1383,12 +1395,9 @@ export async function startRpcSession(
       ) as string[];
       inner.setActiveToolsByName(expanded);
 
-      // When all tools are disabled, clear the system prompt entirely.
-      // pi's buildSystemPrompt always produces a non-empty prompt even with no tools;
-      // the only way to truly clear it is to call agent.setSystemPrompt directly.
-      if (expanded.length === 0) {
-        inner.agent.state.systemPrompt = "";
-      }
+      // When all tools are disabled the prompt is cleared per run by the
+      // `before_agent_start` handler registered in `extensionFactories` above
+      // (it forces an empty system prompt while `selectedTools` is empty).
     }
 
     const wrapper = new AgentSessionWrapper(inner, source, cwd);
