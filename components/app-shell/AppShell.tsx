@@ -256,11 +256,13 @@ const AGENTS_SEGMENT_COLORS = [
 ];
 
 /** Combined highlighter for the base prompt body: the skill `<name>…</name>`
- *  tags plus pi's section headings "Available tools:", "Guidelines:" and
- *  "Pi documentation". Matched runs get an accent text colour; everything
- *  else is returned verbatim as raw strings so pre-wrap whitespace is kept. */
+ *  tags plus the first line of pi's documentation section. The tool list and
+ *  the rules lost their headings when pi moved to tagged sections (`<tools>` /
+ *  `<rules>`), and the tags themselves are stripped before rendering. Matched
+ *  runs get an accent text colour; everything else is returned verbatim as raw
+ *  strings so pre-wrap whitespace is kept. */
 const BASE_PROMPT_HIGHLIGHT_RE =
-  /<name>[\s\S]*?<\/name>|Available tools:|Guidelines:|Pi documentation/g;
+  /<name>[\s\S]*?<\/name>|Pi documentation/g;
 
 function highlightBasePrompt(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];

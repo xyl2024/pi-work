@@ -294,7 +294,7 @@ export function SkillDetail({
         </div>
       )}
       {detailError && (
-        <div style={{ fontSize: 12, color: "#f87171" }}>{detailError}</div>
+        <div style={{ fontSize: 12, color: "var(--error)" }}>{detailError}</div>
       )}
       {skillBody != null && (
         <div

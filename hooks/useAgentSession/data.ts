@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { sendAgentCommand, listToolsForCwd, type ToolWithActive } from "@/lib/client/agent-client";
 import type { AgentMessage, CompactionPoint, ToolInfo } from "@/lib/shared/types";
+import { adoptDiskTranscript } from "@/lib/shared/session-runtime-state";
 import { pickClosestAvailableThinkingLevel, pickHighestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import type { SessionRuntimeInput } from "@/lib/shared/session-events";
 import type {
@@ -89,7 +90,10 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
       // pushed during the previous streaming window so it can't go stale.
       onSessionLoaded();
       setActiveLeafId(d.leafId);
-      setMessages(d.context.messages);
+      // Not a plain assignment: this read is issued at turn end, and the input
+      // is re-enabled in the same breath, so the user can append a prompt
+      // while the response is in flight. See `adoptDiskTranscript`.
+      setMessages((previous) => adoptDiskTranscript(previous, d.context.messages));
       setEntryIds(d.context.entryIds ?? []);
       setEntryTimestamps(d.context.entryTimestamps ?? []);
       setCompactionPoints(d.context.compactionPoints ?? []);
@@ -152,7 +156,11 @@ export function useAgentSessionData(options: UseAgentSessionDataOptions) {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json() as { context: { messages: AgentMessage[]; entryIds: string[]; entryTimestamps?: (number | undefined)[]; compactionPoints?: CompactionPoint[] } };
-      setMessages(d.context.messages);
+      // An active-leaf read (`leafId === null`) is a resync: the transcript can
+      // have been appended to locally while this was in flight, and the
+      // snapshot must not delete that. A read for a specific leaf is a
+      // navigation, where the snapshot has to win even when it is shorter.
+      setMessages((previous) => (leafId === null ? adoptDiskTranscript(previous, d.context.messages) : d.context.messages));
       setEntryIds(d.context.entryIds ?? []);
       setEntryTimestamps(d.context.entryTimestamps ?? []);
       setCompactionPoints(d.context.compactionPoints ?? []);

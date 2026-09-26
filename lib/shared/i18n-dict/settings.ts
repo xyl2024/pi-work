@@ -5,6 +5,13 @@ export const settings = {
   // System prompt replacements
   "Settings": "设置",
   "Settings sections": "设置项导航",
+  // Settings modal groups (registry.ts)
+  "Personal": "个人",
+  "Interface & appearance": "界面与外观",
+  "Agent": "Agent",
+  "Integrations & network": "集成与网络",
+  "Developer": "开发者",
+  "Debugging helpers. Not needed for normal use.": "调试辅助工具，日常使用不需要。",
   "System Prompt Replacements": "系统提示词替换",
   "Replace literal strings in the system prompt. Changes take effect on new sessions. Existing sessions are unaffected.": "替换系统提示词中的字面量字符串。对新建会话生效，已有会话不受影响。",
   "Enable replacements": "启用替换",
@@ -13,6 +20,8 @@ export const settings = {
   "Failed to load settings": "加载设置失败",
   "Failed to save settings": "保存设置失败",
   "Settings saved": "设置已保存",
+  "Unsaved changes": "有未保存的更改",
+  "Discard unsaved changes?": "放弃未保存的更改？",
   "Subagent settings": "子代理设置",
   "Configure the model and thinking level used by new subagent sessions.": "配置新建子代理会话使用的模型和推理强度。",
   "Inherit parent model": "继承父会话模型",

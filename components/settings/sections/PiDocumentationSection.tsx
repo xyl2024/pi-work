@@ -2,6 +2,7 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { SettingsSection } from "../SettingsSection";
+import { Check } from "../controls";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
 /**
@@ -31,14 +32,11 @@ export function PiDocumentationSection({
           ? t("Loaded — new sessions include pi's built-in Pi documentation hints. Takes effect on new sessions.")
           : t("Disabled — new sessions will not include pi's built-in Pi documentation hints. Takes effect on new sessions.")}
       </p>
-      <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--text)" }}>
-        <input
-          type="checkbox"
-          checked={config.load_pi_docs}
-          onChange={() => void apply((prev) => ({ ...prev, load_pi_docs: !prev.load_pi_docs }))}
-        />
-        {t("Load Pi documentation")}
-      </label>
+      <Check
+        label={t("Load Pi documentation")}
+        checked={config.load_pi_docs}
+        onChange={() => void apply((prev) => ({ ...prev, load_pi_docs: !prev.load_pi_docs }))}
+      />
     </SettingsSection>
   );
 }

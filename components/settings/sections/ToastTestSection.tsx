@@ -25,6 +25,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast, type ToastKind } from "@/components/ui/Toast";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { SettingsSection } from "../SettingsSection";
+import { PrimaryButton, SecondaryButton, SegmentedControl, TextArea, TextInput } from "../controls";
 
 const KINDS: readonly ToastKind[] = ["success", "error", "info", "warning"];
 
@@ -36,10 +37,10 @@ const KIND_PRESET_MESSAGE: Record<ToastKind, string> = {
 };
 
 const KIND_ACCENT: Record<ToastKind, string> = {
-  success: "#16a34a",
-  error: "#dc2626",
-  info: "#2563eb",
-  warning: "#d97706",
+  success: "var(--success)",
+  error: "var(--error)",
+  info: "var(--info)",
+  warning: "var(--warning)",
 };
 
 const KIND_LABEL_KEY: Record<ToastKind, string> = {
@@ -154,89 +155,53 @@ export function ToastTestSection() {
       <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 6px 0" }}>
         {t("Kind")}
       </div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        {KINDS.map((k) => {
-          const selected = k === kind;
-          const accent = KIND_ACCENT[k];
-          return (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setKind(k)}
-              aria-pressed={selected}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "5px 12px",
-                height: 30,
-                background: selected ? "var(--bg)" : "transparent",
-                border: selected ? `2px solid ${accent}` : "1px solid var(--border)",
-                borderRadius: 6,
-                color: selected ? "var(--text)" : "var(--text-muted)",
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: selected ? 600 : 500,
-                transition: "border-color 0.12s, color 0.12s, background 0.12s",
-              }}
-            >
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: accent,
-                  flexShrink: 0,
-                }}
-              />
-              {t(KIND_LABEL_KEY[k])}
-            </button>
-          );
-        })}
+      <div style={{ marginBottom: 14 }}>
+        <SegmentedControl
+          value={kind}
+          onChange={(value) => setKind(value as ToastKind)}
+          ariaLabel={t("Kind")}
+          options={KINDS.map((k) => ({
+            value: k,
+            label: (
+              <>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: KIND_ACCENT[k], flexShrink: 0 }} />
+                {t(KIND_LABEL_KEY[k])}
+              </>
+            ),
+          }))}
+        />
       </div>
 
       {/* ── Custom message ────────────────────────────────────────── */}
       <FieldLabel>{t("Custom message")}</FieldLabel>
-      <input
-        type="text"
+      <TextInput
         value={message}
-        onChange={(e) => setMessage(e.target.value)}
+        onChange={setMessage}
         maxLength={300}
         placeholder={t("Test toast (default copy)")}
-        style={inputStyle(false)}
       />
       <FieldHint>
         {messageValid
           ? <span style={{ color: "var(--text-dim)" }}>·</span>
-          : <span style={{ color: "#ef4444" }}>· {t("Test toast (default copy)")}</span>}
+          : <span style={{ color: "var(--error)" }}>· {t("Test toast (default copy)")}</span>}
       </FieldHint>
 
       {/* ── Description ───────────────────────────────────────────── */}
       <FieldLabel>{t("Optional description (multi-line)")}</FieldLabel>
-      <textarea
+      <TextArea
         value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        rows={2}
+        onChange={setDescription}
         placeholder="Click anywhere on the toast to dismiss it."
-        style={{
-          ...inputStyle(false),
-          height: "auto",
-          padding: "8px 10px",
-          resize: "vertical",
-          fontFamily: "var(--font-sans)",
-          lineHeight: 1.5,
-        }}
+        style={{ minHeight: 56 }}
       />
 
       {/* ── Action label ──────────────────────────────────────────── */}
       <FieldLabel>{t("Optional action label")}</FieldLabel>
-      <input
-        type="text"
+      <TextInput
         value={actionLabel}
-        onChange={(e) => setActionLabel(e.target.value)}
+        onChange={setActionLabel}
         maxLength={20}
         placeholder="Undo"
-        style={inputStyle(false)}
       />
 
       {/* ── Duration ──────────────────────────────────────────────── */}
@@ -264,7 +229,7 @@ export function ToastTestSection() {
 
       {/* ── Action buttons ────────────────────────────────────────── */}
       <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>
-        <PrimaryButton onClick={fireKind} accent={KIND_ACCENT[kind]}>
+        <PrimaryButton onClick={fireKind} style={{ background: KIND_ACCENT[kind] }}>
           {t("Show this toast")}
         </PrimaryButton>
         <SecondaryButton onClick={fireKindWithoutIcon}>
@@ -303,99 +268,5 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 function FieldHint({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>{children}</div>
-  );
-}
-
-function inputStyle(invalid: boolean): React.CSSProperties {
-  return {
-    width: "100%",
-    height: 32,
-    padding: "4px 10px",
-    background: "var(--bg)",
-    border: invalid ? "1px solid #ef4444" : "1px solid var(--border)",
-    borderRadius: 6,
-    color: "var(--text)",
-    fontSize: 13,
-    boxSizing: "border-box",
-  };
-}
-
-function PrimaryButton({
-  onClick,
-  children,
-  accent,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-  accent: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: "6px 14px",
-        height: 32,
-        background: accent,
-        border: "none",
-        borderRadius: 6,
-        color: "#fff",
-        cursor: "pointer",
-        fontSize: 13,
-        fontWeight: 600,
-        transition: "filter 0.15s, transform 0.05s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.filter = "brightness(1.08)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.filter = "brightness(1)";
-      }}
-      onMouseDown={(e) => {
-        e.currentTarget.style.transform = "translateY(1px)";
-      }}
-      onMouseUp={(e) => {
-        e.currentTarget.style.transform = "translateY(0)";
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SecondaryButton({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: "6px 12px",
-        height: 32,
-        background: "var(--bg)",
-        border: "1px solid var(--border)",
-        borderRadius: 6,
-        color: "var(--text)",
-        cursor: "pointer",
-        fontSize: 12,
-        fontWeight: 500,
-        transition: "background 0.12s, border-color 0.12s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "var(--bg-hover)";
-        e.currentTarget.style.borderColor = "var(--text-muted)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "var(--bg)";
-        e.currentTarget.style.borderColor = "var(--border)";
-      }}
-    >
-      {children}
-    </button>
   );
 }

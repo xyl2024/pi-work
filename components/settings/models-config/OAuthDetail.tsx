@@ -141,8 +141,8 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <SectionTitle>{t("Subscription")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.loggedIn ? "#4ade80" : "var(--text-dim)" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "var(--success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: provider.loggedIn ? "var(--success)" : "var(--text-dim)" }}>
             {provider.loggedIn ? "connected" : "not connected"}
           </span>
         </div>
@@ -230,10 +230,10 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{loginState.message}</p>
         )}
         {loginState.phase === "success" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#4ade80" }}>{t("Connected successfully.")}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--success)" }}>{t("Connected successfully.")}</p>
         )}
         {loginState.phase === "error" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{loginState.message}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--error)" }}>{loginState.message}</p>
         )}
       </div>
 
@@ -256,7 +256,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
             {provider.loggedIn && (
               <button
                 onClick={handleLogout}
-                style={{ padding: "5px 12px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, color: "#ef4444", cursor: "pointer", fontSize: 12 }}
+                style={{ padding: "5px 12px", background: "none", border: "1px solid color-mix(in srgb, var(--error) 30%, transparent)", borderRadius: 5, color: "var(--error)", cursor: "pointer", fontSize: 12 }}
               >
                 {t("Disconnect")}
               </button>
