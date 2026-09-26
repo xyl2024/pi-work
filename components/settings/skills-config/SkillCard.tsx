@@ -29,8 +29,8 @@ const AVATAR_PALETTES: { bg: string; fg: string }[] = [
   { bg: "rgba(245,158,11,0.16)", fg: "#d97706" },
   { bg: "rgba(59,130,246,0.14)", fg: "#2563eb" },
   { bg: "rgba(168,85,247,0.16)", fg: "#9333ea" },
-  { bg: "rgba(34,197,94,0.14)", fg: "var(--success)" },
-  { bg: "rgba(239,68,68,0.14)", fg: "var(--error)" },
+  { bg: "color-mix(in srgb, var(--success) 14%, transparent)", fg: "var(--success)" },
+  { bg: "color-mix(in srgb, var(--error) 14%, transparent)", fg: "var(--error)" },
 ];
 
 export function avatarPalette(name: string): { bg: string; fg: string } {

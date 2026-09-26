@@ -27,7 +27,7 @@ import {
  *   preview without committing to the setting.
  *
  * Lives in `components/settings/sections/`; shares the same
- * "immediate-apply" mechanism (`apply()` prop from `use-immediate-apply.ts`).
+ * "immediate-apply" mechanism (`apply()` prop from `use-settings-write.ts`).
  */
 
 const EVENT_LABEL_KEYS: Record<UiSoundEventId, string> = {

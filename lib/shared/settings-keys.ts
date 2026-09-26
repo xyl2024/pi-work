@@ -6,8 +6,8 @@ import type {
   UiSoundsConfig,
   WebAccessConfig,
 } from "./config-types";
+import type { FileViewerConfig } from "./file-viewer-limits";
 import type { RightSideBarConfig } from "./right-bar";
-import type { FileViewerMaxSizeMb } from "./file-viewer-limits";
 
 /**
  * The top-level `config.yaml` keys `PUT /api/settings` owns.
@@ -35,16 +35,16 @@ export const SETTINGS_OWNED_KEYS = [
 export type SettingsOwnedKey = (typeof SETTINGS_OWNED_KEYS)[number];
 
 /**
- * A patch for the settings route. Every key is optional and every object value
- * may itself be partial — the server merges the patch onto the on-disk config
- * one owned key at a time; keys it does not own are ignored.
+ * A patch for the settings route. Each owned key carries its full value; the
+ * server replaces that key on disk (except `web_access`, whose Tavily sub-tree
+ * is merged so a key can be set or explicitly cleared).
  */
 export type SettingsPatch = Partial<{
-  right_side_bar: Partial<RightSideBarConfig>;
-  append_system: Partial<AppendSystemConfig>;
+  right_side_bar: RightSideBarConfig;
+  append_system: AppendSystemConfig;
   load_pi_docs: boolean;
-  file_viewer: { max_size_mb?: Partial<FileViewerMaxSizeMb> };
-  ui_sounds: Partial<UiSoundsConfig>;
+  file_viewer: FileViewerConfig;
+  ui_sounds: UiSoundsConfig;
   web_access: {
     enabled?: boolean;
     tavily?: Partial<Omit<WebAccessConfig["tavily"], "api_key">> & {
@@ -52,8 +52,8 @@ export type SettingsPatch = Partial<{
       clear_api_key?: boolean;
     };
   };
-  subagent: Partial<SubagentConfig>;
-  network_proxy: Partial<NetworkProxyConfig>;
+  subagent: SubagentConfig;
+  network_proxy: NetworkProxyConfig;
 }>;
 
 const OWNED_KEY_SET: ReadonlySet<string> = new Set(SETTINGS_OWNED_KEYS);

@@ -256,7 +256,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
             {provider.loggedIn && (
               <button
                 onClick={handleLogout}
-                style={{ padding: "5px 12px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 5, color: "var(--error)", cursor: "pointer", fontSize: 12 }}
+                style={{ padding: "5px 12px", background: "none", border: "1px solid color-mix(in srgb, var(--error) 30%, transparent)", borderRadius: 5, color: "var(--error)", cursor: "pointer", fontSize: 12 }}
               >
                 {t("Disconnect")}
               </button>

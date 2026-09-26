@@ -72,7 +72,7 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
             </button>
             <button
               onClick={onDelete}
-              style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "var(--error)", cursor: "pointer", fontSize: 11 }}
+              style={{ padding: "3px 8px", background: "none", border: "1px solid color-mix(in srgb, var(--error) 30%, transparent)", borderRadius: 4, color: "var(--error)", cursor: "pointer", fontSize: 11 }}
             >
               {t("Delete")}
             </button>
@@ -211,7 +211,7 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
                 } as React.CSSProperties), minHeight: 220, maxHeight: 420, fontFamily: "var(--font-mono)", fontSize: 11, lineHeight: 1.45, resize: "vertical", whiteSpace: "pre" }}
               />
               {rawError && (
-                <div style={{ fontSize: 11, color: "var(--error)", padding: "5px 8px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: 4 }}>
+                <div style={{ fontSize: 11, color: "var(--error)", padding: "5px 8px", background: "color-mix(in srgb, var(--error) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--error) 25%, transparent)", borderRadius: 4 }}>
                   {t("Invalid JSON: {error}", { error: rawError })}
                 </div>
               )}

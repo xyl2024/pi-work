@@ -49,6 +49,7 @@ export function NetworkProxySection({
   const [url, setUrl] = useState(saved.url);
   const [noProxy, setNoProxy] = useState(saved.no_proxy);
   const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [saveOk, flashSaveOk] = useTransientFlag();
 
@@ -70,6 +71,7 @@ export function NetworkProxySection({
 
   /** Persist the draft; optionally flip `enabled` in the same write. */
   const persist = (enabled?: boolean) => {
+    setSaving(true);
     void apply((prev) => ({
       ...prev,
       network_proxy: {
@@ -77,12 +79,14 @@ export function NetworkProxySection({
         url: draftUrl,
         no_proxy: draftNoProxy,
       },
-    })).then((ok) => {
-      if (ok) {
-        setProbe(null);
-        flashSaveOk();
-      }
-    });
+    }))
+      .then((ok) => {
+        if (ok) {
+          setProbe(null);
+          flashSaveOk();
+        }
+      })
+      .finally(() => setSaving(false));
   };
 
   const runTest = () => {
@@ -173,7 +177,7 @@ export function NetworkProxySection({
 
         <SaveButton
           canSave={dirty}
-          saving={false}
+          saving={saving}
           saved={saveOk}
           onClick={() => persist()}
         />

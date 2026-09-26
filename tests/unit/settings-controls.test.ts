@@ -16,6 +16,23 @@ function sectionSources(): Array<{ file: string; source: string }> {
     }));
 }
 
+/** Every .ts/.tsx under components/settings, recursively. */
+function allSettingsSources(): Array<{ file: string; source: string }> {
+  const root = path.join(repoRoot, "components/settings");
+  const out: Array<{ file: string; source: string }> = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+        out.push({ file: path.relative(repoRoot, full), source: readFileSync(full, "utf8") });
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
+
 /** Strip // line comments and /* block comments so prose is not scanned. */
 function stripComments(source: string): string {
   return source
@@ -73,7 +90,9 @@ describe("settings sections use the shared control skin", () => {
 
   it("does not keep a local copy of a control skin or control component", () => {
     const offenders: string[] = [];
-    for (const { file, source } of sectionSources()) {
+    for (const { file, source } of allSettingsSources()) {
+      // The shared control module is the one place these may be defined.
+      if (file.endsWith("components/settings/controls.tsx")) continue;
       const code = stripComments(source);
       for (const pattern of [
         /(?:function|const)\s+inputStyle\b/,

@@ -122,7 +122,7 @@ function PromptDetail({
                 lineHeight: 1.4,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(248,113,113,0.12)";
+                e.currentTarget.style.background = "color-mix(in srgb, var(--error) 12%, transparent)";
                 e.currentTarget.style.color = "var(--error)";
                 e.currentTarget.style.borderColor = "var(--error)";
               }}

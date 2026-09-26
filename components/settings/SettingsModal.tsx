@@ -53,30 +53,35 @@ export function SettingsModal({
   const config = useSettings();
   const [reloading, setReloading] = useState(true);
 
-  // Re-read disk every time the modal opens so the fields show the current
-  // config.yaml, not a snapshot from whenever the store was last written
-  // (another tab, a hand edit). There is exactly one mirror: the settings
-  // store.
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((d: PiWorkConfig) => { if (!cancelled) setSettings(d); })
-      .catch(() => { /* error shown in body via fallback rendering */ })
-      .finally(() => { if (!cancelled) setReloading(false); });
-    return () => { cancelled = true; };
-  }, []);
-
-  const loading = reloading && config === null;
-
-  const { apply, submit } = useSettingsWrite();
-
   // ── Unsaved-changes registry ───────────────────────────────────────
   // Every staged setting reports its dirty-ness here. The close-confirm
   // prompt has one input: the registry's selector. Sections never keep their
   // own dirty flag for the modal to collect.
   const unsaved = useUnsavedChanges();
-  const { markDirty, markSaved, closeConfirmKey } = unsaved;
+  const { markDirty, markSaved, closeConfirmKey, reload: reloadUnsaved } = unsaved;
+
+  // Re-read disk every time the modal opens so the fields show the current
+  // config.yaml, not a snapshot from whenever the store was last written
+  // (another tab, a hand edit). There is exactly one mirror: the settings
+  // store. Re-reading disk also resets the unsaved-changes baseline.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((d: PiWorkConfig) => {
+        if (cancelled) return;
+        setSettings(d);
+        reloadUnsaved();
+      })
+      .catch(() => { /* error shown in body via fallback rendering */ })
+      .finally(() => { if (!cancelled) setReloading(false); });
+    return () => { cancelled = true; };
+  }, [reloadUnsaved]);
+
+  const loading = reloading && config === null;
+
+  const { apply, submit } = useSettingsWrite();
+
   const reportDirty = useCallback<DirtyReporter>((key, dirty) => {
     if (dirty) markDirty(key);
     else markSaved(key);

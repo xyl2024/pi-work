@@ -589,7 +589,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
           disabled={removing}
           style={{
             alignSelf: "flex-start", padding: "5px 12px",
-            background: "none", border: "1px solid rgba(239,68,68,0.3)",
+            background: "none", border: "1px solid color-mix(in srgb, var(--error) 30%, transparent)",
             borderRadius: 5, color: "var(--error)",
             cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
           }}

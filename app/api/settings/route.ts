@@ -7,6 +7,7 @@ import {
 } from "@/lib/shared/file-viewer-limits";
 import { UI_SOUND_EVENT_IDS } from "@/lib/shared/config-types";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
+import { isSettingsOwnedKey } from "@/lib/shared/settings-keys";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
@@ -159,13 +160,18 @@ export async function GET() {
 export async function PUT(req: Request) {
   const startedAt = Date.now();
   try {
-    const body = (await req.json()) as Record<string, unknown>;
+    const rawBody = (await req.json()) as Record<string, unknown>;
 
-    // The body is a *patch*: only the keys this route owns are considered.
-    // Anything else (cwd_aliases / cwd_icons / disabled_skills …) is ignored
-    // without an error, so an old client submitting a whole config snapshot is
-    // a harmless no-op for the keys another feature owns. Method stays PUT so
+    // The body is a *patch*: only the keys this route owns (the shared
+    // SETTINGS_OWNED_KEYS list) are considered. Anything else
+    // (cwd_aliases / cwd_icons / disabled_skills …) is ignored without an
+    // error, so an old client submitting a whole config snapshot is a
+    // harmless no-op for the keys another feature owns. Method stays PUT so
     // upgrading clients never see a 405.
+    const body: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(rawBody)) {
+      if (isSettingsOwnedKey(key)) body[key] = value;
+    }
     if (body.file_viewer !== undefined) {
       const fileViewerCheck = validateFileViewer(body.file_viewer);
       if (!fileViewerCheck.ok) {
@@ -205,7 +211,7 @@ export async function PUT(req: Request) {
     }
 
     // Start from what is on disk and overlay only the owned keys present in
-    // the patch. The write face is therefore exactly SETTINGS_OWNED_KEYS.
+    // the patch; the write face is therefore exactly SETTINGS_OWNED_KEYS.
     const onDisk = readConfig();
 
     // Tavily key keeps its masked-read / explicit-clear semantics.
