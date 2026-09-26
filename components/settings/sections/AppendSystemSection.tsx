@@ -6,6 +6,7 @@ import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { SettingsSection } from "../SettingsSection";
 import { SaveButton, UnsavedHint } from "../staged-save";
+import { TextArea } from "../controls";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
@@ -135,18 +136,13 @@ export function AppendSystemSection({
           <span style={{ marginLeft: 8, color: "var(--text-dim)" }}>({t("file does not exist yet — saving will create it")})</span>
         )}
       </div>
-      <textarea
+      <TextArea
         value={appendSystem?.content ?? ""}
-        onChange={(e) => setAppendSystem((prev) => (prev ? { ...prev, content: e.target.value } : prev))}
+        onChange={(value) => setAppendSystem((prev) => (prev ? { ...prev, content: value } : prev))}
         disabled={appendSystemLoading || !appendSystem}
         placeholder={appendSystemLoading ? t("Loading...") : t("Markdown content appended after the built-in system prompt.")}
-        spellCheck={false}
-        style={{
-          width: "100%", height: 220, padding: "10px 12px", resize: "vertical",
-          background: "var(--bg)", border: "1px solid var(--border)",
-          borderRadius: 6, color: "var(--text)", fontSize: 12,
-          fontFamily: "var(--font-mono)", lineHeight: 1.55,
-        }}
+        mono
+        style={{ height: 220 }}
       />
     </SettingsSection>
   );

@@ -5,7 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { SettingsSection } from "../SettingsSection";
 import { SaveButton, UnsavedHint } from "../staged-save";
-import { TextInput } from "../models-config/form-fields";
+import { SecondaryButton, TextInput } from "../controls";
 import { ALWAYS_BYPASS_HOSTS, type PiWorkConfig } from "@/lib/shared/config-types";
 import type { DirtyReporter } from "../use-unsaved-changes";
 
@@ -177,9 +177,9 @@ export function NetworkProxySection({
           saved={saveOk}
           onClick={() => persist()}
         />
-        <button type="button" onClick={runTest} disabled={!canUseProxy || testing}>
+        <SecondaryButton onClick={runTest} disabled={!canUseProxy || testing}>
           {testing ? t("Testing…") : t("Test connection")}
-        </button>
+        </SecondaryButton>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>

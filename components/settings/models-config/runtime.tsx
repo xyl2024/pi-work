@@ -75,7 +75,7 @@ export function RuntimeModelCatalog() {
         {loading ? (
           <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("Loading catalog...")}</div>
         ) : error ? (
-          <div style={{ padding: 20, color: "#f87171", fontSize: 12, textAlign: "center" }}>{error}</div>
+          <div style={{ padding: 20, color: "var(--error)", fontSize: 12, textAlign: "center" }}>{error}</div>
         ) : visibleProviders.length === 0 ? (
           <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
             {query ? t("No matching providers or models") : t("No catalog data")}
@@ -91,7 +91,7 @@ export function RuntimeModelCatalog() {
                   <span style={{ marginLeft: "auto", color: "var(--text-muted)", fontSize: 10 }}>
                     {t("{n} models", { n: provider.models.length })}
                   </span>
-                  <span style={{ color: provider.auth.configured ? "#4ade80" : "var(--text-dim)", fontSize: 10 }}>
+                  <span style={{ color: provider.auth.configured ? "var(--success)" : "var(--text-dim)", fontSize: 10 }}>
                     {provider.auth.configured ? t("Configured") : t("Not configured")}
                   </span>
                 </summary>
@@ -203,7 +203,7 @@ export function ModelCatalogPicker({
           {loading ? (
             <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("Loading catalog...")}</div>
           ) : error ? (
-            <div style={{ padding: 20, color: "#f87171", fontSize: 12, textAlign: "center" }}>{error}</div>
+            <div style={{ padding: 20, color: "var(--error)", fontSize: 12, textAlign: "center" }}>{error}</div>
           ) : displayedModels.length === 0 ? (
             <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("No matching providers or models")}</div>
           ) : (
@@ -531,8 +531,8 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <SectionTitle>{t("API Key")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 11, color: provider.configured ? "#4ade80" : "var(--text-dim)" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 11, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
             {provider.configured ? t("configured") : t("not configured")}
           </span>
         </div>
@@ -561,7 +561,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
             disabled={saving || !apiKey.trim() || savedOk}
             style={{
               padding: "6px 12px",
-              background: savedOk ? "#16a34a" : apiKey.trim() ? "var(--accent)" : "var(--bg)",
+              background: savedOk ? "var(--success)" : apiKey.trim() ? "var(--accent)" : "var(--bg)",
               border: "none", borderRadius: 5,
               color: (apiKey.trim() || savedOk) ? "#fff" : "var(--text-dim)",
               cursor: (saving || !apiKey.trim() || savedOk) ? "not-allowed" : "pointer",
@@ -579,7 +579,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
         </div>
       </Field>
 
-      {error && <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{error}</p>}
+      {error && <p style={{ margin: 0, fontSize: 12, color: "var(--error)" }}>{error}</p>}
 
       <RuntimeModelList providerId={provider.id} configured={provider.configured} />
 
@@ -590,7 +590,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
           style={{
             alignSelf: "flex-start", padding: "5px 12px",
             background: "none", border: "1px solid rgba(239,68,68,0.3)",
-            borderRadius: 5, color: "#ef4444",
+            borderRadius: 5, color: "var(--error)",
             cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
           }}
         >

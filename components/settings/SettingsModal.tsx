@@ -187,7 +187,7 @@ export function SettingsModal({
       case "network-proxy":
         return <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />;
       case "web-access":
-        return <WebAccessSection config={config} apply={apply} submit={submit} />;
+        return <WebAccessSection config={config} apply={apply} submit={submit} onDirtyChange={reportDirty} />;
       case "inbox-test":
         return (
           <SettingsSection id="inbox-test">

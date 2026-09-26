@@ -2,28 +2,43 @@
 
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { SettingsSection } from "../SettingsSection";
-import { SecretTextInput } from "../models-config/form-fields";
+import {
+  Check,
+  DangerButton,
+  SecretTextInput,
+} from "../controls";
+import { SaveButton, UnsavedHint } from "../staged-save";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import type { SettingsApply, SettingsSubmit } from "../use-settings-write";
+import type { DirtyReporter } from "../use-unsaved-changes";
 
 export function WebAccessSection({
   config,
   apply,
   submit,
+  onDirtyChange,
 }: {
   config: PiWorkConfig;
   apply: SettingsApply;
   submit: SettingsSubmit;
+  onDirtyChange?: DirtyReporter;
 }) {
   const { t } = useI18n();
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveOk, flashSaveOk] = useTransientFlag();
   const [hasKey, setHasKey] = useState(Boolean(config.web_access.tavily.api_key));
 
   useEffect(() => {
     setHasKey(Boolean(config.web_access.tavily.api_key) || config.web_access.tavily.has_api_key === true);
   }, [config.web_access]);
+
+  const keyDirty = key.trim().length > 0;
+  useEffect(() => {
+    onDirtyChange?.("web-access", keyDirty);
+  }, [keyDirty, onDirtyChange]);
 
   // The Tavily key is a staged secret: it goes through the same write entry as
   // every other setting (optimistic update + rollback + one success toast),
@@ -42,6 +57,7 @@ export function WebAccessSection({
         if (ok) {
           setKey("");
           setHasKey(true);
+          flashSaveOk();
         }
       })
       .finally(() => setSaving(false));
@@ -71,14 +87,18 @@ export function WebAccessSection({
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.5 }}>
         {t("Enable web search and webpage fetching for new Agent sessions. Tavily API Key is stored in ~/.pi-work/config.yaml.")}
       </p>
-      <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--text)", marginBottom: 14 }}>
-        <input type="checkbox" checked={config.web_access.enabled} onChange={() => void apply((prev) => ({ ...prev, web_access: { ...prev.web_access, enabled: !prev.web_access.enabled } }))} />
-        {t("Web Access enabled")}
-      </label>
+      <div style={{ marginBottom: 14 }}>
+        <Check
+          label={t("Web Access enabled")}
+          checked={config.web_access.enabled}
+          onChange={() => void apply((prev) => ({ ...prev, web_access: { ...prev.web_access, enabled: !prev.web_access.enabled } }))}
+        />
+      </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <SecretTextInput value={key} onChange={setKey} placeholder={hasKey ? t("API Key configured; enter a new key to replace") : "tvly-..."} mono />
-        <button type="button" onClick={saveKey} disabled={!key.trim() || saving} style={{ padding: "7px 12px", whiteSpace: "nowrap" }}>{t("Save")}</button>
-        <button type="button" onClick={clearKey} disabled={!hasKey || saving} style={{ padding: "7px 12px", whiteSpace: "nowrap" }}>{t("Clear")}</button>
+        <UnsavedHint show={keyDirty} />
+        <SaveButton canSave={keyDirty} saving={saving} saved={saveOk} onClick={saveKey} />
+        <DangerButton onClick={clearKey} disabled={!hasKey || saving}>{t("Clear")}</DangerButton>
       </div>
       <div style={{ fontSize: 11, color: hasKey ? "var(--text-muted)" : "var(--text-dim)", marginTop: 8 }}>
         {hasKey ? t("Tavily API Key configured") : t("Tavily API Key not configured")}

@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { SettingsSection } from "../SettingsSection";
 import { SaveButton, UnsavedHint } from "../staged-save";
+import { DangerButton, SecondaryButton, TextInput } from "../controls";
 import type { DirtyReporter } from "../use-unsaved-changes";
 
 const SUPPORTED_AVATAR_TYPES = [
@@ -215,62 +216,35 @@ export function ProfileSection({
             onChange={handleAvatarFileChange}
             style={{ display: "none" }}
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              padding: "6px 12px", height: 32,
-              background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6,
-              color: "var(--text)", fontSize: 12, fontWeight: 500,
-              cursor: "pointer",
-              display: "inline-flex", alignItems: "center", gap: 6,
-              transition: "border-color 0.15s, color 0.15s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text)"; }}
-          >
+          <SecondaryButton onClick={() => fileInputRef.current?.click()}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="17 8 12 3 7 8" />
               <line x1="12" y1="3" x2="12" y2="15" />
             </svg>
             {t("Upload avatar")}
-          </button>
+          </SecondaryButton>
           <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
             {t("Common image types · up to 5MB")}
           </span>
           {hasAvatar && !avatarRemoved && (
-            <button
+            <DangerButton
               onClick={handleAvatarRemove}
-              style={{
-                padding: "4px 10px", height: 26,
-                background: "none", border: "1px solid var(--border)", borderRadius: 6,
-                color: "var(--text-muted)", fontSize: 11,
-                cursor: "pointer",
-                transition: "color 0.15s, border-color 0.15s",
-                alignSelf: "flex-start",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--error)"; e.currentTarget.style.borderColor = "var(--error)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+              style={{ alignSelf: "flex-start", height: 26, padding: "4px 10px", fontSize: 11 }}
             >
               {t("Remove avatar")}
-            </button>
+            </DangerButton>
           )}
         </div>
       </div>
 
       <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 6px 0" }}>{t("Username")}</div>
-      <input
-        type="text"
+      <TextInput
         placeholder={t("Your display name")}
         value={profileUsername}
-        onChange={(e) => setProfileUsername(e.target.value)}
+        onChange={setProfileUsername}
         disabled={profileLoading}
         maxLength={64}
-        style={{
-          width: "100%", height: 32, padding: "4px 10px",
-          background: "var(--bg)", border: "1px solid var(--border)",
-          borderRadius: 6, color: "var(--text)", fontSize: 13,
-        }}
       />
     </SettingsSection>
   );

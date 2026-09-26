@@ -32,7 +32,7 @@ export function ProviderDetail({ name, provider, onChange, onRename, onDelete, o
         <SectionTitle>{t("Provider")}</SectionTitle>
         <button
           onClick={onDelete}
-          style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "#ef4444", cursor: "pointer", fontSize: 11 }}
+          style={{ padding: "3px 8px", background: "none", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 4, color: "var(--error)", cursor: "pointer", fontSize: 11 }}
         >
           {t("Delete")}
         </button>

@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { SettingsSection } from "../SettingsSection";
+import { SecondaryButton, Select } from "../controls";
 import { SOUND_IDS, playNamedSound } from "@/lib/client/ui-sounds";
 import { DEFAULT_UI_SOUND_EVENTS } from "@/lib/shared/ui-sounds-defaults";
 import {
@@ -168,26 +169,16 @@ export function SoundSettingsSection({
               <label htmlFor={`sound-event-${eventId}`} style={{ fontSize: 13, color: "var(--text)" }}>
                 {t(EVENT_LABEL_KEYS[eventId])}
               </label>
-              <select
+              <Select
                 id={`sound-event-${eventId}`}
                 value={current}
-                onChange={(event) => setEventSound(eventId, event.target.value)}
-                style={{
-                  background: "var(--bg)",
-                  color: "var(--text)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  padding: "6px 8px",
-                  fontSize: 13,
-                }}
-              >
-                <option value="">{t("No sound")}</option>
-                {SOUND_IDS.map((id) => (
-                  <option key={id} value={id}>
-                    {t(id)}
-                  </option>
-                ))}
-              </select>
+                required
+                options={[
+                  { value: "", label: t("No sound") },
+                  ...SOUND_IDS.map((id) => ({ value: id, label: t(id) })),
+                ]}
+                onChange={(value) => setEventSound(eventId, value)}
+              />
             </div>
           );
         })}
@@ -195,43 +186,22 @@ export function SoundSettingsSection({
 
       {/* Restore defaults + preview */}
       <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button
-          type="button"
-          onClick={restoreDefaults}
-          style={{
-            background: "var(--bg)",
-            color: "var(--text)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            padding: "6px 12px",
-            fontSize: 12,
-            cursor: "pointer",
-          }}
-        >
+        <SecondaryButton onClick={restoreDefaults}>
           {t("Restore sound defaults")}
-        </button>
+        </SecondaryButton>
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
           {t("Preview:")}
         </span>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {SOUND_IDS.map((id) => (
-            <button
+            <SecondaryButton
               key={id}
-              type="button"
               onClick={() => playNamedSound(id)}
-              style={{
-                background: "var(--bg)",
-                color: "var(--text)",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                padding: "4px 10px",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
+              style={{ height: 26, padding: "4px 10px", fontSize: 11 }}
             >
               <span style={{ marginRight: 6 }}>♪</span>
               {t(id)}
-            </button>
+            </SecondaryButton>
           ))}
         </div>
       </div>
