@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import {
+  buildAskUserQuestionsCancel,
   clearPendingAskUserQuestions,
   getPendingAskUserQuestions,
   useAskUserQuestionsSubmit,
@@ -39,13 +40,26 @@ export interface AskUserQuestionsForm {
   otherTexts: Record<number, string>;
   submitting: boolean;
   submitError: string | null;
-  /** True while the "Answers sent" confirmation is showing. */
+  /** True while the "sent" confirmation is showing. */
   sent: boolean;
+  /** What was sent — the answers, or a cancel note. Drives the confirmation
+   *  wording ("Answers sent" vs "Note sent"). */
+  sentKind: "answers" | "note" | null;
+  /** True while the optional note input is expanded under the footer. */
+  replyOpen: boolean;
+  /** The note the user has typed (whole-batch, not per question). */
+  replyText: string;
+  setReplyText: (text: string) => void;
   activeTab: number;
   setActiveTab: Dispatch<SetStateAction<number>>;
   canSubmit: boolean;
   handleSubmit: () => void;
-  handleCancel: () => void;
+  /** The Cancel button: opens the note input rather than cancelling outright. */
+  handleCancelClick: () => void;
+  /** Enter sends the note (plain cancel when empty); Esc plain-cancels. */
+  handleReplyKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  /** The "Cancel with note" button; an empty note is a plain cancel. */
+  handleConfirmCancel: () => void;
   /** ←/→/Home/End on the tab bar. */
   handleTabListKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   updateSelection: (qIdx: number, label: string, checked: boolean, multi: boolean) => void;
@@ -78,10 +92,15 @@ export function useAskUserQuestionsForm({
   // Which tab is currently visible. Always within [0, count). Reset to 0
   // every time a new request arrives (see the effect below).
   const [activeTab, setActiveTab] = useState(0);
-  /** True while the "Answers sent ✓" confirmation is showing. The store
-   *  entry stays put during this window (the panel schedules the clear),
-   *  so the confirmation survives the round-trip to the server. */
-  const [sent, setSent] = useState(false);
+  /** True while the "sent" confirmation is showing. The store entry stays
+   *  put during this window (the panel schedules the clear), so the
+   *  confirmation survives the round-trip to the server. */
+  const [sentKind, setSentKind] = useState<"answers" | "note" | null>(null);
+  const sent = sentKind !== null;
+  /** The optional note row under the footer: expanded by Cancel, sent by
+   *  Enter / the "Cancel with note" button, dismissed by Esc (plain cancel). */
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyText, setReplyText] = useState("");
 
   // ── Refs ──────────────────────────────────────────────────────────────
   // pendingRef / answersRef / otherTextsRef: the auto-advance, auto-submit
@@ -147,7 +166,9 @@ export function useAskUserQuestionsForm({
       setOtherTexts({});
       setActiveTab(0);
       setSubmitError(null);
-      setSent(false);
+      setSentKind(null);
+      setReplyOpen(false);
+      setReplyText("");
       return;
     }
     setAnswers(
@@ -160,7 +181,9 @@ export function useAskUserQuestionsForm({
     setOtherTexts({});
     setActiveTab(0);
     setSubmitError(null);
-    setSent(false);
+    setSentKind(null);
+    setReplyOpen(false);
+    setReplyText("");
   }, [pending, clearStaleSubmitted]);
 
   // When a new `ask_user_questions` request appears (pending transitions to
@@ -217,13 +240,13 @@ export function useAskUserQuestionsForm({
       try {
         await submit(sessionId, p.toolCallId, { answers: finalAnswers });
         submittedRef.current = { sessionId, toolCallId: p.toolCallId };
-        setSent(true);
+        setSentKind("answers");
         sentTimerRef.current = setTimeout(() => {
           sentTimerRef.current = null;
           clearPendingAskUserQuestions(sessionId);
         }, SENT_VIEW_MS);
       } catch (e) {
-        setSent(false);
+        setSentKind(null);
         setSubmitError(e instanceof Error ? e.message : String(e));
       } finally {
         setSubmitting(false);
@@ -329,22 +352,69 @@ export function useAskUserQuestionsForm({
     void doSubmit(buildFinalAnswers(p.questions));
   }, [canSubmit, doSubmit, buildFinalAnswers]);
 
-  const handleCancel = useCallback(async () => {
-    const p = pendingRef.current;
-    if (!p || submitting) return;
-    setSubmitting(true);
+  /** The one cancel path: an empty note is a plain cancel (the panel closes
+   *  immediately, exactly as before), a non-empty one goes out as a whole-
+   *  batch note and gets the same "sent" confirmation as a submit. */
+  const doCancel = useCallback(
+    async (note: string) => {
+      const p = pendingRef.current;
+      if (!p || submittingRef.current || !sessionId) return;
+      const trimmed = note.trim();
+      setSubmitting(true);
+      setSubmitError(null);
+      try {
+        await submit(sessionId, p.toolCallId, buildAskUserQuestionsCancel(trimmed));
+        if (trimmed.length > 0) {
+          submittedRef.current = { sessionId, toolCallId: p.toolCallId };
+          setSentKind("note");
+          sentTimerRef.current = setTimeout(() => {
+            sentTimerRef.current = null;
+            clearPendingAskUserQuestions(sessionId);
+          }, SENT_VIEW_MS);
+        } else {
+          // Plain cancel: no confirmation, panel closes right away.
+          clearPendingAskUserQuestions(p.sessionId);
+        }
+      } catch (e) {
+        // Keep the note (and the panel) so the user can retry.
+        setSentKind(null);
+        setSubmitError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [sessionId, submit],
+  );
+
+  /** Cancel opens the note row instead of cancelling — the reject path gains
+   *  a place to say something without getting longer for those who don't. */
+  const handleCancelClick = useCallback(() => {
+    if (submittingRef.current) return;
     setSubmitError(null);
-    try {
-      await submit(sessionId!, p.toolCallId, { cancelled: true });
-      // No confirmation state for cancel — the panel just closes. A
-      // network-level failure keeps the entry so the user can retry.
-      clearPendingAskUserQuestions(p.sessionId);
-    } catch (e) {
-      setSubmitError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [sessionId, submit, submitting]);
+    setReplyOpen(true);
+  }, []);
+
+  const handleConfirmCancel = useCallback(() => {
+    void doCancel(replyText);
+  }, [doCancel, replyText]);
+
+  const handleReplyKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      // Let the IME finish a composition: Enter that commits a candidate (or
+      // Esc that dismisses it) must not submit / cancel the batch.
+      if (e.nativeEvent.isComposing) return;
+      if (e.key === "Enter") {
+        e.preventDefault();
+        void doCancel(replyText);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        // Esc collapses the row by sending a plain cancel — today's reject
+        // path, unchanged.
+        void doCancel("");
+      }
+    },
+    [doCancel, replyText],
+  );
 
   // Keyboard nav: ←/→ on the tab bar moves between tabs. Only intercepts
   // when focus is on the tab bar itself — focusing into a question's
@@ -389,11 +459,17 @@ export function useAskUserQuestionsForm({
     submitting,
     submitError,
     sent,
+    sentKind,
+    replyOpen,
+    replyText,
+    setReplyText,
     activeTab,
     setActiveTab,
     canSubmit,
     handleSubmit,
-    handleCancel,
+    handleCancelClick,
+    handleReplyKeyDown,
+    handleConfirmCancel,
     handleTabListKeyDown,
     updateSelection,
     updateOtherText,

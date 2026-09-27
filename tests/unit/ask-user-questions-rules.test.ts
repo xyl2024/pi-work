@@ -4,6 +4,7 @@ import {
   optionIsRecommended,
   resolveOptionRecommendation,
   stripRecommendedSuffix,
+  userInputToolResult,
   validateAskUserQuestions,
   type AskUserQuestion,
   type AskUserQuestionsParams,
@@ -148,5 +149,37 @@ describe("recommendation suffix normalization", () => {
         [{ questionIndex: 0, selectedLabels: [], otherText: null }],
       ),
     ).toBe(true);
+  });
+});
+
+describe("resolution → tool result", () => {
+  const questions = [question()];
+
+  it("keeps the plain-cancel wording and details exactly as they were", () => {
+    const result = userInputToolResult(questions, { kind: "cancelled" });
+    expect(result.text).toBe("User cancelled the question.");
+    expect(result.details).toEqual({ answers: [], cancelled: true });
+    expect(result.details.reply).toBeUndefined();
+  });
+
+  it("turns a replied resolution into 'no answers, but a note'", () => {
+    const result = userInputToolResult(questions, {
+      kind: "replied",
+      message: "Neither fits; use a queue instead.",
+    });
+    expect(result.text).toContain("did not answer");
+    expect(result.text).toContain("Neither fits; use a queue instead.");
+    expect(result.details).toEqual({
+      answers: [],
+      cancelled: true,
+      reply: "Neither fits; use a queue instead.",
+    });
+  });
+
+  it("formats answers unchanged", () => {
+    const answers = [{ questionIndex: 0, selectedLabels: ["src"], otherText: null }];
+    const result = userInputToolResult(questions, { kind: "answered", answers });
+    expect(result.details).toEqual({ answers, cancelled: false });
+    expect(result.text).toContain("Location: src");
   });
 });

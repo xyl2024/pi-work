@@ -10,4 +10,8 @@ export const askUserQuestions = {
   "{n} questions pending": "{n} 个问题待回答",
   "Recommended": "推荐",
   "Why recommended": "推荐理由",
+  "Note sent": "附言已发送",
+  "Add a note for the agent…": "给智能体留一句话…",
+  "Cancel with note": "连同附言取消",
+  "Note to send when cancelling": "取消时发送的附言",
 } as const;

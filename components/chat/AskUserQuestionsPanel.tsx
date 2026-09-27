@@ -92,10 +92,16 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
     submitting,
     submitError,
     sent,
+    sentKind,
+    replyOpen,
+    replyText,
+    setReplyText,
     setActiveTab,
     canSubmit,
     handleSubmit,
-    handleCancel,
+    handleCancelClick,
+    handleConfirmCancel,
+    handleReplyKeyDown,
     handleTabListKeyDown,
     updateSelection,
     updateOtherText,
@@ -299,7 +305,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
             className="askq-fade-up-delayed"
             style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}
           >
-            {t("Answers sent")}
+            {sentKind === "note" ? t("Note sent") : t("Answers sent")}
           </span>
           <span
             className="askq-fade-up-delayed"
@@ -359,14 +365,75 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
           <div
             style={{
               display: "flex",
-              justifyContent: count > 1 ? "space-between" : "flex-end",
-              alignItems: "center",
+              flexDirection: "column",
+              gap: 8,
               padding: "8px 14px 10px 14px",
               borderTop: "1px solid var(--border)",
-              gap: 8,
               flexShrink: 0,
             }}
           >
+            {/* Optional whole-batch note. Cancel expands this row in place;
+                Enter sends it, Esc / an empty value is a plain cancel. It
+                deliberately does not autofocus — the chat input keeps focus. */}
+            {replyOpen && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="text"
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  onKeyDown={handleReplyKeyDown}
+                  placeholder={t("Add a note for the agent…")}
+                  aria-label={t("Note to send when cancelling")}
+                  disabled={submitting}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    padding: "6px 10px",
+                    fontSize: 12.5,
+                    fontFamily: "inherit",
+                    background: "var(--bg)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    color: "var(--text)",
+                    outline: "none",
+                    transition: "border-color 0.12s ease",
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = "var(--accent)";
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "var(--border)";
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleConfirmCancel}
+                  disabled={submitting}
+                  style={{
+                    padding: "5px 14px",
+                    background: "transparent",
+                    border: "1px solid #f87171",
+                    borderRadius: 5,
+                    color: "#f87171",
+                    cursor: submitting ? "not-allowed" : "pointer",
+                    fontSize: 12,
+                    fontWeight: 500,
+                    opacity: submitting ? 0.5 : 1,
+                    flexShrink: 0,
+                  }}
+                >
+                  {t("Cancel with note")}
+                </button>
+              </div>
+            )}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: count > 1 ? "space-between" : "flex-end",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
             {/* Prev / next — linear navigation for multi-question panels
                 (the tab bar is the progress display). */}
             {count > 1 && (
@@ -398,7 +465,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <button
                 type="button"
-                onClick={handleCancel}
+                onClick={handleCancelClick}
                 disabled={submitting}
                 style={{
                   padding: "5px 14px",
@@ -432,6 +499,7 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
                 {t("Submit")}
               </button>
             </span>
+            </div>
           </div>
         </>
       )}

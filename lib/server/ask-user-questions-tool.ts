@@ -37,6 +37,7 @@ import {
   ASK_USER_QUESTIONS_DESCRIPTION_MAX,
   ASK_USER_QUESTIONS_OTHER_LABEL,
   isOtherOptionLabel,
+  userInputToolResult,
   validateAskUserQuestions,
   type AskUserQuestion,
   type AskUserQuestionAnswer,
@@ -159,49 +160,10 @@ function paramsToQuestions(params: AskUserQuestionsParamsType): AskUserQuestion[
   }));
 }
 
-function formatAnswersForAgent(
-  questions: readonly AskUserQuestion[],
-  answers: readonly AskUserQuestionAnswer[],
-): string {
-  const lines: string[] = ["User answered:"];
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    const a = answers[i];
-    if (!a) {
-      lines.push(`  ${q.header}: (no answer)`);
-      continue;
-    }
-    if (a.selectedLabels.length === 0) {
-      lines.push(`  ${q.header}: (skipped)`);
-      continue;
-    }
-    const labels = a.selectedLabels.slice();
-    const labelsFmt: string[] = [];
-    for (const lbl of labels) {
-      if (isOtherOptionLabel(lbl)) {
-        labelsFmt.push(`Other: "${a.otherText ?? ""}"`);
-      } else {
-        labelsFmt.push(lbl);
-      }
-    }
-    const suffix = q.multiSelect && a.selectedLabels.length > 1 ? " (multi-select)" : "";
-    lines.push(`  ${q.header}: ${labelsFmt.join(", ")}${suffix}`);
-  }
-  return lines.join("\n");
-}
-
-function cancelledDetails(): AskUserQuestionsDetails {
-  return { answers: [], cancelled: true };
-}
-
-function answeredDetails(answers: AskUserQuestionAnswer[]): AskUserQuestionsDetails {
-  return { answers, cancelled: false };
-}
-
 function errorEnvelope(message: string): { content: [{ type: "text"; text: string }]; details: AskUserQuestionsDetails } {
   return {
     content: [{ type: "text", text: `Error: ${message}` }],
-    details: cancelledDetails(),
+    details: { answers: [], cancelled: true },
   };
 }
 
@@ -301,9 +263,19 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
 
       if (resolution.kind === "cancelled") {
         log.info("ask_user_questions cancelled by user", { toolCallId });
+        const result = userInputToolResult(questions, resolution);
         return {
-          content: [{ type: "text", text: "User cancelled the question." }],
-          details: cancelledDetails(),
+          content: [{ type: "text", text: result.text }],
+          details: result.details,
+        };
+      }
+
+      if (resolution.kind === "replied") {
+        log.info("ask_user_questions cancelled with a note", { toolCallId });
+        const result = userInputToolResult(questions, resolution);
+        return {
+          content: [{ type: "text", text: result.text }],
+          details: result.details,
         };
       }
 
@@ -348,11 +320,13 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
         });
       }
 
+      const result = userInputToolResult(questions, {
+        kind: "answered",
+        answers: sanitizedAnswers,
+      });
       return {
-        content: [
-          { type: "text", text: formatAnswersForAgent(questions, sanitizedAnswers) },
-        ],
-        details: answeredDetails(sanitizedAnswers),
+        content: [{ type: "text", text: result.text }],
+        details: result.details,
       };
     },
   });

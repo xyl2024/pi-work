@@ -34,11 +34,12 @@
  */
 
 import type { SessionEvent } from "../shared/session-events";
-import type {
-  AskUserQuestion,
-  AskUserQuestionsCancel,
-  AskUserQuestionsDecision,
-  UserInputResolution,
+import {
+  ASK_USER_QUESTIONS_REPLY_MAX,
+  type AskUserQuestion,
+  type AskUserQuestionsCancel,
+  type AskUserQuestionsDecision,
+  type UserInputResolution,
 } from "../shared/ask-user-questions-tool-types";
 import { createLogger } from "./logger";
 
@@ -238,8 +239,21 @@ export class InteractionGates {
     const gate = this.takeGate(toolCallId, "user_input");
     if (!gate) return false;
     if ("cancelled" in decision && decision.cancelled) {
-      gate.settle({ kind: "cancelled" });
-      log.info("ask_user_questions cancelled", { toolCallId });
+      // A cancel may carry a free-text note. The wire stays one shape
+      // (`{ cancelled: true, message? }`) and the module owns the translation
+      // into its own third resolution (ADR-0008): a non-empty note is the
+      // user saying "I answered nothing, but here is what I think"; an empty
+      // or missing one is the plain cancel it always was.
+      const message = (decision.message ?? "")
+        .trim()
+        .slice(0, ASK_USER_QUESTIONS_REPLY_MAX);
+      if (message.length > 0) {
+        gate.settle({ kind: "replied", message });
+        log.info("ask_user_questions cancelled with a note", { toolCallId });
+      } else {
+        gate.settle({ kind: "cancelled" });
+        log.info("ask_user_questions cancelled", { toolCallId });
+      }
     } else if ("answers" in decision) {
       gate.settle({ kind: "answered", answers: decision.answers });
       log.info("ask_user_questions answered", {

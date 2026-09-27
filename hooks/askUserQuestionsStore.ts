@@ -149,9 +149,12 @@ export function buildAskUserQuestionsDecision(
   return { answers };
 }
 
-/** Pure helper: build the cancel wire shape. */
-export function buildAskUserQuestionsCancel(): AskUserQuestionsCancel {
-  return { cancelled: true };
+/** Pure helper: build the cancel wire shape. An empty or whitespace-only
+ *  note is a plain cancel — the server treats it that way anyway, but keeping
+ *  the empty key off the wire keeps the two paths identical. */
+export function buildAskUserQuestionsCancel(message?: string): AskUserQuestionsCancel {
+  const note = (message ?? "").trim();
+  return note.length > 0 ? { cancelled: true, message: note } : { cancelled: true };
 }
 
 /** Reset the entire store (e.g. on global state transitions). */
