@@ -36,6 +36,7 @@ import {
   ASK_USER_QUESTIONS_QUESTION_MAX,
   ASK_USER_QUESTIONS_DESCRIPTION_MAX,
   ASK_USER_QUESTIONS_OTHER_LABEL,
+  ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK,
   isOtherOptionLabel,
   validateAskUserQuestions,
   type AskUserQuestion,
@@ -61,6 +62,7 @@ export {
   ASK_USER_QUESTIONS_QUESTION_MAX,
   ASK_USER_QUESTIONS_DESCRIPTION_MAX,
   ASK_USER_QUESTIONS_OTHER_LABEL,
+  ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK,
   isOtherOptionLabel,
   hasUnansweredRequired,
 } from "../shared/ask-user-questions-tool-types";
@@ -191,25 +193,10 @@ interface BuildToolOptions {
   source: "user" | "scheduled" | "subagent";
 }
 
-/**
- * Hardcoded, whole-block system-prompt contribution for `ask_user_questions`.
- * Appended at the very end of the system prompt — the same channel
- * `DefaultResourceLoader` uses for `APPEND_SYSTEM.md`, but this block is
- * built into the codebase (no user-configurable file). It is emitted only
- * when the tool is enabled and actually part of the session's tool set
- * Mirrors the user-requested guidelines
- * text; `promptGuidelines` was removed in favor of this append block.
- */
-export const ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK = `\
-## Tool ask_user_questions guidelines
-- Use ask_user_questions when you need a decision from the user before continuing.
-- Each call can carry 1-5 questions; group related decisions in one call.
-- Each question must have 2-4 options.
-- Set multiSelect true when multiple options are valid.
-- Questions are required by default; use required false for optional questions.
-- An Other option is appended automatically; do not add one yourself.
-- Do not call this tool from a scheduled task or when no user is available.
-`;
+// The system-prompt block (`ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK`) lives in
+// the shared, SDK-free types module and is re-exported above: the server
+// injects it via appendSystemPromptOverride when the tool is in the session's
+// tool set, and the Tool Market catalog shows the very same text.
 
 function makeTool({ requestUserInput, source }: BuildToolOptions) {
   return defineTool<typeof AskUserQuestionsParamsSchema, AskUserQuestionsDetails>({

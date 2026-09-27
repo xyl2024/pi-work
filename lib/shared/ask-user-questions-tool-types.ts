@@ -42,6 +42,27 @@ export const ASK_USER_QUESTIONS_DESCRIPTION_MAX = 200;
 /** Exact label that, when present in an option, enables free-text input. */
 export const ASK_USER_QUESTIONS_OTHER_LABEL = "Other";
 
+/**
+ * Whole-block system-prompt contribution for `ask_user_questions`.
+ *
+ * This is the single source of truth: the server tool re-exports it (it is
+ * injected via `appendSystemPromptOverride` when the tool is in the session's
+ * tool set) and the Tool Market catalog references the same constant, so the
+ * two can no longer drift apart. It lives here — in a module that imports no
+ * pi SDK and no Node module — so the text the agent reads is testable without
+ * the SDK (ADR-0003 rule 3).
+ */
+export const ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK = `\
+## Tool ask_user_questions guidelines
+- Use ask_user_questions when you need a decision from the user before continuing.
+- Each call can carry 1-5 questions; group related decisions in one call.
+- Each question must have 2-4 options.
+- Set multiSelect true when multiple options are valid.
+- Questions are required by default; use required false for optional questions.
+- An Other option is appended automatically; do not add one yourself.
+- Do not call this tool from a scheduled task or when no user is available.
+`;
+
 /** Single question as authored by the agent. */
 export interface AskUserQuestion {
   /** Long-form question text shown to the user. */
