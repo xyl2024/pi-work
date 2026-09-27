@@ -36,7 +36,6 @@ import {
   ASK_USER_QUESTIONS_QUESTION_MAX,
   ASK_USER_QUESTIONS_DESCRIPTION_MAX,
   ASK_USER_QUESTIONS_OTHER_LABEL,
-  ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK,
   isOtherOptionLabel,
   validateAskUserQuestions,
   type AskUserQuestion,
@@ -104,6 +103,25 @@ const AskUserQuestionsParamsSchema = Type.Object({
             description: `Short explanation shown beneath the label. Max ${ASK_USER_QUESTIONS_DESCRIPTION_MAX} chars.`,
             maxLength: ASK_USER_QUESTIONS_DESCRIPTION_MAX,
           }),
+          // Optional on purpose: "every question names a recommendation" is
+          // enforced by validateAskUserQuestions, not by the schema — the
+          // schema cannot say "at least one item in this array carries this
+          // optional field". The error is a tool result the model can fix in
+          // the same turn.
+          recommended: Type.Optional(
+            Type.Object(
+              {
+                reason: Type.String({
+                  description: `Why you suggest this option. Max ${ASK_USER_QUESTIONS_DESCRIPTION_MAX} chars.`,
+                  maxLength: ASK_USER_QUESTIONS_DESCRIPTION_MAX,
+                }),
+              },
+              {
+                description:
+                  "Mark this option as the one you suggest. Every question needs at least one recommended option — exactly one for a single-select question, one or more for a multi-select question.",
+              },
+            ),
+          ),
         }),
         {
           minItems: ASK_USER_QUESTIONS_MIN_OPTIONS,
@@ -133,7 +151,11 @@ function paramsToQuestions(params: AskUserQuestionsParamsType): AskUserQuestion[
     header: q.header,
     multiSelect: q.multiSelect,
     required: q.required ?? true,
-    options: q.options.map((o) => ({ label: o.label, description: o.description })),
+    options: q.options.map((o) => ({
+      label: o.label,
+      description: o.description,
+      ...(o.recommended ? { recommended: { reason: o.recommended.reason } } : {}),
+    })),
   }));
 }
 
@@ -203,7 +225,7 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
     name: ASK_USER_QUESTIONS_TOOL_NAME,
     label: "Ask User Questions",
     description:
-      "Ask the user 1-5 multiple-choice questions and wait for their answers. Each question has 2-4 options with a short label and a longer description. Set `multiSelect: true` to allow multiple selections. Questions are required by default; set `required: false` to let the user skip one. A free-text \"Other\" option is always appended automatically, so the user can always type a custom answer — do not add your own. The tool blocks until the user responds or cancels; do not call it from a context where no user is available (e.g. a scheduled task — the tool will return an error in that case).",
+      "Ask the user 1-5 multiple-choice questions and wait for their answers. Each question has 2-4 options with a short label and a longer description. Mark the option you suggest with `recommended: { reason: \"...\" }` — exactly one option on a single-select question, at least one on a multi-select question; the tool returns an error when a question has no recommendation. Set `multiSelect: true` to allow multiple selections. Questions are required by default; set `required: false` to let the user skip one. A free-text \"Other\" option is always appended automatically, so the user can always type a custom answer — do not add your own. The tool blocks until the user responds or cancels; the user may cancel with a free-text note, which is a comment on the whole batch rather than an answer. Do not call it from a context where no user is available (e.g. a scheduled task — the tool will return an error in that case).",
     parameters: AskUserQuestionsParamsSchema,
     executionMode: "sequential",
     promptSnippet: "Ask the user structured multiple-choice questions.",

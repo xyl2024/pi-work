@@ -8,4 +8,6 @@ export const askUserQuestions = {
   "Answers sent": "回答已发送",
   "The agent is continuing…": "智能体会继续处理你的回答…",
   "{n} questions pending": "{n} 个问题待回答",
+  "Recommended": "推荐",
+  "Why recommended": "推荐理由",
 } as const;

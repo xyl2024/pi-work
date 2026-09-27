@@ -57,6 +57,9 @@ export const ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK = `\
 - Use ask_user_questions when you need a decision from the user before continuing.
 - Each call can carry 1-5 questions; group related decisions in one call.
 - Each question must have 2-4 options.
+- Every question must mark at least one option as recommended: \`recommended: { reason: "..." }\`. A single-select question must mark exactly one; a multi-select question may mark several, each with its own reason. The tool returns an error when a question has no recommendation.
+- Put the reason in the \`recommended\` field, not in the label. A "(Recommended)" label suffix is only a compatibility channel for models that don't know the field: it is stripped from the rendered label and still counts as a recommendation.
+- A recommendation is a suggestion, not a selection: it is never preselected for the user.
 - Set multiSelect true when multiple options are valid.
 - Questions are required by default; use required false for optional questions.
 - An Other option is appended automatically; do not add one yourself.
@@ -87,6 +90,14 @@ export interface AskUserQuestionOption {
   label: string;
   /** Short explanation shown beneath the label. */
   description: string;
+  /** When present, this is the option the agent suggests, and `reason` says
+   *  why. Exactly one option for a single-select question; at least one for a
+   *  multi-select question — `validateAskUserQuestions` enforces that, and a
+   *  recognized label suffix like "(Recommended)" counts as a recommendation
+   *  too (the zero-shot Claude Code shape). Recommendations affect rendering
+   *  only: they never enter `selectedLabels` and never mark a question
+   *  answered. */
+  recommended?: { reason: string };
 }
 
 /** Full payload the agent passes to the tool. */
@@ -151,6 +162,52 @@ export function isOtherOptionLabel(label: string): boolean {
   return label === ASK_USER_QUESTIONS_OTHER_LABEL;
 }
 
+/** Recognized "(Recommended)" / "（推荐）" label suffixes: half- or
+ *  full-width parentheses, ASCII case-insensitive. Anchored at the end, so an
+ *  ordinary word like "推荐算法" or "不推荐" is never touched — and no fuzzy
+ *  matching, because those words are common in Chinese labels. */
+const RECOMMENDED_SUFFIX_RE = /[（(]\s*(?:recommended|推荐)\s*[)）]\s*$/i;
+
+/** Detect and strip a Claude-Code-style recommendation suffix from a label.
+ *  Returns the cleaned label and whether a suffix was found. Pure — the UI
+ *  calls it on every render. */
+export function stripRecommendedSuffix(label: string): {
+  label: string;
+  stripped: boolean;
+} {
+  const match = RECOMMENDED_SUFFIX_RE.exec(label);
+  if (!match) return { label, stripped: false };
+  return { label: label.slice(0, match.index).trimEnd(), stripped: true };
+}
+
+/** True when the option is the agent's suggestion — either structurally
+ *  (the `recommended` field) or via a recognized label suffix. Used by
+ *  validation, so a zero-shot suffix-only call satisfies "every question
+ *  needs a recommendation" without a retry. */
+export function optionIsRecommended(option: AskUserQuestionOption): boolean {
+  return (
+    option.recommended !== undefined || stripRecommendedSuffix(option.label).stripped
+  );
+}
+
+/** What the UI renders for one option: the label with any recommendation
+ *  suffix stripped, whether it is recommended, and the reason when the agent
+ *  gave one (a suffix-only recommendation has none). The `recommended` field
+ *  wins: when it is present the suffix is ignored as a signal, but it is
+ *  still stripped from the label so "推荐 (Recommended)" is never shown. */
+export function resolveOptionRecommendation(option: AskUserQuestionOption): {
+  label: string;
+  recommended: boolean;
+  reason: string | null;
+} {
+  const { label, stripped } = stripRecommendedSuffix(option.label);
+  return {
+    label,
+    recommended: option.recommended !== undefined || stripped,
+    reason: option.recommended?.reason ?? null,
+  };
+}
+
 /** Validate that a question object satisfies the schema bounds. Pure helper
  *  used by both the server-side tool wrapper (after schema validation
  *  passes, as a defense-in-depth check) and the client (to flag malformed
@@ -203,6 +260,32 @@ export function validateAskUserQuestions(
       if (o.description.length > ASK_USER_QUESTIONS_DESCRIPTION_MAX) {
         return `questions[${i}].options[${j}].description exceeds ${ASK_USER_QUESTIONS_DESCRIPTION_MAX} chars`;
       }
+      if (o.recommended !== undefined) {
+        if (
+          typeof o.recommended !== "object" ||
+          o.recommended === null ||
+          typeof o.recommended.reason !== "string"
+        ) {
+          return `questions[${i}].options[${j}].recommended must be an object with a string reason`;
+        }
+        if (o.recommended.reason.length > ASK_USER_QUESTIONS_DESCRIPTION_MAX) {
+          return `questions[${i}].options[${j}].recommended.reason exceeds ${ASK_USER_QUESTIONS_DESCRIPTION_MAX} chars`;
+        }
+      }
+    }
+
+    // "Every question names a recommendation" is a hard constraint the schema
+    // cannot express (it cannot say "at least one item in this array carries
+    // this optional field"). The model gets a tool error it can fix in the
+    // same turn. A recognized label suffix counts, so a zero-shot Claude Code
+    // call (no `recommended` field, "(Recommended)" in the label) passes.
+    const recommendedCount = q.options.filter(optionIsRecommended).length;
+    if (q.multiSelect) {
+      if (recommendedCount === 0) {
+        return `questions[${i}] must mark at least one option as recommended (add \`recommended: { reason: "..." }\` to the option(s) you suggest)`;
+      }
+    } else if (recommendedCount !== 1) {
+      return `questions[${i}] must mark exactly one option as recommended for a single-select question (found ${recommendedCount})`;
     }
   }
   return null;
