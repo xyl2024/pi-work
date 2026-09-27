@@ -261,17 +261,16 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
         return errorEnvelope(`Question interrupted: ${message}`);
       }
 
-      if (resolution.kind === "cancelled") {
-        log.info("ask_user_questions cancelled by user", { toolCallId });
-        const result = userInputToolResult(questions, resolution);
-        return {
-          content: [{ type: "text", text: result.text }],
-          details: result.details,
-        };
-      }
-
-      if (resolution.kind === "replied") {
-        log.info("ask_user_questions cancelled with a note", { toolCallId });
+      // Both non-answered kinds (plain cancel and a cancel carrying a note)
+      // leave the questions unanswered; the resolution-to-result mapping owns
+      // the wording and the details they persist.
+      if (resolution.kind !== "answered") {
+        log.info(
+          resolution.kind === "replied"
+            ? "ask_user_questions cancelled with a note"
+            : "ask_user_questions cancelled by user",
+          { toolCallId },
+        );
         const result = userInputToolResult(questions, resolution);
         return {
           content: [{ type: "text", text: result.text }],

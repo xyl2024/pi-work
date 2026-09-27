@@ -182,4 +182,14 @@ describe("resolution → tool result", () => {
     expect(result.details).toEqual({ answers, cancelled: false });
     expect(result.text).toContain("Location: src");
   });
+
+  it("never puts a recommendation into the answer", () => {
+    // The user picked the non-recommended option: the recommended label ("src")
+    // must not leak into what the agent reads as the user's choice.
+    const answers = [{ questionIndex: 0, selectedLabels: ["tests"], otherText: null }];
+    const result = userInputToolResult(questions, { kind: "answered", answers });
+    expect(result.details.answers[0].selectedLabels).toEqual(["tests"]);
+    expect(result.text).toContain("Location: tests");
+    expect(result.text).not.toContain("src");
+  });
 });

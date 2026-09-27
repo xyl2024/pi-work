@@ -161,14 +161,16 @@ export function useAskUserQuestionsForm({
       sentTimerRef.current = null;
     }
     clearStaleSubmitted();
+    // Every request change starts from a blank slate — including the note row
+    // and any "sent" confirmation.
+    setSubmitError(null);
+    setSentKind(null);
+    setReplyOpen(false);
+    setReplyText("");
     if (!pending) {
       setAnswers([]);
       setOtherTexts({});
       setActiveTab(0);
-      setSubmitError(null);
-      setSentKind(null);
-      setReplyOpen(false);
-      setReplyText("");
       return;
     }
     setAnswers(
@@ -180,10 +182,6 @@ export function useAskUserQuestionsForm({
     );
     setOtherTexts({});
     setActiveTab(0);
-    setSubmitError(null);
-    setSentKind(null);
-    setReplyOpen(false);
-    setReplyText("");
   }, [pending, clearStaleSubmitted]);
 
   // When a new `ask_user_questions` request appears (pending transitions to
@@ -231,6 +229,23 @@ export function useAskUserQuestionsForm({
   /** Shared submit path (manual Submit button + auto-submit). Shows the
    *  "Answers sent" confirmation on success, then clears the store entry
    *  a beat later so the panel closes. */
+  /** Show the "sent" confirmation and schedule the store clear. Shared by
+   *  the submit path and a cancel carrying a note: both put something on the
+   *  wire, so both get the same acknowledgement before the panel closes. */
+  const showSent = useCallback(
+    (kind: "answers" | "note") => {
+      const p = pendingRef.current;
+      if (!p || !sessionId) return;
+      submittedRef.current = { sessionId, toolCallId: p.toolCallId };
+      setSentKind(kind);
+      sentTimerRef.current = setTimeout(() => {
+        sentTimerRef.current = null;
+        clearPendingAskUserQuestions(sessionId);
+      }, SENT_VIEW_MS);
+    },
+    [sessionId],
+  );
+
   const doSubmit = useCallback(
     async (finalAnswers: AskUserQuestionAnswer[]) => {
       const p = pendingRef.current;
@@ -239,12 +254,7 @@ export function useAskUserQuestionsForm({
       setSubmitError(null);
       try {
         await submit(sessionId, p.toolCallId, { answers: finalAnswers });
-        submittedRef.current = { sessionId, toolCallId: p.toolCallId };
-        setSentKind("answers");
-        sentTimerRef.current = setTimeout(() => {
-          sentTimerRef.current = null;
-          clearPendingAskUserQuestions(sessionId);
-        }, SENT_VIEW_MS);
+        showSent("answers");
       } catch (e) {
         setSentKind(null);
         setSubmitError(e instanceof Error ? e.message : String(e));
@@ -252,7 +262,7 @@ export function useAskUserQuestionsForm({
         setSubmitting(false);
       }
     },
-    [sessionId, submit],
+    [sessionId, submit, showSent],
   );
 
   /** Auto-submit after the last question's single-select pick. Fires only
@@ -365,15 +375,10 @@ export function useAskUserQuestionsForm({
       try {
         await submit(sessionId, p.toolCallId, buildAskUserQuestionsCancel(trimmed));
         if (trimmed.length > 0) {
-          submittedRef.current = { sessionId, toolCallId: p.toolCallId };
-          setSentKind("note");
-          sentTimerRef.current = setTimeout(() => {
-            sentTimerRef.current = null;
-            clearPendingAskUserQuestions(sessionId);
-          }, SENT_VIEW_MS);
+          showSent("note");
         } else {
           // Plain cancel: no confirmation, panel closes right away.
-          clearPendingAskUserQuestions(p.sessionId);
+          clearPendingAskUserQuestions(sessionId);
         }
       } catch (e) {
         // Keep the note (and the panel) so the user can retry.
@@ -383,7 +388,7 @@ export function useAskUserQuestionsForm({
         setSubmitting(false);
       }
     },
-    [sessionId, submit],
+    [sessionId, submit, showSent],
   );
 
   /** Cancel opens the note row instead of cancelling — the reject path gains
