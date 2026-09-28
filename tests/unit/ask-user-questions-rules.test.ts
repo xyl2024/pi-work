@@ -168,6 +168,7 @@ describe("resolution → tool result", () => {
       message: "Neither fits; use a queue instead.",
     });
     expect(result.text).toContain("did not answer");
+    expect(result.text).toContain("The user replied with this note instead");
     expect(result.text).toContain("Neither fits; use a queue instead.");
     expect(result.details).toEqual({
       answers: [],

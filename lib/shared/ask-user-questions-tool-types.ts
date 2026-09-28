@@ -406,7 +406,7 @@ export function userInputToolResult(
     return {
       text:
         `User did not answer any of the questions. ` +
-        `They replied with this note instead: "${resolution.message}"`,
+        `The user replied with this note instead: "${resolution.message}"`,
       details: { answers: [], cancelled: true, reply: resolution.message },
     };
   }
