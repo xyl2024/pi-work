@@ -391,13 +391,18 @@ export function useAskUserQuestionsForm({
     [sessionId, submit, showSent],
   );
 
-  /** Cancel opens the note row instead of cancelling — the reject path gains
-   *  a place to say something without getting longer for those who don't. */
+  /** The Cancel button. First click opens the note row — the reject path gains
+   *  a place to say something without getting longer for those who don't.
+   *  Clicking Cancel again while the row is open cancels without a note. */
   const handleCancelClick = useCallback(() => {
     if (submittingRef.current) return;
     setSubmitError(null);
+    if (replyOpen) {
+      void doCancel("");
+      return;
+    }
     setReplyOpen(true);
-  }, []);
+  }, [doCancel, replyOpen]);
 
   const handleConfirmCancel = useCallback(() => {
     void doCancel(replyText);

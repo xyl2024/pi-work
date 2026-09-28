@@ -373,8 +373,9 @@ export function AskUserQuestionsPanel({ sessionId, onAppear }: Props) {
             }}
           >
             {/* Optional whole-batch note. Cancel expands this row in place;
-                Enter sends it, Esc / an empty value is a plain cancel. It
-                deliberately does not autofocus — the chat input keeps focus. */}
+                Enter sends it, while Esc / an empty value / clicking Cancel
+                again is a plain cancel. It deliberately does not autofocus —
+                the chat input keeps focus. */}
             {replyOpen && (
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input
