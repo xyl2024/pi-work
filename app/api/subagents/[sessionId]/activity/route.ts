@@ -24,7 +24,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const info = await readSubagentLiveInfo(sessionId);
     const payload: SubagentLiveInfo = {
       task: task
-        ? { status: task.status, startedAt: task.startedAt, description: task.description }
+        ? { status: task.status, startedAt: task.startedAt, description: task.description, subagentName: task.subagentName }
         : null,
       stats: {
         assistantCount: info?.assistantCount ?? null,

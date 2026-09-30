@@ -33,7 +33,7 @@ import {
   buildCodeGraphTools,
   CODEGRAPH_SYSTEM_PROMPT_BLOCK,
 } from "./codegraph-tool";
-import { spawnSubagentTool, SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK } from "./subagent-tool";
+import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
 import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
@@ -1100,7 +1100,7 @@ export async function startRpcSession(
             ));
         const blocks: string[] = [];
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("spawn_subagent")) blocks.push(SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("spawn_subagent")) blocks.push(buildSpawnSubagentSystemPromptBlock());
         if (sessionHasTool("show_media")) blocks.push(SHOW_MEDIA_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("web_search")) blocks.push(WEB_SEARCH_SYSTEM_PROMPT_BLOCK);

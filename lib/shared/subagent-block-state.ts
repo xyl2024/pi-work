@@ -29,6 +29,8 @@ export interface SubagentBlockState {
    * whenever the block knows of no child at all.
    */
   childSessionId: string | null;
+  /** Name of the profile the call launched, when the result carries it. */
+  subagentName: string | null;
 }
 
 export interface SubagentBlockStateInput {
@@ -42,6 +44,7 @@ export interface SubagentBlockStateInput {
 interface SpawnSubagentResultDetails {
   status?: SubagentBlockStatus;
   sessionId?: string | null;
+  subagentName?: string | null;
 }
 
 export function deriveSubagentBlockState({ result, isError }: SubagentBlockStateInput): SubagentBlockState {
@@ -60,5 +63,6 @@ export function deriveSubagentBlockState({ result, isError }: SubagentBlockState
     // sibling finished.
     running: !!result && !hasResultText && !terminal,
     childSessionId: details?.sessionId ?? null,
+    subagentName: details?.subagentName ?? null,
   };
 }

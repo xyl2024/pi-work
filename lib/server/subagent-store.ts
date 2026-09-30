@@ -2,7 +2,6 @@ import Database from "better-sqlite3";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 import { dataPath } from "./data-dir";
-import type { SubagentType } from "../shared/types";
 
 export type SubagentTaskStatus = "creating" | "running" | "completed" | "failed" | "cancelled";
 
@@ -10,7 +9,8 @@ export interface SubagentTask {
   taskId: string;
   parentSessionId: string;
   childSessionId: string | null;
-  subagentType: SubagentType;
+  /** Name of the configured subagent profile this task ran. */
+  subagentName: string;
   description: string;
   prompt: string;
   status: SubagentTaskStatus;
@@ -34,7 +34,7 @@ const SCHEMA = `
     task_id          TEXT PRIMARY KEY,
     parent_session_id TEXT NOT NULL,
     child_session_id TEXT,
-    subagent_type    TEXT NOT NULL,
+    subagent_name    TEXT NOT NULL,
     description      TEXT NOT NULL,
     prompt           TEXT NOT NULL,
     status           TEXT NOT NULL,
@@ -48,7 +48,37 @@ const SCHEMA = `
     ON subagent_tasks(parent_session_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_subagent_tasks_child
     ON subagent_tasks(child_session_id);
+
+  CREATE TABLE IF NOT EXISTS subagent_profiles (
+    name           TEXT PRIMARY KEY,
+    description    TEXT NOT NULL,
+    system_prompt  TEXT NOT NULL,
+    tools          TEXT NOT NULL,
+    model_provider TEXT,
+    model_id       TEXT,
+    thinking_level TEXT NOT NULL,
+    bot            TEXT NOT NULL,
+    timeout_ms     INTEGER NOT NULL,
+    builtin        INTEGER NOT NULL DEFAULT 0,
+    created_at     INTEGER NOT NULL,
+    updated_at     INTEGER NOT NULL
+  );
 `;
+
+/**
+ * Rename `subagent_tasks.subagent_type` to `subagent_name` on databases created
+ * before profiles became user-defined. Idempotent: the column is only renamed
+ * while the old name is present and the new one is not. Old rows keep their
+ * values, which are now profile names (`codebase_explorer` / `code_reviewer`
+ * are exactly the names of the seeded built-ins).
+ */
+function migrateTaskColumns(db: Database.Database): void {
+  const columns = (db.prepare("PRAGMA table_info(subagent_tasks)").all() as Array<{ name: string }>)
+    .map((column) => column.name);
+  if (columns.includes("subagent_type") && !columns.includes("subagent_name")) {
+    db.exec("ALTER TABLE subagent_tasks RENAME COLUMN subagent_type TO subagent_name");
+  }
+}
 
 export function getSubagentDb(): Database.Database {
   if (globalThis.__piSubagentsDb) return globalThis.__piSubagentsDb;
@@ -59,6 +89,7 @@ export function getSubagentDb(): Database.Database {
   db.pragma("synchronous = NORMAL");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+  migrateTaskColumns(db);
   globalThis.__piSubagentsDb = db;
   return db;
 }
@@ -68,7 +99,7 @@ function mapRow(row: Record<string, unknown>): SubagentTask {
     taskId: row.task_id as string,
     parentSessionId: row.parent_session_id as string,
     childSessionId: (row.child_session_id as string | null) ?? null,
-    subagentType: row.subagent_type as SubagentType,
+    subagentName: row.subagent_name as string,
     description: row.description as string,
     prompt: row.prompt as string,
     status: row.status as SubagentTaskStatus,
@@ -83,15 +114,15 @@ function mapRow(row: Record<string, unknown>): SubagentTask {
 export function createSubagentTask(input: {
   taskId: string;
   parentSessionId: string;
-  subagentType: SubagentType;
+  subagentName: string;
   description: string;
   prompt: string;
 }): SubagentTask {
   const now = Date.now();
   getSubagentDb().prepare(`
     INSERT INTO subagent_tasks
-      (task_id, parent_session_id, subagent_type, description, prompt, status, created_at)
-    VALUES (@taskId, @parentSessionId, @subagentType, @description, @prompt, 'creating', @now)
+      (task_id, parent_session_id, subagent_name, description, prompt, status, created_at)
+    VALUES (@taskId, @parentSessionId, @subagentName, @description, @prompt, 'creating', @now)
   `).run({ ...input, now });
   return getSubagentTask(input.taskId)!;
 }

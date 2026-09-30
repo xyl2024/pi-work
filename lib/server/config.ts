@@ -10,8 +10,6 @@ import {
   type DangerousPatternsConfig,
   type PiWorkConfig,
   type McpConfig,
-  type SubagentConfig,
-  type SubagentThinkingLevel,
   type UiSoundEventId,
   type UiSoundsConfig,
   type WebAccessConfig,
@@ -78,20 +76,6 @@ function defaultRightSideBar(): RightSideBarConfig {
 
 const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = defaultRightSideBar();
 
-const DEFAULT_SUBAGENT: SubagentConfig = { thinking_level: "off" };
-const SUBAGENT_THINKING_LEVELS: readonly SubagentThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-
-function parseSubagent(raw: unknown): SubagentConfig {
-  if (!raw || typeof raw !== "object") return { ...DEFAULT_SUBAGENT };
-  const obj = raw as Record<string, unknown>;
-  const model = obj.model && typeof obj.model === "object" ? obj.model as Record<string, unknown> : null;
-  const configuredModel = model && typeof model.provider === "string" && typeof model.modelId === "string"
-    ? { provider: model.provider, modelId: model.modelId } : undefined;
-  const thinking_level = typeof obj.thinking_level === "string" && SUBAGENT_THINKING_LEVELS.includes(obj.thinking_level as SubagentThinkingLevel)
-    ? obj.thinking_level as SubagentThinkingLevel : DEFAULT_SUBAGENT.thinking_level;
-  return { thinking_level, ...(configuredModel ? { model: configuredModel } : {}) };
-}
-
 const DEFAULT_MCP: McpConfig = {
   // Off by default: see McpConfig.project_servers. pi's own CLI trusts project
   // resources, but a web UI must not run workspace-defined commands on open.
@@ -139,7 +123,6 @@ const DEFAULT_CONFIG: PiWorkConfig = {
     enabled: true,
     tavily: {},
   },
-  subagent: { ...DEFAULT_SUBAGENT },
   // Off by default: never silently route traffic through a proxy the user
   // did not ask for. `url` is required for the proxy to take effect.
   network_proxy: { enabled: false, url: "", no_proxy: "" },
@@ -389,7 +372,6 @@ export function readConfig(): PiWorkConfig {
       cwd_aliases: parseCwdAliases(cfg.cwd_aliases),
       disabled_skills: parseDisabledSkills(cfg.disabled_skills),
       web_access: parseWebAccess(cfg.web_access),
-      subagent: parseSubagent(cfg.subagent),
       network_proxy: parseNetworkProxy(cfg.network_proxy),
       mcp: parseMcp(cfg.mcp),
     };

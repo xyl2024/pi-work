@@ -44,13 +44,6 @@ export interface AppendSystemConfig {
 }
 
 
-export type SubagentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-
-export interface SubagentConfig {
-  model?: { provider: string; modelId: string };
-  thinking_level: SubagentThinkingLevel;
-}
-
 export interface WebAccessConfig {
   enabled: boolean;
   tavily: {
@@ -119,7 +112,6 @@ export interface PiWorkConfig {
   /** Per-cwd Skill files excluded from the model prompt (resources are untouched). */
   disabled_skills: Record<string, string[]>;
   web_access: WebAccessConfig;
-  subagent: SubagentConfig;
   network_proxy: NetworkProxyConfig;
   mcp: McpConfig;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { SubagentBotAppearance } from "@/lib/shared/subagent";
 import {
   GROKBOT_EXPRESSIONS,
   GROKBOT_GROUPS,
@@ -29,22 +30,13 @@ import {
  * Persisted to localStorage under `pi-work.grokbot.config`.
  */
 
-export interface GrokbotConfig {
-  /** Index into GROKBOT_EXPRESSIONS. */
-  expression: number;
-  /** Key into GROKBOT_POOLS / GROKBOT_STATE_NAMES, e.g. "idle". */
-  stateKey: string;
+export interface GrokbotConfig extends SubagentBotAppearance {
   /**
    * Body color is always the active theme accent (see `var(--accent)` on
    * `.grokbot-stage` in globals.css). The field is kept only so old
    * `localStorage` payloads don't trip `isConfig`; new writes ignore it.
    */
   colorId?: string;
-  shapeId: string;
-  /** Enabled body-part ids (hands/feet/tail/antenna). */
-  parts: string[];
-  /** Enabled accessory ids (straw-hat/glasses/bowtie/cape). */
-  accessories: string[];
   /** Auto-tour through every state. */
   autoPlay: boolean;
 }

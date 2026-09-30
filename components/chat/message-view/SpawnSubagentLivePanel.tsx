@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { SubagentLiveInfo } from "@/lib/shared/types";
+import { GrokBot } from "@/components/grokbot/GrokBot";
+import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-profiles-store";
 
 const POLL_INTERVAL_MS = 5_000;
 const ACTIVITY_MAX_HEIGHT = 200;
@@ -30,8 +32,16 @@ function fmtClock(timestamp: number): string {
  * and the child's recent tool-call activity; once the tool finishes the whole
  * panel is replaced by the tool's final result.
  */
-export function SpawnSubagentLivePanel({ childSessionId }: { childSessionId: string | null }) {
+export function SpawnSubagentLivePanel({
+  childSessionId,
+  subagentName,
+}: {
+  childSessionId: string | null;
+  subagentName: string | null;
+}) {
   const { t } = useI18n();
+  const profiles = useSubagentProfiles();
+  const profile = findSubagentProfile(profiles, subagentName);
   const [info, setInfo] = useState<SubagentLiveInfo | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const requestSeqRef = useRef(0);
@@ -88,7 +98,13 @@ export function SpawnSubagentLivePanel({ childSessionId }: { childSessionId: str
   const stats = info?.stats;
 
   return (
-    <div style={{ borderTop: "1px solid rgba(34,197,94,0.2)", background: "var(--bg-subtle)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ borderTop: "1px solid rgba(34,197,94,0.2)", background: "var(--bg-subtle)", padding: "8px 10px", display: "flex", gap: 10 }}>
+      {profile && (
+        <div style={{ flexShrink: 0, width: 76, alignSelf: "flex-start" }} aria-hidden="true">
+          <GrokBot appearance={profile.bot} size={76} interactive={false} />
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "#16a34a" }}>
           <span className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a", flexShrink: 0 }} />
@@ -136,6 +152,7 @@ export function SpawnSubagentLivePanel({ childSessionId }: { childSessionId: str
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

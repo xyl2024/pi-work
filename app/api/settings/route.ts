@@ -250,7 +250,6 @@ export async function PUT(req: Request) {
         ? { file_viewer: body.file_viewer as unknown as PiWorkConfig["file_viewer"] }
         : {}),
       ...(isObject(body.ui_sounds) ? { ui_sounds: body.ui_sounds as unknown as PiWorkConfig["ui_sounds"] } : {}),
-      ...(isObject(body.subagent) ? { subagent: body.subagent as unknown as PiWorkConfig["subagent"] } : {}),
       ...(isObject(body.network_proxy)
         ? { network_proxy: body.network_proxy as unknown as PiWorkConfig["network_proxy"] }
         : {}),

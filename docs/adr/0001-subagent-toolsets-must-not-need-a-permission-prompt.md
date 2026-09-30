@@ -13,3 +13,15 @@ We decided that a subagent profile may only contain tools that never need a conf
 
 - A user can no longer approve a blocked command coming from a subagent, even with that child session open in a tab. The child is expected to switch to a read-only alternative and say what it needed.
 - Any future subagent profile must be checkable against this rule: does every tool in the profile avoid interactive prompts? `tests/unit/subagent-profiles.test.ts` guards the current profiles.
+
+## Update: profiles are user-configurable
+
+Subagent profiles later became rows in `subagents.db`, editable in Settings →
+Subagents (`lib/server/subagent-profiles.ts`). The seed for the two built-ins
+still honours this rule — `SUBAGENT_DEFAULT_CODEGRAPH_TOOL_IDS` excludes
+`codegraph_build`, and both built-ins start from the read-only core plus shells
+— but the rule is no longer enforced on *user-created* profiles: the editor
+lets the user pick any tool. A profile that includes a confirmation-gated tool
+keeps the original failure mode (the prompt waits out the timeout, then is
+denied), it just is the user's explicit choice now. The guard test still covers
+the default seed, which is the part this project controls.

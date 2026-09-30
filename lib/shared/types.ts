@@ -245,9 +245,6 @@ export interface SessionInfo {
   running: boolean;
 }
 
-/** Specialized subagent profiles `spawn_subagent` can launch. */
-export type SubagentType = "codebase_explorer" | "code_reviewer";
-
 /**
  * How many subagent child sessions may run at the same time, process-wide.
  * Shared with `lib/shared/tools-market.ts` so the server's slot pool and the
@@ -263,7 +260,8 @@ export type SubagentTaskStatus = "creating" | "running" | "completed" | "failed"
 export interface SubagentTaskSummary {
   taskId: string;
   childSessionId: string | null;
-  subagentType: SubagentType;
+  /** Name of the configured subagent profile this task ran. */
+  subagentName: string;
   description: string;
   status: SubagentTaskStatus;
   createdAt: number;
@@ -294,6 +292,8 @@ export interface SubagentLiveInfo {
     status: SubagentTaskStatus;
     startedAt: number | null;
     description: string;
+    /** Name of the configured subagent profile, when the row still knows it. */
+    subagentName?: string;
   } | null;
   stats: {
     assistantCount: number | null;

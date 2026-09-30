@@ -186,7 +186,7 @@ export function SettingsModal({
       case "pi-documentation":
         return <PiDocumentationSection config={config} apply={apply} />;
       case "subagent":
-        return <SubagentSection config={config} apply={apply} />;
+        return <SubagentSection />;
       case "retry":
         return <RetrySection />;
       case "network-proxy":

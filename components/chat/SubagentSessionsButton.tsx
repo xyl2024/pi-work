@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
-import type { SubagentTaskStatus, SubagentTaskSummary, SubagentType } from "@/lib/shared/types";
+import type { SubagentTaskStatus, SubagentTaskSummary } from "@/lib/shared/types";
+import { GrokBot } from "@/components/grokbot/GrokBot";
+import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-profiles-store";
 
 interface Props {
   parentSessionId: string | null;
@@ -28,17 +30,9 @@ const STATUS_COLORS: Record<SubagentTaskStatus, string> = {
   cancelled: "var(--text-dim)",
 };
 
-/**
- * Short labels for `subagentType`. Parallel children are often described in
- * similar words, so the profile is shown next to the status.
- */
-const TYPE_KEYS: Record<SubagentType, string> = {
-  codebase_explorer: "Code explorer",
-  code_reviewer: "Code reviewer",
-};
-
 export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSession }: Props) {
   const { t } = useI18n();
+  const profiles = useSubagentProfiles();
   const [open, setOpen] = useState(false);
   const [tasks, setTasks] = useState<SubagentTaskSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -238,6 +232,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
             tasks.map((task) => {
               const canOpen = Boolean(task.childSessionId);
               const statusColor = STATUS_COLORS[task.status];
+              const botProfile = findSubagentProfile(profiles, task.subagentName);
               const hasStats = task.assistantCount != null && task.readCount != null;
               const stats = hasStats
                 ? `${t("{count} messages", { count: task.assistantCount as number })} · ${t("read {count} files", { count: task.readCount as number })}`
@@ -274,8 +269,12 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                 >
                   <span
                     aria-hidden="true"
-                    style={{ width: 7, height: 7, marginTop: 4, borderRadius: "50%", flexShrink: 0, background: statusColor }}
-                  />
+                    style={{ flexShrink: 0, width: 30, marginTop: -4 }}
+                  >
+                    {botProfile
+                      ? <GrokBot appearance={botProfile.bot} size={30} interactive={false} />
+                      : <span style={{ display: "inline-block", width: 7, height: 7, marginTop: 4, borderRadius: "50%", background: statusColor }} />}
+                  </span>
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <span
                       style={{
@@ -302,7 +301,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                       <span style={{ color: statusColor }}>{t(STATUS_KEYS[task.status])}</span>
                       <span aria-hidden="true" style={{ color: "var(--text-dim)" }}>·</span>
                       <span style={{ color: "var(--text-dim)" }}>
-                        {t(TYPE_KEYS[task.subagentType])}
+                        {task.subagentName || t("SubAgent")}
                       </span>
                     </span>
                     {stats && (

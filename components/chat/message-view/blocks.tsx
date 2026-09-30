@@ -397,7 +397,10 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
                 {inputStr}
               </pre>
               {isSpawnSubagent && isSubagentRunning ? (
-                <SpawnSubagentLivePanel childSessionId={subagentState?.childSessionId ?? null} />
+                <SpawnSubagentLivePanel
+                  childSessionId={subagentState?.childSessionId ?? null}
+                  subagentName={subagentState?.subagentName ?? null}
+                />
               ) : (
                 result && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />
               )}

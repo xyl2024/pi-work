@@ -2,7 +2,6 @@ import type {
   AppendSystemConfig,
   NetworkProxyConfig,
   PiWorkConfig,
-  SubagentConfig,
   UiSoundsConfig,
   WebAccessConfig,
 } from "./config-types";
@@ -28,7 +27,6 @@ export const SETTINGS_OWNED_KEYS = [
   "file_viewer",
   "ui_sounds",
   "web_access",
-  "subagent",
   "network_proxy",
 ] as const satisfies readonly (keyof PiWorkConfig)[];
 
@@ -52,7 +50,6 @@ export type SettingsPatch = Partial<{
       clear_api_key?: boolean;
     };
   };
-  subagent: SubagentConfig;
   network_proxy: NetworkProxyConfig;
 }>;
 

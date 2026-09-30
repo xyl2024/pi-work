@@ -20,13 +20,13 @@ describe("deriveSubagentBlockState", () => {
       result: result({ details: { status: "running", sessionId: "child-1" } }),
       isError: false,
     });
-    expect(state).toEqual({ running: true, childSessionId: "child-1" });
+    expect(state).toEqual({ running: true, childSessionId: "child-1", subagentName: null });
   });
 
   it("shows the waiting state before the child session exists (queued call)", () => {
     // tool_execution_start created the in-flight entry; no onSession partial yet.
     const state = deriveSubagentBlockState({ result: result(), isError: false });
-    expect(state).toEqual({ running: true, childSessionId: null });
+    expect(state).toEqual({ running: true, childSessionId: null, subagentName: null });
   });
 
   it("stops claiming a run while pi has not delivered the batch's toolResult yet", () => {
@@ -36,15 +36,15 @@ describe("deriveSubagentBlockState", () => {
     // block has no result at all — it must not render the live panel (and its
     // "Waiting for subagent session…" body) for an already-finished child.
     const state = deriveSubagentBlockState({ result: undefined, isError: false });
-    expect(state).toEqual({ running: false, childSessionId: null });
+    expect(state).toEqual({ running: false, childSessionId: null, subagentName: null });
   });
 
   it("shows the final result once it lands instead of the live panel", () => {
     const state = deriveSubagentBlockState({
-      result: result({ content: text("Subagent completed (child-1).\n\nDone."), details: { status: "completed", sessionId: "child-1" } }),
+      result: result({ content: text("Subagent completed (child-1).\n\nDone."), details: { status: "completed", sessionId: "child-1", subagentName: "codebase_explorer" } }),
       isError: false,
     });
-    expect(state).toEqual({ running: false, childSessionId: "child-1" });
+    expect(state).toEqual({ running: false, childSessionId: "child-1", subagentName: "codebase_explorer" });
   });
 
   it("ends the panel on a cancelled or failed child even without result text", () => {
