@@ -436,7 +436,6 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
           display: "block",
           margin: "0 auto",
           overflow: "visible",
-          filter: "drop-shadow(0 10px 10px rgba(35,48,80,0.18))",
         }}
         role="img"
         aria-label="Pi Bot"

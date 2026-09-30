@@ -18,6 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { GrokBot, type GrokBotHandle } from "./GrokBot";
 import {
   useGrokbotConfig,
@@ -58,8 +59,23 @@ export function GrokBotLab({ onClose }: Props) {
   const { t, locale } = useI18n();
   const config = useGrokbotConfig();
   const botRef = useRef<GrokBotHandle>(null);
+
+  // Portal target. The sidebar wraps this modal in a transformed 3D flip
+  // container (`SidebarFlipContainer`), which becomes the containing block
+  // for `position: fixed` descendants — without the portal the backdrop is
+  // trapped (and clipped by the face's `overflow: hidden`) inside the sidebar
+  // column. Mount after the first client render to avoid an SSR mismatch.
+  const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setPortalEl(document.body);
+  }, []);
+
+  // Gate the open animation on the portal: the enter transition has to play
+  // on an already-mounted element, and before the portal exists there is
+  // nothing to show anyway (closing unmounts this component via `onClose`, so
+  // the leaving animation is unaffected).
   const { requestClose, backdropStyle, panelStyle } = useModalAnimation({
-    isOpen: true,
+    isOpen: portalEl !== null,
     onClose,
   });
 
@@ -119,7 +135,9 @@ export function GrokBotLab({ onClose }: Props) {
     fontSize: 12,
   };
 
-  return (
+  if (!portalEl) return null;
+
+  return createPortal(
     <div
       style={backdropStyle}
       onClick={(e) => {
@@ -493,7 +511,8 @@ export function GrokBotLab({ onClose }: Props) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    portalEl,
   );
 }
 
