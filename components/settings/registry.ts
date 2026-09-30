@@ -29,8 +29,7 @@ export type SettingsSectionId =
   | "right-bar"
   | "ui-sounds"
   | "file-preview"
-  | "append-system"
-  | "pi-documentation"
+  | "system-prompt"
   | "subagent"
   | "retry"
   | "network-proxy"
@@ -71,8 +70,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
   { id: "ui-sounds", labelKey: "UI Sounds", group: "appearance" },
   { id: "file-preview", labelKey: "File preview limits", group: "appearance" },
 
-  { id: "append-system", labelKey: "Append System Prompt", group: "agent" },
-  { id: "pi-documentation", labelKey: "Pi documentation", group: "agent" },
+  { id: "system-prompt", labelKey: "System Prompt Template", group: "agent" },
   { id: "subagent", labelKey: "Subagent settings", group: "agent" },
   { id: "retry", labelKey: "Agent retry", group: "agent" },
 

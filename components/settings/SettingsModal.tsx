@@ -17,8 +17,7 @@ import { useSettingsWrite } from "./use-settings-write";
 import { useUnsavedChanges, type DirtyReporter } from "./use-unsaved-changes";
 import { AppearanceSection } from "./sections/AppearanceSection";
 import { ProfileSection } from "./sections/ProfileSection";
-import { AppendSystemSection } from "./sections/AppendSystemSection";
-import { PiDocumentationSection } from "./sections/PiDocumentationSection";
+import { SystemPromptTemplateSection } from "./sections/SystemPromptTemplateSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
@@ -181,10 +180,8 @@ export function SettingsModal({
         return <SoundSettingsSection config={config} apply={apply} />;
       case "file-preview":
         return <FilePreviewSection config={config} apply={apply} />;
-      case "append-system":
-        return <AppendSystemSection config={config} apply={apply} onDirtyChange={reportDirty} />;
-      case "pi-documentation":
-        return <PiDocumentationSection config={config} apply={apply} />;
+      case "system-prompt":
+        return <SystemPromptTemplateSection config={config} submit={submit} onDirtyChange={reportDirty} />;
       case "subagent":
         return <SubagentSection />;
       case "retry":
