@@ -88,10 +88,20 @@ const SECTION_ANCHORS: Record<string, string> = {
   cwd: "cwd",
 };
 
+/** The tag names {@link SECTION_RE} recognises. Also the vocabulary a rendered
+ *  system prompt template has to speak: `lib/shared/system-prompt-template`
+ *  derives its variable tags from these names (its `project_context` variable
+ *  goes through {@link PROJECT_CONTEXT_RE} instead), and a unit test pins the
+ *  two lists together. */
+export const SYSTEM_PROMPT_SECTION_NAMES = ["tools", "rules", "docs", "addendum", "skills", "cwd"] as const;
+
 /** One tagged section, tags included. `tools|rules|docs` are absent when the
  *  session runs with a custom prompt; `addendum|project_context|skills` are
  *  absent when their source is empty. */
-const SECTION_RE = /<(tools|rules|docs|addendum|skills|cwd)>\n([\s\S]*?)\n<\/\1>/g;
+const SECTION_RE = new RegExp(
+  `<(${SYSTEM_PROMPT_SECTION_NAMES.join("|")})>\\n([\\s\\S]*?)\\n<\\/\\1>`,
+  "g",
+);
 
 /** `<project_context>` is pi scaffolding wrapped around the AGENTS.md files;
  *  the wrapper lines are dropped from the display text. */
