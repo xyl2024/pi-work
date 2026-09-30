@@ -21,3 +21,7 @@
 - 服务端的写入面从「任意 key」收窄到「它拥有的 key」，因此 `PUT /api/settings` 不再是 `config.yaml` 的通用写口；按 cwd 的别名、图标与技能禁用各自由自己的接口负责。
 - 三个资源弹窗（Models / Skills / Prompts）与设置分区从此共用同一份控件皮肤；它们的外观会跟着变一次，交互与语义一点不变。若皮肤要再变，变的是那一处定义，不再是十三个文件。
 - 本文没有改动 `writeConfig`：它仍然直接 `writeFileSync` 到目标文件，没有临时文件 + rename，也没有与按 cwd 接口之间的互斥。今天四个写者都是「读-改-写」，丢更新在理论上是可能的；这是本次探索记下的发现，不在这一票里修。
+
+## Update（#99）
+
+系统提示词模板（ADR-0011）退役了 `append_system` 与 `load_pi_docs`，并新增 `system_prompt_template`。`PUT /api/settings` 的归属 key 集合因此变为：`right_side_bar`、`system_prompt_template`、`file_viewer`、`ui_sounds`、`web_access`、`network_proxy`（`lib/shared/settings-keys.ts` 的 `SETTINGS_OWNED_KEYS`）。按输入形态判定保存语义的规则不变：片段列表是用户分几步搭出来的结构化输入（拖拽、输入、增删），所以 `system_prompt_template` 属**待保存项**，用同一个 `submit` 写入口、带显式的 Save 按钮与脏状态登记。原文里 `subagent` 也不在集合内（子代理设置走自己的 SQLite），此处一并更正。

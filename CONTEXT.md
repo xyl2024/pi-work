@@ -258,9 +258,21 @@ _Avoid_: 用「队列」指代它（那是承载它的数据结构）；用「�
 可编辑的 prompt 模板文件，只有 `~/.pi/agent/prompts/`（全局）与 `<cwd>/.pi/prompts`（项目）两处可编辑。
 _Avoid_: 用它指代系统提示词
 
+**系统提示词（System prompt）**：
+模型这一轮实际收到的整条 system message 文本。由 Pi Work 用系统提示词模板渲染决定，pi 只在末尾补一个 `<cwd>` 段（`composeSystemPrompt`）。Context 面板、`get_state` 与 BTW 回放读的都是这一条，子代理会话例外（它不套模板，见下）。
+_Avoid_: 用 `APPEND_SYSTEM.md` 的内容指代它（那个文件已退役，见下）
+
+**系统提示词模板（System prompt template）**：
+`~/.pi-work/config.yaml` 的 `system_prompt_template`，一条有序的片段列表，决定系统提示词按什么顺序拼、拼进哪些变量。会话创建时从配置快照一次，之后改模板要开新会话才生效；变量数据（工具清单、追加块、项目上下文、技能、模型、思考级别、日期）每轮实时取。渲染规则在 `lib/shared/system-prompt-template.ts`（纯模块）。决策见 ADR-0011。
+_Avoid_: 叫它「提示词模板」（词表里的「提示词」已经指斜杠命令模板）
+
+**系统提示词片段（System prompt fragment）**：
+系统提示词模板里的一项，要么是一段自定义文本（可选一个 tag 名包起来，文本内不解析任何语法），要么是一个变量。变量共十个：`preamble`（无 tag）、`tools` / `rules` / `docs` / `addendum` / `project_context` / `skills`（沿用 pi 的段名，渲染出的 tag 能被 `system-prompt-segments` 解析回来）、`model` / `thinking_level` / `date`（Pi Work 自有）。变量渲染为空时整块不输出；没有 `cwd` 变量。
+_Avoid_: 把它当作斜杠命令模板的一项；在文本片段里写 `{{tools}}` 之类的插值
+
 **追加系统提示词（Append System）**：
-附加到系统提示词末尾的单文件 `~/.pi/agent/APPEND_SYSTEM.md`。
-_Avoid_: 把它混同于 Prompt 模板
+已退役：`~/.pi/agent/APPEND_SYSTEM.md`（及项目级 `.pi/APPEND_SYSTEM.md`）不再被 Pi Work 读取——loader 无条件收到 `appendSystemPrompt: []`，pi 的发现分支被跳过。文件原样留在磁盘上，内容要手工搬进系统提示词模板。内置工具说明块改由 `appendSystemPromptOverride` 生产，成为 `addendum` 变量的值。
+_Avoid_: 以为它还在生效；指望 Pi Work 自动迁移它的内容
 
 **斜杠命令（Slash command）**：
 界面层对 Prompt 与 Skill 的统一调用入口，`source` 为 `"prompt"` 或 `"skill"`。
