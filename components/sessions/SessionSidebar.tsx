@@ -731,13 +731,16 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       {/* Today's sessions — a flat, time-windowed view over the same rows
           the grouped Sessions section below renders. Intrinsically sized
           (grow: 0) and capped so a light day doesn't reserve blank space
-          and a heavy day scrolls inside its cap. */}
+          and a heavy day scrolls inside its cap. keepMounted keeps the list
+          (and its already-loaded rows) alive across toggles so collapsing /
+          expanding never replays the fetch. */}
       <SidebarSection
         title={t("Today's Sessions")}
         open={todayOpen}
         onToggle={() => setTodayOpen((v) => !v)}
         grow={0}
         maxHeight="40vh"
+        keepMounted
         actions={
           <RefreshIconButton
             onClick={() => setTodayRefreshSignal((n) => n + 1)}

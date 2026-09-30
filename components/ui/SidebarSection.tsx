@@ -27,6 +27,11 @@ interface Props {
    *  already gets exactly its share of free space. A heavy list then scrolls
    *  inside the cap instead of stretching the section past it. */
   maxHeight?: number | string;
+  /** Keep the content mounted while collapsed (it stays squashed to zero
+   *  height). Default false — unmounting releases things like FileExplorer's
+   *  git polling. Pass true for sections whose body refetches on mount (e.g.
+   *  Today's Sessions): toggling then never replays that load. */
+  keepMounted?: boolean;
 }
 
 // Collapsible section for the left sidebar. Explorer today, future sections
@@ -46,21 +51,28 @@ interface Props {
 // header, open state is header + grow × free space, and the closed header can
 // never be compressed (flexShrink: 0 when closed, matching the previous
 // `flex: 0 0 auto` behavior).
-export function SidebarSection({ title, open, onToggle, actions, children, durationMs = 180, grow = 1, maxHeight }: Props) {
+//
+// grow: 0 sections can't use that: their flex-grow is 0 in both states, so
+// there is nothing to interpolate. They animate their body instead with
+// `grid-template-rows: 0fr ↔ 1fr`, which interpolates toward the content's own
+// height (still without measuring, and capped by `maxHeight` below), so a short
+// list animates at the same pace as a full one.
+export function SidebarSection({ title, open, onToggle, actions, children, durationMs = 180, grow = 1, maxHeight, keepMounted = false }: Props) {
   // Keep the content mounted through the collapse animation (it must be in
   // the DOM to squeeze to zero), then unmount it after the transition
   // settles — same lifecycle as MultiCwdList's body. Unmounting releases
-  // things like FileExplorer's git polling while the section is collapsed.
+  // things like FileExplorer's git polling while the section is collapsed;
+  // `keepMounted` opts out for bodies that would refetch on remount.
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
-    if (open) {
+    if (open || keepMounted) {
       setMounted(true);
       return;
     }
     const timer = window.setTimeout(() => setMounted(false), durationMs + 40);
     return () => window.clearTimeout(timer);
-  }, [open, durationMs]);
+  }, [open, durationMs, keepMounted]);
 
   const ease = "cubic-bezier(0.32, 0.72, 0, 1)";
   // grow=0 sections (e.g. the GrokBot stage) claim only their content's
@@ -123,13 +135,32 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
           </div>
         )}
       </div>
-      {mounted && (
-        <div style={{ flex: isFixedHeight ? "0 0 auto" : "1 1 0", minHeight: 0, overflow: "hidden" }}>
-          <div data-scroll-side style={{ height: isFixedHeight ? "auto" : "100%", maxHeight, overflowY: "auto", overflowX: "hidden" }}>
-            {children}
+      {mounted &&
+        (isFixedHeight ? (
+          // The grid item must be allowed to shrink to nothing (minHeight: 0)
+          // and clip (overflow: hidden) for the 0fr row to squash it.
+          <div
+            style={{
+              display: "grid",
+              gridTemplateRows: open ? "1fr" : "0fr",
+              flex: "0 0 auto",
+              minHeight: 0,
+              transition: `grid-template-rows ${durationMs}ms ${ease}`,
+            }}
+          >
+            <div style={{ minHeight: 0, overflow: "hidden" }}>
+              <div data-scroll-side style={{ maxHeight, overflowY: "auto", overflowX: "hidden" }}>
+                {children}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div style={{ flex: "1 1 0", minHeight: 0, overflow: "hidden" }}>
+            <div data-scroll-side style={{ height: "100%", maxHeight, overflowY: "auto", overflowX: "hidden" }}>
+              {children}
+            </div>
+          </div>
+        ))}
     </div>
   );
 }
