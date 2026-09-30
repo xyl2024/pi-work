@@ -172,6 +172,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const isBash = toolKind === "bash";
   const isFileMutation = toolKind === "file-mutation";
   const isSpawnSubagent = toolKind === "subagent";
+  const isCodemode = toolKind === "codemode";
   // Only the specialized renderers (bash / diff for edit & write / the
   // subagent live panel) stay expanded by default; every other tool call
   // block collapses by default.
@@ -335,6 +336,26 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
         }}
       >
         <BashToolCallContent command={typeof block.input.command === "string" ? block.input.command : ""} timeout={timeout} cwd={cwd} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
+      </div>
+    );
+  }
+
+  if (isCodemode) {
+    // Codemode blocks render like bash: no header, no JSON dump. The single
+    // `code` argument is shown as the input, JS-highlighted, with the script's
+    // text output below; the whole thing is capped inside
+    // CodemodeToolCallContent with a click-to-expand mask.
+    return (
+      <div
+        style={{
+          borderRadius: 7,
+          overflow: "hidden",
+          fontSize: 12,
+          border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
+          background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+        }}
+      >
+        <CodemodeToolCallContent code={typeof block.input.code === "string" ? block.input.code : ""} resultText={resultText} resultIsEmpty={resultIsEmpty} isError={isError} isDark={isDark} />
       </div>
     );
   }
@@ -601,6 +622,82 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
         </svg>
       </button>
     )}
+    </div>
+  );
+}
+
+const CODEMODE_DETAIL_MAX_HEIGHT = 300;
+
+function CodemodeToolCallContent({ code, resultText, resultIsEmpty, isError, isDark }: {
+  code: string;
+  resultText: string | null;
+  resultIsEmpty: boolean;
+  isError: boolean;
+  isDark: boolean;
+}) {
+  const { t } = useI18n();
+  const [expandedAll, setExpandedAll] = useState(false);
+  const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
+  const showMask = contentHeight !== null && contentHeight > CODEMODE_DETAIL_MAX_HEIGHT && !expandedAll;
+  const codeBg = isDark ? "#1e1e1e" : "#f7f7f7";
+  return (
+    <div
+      style={{
+        position: "relative",
+        height: expandedAll
+          ? (contentHeight === null ? "auto" : contentHeight)
+          : (contentHeight === null ? "auto" : Math.min(contentHeight, CODEMODE_DETAIL_MAX_HEIGHT)),
+        overflow: "hidden",
+        transition: allowAnim ? "height 0.3s cubic-bezier(0.4, 0, 0.2, 1)" : "none",
+      }}
+    >
+      <div ref={contentRef} data-scroll-inset style={{ background: codeBg }}>
+        <SyntaxHighlighter
+          language="javascript"
+          style={isDark ? vscDarkPlus : vs}
+          PreTag="pre"
+          customStyle={{ margin: 0, padding: "8px 10px", background: codeBg, fontSize: 12, lineHeight: 1.5, overflowX: "auto", border: "none" }}
+          codeTagProps={{ style: { background: codeBg, fontFamily: "var(--font-mono)", border: "none" } }}
+        >
+          {code}
+        </SyntaxHighlighter>
+        {resultText !== null && <PairedResult text={resultText} isEmpty={resultIsEmpty} isError={isError} />}
+      </div>
+
+      {!expandedAll && showMask && (
+        <button
+          onClick={() => setExpandedAll(true)}
+          aria-label={t("Expand")}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 48,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            border: "none",
+            padding: 0,
+            background: `linear-gradient(to bottom, rgba(0,0,0,0), ${codeBg})`,
+          }}
+        >
+          <svg
+            width={16}
+            height={16}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

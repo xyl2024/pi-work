@@ -1,4 +1,4 @@
-import { createAgentSession, DefaultResourceLoader, isToolCallEventType, ModelRuntime, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, createCodemodeExtension, DefaultResourceLoader, isToolCallEventType, ModelRuntime, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ContextUsage, ToolInfo } from "./pi-types";
 import type { SessionEvent } from "../shared/session-events";
@@ -1095,6 +1095,14 @@ export async function startRpcSession(
             ].filter((skill) => !disabledSkillPaths.has(skill.filePath)),
       }),
       extensionFactories: [
+        // pi 把 codemode / tool_search / MCP 作为「内置扩展」，只有 CLI 会自动加载；
+        // SDK 会话（Pi Work 走的路径）必须显式挂上，否则注册表里根本没有这个工具。
+        // codemode 注册为 inactive（defaultActive: false），由会话的工具选择来激活：
+        // 默认选择 "all" 会把注册表里的每个工具都激活（含 codemode），用户在工具
+        // 选择器里也能单独关掉——选择器读的是 get_tools，未激活的工具同样会列出。
+        // 只用 codemode，不带 tool_search / MCP；子代理会话由 allowedToolNames
+        // 收窄注册表，codemode 自然不会被激活。
+        createCodemodeExtension(),
         ...(options.systemPromptPrefix
           ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
               pi.on("before_agent_start", (event) => {
