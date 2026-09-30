@@ -8,7 +8,7 @@
 
 1. **`customPrompt` 会顶掉 `<tools>` / `<rules>` / `<docs>`。** pi 的 `buildSystemPromptSections` 里，`customPrompt` 只要为真，这三个 section 就整体不再生成——不是覆盖内容，是压根没有。Pi Work 因此必须自己写出同名 tag（`<tools>` 等）才能让 transcript、Context 面板与模型所见三者一致。
 2. **交付是 `event.systemPromptOptions` 的原地 mutation，不是 `return { systemPrompt }`。** 后者走 `forceSystemPrompt`：provider 请求会看到那段不透明文本，而 transcript 仍按分段 diff 记录，两边分叉。用 `customPrompt` 则两边同源。唯一的例外是「模板渲染结果为空」——那时 `customPrompt: ""` 会让 pi 静默退回它自己的默认段落，所以这一种情况**故意**再返回 `{ systemPrompt: "" }`（`forceSystemPrompt` 用 `!== undefined` 判定，空串有效），让「模型失去全部指引」与用户的警告一致。
-3. **末尾那个 `<cwd>` 拦不住。** pi 无条件赋值 `promptSections.cwd` 且永远排在末尾，所以「任意顺序」对 cwd 不成立，模板里干脆没有 cwd 变量，由 `composeSystemPrompt` 在渲染结果之后补上。
+3. **末尾那个 `<cwd>` 拦不住。** pi 无条件赋值 `promptSections.cwd` 且永远排在末尾，所以「任意顺序」对 cwd 不成立，模板里干脆没有 cwd 变量。读侧（Context 面板 / `get_state` / BTW）用 `composeSystemPrompt` 在渲染结果之后补上它；而交付给 `customPrompt` 的必须是**裸渲染**——把补过的结果塞进去会让 cwd 段出现两次。
 4. **`APPEND_SYSTEM.md` 退役。** loader 构造时无条件收到 `appendSystemPrompt: []`（空数组在 JS 里为真，因此 pi 的 `discoverAppendSystemPromptFile()` 分支被跳过），全局与项目级两份文件都不再被读；文件原样留在磁盘上，不自动迁移、不自动导入模板。内置工具说明块仍由 `appendSystemPromptOverride` 生产，成为 `addendum` 变量的值。
 5. **抄来的文案会随 pi 升级漂移。** persona 句、`<tools>` 尾巴、`<docs>` 正文、`buildRules` 的基础规则、`formatSkillsForPrompt` 都是复刻，唯一防线是一条与 SDK `buildSystemPrompt` 逐字对拍的测试（`tests/unit/system-prompt-template.test.ts`）。那条测试允许深路径 import `dist/core/system-prompt.js`，生产代码不可以。
 

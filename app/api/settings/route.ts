@@ -102,13 +102,13 @@ function validateNetworkProxy(
 }
 
 /**
- * The template arrives as an array of fragments. Anything else is a client bug
- * (or a hand-rolled request), so it is rejected rather than silently replaced —
- * the difference between "the user deleted every fragment" (an empty array,
- * which warns) and "the request was malformed" matters. Valid fragments are
- * normalised; unknown ones are dropped instead of failing the whole save.
+ * Shape check only, and only array-ness: an array (including the empty one) is
+ * accepted, and its fragments are normalised by `normalizeSystemPromptTemplate`
+ * below. A non-array is a client bug, and rejecting it matters — silently
+ * turning it into an empty template would render an empty prompt, which the
+ * user never asked for.
  */
-function validateSystemPromptTemplate(raw: unknown): { ok: true } | { ok: false; error: string } {
+function validateSystemPromptTemplateShape(raw: unknown): { ok: true } | { ok: false; error: string } {
   if (raw === undefined) return { ok: true };
   if (!Array.isArray(raw)) return { ok: false, error: "system_prompt_template must be an array" };
   return { ok: true };
@@ -225,7 +225,7 @@ export async function PUT(req: Request) {
     }
 
     if (body.system_prompt_template !== undefined) {
-      const templateCheck = validateSystemPromptTemplate(body.system_prompt_template);
+      const templateCheck = validateSystemPromptTemplateShape(body.system_prompt_template);
       if (!templateCheck.ok) {
         log.warn("settings rejected: invalid system_prompt_template", {
           error: templateCheck.error,

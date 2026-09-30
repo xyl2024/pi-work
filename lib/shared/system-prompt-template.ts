@@ -164,12 +164,11 @@ export const TEMPLATE_VARIABLE_NAMES: readonly TemplateVariableName[] = [
 
 const TEMPLATE_VARIABLE_SET: ReadonlySet<string> = new Set(TEMPLATE_VARIABLE_NAMES);
 
-/** Variables whose removal the settings UI must warn about. */
-export const FUNCTIONAL_TEMPLATE_VARIABLES: readonly TemplateVariableName[] = [
-  "addendum",
-  "project_context",
-  "skills",
-];
+/** Variables whose removal the settings UI must warn about — the catalog's
+ *  `functional` flag is the single source of truth. */
+export function functionalTemplateVariables(): TemplateVariableName[] {
+  return TEMPLATE_VARIABLE_NAMES.filter((name) => TEMPLATE_VARIABLES[name].functional);
+}
 
 // ── Default template ──────────────────────────────────────────────────────
 
@@ -262,6 +261,59 @@ export interface TemplateMaterial {
   model?: string;
   thinkingLevel?: string;
   date?: string;
+}
+
+/**
+ * Build material with the empty defaults filled in, so the three producers (the
+ * event options, the live session, and the no-session preview fallback) do not
+ * each restate the whole field list. `cwd` is required; the docs paths have no
+ * sensible default and are passed by whoever can reach the SDK.
+ */
+export function createTemplateMaterial(
+  overrides: Partial<TemplateMaterial> & { cwd: string },
+): TemplateMaterial {
+  return {
+    selectedTools: [],
+    toolSnippets: {},
+    toolGuidelines: {},
+    promptGuidelines: [],
+    appendSystemPrompt: "",
+    contextFiles: [],
+    skills: [],
+    docsPaths: { readme: "", docs: "", examples: "" },
+    ...overrides,
+  };
+}
+
+/** pi's `_normalizePromptSnippet`: collapse to one trimmed line, or nothing. */
+export function normalizePromptSnippet(text: string | undefined): string | undefined {
+  if (!text) return undefined;
+  const oneLine = text.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  return oneLine.length > 0 ? oneLine : undefined;
+}
+
+/** pi's `_normalizePromptGuidelines`: trimmed, de-duplicated, order kept. */
+export function normalizePromptGuidelines(guidelines: string[] | undefined): string[] {
+  if (!guidelines || guidelines.length === 0) return [];
+  const unique = new Set<string>();
+  for (const guideline of guidelines) {
+    const normalized = guideline.trim();
+    if (normalized.length > 0) unique.add(normalized);
+  }
+  return Array.from(unique);
+}
+
+/** `provider/id`, the label the `model` variable renders. */
+export function templateModelLabel(
+  model: { provider: string; id: string } | undefined,
+): string | undefined {
+  return model ? `${model.provider}/${model.id}` : undefined;
+}
+
+/** Today, as `YYYY-MM-DD` in the local time zone. */
+export function templateDate(now: Date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 /** Per-variable bodies, untagged. An empty string means "this variable has
@@ -448,6 +500,12 @@ export function renderSystemPromptTemplate(
  * this is the one place order is not the user's to choose — a known, accepted
  * exception.
  *
+ * **Do not put this string into `customPrompt`**: pi would append a second
+ * `<cwd>`. The takeover writes the bare {@link renderSystemPromptTemplate}
+ * output and lets pi add the section; this composed form is the read-side
+ * source (Context panel / `get_state` / BTW) and is pinned against
+ * `buildSystemPrompt` with `customPrompt` set by a unit test.
+ *
  * An empty render is the one case with no cwd: the server forces an empty
  * prompt there (`forceSystemPrompt: ""`), because an empty `customPrompt` would
  * silently fall back to pi's own sections.
@@ -502,7 +560,7 @@ export function findTemplateWarnings(
 ): TemplateWarning[] {
   const present = new Set(template.filter((f) => f.kind === "variable").map((f) => f.name));
   const warnings: TemplateWarning[] = [];
-  for (const variable of FUNCTIONAL_TEMPLATE_VARIABLES) {
+  for (const variable of functionalTemplateVariables()) {
     if (!present.has(variable)) warnings.push({ code: "removed-functional-variable", variable });
   }
   if (rendered.trim() === "") warnings.push({ code: "empty-render" });

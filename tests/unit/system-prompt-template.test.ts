@@ -123,6 +123,47 @@ describe("default template parity with pi", () => {
       "skills",
     ]);
   });
+
+  // The takeover writes the *bare* render into `customPrompt` and lets pi append
+  // its own `<cwd>`. This pins that the two together land exactly on the string
+  // the panel reads — and that `<cwd>` appears once, not twice.
+  it.each([
+    ["full material", {}],
+    ["no skills", { skills: [] }],
+    ["no append block", { appendSystemPrompt: "" }],
+    ["no context file", { contextFiles: [] }],
+  ] as Array<[string, Partial<TemplateMaterial>]>)(
+    "lands exactly on the composed prompt through the takeover (%s)",
+    (_label, overrides) => {
+      const input = material(overrides);
+      const rendered = renderDefault(input);
+      const patched = buildSystemPrompt({
+        ...piOptions(input),
+        customPrompt: rendered,
+        appendSystemPrompt: "",
+        contextFiles: [],
+        skills: [],
+        sections: {},
+      });
+      expect(patched).toEqual(composeSystemPrompt(rendered, input.cwd));
+      expect(patched.match(/<cwd>/g)).toHaveLength(1);
+    },
+  );
+
+  // ...which is also why an empty render cannot be expressed with `customPrompt`:
+  // pi treats a falsy one as "no custom prompt" and rebuilds its own sections.
+  it("documents that an empty customPrompt would restore pi's default sections", () => {
+    const input = material();
+    const patched = buildSystemPrompt({
+      ...piOptions(input),
+      customPrompt: "",
+      appendSystemPrompt: "",
+      contextFiles: [],
+      skills: [],
+      sections: {},
+    });
+    expect(patched).toContain("You are an expert coding assistant");
+  });
 });
 
 describe("variable catalog", () => {

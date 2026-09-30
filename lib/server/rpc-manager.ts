@@ -13,6 +13,7 @@ import {
   createDefaultTemplate,
   planSystemPromptOptions,
   renderSystemPromptTemplate,
+  templateModelLabel,
   type SystemPromptTemplate,
   type TemplateMaterial,
   type TemplateVariableValues,
@@ -20,7 +21,6 @@ import {
 import {
   collectTemplateMaterial,
   materialFromSystemPromptOptions,
-  templateModelLabel,
   type SystemPromptOptionsLike,
   type TemplateResourceLoaderLike,
 } from "./system-prompt-template-source";
@@ -195,19 +195,31 @@ export class AgentSessionWrapper {
   }
 
   /**
+   * The value the takeover writes into `systemPromptOptions.customPrompt`: the
+   * rendered template **without** the trailing `<cwd>` — pi appends that
+   * section itself, so including it here would send it twice. Null when the
+   * session does not run the template (subagents).
+   */
+  customPromptForTurn(options?: SystemPromptOptionsLike): string | null {
+    const material = this.collectPromptMaterial(options);
+    if (!material) return null;
+    return renderSystemPromptTemplate(this.promptSource!.template, buildTemplateVariableValues(material));
+  }
+
+  /**
    * Pi Work's own render of the whole system prompt (ADR-0011) — the source the
-   * Context panel, `get_state` and BTW replay read, and what the
-   * `before_agent_start` takeover writes into `customPrompt`.
+   * Context panel, `get_state` and BTW replay read. This *is* the composed form
+   * (render + pi's unconditional `<cwd>`), i.e. exactly what the model receives,
+   * which is why it must not be reused as `customPrompt` (see
+   * {@link customPromptForTurn}).
    *
-   * `options` is the event's `systemPromptOptions` when a turn is starting; it
-   * carries the authoritative tool loadout for that turn. Without it the
-   * material is collected from the live session and loader, which is what lets a
-   * session that has never sent a message show the prompt the model will get.
+   * Material is collected from the live session and loader, so a session that
+   * has never sent a message shows the prompt the model will get.
    *
    * Sessions that do not run the template return pi's prompt unchanged.
    */
-  renderSystemPrompt(options?: SystemPromptOptionsLike): string {
-    const material = this.collectPromptMaterial(options);
+  renderSystemPrompt(): string {
+    const material = this.collectPromptMaterial();
     if (!material) return this.inner.systemPrompt ?? "";
     return composeSystemPrompt(
       renderSystemPromptTemplate(this.promptSource!.template, buildTemplateVariableValues(material)),
@@ -1421,7 +1433,10 @@ export async function startRpcSession(
                 pi.on("before_agent_start", (event) => {
                   const wrapper = wrapperRef.current;
                   if (!wrapper) return undefined;
-                  const rendered = wrapper.renderSystemPrompt(event.systemPromptOptions);
+                  // `customPromptForTurn` is the bare render; pi appends `<cwd>`
+                  // itself, so the composed form would duplicate that section.
+                  const rendered = wrapper.customPromptForTurn(event.systemPromptOptions);
+                  if (rendered === null) return undefined;
                   Object.assign(event.systemPromptOptions, planSystemPromptOptions(rendered));
                   return rendered === "" ? { systemPrompt: "" } : undefined;
                 });

@@ -16,12 +16,13 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 ```
 pi-work/
 ├── app/                # Next.js App Router 入口；app/api/**/route.ts 只做适配，业务逻辑放 lib/server
-│   └── api/            # 按领域的路由目录：agent、agent-settings、append-system、auth、btw、channels、
+│   └── api/            # 按领域的路由目录：agent、agent-settings、auth、btw、channels、
 │                       #   create-space、cwd-aliases/-icons/-tools、default-cwd、exchange-rate、favorites、
 │                       #   file-mentions、files、git、github-trending、home、inbox、kanban、llm-audit、models、
 │                       #   models-config、notes、notes-file、profile、prompts、rss、scheduled-tasks、
-│                       #   sessions、settings、skills、slash-commands、status-bar、subagents、terminal、
-│                       #   token-audit、tools-market、translate、workspaces
+│                       #   sessions、settings、skills、slash-commands、status-bar、subagents、
+│                       #   system-prompt-template、terminal、token-audit、tools-market、translate、
+│                       #   workspaces
 ├── components/         # React UI，按产品功能拆分
 │   ├── app-shell/      # 应用外壳与命令面板
 │   ├── chat/           # 聊天、输入、消息渲染、模型/思考级别/工具选择、权限确认、Ask User Questions

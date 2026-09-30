@@ -19,8 +19,9 @@
 //    subtracts (`prefix differencing`, ADR-0005) — which needs `start` / `end`
 //    offsets into the original string, with the slices forming an ordered,
 //    non-overlapping, gap-free cover of it;
-//  - the specialized-subagent path and the `load_pi_docs` toggle rewrite the
-//    rendered prompt, so they want to drop or unwrap a section by name.
+//  - the specialized-subagent path rewrites the rendered prompt (it flattens
+//    pi's sections and prefixes the profile's own prompt), so it wants to drop
+//    or unwrap a section by name.
 //
 // So: offsets always cover the original bytes (tags included); `text` is what
 // the panel draws.
