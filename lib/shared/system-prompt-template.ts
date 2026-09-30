@@ -425,7 +425,7 @@ function wrapTag(tag: string, body: string): string {
  */
 export function renderSystemPromptTemplate(
   template: SystemPromptTemplate,
-  values: TemplateVariableValues,
+  values: Partial<TemplateVariableValues>,
 ): string {
   const parts: string[] = [];
   for (const fragment of template) {

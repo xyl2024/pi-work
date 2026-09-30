@@ -5,7 +5,6 @@ import {
   splitSystemPrompt,
   splitSystemPromptLeaves,
   stripDefaultSystemPromptSections,
-  stripPiDocumentationSection,
 } from "@/lib/shared/system-prompt-segments";
 
 // Characterization tests for the segmentation that used to live inside the
@@ -299,17 +298,6 @@ describe("prompt section rewriting", () => {
   it("leaves a prompt without the section untouched", () => {
     const prompt = `${PREAMBLE}\n\n${CWD}`;
     expect(dropSystemPromptSection(prompt, "docs")).toBe(prompt);
-  });
-
-  it("removes only the pi-docs section for the load_pi_docs toggle", () => {
-    const stripped = stripPiDocumentationSection(FULL);
-
-    expect(stripped).not.toContain("Pi documentation");
-    // Everything the toggle must preserve is still there.
-    expect(stripped).toContain("<tools>");
-    expect(stripped).toContain("<addendum>\nAPPENDED SYSTEM PROMPT");
-    expect(stripped).toContain('<project_instructions path="/repo/AGENTS.md">');
-    expect(stripped).toContain("<cwd>\n/repo\n</cwd>");
   });
 
   it("flattens the prompt for a specialized subagent", () => {

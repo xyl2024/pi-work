@@ -5,7 +5,6 @@ import { createLogger } from "./logger";
 import { dataPath } from "./data-dir";
 import {
   UI_SOUND_EVENT_IDS,
-  type AppendSystemConfig,
   type DangerousPatternRule,
   type DangerousPatternsConfig,
   type PiWorkConfig,
@@ -14,6 +13,8 @@ import {
   type UiSoundsConfig,
   type WebAccessConfig,
 } from "../shared/config-types";
+import { createDefaultTemplate, normalizeSystemPromptTemplate } from "../shared/system-prompt-template";
+import type { SystemPromptTemplate } from "../shared/system-prompt-template";
 import { DEFAULT_UI_SOUND_EVENTS } from "../shared/ui-sounds-defaults";
 import type { NetworkProxyConfig } from "../shared/config-types";
 import {
@@ -36,11 +37,11 @@ import { PANEL_TAB_SPEC_BY_KIND } from "../shared/panelTabs";
 // the validator will silently drop it (fail-open default still applies, but
 // the user setting is lost).
 
-// ── APPEND_SYSTEM.md loader toggle ───────────────────────────────────────
-// pi's DefaultResourceLoader auto-loads ~/.pi/agent/APPEND_SYSTEM.md on
-// every session. Disabling here passes `appendSystemPrompt: []` to the
-// loader, which short-circuits `discoverAppendSystemPromptFile()` — the
-// file is left untouched on disk so re-enabling just flips the flag.
+// ── System prompt template ───────────────────────────────────────────────
+// `system_prompt_template` is the ordered fragment list Pi Work renders the
+// whole system prompt from (ADR-0011). Absent or mangled → the default
+// template, which renders byte-identically to pi's own assembly. The retired
+// `append_system` / `load_pi_docs` keys are ignored on read, never migrated.
 
 // ── Dangerous-command confirmation rules ────────────────────────────────
 // Empty `rules` means "no user rules": the built-in bash / PowerShell sets in
@@ -101,11 +102,9 @@ function parseMcp(raw: unknown): McpConfig {
 const DEFAULT_CONFIG: PiWorkConfig = {
   dangerous_patterns: DEFAULT_DANGEROUS_PATTERNS,
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
-  // Preserve pre-existing behavior: append file loads by default.
-  append_system: { enabled: true },
-  // Preserve pre-existing behavior: pi's built-in Pi documentation section
-  // stays in new sessions' system prompts by default.
-  load_pi_docs: true,
+  // The default template renders exactly what pi used to assemble, so a
+  // config that says nothing about it keeps pre-feature behavior.
+  system_prompt_template: createDefaultTemplate(),
   // Preserves pre-feature behavior: same hardcoded limits the route used
   // before the value became user-configurable.
   file_viewer: {
@@ -184,13 +183,13 @@ function parseRightSideBar(raw: unknown): RightSideBarConfig {
   return out;
 }
 
-// Fail-open for the missing/garbled case (keep the on-by-default behavior
-// so an old config.yaml doesn't silently turn the append off). An explicit
-// `enabled: false` is honored — the user pushed the button, we trust them.
-function parseAppendSystem(raw: unknown): AppendSystemConfig {
-  if (!raw || typeof raw !== "object") return { enabled: true };
-  const obj = raw as Record<string, unknown>;
-  return { enabled: obj.enabled !== false };
+// System prompt template. A config written before this feature simply has no
+// `system_prompt_template` key, and that has to keep rendering pi's native
+// prompt — i.e. fall back to the default template, not to an empty one. An
+// explicit empty array is the user's own "render nothing" choice and is kept.
+function parseSystemPromptTemplate(raw: unknown): SystemPromptTemplate {
+  if (raw === undefined || raw === null) return createDefaultTemplate();
+  return normalizeSystemPromptTemplate(raw);
 }
 
 // File preview size limits — fail-open like every other parser here:
@@ -364,8 +363,7 @@ export function readConfig(): PiWorkConfig {
     return {
       dangerous_patterns: parseDangerousPatterns(cfg.dangerous_patterns),
       right_side_bar: parseRightSideBar(cfg.right_side_bar),
-      append_system: parseAppendSystem(cfg.append_system),
-      load_pi_docs: typeof cfg.load_pi_docs === "boolean" ? cfg.load_pi_docs : true,
+      system_prompt_template: parseSystemPromptTemplate(cfg.system_prompt_template),
       file_viewer: parseFileViewer(cfg.file_viewer),
       ui_sounds: parseUiSounds(cfg.ui_sounds),
       cwd_icons: parseCwdIcons(cfg.cwd_icons),

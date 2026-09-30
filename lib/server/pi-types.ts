@@ -112,6 +112,8 @@ export interface AgentSessionLike {
    *  prompt options and is correct from session creation onward. */
   readonly systemPrompt: string;
   readonly model: ModelLike | undefined;
+  /** The session's thinking level — the `thinking_level` template variable. */
+  readonly thinkingLevel?: string;
   readonly modelRuntime: Pick<ModelRuntime, "getModel" | "getModels">;
   readonly sessionManager: SessionManager;
   readonly settingsManager: SettingsManager;
@@ -138,6 +140,12 @@ export interface AgentSessionLike {
   followUp(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<QueuedInputDisposition>;
   getAllTools(): ToolInfo[];
   getActiveToolNames(): string[];
+  /** A registered tool's definition, for the prompt snippet / guidelines the
+   *  `tools` and `rules` template variables need. Optional so test doubles do
+   *  not have to implement it. */
+  getToolDefinition?(
+    name: string,
+  ): { promptSnippet?: string; promptGuidelines?: string[] } | undefined;
   setActiveToolsByName(names: string[]): void;
   /**
    * Bind the extension runtime to this session and emit `session_start`.

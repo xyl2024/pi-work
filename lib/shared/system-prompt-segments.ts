@@ -317,17 +317,3 @@ export function stripDefaultSystemPromptSections(prompt: string): string {
   }
   return out.trim();
 }
-
-/**
- * Remove ONLY pi's built-in "Pi documentation" section from a rendered system
- * prompt, leaving everything else (append blocks, `<project_context>`, skills,
- * working directory, …) untouched. The section is a tagged `<docs>` block, so
- * the tag is an exact boundary and the removal can never over-consume a
- * following section.
- *
- * Backed by `PiWorkConfig.load_pi_docs`: when the toggle is off, new sessions
- * start without the model being pointed at the pi SDK README / docs paths.
- */
-export function stripPiDocumentationSection(prompt: string): string {
-  return dropSystemPromptSection(prompt, "docs").trimStart();
-}

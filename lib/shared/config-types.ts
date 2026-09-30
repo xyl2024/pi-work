@@ -1,5 +1,6 @@
 import type { FileViewerConfig } from "./file-viewer-limits";
 import type { RightSideBarConfig } from "./right-bar";
+import type { SystemPromptTemplate } from "./system-prompt-template";
 
 /** Browser-safe contract for ~/.pi-work/config.yaml. */
 export interface DangerousPatternRule {
@@ -37,10 +38,6 @@ export const AGENT_CUSTOM_TOOL_NAMES: readonly AgentCustomToolName[] = [
 
 export interface CustomToolsConfig {
   enabled: AgentCustomToolName[];
-}
-
-export interface AppendSystemConfig {
-  enabled: boolean;
 }
 
 
@@ -100,9 +97,12 @@ export interface McpConfig {
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   right_side_bar: RightSideBarConfig;
-  append_system: AppendSystemConfig;
-  /** Toggle for pi's built-in "Pi documentation" section in new sessions. */
-  load_pi_docs: boolean;
+  /**
+   * The ordered fragment list the session's system prompt is rendered from.
+   * Snapshotted when a session starts; variables are read live every turn.
+   * See `lib/shared/system-prompt-template.ts` and ADR-0011.
+   */
+  system_prompt_template: SystemPromptTemplate;
   file_viewer: FileViewerConfig;
   ui_sounds: UiSoundsConfig;
   /** Per-cwd custom icon override: absolute cwd path → lucide icon name. */

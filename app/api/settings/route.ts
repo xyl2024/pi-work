@@ -8,6 +8,7 @@ import {
 import { UI_SOUND_EVENT_IDS } from "@/lib/shared/config-types";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { isSettingsOwnedKey } from "@/lib/shared/settings-keys";
+import { normalizeSystemPromptTemplate } from "@/lib/shared/system-prompt-template";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +98,19 @@ function validateNetworkProxy(
   if (obj.enabled === true && !urlCheck.url) {
     return { ok: false, error: "network_proxy.url is required when the proxy is enabled" };
   }
+  return { ok: true };
+}
+
+/**
+ * The template arrives as an array of fragments. Anything else is a client bug
+ * (or a hand-rolled request), so it is rejected rather than silently replaced —
+ * the difference between "the user deleted every fragment" (an empty array,
+ * which warns) and "the request was malformed" matters. Valid fragments are
+ * normalised; unknown ones are dropped instead of failing the whole save.
+ */
+function validateSystemPromptTemplate(raw: unknown): { ok: true } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true };
+  if (!Array.isArray(raw)) return { ok: false, error: "system_prompt_template must be an array" };
   return { ok: true };
 }
 
@@ -210,6 +224,17 @@ export async function PUT(req: Request) {
       }
     }
 
+    if (body.system_prompt_template !== undefined) {
+      const templateCheck = validateSystemPromptTemplate(body.system_prompt_template);
+      if (!templateCheck.ok) {
+        log.warn("settings rejected: invalid system_prompt_template", {
+          error: templateCheck.error,
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json({ error: templateCheck.error }, { status: 400 });
+      }
+    }
+
     // Start from what is on disk and overlay only the owned keys present in
     // the patch; the write face is therefore exactly SETTINGS_OWNED_KEYS.
     const onDisk = readConfig();
@@ -242,10 +267,9 @@ export async function PUT(req: Request) {
       ...(isObject(body.right_side_bar)
         ? { right_side_bar: body.right_side_bar as unknown as PiWorkConfig["right_side_bar"] }
         : {}),
-      ...(isObject(body.append_system)
-        ? { append_system: body.append_system as unknown as PiWorkConfig["append_system"] }
+      ...(body.system_prompt_template !== undefined
+        ? { system_prompt_template: normalizeSystemPromptTemplate(body.system_prompt_template) }
         : {}),
-      ...(typeof body.load_pi_docs === "boolean" ? { load_pi_docs: body.load_pi_docs } : {}),
       ...(isObject(body.file_viewer)
         ? { file_viewer: body.file_viewer as unknown as PiWorkConfig["file_viewer"] }
         : {}),

@@ -36,9 +36,9 @@ describe("unsavedChangesReducer", () => {
   it("saving one key leaves another key's dirty flag alone", () => {
     const state = reduce(
       INITIAL_UNSAVED_CHANGES,
-      { type: "dirty", key: "append-system" },
+      { type: "dirty", key: "system-prompt" },
       { type: "dirty", key: "profile" },
-      { type: "saved", key: "append-system" },
+      { type: "saved", key: "system-prompt" },
     );
     expect(state.dirty).toEqual(["profile"]);
   });
@@ -73,7 +73,7 @@ describe("selectCloseConfirmKey", () => {
   });
 
   it("returns the one confirm-prompt key as soon as anything is dirty", () => {
-    for (const key of ["append-system", "network-proxy", "profile"]) {
+    for (const key of ["system-prompt", "network-proxy", "profile"]) {
       const state = reduce(INITIAL_UNSAVED_CHANGES, { type: "dirty", key });
       expect(selectCloseConfirmKey(state)).toBe(UNSAVED_CHANGES_CONFIRM_KEY);
     }

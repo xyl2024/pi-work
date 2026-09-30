@@ -52,31 +52,71 @@ describe("settings api", () => {
     expect(((after.body.ui_sounds ?? {}) as Json).enabled).toBe(nextValue);
   });
 
-  it("applies a reversible load_pi_docs toggle and restores", async () => {
+  it("applies a reversible system_prompt_template change and restores", async () => {
     const before = await api("/api/settings");
     expect(before.status).toBe(200);
-    // Defaults to on so existing prompts keep pi's built-in Pi documentation.
-    expect((before.body as Json).load_pi_docs).toBe(true);
+    original = before.body;
+    const template = (before.body as Json).system_prompt_template as unknown[];
+    // A config that says nothing about the template reads back the default,
+    // which is the pre-feature pi assembly.
+    expect(Array.isArray(template)).toBe(true);
+    expect(template.length).toBeGreaterThan(0);
 
+    // Reverse the order: a content change the API has to round-trip verbatim
+    // (fragment ids, tags and variable names included).
+    const reversed = [...template].reverse();
     const put = await api("/api/settings", {
       method: "PUT",
-      body: JSON.stringify({ load_pi_docs: false }),
+      body: JSON.stringify({ system_prompt_template: reversed }),
     });
     expect(put.status).toBe(200);
     expect(put.body.success).toBe(true);
-
-    const off = await api("/api/settings");
-    expect(off.status).toBe(200);
-    expect((off.body as Json).load_pi_docs).toBe(false);
+    expect(((await api("/api/settings")).body as Json).system_prompt_template).toEqual(reversed);
 
     // Restore.
     const back = await api("/api/settings", {
       method: "PUT",
-      body: JSON.stringify({ load_pi_docs: true }),
+      body: JSON.stringify({ system_prompt_template: template }),
     });
     expect(back.status).toBe(200);
-    const on = await api("/api/settings");
-    expect((on.body as Json).load_pi_docs).toBe(true);
+    expect(((await api("/api/settings")).body as Json).system_prompt_template).toEqual(template);
+  });
+
+  it("keeps an explicitly empty template instead of restoring the default", async () => {
+    const before = (await api("/api/settings")).body;
+    const empty = await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ system_prompt_template: [] }),
+    });
+    expect(empty.status).toBe(200);
+    expect(((await api("/api/settings")).body as Json).system_prompt_template).toEqual([]);
+    await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ system_prompt_template: before.system_prompt_template }),
+    });
+  });
+
+  it("rejects a non-array system_prompt_template with 400", async () => {
+    const bad = await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ system_prompt_template: "not-a-template" }),
+    });
+    expect(bad.status).toBe(400);
+    expect(String(bad.body.error)).toContain("system_prompt_template");
+  });
+
+  it("silently ignores the retired append_system / load_pi_docs keys", async () => {
+    const before = (await api("/api/settings")).body;
+    const put = await api("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify({ append_system: { enabled: false }, load_pi_docs: false }),
+    });
+    // Not rejected — an old page or an old config keeps working.
+    expect(put.status).toBe(200);
+    const after = (await api("/api/settings")).body as Json;
+    expect(after.append_system).toBeUndefined();
+    expect(after.load_pi_docs).toBeUndefined();
+    expect(after).toMatchObject({ system_prompt_template: before.system_prompt_template });
   });
 
   it("rejects out-of-range file_viewer limits with 400", async () => {
@@ -227,26 +267,27 @@ describe("settings api: PUT is a patch over owned keys", () => {
     expect(planted.status).toBe(200);
     expect(await readAlias()).toBe(alias);
 
-    const beforeLoadPiDocs = stale.load_pi_docs;
+    const beforeTemplate = stale.system_prompt_template;
+    const otherTemplate = [...(beforeTemplate as unknown[])].reverse();
     try {
       // 3. An old page submits the whole config it remembers, without the alias.
       const put = await api("/api/settings", {
         method: "PUT",
-        body: JSON.stringify({ ...stale, load_pi_docs: !beforeLoadPiDocs }),
+        body: JSON.stringify({ ...stale, system_prompt_template: otherTemplate }),
       });
       expect(put.status).toBe(200);
-      expect(((await api("/api/settings")).body as Json).load_pi_docs).toBe(!beforeLoadPiDocs);
+      expect(((await api("/api/settings")).body as Json).system_prompt_template).toEqual(otherTemplate);
       // …and the sentinel is still there.
       expect(await readAlias()).toBe(alias);
 
       // 4. A single-key patch behaves the same.
       const patch = await api("/api/settings", {
         method: "PUT",
-        body: JSON.stringify({ load_pi_docs: beforeLoadPiDocs }),
+        body: JSON.stringify({ system_prompt_template: beforeTemplate }),
       });
       expect(patch.status).toBe(200);
       expect(await readAlias()).toBe(alias);
-      expect(((await api("/api/settings")).body as Json).load_pi_docs).toBe(beforeLoadPiDocs);
+      expect(((await api("/api/settings")).body as Json).system_prompt_template).toEqual(beforeTemplate);
     } finally {
       await api("/api/cwd-aliases", {
         method: "POST",
@@ -264,5 +305,7 @@ describe("settings api: PUT is a patch over owned keys", () => {
     expect(put.status).toBe(200);
     const after = await api("/api/settings");
     expect((after.body as Json).disabled_skills).not.toEqual(sentinel);
+    // A retired key is not an owned key any more: it is ignored, not honored.
+    expect((after.body as Json).load_pi_docs).toBeUndefined();
   });
 });
