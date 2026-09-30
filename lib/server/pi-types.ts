@@ -139,6 +139,15 @@ export interface AgentSessionLike {
   getAllTools(): ToolInfo[];
   getActiveToolNames(): string[];
   setActiveToolsByName(names: string[]): void;
+  /**
+   * Bind the extension runtime to this session and emit `session_start`.
+   * pi's own CLI calls this at startup; SDK sessions have to opt in, and it is
+   * the only thing that makes the built-in MCP extension read `mcp.json` and
+   * connect its servers. The bindings themselves are optional: Pi Work passes
+   * `{}`, which leaves pi's no-op UI context in place and only triggers the
+   * event (see `lib/server/rpc-manager.ts`).
+   */
+  bindExtensions(bindings: object): Promise<void>;
   getContextUsage(): ContextUsage | undefined;
   /** Manually trigger context compaction. Aborts any in-progress run first.
    *  Mirrors pi TUI's bare `/compact` — the optional `[focus]` tail is not

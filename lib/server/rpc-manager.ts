@@ -1,9 +1,9 @@
-import { createAgentSession, createCodemodeExtension, DefaultResourceLoader, isToolCallEventType, ModelRuntime, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, createCodemodeExtension, createMcpExtension, DefaultResourceLoader, isToolCallEventType, ModelRuntime, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ContextUsage, ToolInfo } from "./pi-types";
 import type { SessionEvent } from "../shared/session-events";
 import type { ToolSelection } from "../shared/types";
-import { expandToolSelection } from "../shared/tool-selection";
+import { declarableToolNames, expandToolSelection, isDeclarableTool } from "../shared/tool-selection";
 import {
   stripDefaultSystemPromptSections,
   stripPiDocumentationSection,
@@ -11,6 +11,7 @@ import {
 import type { ToolMarketId } from "../shared/tools-market";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
+import { loadMcpConfigForPiWork } from "./mcp-config";
 import { loadPiWorkSkillsSafety } from "./pi-work-skills";
 import path from "node:path";
 
@@ -740,24 +741,40 @@ export class AgentSessionWrapper {
       case "get_tools": {
         const all: ToolInfo[] = this.inner.getAllTools();
         const active = new Set<string>(this.inner.getActiveToolNames());
-        return all.map((t) => ({
+        // Only the declarable tools are worth listing: a tool the user cannot
+        // activate must not show up as an (un-toggleable) row in the picker.
+        // pi's own `codemode` / `tool_search` are `model-only`, so they stay.
+        // MCP tools at their default `codemode` exposure stay reachable from
+        // codemode scripts but are intentionally absent here; set the server's
+        // exposure to `direct` to manage them per session.
+        return all.filter((t) => isDeclarableTool(t)).map((t) => ({
           name: t.name,
           description: t.description,
           active: active.has(t.name),
+          exposure: t.exposure,
         }));
       }
 
       case "set_tools": {
         const toolNames = command.toolNames as ToolSelection;
+        // Non-declarable tools (MCP servers at `codemode` / `deferred`
+        // exposure) are not selectable: activating them would declare them to
+        // the model, which is not what that exposure means. They stay callable
+        // from codemode scripts either way.
+        const declarableSet = new Set(declarableToolNames(this.inner.getAllTools()));
         if (toolNames === "all") {
-          this.inner.setActiveToolsByName(this.inner.getAllTools().map((t) => t.name));
+          this.inner.setActiveToolsByName([...declarableSet]);
         } else if (Array.isArray(toolNames)) {
-          // Entries may carry trailing-`*` prefix patterns (e.g. "codegraph_*");
+          // Entries may carry trailing-`*` prefix patterns (e.g. `codegraph_*`);
           // resolve them against the live registry before applying. The raw
           // selection (patterns included) is what gets persisted below, so a
           // restart re-expands against the then-current registry.
           const allNames = this.inner.getAllTools().map((t) => t.name);
-          this.inner.setActiveToolsByName(expandToolSelection(toolNames, allNames) as string[]);
+          this.inner.setActiveToolsByName(
+            (expandToolSelection(toolNames, allNames) as string[]).filter((name) =>
+              declarableSet.has(name),
+            ),
+          );
         }
         this.setToolSelection(toolNames);
         // Mirror to the sidecar so the selection survives a server restart.
@@ -891,6 +908,14 @@ export interface StartRpcSessionOptions {
   stripDefaultSystemPromptSections?: boolean;
   /** Persist the parent session id in a newly-created session header. */
   parentSessionId?: string;
+  /**
+   * Whether this session may connect MCP servers from pi's `mcp.json`
+   * (default: only plain user sessions — see the check at the call site).
+   * The ephemeral tool-catalog probe passes `false` explicitly: it exists to
+   * list tools, and connecting would spawn every configured stdio server on
+   * each tools-popover open.
+   */
+  mcp?: boolean;
 }
 
 export async function startRpcSession(
@@ -1013,10 +1038,18 @@ export async function startRpcSession(
     // register a before_agent_start extension below that strips only that
     // block. Read once per session start, like the append toggle above.
     let loadPiDocs = true;
+    // PiWorkConfig.mcp. The MCP extension connects its servers from
+    // `session_start`, which only fires once this session binds the extension
+    // runtime (see the `bindExtensions` call after createAgentSession), so the
+    // policy is decided here, once, and never re-read mid-session.
+    let mcpProjectServers = false;
+    let mcpStartupWaitMs = 3000;
     try {
       const cfg = readConfig();
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
       loadPiDocs = cfg.load_pi_docs;
+      mcpProjectServers = cfg.mcp.project_servers;
+      mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
       // Specialized subagents intentionally do not inherit APPEND_SYSTEM.md.
       if (options.systemPromptPrefix || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
@@ -1024,6 +1057,13 @@ export async function startRpcSession(
     } catch {
       // readConfig already logs and falls back to defaults; this catch is defensive only.
     }
+    // MCP servers are process-spawning (stdio) and long-lived, so they are
+    // only connected for the session a user is actually talking to:
+    //  - subagent sessions (systemPromptPrefix) and scheduled tasks run
+    //    unattended and are narrowed by allowedToolNames anyway;
+    //  - the ephemeral tool-catalog probe passes `mcp: false` explicitly.
+    // A caller can still force it on or off through options.mcp.
+    const mcpEnabled = options.mcp ?? (source === "user" && !options.systemPromptPrefix);
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
@@ -1098,11 +1138,33 @@ export async function startRpcSession(
         // pi 把 codemode / tool_search / MCP 作为「内置扩展」，只有 CLI 会自动加载；
         // SDK 会话（Pi Work 走的路径）必须显式挂上，否则注册表里根本没有这个工具。
         // codemode 注册为 inactive（defaultActive: false），由会话的工具选择来激活：
-        // 默认选择 "all" 会把注册表里的每个工具都激活（含 codemode），用户在工具
-        // 选择器里也能单独关掉——选择器读的是 get_tools，未激活的工具同样会列出。
-        // 只用 codemode，不带 tool_search / MCP；子代理会话由 allowedToolNames
-        // 收窄注册表，codemode 自然不会被激活。
+        // 默认选择 "all" 会把注册表里可声明的工具都激活（含 codemode），用户在工具
+        // 选择器里也能单独关掉。
+        // tool_search 只在 MCP 服务器配了 `deferred` exposure 时才需要，暂时不挂：
+        // 挂上它就得让用户能关，多一个 UI 面不如等真有 deferred 服务器再说。
         createCodemodeExtension(),
+        // MCP：读 pi 自己的 ~/.pi/agent/mcp.json（以及用户显式信任时的项目
+        // .pi/mcp.json），把服务器的工具注册成 mcp__<server>__<tool>。
+        // 服务器是在 `session_start` 里连接的，而 SDK 会话只有调用
+        // bindExtensions() 才会发这个事件 —— 见下面 createAgentSession 之后的
+        // 那一次调用，那是整条链路的开关。
+        ...(mcpEnabled
+          ? [
+              createMcpExtension({
+                // 不用 pi 的默认 loader：它按 SettingsManager.isProjectTrusted()
+                // 决定要不要读项目文件，而 SDK 建这个 manager 时 projectTrusted
+                // 默认就是 true。项目文件能拉起任意 stdio 命令，Pi Work 又是 Web
+                // 界面，所以改成由 PiWorkConfig.mcp.project_servers 显式打开。
+                loadConfig: (ctx) =>
+                  loadMcpConfigForPiWork({
+                    agentDir,
+                    cwd: ctx.cwd,
+                    projectTrusted: mcpProjectServers,
+                  }),
+                startupWaitMs: mcpStartupWaitMs,
+              }),
+            ]
+          : []),
         ...(options.systemPromptPrefix
           ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
               pi.on("before_agent_start", (event) => {
@@ -1389,18 +1451,44 @@ export async function startRpcSession(
       invalidateSessionListCache();
     }
 
-    // Keep pi's full tool registry available so later switches to "all" can include
-    // extension/custom tools, then set the active subset before the first prompt.
-    // If "all" was requested, activate everything pi registered at runtime.
+    // Bind the extension runtime and emit `session_start`. This is what makes
+    // the MCP extension read mcp.json and start connecting; without it the
+    // extension is loaded but never runs. Nothing else in Pi Work needs the
+    // event, so it is skipped for sessions that do not connect MCP servers.
+    // (MCP tools themselves arrive later: the extension connects through a
+    // dynamic import on the next tick. Those are registered declarable-only
+    // when their exposure is `direct`, and pi activates them on registration.)
+    if (mcpEnabled) {
+      await inner.bindExtensions({});
+    }
+
+    // Pi Work's tool selection has always meant "every registered tool", but
+    // that no longer agrees with pi once MCP is in play: a server left at its
+    // default `codemode` exposure registers its tools without declaring them,
+    // and pi's loadout only drops `hidden` — putting one of those names into
+    // setActiveToolsByName would declare it to the model after all. Restrict
+    // every "activate tools" path to the declarable subset; the rest stay
+    // reachable from codemode scripts.
+    const declarableNames = declarableToolNames(inner.getAllTools());
+
+    // Keep pi's full tool registry available so later switches to "all" can
+    // include extension/custom tools, then set the active subset before the
+    // first prompt. "all" activates every declarable tool pi registered at
+    // runtime (see the filter above).
     if (effectiveToolNames === "all") {
-      inner.setActiveToolsByName(inner.getAllTools().map((t: ToolInfo) => t.name));
+      inner.setActiveToolsByName(declarableNames);
     } else if (Array.isArray(effectiveToolNames)) {
       // Resolve trailing-`*` prefix patterns (e.g. "pi_work_*") against the
-      // registry pi built for this session before applying.
-      const expanded = expandToolSelection(
-        effectiveToolNames,
-        inner.getAllTools().map((t: ToolInfo) => t.name),
-      ) as string[];
+      // registry pi built for this session before applying. The raw selection
+      // is what gets persisted, so a pattern that only matches a
+      // non-declarable MCP tool still re-expands correctly on restore.
+      const declarableSet = new Set(declarableNames);
+      const expanded = (
+        expandToolSelection(
+          effectiveToolNames,
+          inner.getAllTools().map((t: ToolInfo) => t.name),
+        ) as string[]
+      ).filter((name) => declarableSet.has(name));
       inner.setActiveToolsByName(expanded);
 
       // When all tools are disabled the prompt is cleared per run by the

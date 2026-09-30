@@ -159,6 +159,33 @@ export function toggleSelectionEntry(
 }
 
 /**
+ * Whether pi declares a tool to the model. Mirrors pi's `_isDeclarable`:
+ * `direct` and `model-only` land in the model's tool declarations, while
+ * `codemode` / `deferred` tools are reached through the `codemode` or
+ * `tool_search` tool and `hidden` tools are unreachable.
+ *
+ * This has to be applied to every "activate tools" path: pi's loadout drops
+ * only `hidden`, so passing a `codemode`-exposure tool (e.g. one from an MCP
+ * server left at its default exposure) into `setActiveToolsByName` *would*
+ * declare it to the model, which is the opposite of what that exposure means.
+ * An absent exposure means `direct` (pi's own default).
+ */
+export function isDeclarableTool(tool: { exposure?: string }): boolean {
+  return tool.exposure === undefined || tool.exposure === "direct" || tool.exposure === "model-only";
+}
+
+/**
+ * The subset of a tool catalog pi may declare to the model, in catalog order.
+ * The tools of an MCP server that are not declared stay callable from
+ * `codemode` scripts, so dropping them here loses no capability.
+ */
+export function declarableToolNames(
+  tools: readonly { name: string; exposure?: string }[],
+): string[] {
+  return tools.filter(isDeclarableTool).map((tool) => tool.name);
+}
+
+/**
  * Expand a full ToolSelection ("all" passes through untouched; arrays get
  * their `*` patterns resolved against `allToolNames`).
  */

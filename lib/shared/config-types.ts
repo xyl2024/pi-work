@@ -81,6 +81,29 @@ export interface NetworkProxyConfig {
   no_proxy: string;
 }
 
+/**
+ * MCP (Model Context Protocol) switches. The servers themselves live in pi's
+ * own `~/.pi/agent/mcp.json`, so they stay shared with the `pi` CLI and the
+ * TUI's `/mcp` manager; this block only holds Pi Work's own policy on top.
+ */
+export interface McpConfig {
+  /**
+   * Trust `<cwd>/.pi/mcp.json` from the workspace. Off by default: a project
+   * file can spawn arbitrary stdio commands, and a Pi Work session may be
+   * reachable from the LAN (or the Electron shell's loopback), so opening a
+   * folder must not be enough to run code. pi's CLI/SDK default the other way
+   * (project resources are trusted), which is why this is an explicit switch.
+   */
+  project_servers: boolean;
+  /**
+   * How long the first prompt of a session waits for MCP servers that are
+   * still connecting, in milliseconds. pi's own default is 10000, which makes
+   * the first message look stuck while a slow stdio server boots; 0 disables
+   * the wait entirely (tools still appear once the server connects).
+   */
+  startup_wait_ms: number;
+}
+
 export interface PiWorkConfig {
   dangerous_patterns: DangerousPatternsConfig;
   right_side_bar: RightSideBarConfig;
@@ -98,6 +121,7 @@ export interface PiWorkConfig {
   web_access: WebAccessConfig;
   subagent: SubagentConfig;
   network_proxy: NetworkProxyConfig;
+  mcp: McpConfig;
 }
 
 /**

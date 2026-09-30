@@ -9,6 +9,7 @@ import {
   type DangerousPatternRule,
   type DangerousPatternsConfig,
   type PiWorkConfig,
+  type McpConfig,
   type SubagentConfig,
   type SubagentThinkingLevel,
   type UiSoundEventId,
@@ -91,6 +92,28 @@ function parseSubagent(raw: unknown): SubagentConfig {
   return { thinking_level, ...(configuredModel ? { model: configuredModel } : {}) };
 }
 
+const DEFAULT_MCP: McpConfig = {
+  // Off by default: see McpConfig.project_servers. pi's own CLI trusts project
+  // resources, but a web UI must not run workspace-defined commands on open.
+  project_servers: false,
+  // Much shorter than pi's 10000: the wait happens inside `before_agent_start`,
+  // so it is dead time between "send" and the first token in the web UI.
+  startup_wait_ms: 3000,
+};
+
+function parseMcp(raw: unknown): McpConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULT_MCP };
+  const obj = raw as Record<string, unknown>;
+  const startup = obj.startup_wait_ms;
+  return {
+    project_servers: obj.project_servers === true,
+    startup_wait_ms:
+      typeof startup === "number" && Number.isFinite(startup) && startup >= 0
+        ? Math.min(Math.floor(startup), 120_000)
+        : DEFAULT_MCP.startup_wait_ms,
+  };
+}
+
 const DEFAULT_CONFIG: PiWorkConfig = {
   dangerous_patterns: DEFAULT_DANGEROUS_PATTERNS,
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
@@ -120,6 +143,7 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   // Off by default: never silently route traffic through a proxy the user
   // did not ask for. `url` is required for the proxy to take effect.
   network_proxy: { enabled: false, url: "", no_proxy: "" },
+  mcp: { ...DEFAULT_MCP },
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -367,6 +391,7 @@ export function readConfig(): PiWorkConfig {
       web_access: parseWebAccess(cfg.web_access),
       subagent: parseSubagent(cfg.subagent),
       network_proxy: parseNetworkProxy(cfg.network_proxy),
+      mcp: parseMcp(cfg.mcp),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });
