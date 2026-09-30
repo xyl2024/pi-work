@@ -558,6 +558,7 @@ describe("panelTabs registry → command palette", () => {
       openScheduler: () => {},
       openChannels: () => {},
       openToolMarket: () => {},
+      openMcp: () => {},
       toggleSidebar: () => {},
       toggleRightPanel: () => {},
       togglePanel: () => {},

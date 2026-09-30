@@ -270,6 +270,32 @@ _Avoid_: 把它当成第三种资源
 一个 SKILL.md 目录。运行时会加载的来源有三处：`~/.pi/agent/skills/`（全局）、`<cwd>/.pi/skills/`（项目）、`~/.pi-work/skills/`（Pi Work 自有，pi 的 loader 不扫描）；仓库内 `agent-skills/` 只是平台维护的分发源，需用户自行拷贝到 `~/.pi-work/skills/` 后才会生效。
 _Avoid_: 与 `.agents/skills/`（跨仓库共享技能）混用；把 `agent-skills/` 当作会被自动加载的目录
 
+### MCP
+
+**MCP 服务器（MCP server）**：
+pi 的 MCP 扩展在一个会话启动时连接的外部工具来源，配置写在 pi 自己的 `mcp.json` 里而不是 Pi Work 的 `config.yaml`，工具以 `mcp__<服务器>__<工具>` 注册。
+_Avoid_: 把它当作 Pi Work 的集成（Pi Work 只读写它的配置文件，连接与工具注册都在 pi 那边）
+
+**服务器条目（Server entry）**：
+`mcpServers` 里的一项，由名字加一份配置组成：stdio（`command`/`args`/`env`/`cwd`）或 streamable HTTP（`url`/`headers`）。
+_Avoid_: 用「服务器」指代整份 `mcp.json`
+
+**条目作用域（Entry scope）**：
+条目来自哪份文件：**全局**（`~/.pi/agent/mcp.json`，总是读）与**本工作目录**（`<cwd>/.pi/mcp.json`，只在 `PiWorkConfig.mcp.project_servers` 打开时读）；pi 自己的字段名仍是 `project`。
+_Avoid_: 用「项目」指代它（那是 cwd 的 _Avoid_ 词，且「工作目录分组（Workspace）」已指侧栏的会话分组）；把它当成每个会话各存一份
+
+**条目覆盖（Entry shadowing）**：
+两份文件里的同名条目按作用域合并，**本工作目录**的那份替换全局的那份；两份都留在文件里，只有被替换掉的那份不会被连接。
+_Avoid_: 把它当作条目被移动或删除
+
+**无效条目（Invalid entry）**：
+解析通过但没通过 pi 校验的条目，pi 只跳过它、其余服务器照常连接；所以它既不等于整份文件坏掉，也不允许被静默丢弃或重写。
+_Avoid_: 把它当作 `mcp.json` 解析失败（那是文件级错误，面板拒绝保存）
+
+**工具暴露级别（Exposure）**：
+一个 MCP 服务器的工具对模型可见的程度，五档：`codemode`、`codemode-deferred`、`deferred`、`direct`、`hidden`，可用 `toolExposure` 按工具覆盖。
+_Avoid_: 与会话工具集（loadout）混用
+
 ### 计划
 
 **计划（Plan）**：
