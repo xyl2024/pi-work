@@ -30,6 +30,7 @@ import { BtwPanel } from "../panels/BtwPanel";
 import { useToolCallStatsView, useToolCallStatsScroll } from "@/hooks/toolCallStatsStore";
 import { ModelsConfig } from "../settings/ModelsConfig";
 import { SkillsConfig } from "../settings/SkillsConfig";
+import { McpConfig } from "../settings/McpConfig";
 import { Tooltip } from "../ui/Tooltip";
 import { PromptsConfig } from "../settings/PromptsConfig";
 import { SettingsModal } from "../settings/SettingsModal";
@@ -520,6 +521,7 @@ export function AppShell() {
   const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
+  const [mcpConfigOpen, setMcpConfigOpen] = useState(false);
   const [promptsConfigOpen, setPromptsConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
@@ -557,6 +559,7 @@ export function AppShell() {
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
     setModelsConfigOpen(false);
     setSkillsConfigOpen(false);
+    setMcpConfigOpen(false);
     setPromptsConfigOpen(false);
     setSettingsConfigOpen(false);
     setSchedulerOpen(false);
@@ -1311,6 +1314,7 @@ export function AppShell() {
     openScheduler: () => setSchedulerOpen(true),
     openChannels: () => setChannelsOpen(true),
     openToolMarket: () => setToolsMarketOpen(true),
+    openMcp: () => setMcpConfigOpen(true),
     toggleSidebar: () => setSidebarOpen((v) => !v),
     toggleRightPanel: () => dispatchPanelTabs({
       type: "set_mode",
@@ -1588,6 +1592,7 @@ export function AppShell() {
       onOpenScheduler={() => setSchedulerOpen(true)}
       onOpenChannels={() => setChannelsOpen(true)}
       onOpenToolMarket={() => setToolsMarketOpen(true)}
+      onOpenMcp={() => setMcpConfigOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onOpenInbox={() => setInboxOpen(true)}
       onLogout={handleLogout}
@@ -1868,6 +1873,13 @@ export function AppShell() {
   {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); setModelsRefreshKey((k) => k + 1); }} />}
     {skillsConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
       <SkillsConfig cwd={(selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setSkillsConfigOpen(false)} />
+    )}
+    {mcpConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
+      <McpConfig
+        cwd={(selectedSession?.cwd ?? newSessionCwd)!}
+        onClose={() => setMcpConfigOpen(false)}
+        onNewSession={() => handleSlashNew()}
+      />
     )}
     {promptsConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
       <PromptsConfig cwd={(selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setPromptsConfigOpen(false)} />

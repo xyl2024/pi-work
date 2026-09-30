@@ -230,6 +230,32 @@ describe("the question gate on the same table", () => {
     await expect(pending).resolves.toEqual({ kind: "cancelled" });
   });
 
+  it("turns a cancel carrying a note into a replied resolution", async () => {
+    const { gates } = makeGates();
+    const pending = gates.requestUserInput(inputGate());
+
+    expect(
+      gates.resolveUserInput("question-1", {
+        cancelled: true,
+        message: "  Neither fits; use a queue.  ",
+      }),
+    ).toBe(true);
+    await expect(pending).resolves.toEqual({
+      kind: "replied",
+      message: "Neither fits; use a queue.",
+    });
+  });
+
+  it("treats a whitespace-only note as a plain cancel", async () => {
+    const { gates } = makeGates();
+    const pending = gates.requestUserInput(inputGate());
+
+    expect(
+      gates.resolveUserInput("question-1", { cancelled: true, message: "   " }),
+    ).toBe(true);
+    await expect(pending).resolves.toEqual({ kind: "cancelled" });
+  });
+
   it("round-trips a submit with no selected answers", async () => {
     const { gates } = makeGates();
     const pending = gates.requestUserInput(inputGate());

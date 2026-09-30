@@ -8,6 +8,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { InboxBell } from "../inbox/InboxBell";
 import { SmartImage } from "../ui/SmartImage";
 import { SettingsIcon } from "../ui/animated-icons";
+import { McpIcon } from "../ui/icons";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { SUN, MOON } from "@/lib/client/icon-paths";
 
@@ -19,6 +20,7 @@ interface Props {
   onOpenScheduler?: () => void;
   onOpenChannels?: () => void;
   onOpenToolMarket?: () => void;
+  onOpenMcp?: () => void;
   onOpenInbox?: () => void;
   inboxUnread?: number;
   refreshKey?: number;
@@ -47,7 +49,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, onOpenInbox, inboxUnread, refreshKey, onLogout }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, onOpenInbox, inboxUnread, refreshKey, onLogout }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -141,7 +143,7 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenPrompts || onOpenScheduler || onOpenChannels || onOpenToolMarket || onLogout);
+  const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenMcp || onOpenPrompts || onOpenScheduler || onOpenChannels || onOpenToolMarket || onLogout);
 
   return (
     <div
@@ -363,6 +365,18 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
                 <path d="M2 12l10 5 10-5" />
               </svg>
               <span>{t("Skills")}</span>
+            </button>
+          )}
+          {onOpenMcp && (
+            <button
+              role="menuitem"
+              onClick={() => { setMenuOpen(false); onOpenMcp(); }}
+              style={itemBaseStyle}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              <McpIcon size={14} />
+              <span>{t("mcp.title")}</span>
             </button>
           )}
           {onOpenPrompts && (

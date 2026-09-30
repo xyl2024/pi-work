@@ -39,6 +39,7 @@ const GearIcon = ICONS.gear;
 const ChipIcon = ICONS.chip;
 const SparkleIcon = ICONS.sparkle;
 const BookIcon = ICONS.book;
+const McpIcon = ICONS.mcp;
 
 const ClockIcon = ICONS.clock;
 
@@ -105,6 +106,7 @@ export interface CommandContext {
   openScheduler: () => void;
   openChannels: () => void;
   openToolMarket: () => void;
+  openMcp: () => void;
 
   // View toggles
   toggleSidebar: () => void;
@@ -259,6 +261,15 @@ export function buildCommands(
     icon: <SparkleIcon />,
     when: (c) => c.hasCwd,
     run: () => ctx.openSkills(),
+  });
+  cmds.push({
+    id: "modal.mcp",
+    title: t("mcp.open"),
+    group: "Modal",
+    keywords: ["mcp", "servers", "model context protocol", "tools", "服务器", "工具"],
+    icon: <McpIcon />,
+    when: (c) => c.hasCwd,
+    run: () => ctx.openMcp(),
   });
   cmds.push({
     id: "modal.prompts",

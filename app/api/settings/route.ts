@@ -8,6 +8,7 @@ import {
 import { UI_SOUND_EVENT_IDS } from "@/lib/shared/config-types";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { isSettingsOwnedKey } from "@/lib/shared/settings-keys";
+import { normalizeSystemPromptTemplate } from "@/lib/shared/system-prompt-template";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +98,19 @@ function validateNetworkProxy(
   if (obj.enabled === true && !urlCheck.url) {
     return { ok: false, error: "network_proxy.url is required when the proxy is enabled" };
   }
+  return { ok: true };
+}
+
+/**
+ * Shape check only, and only array-ness: an array (including the empty one) is
+ * accepted, and its fragments are normalised by `normalizeSystemPromptTemplate`
+ * below. A non-array is a client bug, and rejecting it matters — silently
+ * turning it into an empty template would render an empty prompt, which the
+ * user never asked for.
+ */
+function validateSystemPromptTemplateShape(raw: unknown): { ok: true } | { ok: false; error: string } {
+  if (raw === undefined) return { ok: true };
+  if (!Array.isArray(raw)) return { ok: false, error: "system_prompt_template must be an array" };
   return { ok: true };
 }
 
@@ -210,6 +224,17 @@ export async function PUT(req: Request) {
       }
     }
 
+    if (body.system_prompt_template !== undefined) {
+      const templateCheck = validateSystemPromptTemplateShape(body.system_prompt_template);
+      if (!templateCheck.ok) {
+        log.warn("settings rejected: invalid system_prompt_template", {
+          error: templateCheck.error,
+          durationMs: elapsedMs(startedAt),
+        });
+        return NextResponse.json({ error: templateCheck.error }, { status: 400 });
+      }
+    }
+
     // Start from what is on disk and overlay only the owned keys present in
     // the patch; the write face is therefore exactly SETTINGS_OWNED_KEYS.
     const onDisk = readConfig();
@@ -242,15 +267,13 @@ export async function PUT(req: Request) {
       ...(isObject(body.right_side_bar)
         ? { right_side_bar: body.right_side_bar as unknown as PiWorkConfig["right_side_bar"] }
         : {}),
-      ...(isObject(body.append_system)
-        ? { append_system: body.append_system as unknown as PiWorkConfig["append_system"] }
+      ...(body.system_prompt_template !== undefined
+        ? { system_prompt_template: normalizeSystemPromptTemplate(body.system_prompt_template) }
         : {}),
-      ...(typeof body.load_pi_docs === "boolean" ? { load_pi_docs: body.load_pi_docs } : {}),
       ...(isObject(body.file_viewer)
         ? { file_viewer: body.file_viewer as unknown as PiWorkConfig["file_viewer"] }
         : {}),
       ...(isObject(body.ui_sounds) ? { ui_sounds: body.ui_sounds as unknown as PiWorkConfig["ui_sounds"] } : {}),
-      ...(isObject(body.subagent) ? { subagent: body.subagent as unknown as PiWorkConfig["subagent"] } : {}),
       ...(isObject(body.network_proxy)
         ? { network_proxy: body.network_proxy as unknown as PiWorkConfig["network_proxy"] }
         : {}),

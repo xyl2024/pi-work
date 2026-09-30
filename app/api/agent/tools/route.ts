@@ -31,7 +31,10 @@ export async function POST(req: Request) {
     }
 
     const tempKey = `__tools_probe__${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const { session } = await startRpcSession(tempKey, "", cwd, "all");
+    // `mcp: false`: this session exists to read the tool catalog, not to talk
+    // to a model. Connecting here would spawn every configured stdio server on
+    // each tools-popover open, for a session that is destroyed immediately.
+    const { session } = await startRpcSession(tempKey, "", cwd, "all", "user", { mcp: false });
     try {
       // get_tools returns [{name, description, active}]; the frontend only
       // needs the catalog (active defaults to "all" for new sessions).

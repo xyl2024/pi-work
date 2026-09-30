@@ -1,16 +1,33 @@
-import { createAgentSession, DefaultResourceLoader, isToolCallEventType, ModelRuntime, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, createCodemodeExtension, createMcpExtension, DefaultResourceLoader, isToolCallEventType, ModelRuntime, type AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ContextUsage, ToolInfo } from "./pi-types";
 import type { SessionEvent } from "../shared/session-events";
 import type { ToolSelection } from "../shared/types";
-import { expandToolSelection } from "../shared/tool-selection";
+import { declarableToolNames, expandToolSelection, isDeclarableTool } from "../shared/tool-selection";
 import {
   stripDefaultSystemPromptSections,
-  stripPiDocumentationSection,
 } from "../shared/system-prompt-segments";
+import {
+  buildTemplateVariableValues,
+  composeSystemPrompt,
+  createDefaultTemplate,
+  planSystemPromptOptions,
+  renderSystemPromptTemplate,
+  templateModelLabel,
+  type SystemPromptTemplate,
+  type TemplateMaterial,
+  type TemplateVariableValues,
+} from "../shared/system-prompt-template";
+import {
+  collectTemplateMaterial,
+  materialFromSystemPromptOptions,
+  type SystemPromptOptionsLike,
+  type TemplateResourceLoaderLike,
+} from "./system-prompt-template-source";
 import type { ToolMarketId } from "../shared/tools-market";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
+import { loadMcpConfigForPiWork } from "./mcp-config";
 import { loadPiWorkSkillsSafety } from "./pi-work-skills";
 import path from "node:path";
 
@@ -32,7 +49,7 @@ import {
   buildCodeGraphTools,
   CODEGRAPH_SYSTEM_PROMPT_BLOCK,
 } from "./codegraph-tool";
-import { spawnSubagentTool, SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK } from "./subagent-tool";
+import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
 import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
 import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
@@ -160,6 +177,81 @@ export class AgentSessionWrapper {
     return this.inner.sessionFile ?? "";
   }
 
+  /** What {@link renderSystemPrompt} reads: the template snapshotted at session
+   *  start and the loader that holds the append block / project context /
+   *  skills. Null for sessions that do not run the template (subagents) — those
+   *  fall back to pi's own prompt. */
+  private promptSource: {
+    template: SystemPromptTemplate;
+    resourceLoader: TemplateResourceLoaderLike;
+  } | null = null;
+
+  /** Hand the wrapper everything {@link renderSystemPrompt} needs. */
+  setSystemPromptSource(source: {
+    template: SystemPromptTemplate;
+    resourceLoader: TemplateResourceLoaderLike;
+  }): void {
+    this.promptSource = source;
+  }
+
+  /**
+   * The value the takeover writes into `systemPromptOptions.customPrompt`: the
+   * rendered template **without** the trailing `<cwd>` — pi appends that
+   * section itself, so including it here would send it twice. Null when the
+   * session does not run the template (subagents).
+   */
+  customPromptForTurn(options?: SystemPromptOptionsLike): string | null {
+    const material = this.collectPromptMaterial(options);
+    if (!material) return null;
+    return renderSystemPromptTemplate(this.promptSource!.template, buildTemplateVariableValues(material));
+  }
+
+  /**
+   * Pi Work's own render of the whole system prompt (ADR-0011) — the source the
+   * Context panel, `get_state` and BTW replay read. This *is* the composed form
+   * (render + pi's unconditional `<cwd>`), i.e. exactly what the model receives,
+   * which is why it must not be reused as `customPrompt` (see
+   * {@link customPromptForTurn}).
+   *
+   * Material is collected from the live session and loader, so a session that
+   * has never sent a message shows the prompt the model will get.
+   *
+   * Sessions that do not run the template return pi's prompt unchanged.
+   */
+  renderSystemPrompt(): string {
+    const material = this.collectPromptMaterial();
+    if (!material) return this.inner.systemPrompt ?? "";
+    return composeSystemPrompt(
+      renderSystemPromptTemplate(this.promptSource!.template, buildTemplateVariableValues(material)),
+      material.cwd,
+    );
+  }
+
+  /**
+   * The template variables this session would render with, or null when the
+   * session does not run the template (subagents). The settings preview renders
+   * these with the same pure module, so a preview cannot disagree with what the
+   * session will actually send.
+   */
+  templateVariables(): TemplateVariableValues | null {
+    const material = this.collectPromptMaterial();
+    return material ? buildTemplateVariableValues(material) : null;
+  }
+
+  /** Session-specific material for the template, or null without a template. */
+  private collectPromptMaterial(options?: SystemPromptOptionsLike): TemplateMaterial | null {
+    const source = this.promptSource;
+    if (!source) return null;
+    const extras = {
+      cwd: this.cwd ?? process.cwd(),
+      model: templateModelLabel(this.inner.model),
+      thinkingLevel: this.inner.thinkingLevel,
+    };
+    return options
+      ? materialFromSystemPromptOptions(options, extras)
+      : collectTemplateMaterial({ session: this.inner, resourceLoader: source.resourceLoader, extras });
+  }
+
   /** The raw (un-expanded) tool selection live for this session. */
   get toolSelection(): ToolSelection {
     return this._toolSelection;
@@ -278,12 +370,11 @@ export class AgentSessionWrapper {
       .then(async () => {
         if (refreshId !== this.compositionRefreshId || !this._alive) return;
         const agentState = this.inner.agent.state;
-        // `AgentSession.systemPrompt`, not `agent.state.systemPrompt`: the
-        // agent-level field is replayed from the transcript's system messages
-        // and stays empty until the first turn is persisted (pi 0.86+), which
-        // would leave the panel with an empty system-prompt bucket on a fresh
-        // session.
-        const systemPrompt = this.inner.systemPrompt ?? "";
+        // Pi Work's own render, not `inner.systemPrompt`: on a session that has
+        // never sent a message pi's getter still returns its own default
+        // assembly, while the model is going to receive the template render.
+        // Both sides read this same source (ADR-0011).
+        const systemPrompt = this.renderSystemPrompt();
         const tools = agentState?.tools ?? [];
         const messages = agentState?.messages ?? [];
         const anchoredTotalTokens = this.getContextUsage()?.tokens ?? null;
@@ -644,7 +735,7 @@ export class AgentSessionWrapper {
           // exact total stays in `contextUsage` above; every classified number
           // is anchored to it. `null` until the first refresh lands.
           contextComposition: this.contextComposition,
-          systemPrompt: this.inner.systemPrompt ?? "",
+          systemPrompt: this.renderSystemPrompt(),
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
           // Raw selection (patterns included) — lets the UI render the active
           // preset label instead of re-deriving it from the expanded tool list.
@@ -675,7 +766,7 @@ export class AgentSessionWrapper {
         });
         return {
           model: model ? { provider: model.provider, id: model.id } : undefined,
-          systemPrompt: this.inner.systemPrompt ?? "",
+          systemPrompt: this.renderSystemPrompt(),
           thinkingLevel: agentState?.thinkingLevel ?? "off",
           tools,
           // Since pi 0.86 the transcript carries its own leading system
@@ -740,24 +831,40 @@ export class AgentSessionWrapper {
       case "get_tools": {
         const all: ToolInfo[] = this.inner.getAllTools();
         const active = new Set<string>(this.inner.getActiveToolNames());
-        return all.map((t) => ({
+        // Only the declarable tools are worth listing: a tool the user cannot
+        // activate must not show up as an (un-toggleable) row in the picker.
+        // pi's own `codemode` / `tool_search` are `model-only`, so they stay.
+        // MCP tools at their default `codemode` exposure stay reachable from
+        // codemode scripts but are intentionally absent here; set the server's
+        // exposure to `direct` to manage them per session.
+        return all.filter((t) => isDeclarableTool(t)).map((t) => ({
           name: t.name,
           description: t.description,
           active: active.has(t.name),
+          exposure: t.exposure,
         }));
       }
 
       case "set_tools": {
         const toolNames = command.toolNames as ToolSelection;
+        // Non-declarable tools (MCP servers at `codemode` / `deferred`
+        // exposure) are not selectable: activating them would declare them to
+        // the model, which is not what that exposure means. They stay callable
+        // from codemode scripts either way.
+        const declarableSet = new Set(declarableToolNames(this.inner.getAllTools()));
         if (toolNames === "all") {
-          this.inner.setActiveToolsByName(this.inner.getAllTools().map((t) => t.name));
+          this.inner.setActiveToolsByName([...declarableSet]);
         } else if (Array.isArray(toolNames)) {
-          // Entries may carry trailing-`*` prefix patterns (e.g. "codegraph_*");
+          // Entries may carry trailing-`*` prefix patterns (e.g. `codegraph_*`);
           // resolve them against the live registry before applying. The raw
           // selection (patterns included) is what gets persisted below, so a
           // restart re-expands against the then-current registry.
           const allNames = this.inner.getAllTools().map((t) => t.name);
-          this.inner.setActiveToolsByName(expandToolSelection(toolNames, allNames) as string[]);
+          this.inner.setActiveToolsByName(
+            (expandToolSelection(toolNames, allNames) as string[]).filter((name) =>
+              declarableSet.has(name),
+            ),
+          );
         }
         this.setToolSelection(toolNames);
         // Mirror to the sidecar so the selection survives a server restart.
@@ -862,9 +969,10 @@ function getLocks(): Map<string, Promise<{ session: AgentSessionWrapper; realSes
 export { getRpcSession, listRunningRpcSessions } from "./session-registry";
 export { runTurnRpcSession, type RunTurnRpcSpec } from "./turn/rpc-factory";
 
-// `stripDefaultSystemPromptSections` / `stripPiDocumentationSection` live in
-// `lib/shared/system-prompt-segments` next to the rest of the knowledge about
-// pi's prompt section boundaries (and are unit-tested there).
+// Pi Work renders the whole system prompt itself from `systemPromptTemplate`
+// (ADR-0011); `stripDefaultSystemPromptSections` is what the specialized
+// subagent path flattens pi's prompt with. Both live in `lib/shared` next to the
+// rest of the knowledge about pi's prompt section boundaries.
 
 /**
  * Get or create an AgentSession for the given session.
@@ -891,6 +999,14 @@ export interface StartRpcSessionOptions {
   stripDefaultSystemPromptSections?: boolean;
   /** Persist the parent session id in a newly-created session header. */
   parentSessionId?: string;
+  /**
+   * Whether this session may connect MCP servers from pi's `mcp.json`
+   * (default: only plain user sessions — see the check at the call site).
+   * The ephemeral tool-catalog probe passes `false` explicitly: it exists to
+   * list tools, and connecting would spawn every configured stdio server on
+   * each tools-popover open.
+   */
+  mcp?: boolean;
 }
 
 export async function startRpcSession(
@@ -1001,39 +1117,46 @@ export async function startRpcSession(
     // tools are passed to createAgentSession below — already-running
     // sessions keep their original set even if the user toggles a switch.
     const enabledTools = new Set(readEnabledTools());
-    // APPEND_SYSTEM.md loader toggle (see PiWorkConfig.append_system): when the
-    // user has disabled it, we hand DefaultResourceLoader an explicit empty
-    // array so the `??` on `appendSystemPromptSource` short-circuits and
-    // `discoverAppendSystemPromptFile()` never runs. Read once per session
-    // start — toggling at runtime only affects sessions started afterward.
-    let appendSystemPromptLoaderOption: string[] | undefined;
     let disabledSkillPaths = new Set<string>();
-    // Whether pi's built-in "Pi documentation" section should be loaded into
-    // this session's system prompt (PiWorkConfig.load_pi_docs). When off we
-    // register a before_agent_start extension below that strips only that
-    // block. Read once per session start, like the append toggle above.
-    let loadPiDocs = true;
+    // The system prompt template is snapshotted once per session start
+    // (`PiWorkConfig.system_prompt_template`, ADR-0011): editing it only
+    // affects sessions started afterwards, which the settings UI says out loud.
+    // The *variables* are re-read every turn, so switching the tool set does
+    // change the tool list in the prompt.
+    let systemPromptTemplate: SystemPromptTemplate = createDefaultTemplate();
+    // PiWorkConfig.mcp. The MCP extension connects its servers from
+    // `session_start`, which only fires once this session binds the extension
+    // runtime (see the `bindExtensions` call after createAgentSession), so the
+    // policy is decided here, once, and never re-read mid-session.
+    let mcpProjectServers = false;
+    let mcpStartupWaitMs = 3000;
     try {
       const cfg = readConfig();
       disabledSkillPaths = new Set(cfg.disabled_skills[cwd] ?? []);
-      loadPiDocs = cfg.load_pi_docs;
-      // Specialized subagents intentionally do not inherit APPEND_SYSTEM.md.
-      if (options.systemPromptPrefix || !cfg.append_system.enabled) {
-        appendSystemPromptLoaderOption = [];
-      }
+      systemPromptTemplate = cfg.system_prompt_template;
+      mcpProjectServers = cfg.mcp.project_servers;
+      mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
     } catch {
       // readConfig already logs and falls back to defaults; this catch is defensive only.
     }
+    // MCP servers are process-spawning (stdio) and long-lived, so they are
+    // only connected for the session a user is actually talking to:
+    //  - subagent sessions (systemPromptPrefix) and scheduled tasks run
+    //    unattended and are narrowed by allowedToolNames anyway;
+    //  - the ephemeral tool-catalog probe passes `mcp: false` explicitly.
+    // A caller can still force it on or off through options.mcp.
+    const mcpEnabled = options.mcp ?? (source === "user" && !options.systemPromptPrefix);
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
-      // Pass `[]` (not `undefined`) when the toggle is off — the loader's
-      // `??` on appendSystemPromptSource treats an explicit empty array as
-      // "user-supplied, nothing to append" and skips file discovery.
-      // Leaving `undefined` here would fall through to discovery.
-      ...(appendSystemPromptLoaderOption !== undefined
-        ? { appendSystemPrompt: appendSystemPromptLoaderOption }
-        : {}),
+      // Unconditionally `[]`: an explicit empty array is truthy, so pi's
+      // `if (!appendSources)` branch is skipped and
+      // `discoverAppendSystemPromptFile()` never runs. `APPEND_SYSTEM.md`
+      // (global and project) is retired (ADR-0011) — the file stays on disk
+      // untouched, and the template's `addendum` variable takes its place. The
+      // built-in tool notes below still arrive through
+      // `appendSystemPromptOverride`.
+      appendSystemPrompt: [],
       // Builtin hardcoded append blocks contributed by enabled custom tools.
       // These flow through the same channel as user APPEND_SYSTEM.md entries
       // (joined with "\n\n" and appended at the very end of the system
@@ -1060,7 +1183,7 @@ export async function startRpcSession(
             ));
         const blocks: string[] = [];
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("spawn_subagent")) blocks.push(SPAWN_SUBAGENT_SYSTEM_PROMPT_BLOCK);
+        if (sessionHasTool("spawn_subagent")) blocks.push(buildSpawnSubagentSystemPromptBlock());
         if (sessionHasTool("show_media")) blocks.push(SHOW_MEDIA_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("web_search")) blocks.push(WEB_SEARCH_SYSTEM_PROMPT_BLOCK);
@@ -1095,6 +1218,36 @@ export async function startRpcSession(
             ].filter((skill) => !disabledSkillPaths.has(skill.filePath)),
       }),
       extensionFactories: [
+        // pi 把 codemode / tool_search / MCP 作为「内置扩展」，只有 CLI 会自动加载；
+        // SDK 会话（Pi Work 走的路径）必须显式挂上，否则注册表里根本没有这个工具。
+        // codemode 注册为 inactive（defaultActive: false），由会话的工具选择来激活：
+        // 默认选择 "all" 会把注册表里可声明的工具都激活（含 codemode），用户在工具
+        // 选择器里也能单独关掉。
+        // tool_search 只在 MCP 服务器配了 `deferred` exposure 时才需要，暂时不挂：
+        // 挂上它就得让用户能关，多一个 UI 面不如等真有 deferred 服务器再说。
+        createCodemodeExtension(),
+        // MCP：读 pi 自己的 ~/.pi/agent/mcp.json（以及用户显式信任时的项目
+        // .pi/mcp.json），把服务器的工具注册成 mcp__<server>__<tool>。
+        // 服务器是在 `session_start` 里连接的，而 SDK 会话只有调用
+        // bindExtensions() 才会发这个事件 —— 见下面 createAgentSession 之后的
+        // 那一次调用，那是整条链路的开关。
+        ...(mcpEnabled
+          ? [
+              createMcpExtension({
+                // 不用 pi 的默认 loader：它按 SettingsManager.isProjectTrusted()
+                // 决定要不要读项目文件，而 SDK 建这个 manager 时 projectTrusted
+                // 默认就是 true。项目文件能拉起任意 stdio 命令，Pi Work 又是 Web
+                // 界面，所以改成由 PiWorkConfig.mcp.project_servers 显式打开。
+                loadConfig: (ctx) =>
+                  loadMcpConfigForPiWork({
+                    agentDir,
+                    cwd: ctx.cwd,
+                    projectTrusted: mcpProjectServers,
+                  }),
+                startupWaitMs: mcpStartupWaitMs,
+              }),
+            ]
+          : []),
         ...(options.systemPromptPrefix
           ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
               pi.on("before_agent_start", (event) => {
@@ -1107,21 +1260,9 @@ export async function startRpcSession(
               });
             }]
           : []),
-        // PiWorkConfig.load_pi_docs toggle: when disabled, strip pi's built-in
-        // "Pi documentation" section from freshly-generated system prompts for
-        // normal (non-subagent) sessions. Prefix sessions are excluded — the
-        // subagent path already handles section removal itself.
-        ...(options.systemPromptPrefix || loadPiDocs
-          ? []
-          : [
-              (pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
-                pi.on("before_agent_start", (event) => {
-                  // Always return the (possibly unchanged) prompt — the regex
-                  // is a no-op pass-through when the block is already absent.
-                  return { systemPrompt: stripPiDocumentationSection(event.systemPrompt) };
-                });
-              },
-            ]),
+        // `load_pi_docs` is retired (ADR-0011): the system prompt template owns
+        // whether pi's documentation section appears. The stripping handler that
+        // used to live here is gone; the template does the job.
         (pi) => {
           pi.on("tool_call", async (event) => {
             // CodeGraph index construction: mode=sync is lightweight and runs
@@ -1265,31 +1406,42 @@ export async function startRpcSession(
             }
           });
         },
-        // Clearing the system prompt when every tool is disabled. Since pi
-        // 0.87 the prompt is replayed from the transcript's system messages
-        // and `agent.state.systemPrompt` is read-only, so the old one-shot
-        // `agent.state.systemPrompt = ""` write is gone: the only way to
-        // truly clear the prompt (pi's buildSystemPrompt always renders a
-        // non-empty one) is to force an empty prompt per run from here.
-        // `systemPromptOptions.selectedTools` mirrors the live tool loadout
-        // (`setActiveToolsByName` rebuilds the base options), so an empty
-        // list means "no tools active". Registered last on purpose: the last
-        // handler to set `forceSystemPrompt` wins, so this must run after the
-        // prefix / pi-docs handlers above.
-        (pi) => {
-          pi.on("before_agent_start", (event) => {
-            // Only sessions opened with an explicit (non-"all") selection can
-            // legitimately end up with zero tools; an "all" session with an
-            // empty registry keeps pi's normal prompt.
-            if (
-              effectiveToolNames !== "all" &&
-              event.systemPromptOptions.selectedTools.length === 0
-            ) {
-              return { systemPrompt: "" };
-            }
-            return undefined;
-          });
-        },
+        // Pi Work composes the whole system prompt from the template
+        // (ADR-0011). The render goes in as `customPrompt`, which makes pi drop
+        // its own `<tools>` / `<rules>` / `<docs>`; the four fields pi would
+        // otherwise fill from the loader are cleared so nothing is appended
+        // twice. `selectedTools` is deliberately left alone — pi reads it back
+        // to apply the live tool loadout.
+        //
+        // An empty render is the one case that needs `forceSystemPrompt`: an
+        // empty `customPrompt` would silently fall back to pi's own sections
+        // instead of sending nothing. `forceSystemPrompt` is checked with
+        // `!== undefined`, so the empty string does clear it. Subagent sessions
+        // are excluded — they keep the prefix handler above.
+        ...(options.systemPromptPrefix
+          ? []
+          : [
+              (pi: {
+                on: (
+                  event: "before_agent_start",
+                  handler: (event: {
+                    systemPrompt: string;
+                    systemPromptOptions: SystemPromptOptionsLike & { customPrompt?: string };
+                  }) => { systemPrompt: string } | undefined,
+                ) => void;
+              }) => {
+                pi.on("before_agent_start", (event) => {
+                  const wrapper = wrapperRef.current;
+                  if (!wrapper) return undefined;
+                  // `customPromptForTurn` is the bare render; pi appends `<cwd>`
+                  // itself, so the composed form would duplicate that section.
+                  const rendered = wrapper.customPromptForTurn(event.systemPromptOptions);
+                  if (rendered === null) return undefined;
+                  Object.assign(event.systemPromptOptions, planSystemPromptOptions(rendered));
+                  return rendered === "" ? { systemPrompt: "" } : undefined;
+                });
+              },
+            ]),
       ],
     });
     await resourceLoader.reload();
@@ -1381,18 +1533,44 @@ export async function startRpcSession(
       invalidateSessionListCache();
     }
 
-    // Keep pi's full tool registry available so later switches to "all" can include
-    // extension/custom tools, then set the active subset before the first prompt.
-    // If "all" was requested, activate everything pi registered at runtime.
+    // Bind the extension runtime and emit `session_start`. This is what makes
+    // the MCP extension read mcp.json and start connecting; without it the
+    // extension is loaded but never runs. Nothing else in Pi Work needs the
+    // event, so it is skipped for sessions that do not connect MCP servers.
+    // (MCP tools themselves arrive later: the extension connects through a
+    // dynamic import on the next tick. Those are registered declarable-only
+    // when their exposure is `direct`, and pi activates them on registration.)
+    if (mcpEnabled) {
+      await inner.bindExtensions({});
+    }
+
+    // Pi Work's tool selection has always meant "every registered tool", but
+    // that no longer agrees with pi once MCP is in play: a server left at its
+    // default `codemode` exposure registers its tools without declaring them,
+    // and pi's loadout only drops `hidden` — putting one of those names into
+    // setActiveToolsByName would declare it to the model after all. Restrict
+    // every "activate tools" path to the declarable subset; the rest stay
+    // reachable from codemode scripts.
+    const declarableNames = declarableToolNames(inner.getAllTools());
+
+    // Keep pi's full tool registry available so later switches to "all" can
+    // include extension/custom tools, then set the active subset before the
+    // first prompt. "all" activates every declarable tool pi registered at
+    // runtime (see the filter above).
     if (effectiveToolNames === "all") {
-      inner.setActiveToolsByName(inner.getAllTools().map((t: ToolInfo) => t.name));
+      inner.setActiveToolsByName(declarableNames);
     } else if (Array.isArray(effectiveToolNames)) {
       // Resolve trailing-`*` prefix patterns (e.g. "pi_work_*") against the
-      // registry pi built for this session before applying.
-      const expanded = expandToolSelection(
-        effectiveToolNames,
-        inner.getAllTools().map((t: ToolInfo) => t.name),
-      ) as string[];
+      // registry pi built for this session before applying. The raw selection
+      // is what gets persisted, so a pattern that only matches a
+      // non-declarable MCP tool still re-expands correctly on restore.
+      const declarableSet = new Set(declarableNames);
+      const expanded = (
+        expandToolSelection(
+          effectiveToolNames,
+          inner.getAllTools().map((t: ToolInfo) => t.name),
+        ) as string[]
+      ).filter((name) => declarableSet.has(name));
       inner.setActiveToolsByName(expanded);
 
       // When all tools are disabled the prompt is cleared per run by the
@@ -1401,6 +1579,13 @@ export async function startRpcSession(
     }
 
     const wrapper = new AgentSessionWrapper(inner, source, cwd);
+    // Subagents do not run the template (ADR-0011): they keep the profile's own
+    // prompt plus pi's flattened sections, so the main session's编排 cannot
+    // leak into a narrow task. They therefore also keep pi's own prompt as the
+    // `get_state` / composition source.
+    if (!options.systemPromptPrefix) {
+      wrapper.setSystemPromptSource({ template: systemPromptTemplate, resourceLoader });
+    }
     // Remember the raw selection this session started with so `get_state` can
     // report it (restored-from-sidecar selection included) — the UI labels the
     // tools button from it.

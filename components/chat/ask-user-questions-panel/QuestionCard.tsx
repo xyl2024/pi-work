@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import {
   ASK_USER_QUESTIONS_OTHER_LABEL,
   isOtherOptionLabel,
+  resolveOptionRecommendation,
   type AskUserQuestion,
   type AskUserQuestionAnswer,
 } from "@/lib/shared/ask-user-questions-tool-types";
@@ -70,6 +71,10 @@ export function QuestionCard({
         ].map((opt, i) => {
           const checked = selectedSet.has(opt.label);
           const isOther = isOtherOptionLabel(opt.label);
+          // The label with any "(Recommended)" suffix stripped, plus whether
+          // this is the suggested option and why. A suffix-only
+          // recommendation lights the badge with no reason line.
+          const resolved = resolveOptionRecommendation(opt);
           const inputId = `ask-opt-${question.header}-${i}`.replace(/\s+/g, "-");
           return (
             <div key={inputId} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -118,12 +123,24 @@ export function QuestionCard({
                 >
                   <span
                     style={{
-                      fontSize: 13,
-                      color: "var(--text)",
-                      fontWeight: checked ? 600 : 500,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      flexWrap: "wrap",
                     }}
                   >
-                    {isOther ? t("Other") : opt.label}
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: "var(--text)",
+                        fontWeight: checked ? 600 : 500,
+                      }}
+                    >
+                      {isOther ? t("Other") : resolved.label}
+                    </span>
+                    {resolved.recommended && (
+                      <span className="askq-badge">{t("Recommended")}</span>
+                    )}
                   </span>
                   {opt.description && (
                     <span
@@ -134,6 +151,26 @@ export function QuestionCard({
                       }}
                     >
                       {opt.description}
+                    </span>
+                  )}
+                  {/* Why the agent suggests this option — a separate line
+                      under the description, smaller and accent-marked so it
+                      can't be read as part of the option's own description. */}
+                  {resolved.recommended && resolved.reason && (
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        color: "var(--text-muted)",
+                        lineHeight: 1.45,
+                        borderLeft: "2px solid var(--accent)",
+                        paddingLeft: 8,
+                      }}
+                    >
+                      <span style={{ color: "var(--accent)", fontWeight: 600 }}>
+                        {t("Why recommended")}
+                      </span>
+                      {": "}
+                      {resolved.reason}
                     </span>
                   )}
                 </span>

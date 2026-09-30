@@ -5,16 +5,16 @@ import { createLogger } from "./logger";
 import { dataPath } from "./data-dir";
 import {
   UI_SOUND_EVENT_IDS,
-  type AppendSystemConfig,
   type DangerousPatternRule,
   type DangerousPatternsConfig,
   type PiWorkConfig,
-  type SubagentConfig,
-  type SubagentThinkingLevel,
+  type McpConfig,
   type UiSoundEventId,
   type UiSoundsConfig,
   type WebAccessConfig,
 } from "../shared/config-types";
+import { createDefaultTemplate, normalizeSystemPromptTemplate } from "../shared/system-prompt-template";
+import type { SystemPromptTemplate } from "../shared/system-prompt-template";
 import { DEFAULT_UI_SOUND_EVENTS } from "../shared/ui-sounds-defaults";
 import type { NetworkProxyConfig } from "../shared/config-types";
 import {
@@ -37,11 +37,11 @@ import { PANEL_TAB_SPEC_BY_KIND } from "../shared/panelTabs";
 // the validator will silently drop it (fail-open default still applies, but
 // the user setting is lost).
 
-// ── APPEND_SYSTEM.md loader toggle ───────────────────────────────────────
-// pi's DefaultResourceLoader auto-loads ~/.pi/agent/APPEND_SYSTEM.md on
-// every session. Disabling here passes `appendSystemPrompt: []` to the
-// loader, which short-circuits `discoverAppendSystemPromptFile()` — the
-// file is left untouched on disk so re-enabling just flips the flag.
+// ── System prompt template ───────────────────────────────────────────────
+// `system_prompt_template` is the ordered fragment list Pi Work renders the
+// whole system prompt from (ADR-0011). Absent or mangled → the default
+// template, which renders byte-identically to pi's own assembly. The retired
+// `append_system` / `load_pi_docs` keys are ignored on read, never migrated.
 
 // ── Dangerous-command confirmation rules ────────────────────────────────
 // Empty `rules` means "no user rules": the built-in bash / PowerShell sets in
@@ -77,28 +77,34 @@ function defaultRightSideBar(): RightSideBarConfig {
 
 const DEFAULT_RIGHT_SIDE_BAR: RightSideBarConfig = defaultRightSideBar();
 
-const DEFAULT_SUBAGENT: SubagentConfig = { thinking_level: "off" };
-const SUBAGENT_THINKING_LEVELS: readonly SubagentThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+const DEFAULT_MCP: McpConfig = {
+  // Off by default: see McpConfig.project_servers. pi's own CLI trusts project
+  // resources, but a web UI must not run workspace-defined commands on open.
+  project_servers: false,
+  // Much shorter than pi's 10000: the wait happens inside `before_agent_start`,
+  // so it is dead time between "send" and the first token in the web UI.
+  startup_wait_ms: 3000,
+};
 
-function parseSubagent(raw: unknown): SubagentConfig {
-  if (!raw || typeof raw !== "object") return { ...DEFAULT_SUBAGENT };
+function parseMcp(raw: unknown): McpConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULT_MCP };
   const obj = raw as Record<string, unknown>;
-  const model = obj.model && typeof obj.model === "object" ? obj.model as Record<string, unknown> : null;
-  const configuredModel = model && typeof model.provider === "string" && typeof model.modelId === "string"
-    ? { provider: model.provider, modelId: model.modelId } : undefined;
-  const thinking_level = typeof obj.thinking_level === "string" && SUBAGENT_THINKING_LEVELS.includes(obj.thinking_level as SubagentThinkingLevel)
-    ? obj.thinking_level as SubagentThinkingLevel : DEFAULT_SUBAGENT.thinking_level;
-  return { thinking_level, ...(configuredModel ? { model: configuredModel } : {}) };
+  const startup = obj.startup_wait_ms;
+  return {
+    project_servers: obj.project_servers === true,
+    startup_wait_ms:
+      typeof startup === "number" && Number.isFinite(startup) && startup >= 0
+        ? Math.min(Math.floor(startup), 120_000)
+        : DEFAULT_MCP.startup_wait_ms,
+  };
 }
 
 const DEFAULT_CONFIG: PiWorkConfig = {
   dangerous_patterns: DEFAULT_DANGEROUS_PATTERNS,
   right_side_bar: { ...DEFAULT_RIGHT_SIDE_BAR },
-  // Preserve pre-existing behavior: append file loads by default.
-  append_system: { enabled: true },
-  // Preserve pre-existing behavior: pi's built-in Pi documentation section
-  // stays in new sessions' system prompts by default.
-  load_pi_docs: true,
+  // The default template renders exactly what pi used to assemble, so a
+  // config that says nothing about it keeps pre-feature behavior.
+  system_prompt_template: createDefaultTemplate(),
   // Preserves pre-feature behavior: same hardcoded limits the route used
   // before the value became user-configurable.
   file_viewer: {
@@ -116,10 +122,10 @@ const DEFAULT_CONFIG: PiWorkConfig = {
     enabled: true,
     tavily: {},
   },
-  subagent: { ...DEFAULT_SUBAGENT },
   // Off by default: never silently route traffic through a proxy the user
   // did not ask for. `url` is required for the proxy to take effect.
   network_proxy: { enabled: false, url: "", no_proxy: "" },
+  mcp: { ...DEFAULT_MCP },
 };
 
 function parseDangerousPatterns(raw: unknown): DangerousPatternsConfig {
@@ -177,13 +183,13 @@ function parseRightSideBar(raw: unknown): RightSideBarConfig {
   return out;
 }
 
-// Fail-open for the missing/garbled case (keep the on-by-default behavior
-// so an old config.yaml doesn't silently turn the append off). An explicit
-// `enabled: false` is honored — the user pushed the button, we trust them.
-function parseAppendSystem(raw: unknown): AppendSystemConfig {
-  if (!raw || typeof raw !== "object") return { enabled: true };
-  const obj = raw as Record<string, unknown>;
-  return { enabled: obj.enabled !== false };
+// System prompt template. A config written before this feature simply has no
+// `system_prompt_template` key, and that has to keep rendering pi's native
+// prompt — i.e. fall back to the default template, not to an empty one. An
+// explicit empty array is the user's own "render nothing" choice and is kept.
+function parseSystemPromptTemplate(raw: unknown): SystemPromptTemplate {
+  if (raw === undefined || raw === null) return createDefaultTemplate();
+  return normalizeSystemPromptTemplate(raw);
 }
 
 // File preview size limits — fail-open like every other parser here:
@@ -357,16 +363,15 @@ export function readConfig(): PiWorkConfig {
     return {
       dangerous_patterns: parseDangerousPatterns(cfg.dangerous_patterns),
       right_side_bar: parseRightSideBar(cfg.right_side_bar),
-      append_system: parseAppendSystem(cfg.append_system),
-      load_pi_docs: typeof cfg.load_pi_docs === "boolean" ? cfg.load_pi_docs : true,
+      system_prompt_template: parseSystemPromptTemplate(cfg.system_prompt_template),
       file_viewer: parseFileViewer(cfg.file_viewer),
       ui_sounds: parseUiSounds(cfg.ui_sounds),
       cwd_icons: parseCwdIcons(cfg.cwd_icons),
       cwd_aliases: parseCwdAliases(cfg.cwd_aliases),
       disabled_skills: parseDisabledSkills(cfg.disabled_skills),
       web_access: parseWebAccess(cfg.web_access),
-      subagent: parseSubagent(cfg.subagent),
       network_proxy: parseNetworkProxy(cfg.network_proxy),
+      mcp: parseMcp(cfg.mcp),
     };
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });

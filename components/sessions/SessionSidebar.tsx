@@ -151,7 +151,7 @@ const WORKSPACE_PAGE_SIZE = 5;
 const SESSION_PAGE_SIZE_GROUPED = 3;
 const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, onOpenSettings, onOpenInbox, inboxUnread, onLogout, profileRefreshKey, onFlip }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, onOpenSettings, onOpenInbox, inboxUnread, onLogout, profileRefreshKey, onFlip }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -731,13 +731,16 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       {/* Today's sessions — a flat, time-windowed view over the same rows
           the grouped Sessions section below renders. Intrinsically sized
           (grow: 0) and capped so a light day doesn't reserve blank space
-          and a heavy day scrolls inside its cap. */}
+          and a heavy day scrolls inside its cap. keepMounted keeps the list
+          (and its already-loaded rows) alive across toggles so collapsing /
+          expanding never replays the fetch. */}
       <SidebarSection
         title={t("Today's Sessions")}
         open={todayOpen}
         onToggle={() => setTodayOpen((v) => !v)}
         grow={0}
         maxHeight="40vh"
+        keepMounted
         actions={
           <RefreshIconButton
             onClick={() => setTodayRefreshSignal((n) => n + 1)}
@@ -857,6 +860,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           onOpenScheduler={onOpenScheduler}
           onOpenChannels={onOpenChannels}
           onOpenToolMarket={onOpenToolMarket}
+          onOpenMcp={onOpenMcp}
           onOpenInbox={onOpenInbox}
           onLogout={onLogout}
           inboxUnread={inboxUnread}

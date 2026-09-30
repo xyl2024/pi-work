@@ -4,16 +4,19 @@ export type IconProps = Omit<SVGProps<SVGSVGElement>, "viewBox" | "stroke" | "st
   size?: number | string;
   strokeWidth?: number;
   stroke?: string;
+  /** Source grid. Only glyphs that were not drawn on a 24×24 grid pass their
+   *  own (the MCP mark comes from a 1024 grid); everything else keeps the default. */
+  viewBox?: string;
 };
 
 type IconBody = React.ReactNode;
 
-function Icon({ size = 16, children, fill = "none", stroke = "currentColor", strokeWidth = 2, ...props }: IconProps & { children: IconBody }) {
+function Icon({ size = 16, viewBox = "0 0 24 24", children, fill = "none", stroke = "currentColor", strokeWidth = 2, ...props }: IconProps & { children: IconBody }) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox={viewBox}
       fill={fill}
       stroke={stroke}
       strokeWidth={strokeWidth}
@@ -69,6 +72,15 @@ export const GitDiffGlyphIcon = (props: IconProps) => <Icon {...props}><circle c
 export const LlmAuditGlyphIcon = (props: IconProps) => <Icon {...props}><path d="M2 12h3l2-4 3 8 2-4h2" /><circle cx="15.5" cy="15.5" r="2.5" /><path d="M17.5 17.5 20 20" /></Icon>;
 export const RssIcon = (props: IconProps) => <Icon {...props}><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none" /><path d="M4 13a7 7 0 0 1 7 7M4 7a13 13 0 0 1 13 13" /></Icon>;
 export const ToolIcon = (props: IconProps) => <Icon {...props}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></Icon>;
+
+/** The official MCP mark: two filled strokes on a 1024 px grid, so it takes the
+ *  fill of `currentColor` instead of the project's 24 px stroke treatment. */
+export const McpIcon = (props: IconProps) => (
+  <Icon {...props} viewBox="0 0 1024 1024" fill="currentColor" stroke="none" strokeWidth={0}>
+    <path d="M330.965333 529.685333a85.333333 85.333333 0 0 0 120.682667 120.682667L723.2 378.837333l60.330667 60.330667L512 710.698667A170.666667 170.666667 0 0 1 270.634667 469.333333L542.165333 197.824l60.330667 60.330667-271.530667 271.530666z" />
+    <path d="M693.034667 107.306667a170.24 170.24 0 0 1 49.6 131.392 170.666667 170.666667 0 0 1 131.392 290.986666L542.165333 861.546667l89.6 89.6-60.330666 60.373333-149.952-149.973333L813.696 469.333333a85.333333 85.333333 0 0 0-120.682667-120.661333L421.482667 620.16l-60.330667-60.330667 271.530667-271.530666A85.333333 85.333333 0 0 0 512 167.616L119.808 559.829333l-60.352-60.330666L451.669333 107.285333a170.666667 170.666667 0 0 1 241.365334 0z" />
+  </Icon>
+);
 export const JsonIcon = (props: IconProps) => <Icon {...props}><path d="M8 3H6a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2h2M16 3h2a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2 2 2 0 0 1-2 2v3a2 2 0 0 1-2 2h-2" /></Icon>;
 export const ConversationTreeGlyphIcon = (props: IconProps) => <Icon {...props}><circle cx="4" cy="5" r="1.5" /><circle cx="4" cy="19" r="1.5" /><circle cx="20" cy="5" r="1.5" /><path d="M4 6.5v11M20 6.5a10 10 0 0 1-10 10" /></Icon>;
 export const PanelToggleIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" /></Icon>;

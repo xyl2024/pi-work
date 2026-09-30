@@ -37,6 +37,7 @@ import {
   ASK_USER_QUESTIONS_DESCRIPTION_MAX,
   ASK_USER_QUESTIONS_OTHER_LABEL,
   isOtherOptionLabel,
+  userInputToolResult,
   validateAskUserQuestions,
   type AskUserQuestion,
   type AskUserQuestionAnswer,
@@ -61,6 +62,7 @@ export {
   ASK_USER_QUESTIONS_QUESTION_MAX,
   ASK_USER_QUESTIONS_DESCRIPTION_MAX,
   ASK_USER_QUESTIONS_OTHER_LABEL,
+  ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK,
   isOtherOptionLabel,
   hasUnansweredRequired,
 } from "../shared/ask-user-questions-tool-types";
@@ -102,6 +104,25 @@ const AskUserQuestionsParamsSchema = Type.Object({
             description: `Short explanation shown beneath the label. Max ${ASK_USER_QUESTIONS_DESCRIPTION_MAX} chars.`,
             maxLength: ASK_USER_QUESTIONS_DESCRIPTION_MAX,
           }),
+          // Optional on purpose: "every question names a recommendation" is
+          // enforced by validateAskUserQuestions, not by the schema — the
+          // schema cannot say "at least one item in this array carries this
+          // optional field". The error is a tool result the model can fix in
+          // the same turn.
+          recommended: Type.Optional(
+            Type.Object(
+              {
+                reason: Type.String({
+                  description: `Why you suggest this option. Max ${ASK_USER_QUESTIONS_DESCRIPTION_MAX} chars.`,
+                  maxLength: ASK_USER_QUESTIONS_DESCRIPTION_MAX,
+                }),
+              },
+              {
+                description:
+                  "Mark this option as the one you suggest. Every question needs at least one recommended option — exactly one for a single-select question, one or more for a multi-select question.",
+              },
+            ),
+          ),
         }),
         {
           minItems: ASK_USER_QUESTIONS_MIN_OPTIONS,
@@ -131,53 +152,18 @@ function paramsToQuestions(params: AskUserQuestionsParamsType): AskUserQuestion[
     header: q.header,
     multiSelect: q.multiSelect,
     required: q.required ?? true,
-    options: q.options.map((o) => ({ label: o.label, description: o.description })),
+    options: q.options.map((o) => ({
+      label: o.label,
+      description: o.description,
+      ...(o.recommended ? { recommended: { reason: o.recommended.reason } } : {}),
+    })),
   }));
-}
-
-function formatAnswersForAgent(
-  questions: readonly AskUserQuestion[],
-  answers: readonly AskUserQuestionAnswer[],
-): string {
-  const lines: string[] = ["User answered:"];
-  for (let i = 0; i < questions.length; i++) {
-    const q = questions[i];
-    const a = answers[i];
-    if (!a) {
-      lines.push(`  ${q.header}: (no answer)`);
-      continue;
-    }
-    if (a.selectedLabels.length === 0) {
-      lines.push(`  ${q.header}: (skipped)`);
-      continue;
-    }
-    const labels = a.selectedLabels.slice();
-    const labelsFmt: string[] = [];
-    for (const lbl of labels) {
-      if (isOtherOptionLabel(lbl)) {
-        labelsFmt.push(`Other: "${a.otherText ?? ""}"`);
-      } else {
-        labelsFmt.push(lbl);
-      }
-    }
-    const suffix = q.multiSelect && a.selectedLabels.length > 1 ? " (multi-select)" : "";
-    lines.push(`  ${q.header}: ${labelsFmt.join(", ")}${suffix}`);
-  }
-  return lines.join("\n");
-}
-
-function cancelledDetails(): AskUserQuestionsDetails {
-  return { answers: [], cancelled: true };
-}
-
-function answeredDetails(answers: AskUserQuestionAnswer[]): AskUserQuestionsDetails {
-  return { answers, cancelled: false };
 }
 
 function errorEnvelope(message: string): { content: [{ type: "text"; text: string }]; details: AskUserQuestionsDetails } {
   return {
     content: [{ type: "text", text: `Error: ${message}` }],
-    details: cancelledDetails(),
+    details: { answers: [], cancelled: true },
   };
 }
 
@@ -191,32 +177,17 @@ interface BuildToolOptions {
   source: "user" | "scheduled" | "subagent";
 }
 
-/**
- * Hardcoded, whole-block system-prompt contribution for `ask_user_questions`.
- * Appended at the very end of the system prompt — the same channel
- * `DefaultResourceLoader` uses for `APPEND_SYSTEM.md`, but this block is
- * built into the codebase (no user-configurable file). It is emitted only
- * when the tool is enabled and actually part of the session's tool set
- * Mirrors the user-requested guidelines
- * text; `promptGuidelines` was removed in favor of this append block.
- */
-export const ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK = `\
-## Tool ask_user_questions guidelines
-- Use ask_user_questions when you need a decision from the user before continuing.
-- Each call can carry 1-5 questions; group related decisions in one call.
-- Each question must have 2-4 options.
-- Set multiSelect true when multiple options are valid.
-- Questions are required by default; use required false for optional questions.
-- An Other option is appended automatically; do not add one yourself.
-- Do not call this tool from a scheduled task or when no user is available.
-`;
+// The system-prompt block (`ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK`) lives in
+// the shared, SDK-free types module and is re-exported above: the server
+// injects it via appendSystemPromptOverride when the tool is in the session's
+// tool set, and the Tool Market catalog shows the very same text.
 
 function makeTool({ requestUserInput, source }: BuildToolOptions) {
   return defineTool<typeof AskUserQuestionsParamsSchema, AskUserQuestionsDetails>({
     name: ASK_USER_QUESTIONS_TOOL_NAME,
     label: "Ask User Questions",
     description:
-      "Ask the user 1-5 multiple-choice questions and wait for their answers. Each question has 2-4 options with a short label and a longer description. Set `multiSelect: true` to allow multiple selections. Questions are required by default; set `required: false` to let the user skip one. A free-text \"Other\" option is always appended automatically, so the user can always type a custom answer — do not add your own. The tool blocks until the user responds or cancels; do not call it from a context where no user is available (e.g. a scheduled task — the tool will return an error in that case).",
+      "Ask the user 1-5 multiple-choice questions and wait for their answers. Each question has 2-4 options with a short label and a longer description. Mark the option you suggest with `recommended: { reason: \"...\" }` — exactly one option on a single-select question, at least one on a multi-select question; the tool returns an error when a question has no recommendation. Set `multiSelect: true` to allow multiple selections. Questions are required by default; set `required: false` to let the user skip one. A free-text \"Other\" option is always appended automatically, so the user can always type a custom answer — do not add your own. The tool blocks until the user responds or cancels; the user may cancel with a free-text note, which is a comment on the whole batch rather than an answer. Do not call it from a context where no user is available (e.g. a scheduled task — the tool will return an error in that case).",
     parameters: AskUserQuestionsParamsSchema,
     executionMode: "sequential",
     promptSnippet: "Ask the user structured multiple-choice questions.",
@@ -290,11 +261,20 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
         return errorEnvelope(`Question interrupted: ${message}`);
       }
 
-      if (resolution.kind === "cancelled") {
-        log.info("ask_user_questions cancelled by user", { toolCallId });
+      // Both non-answered kinds (plain cancel and a cancel carrying a note)
+      // leave the questions unanswered; the resolution-to-result mapping owns
+      // the wording and the details they persist.
+      if (resolution.kind !== "answered") {
+        log.info(
+          resolution.kind === "replied"
+            ? "ask_user_questions cancelled with a note"
+            : "ask_user_questions cancelled by user",
+          { toolCallId },
+        );
+        const result = userInputToolResult(questions, resolution);
         return {
-          content: [{ type: "text", text: "User cancelled the question." }],
-          details: cancelledDetails(),
+          content: [{ type: "text", text: result.text }],
+          details: result.details,
         };
       }
 
@@ -339,11 +319,13 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
         });
       }
 
+      const result = userInputToolResult(questions, {
+        kind: "answered",
+        answers: sanitizedAnswers,
+      });
       return {
-        content: [
-          { type: "text", text: formatAnswersForAgent(questions, sanitizedAnswers) },
-        ],
-        details: answeredDetails(sanitizedAnswers),
+        content: [{ type: "text", text: result.text }],
+        details: result.details,
       };
     },
   });

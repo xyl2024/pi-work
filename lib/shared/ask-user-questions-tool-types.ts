@@ -9,11 +9,16 @@
  * without pulling server-only code into the browser bundle.
  *
  * Schema mirrors Anthropic's Claude Code `AskUserQuestion` tool so LLMs that
- * already know that shape can use this tool zero-shot. One small extension:
- * each question may carry `required: boolean` (default true when omitted —
- * the server normalizes an omitted field to true) — when true, the user
- * cannot submit without selecting at least one option (and, if the "Other"
- * option is selected, typing non-empty text).
+ * already know that shape can use this tool zero-shot. Extensions beyond that
+ * shape:
+ *   • each question may carry `required: boolean` (default true when omitted —
+ *     the server normalizes an omitted field to true) — when true, the user
+ *     cannot submit without selecting at least one option (and, if the "Other"
+ *     option is selected, typing non-empty text);
+ *   • each option may carry `recommended: { reason }` — the agent's suggestion.
+ *     Every question must have one (exactly one for a single-select question),
+ *     enforced by `validateAskUserQuestions`; a "(Recommended)" label suffix
+ *     is recognized as the same thing for zero-shot callers.
  */
 
 export const ASK_USER_QUESTIONS_TOOL_NAME = "ask_user_questions";
@@ -39,8 +44,37 @@ export const ASK_USER_QUESTIONS_QUESTION_MAX = 500;
 /** Max characters for an option's description. */
 export const ASK_USER_QUESTIONS_DESCRIPTION_MAX = 200;
 
+/** Max characters for the free-text note a user may attach to a cancel.
+ *  Matches the existing cap on a typed "Other" answer. */
+export const ASK_USER_QUESTIONS_REPLY_MAX = 4000;
+
 /** Exact label that, when present in an option, enables free-text input. */
 export const ASK_USER_QUESTIONS_OTHER_LABEL = "Other";
+
+/**
+ * Whole-block system-prompt contribution for `ask_user_questions`.
+ *
+ * This is the single source of truth: the server tool re-exports it (it is
+ * injected via `appendSystemPromptOverride` when the tool is in the session's
+ * tool set) and the Tool Market catalog references the same constant, so the
+ * two can no longer drift apart. It lives here — in a module that imports no
+ * pi SDK and no Node module — so the text the agent reads is testable without
+ * the SDK (ADR-0003 rule 3).
+ */
+export const ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK = `\
+## Tool ask_user_questions guidelines
+- Use ask_user_questions when you need a decision from the user before continuing.
+- Each call can carry 1-5 questions; group related decisions in one call.
+- Each question must have 2-4 options.
+- Every question must mark at least one option as recommended: \`recommended: { reason: "..." }\`. A single-select question must mark exactly one; a multi-select question may mark several, each with its own reason. The tool returns an error when a question has no recommendation.
+- Put the reason in the \`recommended\` field, not in the label. A "(Recommended)" label suffix is only a compatibility channel for models that don't know the field: it is stripped from the rendered label and still counts as a recommendation.
+- A recommendation is a suggestion, not a selection: it is never preselected for the user.
+- The user may cancel instead of answering, and may attach a free-text note. When they do, the note is a comment on the whole batch — not an answer to any question. Read it and adjust instead of treating the cancel as an interruption.
+- Set multiSelect true when multiple options are valid.
+- Questions are required by default; use required false for optional questions.
+- An Other option is appended automatically; do not add one yourself.
+- Do not call this tool from a scheduled task or when no user is available.
+`;
 
 /** Single question as authored by the agent. */
 export interface AskUserQuestion {
@@ -66,6 +100,14 @@ export interface AskUserQuestionOption {
   label: string;
   /** Short explanation shown beneath the label. */
   description: string;
+  /** When present, this is the option the agent suggests, and `reason` says
+   *  why. Exactly one option for a single-select question; at least one for a
+   *  multi-select question — `validateAskUserQuestions` enforces that, and a
+   *  recognized label suffix like "(Recommended)" counts as a recommendation
+   *  too (the zero-shot Claude Code shape). Recommendations affect rendering
+   *  only: they never enter `selectedLabels` and never mark a question
+   *  answered. */
+  recommended?: { reason: string };
 }
 
 /** Full payload the agent passes to the tool. */
@@ -89,8 +131,13 @@ export interface AskUserQuestionAnswer {
 export interface AskUserQuestionsDetails {
   /** Per-question answers, same order as `questions[]`. */
   answers: AskUserQuestionAnswer[];
-  /** True when the user clicked Cancel — `answers` is empty. */
+  /** True when the user clicked Cancel — `answers` is empty. The meaning is
+   *  unchanged from before the reply feature: the user did not answer any
+   *  question. */
   cancelled: boolean;
+  /** Present only when the user cancelled with a free-text note — a comment
+   *  on the whole batch, not an answer to any question. */
+  reply?: string;
 }
 
 /** Wire shape sent from client to server when the user submits. */
@@ -102,14 +149,21 @@ export interface AskUserQuestionsDecision {
 /** Wire shape sent from client to server when the user cancels. */
 export interface AskUserQuestionsCancel {
   cancelled: true;
+  /** Optional free-text note attached to the cancel — a comment on the whole
+   *  batch, not an answer. Trimmed and capped server-side; empty or
+   *  whitespace-only is treated as a plain cancel. Optional so an older client
+   *  that only sends `{ cancelled: true }` keeps working. */
+  message?: string;
 }
 
 /** Public shape of the Promise `requestUserInput` resolves with: the user's
- *  answers, or a cancel. Lives here (not in the server-only tool file) so the
- *  interaction-gate module can speak it without importing the pi SDK. */
+ *  answers, a cancel, or a cancel carrying a note. Lives here (not in the
+ *  server-only tool file) so the interaction-gate module can speak it without
+ *  importing the pi SDK. */
 export type UserInputResolution =
   | { kind: "answered"; answers: AskUserQuestionAnswer[] }
-  | { kind: "cancelled" };
+  | { kind: "cancelled" }
+  | { kind: "replied"; message: string };
 
 /** Server-side payload attached to the `ask_user_questions_request` SSE event.
  *
@@ -128,6 +182,52 @@ export type AskUserQuestionsRequestPayload = {
 /** Detect whether the given option label triggers free-text mode. */
 export function isOtherOptionLabel(label: string): boolean {
   return label === ASK_USER_QUESTIONS_OTHER_LABEL;
+}
+
+/** Recognized "(Recommended)" / "（推荐）" label suffixes: half- or
+ *  full-width parentheses, ASCII case-insensitive. Anchored at the end, so an
+ *  ordinary word like "推荐算法" or "不推荐" is never touched — and no fuzzy
+ *  matching, because those words are common in Chinese labels. */
+const RECOMMENDED_SUFFIX_RE = /[（(]\s*(?:recommended|推荐)\s*[)）]\s*$/i;
+
+/** Detect and strip a Claude-Code-style recommendation suffix from a label.
+ *  Returns the cleaned label and whether a suffix was found. Pure — the UI
+ *  calls it on every render. */
+export function stripRecommendedSuffix(label: string): {
+  label: string;
+  stripped: boolean;
+} {
+  const match = RECOMMENDED_SUFFIX_RE.exec(label);
+  if (!match) return { label, stripped: false };
+  return { label: label.slice(0, match.index).trimEnd(), stripped: true };
+}
+
+/** True when the option is the agent's suggestion — either structurally
+ *  (the `recommended` field) or via a recognized label suffix. Used by
+ *  validation, so a zero-shot suffix-only call satisfies "every question
+ *  needs a recommendation" without a retry. */
+export function optionIsRecommended(option: AskUserQuestionOption): boolean {
+  return (
+    option.recommended !== undefined || stripRecommendedSuffix(option.label).stripped
+  );
+}
+
+/** What the UI renders for one option: the label with any recommendation
+ *  suffix stripped, whether it is recommended, and the reason when the agent
+ *  gave one (a suffix-only recommendation has none). The `recommended` field
+ *  wins: when it is present the suffix is ignored as a signal, but it is
+ *  still stripped from the label so "推荐 (Recommended)" is never shown. */
+export function resolveOptionRecommendation(option: AskUserQuestionOption): {
+  label: string;
+  recommended: boolean;
+  reason: string | null;
+} {
+  const { label, stripped } = stripRecommendedSuffix(option.label);
+  return {
+    label,
+    recommended: option.recommended !== undefined || stripped,
+    reason: option.recommended?.reason ?? null,
+  };
 }
 
 /** Validate that a question object satisfies the schema bounds. Pure helper
@@ -182,6 +282,32 @@ export function validateAskUserQuestions(
       if (o.description.length > ASK_USER_QUESTIONS_DESCRIPTION_MAX) {
         return `questions[${i}].options[${j}].description exceeds ${ASK_USER_QUESTIONS_DESCRIPTION_MAX} chars`;
       }
+      if (o.recommended !== undefined) {
+        if (
+          typeof o.recommended !== "object" ||
+          o.recommended === null ||
+          typeof o.recommended.reason !== "string"
+        ) {
+          return `questions[${i}].options[${j}].recommended must be an object with a string reason`;
+        }
+        if (o.recommended.reason.length > ASK_USER_QUESTIONS_DESCRIPTION_MAX) {
+          return `questions[${i}].options[${j}].recommended.reason exceeds ${ASK_USER_QUESTIONS_DESCRIPTION_MAX} chars`;
+        }
+      }
+    }
+
+    // "Every question names a recommendation" is a hard constraint the schema
+    // cannot express (it cannot say "at least one item in this array carries
+    // this optional field"). The model gets a tool error it can fix in the
+    // same turn. A recognized label suffix counts, so a zero-shot Claude Code
+    // call (no `recommended` field, "(Recommended)" in the label) passes.
+    const recommendedCount = q.options.filter(optionIsRecommended).length;
+    if (q.multiSelect) {
+      if (recommendedCount === 0) {
+        return `questions[${i}] must mark at least one option as recommended (add \`recommended: { reason: "..." }\` to the option(s) you suggest)`;
+      }
+    } else if (recommendedCount !== 1) {
+      return `questions[${i}] must mark exactly one option as recommended for a single-select question (found ${recommendedCount})`;
     }
   }
   return null;
@@ -224,4 +350,68 @@ export function isQuestionAnswered(
   const hasOther = answer.selectedLabels.some(isOtherOptionLabel);
   if (hasOther && (answer.otherText ?? "").trim().length === 0) return false;
   return true;
+}
+
+/** Render the answered batch as the English text the agent reads. */
+function formatAnswersForAgent(
+  questions: readonly AskUserQuestion[],
+  answers: readonly AskUserQuestionAnswer[],
+): string {
+  const lines: string[] = ["User answered:"];
+  for (let i = 0; i < questions.length; i++) {
+    const q = questions[i];
+    const a = answers[i];
+    if (!a) {
+      lines.push(`  ${q.header}: (no answer)`);
+      continue;
+    }
+    if (a.selectedLabels.length === 0) {
+      lines.push(`  ${q.header}: (skipped)`);
+      continue;
+    }
+    const labelsFmt: string[] = [];
+    for (const lbl of a.selectedLabels) {
+      if (isOtherOptionLabel(lbl)) {
+        labelsFmt.push(`Other: "${a.otherText ?? ""}"`);
+      } else {
+        labelsFmt.push(lbl);
+      }
+    }
+    const suffix = q.multiSelect && a.selectedLabels.length > 1 ? " (multi-select)" : "";
+    lines.push(`  ${q.header}: ${labelsFmt.join(", ")}${suffix}`);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * The one place a gate resolution becomes what the agent sees: the text
+ * content and the persisted `details` of the tool result. Pure and SDK-free,
+ * so the exact wording the agent reads (and the `reply` field written into
+ * the session JSONL) is testable here rather than through the pi SDK.
+ *
+ * `answered` expects answers already sanitized by the caller; the other two
+ * branches carry no answers by construction.
+ */
+export function userInputToolResult(
+  questions: readonly AskUserQuestion[],
+  resolution: UserInputResolution,
+): { text: string; details: AskUserQuestionsDetails } {
+  if (resolution.kind === "cancelled") {
+    return {
+      text: "User cancelled the question.",
+      details: { answers: [], cancelled: true },
+    };
+  }
+  if (resolution.kind === "replied") {
+    return {
+      text:
+        `User did not answer any of the questions. ` +
+        `The user replied with this note instead: "${resolution.message}"`,
+      details: { answers: [], cancelled: true, reply: resolution.message },
+    };
+  }
+  return {
+    text: formatAnswersForAgent(questions, resolution.answers),
+    details: { answers: resolution.answers, cancelled: false },
+  };
 }

@@ -95,6 +95,12 @@ export interface ToolResultMessage {
 // Single source of truth: lib/types.ts. lib/pi-types.ts re-exports `ToolInfo`
 // so the pi-SDK-shaped interface stays where the backend already imports it.
 
+/** pi's tool exposure. `direct` / `model-only` tools are declared to the
+ *  model; `codemode` and `deferred` tools are registered but reached through
+ *  the `codemode` / `tool_search` tool instead, and `hidden` tools are
+ *  unreachable. Mirrors pi's `ToolExposure`. */
+export type ToolExposure = "direct" | "model-only" | "codemode" | "deferred" | "hidden";
+
 /** A tool registered by pi's resource loader — used to render the
  *  ChatInput tools checklist. Shape mirrors `inner.getAllTools()` from
  *  AgentSessionLike in lib/pi-types.ts. */
@@ -102,6 +108,8 @@ export interface ToolInfo {
   name: string;
   description: string;
   active?: boolean;
+  /** Absent on the legacy `get_tools` payload (and defaults to `direct`). */
+  exposure?: ToolExposure;
 }
 
 /** The user's tool selection state for a session. `[]` ≡ "Off" (no tools);
@@ -237,9 +245,6 @@ export interface SessionInfo {
   running: boolean;
 }
 
-/** Specialized subagent profiles `spawn_subagent` can launch. */
-export type SubagentType = "codebase_explorer" | "code_reviewer";
-
 /**
  * How many subagent child sessions may run at the same time, process-wide.
  * Shared with `lib/shared/tools-market.ts` so the server's slot pool and the
@@ -255,7 +260,8 @@ export type SubagentTaskStatus = "creating" | "running" | "completed" | "failed"
 export interface SubagentTaskSummary {
   taskId: string;
   childSessionId: string | null;
-  subagentType: SubagentType;
+  /** Name of the configured subagent profile this task ran. */
+  subagentName: string;
   description: string;
   status: SubagentTaskStatus;
   createdAt: number;
@@ -286,6 +292,8 @@ export interface SubagentLiveInfo {
     status: SubagentTaskStatus;
     startedAt: number | null;
     description: string;
+    /** Name of the configured subagent profile, when the row still knows it. */
+    subagentName?: string;
   } | null;
   stats: {
     assistantCount: number | null;

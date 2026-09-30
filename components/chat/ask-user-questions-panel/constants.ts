@@ -65,6 +65,18 @@ export const ASK_PANEL_STYLES = `
     background: color-mix(in srgb, var(--accent) 10%, transparent);
   }
   .askq-input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+  /* "Recommended" badge on the suggested option's label row. It only
+     appears next to the option the agent picked — it is never preselected. */
+  .askq-badge {
+    flex-shrink: 0;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.02em;
+    line-height: 1.5;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    border-radius: 999px;
+    padding: 1px 7px;
+  }
   .askq-opt:has(.askq-input:focus-visible) {
     outline: 2px solid var(--accent); outline-offset: 1px;
   }

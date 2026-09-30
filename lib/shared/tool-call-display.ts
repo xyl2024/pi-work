@@ -40,9 +40,9 @@ import type {
   ToolResultMessage,
 } from "./types";
 
-/** The display category of one tool call. Only these five exist — views must
+/** The display category of one tool call. Only these six exist — views must
  *  not re-derive "is this a file mutation?" from a tool-name comparison. */
-export type ToolCallKind = "read" | "file-mutation" | "bash" | "subagent" | "other";
+export type ToolCallKind = "read" | "file-mutation" | "bash" | "subagent" | "codemode" | "other";
 
 /** Classify one tool call by name. Unknown tools are `"other"`. */
 export function classifyToolCall(toolName: string): ToolCallKind {
@@ -56,6 +56,8 @@ export function classifyToolCall(toolName: string): ToolCallKind {
       return "bash";
     case "spawn_subagent":
       return "subagent";
+    case "codemode":
+      return "codemode";
     default:
       return "other";
   }

@@ -25,6 +25,7 @@ import { githubTrending } from "./github-trending";
 import { grokbot } from "./grokbot";
 import { kanban } from "./kanban";
 import { inbox } from "./inbox";
+import { mcp } from "./mcp";
 import { media } from "./media";
 import { models } from "./models";
 import { notes } from "./notes";
@@ -60,6 +61,7 @@ export const ZH_TRANSLATIONS = {
   ...grokbot,
   ...inbox,
   ...kanban,
+  ...mcp,
   ...media,
   ...models,
   ...notes,

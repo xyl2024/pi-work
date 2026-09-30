@@ -181,12 +181,12 @@ _Avoid_: 把它当作新实体、新分组或「今天创建」的会话（口�
 ### 子代理
 
 **子代理（Subagent）**：
-由某个会话通过 `spawn_subagent` 工具启动、拥有自己的 pi 会话文件、且工具集被限制的辅助 agent。
+由某个会话通过 `spawn_subagent` 工具启动、拥有自己的 pi 会话文件、且工具集独立配置的辅助 agent。
 _Avoid_: 用「子 agent」指代它；把它当作会话标签页里的普通会话
 
-**子代理类型（Subagent type）**：
-`spawn_subagent` 的 `subagent_type` 取值，决定子代理的工具集与系统提示词；现有取值为 `codebase_explorer`（只读探索与报告）与 `code_reviewer`（审查代码或 diff），两者工具集相同，都可只读使用 bash（`code_reviewer` 的系统提示词额外要求把结论绑定到证据）。
-_Avoid_: 用「子代理」指代某个类型；把模型与推理强度算作类型的一部分（那是全局 subagent 配置）
+**子代理档案（Subagent profile）**：
+一条用户可编辑的子代理定义，存于 `subagents.db` 的 `subagent_profiles` 表：名称（`spawn_subagent` 的 `subagent_name` 取值）、描述、系统提示词、工具集、模型与推理强度、Pi Bot 形象与运行超时。两个内置档案 `codebase_explorer`（只读探索与报告）与 `code_reviewer`（审查代码或 diff）在首次初始化时写入表中，之后同样可改可删。
+_Avoid_: 把「子代理档案」说成「子代理类型」；把它与某次调用（子代理任务）混为一谈
 
 **子代理任务（Subagent task）**：
 一次 `spawn_subagent` 调用：从派发到终态的完整过程，对应子代理会话列表中的一项与 `subagent_tasks` 中的一行。
@@ -258,9 +258,21 @@ _Avoid_: 用「队列」指代它（那是承载它的数据结构）；用「�
 可编辑的 prompt 模板文件，只有 `~/.pi/agent/prompts/`（全局）与 `<cwd>/.pi/prompts`（项目）两处可编辑。
 _Avoid_: 用它指代系统提示词
 
+**系统提示词（System prompt）**：
+模型这一轮实际收到的整条 system message 文本。由 Pi Work 用系统提示词模板渲染决定，pi 只在末尾补一个 `<cwd>` 段（`composeSystemPrompt`）。Context 面板、`get_state` 与 BTW 回放读的都是这一条，子代理会话例外（它不套模板，见下）。
+_Avoid_: 用 `APPEND_SYSTEM.md` 的内容指代它（那个文件已退役，见下）
+
+**系统提示词模板（System prompt template）**：
+`~/.pi-work/config.yaml` 的 `system_prompt_template`，一条有序的片段列表，决定系统提示词按什么顺序拼、拼进哪些变量。会话创建时从配置快照一次，之后改模板要开新会话才生效；变量数据（工具清单、追加块、项目上下文、技能、模型、思考级别、日期）每轮实时取。渲染规则在 `lib/shared/system-prompt-template.ts`（纯模块）。决策见 ADR-0011。
+_Avoid_: 叫它「提示词模板」（词表里的「提示词」已经指斜杠命令模板）
+
+**系统提示词片段（System prompt fragment）**：
+系统提示词模板里的一项，要么是一段自定义文本（可选一个 tag 名包起来，文本内不解析任何语法），要么是一个变量。变量共十个：`preamble`（无 tag）、`tools` / `rules` / `docs` / `addendum` / `project_context` / `skills`（沿用 pi 的段名，渲染出的 tag 能被 `system-prompt-segments` 解析回来）、`model` / `thinking_level` / `date`（Pi Work 自有）。变量渲染为空时整块不输出；没有 `cwd` 变量。
+_Avoid_: 把它当作斜杠命令模板的一项；在文本片段里写 `{{tools}}` 之类的插值
+
 **追加系统提示词（Append System）**：
-附加到系统提示词末尾的单文件 `~/.pi/agent/APPEND_SYSTEM.md`。
-_Avoid_: 把它混同于 Prompt 模板
+已退役：`~/.pi/agent/APPEND_SYSTEM.md`（及项目级 `.pi/APPEND_SYSTEM.md`）不再被 Pi Work 读取——loader 无条件收到 `appendSystemPrompt: []`，pi 的发现分支被跳过。文件原样留在磁盘上，内容要手工搬进系统提示词模板。内置工具说明块改由 `appendSystemPromptOverride` 生产，成为 `addendum` 变量的值。
+_Avoid_: 以为它还在生效；指望 Pi Work 自动迁移它的内容
 
 **斜杠命令（Slash command）**：
 界面层对 Prompt 与 Skill 的统一调用入口，`source` 为 `"prompt"` 或 `"skill"`。
@@ -269,6 +281,32 @@ _Avoid_: 把它当成第三种资源
 **技能（Skill）**：
 一个 SKILL.md 目录。运行时会加载的来源有三处：`~/.pi/agent/skills/`（全局）、`<cwd>/.pi/skills/`（项目）、`~/.pi-work/skills/`（Pi Work 自有，pi 的 loader 不扫描）；仓库内 `agent-skills/` 只是平台维护的分发源，需用户自行拷贝到 `~/.pi-work/skills/` 后才会生效。
 _Avoid_: 与 `.agents/skills/`（跨仓库共享技能）混用；把 `agent-skills/` 当作会被自动加载的目录
+
+### MCP
+
+**MCP 服务器（MCP server）**：
+pi 的 MCP 扩展在一个会话启动时连接的外部工具来源，配置写在 pi 自己的 `mcp.json` 里而不是 Pi Work 的 `config.yaml`，工具以 `mcp__<服务器>__<工具>` 注册。
+_Avoid_: 把它当作 Pi Work 的集成（Pi Work 只读写它的配置文件，连接与工具注册都在 pi 那边）
+
+**服务器条目（Server entry）**：
+`mcpServers` 里的一项，由名字加一份配置组成：stdio（`command`/`args`/`env`/`cwd`）或 streamable HTTP（`url`/`headers`）。
+_Avoid_: 用「服务器」指代整份 `mcp.json`
+
+**条目作用域（Entry scope）**：
+条目来自哪份文件：**全局**（`~/.pi/agent/mcp.json`，总是读）与**本工作目录**（`<cwd>/.pi/mcp.json`，只在 `PiWorkConfig.mcp.project_servers` 打开时读）；pi 自己的字段名仍是 `project`。
+_Avoid_: 用「项目」指代它（那是 cwd 的 _Avoid_ 词，且「工作目录分组（Workspace）」已指侧栏的会话分组）；把它当成每个会话各存一份
+
+**条目覆盖（Entry shadowing）**：
+两份文件里的同名条目按作用域合并，**本工作目录**的那份替换全局的那份；两份都留在文件里，只有被替换掉的那份不会被连接。
+_Avoid_: 把它当作条目被移动或删除
+
+**无效条目（Invalid entry）**：
+解析通过但没通过 pi 校验的条目，pi 只跳过它、其余服务器照常连接；所以它既不等于整份文件坏掉，也不允许被静默丢弃或重写。
+_Avoid_: 把它当作 `mcp.json` 解析失败（那是文件级错误，面板拒绝保存）
+
+**工具暴露级别（Exposure）**：
+一个 MCP 服务器的工具对模型可见的程度，五档：`codemode`、`codemode-deferred`、`deferred`、`direct`、`hidden`，可用 `toolExposure` 按工具覆盖。
+_Avoid_: 与会话工具集（loadout）混用
 
 ### 计划
 

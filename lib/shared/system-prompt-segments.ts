@@ -19,8 +19,9 @@
 //    subtracts (`prefix differencing`, ADR-0005) — which needs `start` / `end`
 //    offsets into the original string, with the slices forming an ordered,
 //    non-overlapping, gap-free cover of it;
-//  - the specialized-subagent path and the `load_pi_docs` toggle rewrite the
-//    rendered prompt, so they want to drop or unwrap a section by name.
+//  - the specialized-subagent path rewrites the rendered prompt (it flattens
+//    pi's sections and prefixes the profile's own prompt), so it wants to drop
+//    or unwrap a section by name.
 //
 // So: offsets always cover the original bytes (tags included); `text` is what
 // the panel draws.
@@ -88,10 +89,20 @@ const SECTION_ANCHORS: Record<string, string> = {
   cwd: "cwd",
 };
 
+/** The tag names {@link SECTION_RE} recognises. Also the vocabulary a rendered
+ *  system prompt template has to speak: `lib/shared/system-prompt-template`
+ *  derives its variable tags from these names (its `project_context` variable
+ *  goes through {@link PROJECT_CONTEXT_RE} instead), and a unit test pins the
+ *  two lists together. */
+export const SYSTEM_PROMPT_SECTION_NAMES = ["tools", "rules", "docs", "addendum", "skills", "cwd"] as const;
+
 /** One tagged section, tags included. `tools|rules|docs` are absent when the
  *  session runs with a custom prompt; `addendum|project_context|skills` are
  *  absent when their source is empty. */
-const SECTION_RE = /<(tools|rules|docs|addendum|skills|cwd)>\n([\s\S]*?)\n<\/\1>/g;
+const SECTION_RE = new RegExp(
+  `<(${SYSTEM_PROMPT_SECTION_NAMES.join("|")})>\\n([\\s\\S]*?)\\n<\\/\\1>`,
+  "g",
+);
 
 /** `<project_context>` is pi scaffolding wrapped around the AGENTS.md files;
  *  the wrapper lines are dropped from the display text. */
@@ -306,18 +317,4 @@ export function stripDefaultSystemPromptSections(prompt: string): string {
     out = rewriteSystemPromptSection(out, name, (body) => body);
   }
   return out.trim();
-}
-
-/**
- * Remove ONLY pi's built-in "Pi documentation" section from a rendered system
- * prompt, leaving everything else (append blocks, `<project_context>`, skills,
- * working directory, …) untouched. The section is a tagged `<docs>` block, so
- * the tag is an exact boundary and the removal can never over-consume a
- * following section.
- *
- * Backed by `PiWorkConfig.load_pi_docs`: when the toggle is off, new sessions
- * start without the model being pointed at the pi SDK README / docs paths.
- */
-export function stripPiDocumentationSection(prompt: string): string {
-  return dropSystemPromptSection(prompt, "docs").trimStart();
 }

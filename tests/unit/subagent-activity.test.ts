@@ -23,7 +23,7 @@ describe("GET /api/subagents/[sessionId]/activity", () => {
       const taskId = `subagent:test-${uniqueId("t")}`;
       db.prepare(`
         INSERT INTO subagent_tasks
-          (task_id, parent_session_id, child_session_id, subagent_type, description, prompt, status, created_at, started_at)
+          (task_id, parent_session_id, child_session_id, subagent_name, description, prompt, status, created_at, started_at)
         VALUES (?, ?, ?, 'codebase_explorer', 'test task', 'test prompt', 'running', ?, ?)
       `).run(taskId, `parent-${uniqueId("p")}`, childSessionId, Date.now(), Date.now());
       return taskId;

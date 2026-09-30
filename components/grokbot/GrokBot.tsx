@@ -16,6 +16,7 @@
 
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -31,6 +32,7 @@ import {
   type GrokPoint,
 } from "@/lib/client/grokbot-data";
 import { useGrokbotConfig, setGrokbotConfig } from "@/lib/client/grokbot-store";
+import type { SubagentBotAppearance } from "@/lib/shared/subagent";
 
 export interface GrokBotHandle {
   /** Pick an expression by index (0..24). Persists to the shared store. */
@@ -50,6 +52,14 @@ export interface GrokBotProps {
   interactive?: boolean;
   /** Extra class for the stage wrapper. */
   className?: string;
+  /**
+   * Controlled appearance. When set, the component renders this instead of the
+   * shared GrokBot store — used to preview a subagent profile's bot without
+   * touching the user's own companion.
+   */
+  appearance?: SubagentBotAppearance;
+  /** Receives appearance patches while `appearance` is controlled. */
+  onAppearanceChange?: (patch: Partial<SubagentBotAppearance>) => void;
 }
 
 // ── Animation constants (from LaoA-GrokBot app.js) ───────────────────────
@@ -169,10 +179,19 @@ function motionClassForState(stateKey: string): string {
 }
 
 export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
-  { size = "100%", interactive = true, className },
+  { size = "100%", interactive = true, className, appearance, onAppearanceChange },
   ref,
 ) {
-  const config = useGrokbotConfig();
+  // Controlled (subagent editor / live panel) or store-backed (the user's own
+  // companion). `useGrokbotConfig` is still called unconditionally so the hook
+  // order and the store's lazy timers are unaffected by which mode is active.
+  const storeConfig = useGrokbotConfig();
+  const controlled = appearance !== undefined;
+  const config: SubagentBotAppearance = appearance ?? storeConfig;
+  const update = useCallback((patch: Partial<SubagentBotAppearance>) => {
+    if (controlled) onAppearanceChange?.(patch);
+    else setGrokbotConfig(patch);
+  }, [controlled, onAppearanceChange]);
   const stageRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const eye0Ref = useRef<SVGPathElement>(null);
@@ -228,7 +247,7 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
     const next = pool.find((i) => i !== current) ?? pool[0];
     if (next !== current) {
       // Route through the expression effect so both stay consistent.
-      setGrokbotConfig({ expression: next });
+      update({ expression: next });
     }
     // Motion class.
     const t = timers.current;
@@ -386,10 +405,10 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
 
   useImperativeHandle(ref, () => ({
     setExpression(index: number) {
-      setGrokbotConfig({ expression: index });
+      update({ expression: index });
     },
     setState(stateKey: string) {
-      setGrokbotConfig({ stateKey });
+      update({ stateKey });
     },
     playQuickAction(action: string) {
       const svg = svgRef.current;
@@ -413,7 +432,7 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
     triggerBlink() {
       anim.current.blinkStart = performance.now();
     },
-  }), []);
+  }), [update]);
 
   const shapePath = GROKBOT_SHAPES.find((s) => s.id === config.shapeId)?.path ?? GROKBOT_SHAPES[0].path;
 
@@ -436,7 +455,6 @@ export const GrokBot = forwardRef<GrokBotHandle, GrokBotProps>(function GrokBot(
           display: "block",
           margin: "0 auto",
           overflow: "visible",
-          filter: "drop-shadow(0 10px 10px rgba(35,48,80,0.18))",
         }}
         role="img"
         aria-label="Pi Bot"

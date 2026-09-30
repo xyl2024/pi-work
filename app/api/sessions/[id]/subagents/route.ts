@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const base = listSubagentTasks(id).map((task) => ({
       taskId: task.taskId,
       childSessionId: task.childSessionId,
-      subagentType: task.subagentType,
+      subagentName: task.subagentName,
       description: task.description,
       status: task.status,
       createdAt: task.createdAt,

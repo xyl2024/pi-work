@@ -201,7 +201,9 @@ export function getToolPreview(block: { input?: unknown; toolName?: string }): s
       break;
     }
     case "spawn_subagent": {
-      parts = [str(record.subagent_type), str(record.description)];
+      // `subagentType` is the pre-rename field, still present on custom
+      // entries written by older versions.
+      parts = [str(record.subagent_name) || str(record.subagentType), str(record.description)];
       break;
     }
     default: {
