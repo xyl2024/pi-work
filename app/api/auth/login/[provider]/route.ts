@@ -1,4 +1,4 @@
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { ModelRuntime, SettingsManager, getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +115,15 @@ export async function GET(
       // Also cancel on client disconnect
       abort.signal.addEventListener("abort", cleanup);
 
+      // pi 0.99 added OAuth to the `openai` provider ("Sign in with ChatGPT").
+      // That flow identifies the installation by a stable UUID: pi reads it from
+      // the *global* settings file (never the project one, so a cloned repo does
+      // not share it) and creates it on first use. Without it
+      // `login("openai", "oauth")` aborts with "requires a device ID". Other
+      // providers never call the callback, so nothing is written unless that
+      // flow actually runs.
+      const settings = SettingsManager.create(process.cwd(), getAgentDir());
+
       try {
         await runtime.login(provider, "oauth", {
           signal: abort.signal,
@@ -165,6 +174,8 @@ export async function GET(
                 break;
             }
           },
+        }, {
+          getDeviceId: () => settings.getOrCreateDeviceId(),
         });
 
         send(controller, { type: "success" });

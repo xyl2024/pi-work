@@ -27,6 +27,15 @@ export type PiSessionEventsAreKnownToProtocol = AssertTrue<
   AgentSessionEvent["type"] extends SessionEventType ? true : false
 >;
 
+/** What pi did with an input handed to a running session: `"handled"` when an
+ *  extension consumed it, `"queued"` when it was queued behind the current
+ *  turn. Mirrored here rather than imported because pi exports it from
+ *  `core/agent-session` but not from the package root. `steer()` and
+ *  `followUp()` return it since 0.99; this layer deliberately ignores the
+ *  value (the UI learns the outcome from the events), but the mirror has to
+ *  match or the structural cast to `AgentSession` stops compiling. */
+export type QueuedInputDisposition = "handled" | "queued";
+
 export interface ContextUsage {
   percent: number | null;
   contextWindow: number;
@@ -125,8 +134,8 @@ export interface AgentSessionLike {
   setModel(model: ModelLike): Promise<void>;
   navigateTree(targetId: string, options?: { summarize?: boolean }): Promise<NavigateTreeResult>;
   setThinkingLevel(level: string): void;
-  steer(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<void>;
-  followUp(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<void>;
+  steer(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<QueuedInputDisposition>;
+  followUp(text: string, images?: Array<{ type: "image"; data: string; mimeType: string }>): Promise<QueuedInputDisposition>;
   getAllTools(): ToolInfo[];
   getActiveToolNames(): string[];
   setActiveToolsByName(names: string[]): void;
