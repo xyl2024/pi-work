@@ -1,4 +1,4 @@
-// BTW-panel glyph (Message-square-more). Hovering stokes the three dots
+// Message-square-more glyph. Hovering stokes the three dots
 // in sequence (staggered) inside the speech bubble.
 
 "use client";

@@ -69,10 +69,6 @@ interface Props {
   /** Called after the scroll-to-entry navigation completes */
   onScrollComplete?: () => void;
   onNewSessionRequest?: () => void;
-  /** Slash action `/btw`: open the right BTW panel and focus its input.
-   *  Wired by AppShell so the main-chat slash menu can jump straight into
-   *  a BTW question. */
-  onOpenBtw?: () => void;
   /** Open a persisted child session in the workspace tab bar. */
   onOpenSession: (sessionId: string) => void;
   /** Current cwd of the chat context — shown by ChatInput's CwdPicker (the
@@ -106,7 +102,7 @@ interface Props {
   }) => void;
 }
 
-function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenBtw, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
+function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady, modelsRefreshKey, chatInputRef, scrollToEntryId, onScrollComplete, onNewSessionRequest, onOpenSession, cwd, onCwdChange, onRenameCompleted, onSessionNameChange, onSessionInfoLoaded, onOpenFile, onDraftChange, onAgentStatusChange }: Props) {
   const streamingKey = tabId ?? session?.id ?? "default";
   const { t, locale } = useI18n();
   const toast = useToast();
@@ -785,7 +781,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         onSlashAction={(action) => {
           if (action === "new") onNewSessionRequest?.();
           else if (action === "compact") handleCompactClick();
-          else if (action === "btw") onOpenBtw?.();
           else if (action === "model") setModelModalOpen(true);
         }}
         sessionId={currentSessionId}

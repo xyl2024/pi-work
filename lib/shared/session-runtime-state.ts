@@ -333,7 +333,7 @@ export function removeInFlightTool(
 
 /**
  * The in-flight partial tool results, keyed by toolCallId — the view the chat
- * (and BTW) renders. Derived from `inFlightTools` so there is a single table
+ * renders. Derived from `inFlightTools` so there is a single table
  * of in-flight calls; entries only appear once a result exists.
  */
 export function inFlightToolResultsOf(

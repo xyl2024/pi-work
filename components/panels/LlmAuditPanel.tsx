@@ -96,8 +96,9 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
       });
       if (filter) params.set("status", filter);
       if (sourceFilter) params.set("source", sourceFilter);
-      // LLM audit is session-scoped whenever a main session is active,
-      // including BTW calls. Never broaden a BTW filter to all sessions.
+      // LLM audit is session-scoped whenever a main session is active. The
+      // `btw` source is kept only for rows recorded before that panel was
+      // removed; never broaden its filter to all sessions.
       if (effectiveSessionId) params.set("sessionId", effectiveSessionId);
       const res = await fetch(`/api/llm-audit/calls?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

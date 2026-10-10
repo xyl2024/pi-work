@@ -7,7 +7,7 @@ import { readLastUsedModel, writeLastUsedModel } from "@/lib/client/last-used-mo
 import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
-import { setSessionUiState, setLeafChangeHandler, setSystemPromptRefreshHandler } from "../sessionUiStore";
+import { setSessionUiState, setLeafChangeHandler } from "../sessionUiStore";
 import { getPendingAskUserQuestions } from "../askUserQuestionsStore";
 import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import {
@@ -375,17 +375,6 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
       })
       .catch(() => {});
   }, []);
-
-  // Bridge the systemPrompt refresh out to the BTW panel's header refresh
-  // button. AppShell triggers this via useSystemPromptRefresh(); without a
-  // registered handler the button degrades to a no-op re-render.
-  useEffect(() => {
-    if (!isActive) return;
-    setSystemPromptRefreshHandler(refreshSystemPrompt, sessionIdRef.current ?? undefined);
-    return () => setSystemPromptRefreshHandler(null, sessionIdRef.current ?? undefined);
-    // refreshSystemPrompt is a stable useCallback; isActive flips on tab
-    // activation so we re-register the owner for the now-active session.
-  }, [isActive, refreshSystemPrompt]);
 
   const { handleAgentEvent, applyRuntimeInput } = useAgentSessionEvents({
     controllerId: streamingKey,
@@ -756,7 +745,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
         // Backstop for a wrapper that wasn't alive at includeState time (e.g.
         // right after server boot): GET /api/agent/[id] lazily boots the RPC
         // session, so one re-fetch publishes systemPrompt/contextUsage without
-        // waiting for the user to hit the BTW panel's refresh button.
+        // waiting for a manual refresh.
         if (agentState && !agentState.state) {
           refreshAgentRuntimeState(session.id).catch(() => {});
         }

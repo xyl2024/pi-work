@@ -43,20 +43,6 @@ export const BUILTIN_COMPACT: SlashResource = {
   content: "",
 };
 
-/** Built-in `/btw` slash command — opens the right BTW panel and focuses its
- *  input so the user can immediately ask a question grounded in the active
- *  session's context (same `source: "action"` path as `/new` and `/compact`;
- *  handled by AppShell via `onSlashAction?.("btw")` → opens the tab + bumps
- *  the BtwPanel focus request). */
-export const BUILTIN_BTW: SlashResource = {
-  source: "action",
-  name: "BTW",
-  command: "btw",
-  description: "打开 BTW 面板并向当前会话提问",
-  path: "",
-  content: "",
-};
-
 /** Built-in `/model` slash command — opens the model-picker modal (same
  *  choice the toolbar's ModelPicker offers) so keyboard-first users can
  *  switch the session model without reaching for the mouse. Handled by
@@ -71,4 +57,4 @@ export const BUILTIN_MODEL: SlashResource = {
   content: "",
 };
 
-export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT, BUILTIN_BTW, BUILTIN_MODEL];
+export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT, BUILTIN_MODEL];

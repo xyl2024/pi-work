@@ -43,8 +43,8 @@ export interface ContextUsage {
 }
 
 /** The subset of pi's `AgentTool` this layer reads: the API `tools` schema
- *  fields plus the sampling override `btw_context` forwards. The execute
- *  function and the rest of the runtime tool are none of our business. */
+ *  fields plus the sampling override pi reports. The execute function and the
+ *  rest of the runtime tool are none of our business. */
 export interface AgentToolStateLike {
   name?: string;
   description?: string;
@@ -52,8 +52,7 @@ export interface AgentToolStateLike {
   constrainedSampling?: unknown;
 }
 
-/** The subset of a pi `AgentMessage` context composition and `btw_context`
- *  read. `content` stays `unknown` because its block union is provider-shaped;
+/** The subset of a pi `AgentMessage` context composition reads. `content` stays `unknown` because its block union is provider-shaped;
  *  `toolCallId`/`toolName` cover pairing a tool result with the call that
  *  produced it (the composition panel's Top-N list); `command`/`output`/`summary`
  *  cover the non-content message roles. */
@@ -117,8 +116,7 @@ export interface AgentSessionLike {
   readonly settingsManager: SettingsManager;
   /** Mirror of the pi SDK `AgentState` fields this layer reads. `tools` and
    *  `messages` are typed here (rather than reached through a cast at each
-   *  call site) because context composition and `btw_context` both consume
-   *  them. */
+   *  call site) because context composition consumes them. */
   readonly agent: {
     state?: {
       systemPrompt?: string;

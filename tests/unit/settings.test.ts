@@ -118,7 +118,6 @@ describe("settings api: right side bar", () => {
     "notes",
     "kanban",
     "llmAudit",
-    "btw",
   ];
 
   async function snapshot(): Promise<Json> {

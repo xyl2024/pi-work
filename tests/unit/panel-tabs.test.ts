@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  BTW_TAB_ID,
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   KANBAN_TAB_ID,
@@ -134,22 +133,22 @@ describe("panelTabs open", () => {
 
 describe("panelTabs toggle", () => {
   it("opens the panel when its tab is not active", () => {
-    const state = reduce(createPanelTabsState(), { type: "toggle", kind: "btw" });
+    const state = reduce(createPanelTabsState(), { type: "toggle", kind: "rss" });
 
     expect(selectIsOpen(state)).toBe(true);
-    expect(selectActiveKind(state)).toBe("btw");
-    expect(openCount(state, BTW_TAB_ID)).toBe(1);
+    expect(selectActiveKind(state)).toBe("rss");
+    expect(openCount(state, RSS_TAB_ID)).toBe(1);
   });
 
   it("collapses the panel when the toggled tab is active and the panel is open", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "btw" },
-      { type: "toggle", kind: "btw" },
+      { type: "open", kind: "rss" },
+      { type: "toggle", kind: "rss" },
     );
 
     // The tab stays in the strip so the next toggle reopens the same view.
-    expect(kinds(state)).toEqual(["btw"]);
+    expect(kinds(state)).toEqual(["rss"]);
     expect(state.mode).toBe("closed");
     expect(selectIsOpen(state)).toBe(false);
     expect(selectActiveKind(state)).toBe(null);
@@ -158,19 +157,19 @@ describe("panelTabs toggle", () => {
   it("reopens an already open tab whose panel was collapsed", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "btw" },
+      { type: "open", kind: "rss" },
       { type: "set_mode", mode: "closed" },
-      { type: "toggle", kind: "btw" },
+      { type: "toggle", kind: "rss" },
     );
 
     expect(state.mode).toBe("normal");
-    expect(openCount(state, BTW_TAB_ID)).toBe(2);
+    expect(openCount(state, RSS_TAB_ID)).toBe(2);
   });
 
   it("toggles a different panel view instead of collapsing the active one", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "btw" },
+      { type: "open", kind: "rss" },
       { type: "toggle", kind: "translate" },
     );
 
@@ -344,7 +343,7 @@ describe("panelTabs selectors", () => {
 });
 
 describe("panelTabs registry", () => {
-  const DELETED_PANEL_KINDS = ["canvas", "json", "githubTrending", "toolCalls"];
+  const DELETED_PANEL_KINDS = ["canvas", "json", "githubTrending", "toolCalls", "btw"];
 
   it("declares a label key and keywords for every spec and palette entry", () => {
     for (const spec of PANEL_TAB_SPECS) {
@@ -375,7 +374,6 @@ describe("panelTabs registry", () => {
   it("covers exactly the panel views the shell knows about", () => {
     expect([...PANEL_TAB_KINDS].sort()).toEqual(
       [
-        "btw",
         "context",
         "conversationTree",
         "favorites",
@@ -394,7 +392,7 @@ describe("panelTabs registry", () => {
   it("marks session-bound panels and only expands kanban by default", () => {
     const sessionBound = PANEL_TAB_SPECS.filter((spec) => spec.sessionBound).map((spec) => spec.kind);
     expect([...sessionBound].sort()).toEqual(
-      ["btw", "context", "conversationTree", "gitDiff", "llmAudit"].sort(),
+      ["context", "conversationTree", "gitDiff", "llmAudit"].sort(),
     );
 
     const expanded = PANEL_TAB_SPECS.filter((spec) => spec.defaultMode === "expanded").map((spec) => spec.kind);

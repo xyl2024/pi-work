@@ -12,7 +12,7 @@
 //   • panelTabsReducer + selectors — the strip's state machine. Label text is
 //     resolved at render time from `labelKey`, so open tabs follow a locale
 //     switch; each tab carries an `openCount` so a re-open can be observed by
-//     panels that need to refresh (git diff) or focus (BTW).
+//     panels that need to refresh (git diff, plans).
 //
 // Presentation (icon and panel body) deliberately stays outside this module:
 // the right-bar descriptors look a body up by kind. Adding a panel view is two
@@ -21,7 +21,6 @@
 // shape here.
 
 import {
-  BTW_TAB_ID,
   CONTEXT_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
   FAVORITES_TAB_ID,
@@ -52,7 +51,6 @@ export interface PanelTabParams {
   conversationTree: undefined;
   llmAudit: undefined;
   context: undefined;
-  btw: undefined;
   kanban: undefined;
   notes: undefined;
   plans: undefined;
@@ -252,14 +250,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     kind: "conversationTree",
     tabId: CONVERSATION_TREE_TAB_ID,
     labelKey: "Conversation Tree",
-    defaultMode: "normal",
-    sessionBound: true,
-  },
-  btw: {
-    kind: "btw",
-    tabId: BTW_TAB_ID,
-    // The strip has always displayed the BTW tab through this key, not "BTW".
-    labelKey: "By the way",
     defaultMode: "normal",
     sessionBound: true,
   },
@@ -482,7 +472,7 @@ export function selectTabByKind(state: PanelTabsState, kind: PanelViewKind): Any
 
 /**
  * How many times a panel view has been opened, 0 when it never was. Drives
- * re-open side effects (git-diff refresh, BTW focus) without a second
+ * re-open side effects (git-diff refresh, plans focus) without a second
  * counter living in the shell.
  */
 export function selectOpenCount(state: PanelTabsState, kind: PanelViewKind): number {

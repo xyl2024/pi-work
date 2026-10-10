@@ -92,7 +92,8 @@ interface Props {
     cursorPosition: number;
   }) => void;
   /** Enter sends immediately (instead of the default Ctrl/Cmd+Enter). Used
-   *  by compact panels (e.g. BTW) that want plain-Enter sending. */
+   *  by compact surfaces (e.g. the Ask User Questions card) that want
+   *  plain-Enter sending. */
   enterToSend?: boolean;
   /** Renders only the bordered input box itself: no bottom toolbar, no
    *  image attachments / slash / prompt UI. While streaming, a stop button
@@ -298,7 +299,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       // directly, bypassing the prompt-template expansion that prompt/skill
       // commands go through in selectSlashResource.
       const trimmed = value.trim();
-      if (trimmed === "/new" || trimmed === "/compact" || trimmed === "/btw" || trimmed === "/model") {
+      if (trimmed === "/new" || trimmed === "/compact" || trimmed === "/model") {
         const action = trimmed.slice(1);
         onSlashAction?.(action);
         setValue("");

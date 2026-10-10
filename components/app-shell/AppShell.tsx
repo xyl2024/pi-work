@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useRef, useEffect, useReducer, memo, type RefObject, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useSessionUiState, useSessionLeafChange, useSystemPromptRefresh } from "@/hooks/sessionUiStore";
+import { useSessionUiState, useSessionLeafChange } from "@/hooks/sessionUiStore";
 import { initCwdList, useCwdList } from "@/hooks/cwdListStore";
 import { SessionSidebar } from "../sessions/SessionSidebar";
 import { SidebarFlipContainer } from "../sessions/SidebarFlipContainer";
@@ -24,7 +24,6 @@ import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
 import { GitPanel } from "../panels/GitPanel";
-import { BtwPanel } from "../panels/BtwPanel";
 import { ModelsConfig } from "../settings/ModelsConfig";
 import { SkillsConfig } from "../settings/SkillsConfig";
 import { McpConfig } from "../settings/McpConfig";
@@ -111,11 +110,9 @@ interface PanelBodyCtx {
   tools: ToolInfo[];
   currentModel: { provider: string; modelId: string } | null;
   thinkingLevel: string;
-  onRefreshSystemPrompt: () => void;
   isStreaming: boolean;
   agentRunning: boolean;
   onConversationTreeCardClick: (cardId: string) => void;
-  btwOpenCount: number;
   gitDiffOpenCount: number;
   plansOpenCount: number;
   onExpandGitPanel: () => void;
@@ -144,17 +141,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   tokens: () => <TokensPanel />,
   llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
   context: (ctx) => <ContextPanel systemPrompt={ctx.systemPrompt} tools={ctx.tools} />,
-  btw: (ctx) => (
-    <BtwPanel
-      mainSessionId={ctx.selectedSessionId}
-      cwd={ctx.cwd}
-      model={ctx.currentModel}
-      systemPrompt={ctx.systemPrompt}
-      thinkingLevel={ctx.thinkingLevel}
-      onRefresh={ctx.onRefreshSystemPrompt}
-      focusRequest={ctx.btwOpenCount}
-    />
-  ),
   gitDiff: (ctx) => (
     <GitPanel
       cwd={ctx.cwd}
@@ -291,8 +277,6 @@ interface WorkspaceChatTabProps {
   scrollToEntryId: string | null;
   onScrollComplete: () => void;
   onNewSessionRequest: (cwdOverride?: string) => void;
-  /** `/btw` slash action handler (open BTW panel + focus its input). */
-  onOpenBtw: () => void;
   /** Open an existing session in a workspace tab. */
   onOpenSession: (sessionId: string) => void;
   onCwdChange: (cwd: string) => void;
@@ -315,7 +299,6 @@ function WorkspaceChatTabView({
   scrollToEntryId,
   onScrollComplete,
   onNewSessionRequest,
-  onOpenBtw,
   onOpenSession,
   onCwdChange,
   onRenameCompleted,
@@ -354,7 +337,6 @@ function WorkspaceChatTabView({
         scrollToEntryId={scrollToEntryId}
         onScrollComplete={onScrollComplete}
         onNewSessionRequest={onNewSessionRequest}
-        onOpenBtw={onOpenBtw}
         onOpenSession={onOpenSession}
         cwd={tab.session?.cwd ?? tab.cwd}
         onCwdChange={onCwdChange}
@@ -382,7 +364,6 @@ const USEFUL_TIP_KEYS = [
   "You can switch the current conversation branch in the conversation tree on the right.",
   "Use Git to manage your projects.",
   "Press ↑/↓ in the input box to cycle through sent messages.",
-  "Use /btw to ask a question without affecting the current context.",
 ] as const;
 
 function shuffleTips<T>(items: readonly T[]): T[] {
@@ -466,9 +447,8 @@ export function AppShell() {
   const activePanelTab = selectActiveTab(panelTabsState);
   const activeRightPanelKind = selectActiveKind(panelTabsState);
   // Re-open counters carried by the tabs themselves: Git Diff refreshes and
-  // BTW focuses off these instead of shell-owned request tokens.
+  // Plans focus off these instead of shell-owned request tokens.
   const gitDiffOpenCount = selectOpenCount(panelTabsState, "gitDiff");
-  const btwOpenCount = selectOpenCount(panelTabsState, "btw");
   const plansOpenCount = selectOpenCount(panelTabsState, "plans");
 
   // Classic mode hides the chat card behind the right column being
@@ -569,11 +549,6 @@ export function AppShell() {
   // snapshot into this module-level bridge for the chat footer/right panels.
   const { branchTree, branchActiveLeafId, systemPrompt, isStreaming, agentRunning, currentModel, thinkingLevel } = useSessionUiState();
   const handleBranchLeafChange = useSessionLeafChange();
-  // Trigger the active session controller to re-fetch & re-publish its
-  // systemPrompt — surfaced as the BTW panel's header refresh button so a
-  // session that got stuck on the "initializing" state can be prodded.
-  const refreshSystemPrompt = useSystemPromptRefresh();
-
   // Tools are cached per formal session. Activating an already-open tab only
   // reads this map; it never sends a new runtime request just because focus
   // moved between tabs.
@@ -1007,14 +982,6 @@ export function AppShell() {
     }
   }, []);
 
-  // `/btw` slash action: always open the BTW tab (never toggle-close it) —
-  // the same "open, never collapse" rule as the palette's record-now entries.
-  // BtwPanel focuses its input off the tab's own openCount, so the extra
-  // focus-request counter is gone.
-  const handleSlashOpenBtw = useCallback(() => {
-    handleOpenPanel("btw");
-  }, [handleOpenPanel]);
-
   // Click on a card in the conversation-tree panel. We always resolve the
   // clicked card to the deepest leaf entry in its subtree, so the chat
   // jumps to the *end* of that branch rather than stopping at an ancestor
@@ -1217,11 +1184,9 @@ export function AppShell() {
     tools,
     currentModel,
     thinkingLevel,
-    onRefreshSystemPrompt: refreshSystemPrompt,
     isStreaming,
     agentRunning,
     onConversationTreeCardClick: handleConversationTreeCardClick,
-    btwOpenCount,
     gitDiffOpenCount,
     plansOpenCount,
     onExpandGitPanel: handleExpandGitPanel,
@@ -1485,7 +1450,6 @@ export function AppShell() {
                 return next;
               })}
               onNewSessionRequest={handleSlashNew}
-              onOpenBtw={handleSlashOpenBtw}
               onOpenSession={handleOpenScheduledSession}
               onCwdChange={handleCwdPicked}
               onRenameCompleted={handleSessionRenameCompleted}
@@ -1501,7 +1465,7 @@ export function AppShell() {
   );
 
   // Panel card — the right-side workspace that hosts file viewers,
-  // tool lists, RSS, BTW, etc. Built once; the layout mode
+  // tool lists, RSS, etc. Built once; the layout mode
   // decides whether it sits next to (Agentic) or instead of (Classic)
   // the chat card. The same expand / collapse right-panel state is
   // used in both modes: expanding still pushes the *other* center

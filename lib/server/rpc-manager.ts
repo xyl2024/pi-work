@@ -653,46 +653,6 @@ export class AgentSessionWrapper {
         };
       }
 
-      case "btw_context": {
-        // Snapshot of the main session's LIVE model-request inputs, used by
-        // the BTW panel to replay the exact same systemPrompt / messages /
-        // tools to the provider (pure chat, no agent loop) so prompt-cache
-        // prefixes line up. Reads the underlying SDK Agent state directly
-        // (state.messages carries SDK-shaped blocks incl. thinking
-        // signatures + toolCall id/name/arguments) — not the UI-rendered
-        // transcript, which would drop those fields.
-        const agentState = this.inner.agent.state;
-        const model = this.inner.model;
-        const tools = (agentState?.tools ?? []).map((t) => {
-          const out: Record<string, unknown> = {
-            name: typeof t.name === "string" ? t.name : "",
-            description: typeof t.description === "string" ? t.description : "",
-            parameters: t.parameters,
-          };
-          if (t.constrainedSampling !== undefined) {
-            out.constrainedSampling = t.constrainedSampling;
-          }
-          return out;
-        });
-        return {
-          model: model ? { provider: model.provider, id: model.id } : undefined,
-          systemPrompt: this.inner.systemPrompt ?? "",
-          thinkingLevel: agentState?.thinkingLevel ?? "off",
-          tools,
-          // Since pi 0.86 the transcript carries its own leading system
-          // message(s): the prompt and tool loadout are replayed from them.
-          // BTW replays the request as `{ systemPrompt, messages, tools }`,
-          // and pi-ai's `normalizeContext` folds that shorthand into a NEW
-          // leading system message. Leaving the transcript's system messages
-          // in would render the prompt twice — collapsing a transcript
-          // concatenates `content` and `sections` — doubling the prompt and
-          // destroying the very cache prefix this snapshot exists to preserve.
-          // The shorthand carries the same prompt and active tool set, so the
-          // system entries are dropped here.
-          messages: (agentState?.messages ?? []).filter((m) => m.role !== "system"),
-        };
-      }
-
       case "set_model": {
         const { provider, modelId } = command as { provider: string; modelId: string };
         const runtime = this.inner.modelRuntime;

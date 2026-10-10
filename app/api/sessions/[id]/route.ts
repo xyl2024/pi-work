@@ -34,7 +34,7 @@ export async function GET(req: Request, { params }: RouteContext) {
         // Wrapper not alive (e.g. right after server boot) — lazily boot it so
         // the client learns the session's real state (systemPrompt etc.) on
         // this request instead of an empty `{ running: false }` that leaves
-        // BTW / Context panels stuck on "main session initializing…". Mirrors
+        // Context panel stuck on "main session initializing…". Mirrors
         // the events endpoint's lazy-start behavior. Boot failure degrades to
         // the old calm response so session loading never breaks.
         try {

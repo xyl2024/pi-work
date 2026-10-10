@@ -179,26 +179,4 @@ export const rightPanels = {
   "Cost by category": "按类别分摊",
   "Top sessions by cost": "Top 会话成本",
 
-  // BTW (By the way) — right-side panel that asks a temporary agent
-  // read-only questions grounded in the active session. The panel header
-  // shows no title; the on-tab "BTW" mark is intentionally kept as English
-  // (a brand mark, not a translatable label).
-  "Open BTW": "打开 BTW",
-  "By the way": "顺带一提",
-  "btw.tooltip": "基于当前会话提问（仅只读工具，不影响主会话）",
-  "btw.empty": "还没有 BTW 对话。发条消息开始。",
-  "btw.clearButton": "清空 BTW 对话",
-  "btw.clearConfirmTitle": "清空 BTW 对话？",
-  "btw.clearConfirmBody": "当前与本会话相关的所有 BTW 问答都会被永久删除，无法恢复。",
-  "btw.stop": "停止生成",
-  "btw.error.network": "网络中断，请重试。",
-  "btw.error.contextTooLarge": "主会话上下文过大，请先压缩主会话再使用 BTW。",
-  "btw.error.modelUnavailable": "当前模型不可用，请切换主会话的模型。",
-  "btw.disabled.noSession": "请先打开一个会话再使用 BTW。",
-  "btw.disabled.loading": "主会话正在初始化…",
-  "btw.refreshHint": "重新检测就绪状态（卡在此处时可点击）",
-  "About BTW": "BTW 使用说明",
-  "BTW means \"By The Way\": ask questions grounded in the current session's context without interrupting the main session, and without polluting its context.": "BTW 意为 By The Way，用于在不中断主会话的情况下，基于当前会话的上下文进行提问，不会污染主会话的上下文。",
-  "This BTW chat runs in Chat-Only mode: no Agent loop, and no tool calls.": "此处的 BTW 对话为 Chat-Only 模式，无 Agent loop，无法调用工具。",
-  "It reuses the current context prompt 100% verbatim, ensuring input-cache hits.": "100% 完整复用当前时刻上下文提示词，确保输入缓存命中。",
 } as const;

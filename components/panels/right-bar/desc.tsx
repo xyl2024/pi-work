@@ -48,7 +48,6 @@ import {
   GitGraph,
   Languages,
   ListChecks,
-  MessageSquareMore,
   NotebookText,
   PanelRight,
   Rss,
@@ -211,16 +210,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     labelKey: "Open conversation tree",
     isDisabled: (ctx) => !ctx.selectedSessionId && !ctx.selectedCwd,
     icon: ({ size }) => <GitBranch size={size} />,
-  }),
-  // BTW (By the way): session-bound, reads from the active main session.
-  // Disabled when there's no stable sessionId yet. The button shows the
-  // animated speech-bubble-with-dots glyph so the user can spot it without
-  // reading, while the tooltip keeps the "Open BTW" label (an i18n key,
-  // never inlined into the glyph).
-  btw: panelButton("btw", {
-    labelKey: "Open BTW",
-    isDisabled: (ctx) => !ctx.selectedSessionId,
-    icon: ({ size }) => <MessageSquareMore size={size} />,
   }),
   // Kanban: global board (spans all cwds), not session-bound. Its spec
   // declares an expanded default open state so the four columns have room,

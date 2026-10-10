@@ -86,8 +86,8 @@ export async function POST(
 // Lazy-boots the RPC session when it isn't alive yet (mirrors the events
 // endpoint). Without this, a freshly-started server that loads an existing
 // session reports { running: false } with no `state`, so the client never
-// learns the session's systemPrompt and panels like BTW stay stuck on
-// "main session initializing…" until the user clicks their refresh button.
+// learns the session's systemPrompt and the Context panel stays stuck on
+// "main session initializing…" until it is fetched again.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }

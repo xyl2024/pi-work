@@ -444,7 +444,6 @@ export const GIT_DIFF_TAB_ID = "gitDiff:global";
 export const CONVERSATION_TREE_TAB_ID = "conversationTree:global";
 export const LLM_AUDIT_TAB_ID = "llmAudit:global";
 export const CONTEXT_TAB_ID = "context:global";
-export const BTW_TAB_ID = "btw:global";
 export const KANBAN_TAB_ID = "kanban:global";
 export const NOTES_TAB_ID = "notes:global";
 export const PLANS_TAB_ID = "plans:global";
