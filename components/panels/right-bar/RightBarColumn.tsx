@@ -37,7 +37,6 @@ import {
   RIGHT_BAR_BUTTON_IDS,
   RIGHT_BAR_DESCRIPTORS,
   isSessionBoundDescriptor,
-  resolveButtonContent,
   resolveButtonLabel,
   type RightBarCtx,
   type RightBarDescriptor,
@@ -195,10 +194,7 @@ function renderDescriptor(
       active={desc.isActive(ctx)}
       disabled={desc.isDisabled ? desc.isDisabled(ctx) : false}
       badge={desc.badge?.(ctx) ?? undefined}
-      flexDirection={desc.bodyLayout?.flexDirection ?? "row"}
-      gap={desc.bodyLayout?.gap}
-    >
-      {resolveButtonContent(desc, ctx)}
-    </RightBarButton>
+      icon={desc.icon({ size: 16, active: desc.isActive(ctx) })}
+    />
   );
 }

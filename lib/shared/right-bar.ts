@@ -42,7 +42,7 @@ export interface RightSideBarConfig {
    */
   order?: readonly RightBarButtonId[];
   /**
-   * Vertical grouping for session-bound buttons (context / toolCalls /
+   * Vertical grouping for session-bound buttons (context /
    * conversationTree / gitDiff / llmAudit). See SessionBoundAlignment.
    * Missing/unknown values fall back to "bottom".
    */

@@ -3,7 +3,7 @@
 /**
  * Module-scoped git status store + folder aggregation helper.
  *
- * Mirrors the pattern in `sessionUiStore` and `toolCallStatsStore`:
+ * Mirrors the pattern in `sessionUiStore`:
  * one source of truth, useSyncExternalStore-backed subscription, content-
  * equality guarded patches so re-renders only fire when the visible
  * status actually changes.

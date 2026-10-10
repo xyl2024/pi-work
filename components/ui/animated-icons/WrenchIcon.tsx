@@ -1,6 +1,5 @@
-// Tool-calls-panel glyph (Wrench). Hovering gives the wrench head a quick
-// loose-wiggle. Shares the slot with the running/total counter in desc.tsx
-// (RightBarButton bodyLayout: column + gap), so the wrapper stays shrink-wrap.
+// Tool-panel glyph (Wrench). Hovering gives the wrench head a quick
+// loose-wiggle. Shrink-wrapped, so it also fits the animated-icon registry.
 
 "use client";
 

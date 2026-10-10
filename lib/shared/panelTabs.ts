@@ -32,7 +32,6 @@ import {
   PLANS_TAB_ID,
   RSS_TAB_ID,
   TOKENS_TAB_ID,
-  TOOL_CALLS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "./types";
 
@@ -47,7 +46,6 @@ import {
 export interface PanelTabParams {
   favorites: undefined;
   translate: undefined;
-  toolCalls: undefined;
   rss: undefined;
   tokens: undefined;
   gitDiff: undefined;
@@ -247,19 +245,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open LLM API audit",
         keywords: ["llm", "api", "audit", "request", "response", "调用", "审计", "请求", "响应"],
-      },
-    ],
-  },
-  toolCalls: {
-    kind: "toolCalls",
-    tabId: TOOL_CALLS_TAB_ID,
-    labelKey: "Tool Calls",
-    defaultMode: "normal",
-    sessionBound: true,
-    commands: [
-      {
-        labelKey: "Open tool calls",
-        keywords: ["tool", "calls", "stats", "工具", "调用", "统计"],
       },
     ],
   },

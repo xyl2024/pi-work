@@ -54,7 +54,6 @@ import {
   Rss,
   SquareKanban,
   Star,
-  Wrench,
 } from "lucide-react";
 
 /** Options for rendering a panel view's glyph. The right-bar button, the tab
@@ -75,7 +74,6 @@ export interface RightBarCtx {
   selectedSessionId: string | null;
   selectedCwd: string | null;
   rssUnread: number;
-  toolStats: { runningCount: number; totalCount: number };
   /** Active tool-call counter is the only thing that requires i18n inside
    *  the descriptor body, so we expose the AppShell-bound t() to avoid
    *  re-resolving the same key in two places. */
@@ -116,20 +114,12 @@ export interface RightBarDescriptor {
   /** The entry's glyph, declared exactly once: the right-bar button, the tab
    *  strip (`PANEL_TAB_ICON_BY_KIND`) and the command palette all read it. */
   icon: PanelIcon;
-  /** Optional override for the button body when it shows more than the icon
-   *  (tool-calls stacks a running/total counter under it). Receives the
-   *  already-rendered icon so the glyph is still declared once. */
-  content?: (ctx: RightBarCtx, icon: ReactNode) => ReactNode;
   /** Optional top-right corner badge (RSS unread count etc.). */
   badge?: (ctx: RightBarCtx) => ReactNode | null;
   isActive: (ctx: RightBarCtx) => boolean;
   isDisabled?: (ctx: RightBarCtx) => boolean;
   /** Optional visibility predicate. Defaults to always-true. */
   isVisible?: (ctx: RightBarCtx) => boolean;
-  /** Optional layout override forwarded to RightBarButton. Tool-calls uses
-   *  { flexDirection: 'column', gap: 1 } to stack the icon and the
-   *  running/total counter. */
-  bodyLayout?: { flexDirection?: "row" | "column"; gap?: number };
   onClick: (ctx: RightBarCtx) => void;
 }
 
@@ -157,10 +147,8 @@ function panelButton(
   presentation: {
     labelKey: string;
     icon: PanelIcon;
-    content?: (ctx: RightBarCtx, icon: ReactNode) => ReactNode;
     isDisabled?: (ctx: RightBarCtx) => boolean;
     badge?: (ctx: RightBarCtx) => ReactNode | null;
-    bodyLayout?: RightBarDescriptor["bodyLayout"];
   },
 ): RightBarDescriptor {
   const buttonId = PANEL_BUTTON_ID_BY_KIND[kind];
@@ -173,11 +161,9 @@ function panelButton(
     icon: presentation.icon,
     isActive: (ctx) => ctx.activeTabKind === kind,
     onClick: (ctx) => ctx.togglePanel(kind),
-    ...(presentation.content ? { content: presentation.content } : {}),
     ...(spec.sessionBound ? { sessionBound: true as const } : {}),
     ...(presentation.isDisabled ? { isDisabled: presentation.isDisabled } : {}),
     ...(presentation.badge ? { badge: presentation.badge } : {}),
-    ...(presentation.bodyLayout ? { bodyLayout: presentation.bodyLayout } : {}),
   };
 }
 
@@ -220,40 +206,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   llmAudit: panelButton("llmAudit", {
     labelKey: "Open LLM API audit",
     icon: ({ size }) => <ChartColumn size={size} />,
-  }),
-  toolCalls: panelButton("toolCalls", {
-    labelKey: "Tool Calls",
-    icon: ({ size }) => <Wrench size={size} />,
-    // The only button that stacks a live counter under its glyph; the tab
-    // strip shows the bare icon, so the extra stays in this override.
-    content: (ctx, icon) => {
-      const { runningCount, totalCount } = ctx.toolStats;
-      const badgeColor =
-        runningCount > 0
-          ? "var(--accent)"
-          : totalCount > 0
-            ? "var(--text-muted)"
-            : null;
-      return (
-        <>
-          {icon}
-          {badgeColor !== null && (
-            <span
-              style={{
-                fontSize: 9,
-                lineHeight: "10px",
-                fontFamily: "var(--font-mono)",
-                fontWeight: 600,
-                color: badgeColor,
-              }}
-            >
-              {runningCount > 0 ? `${runningCount}/${totalCount}` : totalCount}
-            </span>
-          )}
-        </>
-      );
-    },
-    bodyLayout: { flexDirection: "column", gap: 1 },
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",
@@ -343,16 +295,6 @@ export const RIGHT_BAR_DESCRIPTOR_BY_ID: ReadonlyMap<
   RightBarDescriptor["id"],
   RightBarDescriptor
 > = new Map(RIGHT_BAR_DESCRIPTORS.map((d) => [d.id, d]));
-
-/** Resolve the body of a button: the plain glyph, or the descriptor's
- *  override with the glyph already rendered at button size. */
-export function resolveButtonContent(
-  desc: RightBarDescriptor,
-  ctx: RightBarCtx,
-): ReactNode {
-  const icon = desc.icon({ size: 16, active: desc.isActive(ctx) });
-  return desc.content ? desc.content(ctx, icon) : icon;
-}
 
 /** Resolve the user-visible label for a button. Handles descriptors whose
  *  label flips based on state (panel toggle: Hide/Show; expand: Collapse/

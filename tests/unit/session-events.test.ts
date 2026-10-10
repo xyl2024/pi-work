@@ -255,10 +255,7 @@ describe("session event reducer: tool execution", () => {
       kind: "running_tools",
       tools: [{ id: "call-1", name: "bash", args: { command: "ls -la" } }],
     });
-    expect(reduction.effects).toEqual([{
-      kind: "report_tool_call_stats",
-      report: { type: "tool_start", toolCallId: "call-1", toolName: "bash", args: { command: "ls -la" } },
-    }]);
+    expect(reduction.effects).toEqual([]);
   });
 
   it("reports no args for a non-object argument bag", () => {
@@ -457,28 +454,6 @@ describe("session event reducer: tool execution", () => {
 
     const ok = reduceSessionEvent(createSessionRuntimeState(), toolEnd("call-2", "bash", undefined, false));
     expect(kindsOf(ok.effects)).not.toContain("flash_bot_state");
-  });
-
-  it("reports the end with the first text block, truncated for the stats store", () => {
-    const long = "x".repeat(2000);
-    const started = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "bash", { command: "ls" }));
-
-    const reduction = reduceSessionEvent(
-      started.state,
-      toolEnd("call-1", "bash", { content: [{ type: "text", text: long }], details: { exitCode: 1 } }, true),
-    );
-
-    const report = reduction.effects.find((effect) => effect.kind === "report_tool_call_stats");
-    expect(report).toEqual({
-      kind: "report_tool_call_stats",
-      report: {
-        type: "tool_end",
-        toolCallId: "call-1",
-        isError: true,
-        resultText: `${"x".repeat(1024)}…`,
-        resultDetails: { exitCode: 1 },
-      },
-    });
   });
 
   it("retires the in-flight tool once it ends", () => {
@@ -824,7 +799,6 @@ describe("session event reducer: turn and phase", () => {
     expect(reduction.state.lastAssistantIsBody).toBe(false);
     expect(kindsOf(reduction.effects)).toEqual([
       "begin_stream",
-      "reset_tool_call_stats",
       "refresh_system_prompt",
       "set_bot_baseline",
     ]);

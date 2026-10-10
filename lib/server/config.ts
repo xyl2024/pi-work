@@ -64,7 +64,7 @@ const CONFIGURABLE_BUTTON_IDS: readonly RightBarButtonId[] = Object.keys(
 
 /**
  * Every panel view visible by default. Session-bound buttons (context /
- * toolCalls / conversationTree / gitDiff / llmAudit) pin to the bottom —
+ * conversationTree / gitDiff / llmAudit) pin to the bottom —
  * they're meaningful only when a session is active and become empty on the
  * new-session page.
  */

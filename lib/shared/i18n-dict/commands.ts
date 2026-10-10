@@ -23,7 +23,6 @@ export const commands = {
   "Tools: Full": "工具：全部",
   "Toggle sidebar": "切换侧边栏",
   "Toggle right panel": "切换右面板",
-  "Open tool calls": "打开工具调用",
   "Open HTTP debug": "打开 HTTP 调试",
   "Open models config": "打开模型配置",
   "Open settings": "打开设置",

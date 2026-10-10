@@ -2,7 +2,6 @@ import { useCallback, useRef, type Dispatch } from "react";
 import type { SessionInfo, ToolSelection } from "@/lib/shared/types";
 import type { ContextComposition } from "@/lib/shared/context-composition";
 import type { SessionRuntimeState, StateUpdater } from "@/lib/shared/session-runtime-state";
-import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 import { notifyMutated } from "@/lib/client/git-status-store";
 import { playUiSoundEvent } from "@/lib/client/ui-sounds";
 import { setGrokbotConfig } from "@/lib/client/grokbot-store";
@@ -46,7 +45,6 @@ type AgentSessionEventsOptions = {
   onAgentEnd?: () => void;
   onFirstAssistantReady?: () => void;
   permissionsRef: PermissionRef;
-  statsEmitRef: { current: ToolCallStatsDispatch | undefined };
   sessionIdRef: { current: string | null };
   dispatch: Dispatch<StreamAction>;
   /** The one session runtime state object this controller holds. The adapter
@@ -94,7 +92,6 @@ function performEffect(
     onAgentEnd,
     onFirstAssistantReady,
     permissionsRef,
-    statsEmitRef,
     sessionIdRef,
     dispatch,
     runtimeStateRef,
@@ -152,33 +149,6 @@ function performEffect(
     case "play_ui_sound":
       playUiSoundEvent(effect.sound);
       return;
-    case "report_tool_call_stats": {
-      // The reducer states *what* happened; the clock is read here.
-      const timestamp = Date.now();
-      const report = effect.report;
-      switch (report.type) {
-        case "tool_start":
-          statsEmitRef.current?.({
-            type: "tool_start",
-            toolCallId: report.toolCallId,
-            toolName: report.toolName,
-            args: report.args,
-            timestamp,
-          });
-          return;
-        case "tool_end":
-          statsEmitRef.current?.({
-            type: "tool_end",
-            toolCallId: report.toolCallId,
-            isError: report.isError,
-            resultText: report.resultText,
-            resultDetails: report.resultDetails,
-            timestamp,
-          });
-          return;
-      }
-      return;
-    }
     case "invalidate_git_status": {
       const cwd = session?.cwd ?? newSessionCwd;
       if (cwd) notifyMutated(cwd, effect.force);
@@ -235,9 +205,6 @@ function performEffect(
       endStreamingStore(controllerId, modelCallFailed);
       return;
     }
-    case "reset_tool_call_stats":
-      statsEmitRef.current?.({ type: "reset" });
-      return;
     case "refresh_system_prompt":
       refreshSystemPrompt();
       return;
@@ -349,7 +316,7 @@ export function useAgentSessionEvents(options: AgentSessionEventsOptions) {
   // not be rebuilt when one of its twenty-odd dependencies gets a new identity:
   // the adapter is the stable identity the transport holds, and the latest
   // options are read through this ref at call time — the same render-phase ref
-  // write the hook already uses for `isActiveRef` / `statsEmitRef`.
+  // write the hook already uses for `isActiveRef`.
   const optionsRef = useRef(options);
   optionsRef.current = options;
 

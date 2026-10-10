@@ -36,9 +36,7 @@ import { useConfirm } from "../ui/ConfirmDialog";
 import { CompactionDivider } from "./CompactionDivider";
 import { setChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
 import type { SlashResource } from "@/lib/shared/slash-commands";
-import { ToolCallStatsProvider, useToolCallStatsEmit } from "@/hooks/ToolCallStatsContext";
-import { useToolCallStats } from "@/hooks/useToolCallStats";
-import { setToolCallStatsScrollCallback, setToolCallStatsState } from "@/hooks/toolCallStatsStore";
+import { setToolCallScrollCallback } from "@/hooks/toolCallScrollStore";
 import { setAgentControls } from "@/hooks/sessionUiStore";
 import { SessionSearch } from "../sessions/SessionSearch";
 import { phaseLabel, phaseLoaderVariant, resolveReadPath, isGroupAnchor, findFinalAssistantIndex, hasDisplayableProcessMessage } from "./chat-window/utils";
@@ -142,9 +140,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     entryNavigatedRef.current();
   }, []);
 
-  // Tool call stats: wire the context emit into useAgentSession
-  const statsEmit = useToolCallStatsEmit();
-
   const {
     data, loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, streamState,
     agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps,
@@ -165,7 +160,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   } = useAgentSession({
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady: handleFirstAssistantReady,
     modelsRefreshKey,
-    statsEmit,
     scrollToEntryId,
     onEntryNavigated: handleEntryNavigated,
     isActive,
@@ -189,10 +183,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     sessionInfoReportedRef.current = data.sessionId;
     onSessionInfoLoaded?.(data.info);
   }, [data, onSessionInfoLoaded, session?.id]);
-
-  // Tool call stats hook — snapshot is published to the module store so the
-  // right-panel tab + vertical button (in AppShell) can render it.
-  const { snapshot } = useToolCallStats(messages);
 
   // ── Text-selection toolbar ──
   // Scoped to the message scroll container so selections in the chat
@@ -409,21 +399,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     handleToBottom();
   }, [currentSessionId, agentRunning, handleCompact, handleToBottom, showToast, t]);
 
-  // Running summary for the vertical toolbar badge
-  const runningSummary = agentPhase?.kind === "running_tools" && agentPhase.tools.length > 0
-    ? t("{n} running · {m} total").replace("{n}", String(agentPhase.tools.length)).replace("{m}", String(snapshot.totalCount))
-    : snapshot.totalCount > 0
-      ? t("{n} total").replace("{n}", String(snapshot.totalCount))
-      : undefined;
-
-  // Publish the latest stats snapshot + summary to the module store so
-  // AppShell's right-panel tab + vertical button can render them without
-  // owning the reducer state themselves.
-  useEffect(() => {
-    if (!isActive) return;
-    setToolCallStatsState({ snapshot, runningSummary });
-  }, [isActive, snapshot, runningSummary]);
-
   // ── /model slash command → model-picker modal ──
   const [modelModalOpen, setModelModalOpen] = useState(false);
 
@@ -601,10 +576,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // banner) has the index ready without having to recompute it.
   void lastAnchorIdx;
   // Scroll a tool call into view by its toolCallId, resolving the landing
-  // message through the timeline projection. Shared between the stats drawer
-  // (click on a tool name) and the context-composition panel's Top-5 list: the
-  // tool result itself has no visible row, so both land on the assistant
-  // message that issued the call and flash it for two seconds.
+  // message through the timeline projection. Consumed by the
+  // context-composition panel's Top-5 list: the
+  // tool result itself has no visible row, so it lands on the assistant
+  // message that issued the call and flashes it for two seconds.
   const { highlightEntryId: jumpHighlightEntryId, flash: flashJumpHighlight } = useJumpHighlight();
   const handleScrollToToolCall = useCallback((toolCallId: string) => {
     const idx = timeline.toolCallVisibleIndices.get(toolCallId);
@@ -621,13 +596,14 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     flashJumpHighlight(entryId);
   }, [timeline, messageRefs, scrollContainerRef, reengageScrollFollow, renderEntryIds, flashJumpHighlight]);
 
-  // Register the scroll callback with the module store so the right-panel tab
-  // body can jump to a tool-call message when the user clicks a row. Clear on
+  // Register the scroll callback with the module store so the
+  // context-composition panel can jump to a tool-call message when the user
+  // clicks a row. Clear on
   // unmount so a stale callback can't be invoked from a different session.
   useEffect(() => {
     if (!isActive) return;
-    setToolCallStatsScrollCallback(handleScrollToToolCall, tabId);
-    return () => setToolCallStatsScrollCallback(null, tabId);
+    setToolCallScrollCallback(handleScrollToToolCall, tabId);
+    return () => setToolCallScrollCallback(null, tabId);
   }, [isActive, handleScrollToToolCall, tabId]);
 
   const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !agentRunning;
@@ -1445,9 +1421,5 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 }
 
 export function ChatWindow(props: Props) {
-  return (
-    <ToolCallStatsProvider>
-      <ChatWindowContent {...props} />
-    </ToolCallStatsProvider>
-  );
+  return <ChatWindowContent {...props} />;
 }

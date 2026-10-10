@@ -438,7 +438,6 @@ export interface WorkspacesResponse {
 
 export const FAVORITES_TAB_ID = "favorites:global";
 export const TRANSLATE_TAB_ID = "translate:global";
-export const TOOL_CALLS_TAB_ID = "toolCalls:global";
 export const RSS_TAB_ID = "rss:global";
 export const TOKENS_TAB_ID = "tokens:global";
 export const GIT_DIFF_TAB_ID = "gitDiff:global";

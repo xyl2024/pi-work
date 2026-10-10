@@ -6,8 +6,7 @@ import { isContentEqual } from "@/lib/client/shallowEqual";
 /**
  * Session Media Library UI state (会话媒体库).
  *
- * Module-scoped store following the `sessionUiStore` / `toolCallStatsStore`
- * pattern. Owns UI state only; the entry data itself is recomputed from
+ * Module-scoped store following the `sessionUiStore` pattern. Owns UI state only; the entry data itself is recomputed from
  * `messages` on every render (see `lib/session-library-derive.ts` and the
  * `useSessionLibraryEntries` hook), so we never duplicate truth.
  *

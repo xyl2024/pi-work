@@ -44,7 +44,7 @@ import type {
 export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionResult {
   const {
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady,
-    modelsRefreshKey, statsEmit,
+    modelsRefreshKey,
     scrollToEntryId, onEntryNavigated, isActive = true, controllerId,
   } = opts;
   const streamingKey = controllerId ?? session?.id ?? "default";
@@ -56,8 +56,6 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     if (isActiveRef.current) toast.show(notification);
   }, [toast]);
   const permissionsRef = usePendingPermissionsRef();
-  const statsEmitRef = useRef(statsEmit);
-  statsEmitRef.current = statsEmit;
 
   // "New session" = no session selected yet. Deliberately not gated on
   // newSessionCwd: the very first entry lands on the new-session page before
@@ -397,7 +395,6 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     onAgentEnd,
     onFirstAssistantReady,
     permissionsRef,
-    statsEmitRef,
     sessionIdRef,
     runtimeStateRef,
     patchRuntime,

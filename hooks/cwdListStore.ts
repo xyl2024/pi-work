@@ -5,7 +5,7 @@ import type { WorkspacesResponse } from "@/lib/shared/types";
 
 /**
  * App-wide cwd list, following the same module-scoped
- * `useSyncExternalStore` pattern as sessionUiStore / toolCallStatsStore.
+ * `useSyncExternalStore` pattern as sessionUiStore / rssStore.
  *
  * The full list is fetched exactly once per page load (see `initCwdList`)
  * so the CwdPicker dropdown is populated before it is ever opened and

@@ -11,10 +11,6 @@ import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 // The session-event protocol is declared once, in the shared layer, and used by
 // both the client and the server — see lib/shared/session-events.ts.
 import type { SessionEvent } from "@/lib/shared/session-events";
-// The session runtime state lives in the shared layer so it stays pure and
-// testable; the hook holds one instance of it (see
-// lib/shared/session-runtime-state.ts).
-import type { ToolCallStatsDispatch } from "../ToolCallStatsContext";
 
 export type { AgentPhase, ContextUsage, RetryInfo } from "@/lib/shared/session-runtime-state";
 
@@ -75,7 +71,6 @@ export interface UseAgentSessionOptions {
   modelsRefreshKey?: number;
   chatInputRef?: RefObject<ChatInputHandle | null>;
   setNewSessionModel?: (model: { provider: string; modelId: string } | null) => void;
-  statsEmit?: ToolCallStatsDispatch;
   scrollToEntryId?: string | null;
   /**
    * The session-entry navigation finished: land the view at the end of the

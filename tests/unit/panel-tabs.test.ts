@@ -33,7 +33,6 @@ import {
   RIGHT_BAR_BUTTON_IDS,
   RIGHT_BAR_DESCRIPTOR_BY_ID,
   RIGHT_BAR_DESCRIPTORS,
-  resolveButtonContent,
   type RightBarCtx,
 } from "@/components/panels/right-bar/desc";
 
@@ -345,7 +344,7 @@ describe("panelTabs selectors", () => {
 });
 
 describe("panelTabs registry", () => {
-  const DELETED_PANEL_KINDS = ["canvas", "json", "githubTrending"];
+  const DELETED_PANEL_KINDS = ["canvas", "json", "githubTrending", "toolCalls"];
 
   it("declares a label key and keywords for every spec and palette entry", () => {
     for (const spec of PANEL_TAB_SPECS) {
@@ -387,7 +386,6 @@ describe("panelTabs registry", () => {
         "plans",
         "rss",
         "tokens",
-        "toolCalls",
         "translate",
       ].sort(),
     );
@@ -396,7 +394,7 @@ describe("panelTabs registry", () => {
   it("marks session-bound panels and only expands kanban by default", () => {
     const sessionBound = PANEL_TAB_SPECS.filter((spec) => spec.sessionBound).map((spec) => spec.kind);
     expect([...sessionBound].sort()).toEqual(
-      ["btw", "context", "conversationTree", "gitDiff", "llmAudit", "toolCalls"].sort(),
+      ["btw", "context", "conversationTree", "gitDiff", "llmAudit"].sort(),
     );
 
     const expanded = PANEL_TAB_SPECS.filter((spec) => spec.defaultMode === "expanded").map((spec) => spec.kind);
@@ -509,20 +507,19 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     }
   });
 
-  it("resolves a non-empty button body for every descriptor from its glyph", () => {
+  it("resolves a truthy glyph for every descriptor", () => {
     const ctx: RightBarCtx = {
       rightPanelState: "normal",
       activeTabKind: null,
       selectedSessionId: null,
       selectedCwd: null,
       rssUnread: 0,
-      toolStats: { runningCount: 0, totalCount: 0 },
       t: (key) => key,
       toggleRightPanel: () => {},
       togglePanel: () => {},
     };
     for (const desc of RIGHT_BAR_DESCRIPTORS) {
-      expect(resolveButtonContent(desc, ctx)).toBeTruthy();
+      expect(desc.icon({ size: 16, active: desc.isActive(ctx) })).toBeTruthy();
     }
   });
 
@@ -606,7 +603,6 @@ describe("panelTabs registry → command palette", () => {
         "panel.plans",
         "panel.plans.new",
         "panel.tokens",
-        "panel.toolCalls",
         "panel.translate",
       ].sort(),
     );

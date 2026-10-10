@@ -209,27 +209,12 @@ export const chat = {
   "No output": "无输出",
   "No messages yet": "暂无消息",
 
-  // Tool call stats drawer
-  "Tool call statistics": "工具调用统计",
-  "Tool Calls": "工具调用",
-  "{n} total": "共 {n} 次",
-  "By Tool": "按工具",
+  // Chat activity wording shared with the process details / file chips
   "Tool": "工具",
-  "#": "次数",
-  "Timeline": "时间线",
-  "No tool calls yet": "暂无工具调用",
-  "{n} running · {m} total": "{n} 运行中 · 共 {m} 次",
   "Overview": "概览",
-  "Bash Analysis": "Bash 命令分析",
-  "Recent commands": "最近命令",
-  "Command prefix": "命令前缀",
   "Show all files": "显示全部文件",
   "Files read or changed this turn:": "本轮已读/已处理文件：",
-  "No bash commands yet": "暂无 Bash 命令",
-  "File Changes": "文件改动",
   "Lines changed this turn": "本轮文件变更行数",
-  "lines changed": "行变更",
-  "lines written (deletions not tracked)": "写入行数（不追踪删除行）",
 
   // Activity / context panel
   "Context": "上下文",

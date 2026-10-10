@@ -16,7 +16,6 @@ import { FileViewer } from "../files/FileViewer";
 import { TabBar } from "../ui/TabBar";
 import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
-import { ToolCallStatsPanel } from "../panels/ToolCallStatsPanel";
 import { RssPanel } from "../rss/RssPanel";
 import { KanbanPanel } from "../kanban/KanbanPanel";
 import { NotesPanel } from "../panels/notes/NotesPanel";
@@ -26,7 +25,6 @@ import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
 import { GitPanel } from "../panels/GitPanel";
 import { BtwPanel } from "../panels/BtwPanel";
-import { useToolCallStatsView, useToolCallStatsScroll } from "@/hooks/toolCallStatsStore";
 import { ModelsConfig } from "../settings/ModelsConfig";
 import { SkillsConfig } from "../settings/SkillsConfig";
 import { McpConfig } from "../settings/McpConfig";
@@ -142,7 +140,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   translate: () => <TranslatePanel />,
-  toolCalls: () => <ToolCallStatsTabBody />,
   rss: () => <RssPanel />,
   tokens: () => <TokensPanel />,
   llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
@@ -1197,17 +1194,12 @@ export function AppShell() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const { snapshot: toolStatsSnapshot } = useToolCallStatsView();
   const rightBarCtx: RightBarCtx = {
     rightPanelState,
     activeTabKind: activeRightPanelKind,
     selectedSessionId,
     selectedCwd,
     rssUnread,
-    toolStats: {
-      runningCount: toolStatsSnapshot.runningCount,
-      totalCount: toolStatsSnapshot.totalCount,
-    },
     t,
     toggleRightPanel: () =>
       setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),
@@ -2113,21 +2105,4 @@ function ContextPanel({ systemPrompt, tools }: { systemPrompt: string | null; to
       </section>
     </div>
   );
-}
-
-// ── Tool-calls vertical button ────────────────────────────────────────────
-// Mirrors the style of the other right-bar buttons (favorites /
-// translate) and overlays a tiny live badge for the running / total count.
-// Tool-calls button rendering now lives in the rightBar descriptor
-// registry (see components/rightBar/desc.tsx) — `ToolCallsVerticalButton`
-// was a one-off wrapper duplicated against every other button; the
-// unified `RightBarButton` covers it through `bodyLayout: column + gap:1`.
-
-// ── Tool-calls tab body ───────────────────────────────────────────────────
-// Wires the published snapshot + scroll callback into the panel component.
-
-function ToolCallStatsTabBody() {
-  const { snapshot } = useToolCallStatsView();
-  const scrollToToolCall = useToolCallStatsScroll();
-  return <ToolCallStatsPanel snapshot={snapshot} onScrollToToolCall={scrollToToolCall} />;
 }

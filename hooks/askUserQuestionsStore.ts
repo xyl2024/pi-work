@@ -16,7 +16,7 @@
  * - SSE event handlers run inside useAgentSession; module state is the
  *   simplest way to bridge "server event in ChatWindow" → "panel that also
  *   lives in ChatWindow" without re-triggering useEffect chains.
- * - Like the other stores (sessionUiStore, toolCallStatsStore), state
+ * - Like the other stores (sessionUiStore, rssStore), state
  *   survives ChatWindow remounts on session switch.
  *
  * Reconnect handling: when the SSE stream reconnects, the server re-emits

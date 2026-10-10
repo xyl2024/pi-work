@@ -48,7 +48,6 @@ import {
   type SessionSnapshotPayload,
 } from "./session-runtime-state";
 import { isShowFileToolName, type ShowFileEntry } from "./show-file-tool-types";
-import type { ToolCallReport } from "./tool-call-stats-types";
 import type { AgentMessage, AssistantMessage, SessionTreeNode, ToolSelection } from "./types";
 import type { ContextComposition } from "./context-composition";
 
@@ -428,9 +427,6 @@ export type SessionEventEffect =
   | { kind: "enqueue_permission_request"; toolCallId: string; ruleName: string; command: string }
   | { kind: "set_pending_ask_user_questions"; request: AskUserQuestionsRequestPayload }
   | { kind: "play_ui_sound"; sound: UiSoundEventId }
-  /** Feed the tool-call statistics store. The report carries no `timestamp`:
-   *  the adapter stamps `Date.now()` when it performs it. */
-  | { kind: "report_tool_call_stats"; report: ToolCallReport }
   /** The worktree's git status may have changed. The adapter knows the
    *  session's cwd; the reducer only decides that a mutation happened (and
    *  whether it was a git-level one that must bypass the server's cache). */
@@ -469,8 +465,6 @@ export type SessionEventEffect =
   | { kind: "record_assistant_outcome"; isBody: boolean; pendingError: string | null }
   /** Open the live streaming view for a new turn, before the first token. */
   | { kind: "begin_stream" }
-  /** Clear the per-turn tool-call statistics. */
-  | { kind: "reset_tool_call_stats" }
   /** Re-fetch the session's system prompt (a new turn may have changed it). */
   | { kind: "refresh_system_prompt" }
   /** Return the sidebar Pi Bot to its baseline, cancelling a pending flash. */
@@ -887,10 +881,6 @@ function reduceReducedSessionEvent(
       if (toolName === "spawn_subagent" && state.seenSubagentToolStartIds.claim(toolCallId)) {
         effects.push({ kind: "refresh_subagent_panel", toolCallId });
       }
-      effects.push({
-        kind: "report_tool_call_stats",
-        report: { type: "tool_start", toolCallId, toolName, args: argsRecord },
-      });
       return { state: next, effects };
     }
     case "tool_execution_update": {
@@ -938,21 +928,6 @@ function reduceReducedSessionEvent(
       if (toolName === CELEBRATE_TOOL_NAME && state.seenCelebrateToolEndIds.claim(toolCallId)) {
         effects.push({ kind: "celebrate", details: resultParts?.details as CelebrateDetails | undefined });
       }
-      let resultText: string | undefined;
-      const firstText = textBlocksOf(resultParts?.content)[0];
-      if (firstText !== undefined) {
-        resultText = firstText.length > 1024 ? `${firstText.slice(0, 1024)}…` : firstText;
-      }
-      effects.push({
-        kind: "report_tool_call_stats",
-        report: {
-          type: "tool_end",
-          toolCallId,
-          isError,
-          resultText,
-          resultDetails: resultParts?.details,
-        },
-      });
       let next = patchSessionRuntimeState(state, "inFlightTools", (previous) =>
         removeInFlightTool(previous, toolCallId));
       next = patchSessionRuntimeState(next, "agentPhase", (previous) => {
@@ -1069,7 +1044,6 @@ function reduceReducedSessionEvent(
         state: next,
         effects: [
           { kind: "begin_stream" },
-          { kind: "reset_tool_call_stats" },
           { kind: "refresh_system_prompt" },
           { kind: "set_bot_baseline" },
         ],
