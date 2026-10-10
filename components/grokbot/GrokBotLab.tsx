@@ -60,11 +60,10 @@ export function GrokBotLab({ onClose }: Props) {
   const config = useGrokbotConfig();
   const botRef = useRef<GrokBotHandle>(null);
 
-  // Portal target. The sidebar wraps this modal in a transformed 3D flip
-  // container (`SidebarFlipContainer`), which becomes the containing block
-  // for `position: fixed` descendants — without the portal the backdrop is
-  // trapped (and clipped by the face's `overflow: hidden`) inside the sidebar
-  // column. Mount after the first client render to avoid an SSR mismatch.
+  // Portal target. The sidebar clips its content (`overflow: hidden`), which
+  // becomes the containing block for `position: fixed` descendants — without
+  // the portal the backdrop is trapped inside the sidebar column. Mount after
+  // the first client render to avoid an SSR mismatch.
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
   useEffect(() => {
     setPortalEl(document.body);
