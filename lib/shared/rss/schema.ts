@@ -103,9 +103,8 @@ export interface FetchResult {
   updated: number;
   totalSeen: number;
   error: string | null;
-  /** Details for articles newly inserted by this fetch — used by the per-tick
-   *  Inbox push to attach links. Empty for non-insert outcomes (304, errors,
-   *  re-fetches where every guid was already known). */
+  /** Details for articles newly inserted by this fetch. Empty for non-insert
+   *  outcomes (304, errors, re-fetches where every guid was already known). */
   insertedArticles: Array<{
     title: string | null;
     link: string | null;

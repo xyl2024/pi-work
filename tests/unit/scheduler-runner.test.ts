@@ -4,8 +4,7 @@ import type { TurnResult } from "@/lib/server/turn";
 
 /**
  * The scheduler's mapping from a turn result to the run record it writes, plus
- * the two side-effect payloads a finished run produces (the inbox push and the
- * phone notification).
+ * the side-effect payload a finished run produces (the phone notification).
  *
  * Pure — no session, no SQLite — so the scheduler's run-policy decisions (an
  * empty reply is a failure, an interruption stays silent, notification text
@@ -80,26 +79,6 @@ describe("toRunEnd — the run record", () => {
     expect(toRunEnd(result({ status: "interrupted", error: null }), "Nightly").error).toBe(
       "turn interrupted",
     );
-  });
-});
-
-describe("toRunEnd — inbox push", () => {
-  it("pushes info with the reply on success", () => {
-    const end = toRunEnd(result({ text: "done", hasReply: true }), "Nightly");
-    expect(end.push).toEqual({ level: "info", body: "done" });
-  });
-
-  it("pushes warn for timeout and interrupted, error otherwise", () => {
-    expect(toRunEnd(result({ status: "timeout", error: "late" }), "Nightly").push.level).toBe("warn");
-    expect(toRunEnd(result({ status: "interrupted", error: "gone" }), "Nightly").push.level).toBe("warn");
-    expect(toRunEnd(result({ status: "failed", error: "boom" }), "Nightly").push.level).toBe("error");
-    expect(toRunEnd(result({ hasReply: false }), "Nightly").push.level).toBe("error");
-  });
-
-  it("truncates the pushed body to 200 characters", () => {
-    const long = "x".repeat(2500);
-    expect(toRunEnd(result({ text: long, hasReply: true }), "Nightly").push.body).toBe("x".repeat(200));
-    expect(toRunEnd(result({ status: "failed", error: long }), "Nightly").push.body).toBe("x".repeat(200));
   });
 });
 

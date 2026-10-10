@@ -5,7 +5,6 @@ import type { MouseEvent as ReactMouseEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { Tooltip } from "../ui/Tooltip";
-import { InboxBell } from "../inbox/InboxBell";
 import { SmartImage } from "../ui/SmartImage";
 import { SettingsIcon } from "../ui/animated-icons";
 import { McpIcon } from "../ui/icons";
@@ -21,8 +20,6 @@ interface Props {
   onOpenChannels?: () => void;
   onOpenToolMarket?: () => void;
   onOpenMcp?: () => void;
-  onOpenInbox?: () => void;
-  inboxUnread?: number;
   refreshKey?: number;
   /** Sign-out entry (POST /api/auth/session/logout + reload). Rendered only
    *  when provided. */
@@ -49,7 +46,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, onOpenInbox, inboxUnread, refreshKey, onLogout }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, refreshKey, onLogout }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -242,10 +239,6 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
           {loading ? "…" : (username ?? t("Guest"))}
         </span>
       </button>
-
-      {onOpenInbox && (
-        <InboxBell unread={inboxUnread ?? 0} onClick={onOpenInbox} />
-      )}
 
       {/* Theme toggle — morphs sun↔moon with morphicons so the icon swap
           animates alongside the global startViewTransition. `active` is the

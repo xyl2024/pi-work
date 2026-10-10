@@ -40,7 +40,7 @@ PORT=8080 pi-work                 # 也支持 PORT 环境变量
 - Markdown、代码、Mermaid、SVG、ECharts、图片、音频、视频和 PDF 查看
 - Todo、Agent Todo、收藏、RSS、终端、Canvas、Git Diff 面板
 - Token 使用审计和 LLM API 调用审计
-- 定时任务、Inbox、技能配置、模型配置和提示词配置
+- 定时任务、技能配置、模型配置和提示词配置
 - WeChat 登录、收发消息和入站监控
 - ⌘K / Ctrl+K 命令面板
 
@@ -99,7 +99,6 @@ Pi Work 默认使用以下数据目录：
 - 用户 Todo 数据库：`~/.pi-work/todos.db`
 - 定时任务数据库：`~/.pi-work/scheduler.db`
 - RSS 数据库：`~/.pi-work/rss.db`
-- Inbox 数据库：`~/.pi-work/inbox.db`
 - Token 审计数据库：`~/.pi-work/token-audit.db`
 - LLM 审计数据库：`~/.pi-work/llm-audit.db`
 

@@ -130,7 +130,6 @@ export const UI_SOUND_EVENT_IDS = [
   "toast_info",
   "agent_success",
   "agent_failure",
-  "inbox_new",
   "rss_new",
   "ask_user_questions",
   "celebrate",

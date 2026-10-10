@@ -4,8 +4,8 @@
  * The run itself (open a session → apply model/thinking/tools → deliver the
  * prompt → wait until the turn has *really* finished → clean up) goes through
  * the turn module (`lib/server/turn`); this file is the scheduler's adapter: it
- * owns the run vocabulary, the inbox push, the notification and the per-task
- * queue, and nothing else. `agent_settled` is the terminal event, so a task
+ * owns the run vocabulary, the notification and the per-task queue, and nothing
+ * else. `agent_settled` is the terminal event, so a task
  * that pi is still retrying (or compaction-retrying, or continuation-running)
  * stays `running` instead of being recorded as finished mid-flight.
  *
@@ -24,7 +24,6 @@ import { runTurnRpcSession, type RunTurnRpcSpec } from "@/lib/server/rpc-manager
 import { runSerial } from "@/lib/server/serial-chain";
 import { recordRunEnd, type ScheduledTask } from "./store";
 import { toRunEnd } from "./run-end";
-import { pushMessage } from "@/lib/server/inbox-store";
 import { notify, shouldNotify } from "@/lib/server/notifications";
 import { createLogger } from "../logger";
 
@@ -39,19 +38,6 @@ const log = createLogger("scheduler/runner");
  * agent can't pin a slot forever.
  */
 const DEFAULT_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
-
-/**
- * Inbox is a side channel — pushMessage can throw InboxValidationError on
- * malformed input. The scheduler must never be poisoned by inbox failures,
- * so we swallow the error and log it.
- */
-function safePush(taskId: string, input: Parameters<typeof pushMessage>[0]): void {
-  try {
-    pushMessage(input);
-  } catch (err) {
-    log.warn("inbox push failed", { taskId, error: String(err) });
-  }
-}
 
 /** Fire task notifications (best-effort, never blocks the run). */
 function dispatchNotifications(
@@ -86,12 +72,6 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
     const msg = `cwd missing: ${task.cwd}`;
     log.error("run aborted", { taskId: task.id, runId, error: msg });
     recordRunEnd(runId, { status: "error", error: msg, durationMs: Date.now() - startedAt });
-    safePush(task.id, {
-      source: "scheduler",
-      level: "error",
-      title: task.name,
-      payload: { body: msg },
-    });
     dispatchNotifications(task, "error", msg, msg, runId);
     return;
   }
@@ -145,12 +125,6 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       sessionId,
       durationMs,
     });
-    safePush(task.id, {
-      source: "scheduler",
-      level: end.push.level,
-      title: task.name,
-      payload: { body: end.push.body },
-    });
     if (end.notification) {
       dispatchNotifications(task, end.notification.outcome, end.notification.text, end.notification.detail, runId);
     }
@@ -167,12 +141,6 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       error: end.error,
       sessionId,
       durationMs,
-    });
-    safePush(task.id, {
-      source: "scheduler",
-      level: end.push.level,
-      title: task.name,
-      payload: { body: end.push.body },
     });
     if (end.notification) {
       dispatchNotifications(task, end.notification.outcome, end.notification.text, end.notification.detail, runId);

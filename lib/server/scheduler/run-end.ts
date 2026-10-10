@@ -1,6 +1,6 @@
 /**
  * The scheduler's mapping from the turn module's neutral terminal state onto
- * the run vocabulary and the two side-effect payloads a finished run produces.
+ * the run vocabulary and the notification payload a finished run produces.
  *
  * Pure — no session, no SQLite, no I/O — so the scheduler's only run-policy
  * decisions can be asserted directly:
@@ -14,12 +14,12 @@
  *    failure, so the scheduler no longer has a terminal-state opinion of its
  *    own;
  *  - an aborted turn has no state of its own: it is recorded as `error`;
- *  - a timeout and an interruption are pushed as warnings, and only a real
- *    error or a timeout asks for a phone notification — an interruption from a
- *    server restart is shown in the runs tab, never blared to a phone.
+ *  - a timeout and an interruption are warnings, and only a real error or a
+ *    timeout asks for a phone notification — an interruption from a server
+ *    restart is shown in the runs tab, never blared to a phone.
  *
- * The side effects themselves (recordRunEnd, pushMessage, notify) stay in the
- * runner; this file only decides what they should say.
+ * The side effects themselves (recordRunEnd, notify) stay in the runner; this
+ * file only decides what they should say.
  */
 import type { TurnResult } from "@/lib/server/turn";
 import type { TaskRunStatus } from "./store";
@@ -28,12 +28,6 @@ import type { TaskRunStatus } from "./store";
  *  the session is acquired. Derived from the store's vocabulary so the two
  *  cannot drift. */
 export type RunEndStatus = Exclude<TaskRunStatus, "running">;
-
-/** The inbox push a finished run produces. */
-export interface RunEndPush {
-  level: "info" | "warn" | "error";
-  body: string;
-}
 
 /** The notification a finished run asks for. */
 export interface RunEndNotification {
@@ -48,7 +42,6 @@ export interface RunEnd {
   replyText: string | null;
   /** Human-readable reason on failure, null on success. */
   error: string | null;
-  push: RunEndPush;
   /** null when the run must stay silent (an interruption). */
   notification: RunEndNotification | null;
 }
@@ -58,8 +51,6 @@ export interface RunEnd {
  *  classifies) can be mapped without inventing session ids. */
 export type RunEndInput = Pick<TurnResult, "status" | "text" | "hasReply" | "error">;
 
-/** Inbox body truncation, kept from the pre-seam runner. */
-export const PUSH_BODY_LIMIT = 200;
 /** Notification headline truncation, kept from the pre-seam runner. */
 export const NOTIFICATION_TEXT_LIMIT = 120;
 
@@ -69,8 +60,8 @@ export const NOTIFICATION_TEXT_LIMIT = 120;
  *    the turn module's error text;
  *  - a completed turn with no reply is a failure;
  *  - a successful reply is stored in full as `replyText` (the pre-seam runner
- *    stored the untruncated reply) while the push and the notification carry
- *    the truncations they always did.
+ *    stored the untruncated reply) while the notification carries the
+ *    truncation it always did.
  */
 export function toRunEnd(result: RunEndInput, taskName: string): RunEnd {
   if (result.status === "completed" && result.hasReply) {
@@ -78,7 +69,6 @@ export function toRunEnd(result: RunEndInput, taskName: string): RunEnd {
       status: "success",
       replyText: result.text,
       error: null,
-      push: { level: "info", body: result.text.slice(0, PUSH_BODY_LIMIT) },
       notification: {
         outcome: "success",
         text: result.text.slice(0, NOTIFICATION_TEXT_LIMIT),
@@ -104,10 +94,6 @@ export function toRunEnd(result: RunEndInput, taskName: string): RunEnd {
     status,
     replyText: null,
     error,
-    push: {
-      level: status === "timeout" || status === "interrupted" ? "warn" : "error",
-      body: error.slice(0, PUSH_BODY_LIMIT),
-    },
     notification:
       status === "interrupted"
         ? null

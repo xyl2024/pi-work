@@ -35,7 +35,6 @@ export type SettingsSectionId =
   | "retry"
   | "network-proxy"
   | "web-access"
-  | "inbox-test"
   | "toast-test";
 
 export interface SettingsSectionSpec {
@@ -79,7 +78,6 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
   { id: "network-proxy", labelKey: "Network proxy", group: "integrations" },
   { id: "web-access", labelKey: "Web Access", group: "integrations" },
 
-  { id: "inbox-test", labelKey: "Inbox Test", group: "developer" },
   { id: "toast-test", labelKey: "Toast Test", group: "developer" },
 ];
 

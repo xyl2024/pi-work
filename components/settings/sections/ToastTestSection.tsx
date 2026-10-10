@@ -10,7 +10,7 @@
  * selector each demonstrate one real-world-style copy so the user can
  * judge visual weight against common patterns.
  *
- * Differences vs. `InboxTestSection`:
+ * Differences vs. the developer test panels that hit a backend endpoint:
  *  • Purely client-side: no `fetch`, no `/api/...` test endpoint. Toasts
  *    render immediately, so there's no "Last sent" log row.
  *  • The `Stack` button fires 5 toasts in a row to preview the viewport

@@ -214,10 +214,6 @@ _Avoid_: 把频道的 workspaceId 当作 Workspace 分组
 频道收到、尚未交给 agent 的用户消息；`/new` 这类命令也算一种入站消息。
 _Avoid_: 用「消息」单独指代它
 
-**Inbox 消息（Inbox message）**：
-Pi Work 后台任务与系统事件推入收件箱的一条记录。
-_Avoid_: 把频道消息或通知内容当作 Inbox 消息
-
 **频道冷启动（Cold start）**：
 频道当前没有会话时，用一条入站消息新建会话并记住它。
 _Avoid_: 用「新会话」指代它

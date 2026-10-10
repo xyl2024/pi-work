@@ -18,8 +18,8 @@ import type { ReactNode } from "react";
  *    neighbor by a single 24px gap; sections that follow an open
  *    description block use a 24px top + 24px bottom. `bottomGap`
  *    defaults to `true`; pass `false` to suppress the bottom margin
- *    (used by `settings-section-inbox-test` which sits at the end of
- *    the modal and shouldn't leave trailing whitespace).
+ *    (useful for a section that sits at the end of the modal and
+ *    shouldn't leave trailing whitespace).
  *
  * Usage:
  *   <SettingsSection id="appearance">

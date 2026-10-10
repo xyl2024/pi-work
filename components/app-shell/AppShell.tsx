@@ -37,13 +37,11 @@ import type { SessionTreeNode } from "@/lib/shared/types";
 // the context-composition estimate share one set of boundaries (ADR-0005).
 import { splitBaseBlocks, splitSystemPrompt, type SystemPromptSegment } from "@/lib/shared/system-prompt-segments";
 import { CommandPalette } from "./CommandPalette";
-import { InboxModal } from "../inbox/InboxModal";
 import { CwdPicker } from "../sessions/CwdPicker";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisableDefaultTab } from "@/hooks/useDisableDefaultTab";
 import { useExternalLinks } from "@/hooks/useExternalLinks";
-import { useInboxUnreadCount } from "@/hooks/useInboxUnreadCount";
 import { useRssUnreadCount } from "@/hooks/useRssUnreadCount";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { ICONS } from "../ui/icons";
@@ -379,7 +377,6 @@ export function AppShell() {
   // browser).
   useExternalLinks();
   const cm = useContextMenu();
-  const { unread: inboxUnread } = useInboxUnreadCount();
   const { unread: rssUnread } = useRssUnreadCount();
   const settings = useEnsureSettings();
   const rightSideBarConfig = settings?.right_side_bar ?? null;
@@ -485,7 +482,6 @@ export function AppShell() {
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [toolsMarketOpen, setToolsMarketOpen] = useState(false);
-  const [inboxOpen, setInboxOpen] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   // Whole-sidebar flip card: false = front (Pi Bot / Sessions / Explorer),
@@ -521,7 +517,6 @@ export function AppShell() {
     setSettingsConfigOpen(false);
     setSchedulerOpen(false);
     setChannelsOpen(false);
-    setInboxOpen(false);
     setPaletteOpen(true);
   }, []);
   const closeTopPanel = useCallback(() => {}, []);
@@ -1508,9 +1503,7 @@ export function AppShell() {
       onOpenToolMarket={() => setToolsMarketOpen(true)}
       onOpenMcp={() => setMcpConfigOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
-      onOpenInbox={() => setInboxOpen(true)}
       onLogout={handleLogout}
-      inboxUnread={inboxUnread}
       profileRefreshKey={profileRefreshKey}
       onFlip={() => setSidebarFlipped(true)}
     />
@@ -1818,12 +1811,6 @@ export function AppShell() {
       <ChannelsModal
         open={channelsOpen}
         onClose={() => setChannelsOpen(false)}
-      />
-    )}
-    {inboxOpen && (
-      <InboxModal
-        open={inboxOpen}
-        onClose={() => setInboxOpen(false)}
       />
     )}
     <CommandPalette

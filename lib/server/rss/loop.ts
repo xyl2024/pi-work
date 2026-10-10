@@ -9,7 +9,6 @@
  *      and don't want to hammer upstream servers with concurrent requests).
  *   3. New articles land in `rss_articles` with `read_at = NULL`; the
  *      client badge (`useRssUnreadCount`) reflects the running total.
- *      No Inbox push — RSS notifications now live on the right-bar button.
  *      Articles are deduplicated by guid at the DB layer so re-fetches
  *      never duplicate rows.
  *   4. Wait `RSS_DEFAULT_INTERVAL_MS` and re-arm.

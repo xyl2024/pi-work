@@ -11,7 +11,7 @@
  * set is not a command this module sends: it is baked into the session at
  * acquisition, so it is forwarded to the session factory instead.
  *
- * No side effects live here: notifications, inbox pushes, logs and channel
+ * No side effects live here: notifications, logs and channel
  * state stay with the callers. Options are genuinely optional — an absent
  * model/thinking simply sends no setup command and defers to the session
  * sidecar / cwd defaults; the module never invents a default.
@@ -277,8 +277,8 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
  * judgement. Cleanup: a failed setup or a timed-out wait destroys the
  * session; a cancel from one of the caller's abort sources instead tells the
  * session to abort and returns `cancelled`. Factory failures propagate to the
- * caller. No side effects are owned here — notifications, inbox pushes, logs
- * and channel state belong to the caller.
+ * caller. No side effects are owned here — notifications, logs and channel
+ * state belong to the caller.
  */
 export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFactory): Promise<TurnResult> {
   // Session acquisition: the factory owns registry keys and pi's own ids.

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
-import { InboxTestSection } from "./InboxTestSection";
 import { setSettings, useSettings } from "@/hooks/settingsStore";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import {
@@ -12,7 +11,6 @@ import {
   sectionsForGroup,
   type SettingsSectionId,
 } from "./registry";
-import { SettingsSection } from "./SettingsSection";
 import { useSettingsWrite } from "./use-settings-write";
 import { useUnsavedChanges, type DirtyReporter } from "./use-unsaved-changes";
 import { AppearanceSection } from "./sections/AppearanceSection";
@@ -193,12 +191,6 @@ export function SettingsModal({
         return <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />;
       case "web-access":
         return <WebAccessSection config={config} apply={apply} submit={submit} onDirtyChange={reportDirty} />;
-      case "inbox-test":
-        return (
-          <SettingsSection id="inbox-test">
-            <InboxTestSection />
-          </SettingsSection>
-        );
       case "toast-test":
         return <ToastTestSection />;
     }

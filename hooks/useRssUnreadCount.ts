@@ -10,12 +10,11 @@ const POLL_INTERVAL_MS = 60_000;
  * AppShell level.
  *
  * - Polls `/api/rss/feeds` every 60s and reports the sum of every feed's
- *   `unreadCount`. Mirrors `useInboxUnreadCount`'s structure: the badge
- *   reflects the DB truth, and reading articles in the RSS panel (which
- *   marks them read server-side) drops the badge on the next tick.
- * - The interval is deliberately longer than the inbox's 30s — the feeds
- *   list endpoint has no size concern, but a 60s cadence comfortably
- *   outpaces the 30-minute background fetch loop while staying cheap.
+ *   `unreadCount`. The badge reflects the DB truth, and reading articles in
+ *   the RSS panel (which marks them read server-side) drops the badge on the
+ *   next tick.
+ * - The interval comfortably outpaces the 30-minute background fetch loop
+ *   while staying cheap; the feeds list endpoint has no size concern.
  *
  * Fires `playUiSoundEvent("rss_new")` when the unread count rises between
  * two consecutive polls and the document is hidden. The browser's own

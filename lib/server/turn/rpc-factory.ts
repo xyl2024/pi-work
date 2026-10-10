@@ -34,7 +34,7 @@ export type RunTurnRpcSpec = Omit<Parameters<typeof runTurn>[0], "source" | "too
  * Run one complete turn in a pi session: acquire it (`fresh` opens one in
  * `cwd`; `reuse` continues the named session), apply the optional
  * model/thinking level, deliver the prompt and wait until the turn has really
- * finished. No side effects — notifications, inbox pushes, logs and channel
+ * finished. No side effects — notifications, logs and channel
  * state are the caller's job.
  */
 export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResult> {
