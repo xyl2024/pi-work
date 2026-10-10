@@ -36,6 +36,31 @@ peerDependencyRules:
   ignoreMissing:
     - canvas
 
+# `@lobehub/icons` is only used for 30 deep imports in
+# `components/ui/ProviderIcon.tsx`
+# (`@lobehub/icons/es/<Provider>/components/Mono|Color`). Those components only
+# pull in `react` and the package's own `../style` constants — they never touch
+# `antd` or `@lobehub/ui`. But `@lobehub/icons` (and `antd-style`, its hard
+# dependency) declare `antd` / `@lobehub/ui` as *required* peers, so pnpm's
+# autoInstallPeers used to drag the whole antd + @lobehub/ui ecosystem in
+# (@base-ui/react, @emoji-mart/data, @splinetool/runtime, several extra
+# lucide-react copies, …): ~370 MB / ~460 packages that nothing at runtime
+# ever loads. Marking those peers optional stops autoInstallPeers from
+# installing them; the deep imports we actually use are unaffected. If the
+# icons are ever imported from the `@lobehub/icons` root barrel, or the
+# Avatar/Text components are used, this block has to be removed again.
+packageExtensions:
+  '@lobehub/icons':
+    peerDependenciesMeta:
+      '@lobehub/ui':
+        optional: true
+      antd:
+        optional: true
+  antd-style:
+    peerDependenciesMeta:
+      antd:
+        optional: true
+
 # eslint-config-next 16.2.1 declares `eslint-plugin-react-hooks: ^7.0.0`; the npm
 # lockfile had frozen it at 7.0.1. 7.1.x promotes a batch of React Compiler
 # diagnostics (preserve-manual-memoization, purity, static-components) from
@@ -46,3 +71,12 @@ peerDependencyRules:
 
 overrides:
   eslint-plugin-react-hooks: 7.0.1
+
+  # @lobehub/icons pins its optional lucide-react at ^0.469.0 while the app
+  # itself depends on ^1.37.0, which pnpm resolves to two separate copies
+  # (~37 MB extra). The 0.x copy is only referenced by @lobehub/icons'
+  # `es/components` / `es/features` demo modules — none of which are on the
+  # deep-import path used by components/ui/ProviderIcon.tsx. Force the
+  # pre-1.0 consumers onto the same 1.x copy; our own `^1.37.0` is left alone
+  # by the `<1` selector.
+  'lucide-react@<1': 1.54.0
