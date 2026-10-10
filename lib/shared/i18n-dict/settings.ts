@@ -39,7 +39,7 @@ export const settings = {
   "The child's working directory is appended automatically at run time.": "运行时会自动追加子代理的当前工作目录。",
   "Pi Bot appearance": "Pi Bot 形象",
   "Read only + shells": "只读 + 终端",
-  "Read, grep, ls, find, CodeGraph and shells": "read、grep、ls、find、CodeGraph 与终端",
+  "Read, grep, ls, find and shells": "read、grep、ls、find 与终端",
   "{n} min": "{n} 分钟",
   "{n} tools": "{n} 个工具",
   "Name must start with a lowercase letter and use only lowercase letters, digits, '_' or '-'.": "名称必须以小写字母开头，只能包含小写字母、数字、下划线或连字符。",

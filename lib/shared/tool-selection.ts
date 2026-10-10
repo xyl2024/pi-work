@@ -6,8 +6,8 @@ import type { ToolSelection } from "./types";
 /**
  * Expand a list of tool name patterns into concrete tool names.
  *
- * Entries ending with `*` are treated as prefix patterns (e.g. `codegraph_*`
- * matches every tool whose name starts with `codegraph_`); other entries are
+ * Entries ending with `*` are treated as prefix patterns (e.g. `pi_work_*`
+ * matches every tool whose name starts with `pi_work_`); other entries are
  * kept as-is (unknown names are filtered by the caller, mirroring pi's
  * `setActiveToolsByName` which silently ignores unknown names).
  * Duplicates are removed, first occurrence wins.
@@ -34,9 +34,9 @@ export function expandToolPatterns(patterns: readonly string[], allToolNames: re
  * one row per tool). `pattern` is the `*`-suffixed prefix pattern stored in
  * a ToolSelection when the family is enabled; `prefix` matches member names.
  *
- * Rationale: a family's tools are only useful together (e.g. every
- * `codegraph_*` tool queries the same index and shares usage guidelines in
- * the appended system prompt), so partial enablement just degrades behavior.
+ * Rationale: a family's tools are only useful together (one shared index, one
+ * shared append block in the system prompt), so partial enablement just
+ * degrades behavior.
  */
 export interface ToolGroup {
   id: string;
@@ -44,9 +44,13 @@ export interface ToolGroup {
   prefix: string;
 }
 
-export const TOOL_GROUPS: readonly ToolGroup[] = [
-  { id: "codegraph", pattern: "codegraph_*", prefix: "codegraph_" },
-];
+/**
+ * Bound families the pickers currently collapse. Empty today: the one entry
+ * this registry carried (the `codegraph_*` family) left with the CodeGraph
+ * toolset. The mechanism itself stays — register a family here by `prefix` and
+ * it is folded into one checklist row and toggled as a group.
+ */
+export const TOOL_GROUPS: readonly ToolGroup[] = [];
 
 /** The bound group a tool name belongs to, or undefined for a standalone tool. */
 export function toolGroupFor(name: string): ToolGroup | undefined {

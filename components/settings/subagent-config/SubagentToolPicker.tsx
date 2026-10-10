@@ -32,7 +32,6 @@ export const SUBAGENT_DEFAULT_TOOL_PATTERN: readonly string[] = [
   "grep",
   "ls",
   "find",
-  "codegraph_*",
   "bash",
   "powershell",
 ];
@@ -99,7 +98,7 @@ export function SubagentToolPicker({
     return [
       { id: "off", label: t("Off"), description: t("No tools, chat only") },
       { id: "full", label: t("Full"), description: t("All available tools") },
-      { id: "subagent-default", label: t("Read only + shells"), description: t("Read, grep, ls, find, CodeGraph and shells") },
+      { id: "subagent-default", label: t("Read only + shells"), description: t("Read, grep, ls, find and shells") },
       ...named,
     ];
   }, [t]);

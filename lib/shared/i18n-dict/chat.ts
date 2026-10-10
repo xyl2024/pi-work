@@ -75,7 +75,7 @@ export const chat = {
   "Find, ls, grep, read": "查找、列出、搜索、读取",
   "Pi's default tools": "提供 pi 默认工具",
   "Pi Work platform control capabilities": "提供 pi work 平台控制能力",
-  "Codegraph and subagent capabilities": "提供代码图谱、子代理的能力",
+  "Coding and subagent capabilities": "提供编码、子代理的能力",
   "Active": "已启用",
   "Inactive": "未启用",
   "Loading tools...": "正在加载工具...",

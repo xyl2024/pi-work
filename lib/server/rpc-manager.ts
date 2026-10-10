@@ -29,12 +29,7 @@ import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } fro
 import { celebrateTool, CELEBRATE_SYSTEM_PROMPT_BLOCK } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
-import {
-  buildCodeGraphTools,
-  CODEGRAPH_SYSTEM_PROMPT_BLOCK,
-} from "./codegraph-tool";
 import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
-import { CODEGRAPH_TOOL_IDS } from "../shared/codegraph-tool-ids";
 import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
 import { readEnabledTools } from "./tools-market-config";
@@ -724,7 +719,7 @@ export class AgentSessionWrapper {
         if (toolNames === "all") {
           this.inner.setActiveToolsByName([...declarableSet]);
         } else if (Array.isArray(toolNames)) {
-          // Entries may carry trailing-`*` prefix patterns (e.g. `codegraph_*`);
+          // Entries may carry trailing-`*` prefix patterns (e.g. `pi_work_*`);
           // resolve them against the live registry before applying. The raw
           // selection (patterns included) is what gets persisted below, so a
           // restart re-expands against the then-current registry.
@@ -1051,8 +1046,8 @@ export async function startRpcSession(
           (!options.allowedToolNames || options.allowedToolNames.includes(name)) &&
           (effectiveToolNames === "all" ||
             // The stored selection may carry trailing-`*` prefix patterns
-            // (bound groups like "codegraph_*" from the tool picker, or named
-            // presets like the Assistant's "pi_work_*"); expand them here,
+            // (bound groups registered in TOOL_GROUPS, or named presets like
+            // the Assistant's "pi_work_*"); expand them here,
             // matching expandToolSelection applied to the live registry below.
             effectiveToolNames.some((entry) =>
               entry === name || (entry.endsWith("*") && name.startsWith(entry.slice(0, -1))),
@@ -1064,18 +1059,6 @@ export async function startRpcSession(
         if (sessionHasTool("celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("web_search")) blocks.push(WEB_SEARCH_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("fetch_content")) blocks.push(FETCH_CONTENT_SYSTEM_PROMPT_BLOCK);
-        // CodeGraph tools are registered as a whole family when ANY codegraph
-        // id is enabled (same condition as the customTools entry below). The
-        // family shares ONE append block: its tools are bound together in the
-        // UI (TOOL_GROUPS) and the guidance is only meaningful as a set, so
-        // gate on the family being loaded AND at least one family tool being
-        // active in this session (also covers legacy partial selections).
-        const codegraphFamilyLoaded =
-          options.allowedToolNames?.some((id) => CODEGRAPH_TOOL_IDS.includes(id as (typeof CODEGRAPH_TOOL_IDS)[number])) ||
-          CODEGRAPH_TOOL_IDS.some((id) => enabledTools.has(id));
-        if (codegraphFamilyLoaded && CODEGRAPH_TOOL_IDS.some((id) => sessionHasTool(id))) {
-          blocks.push(CODEGRAPH_SYSTEM_PROMPT_BLOCK);
-        }
         return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
       },
       // Codebase explorers receive no Skills section. Other sessions retain
@@ -1153,32 +1136,6 @@ export async function startRpcSession(
             ]),
         (pi) => {
           pi.on("tool_call", async (event) => {
-            // CodeGraph index construction: mode=sync is lightweight and runs
-            // freely, but mode=init/index are minutes-long full scans — treat
-            // them like a dangerous command and require the user's explicit
-            // approval (indexing is the user's decision, never the agent's).
-            if (isToolCallEventType<"codegraph_build", { mode?: unknown }>("codegraph_build", event)) {
-              const mode = typeof event.input?.mode === "string" ? event.input.mode : "sync";
-              if (mode === "sync") return;
-              const w = wrapperRef.current;
-              if (!w) return;
-              const outcome = await w.gates.runPermissionGate({
-                toolCallId: event.toolCallId,
-                rule: `codegraph_${mode}`,
-                command:
-                  mode === "init"
-                    ? `codegraph init ${event.input?.path ?? "<cwd>"}`
-                    : `codegraph index ${event.input?.path ?? "<cwd>"}`,
-                what: `codegraph_build mode=${mode}`,
-                deniedSubject: mode === "init" ? "index creation" : "index rebuild",
-                timeoutMs: getDangerousPatternTimeoutMs(),
-              });
-              if (outcome.decision === "deny") {
-                return { block: true, reason: outcome.reason };
-              }
-              return undefined;
-            }
-
             // Both agent shells are matched against the dangerous-command
             // rules. The gate used to key on `bash` alone, which left the
             // Windows-only `powershell` tool as a shell no rule could match —
@@ -1382,13 +1339,6 @@ export async function startRpcSession(
         // one tool (pi_work_call) to keep tool descriptions out of the
         // system prompt. Gated via TOOL_MARKET_IDS.
         ...(enabledTools.has("pi_work_call") ? [piWorkCallTool] : []),
-        // CodeGraph semantic code-intelligence tools: drive the CodeGraph SDK's
-        // MCP ToolHandler in-process (see lib/server/codegraph-tool.ts). All
-        // eight are gated by the same ~/.pi-work/tools-market.json entry list;
-        // enabling any one registers the whole family (they share the SDK pool).
-        ...((options.allowedToolNames?.some((id) => CODEGRAPH_TOOL_IDS.includes(id as typeof CODEGRAPH_TOOL_IDS[number])) || CODEGRAPH_TOOL_IDS.some((id) => enabledTools.has(id)))
-          ? buildCodeGraphTools()
-          : []),
       ],
       // The SDK's public option is `tools`; it becomes the hard allowlist
       // passed to AgentSession.allowedToolNames. This is intentionally used

@@ -986,7 +986,7 @@ function ToolsSelect({ form, update, availableTools, toolsLoading, toolsError, c
   const { t } = useI18n();
   const { open, setOpen, rootRef } = useDropdown();
   const selection = form.toolSelection;
-  // Patterns (e.g. "codegraph_*") expand against the catalog for display; the
+  // Patterns (e.g. "pi_work_*") expand against the catalog for display; the
   // raw selection (patterns included) is what gets stored so the preset stays
   // recognisable and the server re-expands it when the task's session starts.
   const toolNames = availableTools.map((tool) => tool.name);

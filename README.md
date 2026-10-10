@@ -77,7 +77,7 @@ pnpm start
 - 依赖安装脚本默认被禁用，允许清单是同文件的 `allowBuilds`（`better-sqlite3`、`node-pty` 等原生模块必须允许，否则运行时加载 `.node` 会失败）。
 - 与 npm 的两处行为差异需要注意：
   - `pnpm install` **不会**因 `NODE_ENV=production` 跳过 devDependencies（只在显式 `--prod` 时跳过）。
-  - node_modules 是严格隔离布局，**没有提升**：代码里 `import "某个间接依赖"` 会失败，必须把它声明为直接依赖。同理，按包名在运行时 `require` 平台包时需要 `publicHoistPattern`（见 `@colbymchenry/codegraph-*`）。
+  - node_modules 是严格隔离布局，**没有提升**：代码里 `import "某个间接依赖"` 会失败，必须把它声明为直接依赖。
 - 改了 `pnpm-workspace.yaml` 里影响解析的配置（`overrides` 等）后，普通 `pnpm install` 不会重新解析；用 `pnpm install --no-frozen-lockfile` 更新 `pnpm-lock.yaml`。
 - `electron-shell/` 是独立的 Electron 包（自带 `package.json`，无锁文件），不在 pnpm workspace 内，不要把它加进 `pnpm-workspace.yaml`。
 

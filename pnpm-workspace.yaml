@@ -36,14 +36,6 @@ peerDependencyRules:
   ignoreMissing:
     - canvas
 
-# App code loads the CodeGraph platform bundle by bare specifier
-# (`lib/server/codegraph-sdk.ts` -> `@colbymchenry/codegraph-<platform>-<arch>/
-# lib/dist/index.js`), which only resolves if that package is also reachable
-# from the app root. npm's hoisting did that for free; with pnpm's isolated
-# layout the platform bundle lives in `.pnpm/` only, so link it back.
-publicHoistPattern:
-  - '@colbymchenry/codegraph-*'
-
 # eslint-config-next 16.2.1 declares `eslint-plugin-react-hooks: ^7.0.0`; the npm
 # lockfile had frozen it at 7.0.1. 7.1.x promotes a batch of React Compiler
 # diagnostics (preserve-manual-memoization, purity, static-components) from

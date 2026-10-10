@@ -105,7 +105,8 @@ describe("shellDisplayName", () => {
  * "one implementation, read by both the terminal panel and the status bar".
  * Both consumers live in server modules that cannot be imported here without
  * dragging in SQLite and the pi SDK, so the rule is pinned at the source level
- * instead (same approach as `codegraph-externals.test.ts`): each of them must
+ * instead (the same source-level approach as the shared-module pins elsewhere in
+ * this suite): each of them must
  * delegate the decision to the shared module, and neither may keep a local
  * copy of the Windows fallback.
  */

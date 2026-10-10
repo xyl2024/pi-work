@@ -68,7 +68,6 @@ describe("classifyToolCall", () => {
       grep: "other",
       find: "other",
       ls: "other",
-      codegraph_search: "other",
       "": "other",
     };
     for (const [toolName, kind] of Object.entries(cases)) {

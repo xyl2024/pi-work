@@ -51,5 +51,4 @@ third
 /.playwright-cli/
 
 # local agent tooling
-/.codegraph/
 /.qoder/

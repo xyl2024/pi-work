@@ -6,8 +6,8 @@
 // A packaged build has no "someone else": the shell starts the server itself.
 //
 // The server runs on a *standalone Node runtime* bundled under
-// `resources/runtime/` — never Electron's own Node. `better-sqlite3` and
-// CodeGraph's tree-sitter are V8-ABI native modules: inside Electron they would
+// `resources/runtime/` — never Electron's own Node. `better-sqlite3` is a
+// V8-ABI native module: inside Electron it would
 // have to be rebuilt for a different NODE_MODULE_VERSION (and rebuilt again on
 // every Electron upgrade), while a plain Node process uses the published
 // prebuilds unchanged. `node-pty` is N-API and does not care either way.

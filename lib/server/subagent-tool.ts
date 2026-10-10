@@ -19,11 +19,7 @@ import {
 
 // Re-exported from their new home so existing importers (tests, rpc-manager)
 // keep resolving the default tool set through the tool module.
-export {
-  SUBAGENT_CODEGRAPH_TOOLS,
-  SUBAGENT_READ_ONLY_TOOLS,
-  subagentTools,
-} from "./subagent-tools";
+export { SUBAGENT_READ_ONLY_TOOLS, subagentTools } from "./subagent-tools";
 
 export const SPAWN_SUBAGENT_TOOL_NAME = "spawn_subagent";
 

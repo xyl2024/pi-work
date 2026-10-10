@@ -20,9 +20,6 @@ importers:
       '@codemirror/view':
         specifier: ^6.43.11
         version: 6.43.11
-      '@colbymchenry/codegraph':
-        specifier: 1.6.0
-        version: 1.6.0
       '@earendil-works/pi-ai':
         specifier: 1.1.0
         version: 1.1.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.6.4)
@@ -540,40 +537,6 @@ packages:
 
   '@codemirror/view@6.43.11':
     resolution: {integrity: sha512-2+esucbQX6wB2JYi1eDvdCPFTA31BN8oSy6xCmk3G6CloV11yOvEjYk+gH7kLrP0MuHG94E8WDhjs5oMiu3+Wg==}
-
-  '@colbymchenry/codegraph-darwin-arm64@1.6.0':
-    resolution: {integrity: sha512-usYVM30d7kH2Fm3ZPkiE84J8bWAicPsw/3Kh8LjbwvHkBkU3IlEYRQFkTDAf+HSRLLs8h5w/5WHkx/FvNKRZ/g==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@colbymchenry/codegraph-darwin-x64@1.6.0':
-    resolution: {integrity: sha512-MMYFseqAmytsj47ZsGZI+0OVDTYsEktHg6x42tB6y+8MWUjvH1ivz5Yk6RtX6iFAnNJeMSlV+SJepfP7pvbNbQ==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@colbymchenry/codegraph-linux-arm64@1.6.0':
-    resolution: {integrity: sha512-Uk2xKPh/DP/B0r4tg/uNZFwMsJDB+uKSbTN+Pcbf2F7PjolrqiFiR/9uqj8rndTjWmWDnxEK6IafJ1AOW4TpLA==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@colbymchenry/codegraph-linux-x64@1.6.0':
-    resolution: {integrity: sha512-zQMtxLdFBB5tNSuCIk5zLW281I/AMyfWqwjIcg1h7n521174Es54xlnWuEhmTPWKYSmMuOpInKeE6YpOPtERuQ==}
-    cpu: [x64]
-    os: [linux]
-
-  '@colbymchenry/codegraph-win32-arm64@1.6.0':
-    resolution: {integrity: sha512-O5/xEp8RDiJh3cbto2Dg94uk02zO70UCq5OuvP1aJV9ZQmMKKFTnOWNyeZi+LSHMO5CQOv3kfskrORmGAB5+xw==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@colbymchenry/codegraph-win32-x64@1.6.0':
-    resolution: {integrity: sha512-zSjrLgkE2j2UYsPp6ThlVKL4xoZ1WnMkOfNH8i3XFGNXBS8p500WFA9bh0JJJ+IQx6vhtltTxTTdlVmVICGYsw==}
-    cpu: [x64]
-    os: [win32]
-
-  '@colbymchenry/codegraph@1.6.0':
-    resolution: {integrity: sha512-nCN40MqmYxF7gH1QTKqlxJ1d2mzwhw3fzSdGV2wjnQKsymjM3JZnH/5rpGqhBkcUEom0qWq0WjDRvOZh2t8mFA==}
-    hasBin: true
 
   '@csstools/color-helpers@6.1.1':
     resolution: {integrity: sha512-gLNsunvwf3mCi5u5o46/Z/JcJMnhbHSaZ69rkgPzNM3J4s8hWwpPUQB6/tt0EDFyCiWzxANlx+2LJwpYj4zS1w==}
@@ -6576,33 +6539,6 @@ snapshots:
       crelt: 1.0.7
       style-mod: 4.1.3
       w3c-keyname: 2.2.8
-
-  '@colbymchenry/codegraph-darwin-arm64@1.6.0':
-    optional: true
-
-  '@colbymchenry/codegraph-darwin-x64@1.6.0':
-    optional: true
-
-  '@colbymchenry/codegraph-linux-arm64@1.6.0':
-    optional: true
-
-  '@colbymchenry/codegraph-linux-x64@1.6.0':
-    optional: true
-
-  '@colbymchenry/codegraph-win32-arm64@1.6.0':
-    optional: true
-
-  '@colbymchenry/codegraph-win32-x64@1.6.0':
-    optional: true
-
-  '@colbymchenry/codegraph@1.6.0':
-    optionalDependencies:
-      '@colbymchenry/codegraph-darwin-arm64': 1.6.0
-      '@colbymchenry/codegraph-darwin-x64': 1.6.0
-      '@colbymchenry/codegraph-linux-arm64': 1.6.0
-      '@colbymchenry/codegraph-linux-x64': 1.6.0
-      '@colbymchenry/codegraph-win32-arm64': 1.6.0
-      '@colbymchenry/codegraph-win32-x64': 1.6.0
 
   '@csstools/color-helpers@6.1.1': {}
 

@@ -11,17 +11,6 @@
  * the store, the API route, the tool and the client editor can all share them.
  */
 
-import { CODEGRAPH_TOOL_IDS } from "./codegraph-tool-ids";
-
-/**
- * The CodeGraph tools a default profile gets. `codegraph_build` is excluded:
- * it is gated behind a user confirmation and a child session has no prompt UI
- * (docs/adr/0001). A user *can* add it back through the editor.
- */
-export const SUBAGENT_DEFAULT_CODEGRAPH_TOOL_IDS: readonly string[] = CODEGRAPH_TOOL_IDS.filter(
-  (id) => id !== "codegraph_build",
-);
-
 /**
  * The platform-independent half of a default profile's tool set: the read-only
  * exploration core. Callers compose the shells they know the machine has
@@ -33,7 +22,6 @@ export const SUBAGENT_DEFAULT_TOOL_IDS: readonly string[] = [
   "grep",
   "ls",
   "find",
-  ...SUBAGENT_DEFAULT_CODEGRAPH_TOOL_IDS,
 ];
 
 /** Thinking levels a subagent session can be started with (mirrors pi's). */

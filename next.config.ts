@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { codegraphPlatformPackage } from "./lib/shared/codegraph-platform";
 
 const { version } = JSON.parse(readFileSync(join(__dirname, "package.json"), "utf8")) as { version: string };
 let piVersion = "unknown";
@@ -27,13 +26,6 @@ const nextConfig: NextConfig = {
     // bundle so the class we construct is the same module this file resolves
     // at runtime, not a second webpack-inlined copy.
     "undici",
-    // CodeGraph's compiled bundle ships tree-sitter wasm loaders that neither
-    // webpack nor Turbopack can compile (duplicate-symbol errors). Keep it out
-    // of the bundle so it resolves via Node require at runtime instead. The
-    // package name is resolved for the platform this build runs on — a
-    // hardcoded linux package would otherwise be bundled on Windows, where the
-    // deep require in lib/server/codegraph-sdk.ts asks for win32 instead.
-    codegraphPlatformPackage(process.platform, process.arch),
   ],
   allowedDevOrigins: ['192.168.*.*'],
   env: {
