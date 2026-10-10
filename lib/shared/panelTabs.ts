@@ -26,7 +26,6 @@ import {
   CONVERSATION_TREE_TAB_ID,
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
-  GITHUB_TRENDING_TAB_ID,
   KANBAN_TAB_ID,
   LLM_AUDIT_TAB_ID,
   NOTES_TAB_ID,
@@ -56,7 +55,6 @@ export interface PanelTabParams {
   llmAudit: undefined;
   context: undefined;
   btw: undefined;
-  githubTrending: undefined;
   kanban: undefined;
   notes: undefined;
   plans: undefined;
@@ -197,13 +195,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     kind: "rss",
     tabId: RSS_TAB_ID,
     labelKey: "RSS",
-    defaultMode: "normal",
-    sessionBound: false,
-  },
-  githubTrending: {
-    kind: "githubTrending",
-    tabId: GITHUB_TRENDING_TAB_ID,
-    labelKey: "GitHub Trending",
     defaultMode: "normal",
     sessionBound: false,
   },

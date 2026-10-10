@@ -56,7 +56,6 @@ import {
   Star,
   Wrench,
 } from "lucide-react";
-import GithubIcon from "@lobehub/icons/es/Github/components/Mono";
 
 /** Options for rendering a panel view's glyph. The right-bar button, the tab
  *  strip and the command palette share one icon per kind, differing only in
@@ -196,14 +195,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     labelKey: "RSS",
     badge: (ctx) => <CountBadge count={ctx.rssUnread} size="sm" />,
     icon: ({ size }) => <Rss size={size} />,
-  }),
-  // GitHub Trending: global (not session-bound) — public data anyone can
-  // browse. Defaults right after RSS in the configurable row: another
-  // "external feed" panel, so they sit shoulder-to-shoulder. The button and
-  // tab-bar glyph is the GitHub Octocat (brand icon), not a generic arrow.
-  githubTrending: panelButton("githubTrending", {
-    labelKey: "GitHub Trending",
-    icon: ({ size }) => <GithubIcon size={size} />,
   }),
   // Cwd-derived (one repo per active session) — treated as session-bound
   // for column layout so it pins with the other "live state" buttons.

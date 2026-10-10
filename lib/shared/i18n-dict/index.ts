@@ -21,7 +21,6 @@ import { channels } from "./channels";
 import { commands } from "./commands";
 import { common } from "./common";
 import { fileViewer } from "./file-viewer";
-import { githubTrending } from "./github-trending";
 import { grokbot } from "./grokbot";
 import { kanban } from "./kanban";
 import { inbox } from "./inbox";
@@ -57,7 +56,6 @@ export const ZH_TRANSLATIONS = {
   ...channels,
   ...commands,
   ...fileViewer,
-  ...githubTrending,
   ...grokbot,
   ...inbox,
   ...kanban,

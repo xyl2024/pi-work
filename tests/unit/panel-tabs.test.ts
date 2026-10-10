@@ -345,7 +345,7 @@ describe("panelTabs selectors", () => {
 });
 
 describe("panelTabs registry", () => {
-  const DELETED_PANEL_KINDS = ["canvas", "json"];
+  const DELETED_PANEL_KINDS = ["canvas", "json", "githubTrending"];
 
   it("declares a label key and keywords for every spec and palette entry", () => {
     for (const spec of PANEL_TAB_SPECS) {
@@ -381,7 +381,6 @@ describe("panelTabs registry", () => {
         "conversationTree",
         "favorites",
         "gitDiff",
-        "githubTrending",
         "kanban",
         "llmAudit",
         "notes",

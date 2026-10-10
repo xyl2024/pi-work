@@ -18,7 +18,6 @@ import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
 import { ToolCallStatsPanel } from "../panels/ToolCallStatsPanel";
 import { RssPanel } from "../rss/RssPanel";
-import { GitHubTrendingPanel } from "../panels/github-trending/GitHubTrendingPanel";
 import { KanbanPanel } from "../kanban/KanbanPanel";
 import { NotesPanel } from "../panels/notes/NotesPanel";
 import { PlansPanel } from "../panels/plans/PlansPanel";
@@ -145,7 +144,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   translate: () => <TranslatePanel />,
   toolCalls: () => <ToolCallStatsTabBody />,
   rss: () => <RssPanel />,
-  githubTrending: () => <GitHubTrendingPanel />,
   tokens: () => <TokensPanel />,
   llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
   context: (ctx) => <ContextPanel systemPrompt={ctx.systemPrompt} tools={ctx.tools} />,
