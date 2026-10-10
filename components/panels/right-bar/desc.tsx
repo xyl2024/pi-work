@@ -48,7 +48,6 @@ import {
   GitGraph,
   Languages,
   ListChecks,
-  NotebookText,
   PanelRight,
   Rss,
   SquareKanban,
@@ -217,13 +216,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   kanban: panelButton("kanban", {
     labelKey: "Kanban",
     icon: ({ size }) => <SquareKanban size={size} />,
-  }),
-  // Notes: global personal note-taking board, not session-bound. It stores
-  // plain markdown under ~/.pi-work/user-notes and is intended for the human
-  // user (the agent stays out of it).
-  notes: panelButton("notes", {
-    labelKey: "Notes",
-    icon: ({ size }) => <NotebookText size={size} />,
   }),
   // Plans: global personal plan list (plain markdown under
   // ~/.pi-work/user-plans, anchors encoded in the filename), not

@@ -18,7 +18,6 @@ import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
 import { RssPanel } from "../rss/RssPanel";
 import { KanbanPanel } from "../kanban/KanbanPanel";
-import { NotesPanel } from "../panels/notes/NotesPanel";
 import { PlansPanel } from "../panels/plans/PlansPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
@@ -166,7 +165,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       expanded={ctx.rightPanelState === "expanded"}
     />
   ),
-  notes: (ctx) => <NotesPanel expanded={ctx.rightPanelState === "expanded"} />,
   plans: (ctx) => <PlansPanel openCount={ctx.plansOpenCount} />,
 };
 

@@ -3,8 +3,8 @@
 // the same way the rest of `lib/client` is.
 
 /**
- * Word count for a document body, counted the way the notes and plans footers
- * both report it: every CJK character is one word, runs of latin letters /
+ * Word count for a document body, counted the way the document footers report
+ * it: every CJK character is one word, runs of latin letters /
  * digits are one word each. Mixed text is the normal case for this app, so the
  * convention matters more than the exact number.
  */

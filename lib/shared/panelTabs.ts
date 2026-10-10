@@ -27,7 +27,6 @@ import {
   GIT_DIFF_TAB_ID,
   KANBAN_TAB_ID,
   LLM_AUDIT_TAB_ID,
-  NOTES_TAB_ID,
   PLANS_TAB_ID,
   RSS_TAB_ID,
   TOKENS_TAB_ID,
@@ -52,7 +51,6 @@ export interface PanelTabParams {
   llmAudit: undefined;
   context: undefined;
   kanban: undefined;
-  notes: undefined;
   plans: undefined;
   file: { path: string };
 }
@@ -259,13 +257,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Kanban",
     // The four-column board needs the full column width.
     defaultMode: "expanded",
-    sessionBound: false,
-  },
-  notes: {
-    kind: "notes",
-    tabId: NOTES_TAB_ID,
-    labelKey: "Notes",
-    defaultMode: "normal",
     sessionBound: false,
   },
   plans: {

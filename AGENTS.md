@@ -8,7 +8,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 
 - **会话与 Agent**：多会话工作区和标签页、SSE 流式事件、分支树导航、上下文压缩、模型/思考级别/工具选择、会话搜索/重命名/删除/导出/自动命名。
 - **项目工作区**：按 cwd 浏览和搜索文件，编辑、重命名、删除和查看文本、代码、Diff、图片、音频、视频、PDF、SVG、Mermaid、ECharts；支持 Git Diff 和独立终端。
-- **辅助面板**：右栏面板为 Context、翻译、RSS、Git Diff、收藏、Token 审计、LLM API 审计、Conversation Tree、看板、笔记；另有独立的终端面板与定时任务模态。
+- **辅助面板**：右栏面板为 Context、翻译、RSS、Git Diff、收藏、Token 审计、LLM API 审计、Conversation Tree、看板；另有独立的终端面板与定时任务模态。
 - **配置与集成**：模型/API Key/OAuth、Prompt、Skill、危险命令确认、自定义 Agent 工具、右侧按钮、音效和界面设置；另有 Inbox、微信登录/收发消息及 Grokbot 功能。
 
 ## 目录与架构
@@ -19,7 +19,7 @@ pi-work/
 │   └── api/            # 按领域的路由目录：agent、agent-settings、append-system、auth、btw、channels、
 │                       #   create-space、cwd-aliases/-icons/-tools、default-cwd、exchange-rate、favorites、
 │                       #   file-mentions、files、git、home、inbox、kanban、llm-audit、models、
-│                       #   models-config、notes、notes-file、profile、prompts、rss、scheduled-tasks、
+│                       #   models-config、profile、prompts、rss、scheduled-tasks、
 │                       #   sessions、settings、skills、slash-commands、status-bar、subagents、terminal、
 │                       #   token-audit、tools-market、translate、workspaces
 ├── components/         # React UI，按产品功能拆分
@@ -28,11 +28,11 @@ pi-work/
 │   ├── sessions/       # 会话侧栏、标签页、搜索、会话库、多 cwd、收藏、Conversation Tree
 │   ├── files/          # 文件浏览、Git 状态与查看器（file-viewer/ 支持文本/代码、图片、音频、视频、PDF）
 │   ├── panels/         # 右侧面板 body（Context、Translate、RSS、Git Diff 含 Git Log、
-│   │                   #   Favorites、Tokens、LLM Audit、Conversation Tree、Kanban、
-│   │                   #   Notes）+ TerminalPanel；right-bar/ 是按钮列，desc.tsx 注册描述符
+│   │                   #   Favorites、Tokens、LLM Audit、Conversation Tree、Kanban）
+│   │                   #   + TerminalPanel；right-bar/ 是按钮列，desc.tsx 注册描述符
 │   ├── settings/       # 设置弹窗与各配置区块（模型、Prompt、Skill、Profile、重试、Append System、
 │   │                   #   自定义工具、文件预览、右侧按钮、音效）
-│   ├── markdown-editor/ # 共用 Markdown 编辑器（CodeMirror + 工具栏 + 快捷键），笔记面板与计划详情弹窗共用
+│   ├── markdown-editor/ # Markdown 编辑器（CodeMirror + 工具栏 + 快捷键），计划详情弹窗使用
 │   ├── renderers/      # 消息中的代码块、ECharts、Mermaid、SVG 与图片渲染器
 │   ├── ui/             # 公共 UI 原语、图标与动画图标
 │   └── inbox/ rss/ scheduler/ kanban/ grokbot/ tools-market/ channels/ auth/ effects/
@@ -47,7 +47,7 @@ pi-work/
 │       ├── rpc-manager.ts   # 创建并复用进程内 AgentSessionWrapper：pi session、命令分发、SSE 事件、
 │       │                    # 权限确认、Ask User Questions、自定义工具与审计上下文
 │       ├── sessions/        # 会话读取、搜索与变更（JSONL 原子写入，并同步清理缓存/sidecar）
-│       ├── session-export/ files/ terminal/ wechat/ scheduler/ rss/ kanban/ notes/ channels/
+│       ├── session-export/ files/ terminal/ wechat/ scheduler/ rss/ kanban/ channels/
 │       │                    notifications/ self-tools/ turn/ web-access/ subagent-*
 │       └── *-db.ts *-store.ts   # 各功能的 SQLite / JSON store（Inbox、LLM Audit、Token Audit、
 │                                #   Kanban、Profile、Subagent）

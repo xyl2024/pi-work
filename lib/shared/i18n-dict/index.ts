@@ -27,7 +27,6 @@ import { inbox } from "./inbox";
 import { mcp } from "./mcp";
 import { media } from "./media";
 import { models } from "./models";
-import { notes } from "./notes";
 import { permissions } from "./permissions";
 import { plans } from "./plans";
 import { profile } from "./profile";
@@ -62,7 +61,6 @@ export const ZH_TRANSLATIONS = {
   ...mcp,
   ...media,
   ...models,
-  ...notes,
   ...permissions,
   ...plans,
   ...profile,

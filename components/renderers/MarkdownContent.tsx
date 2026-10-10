@@ -13,16 +13,15 @@ export interface MarkdownContentProps {
   content: string;
   /**
    * Resolve a relative `img` src to a servable URL. Each surface owns its own
-   * data source (notes resolve against the note's directory via the notes
-   * media route), so it is passed in rather than guessed here. Defaults to
+   * data source (the plans preview resolves against the plan's directory),
+   * so it is passed in rather than guessed here. Defaults to
    * identity — the browser then resolves the src against the page URL.
    */
   resolveImage?: (src: string) => string;
 }
 
 /**
- * Read-only Markdown renderer shared by the notes preview and the plans
- * preview: pi-work's custom blocks (code / mermaid / svg / echarts) plus GFM.
+ * Read-only Markdown renderer used by the plans preview: pi-work's custom blocks (code / mermaid / svg / echarts) plus GFM.
  * The chat message body has its own richer pipeline; this is the lighter
  * "document preview" variant, and the `resolveImage` seam is what lets each
  * document type point relative images at the right place.

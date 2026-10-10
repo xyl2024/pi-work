@@ -10,22 +10,21 @@ import { useTheme } from "@/hooks/useTheme";
 import { IconButton } from "@/components/ui/IconButton";
 
 /**
- * Markdown editing on CodeMirror: the notes panel's editor, shared.
+ * Markdown editing on CodeMirror, owned by the plan detail dialog.
  *
- * The plan detail dialog used to pair a rendered preview with a bare
- * `<textarea>`, so the same activity — writing a Markdown note — had two
- * different handwritings. This is the one surface both hosts now use: the
- * notes panel keeps it as-is, the plan dialog gets the same toolbar,
- * highlight and keymap without owning a second editor.
+ * The dialog used to pair a rendered preview with a bare `<textarea>`, so
+ * writing Markdown had two different handwritings. This is the one surface it
+ * now uses: the same toolbar, highlight and keymap as the rest of the app
+ * without owning a second editor.
  *
  * The Markdown language support brings `markdownKeymap` along (`addKeymap`
  * defaults to true), so Enter continues a list / quote and Backspace removes
  * the markup it would otherwise leave behind; neither is written here.
  *
- * `onUploadImage` is the only capability that differs by host, and it is what
- * the notes panel adds: with a handler the toolbar grows 插入图片 and pasted /
- * dropped files are intercepted. Without one — the plan dialog, which has no
- * asset folder — there is no image button and the browser keeps its defaults.
+ * `onUploadImage` is optional: with a handler the toolbar grows 插入图片 and
+ * pasted / dropped files are intercepted. Without one — as in the plan dialog,
+ * which has no asset folder — there is no image button and the browser keeps
+ * its defaults.
  */
 export interface MarkdownEditorProps {
   value: string;
@@ -42,7 +41,7 @@ export interface MarkdownEditorProps {
   ariaLabel?: string;
   /** Toolbar visibility. Defaults to true. */
   toolbar?: boolean;
-  /** Editing surface font size. Defaults to the notes panel's 13. */
+  /** Editing surface font size. */
   fontSize?: number;
   /** Editing surface padding, so a host can match the pane it replaced. */
   padding?: string;

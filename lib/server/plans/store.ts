@@ -12,7 +12,7 @@
 // directory (ADR-0006 accepts "refresh to see external edits").
 //
 // Every entry point validates that the resolved absolute path stays under the
-// plans root (defence in depth, same shape as `lib/server/notes/store.ts`) —
+// plans root (defence in depth) —
 // the cwd allow-root rules are deliberately not reused here.
 import fs from "fs";
 import path from "path";
@@ -158,8 +158,8 @@ export function readPlanFile(rel: string): PlanFileRead {
 }
 
 /** Atomically write a plan file: temp file in the same directory + rename, so
- *  a reader never sees a half-written plan (same shape as the notes store).
- *  The temp name starts with "." and is therefore invisible to the scan. */
+ *  a reader never sees a half-written plan. The temp name starts with "." and
+ *  is therefore invisible to the scan. */
 function writePlanFileAtomic(abs: string, content: string): void {
   const dir = path.dirname(abs);
   fs.mkdirSync(dir, { recursive: true });

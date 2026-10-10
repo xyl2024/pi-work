@@ -72,6 +72,7 @@ export const common = {
   "Source": "源码",
   "Diff": "差异",
   "Code": "代码",
+  "Quote": "引用",
   "Preview": "预览",
   "Raw": "原文",
   "Fit": "适应",

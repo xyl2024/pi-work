@@ -8,7 +8,7 @@ import { resolveNewTabUrl } from "@/lib/shared/external-link";
  * in a new tab instead of replacing the Pi Work page.
  *
  * Why a document-level listener rather than a wrapper component: links are
- * rendered by a dozen unrelated surfaces (chat markdown, notes, RSS, inbox,
+ * rendered by a dozen unrelated surfaces (chat markdown, RSS, inbox,
  * OAuth, …) and by `react-markdown` itself, so the only place that can see all
  * of them is the document. This is the same approach as `useDisableDefaultTab`.
  *

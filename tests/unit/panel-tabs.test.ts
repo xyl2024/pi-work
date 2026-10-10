@@ -3,7 +3,6 @@ import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   KANBAN_TAB_ID,
-  NOTES_TAB_ID,
   RSS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
@@ -105,23 +104,23 @@ describe("panelTabs open", () => {
     const state = reduce(
       createPanelTabsState(),
       { type: "open", kind: "translate" },
-      { type: "open_file", path: "/tmp/notes.md", label: "notes.md" },
+      { type: "open_file", path: "/tmp/a.md", label: "a.md" },
     );
 
     expect(kinds(state)).toEqual(["file", "translate"]);
-    expect(state.tabs[0].id).toBe(fileTabId("/tmp/notes.md"));
-    expect(state.tabs[0].label).toBe("notes.md");
+    expect(state.tabs[0].id).toBe(fileTabId("/tmp/a.md"));
+    expect(state.tabs[0].label).toBe("a.md");
     expect(selectActiveKind(state)).toBe("file");
     expect(state.mode).toBe("normal");
   });
 
   it("reuses an already open file tab and bumps its openCount", () => {
-    const path = "/tmp/notes.md";
+    const path = "/tmp/a.md";
     const state = reduce(
       createPanelTabsState(),
-      { type: "open_file", path, label: "notes.md" },
+      { type: "open_file", path, label: "a.md" },
       { type: "open", kind: "translate" },
-      { type: "open_file", path, label: "notes.md" },
+      { type: "open_file", path, label: "a.md" },
     );
 
     // Reusing the tab keeps its original position in the strip.
@@ -208,9 +207,9 @@ describe("panelTabs close", () => {
   it("collapses the strip when the last tab closes", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "notes" },
+      { type: "open", kind: "kanban" },
       { type: "set_mode", mode: "expanded" },
-      { type: "close", id: NOTES_TAB_ID },
+      { type: "close", id: KANBAN_TAB_ID },
     );
 
     expect(state.tabs).toEqual([]);
@@ -219,7 +218,7 @@ describe("panelTabs close", () => {
   });
 
   it("ignores a close of an unknown tab", () => {
-    const before = reduce(createPanelTabsState(), { type: "open", kind: "notes" });
+    const before = reduce(createPanelTabsState(), { type: "open", kind: "kanban" });
     const after = reduce(before, { type: "close", id: "file:/tmp/gone.md" });
 
     expect(after).toEqual(before);
@@ -227,34 +226,34 @@ describe("panelTabs close", () => {
 });
 
 describe("panelTabs batch close", () => {
-  // Newest-first strip used by the batch tests: translate, favorites, notes,
+  // Newest-first strip used by the batch tests: translate, favorites, kanban,
   // rss — i.e. rss is the oldest tab.
   function strip(): PanelTabsState {
     return reduce(
       createPanelTabsState(),
       { type: "open", kind: "rss" },
-      { type: "open", kind: "notes" },
+      { type: "open", kind: "kanban" },
       { type: "open", kind: "favorites" },
       { type: "open", kind: "translate" },
     );
   }
 
   it("close_left drops the tabs left of the reference tab", () => {
-    const state = reduce(strip(), { type: "close_left", id: NOTES_TAB_ID });
+    const state = reduce(strip(), { type: "close_left", id: KANBAN_TAB_ID });
 
-    expect(kinds(state)).toEqual(["notes", "rss"]);
+    expect(kinds(state)).toEqual(["kanban", "rss"]);
   });
 
   it("close_left re-activates the reference tab when the active one was dropped", () => {
     const state = reduce(
       strip(),
       { type: "activate", id: TRANSLATE_TAB_ID },
-      { type: "close_left", id: NOTES_TAB_ID },
+      { type: "close_left", id: KANBAN_TAB_ID },
     );
 
-    expect(kinds(state)).toEqual(["notes", "rss"]);
-    expect(state.activeId).toBe(NOTES_TAB_ID);
-    expect(selectActiveKind(state)).toBe("notes");
+    expect(kinds(state)).toEqual(["kanban", "rss"]);
+    expect(state.activeId).toBe(KANBAN_TAB_ID);
+    expect(selectActiveKind(state)).toBe("kanban");
   });
 
   it("close_right drops the tabs right of the reference tab", () => {
@@ -275,18 +274,18 @@ describe("panelTabs batch close", () => {
   });
 
   it("close_others keeps only the reference tab and activates it", () => {
-    const state = reduce(strip(), { type: "close_others", id: NOTES_TAB_ID });
+    const state = reduce(strip(), { type: "close_others", id: KANBAN_TAB_ID });
 
-    expect(kinds(state)).toEqual(["notes"]);
-    expect(state.activeId).toBe(NOTES_TAB_ID);
+    expect(kinds(state)).toEqual(["kanban"]);
+    expect(state.activeId).toBe(KANBAN_TAB_ID);
     expect(selectIsOpen(state)).toBe(true);
   });
 
   it("close_others never collapses the panel", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "notes" },
-      { type: "close_others", id: NOTES_TAB_ID },
+      { type: "open", kind: "kanban" },
+      { type: "close_others", id: KANBAN_TAB_ID },
     );
 
     expect(state.mode).not.toBe("closed");
@@ -343,7 +342,7 @@ describe("panelTabs selectors", () => {
 });
 
 describe("panelTabs registry", () => {
-  const DELETED_PANEL_KINDS = ["canvas", "json", "githubTrending", "toolCalls", "btw"];
+  const DELETED_PANEL_KINDS = ["canvas", "json", "githubTrending", "toolCalls", "btw", "notes"];
 
   it("declares a label key and keywords for every spec and palette entry", () => {
     for (const spec of PANEL_TAB_SPECS) {
@@ -380,7 +379,6 @@ describe("panelTabs registry", () => {
         "gitDiff",
         "kanban",
         "llmAudit",
-        "notes",
         "plans",
         "rss",
         "tokens",

@@ -28,14 +28,13 @@ export const plans = {
   "Failed to save plan": "保存计划失败",
   // Plan detail dialog (#51): the note is written on the left and previewed on
   // the right, or one pane plus an 编辑 / 预览 switch when the dialog is narrow.
-  // "Plan details" is the dialog's accessible name. "Edit" / "Preview" / "Words"
-  // / "Characters" / "Close" already exist in the common and notes
-  // dictionaries and are reused.
+  // "Plan details" is the dialog's accessible name. "Edit" / "Preview" /
+  // "Close" already exist in the common dictionary and are reused.
   "Plan details": "计划详情",
   "No note yet": "还没有备注",
   // Row actions. "Copy path" / "Copied" / "Delete" / "Cancel" / "Saved" /
-  // "Saving" / "Unsaved changes" / "Save failed" already exist in the common,
-  // notes and media dictionaries and are reused as-is.
+  // "Unsaved changes" / "Save failed" already exist in the common, media and
+  // settings dictionaries and are reused as-is.
   "Path copied": "路径已复制",
   "Copy path failed": "复制路径失败",
   // Renaming: the title is the second half of the file name and the anchor is
@@ -94,4 +93,21 @@ export const plans = {
   "Reload": "重载",
   "Reload to the new location": "重载到新位置",
   "Dismiss": "忽略",
+  // Wording the shared markdown editor and the plan detail dialog read. It used
+  // to live in the notes dictionary (the notes panel was the editor's other
+  // consumer); with the notes panel gone, the plans panel is its only host.
+  "Saving": "保存中…",
+  "Insert image": "插入图片",
+  "Bold": "加粗",
+  "Italic": "斜体",
+  "Heading": "标题",
+  "Link": "链接",
+  "Quote": "引用",
+  "Code block": "代码块",
+  "Table": "表格",
+  "Task list": "任务列表",
+  "Unordered list": "无序列表",
+  "Ordered list": "有序列表",
+  "Words": "字词",
+  "Characters": "字符",
 };
