@@ -16,7 +16,6 @@ import { FileViewer } from "../files/FileViewer";
 import { TabBar } from "../ui/TabBar";
 import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
-import { RssPanel } from "../rss/RssPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
@@ -42,7 +41,6 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisableDefaultTab } from "@/hooks/useDisableDefaultTab";
 import { useExternalLinks } from "@/hooks/useExternalLinks";
-import { useRssUnreadCount } from "@/hooks/useRssUnreadCount";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { ICONS } from "../ui/icons";
 import { MENU, PANEL_LEFT } from "@/lib/client/icon-paths";
@@ -130,7 +128,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   translate: () => <TranslatePanel />,
-  rss: () => <RssPanel />,
   tokens: () => <TokensPanel />,
   llmAudit: (ctx) => <LlmAuditPanel currentSessionId={ctx.selectedSessionId} />,
   context: (ctx) => <ContextPanel systemPrompt={ctx.systemPrompt} tools={ctx.tools} />,
@@ -377,7 +374,6 @@ export function AppShell() {
   // browser).
   useExternalLinks();
   const cm = useContextMenu();
-  const { unread: rssUnread } = useRssUnreadCount();
   const settings = useEnsureSettings();
   const rightSideBarConfig = settings?.right_side_bar ?? null;
   const { cwds: recentCwds } = useCwdList();
@@ -1125,7 +1121,6 @@ export function AppShell() {
     activeTabKind: activeRightPanelKind,
     selectedSessionId,
     selectedCwd,
-    rssUnread,
     t,
     toggleRightPanel: () =>
       setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),
@@ -1420,7 +1415,7 @@ export function AppShell() {
   );
 
   // Panel card — the right-side workspace that hosts file viewers,
-  // tool lists, RSS, etc. Built once; the layout mode
+  // tool lists, etc. Built once; the layout mode
   // decides whether it sits next to (Agentic) or instead of (Classic)
   // the chat card. The same expand / collapse right-panel state is
   // used in both modes: expanding still pushes the *other* center

@@ -38,7 +38,7 @@ PORT=8080 pi-work                 # 也支持 PORT 环境变量
 - 长会话压缩、会话回放、导出 HTML 和自动命名
 - 项目文件浏览、搜索、编辑、重命名、删除和实时监听
 - Markdown、代码、Mermaid、SVG、ECharts、图片、音频、视频和 PDF 查看
-- Todo、Agent Todo、收藏、RSS、终端、Canvas、Git Diff 面板
+- Todo、Agent Todo、收藏、终端、Canvas、Git Diff 面板
 - Token 使用审计和 LLM API 调用审计
 - 定时任务、技能配置、模型配置和提示词配置
 - WeChat 登录、收发消息和入站监控
@@ -98,7 +98,6 @@ Pi Work 默认使用以下数据目录：
 - Pi Work 数据：`~/.pi-work/`
 - 用户 Todo 数据库：`~/.pi-work/todos.db`
 - 定时任务数据库：`~/.pi-work/scheduler.db`
-- RSS 数据库：`~/.pi-work/rss.db`
 - Token 审计数据库：`~/.pi-work/token-audit.db`
 - LLM 审计数据库：`~/.pi-work/llm-audit.db`
 
@@ -162,7 +161,7 @@ npm run dev      # 指向隔离开发实例 http://127.0.0.1:30143（先跑 pnpm
 ```
 
 - `npm start` 启动的是**外壳自己的服务端进程**：用 `resources/runtime/` 下的独立 Node 运行时（不是 Electron 自带的 Node，因此 `better-sqlite3` / tree-sitter 等原生模块不需要按 Electron ABI 重编译）跑 `bin/pi-work.js`，端口每次启动随机、只绑 `127.0.0.1`，凭据（`PI_WORK_DESKTOP_SECRET`）每次启动随机生成并由外壳签名注入 cookie（见“信任边界”）。决策在 `electron-shell/server-process.js`（纯 module，单测在 `tests/unit/electron-shell-server-process.test.ts`）。
-- 退出时按平台结束整个进程树（POSIX 信号进程组 / Windows `taskkill /T /F`）；关窗只是隐藏到托盘，服务端继续跑。托盘菜单能显示/隐藏窗口、重新加载应用、退出；关窗后到点的定时任务 / RSS / 看板 / 频道照常执行，只有托盘「退出」才停。窗口可见性与应用寿命是两条规则，在 `electron-shell/lifecycle.js`（纯 module，单测在 `tests/unit/electron-shell-lifecycle.test.ts`）。
+- 退出时按平台结束整个进程树（POSIX 信号进程组 / Windows `taskkill /T /F`）；关窗只是隐藏到托盘，服务端继续跑。托盘菜单能显示/隐藏窗口、重新加载应用、退出；关窗后到点的定时任务 / 看板 / 频道照常执行，只有托盘「退出」才停。窗口可见性与应用寿命是两条规则，在 `electron-shell/lifecycle.js`（纯 module，单测在 `tests/unit/electron-shell-lifecycle.test.ts`）。
 - 两个“不拉起服务端”的口子：`npm run dev`（即 `electron . --dev`，只连隔离实例，不碰生产数据）、显式 `PI_PORT`（表示“服务端我自己已经起好了，连这个端口”）。源码检出里没有打包运行时，用 `PI_WORK_NODE=$(which node) npm start` 指定。
 - 服务端不可达或起不来时窗口显示可手动重试的错误页；外部链接交给默认浏览器，应用窗口不会被导航走；重复启动只保留一个实例。
 - Windows 上使用原生窗口控件（`titleBarStyle: "hidden"` + Window Controls Overlay），应用顶部用 `env(titlebar-area-height, 0px)` 预留条带（`app/globals.css` 的 `.pi-shell-titlebar`），因此没有自绘标题栏也不会有双重标题栏；该变量在浏览器里恒为 0，不影响 Web 形态。
@@ -177,7 +176,6 @@ components/
   chat/                        对话窗口、输入框、消息渲染和权限交互
   files/                       文件浏览器和文件查看器
   panels/                      右侧工具面板
-  rss/                         RSS 面板
   scheduler/                   定时任务 UI
   sessions/                   会话侧栏、会话库和分支视图
   settings/                   设置、模型、技能和提示词配置
@@ -190,7 +188,6 @@ lib/
   client/                      浏览器运行时工具和客户端状态
   server/                      文件系统、SQLite、pi SDK 和后台循环
     agent-todo-tool/
-    rss/
     scheduler/
     session-export/
     terminal/
@@ -199,7 +196,6 @@ lib/
   shared/                      client/server 共用的类型和纯函数
     agent-todo-tool/
     i18n-dict/
-    rss/
     user-todo/
     wechat/
 scripts/                      运维、恢复和手工 smoke test
@@ -221,7 +217,7 @@ Browser                 Next.js Server                 AgentSession
 
 - **只读浏览会话**：直接读取 `.jsonl`，不会创建 AgentSession。
 - **发送消息**：由 `lib/server/rpc-manager.ts` 创建或复用进程内 AgentSession。
-- **服务启动**：`instrumentation.ts` 启动 WeChat、Scheduler、RSS 和 Terminal 后台服务。
+- **服务启动**：`instrumentation.ts` 启动 WeChat、Scheduler 和 Terminal 后台服务。
 
 ## Import 边界
 

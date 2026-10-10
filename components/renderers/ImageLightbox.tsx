@@ -25,7 +25,7 @@ export function extractImageGallery(
   return out;
 }
 
-// Extract every image reference from an HTML string. Used by RSS reader view.
+// Extract every image reference from an HTML string.
 // Returns an empty list in SSR environments (no DOMParser) so the import is
 // safe in React Server Components, even though this code is "use client".
 export function extractImagesFromHtml(content: string): ImageItem[] {

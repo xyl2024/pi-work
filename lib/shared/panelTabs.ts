@@ -26,7 +26,6 @@ import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
-  RSS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "./types";
@@ -42,7 +41,6 @@ import {
 export interface PanelTabParams {
   favorites: undefined;
   translate: undefined;
-  rss: undefined;
   tokens: undefined;
   gitDiff: undefined;
   conversationTree: undefined;
@@ -172,13 +170,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
         keywords: ["translate", "translation", "翻译"],
       },
     ],
-  },
-  rss: {
-    kind: "rss",
-    tabId: RSS_TAB_ID,
-    labelKey: "RSS",
-    defaultMode: "normal",
-    sessionBound: false,
   },
   gitDiff: {
     kind: "gitDiff",

@@ -30,7 +30,6 @@
 
 import type { ReactNode } from "react";
 import type { RightBarButtonId } from "@/lib/shared/right-bar";
-import { CountBadge } from "@/components/ui/CountBadge";
 import {
   PANEL_BUTTON_ID_BY_KIND,
   PANEL_TAB_KINDS,
@@ -48,7 +47,6 @@ import {
   GitGraph,
   Languages,
   PanelRight,
-  Rss,
   Star,
 } from "lucide-react";
 
@@ -69,7 +67,6 @@ export interface RightBarCtx {
   activeTabKind: PanelTabKind | null;
   selectedSessionId: string | null;
   selectedCwd: string | null;
-  rssUnread: number;
   /** Active tool-call counter is the only thing that requires i18n inside
    *  the descriptor body, so we expose the AppShell-bound t() to avoid
    *  re-resolving the same key in two places. */
@@ -110,7 +107,7 @@ export interface RightBarDescriptor {
   /** The entry's glyph, declared exactly once: the right-bar button, the tab
    *  strip (`PANEL_TAB_ICON_BY_KIND`) and the command palette all read it. */
   icon: PanelIcon;
-  /** Optional top-right corner badge (RSS unread count etc.). */
+  /** Optional top-right corner badge (active tool-call count etc.). */
   badge?: (ctx: RightBarCtx) => ReactNode | null;
   isActive: (ctx: RightBarCtx) => boolean;
   isDisabled?: (ctx: RightBarCtx) => boolean;
@@ -172,11 +169,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   translate: panelButton("translate", {
     labelKey: "Open translate",
     icon: ({ size }) => <Languages size={size} />,
-  }),
-  rss: panelButton("rss", {
-    labelKey: "RSS",
-    badge: (ctx) => <CountBadge count={ctx.rssUnread} size="sm" />,
-    icon: ({ size }) => <Rss size={size} />,
   }),
   // Cwd-derived (one repo per active session) — treated as session-bound
   // for column layout so it pins with the other "live state" buttons.

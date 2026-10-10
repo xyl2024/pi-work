@@ -6,7 +6,7 @@
  * dir, so the dev instance never races the production instance that shares
  * this checkout:
  *
- *   - background loops (scheduler / RSS / channel workers) get their own
+ *   - background loops (scheduler / channel workers) get their own
  *     state instead of duplicating production runs;
  *   - SQLite files, config.yaml, channel credentials, sidecars, profile,
  *     logs and the WeChat monitor lock all land in the dev data root;

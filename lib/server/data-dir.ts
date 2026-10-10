@@ -6,7 +6,7 @@
  * logs and lock files — lives under a single data root. The default is
  * `~/.pi-work`, but running more than one pi-work process against the
  * same root (e.g. a production `next start` plus a `next dev` on the
- * same checkout) makes background loops (scheduler / RSS / channel
+ * same checkout) makes background loops (scheduler / channel
  * workers) and SQLite/JSON stores race each other: duplicate scheduled
  * runs, duplicated channel pollers, lost updates on JSON files.
  *

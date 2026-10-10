@@ -4,7 +4,7 @@
 // Same shape as tests/unit/electron-shell-window-rules.test.ts.
 //
 // What is worth guarding: the window's visibility and the app's lifetime are
-// two different things. The 定时任务 / RSS / 频道 loops run inside the
+// two different things. The 定时任务 / 频道 loops run inside the
 // server process the shell owns, so closing the window must hide it rather than
 // end anything; only a quit may take the process tree down (#89). The tray menu
 // is the window's only way back, because the shell has no other UI of its own.
@@ -184,7 +184,7 @@ describe("main.js wires the lifetime rules", () => {
   it("ends the server process only on quit", () => {
     // Two call sites and no more: `will-quit`, and the reap for a child that
     // finished spawning after a quit had already started. A third one would be
-    // a path that stops 定时任务 / RSS / 频道 without anyone asking.
+    // a path that stops 定时任务 / 频道 without anyone asking.
     expect(code.match(/stopServer\(\);/g)).toHaveLength(2);
   });
 });

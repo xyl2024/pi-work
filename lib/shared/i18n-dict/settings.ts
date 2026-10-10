@@ -137,7 +137,6 @@ export const settings = {
   "Event: toast info": "事件：Toast 提示",
   "Event: agent success": "事件：Agent 正常完成",
   "Event: agent failure": "事件：Agent 最终失败",
-  "Event: RSS new article": "事件：RSS 新文章",
   "Event: ask user questions": "事件：向用户提问",
   "Event: celebration": "事件：庆祝动画",
   "morning-light": "晨曦",
@@ -152,8 +151,8 @@ export const settings = {
 
   // Network proxy (~/.pi-work/config.yaml → network_proxy)
   "Network proxy": "网络代理",
-  "Route every outbound server request — model calls, RSS, GitHub Trending — through an HTTP proxy. Takes effect immediately, no restart needed.":
-    "服务端所有对外请求（模型调用、RSS、GitHub Trending 等）都走这个 HTTP 代理。保存后立即生效，无需重启。",
+  "Route every outbound server request — model calls, GitHub Trending — through an HTTP proxy. Takes effect immediately, no restart needed.":
+    "服务端所有对外请求（模型调用、GitHub Trending 等）都走这个 HTTP 代理。保存后立即生效，无需重启。",
   "Use proxy": "启用代理",
   "Enter a proxy address first — it is required to enable or test the proxy.":
     "请先填写代理地址 —— 启用和测试都需要它。",

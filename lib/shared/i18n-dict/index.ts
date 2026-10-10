@@ -30,7 +30,6 @@ import { profile } from "./profile";
 import { prompts } from "./prompts";
 import { renderers } from "./renderers";
 import { rightPanels } from "./right-panels";
-import { rss } from "./rss";
 import { scheduler } from "./scheduler";
 import { sessions } from "./sessions";
 import { settings } from "./settings";
@@ -61,7 +60,6 @@ export const ZH_TRANSLATIONS = {
   ...prompts,
   ...renderers,
   ...rightPanels,
-  ...rss,
   ...scheduler,
   ...sessions,
   ...settings,

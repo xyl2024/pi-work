@@ -128,7 +128,7 @@ export function NetworkProxySection({
         {t("Network proxy")}
       </h3>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.5 }}>
-        {t("Route every outbound server request — model calls, RSS, GitHub Trending — through an HTTP proxy. Takes effect immediately, no restart needed.")}
+        {t("Route every outbound server request — model calls, GitHub Trending — through an HTTP proxy. Takes effect immediately, no restart needed.")}
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>

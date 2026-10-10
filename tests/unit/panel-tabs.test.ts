@@ -3,7 +3,7 @@ import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
-  RSS_TAB_ID,
+  TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
 import {
@@ -131,22 +131,22 @@ describe("panelTabs open", () => {
 
 describe("panelTabs toggle", () => {
   it("opens the panel when its tab is not active", () => {
-    const state = reduce(createPanelTabsState(), { type: "toggle", kind: "rss" });
+    const state = reduce(createPanelTabsState(), { type: "toggle", kind: "tokens" });
 
     expect(selectIsOpen(state)).toBe(true);
-    expect(selectActiveKind(state)).toBe("rss");
-    expect(openCount(state, RSS_TAB_ID)).toBe(1);
+    expect(selectActiveKind(state)).toBe("tokens");
+    expect(openCount(state, TOKENS_TAB_ID)).toBe(1);
   });
 
   it("collapses the panel when the toggled tab is active and the panel is open", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "rss" },
-      { type: "toggle", kind: "rss" },
+      { type: "open", kind: "tokens" },
+      { type: "toggle", kind: "tokens" },
     );
 
     // The tab stays in the strip so the next toggle reopens the same view.
-    expect(kinds(state)).toEqual(["rss"]);
+    expect(kinds(state)).toEqual(["tokens"]);
     expect(state.mode).toBe("closed");
     expect(selectIsOpen(state)).toBe(false);
     expect(selectActiveKind(state)).toBe(null);
@@ -155,19 +155,19 @@ describe("panelTabs toggle", () => {
   it("reopens an already open tab whose panel was collapsed", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "rss" },
+      { type: "open", kind: "tokens" },
       { type: "set_mode", mode: "closed" },
-      { type: "toggle", kind: "rss" },
+      { type: "toggle", kind: "tokens" },
     );
 
     expect(state.mode).toBe("normal");
-    expect(openCount(state, RSS_TAB_ID)).toBe(2);
+    expect(openCount(state, TOKENS_TAB_ID)).toBe(2);
   });
 
   it("toggles a different panel view instead of collapsing the active one", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "rss" },
+      { type: "open", kind: "tokens" },
       { type: "toggle", kind: "translate" },
     );
 
@@ -226,11 +226,11 @@ describe("panelTabs close", () => {
 
 describe("panelTabs batch close", () => {
   // Newest-first strip used by the batch tests: translate, favorites,
-  // llmAudit, rss — i.e. rss is the oldest tab.
+  // llmAudit, tokens — i.e. tokens is the oldest tab.
   function strip(): PanelTabsState {
     return reduce(
       createPanelTabsState(),
-      { type: "open", kind: "rss" },
+      { type: "open", kind: "tokens" },
       { type: "open", kind: "llmAudit" },
       { type: "open", kind: "favorites" },
       { type: "open", kind: "translate" },
@@ -240,7 +240,7 @@ describe("panelTabs batch close", () => {
   it("close_left drops the tabs left of the reference tab", () => {
     const state = reduce(strip(), { type: "close_left", id: LLM_AUDIT_TAB_ID });
 
-    expect(kinds(state)).toEqual(["llmAudit", "rss"]);
+    expect(kinds(state)).toEqual(["llmAudit", "tokens"]);
   });
 
   it("close_left re-activates the reference tab when the active one was dropped", () => {
@@ -250,7 +250,7 @@ describe("panelTabs batch close", () => {
       { type: "close_left", id: LLM_AUDIT_TAB_ID },
     );
 
-    expect(kinds(state)).toEqual(["llmAudit", "rss"]);
+    expect(kinds(state)).toEqual(["llmAudit", "tokens"]);
     expect(state.activeId).toBe(LLM_AUDIT_TAB_ID);
     expect(selectActiveKind(state)).toBe("llmAudit");
   });
@@ -264,7 +264,7 @@ describe("panelTabs batch close", () => {
   it("close_right re-activates the reference tab when the active one was dropped", () => {
     const state = reduce(
       strip(),
-      { type: "activate", id: RSS_TAB_ID },
+      { type: "activate", id: TOKENS_TAB_ID },
       { type: "close_right", id: FAVORITES_TAB_ID },
     );
 
@@ -386,7 +386,6 @@ describe("panelTabs registry", () => {
         "favorites",
         "gitDiff",
         "llmAudit",
-        "rss",
         "tokens",
         "translate",
       ].sort(),
@@ -516,7 +515,6 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       activeTabKind: null,
       selectedSessionId: null,
       selectedCwd: null,
-      rssUnread: 0,
       t: (key) => key,
       toggleRightPanel: () => {},
       togglePanel: () => {},

@@ -133,8 +133,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // Push the current ui_sounds config into the sound dispatcher. Module-
-  // scoped state means a second consumer (e.g. the RSS hook) sees the
-  // same snapshot the user just toggled in Settings.
+  // scoped state means a second consumer sees the same snapshot the user
+  // just toggled in Settings.
   const settings = useEnsureSettings();
   useEffect(() => {
     setUiSoundsConfig(settings?.ui_sounds ?? null);

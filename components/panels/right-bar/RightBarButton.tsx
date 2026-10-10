@@ -11,7 +11,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 // Variants:
 //   - Default: single SVG icon, hover → var(--text), active → var(--accent).
 //   - withBadge: pass `badge` to render a small absolute-positioned node in
-//     the top-right corner (RSS unread count). The parent is `position:
+//     the top-right corner. The parent is `position:
 //     relative` so the badge anchors to the button.
 
 interface RightBarButtonProps {

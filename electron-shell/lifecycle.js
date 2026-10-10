@@ -1,7 +1,7 @@
 // lifecycle.js — the window's visibility and the app's lifetime are two
 // different things.
 //
-// The background loops (定时任务 / RSS / 看板 / 频道) run inside the server
+// The background loops (定时任务 / 看板 / 频道) run inside the server
 // process, and the shell owns that process rather than the window: closing the
 // window hides it, the server keeps running, and only the tray's 「退出」 ends
 // the process tree (#89). The decisions behind that story — what the close

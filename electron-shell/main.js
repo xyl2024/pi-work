@@ -468,8 +468,8 @@ function createWindow() {
     }
   });
 
-  // Close hides to the tray (lifecycle.js): the server, and the 定时任务 / RSS
-  // / 看板 / 频道 loops ticking inside it, must outlive the window.
+  // Close hides to the tray (lifecycle.js): the server, and the 定时任务 / 看板
+  // / 频道 loops ticking inside it, must outlive the window.
   win.on("close", (event) => {
     if (windowCloseAction({ isQuitting, hasTray: tray !== null }) === "hide") {
       event.preventDefault();

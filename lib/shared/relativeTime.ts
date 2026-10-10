@@ -1,10 +1,9 @@
 /**
- * Compact "Xm / Xh / Xd ago" formatter for feed/article timestamps.
+ * Compact "Xm / Xh / Xd ago" formatter for timestamps.
  *
- * Returns `fallback` when the timestamp is null (e.g. never-fetched feeds),
- * otherwise a short relative string capped at 7 days — beyond that we
- * surface a real locale date so the user sees something meaningful
- * instead of "20d".
+ * Returns `fallback` when the timestamp is null, otherwise a short relative
+ * string capped at 7 days — beyond that we surface a real locale date so the
+ * user sees something meaningful instead of "20d".
  */
 export function relativeTime(ts: number | null, fallback: string): string {
   if (!ts) return fallback;

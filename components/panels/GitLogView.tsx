@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { relativeTime } from "../rss/relativeTime";
+import { relativeTime } from "@/lib/shared/relativeTime";
 import type {
   GitCommitDetailResponse,
   GitCommitFile,

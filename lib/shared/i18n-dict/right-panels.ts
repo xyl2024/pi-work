@@ -1,5 +1,5 @@
 // All right-panel tabs (HTTP / JSON / Canvas / Git Diff / Tokens /
-// LLM API audit / RSS) plus the per-tab open/close verbs reused by the
+// LLM API audit) plus the per-tab open/close verbs reused by the
 // command palette. Token audit and LLM API audit are appended below.
 
 export const rightPanels = {

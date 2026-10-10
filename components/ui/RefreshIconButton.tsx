@@ -5,7 +5,7 @@
  * on click and stays ✓ for 2 seconds before morphing back. Replaces the
  * hand-rolled <button> + <MorphToggleIcon from={REFRESH} to={CHECK} active={done} />
  * + useState/useRef/useEffect dance that was duplicated in SessionSidebar,
- * CollectionPanel, GitPanel, LlmAuditPanel and the RSS views.
+ * CollectionPanel, GitPanel and the LlmAuditPanel views.
  *
  * Visual matches the sidebar Sessions/Explorer refresh buttons (no border,
  * 5px radius, dim → muted hover, green ✓ flash). Call sites that need a

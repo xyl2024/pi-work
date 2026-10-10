@@ -62,7 +62,7 @@ export const ALWAYS_BYPASS_HOSTS = ["localhost", "127.0.0.1", "::1"] as const;
 
 /**
  * Outbound network proxy (Settings → Network proxy). Applies to every `fetch`
- * the server process performs — provider calls, RSS, GitHub Trending, update
+ * the server process performs — provider calls, GitHub Trending, update
  * checks — so they share one exit. `no_proxy` is a comma-separated host /
  * host-suffix list on top of {@link ALWAYS_BYPASS_HOSTS}.
  */
@@ -130,7 +130,6 @@ export const UI_SOUND_EVENT_IDS = [
   "toast_info",
   "agent_success",
   "agent_failure",
-  "rss_new",
   "ask_user_questions",
   "celebrate",
 ] as const;

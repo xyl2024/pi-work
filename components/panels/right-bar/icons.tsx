@@ -2,7 +2,6 @@
 export {
   ExpandLeftIcon,
   PanelToggleIcon,
-  RssIcon,
   StarIconWithFill,
   LlmAuditGlyphIcon as LlmAuditIcon,
 } from "@/components/ui/icons";
