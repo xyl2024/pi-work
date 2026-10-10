@@ -1,5 +1,10 @@
 # 计划以 Markdown 文件为唯一真值，时间锚点写在路径里
 
+> **状态：已移除（2026-10-11）。** 计划面板、`/api/plans`、`lib/shared/plans.ts`、
+> `lib/client/plans.ts`、`lib/client/plan-write-session.ts`、`lib/server/plans/store.ts`、
+> 面板组件与 `agent-skills/pi-work-user-plans` 技能已全部删除。本文保留为当时的决策记录，
+> 描述与代码引用均按当时状态解读；磁盘上的 `~/.pi-work/user-plans/` 未被动过。
+
 2026-09-12 我们刻意删掉了完整的旧「待办」功能（用户待办 + Agent 待办，116 文件、-11352 行：SQLite `todos.db` + 标签表、Tiptap 富文本、标签、优先级、截止日期、月历、3 个 agent 工具）。三天后重新做这件事时，我们决定**不恢复它**：新功能叫**计划（Plans）**，一条计划就是一个 Markdown 文件，放在 `<数据根>/user-plans/` 下（默认 `~/.pi-work/user-plans/`，目录名沿用笔记 `user-notes/` 的 `user-` 前缀）；**时间锚点只存在于路径里**（`user-plans/YYYY-MM/YYYY-MM-DD-标题.md` 日锚点、`YYYY-MM-DD W-标题.md` 周锚点、`YYYY-MM-M-标题.md` 月锚点、`user-plans/inbox/标题.md` 无锚点），文件名前缀之后就是标题；frontmatter 只留 `done` / `created_at` / `done_at` 三个字段，正文是备注。改期 = 移动/重命名文件。面板只读文件（进程内 `mtime` 缓存，无持久化索引、不 `fs.watch`）。agent 通过 `agent-skills/pi-work-user-plans` 技能用现成的 `read` / `write` / `edit` / `bash mv` 维护同一批文件，Pi Work **不注册任何专用工具、不写系统提示词**。
 
 理由：用户要的是「自己的东西」——能在文件管理器里看懂、能用任何编辑器改、能进 git、坏掉也不会被机器背着自己改写。把锚点编码进路径换来的是**「今天该做什么」= 一次 `readdir`**：不需要索引、不需要 schema、不需要迁移，也没有「文件与数据库不一致」这种状态。

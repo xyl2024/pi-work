@@ -4,7 +4,7 @@
 
 代价落在处理这一侧：`hooks/useAgentSession/events.ts` 那个 363 行的 `switch`（`:138` 起）动了 11 个 `useState`、6 个 ref、5 个 module store、约 6 处发出去就不管的副作用和 5 个外部回调，依赖数组 42 项（`:498-553`），里面还夹了一次内联 `fetch`（`:278-286`），而且**没有任何测试覆盖**。同一批状态还有第二条独立真值路径：`data.ts:184-227` 的 `applyAgentRuntimeState` 写同样六个 sink，于是 `contextUsage` / `contextComposition` 有三个写者。
 
-**我们决定**，会话事件的类型清单就是这份协议本身，放在 `lib/shared`，服务端与客户端共用同一份，**不复用 pi SDK 的 `AgentSessionEvent`**。每一条事件必须二选一：归约进会话运行时状态，或进入一张显式的「知道、但故意不处理」清单；**不设 `default:` 分支**，清单之外的类型必须让编译失败。归约是一个纯 reducer（`lib/shared`，无 React、无 DOM、无服务端 import）：`(state, event) → { state, effects }`。状态包括去重账本与「在飞的工具调用及其参数」；副作用以封闭联合返回，由客户端适配层执行——**三个 module store（流式消息、会话 UI、工具统计）不进状态**，沿用 ADR-0003 对跨标签页共享面的否决。这一刀行为冻结（ADR-0003 规则 2）：屏幕上不可见任何变化，搬移中发现的漂移记为 findings。
+**我们决定**，会话事件的类型清单就是这份协议本身，放在 `lib/shared`，服务端与客户端共用同一份，**不复用 pi SDK 的 `AgentSessionEvent`**。每一条事件必须二选一：归约进会话运行时状态，或进入一张显式的「知道、但故意不处理」清单；**不设 `default:` 分支**，清单之外的类型必须让编译失败。归约是一个纯 reducer（`lib/shared`，无 React、无 DOM、无服务端 import）：`(state, event) → { state, effects }`。状态包括去重账本与「在飞的工具调用及其参数」；副作用以封闭联合返回，由客户端适配层执行——**三个 module store（流式消息、会话 UI、工具统计）不进状态**，沿用 ADR-0003 对跨标签页共享面的否决。（2026-10-11 更新：工具调用统计面板已移除，那个 store 随之消失；结论不变。）这一刀行为冻结（ADR-0003 规则 2）：屏幕上不可见任何变化，搬移中发现的漂移记为 findings。
 
 ## Considered options
 

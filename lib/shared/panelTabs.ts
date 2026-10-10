@@ -12,7 +12,7 @@
 //   • panelTabsReducer + selectors — the strip's state machine. Label text is
 //     resolved at render time from `labelKey`, so open tabs follow a locale
 //     switch; each tab carries an `openCount` so a re-open can be observed by
-//     panels that need to refresh (git diff, plans).
+//     panels that need to refresh (git diff).
 //
 // Presentation (icon and panel body) deliberately stays outside this module:
 // the right-bar descriptors look a body up by kind. Adding a panel view is two
@@ -27,7 +27,6 @@ import {
   GIT_DIFF_TAB_ID,
   KANBAN_TAB_ID,
   LLM_AUDIT_TAB_ID,
-  PLANS_TAB_ID,
   RSS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
@@ -51,7 +50,6 @@ export interface PanelTabParams {
   llmAudit: undefined;
   context: undefined;
   kanban: undefined;
-  plans: undefined;
   file: { path: string };
 }
 
@@ -129,14 +127,6 @@ export interface PanelTabCommand {
   /** Palette id suffix: the generated id is `panel.<kind>` when omitted and
    *  `panel.<kind>.<id>` otherwise. */
   id?: string;
-  /**
-   * How the entry reveals the view. `toggle` (the default) reuses the shared
-   * panel toggle rule — running it again collapses the panel; `open` always
-   * reveals the view instead, for entries that mean "do something now" and so
-   * must never close the panel they need. (Focus comes from the view itself:
-   * it focuses its entry point on open, off its own open count.)
-   */
-  action?: "toggle" | "open";
 }
 
 export interface PanelTabSpec<K extends PanelViewKind = PanelViewKind> {
@@ -258,28 +248,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     // The four-column board needs the full column width.
     defaultMode: "expanded",
     sessionBound: false,
-  },
-  plans: {
-    kind: "plans",
-    tabId: PLANS_TAB_ID,
-    labelKey: "Plans",
-    defaultMode: "normal",
-    sessionBound: false,
-    // Two entries: "Open plans" browses (and collapse-toggles on a second
-    // run), "New plan" is the record-now action — it always reveals the panel,
-    // which then focuses its entry input.
-    commands: [
-      {
-        labelKey: "Open plans",
-        keywords: ["plan", "plans", "schedule", "agenda", "计划", "安排", "日程"],
-      },
-      {
-        id: "new",
-        labelKey: "New plan",
-        keywords: ["new", "add", "plan", "today", "新建", "添加", "计划", "今天"],
-        action: "open",
-      },
-    ],
   },
 } as const satisfies { [K in PanelViewKind]: PanelTabSpec<K> };
 
@@ -463,7 +431,7 @@ export function selectTabByKind(state: PanelTabsState, kind: PanelViewKind): Any
 
 /**
  * How many times a panel view has been opened, 0 when it never was. Drives
- * re-open side effects (git-diff refresh, plans focus) without a second
+ * re-open side effects (git-diff refresh) without a second
  * counter living in the shell.
  */
 export function selectOpenCount(state: PanelTabsState, kind: PanelViewKind): number {

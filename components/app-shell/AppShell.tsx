@@ -18,7 +18,6 @@ import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
 import { RssPanel } from "../rss/RssPanel";
 import { KanbanPanel } from "../kanban/KanbanPanel";
-import { PlansPanel } from "../panels/plans/PlansPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
@@ -113,7 +112,6 @@ interface PanelBodyCtx {
   agentRunning: boolean;
   onConversationTreeCardClick: (cardId: string) => void;
   gitDiffOpenCount: number;
-  plansOpenCount: number;
   onExpandGitPanel: () => void;
   onOpenKanbanSession: (sessionId: string) => void;
 }
@@ -165,7 +163,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       expanded={ctx.rightPanelState === "expanded"}
     />
   ),
-  plans: (ctx) => <PlansPanel openCount={ctx.plansOpenCount} />,
 };
 
 function formatBytes(bytes: number): string {
@@ -444,10 +441,9 @@ export function AppShell() {
   const activeFileTabId = panelTabsState.activeId;
   const activePanelTab = selectActiveTab(panelTabsState);
   const activeRightPanelKind = selectActiveKind(panelTabsState);
-  // Re-open counters carried by the tabs themselves: Git Diff refreshes and
-  // Plans focus off these instead of shell-owned request tokens.
+  // Re-open counters carried by the tabs themselves: Git Diff refreshes off
+  // these instead of shell-owned request tokens.
   const gitDiffOpenCount = selectOpenCount(panelTabsState, "gitDiff");
-  const plansOpenCount = selectOpenCount(panelTabsState, "plans");
 
   // Classic mode hides the chat card behind the right column being
   // closed, so the very first commit has to paint with the column
@@ -905,13 +901,6 @@ export function AppShell() {
     dispatchPanelTabs({ type: "toggle", kind });
   }, []);
 
-  // The palette entries that mean "do it now" ("New plan") reveal the view
-  // unconditionally — they must never collapse the panel they need. The view
-  // itself takes the keyboard on open, off the open count the reducer bumps.
-  const handleOpenPanel = useCallback((kind: PanelViewKind) => {
-    dispatchPanelTabs({ type: "open", kind });
-  }, []);
-
   // Global keyboard shortcuts.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1186,7 +1175,6 @@ export function AppShell() {
     agentRunning,
     onConversationTreeCardClick: handleConversationTreeCardClick,
     gitDiffOpenCount,
-    plansOpenCount,
     onExpandGitPanel: handleExpandGitPanel,
     onOpenKanbanSession: handleOpenKanbanSession,
   };
@@ -1274,7 +1262,6 @@ export function AppShell() {
       mode: panelTabsRef.current.mode === "closed" ? "normal" : "closed",
     }),
     togglePanel: handleTogglePanel,
-    openPanel: handleOpenPanel,
     agentControls,
     hasSession: selectedSession !== null || newSessionCwd !== null,
     hasCwd: !!(selectedSession?.cwd ?? newSessionCwd),
@@ -1282,7 +1269,6 @@ export function AppShell() {
     theme.setPreset, setLocale, handleSlashNew,
     setCwdPickerOpen,
     handleTogglePanel,
-    handleOpenPanel,
     agentControls,
     selectedSession, newSessionCwd,
   ]);

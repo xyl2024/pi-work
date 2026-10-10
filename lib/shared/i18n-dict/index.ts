@@ -28,7 +28,6 @@ import { mcp } from "./mcp";
 import { media } from "./media";
 import { models } from "./models";
 import { permissions } from "./permissions";
-import { plans } from "./plans";
 import { profile } from "./profile";
 import { prompts } from "./prompts";
 import { renderers } from "./renderers";
@@ -62,7 +61,6 @@ export const ZH_TRANSLATIONS = {
   ...media,
   ...models,
   ...permissions,
-  ...plans,
   ...profile,
   ...prompts,
   ...renderers,

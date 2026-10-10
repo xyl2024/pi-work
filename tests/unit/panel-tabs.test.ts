@@ -342,7 +342,15 @@ describe("panelTabs selectors", () => {
 });
 
 describe("panelTabs registry", () => {
-  const DELETED_PANEL_KINDS = ["canvas", "json", "githubTrending", "toolCalls", "btw", "notes"];
+  const DELETED_PANEL_KINDS = [
+    "canvas",
+    "json",
+    "githubTrending",
+    "toolCalls",
+    "btw",
+    "notes",
+    "plans",
+  ];
 
   it("declares a label key and keywords for every spec and palette entry", () => {
     for (const spec of PANEL_TAB_SPECS) {
@@ -379,7 +387,6 @@ describe("panelTabs registry", () => {
         "gitDiff",
         "kanban",
         "llmAudit",
-        "plans",
         "rss",
         "tokens",
         "translate",
@@ -554,7 +561,6 @@ describe("panelTabs registry → command palette", () => {
       toggleSidebar: () => {},
       toggleRightPanel: () => {},
       togglePanel: () => {},
-      openPanel: () => {},
       agentControls: null,
       hasSession: false,
       hasCwd: false,
@@ -567,7 +573,6 @@ describe("panelTabs registry → command palette", () => {
     (spec.commands ?? []).map((entry) => ({
       id: entry.id ? `panel.${spec.kind}.${entry.id}` : `panel.${spec.kind}`,
       kind: spec.kind,
-      action: entry.action ?? "toggle",
       labelKey: entry.labelKey,
       keywords: entry.keywords,
     })),
@@ -596,8 +601,6 @@ describe("panelTabs registry → command palette", () => {
         "panel.favorites",
         "panel.gitDiff",
         "panel.llmAudit",
-        "panel.plans",
-        "panel.plans.new",
         "panel.tokens",
         "panel.translate",
       ].sort(),
@@ -620,22 +623,15 @@ describe("panelTabs registry → command palette", () => {
     });
   });
 
-  it("routes every palette entry through the shared panel rules", () => {
+  it("routes every palette entry through the shared panel toggle rule", () => {
     const toggled: PanelViewKind[] = [];
-    const opened: PanelViewKind[] = [];
-    const ctx = commandCtx({
-      togglePanel: (kind) => toggled.push(kind),
-      openPanel: (kind) => opened.push(kind),
-    });
+    const ctx = commandCtx({ togglePanel: (kind) => toggled.push(kind) });
 
     // Run the whole palette, not just the Panel group: a hand-written entry
     // that opens a panel from any group (the regression this issue deletes)
     // shows up as an extra panel call here.
     for (const cmd of buildCommands(ctx, (key) => key)) cmd.run(ctx);
 
-    const kindsOf = (action: "toggle" | "open") =>
-      optInCommands.filter((entry) => entry.action === action).map((entry) => entry.kind);
-    expect(toggled).toEqual(kindsOf("toggle"));
-    expect(opened).toEqual(kindsOf("open"));
+    expect(toggled).toEqual(optInCommands.map((entry) => entry.kind));
   });
 });

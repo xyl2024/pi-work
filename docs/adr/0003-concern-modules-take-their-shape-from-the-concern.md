@@ -34,6 +34,8 @@ We decided three rules that every extraction from the chat window — and later,
 
 ## 修订 2026-09-19（#78）：规则型的关切可以住在客户端层
 
+> **2026-10-11 更新**：下文用来举例的计划面板已移除，`lib/client/plan-write-session.ts` 与 `lib/shared/plans.ts` 均已删除。该修订确立的判据（「输入是不是纯领域事实」）与它给出的落地约束继续有效，只是失去这个具体例证。
+
 规则 1 说「核心是规则的关切 ⇒ 纯 module 放共享层」。计划写入会话（`lib/client/plan-write-session.ts`）是一处**有意的宽松读法**：它仍然是一条规则型的关切——它比任何一条都更像「规则」——但它不住在共享层。
 
 理由在**输入**那一侧。这台状态机的处境由客户端传输事实构成：「服务端回了 409、`code` 是 `missing`、`movedTo` 是那条路径」，承载它的是传输层抛出的 `PlanConflictError`；而共享层那份 `lib/shared/plans.ts` 是本项目与服务端共用的领域契约（808 行：文件名语法、时间锚点、分区、frontmatter 解析）。把状态机放进共享层，要么让共享层开始认识客户端的传输错误，要么让服务端 bundle 里多出一份它用不到的会话状态机。

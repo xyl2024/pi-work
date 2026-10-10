@@ -117,11 +117,6 @@ export interface CommandContext {
    *  it is already the active open tab. */
   togglePanel: (kind: PanelViewKind) => void;
 
-  /** Always reveal a panel view (never collapses) for the palette entries
-   *  that mean "do something now" rather than "go look at the panel". The
-   *  view hands focus to its own entry point when it is opened. */
-  openPanel: (kind: PanelViewKind) => void;
-
   // Imperative agent controls — null when no ChatWindow is mounted.
   agentControls: AgentControls | null;
 
@@ -135,9 +130,7 @@ export interface CommandContext {
 /**
  * Panel commands generated from the panel registry instead of hand-written
  * entries: only specs that opt in (`spec.commands`) get any, and each one
- * routes through the shared panel rules — `toggle` entries through the same
- * toggle rule as the right-bar button, `open` entries through `openPanel`,
- * which reveals the view without being able to collapse it.
+ * routes through the same panel toggle rule as the right-bar button.
  */
 function buildPanelCommands(
   ctx: CommandContext,
@@ -152,8 +145,7 @@ function buildPanelCommands(
       group: "Panel",
       keywords: [...entry.keywords],
       icon: icons[spec.kind] ?? null,
-      run: () =>
-        entry.action === "open" ? ctx.openPanel(spec.kind) : ctx.togglePanel(spec.kind),
+      run: () => ctx.togglePanel(spec.kind),
     })),
   );
 }

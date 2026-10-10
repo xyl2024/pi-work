@@ -47,7 +47,6 @@ import {
   GitBranch,
   GitGraph,
   Languages,
-  ListChecks,
   PanelRight,
   Rss,
   SquareKanban,
@@ -216,13 +215,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   kanban: panelButton("kanban", {
     labelKey: "Kanban",
     icon: ({ size }) => <SquareKanban size={size} />,
-  }),
-  // Plans: global personal plan list (plain markdown under
-  // ~/.pi-work/user-plans, anchors encoded in the filename), not
-  // session-bound. Read-only in this slice; editing arrives later.
-  plans: panelButton("plans", {
-    labelKey: "Plans",
-    icon: ({ size }) => <ListChecks size={size} />,
   }),
 };
 
