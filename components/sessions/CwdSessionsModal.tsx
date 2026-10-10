@@ -29,6 +29,7 @@ import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { decideLoadMoreOnScroll } from "@/lib/shared/sidebar-paging";
 import type { SessionInfo, SessionSearchPagedResult } from "@/lib/shared/types";
 
 const PAGE_SIZE = 20;
@@ -257,15 +258,24 @@ export function CwdSessionsModal({ cwd, onClose, onSelectSession }: Props) {
   }, []);
 
   // Infinite-scroll trigger: fetch the next page when the scroll
-  // container is within LOAD_MORE_THRESHOLD_PX of the bottom. Guarded
-  // against the initial render (no rows yet) and the already-loading
-  // case so a fast scroller can't pile up requests.
+  // container is within LOAD_MORE_THRESHOLD_PX of the bottom. The "is this
+  // close enough to the bottom" rule is shared with the sidebar list
+  // (`decideLoadMoreOnScroll`); the modal keeps its own 24px threshold and
+  // its 20-row page size.
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
-    if (!page.nextCursor) return;
-    if (page.loading || page.loadingMore) return;
-    if (page.rows.length === 0) return;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - LOAD_MORE_THRESHOLD_PX) {
+    const shouldLoad = decideLoadMoreOnScroll({
+      metrics: {
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
+        clientHeight: el.clientHeight,
+      },
+      thresholdPx: LOAD_MORE_THRESHOLD_PX,
+      hasMore: page.nextCursor !== null,
+      loading: page.loading || page.loadingMore,
+      rowCount: page.rows.length,
+    });
+    if (shouldLoad && page.nextCursor) {
       void fetchPage(page.nextCursor, "append");
     }
   }, [page.nextCursor, page.loading, page.loadingMore, page.rows.length, fetchPage]);

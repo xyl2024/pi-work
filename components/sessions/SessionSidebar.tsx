@@ -18,6 +18,16 @@ import { SidebarSection } from "../ui/SidebarSection";
 import { GrokBotStage } from "../grokbot/GrokBotStage";
 import { GrokBotLab } from "../grokbot/GrokBotLab";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
+import {
+  SESSION_PAGE_SIZE_GROUPED,
+  SIDEBAR_LOAD_MORE_THRESHOLD_PX,
+  WORKSPACE_PAGE_SIZE,
+  decideChainLoad,
+  decideLoadMoreOnScroll,
+  mergePage,
+  refreshLimit,
+  showChainFallback,
+} from "@/lib/shared/sidebar-paging";
 
 interface Props {
   selectedSession?: SessionInfo | null;
@@ -142,8 +152,6 @@ function PiAgentTitle() {
   );
 }
 
-const WORKSPACE_PAGE_SIZE = 5;
-const SESSION_PAGE_SIZE_GROUPED = 3;
 const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 
 export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenModels, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, onOpenSettings, onLogout, profileRefreshKey }: Props) {
@@ -169,6 +177,29 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   // when present. Persisted to localStorage.
   const [expandedCwds, setExpandedCwds] = useState<Record<string, boolean>>({});
   const cwdHeaderRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // Ref to the Sessions section's scroll container (owned by SidebarSection).
+  // The list pages in on its scroll events. `sessionsScrollEl` mirrors it in
+  // state so the scroll/chain effects re-run when the container remounts
+  // (collapsing the section unmounts it; reopening mounts a new node).
+  const sessionsScrollRef = useRef<HTMLDivElement | null>(null);
+  const [sessionsScrollEl, setSessionsScrollEl] = useState<HTMLDivElement | null>(null);
+  const attachSessionsScroll = useCallback((el: HTMLDivElement | null) => {
+    sessionsScrollRef.current = el;
+    setSessionsScrollEl(el);
+  }, []);
+  // Once the list cannot scroll and a few pages have been chained in, the
+  // manual "load more projects" fallback appears. Reset by a user scroll or
+  // click.
+  const [showFallbackLoadMore, setShowFallbackLoadMore] = useState(false);
+  const chainLoadCountRef = useRef(0);
+  // Current workspace / per-cwd depth, read by the refresh path so a refresh
+  // keeps the loading depth instead of snapping back to page one. Kept in
+  // refs because refreshAll must stay referentially stable for the
+  // refreshKey effect (reading live state in a callback would re-fire it on
+  // every render).
+  const workspacesRef = useRef<Workspace[]>([]);
+  const perCwdSessionsRef = useRef<Record<string, CwdSessionsState>>({});
+  const workspaceFetchInFlightRef = useRef(false);
 
   const [sessionsOpen, setSessionsOpen] = useState(true);
   const [todayOpen, setTodayOpen] = useState(true);
@@ -207,6 +238,15 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     explorerCollapseTimerRef.current = setTimeout(() => setExplorerCollapseDone(false), 700);
   }, []);
 
+  // Keep the refresh path's depth snapshots in sync with state. Declared
+  // before the refresh effects so a refresh sees the latest depth.
+  useEffect(() => {
+    workspacesRef.current = workspaces;
+  }, [workspaces]);
+  useEffect(() => {
+    perCwdSessionsRef.current = perCwdSessions;
+  }, [perCwdSessions]);
+
   // Persist expand state to localStorage. Stored as a flat object
   // { [cwd]: boolean } — last-writer-wins on the cwd key.
   useEffect(() => {
@@ -238,16 +278,21 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const fetchWorkspaces = useCallback(async (
     cursor: string | null,
     mode: "reset" | "append",
+    limitOverride?: number,
   ) => {
     workspaceAbortRef.current?.abort();
     const controller = new AbortController();
     workspaceAbortRef.current = controller;
+    // Synchronous guard shared by the scroll and chain-load paths: a second
+    // append cannot start while this request is still in flight (state flips
+    // only after the next render).
+    workspaceFetchInFlightRef.current = true;
     if (mode === "reset") setLoadingWorkspaces(true);
     else setLoadingMoreWorkspaces(true);
     setWorkspaceLoadError(null);
     try {
       const params = new URLSearchParams();
-      params.set("limit", String(WORKSPACE_PAGE_SIZE));
+      params.set("limit", String(limitOverride ?? WORKSPACE_PAGE_SIZE));
       if (cursor) params.set("cursor", cursor);
       const res = await fetch(`/api/workspaces?${params.toString()}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -256,11 +301,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       if (mode === "reset") {
         setWorkspaces(data.workspaces);
       } else {
-        setWorkspaces((prev) => {
-          const seen = new Set(prev.map((w) => w.cwd));
-          const incoming = data.workspaces.filter((w) => !seen.has(w.cwd));
-          return incoming.length === 0 ? prev : [...prev, ...incoming];
-        });
+        setWorkspaces((prev) => mergePage(prev, data.workspaces, (w) => w.cwd));
       }
       setNextWorkspaceCursor(data.nextCursor);
       setHasMoreWorkspaces(data.nextCursor !== null);
@@ -276,6 +317,9 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         toast.show({ kind: "error", message: msg });
       }
     } finally {
+      if (workspaceAbortRef.current === controller) {
+        workspaceFetchInFlightRef.current = false;
+      }
       if (!controller.signal.aborted) {
         if (mode === "reset") setLoadingWorkspaces(false);
         else setLoadingMoreWorkspaces(false);
@@ -290,6 +334,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     cwd: string,
     cursor: string | null,
     mode: "reset" | "append",
+    limitOverride?: number,
   ) => {
     setPerCwdSessions((prev) => {
       const existing = prev[cwd];
@@ -320,7 +365,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     try {
       const params = new URLSearchParams();
       params.set("cwd", cwd);
-      params.set("limit", String(SESSION_PAGE_SIZE_GROUPED));
+      params.set("limit", String(limitOverride ?? SESSION_PAGE_SIZE_GROUPED));
       if (cursor) params.set("cursor", cursor);
       const res = await fetch(`/api/sessions?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -337,11 +382,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         };
         const nextSessions = mode === "reset"
           ? data.sessions
-          : (() => {
-              const seen = new Set(base.sessions.map((s) => s.id));
-              const incoming = data.sessions.filter((s) => !seen.has(s.id));
-              return incoming.length === 0 ? base.sessions : [...base.sessions, ...incoming];
-            })();
+          : mergePage(base.sessions, data.sessions, (s) => s.id);
         return {
           ...prev,
           [cwd]: {
@@ -369,8 +410,8 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
 
   // Synchronize historical-session selection with the sidebar: reveal the
   // target cwd, refresh its first page, and bring the active group into view.
-  // MultiCwdList separately injects the selected session when it falls outside
-  // that first page.
+  // MultiCwdList injects the selected session when it falls outside that
+  // first page (the same rule as a click), so this effect never prepends.
   useEffect(() => {
     const cwd = selectedSession?.cwd;
     if (!cwd) return;
@@ -384,22 +425,46 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     return () => cancelAnimationFrame(frame);
   }, [selectedSession?.id, selectedSession?.cwd, fetchCwdSessions]);
 
-  // Refresh button handler — reload workspaces + each expanded cwd's first page.
+  // Refresh handler — reload workspaces + every loaded cwd's sessions while
+  // keeping the depth the user has scrolled to. `refreshLimit` sizes each
+  // request to what is already on screen (never less than one page), and the
+  // returned cursor lets paging continue from that depth. Because the row
+  // count does not change, `scrollTop` is left alone.
   const refreshAll = useCallback(() => {
-    void fetchWorkspaces(null, "reset");
-    setPerCwdSessions((prev) => {
-      const next: Record<string, CwdSessionsState> = {};
-      for (const [cwd, state] of Object.entries(prev)) {
-        if (state.sessions.length > 0 || state.loading) {
-          // Silent refresh: keep rows, just rewind to page 1 and refetch.
-          next[cwd] = { ...state, cursor: null, hasMore: false };
-          void fetchCwdSessions(cwd, null, "reset");
-        } else {
-          next[cwd] = state;
-        }
+    const workspaceDepth = workspacesRef.current.length;
+    void fetchWorkspaces(null, "reset", refreshLimit(WORKSPACE_PAGE_SIZE, workspaceDepth));
+
+    const targets: Array<{ cwd: string; loadedCount: number }> = [];
+    for (const [cwd, state] of Object.entries(perCwdSessionsRef.current)) {
+      if (state.sessions.length > 0 || state.loading) {
+        targets.push({ cwd, loadedCount: state.sessions.length });
       }
-      return next;
-    });
+    }
+    if (targets.length > 0) {
+      setPerCwdSessions((prev) => {
+        let changed = false;
+        const next: Record<string, CwdSessionsState> = {};
+        for (const [cwd, state] of Object.entries(prev)) {
+          if (state.sessions.length > 0 || state.loading) {
+            // Silent refresh: keep rows, just rewind the cursor; the fresh
+            // page replaces the rows once it arrives.
+            next[cwd] = { ...state, cursor: null, hasMore: false };
+            changed = true;
+          } else {
+            next[cwd] = state;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+    for (const { cwd, loadedCount } of targets) {
+      void fetchCwdSessions(
+        cwd,
+        null,
+        "reset",
+        refreshLimit(SESSION_PAGE_SIZE_GROUPED, loadedCount),
+      );
+    }
   }, [fetchWorkspaces, fetchCwdSessions]);
 
   // Back-compat alias used by inline rename/delete handlers that pre-date
@@ -483,27 +548,9 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           const res = await fetch(`/api/sessions/${encodeURIComponent(initialSessionId)}/info`);
           if (res.ok) {
             const data = (await res.json()) as { session: SessionInfo };
-            // Merge into perCwdSessions so MultiCwdList can render the row.
-            setPerCwdSessions((prev) => {
-              const existing = prev[data.session.cwd];
-              const base: CwdSessionsState = existing ?? {
-                sessions: [],
-                cursor: null,
-                hasMore: false,
-                loading: false,
-                loadingMore: false,
-                loadError: null,
-              };
-              const already = base.sessions.some((s) => s.id === data.session.id);
-              if (already) return prev;
-              return {
-                ...prev,
-                [data.session.cwd]: {
-                  ...base,
-                  sessions: [data.session, ...base.sessions],
-                },
-              };
-            });
+            // Hand the full row to the selection; MultiCwdList injects it into
+            // its cwd group when it falls outside the loaded page — the same
+            // rule as clicking a session, so the landing spot matches.
             onSelectSession(data.session, true);
             return;
           }
@@ -550,13 +597,109 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
 
   const loadMoreCwdSessions = useCallback((cwd: string) => {
     const state = perCwdSessions[cwd];
-    if (!state?.cursor) return;
+    if (!state?.cursor || state.loadingMore) return;
     void fetchCwdSessions(cwd, state.cursor, "append");
   }, [perCwdSessions, fetchCwdSessions]);
 
   const openCwdSessions = useCallback((cwd: string) => {
     setCwdSessionsModalCwd(cwd);
   }, []);
+
+  // ── Sessions infinite scroll ────────────────────────────────────────────
+  // The real scroll container lives inside SidebarSection (`scrollRef`); the
+  // list itself is a plain content div. A scroll near the bottom asks for the
+  // next workspace page. `workspaceFetchInFlightRef` is the synchronous
+  // guard so a fast scroll cannot stack two requests for the same cursor.
+  const readSessionsMetrics = useCallback(() => {
+    const el = sessionsScrollRef.current;
+    if (!el) return null;
+    return { scrollHeight: el.scrollHeight, scrollTop: el.scrollTop, clientHeight: el.clientHeight };
+  }, []);
+
+  const loadMoreWorkspaces = useCallback(() => {
+    if (workspaceFetchInFlightRef.current) return;
+    if (!hasMoreWorkspaces || !nextWorkspaceCursor) return;
+    void fetchWorkspaces(nextWorkspaceCursor, "append");
+  }, [hasMoreWorkspaces, nextWorkspaceCursor, fetchWorkspaces]);
+
+  useEffect(() => {
+    const el = sessionsScrollEl;
+    if (!el || !sessionsOpen) return;
+    const onScroll = () => {
+      // The user is scrolling, so the container can scroll: the chain-load
+      // fallback is not needed and its counter resets.
+      chainLoadCountRef.current = 0;
+      if (decideLoadMoreOnScroll({
+        metrics: readSessionsMetrics(),
+        thresholdPx: SIDEBAR_LOAD_MORE_THRESHOLD_PX,
+        hasMore: hasMoreWorkspaces,
+        loading: loadingWorkspaces || loadingMoreWorkspaces,
+        rowCount: orderedWorkspaces.length,
+      })) {
+        loadMoreWorkspaces();
+      }
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [
+    sessionsScrollEl,
+    sessionsOpen,
+    hasMoreWorkspaces,
+    loadingWorkspaces,
+    loadingMoreWorkspaces,
+    orderedWorkspaces.length,
+    loadMoreWorkspaces,
+    readSessionsMetrics,
+  ]);
+
+  // Chain-load: a page that does not fill the container (typically every cwd
+  // collapsed) leaves nothing to scroll, so the scroll path can never fire.
+  // After each settled page, measure once the layout has landed and pull the
+  // next one — up to CHAIN_LOAD_LIMIT. Past the cap the manual fallback row
+  // appears instead. Skipped entirely while the section is collapsed (no
+  // layout, and no paging in the background).
+  const evaluateChainLoad = useCallback(() => {
+    const metrics = readSessionsMetrics();
+    if (decideChainLoad({
+      metrics,
+      hasMore: hasMoreWorkspaces,
+      // The same synchronous in-flight guard the scroll path uses: neither
+      // path may issue a second request for a cursor already on the wire.
+      loading: workspaceFetchInFlightRef.current,
+      chainCount: chainLoadCountRef.current,
+    })) {
+      chainLoadCountRef.current += 1;
+      setShowFallbackLoadMore(false);
+      loadMoreWorkspaces();
+      return;
+    }
+    setShowFallbackLoadMore(showChainFallback({ metrics, hasMore: hasMoreWorkspaces }));
+  }, [hasMoreWorkspaces, loadMoreWorkspaces, readSessionsMetrics]);
+
+  useEffect(() => {
+    if (!sessionsOpen) return;
+    if (loadingWorkspaces || loadingMoreWorkspaces) return;
+    const id = requestAnimationFrame(evaluateChainLoad);
+    return () => cancelAnimationFrame(id);
+  }, [
+    sessionsOpen,
+    sessionsScrollEl,
+    loadingWorkspaces,
+    loadingMoreWorkspaces,
+    orderedWorkspaces.length,
+    hasMoreWorkspaces,
+    // Collapsing every group can make the list unscrollable without a fetch;
+    // re-measure then too so the fallback still surfaces.
+    expandedCwds,
+    evaluateChainLoad,
+  ]);
+
+  const handleFallbackLoadMore = useCallback(() => {
+    // A manual click resets the chain counter, so the fallback can chain
+    // again if the freshly appended page still does not fill the container.
+    chainLoadCountRef.current = 0;
+    loadMoreWorkspaces();
+  }, [loadMoreWorkspaces]);
 
   // Refresh both the workspace metadata (lastUsed may shift) and the
   // current cwd's session page (name may change) after a rename.
@@ -577,15 +720,15 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       return changed ? next : prev;
     });
     onSessionRenamed?.(sessionId, name);
-    void fetchWorkspaces(null, "reset");
-    if (selectedCwdProp) void fetchCwdSessions(selectedCwdProp, null, "reset");
-  }, [onSessionRenamed, fetchWorkspaces, fetchCwdSessions, selectedCwdProp]);
+    // Refresh keeps the loaded depth (and the scroll position).
+    refreshAll();
+  }, [onSessionRenamed, refreshAll]);
 
   const handleSessionDeleted = useCallback((sessionId: string) => {
     onSessionDeleted?.(sessionId);
-    void fetchWorkspaces(null, "reset");
-    if (selectedCwdProp) void fetchCwdSessions(selectedCwdProp, null, "reset");
-  }, [onSessionDeleted, fetchWorkspaces, fetchCwdSessions, selectedCwdProp]);
+    // Refresh keeps the loaded depth (and the scroll position).
+    refreshAll();
+  }, [onSessionDeleted, refreshAll]);
 
   return (
     <div className="session-sidebar" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -726,6 +869,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         title={t("Sessions")}
         open={sessionsOpen}
         onToggle={() => setSessionsOpen((v) => !v)}
+        scrollRef={attachSessionsScroll}
         actions={
           <RefreshIconButton
             onClick={() => { void loadSessions(); }}
@@ -738,6 +882,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         loadingWorkspaces={loadingWorkspaces}
         loadingMoreWorkspaces={loadingMoreWorkspaces}
         hasMoreWorkspaces={hasMoreWorkspaces}
+        showFallbackLoadMore={showFallbackLoadMore}
         workspaceLoadError={workspaceLoadError}
         expandedCwds={expandedCwds}
         perCwdSessions={perCwdSessions}
@@ -748,7 +893,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         onCwdHeaderRef={(cwd, el) => { cwdHeaderRefs.current[cwd] = el; }}
         onToggleExpand={handleToggleExpand}
         onSelectSession={onSelectSession}
-        onLoadMoreWorkspaces={() => { void fetchWorkspaces(nextWorkspaceCursor, "append"); }}
+        onLoadMoreWorkspaces={handleFallbackLoadMore}
         onLoadMoreCwdSessions={loadMoreCwdSessions}
         onOpenCwdSessions={openCwdSessions}
         onToggleFavorite={onToggleFavorite}

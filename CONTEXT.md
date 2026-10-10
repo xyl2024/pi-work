@@ -8,7 +8,7 @@ pi coding agent 的 Web UI：会话浏览与实时对话、工作目录下的文
 
 **工作目录（cwd）**：
 定位一个会话及其文件操作的绝对目录路径。
-_Avoid_: space、project、项目
+_Avoid_: space、project、项目——代码、类型、日志与文档里只准用这个叫法；**面向用户的界面文案是唯一例外**，那里一律叫「项目」（`lib/shared/i18n-dict/` 里的 `project`、「此项目」、「N 个项目」指的都是 cwd，不是工作目录分组）
 
 **工作目录分组（Workspace）**：
 侧栏中按 cwd 聚合的一组会话，是 `/api/workspaces` 返回的单元。

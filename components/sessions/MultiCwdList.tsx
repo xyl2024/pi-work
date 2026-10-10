@@ -14,6 +14,7 @@ import { CwdAliasDialog } from "./CwdAliasDialog";
 import { useCwdIcon, setCwdIcon, initCwdIcons } from "@/hooks/cwdIconStore";
 import { useCwdAlias, setCwdAlias, initCwdAliases } from "@/hooks/cwdAliasStore";
 import { useAllPendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
+import { SESSION_PAGE_SIZE_GROUPED, insertActiveSession } from "@/lib/shared/sidebar-paging";
 
 /**
  * Per-cwd session loader state. Held in a Map keyed by cwd so each group
@@ -34,6 +35,10 @@ interface MultiCwdListProps {
   loadingWorkspaces: boolean;
   loadingMoreWorkspaces: boolean;
   hasMoreWorkspaces: boolean;
+  /** Chain-loading gave up because the list still cannot scroll: show the
+   *  manual "load more projects" fallback. Never persistent — hidden while
+   *  a fetch is in flight and once every group is loaded. */
+  showFallbackLoadMore: boolean;
   workspaceLoadError: string | null;
   /** cwd → expanded (true) / collapsed (false). Caller owns persistence. */
   expandedCwds: Record<string, boolean>;
@@ -73,6 +78,7 @@ export function MultiCwdList({
   loadingWorkspaces,
   loadingMoreWorkspaces,
   hasMoreWorkspaces,
+  showFallbackLoadMore,
   workspaceLoadError,
   expandedCwds,
   perCwdSessions,
@@ -99,7 +105,7 @@ export function MultiCwdList({
   const pendingQuestionSessionIds = new Set(pendingQuestions.map((p) => p.sessionId));
 
   return (
-    <div data-scroll-side style={{ flex: 1, overflowY: "auto", padding: "4px 8px 8px", minHeight: 80, display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ padding: "4px 8px 8px", minHeight: 80, display: "flex", flexDirection: "column", gap: 8 }}>
       {loadingWorkspaces && workspaces.length === 0 && (
         <div style={{ padding: "16px 8px 6px", color: "var(--text-muted)", fontSize: 12 }}>
           {t("Loading projects...")}
@@ -121,27 +127,31 @@ export function MultiCwdList({
         // any prior collapsed state — first-writer-wins per cwd.
         const expanded = expandedCwds[ws.cwd] ?? true;
         const group = perCwdSessions[ws.cwd];
-        // 选中的会话若不在 group 已加载页面里，额外插到第 3 项之后，
-        // 让用户既能看到原本的 3 条最近会话，又能直接定位到选中项。
+        // 选中的会话若不在 group 已加载页面里，插到第 SESSION_PAGE_SIZE_GROUPED
+        // 条之后（页尾），让用户既能看到原本的首屏会话，又能直接定位到选中项。
         // 已加载时 group 原样显示 —— SessionItem 自己根据 selectedSessionId
-        // 渲染选中态，不再重排。
+        // 渲染选中态，不再重排。注入位置由页大小决定（页大小从上层传入）。
         const activeSessionInCwd = activeSession?.cwd === ws.cwd ? activeSession : null;
-        const activeNotInGroup = activeSessionInCwd && !group?.sessions.some((session) => session.id === activeSessionInCwd.id);
-        const PAGE_SIZE = 3; // 与 SessionSidebar.SESSION_PAGE_SIZE_GROUPED 保持一致
-        const displayGroup = activeNotInGroup
-          ? {
-              sessions: [
-                ...(group?.sessions ?? []).slice(0, PAGE_SIZE),
-                activeSessionInCwd,
-                ...(group?.sessions ?? []).slice(PAGE_SIZE),
-              ],
-              cursor: group?.cursor ?? null,
-              hasMore: group?.hasMore ?? false,
-              loading: group?.loading ?? false,
-              loadingMore: group?.loadingMore ?? false,
-              loadError: group?.loadError ?? null,
-            }
-          : group;
+        const sessions = insertActiveSession(
+          group?.sessions ?? [],
+          activeSessionInCwd,
+          SESSION_PAGE_SIZE_GROUPED,
+          (session) => session.id,
+        );
+        const displayGroup: CwdSessionsState | undefined = !group
+          ? (sessions.length > 0
+            ? {
+                sessions,
+                cursor: null,
+                hasMore: false,
+                loading: false,
+                loadingMore: false,
+                loadError: null,
+              }
+            : undefined)
+          : sessions === group.sessions
+            ? group
+            : { ...group, sessions };
 
         return (
           <CwdGroup
@@ -165,10 +175,14 @@ export function MultiCwdList({
         );
       })}
 
-      {hasMoreWorkspaces && (
+      {loadingMoreWorkspaces && (
+        <div style={{ padding: "4px 8px 0", color: "var(--text-dim)", fontSize: 10, textAlign: "center" }}>
+          {t("Loading more...")}
+        </div>
+      )}
+      {showFallbackLoadMore && hasMoreWorkspaces && !loadingMoreWorkspaces && (
         <button
           onClick={onLoadMoreWorkspaces}
-          disabled={loadingMoreWorkspaces}
           style={{
             alignSelf: "center",
             padding: "5px 14px",
@@ -176,13 +190,12 @@ export function MultiCwdList({
             border: "1px solid var(--border)",
             borderRadius: 6,
             color: "var(--text-muted)",
-            cursor: loadingMoreWorkspaces ? "default" : "pointer",
+            cursor: "pointer",
             fontSize: 11,
-            opacity: loadingMoreWorkspaces ? 0.6 : 1,
             marginTop: 2,
           }}
         >
-          {loadingMoreWorkspaces ? t("Loading more...") : t("Load more projects")}
+          {t("Load more projects")}
         </button>
       )}
       {!hasMoreWorkspaces && workspaces.length > 0 && (

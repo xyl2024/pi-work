@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type Ref } from "react";
 
 interface Props {
   /** Header label rendered next to the chevron (uppercased, matching the
@@ -32,6 +32,11 @@ interface Props {
    *  git polling. Pass true for sections whose body refetches on mount (e.g.
    *  Today's Sessions): toggling then never replays that load. */
   keepMounted?: boolean;
+  /** Optional ref forwarded to the internal scroll container (the element
+   *  that actually scrolls, not the section wrapper). Callers that watch
+   *  scrolling (the Sessions infinite scroll) read its metrics and attach
+   *  their listener to it. Leave unset and the section behaves as before. */
+  scrollRef?: Ref<HTMLDivElement>;
 }
 
 // Collapsible section for the left sidebar. Explorer today, future sections
@@ -57,7 +62,7 @@ interface Props {
 // `grid-template-rows: 0fr ↔ 1fr`, which interpolates toward the content's own
 // height (still without measuring, and capped by `maxHeight` below), so a short
 // list animates at the same pace as a full one.
-export function SidebarSection({ title, open, onToggle, actions, children, durationMs = 180, grow = 1, maxHeight, keepMounted = false }: Props) {
+export function SidebarSection({ title, open, onToggle, actions, children, durationMs = 180, grow = 1, maxHeight, keepMounted = false, scrollRef }: Props) {
   // Keep the content mounted through the collapse animation (it must be in
   // the DOM to squeeze to zero), then unmount it after the transition
   // settles — same lifecycle as MultiCwdList's body. Unmounting releases
@@ -149,14 +154,14 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
             }}
           >
             <div style={{ minHeight: 0, overflow: "hidden" }}>
-              <div data-scroll-side style={{ maxHeight, overflowY: "auto", overflowX: "hidden" }}>
+              <div ref={scrollRef} data-scroll-side style={{ maxHeight, overflowY: "auto", overflowX: "hidden" }}>
                 {children}
               </div>
             </div>
           </div>
         ) : (
           <div style={{ flex: "1 1 0", minHeight: 0, overflow: "hidden" }}>
-            <div data-scroll-side style={{ height: "100%", maxHeight, overflowY: "auto", overflowX: "hidden" }}>
+            <div ref={scrollRef} data-scroll-side style={{ height: "100%", maxHeight, overflowY: "auto", overflowX: "hidden" }}>
               {children}
             </div>
           </div>
