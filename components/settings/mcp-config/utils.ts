@@ -6,7 +6,7 @@
  * one-line summary, and the transport an entry currently uses.
  */
 
-import type { McpExposure } from "@/lib/shared/mcp-panel";
+import { resolveMcpExposure, type McpExposure } from "@/lib/shared/mcp-panel";
 
 export type McpTransport = "stdio" | "http" | "unknown";
 
@@ -28,8 +28,7 @@ export function summarizeEntry(config: Record<string, unknown> | null): string {
 }
 
 export function exposureOf(config: Record<string, unknown> | null): McpExposure {
-  const value = config?.exposure;
-  return typeof value === "string" && value !== "" ? (value as McpExposure) : "codemode";
+  return resolveMcpExposure(config?.exposure);
 }
 
 export function isEnabled(config: Record<string, unknown> | null): boolean {

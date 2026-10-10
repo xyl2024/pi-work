@@ -1,7 +1,7 @@
 /**
- * Wire shapes for the MCP panel (client ↔ `/api/mcp`), plus the two pure rules
- * both halves need: which server names pi accepts, and how an entry is
- * normalized before it is written back.
+ * Wire shapes for the MCP panel (client ↔ `/api/mcp`), plus the pure rules
+ * both halves need: which server names pi accepts, how an entry is normalized
+ * before it is written back, and which exposure names are still current.
  *
  * Browser-safe by construction — no `fs` / `path` / pi SDK here. The pi-owned
  * schema this mirrors is documented at the mirror itself
@@ -15,9 +15,32 @@ export type McpScope = "global" | "project";
 /** Both scopes in display order: the always-read file first. */
 export const MCP_SCOPES: readonly McpScope[] = ["global", "project"];
 
-/** pi's tool-exposure ladder (`McpExposure`). */
-export const MCP_EXPOSURES = ["codemode", "codemode-deferred", "deferred", "direct", "hidden"] as const;
+/**
+ * pi's tool-exposure ladder (`McpExposure`). `codemode-deferred` left the
+ * ladder in pi 1.1.0: the "not listed in the codemode description" behavior
+ * moved into `codemode` itself, so the form no longer offers it.
+ */
+export const MCP_EXPOSURES = ["codemode", "deferred", "direct", "hidden"] as const;
 export type McpExposure = (typeof MCP_EXPOSURES)[number];
+
+/**
+ * Exposure names pi still accepts in `mcp.json` but no longer lists, mapped to
+ * the name they now stand for. pi resolves them while validating
+ * (`MCP_EXPOSURE_ALIASES` in its `mcp-servers` module), so a saved entry and
+ * this UI both read back the current name.
+ */
+export const MCP_EXPOSURE_ALIASES: Readonly<Record<string, string>> = { "codemode-deferred": "codemode" };
+
+/**
+ * An entry's exposure with the legacy aliases resolved, defaulting to pi's
+ * `codemode`. Unknown values pass through unchanged: the entry is invalid and
+ * the panel shows pi's error next to it rather than silently rewriting it.
+ */
+export function resolveMcpExposure(value: unknown): McpExposure {
+  const resolved =
+    typeof value === "string" && value !== "" ? (MCP_EXPOSURE_ALIASES[value] ?? value) : "codemode";
+  return resolved as McpExposure;
+}
 
 /** Server names pi accepts — mirrors `SERVER_NAME` in `lib/server/mcp-config.ts`. */
 export const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/;

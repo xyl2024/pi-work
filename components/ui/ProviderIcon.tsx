@@ -60,7 +60,7 @@ const PROVIDER_ICONS: Record<string, { Icon: IconComponent; hasColor: boolean }>
   "vercel-ai-gateway":      { Icon: VercelIcon,           hasColor: false },
   "github-copilot":         { Icon: GithubCopilotIcon,    hasColor: false },
   "amazon-bedrock":         { Icon: AwsColorIcon,         hasColor: true },
-  "azure-openai-responses": { Icon: AzureColorIcon,       hasColor: true },
+  "azure":                  { Icon: AzureColorIcon,       hasColor: true },
   "kimi-coding":            { Icon: KimiColorIcon,        hasColor: true },
   "qwen":                   { Icon: QwenColorIcon,        hasColor: true },
   "zai":                    { Icon: ZhipuColorIcon,       hasColor: true },

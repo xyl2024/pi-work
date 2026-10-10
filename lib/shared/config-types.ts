@@ -89,10 +89,14 @@ export interface McpConfig {
    */
   project_servers: boolean;
   /**
-   * How long the first prompt of a session waits for MCP servers that are
-   * still connecting, in milliseconds. pi's own default is 10000, which makes
-   * the first message look stuck while a slow stdio server boots; 0 disables
-   * the wait entirely (tools still appear once the server connects).
+   * How long the first prompt of a session waits for MCP servers that declare
+   * their tools to the model (`direct` exposure) and are still connecting, in
+   * milliseconds. pi's own default is 10000, which makes the first message look
+   * stuck while a slow stdio server boots; 0 disables the wait entirely (tools
+   * still appear once the server connects). Since pi 1.1.0 servers reached only
+   * through codemode or tool search connect in the background and are waited
+   * for when a script or a search needs them, so this bounds the startup wait
+   * for `direct` servers alone.
    */
   startup_wait_ms: number;
 }
