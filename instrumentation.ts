@@ -31,7 +31,6 @@ export async function register(): Promise<void> {
   // served during boot can never race the first `setGlobalDispatcher` call.
   await safeBootstrap("network-proxy", () => import("@/lib/server/network-proxy"));
   await safeBootstrap("scheduler", () => import("@/lib/server/scheduler/startup"));
-  await safeBootstrap("kanban",    () => import("@/lib/server/kanban/startup"));
   await safeBootstrap("rss",       () => import("@/lib/server/rss/startup"));
   await safeBootstrap("terminal",  () => import("@/lib/server/terminal/startup"));
 }

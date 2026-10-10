@@ -70,8 +70,8 @@ interface Props {
  * Click: where a composition exists, the indicator is also a button that opens
  * the composition panel (ADR-0005). Only the click opens it — hovering keeps
  * the one-glance tooltip — and it stays put until the ring or the outside is
- * clicked, so its rows are reachable. Sessions without a composition (kanban
- * cards, the JSONL fallback path) render the plain indicator: no trigger, no
+ * clicked, so its rows are reachable. Sessions without a composition (the
+ * read-only JSONL fallback path) render the plain indicator: no trigger, no
  * empty hover target.
  */
 export function ContextUsageBar({ contextUsage, sessionStats, contextComposition }: Props) {
@@ -104,7 +104,7 @@ export function ContextUsageBar({ contextUsage, sessionStats, contextComposition
 
   // ── Composition panel (click, not hover) ───────────────────────────────
   // Only sessions the server actually computed a composition for get a
-  // trigger. The kanban card ring and read-only JSONL sessions have none, and
+  // trigger. Read-only JSONL sessions have none, and
   // a ring that opens an empty panel is worse than one that cannot open at
   // all — the same reason they are not shown a different split.
   const [compositionOpen, setCompositionOpen] = useState(false);

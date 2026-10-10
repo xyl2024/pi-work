@@ -114,10 +114,7 @@ describe("settings api", () => {
  */
 describe("settings api: right side bar", () => {
   /** Panels missing from the hand-kept defaults used to be un-toggleable. */
-  const PREVIOUSLY_UNCONFIGURABLE = [
-    "kanban",
-    "llmAudit",
-  ];
+  const PREVIOUSLY_UNCONFIGURABLE = ["llmAudit"];
 
   async function snapshot(): Promise<Json> {
     const res = await api("/api/settings");

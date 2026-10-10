@@ -4,7 +4,7 @@
  *
  * Pure — no session, no SQLite, no I/O — so the scheduler's only run-policy
  * decisions can be asserted directly:
- *  - a completed turn with no reply text is a failure here (kanban agrees;
+ *  - a completed turn with no reply text is a failure here (wechat differs;
  *    wechat deliberately does not — see
  *    docs/adr/0004-turn-execution-has-one-seam-and-waits-for-agent-settled.md).
  *    The pre-seam scheduler already failed an empty assistant reply; it

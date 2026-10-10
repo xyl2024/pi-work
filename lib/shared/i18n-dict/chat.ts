@@ -233,9 +233,7 @@ export const chat = {
   "System prompt": "系统提示",
   "System tool definitions": "系统工具定义",
   // "Skills" is already defined above (技能) and is reused as the bucket label.
-  // "Messages" is taken by the kanban count label (消息数), so the bucket uses
-  // its own key that still reads as the canonical「消息」.
-  "Messages (context)": "消息",
+  "Messages": "消息",
   // System-prompt rows. `Pi base prompt` is the prompt's own prose plus the
   // `Available tools` / `Guidelines` sections; those two keep the Context
   // panel's anchor names so both surfaces say the same word.

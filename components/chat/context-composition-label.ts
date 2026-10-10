@@ -9,14 +9,12 @@
 
 import type { ContextBucketId, MessageCompositionLeafId } from "@/lib/shared/context-composition";
 
-/** i18n keys for the four buckets. `messages` uses the disambiguated key
- *  because the plain `Messages` key is the kanban count label (`消息数`), which
- *  would win the dictionary merge. */
+/** i18n keys for the four buckets. */
 export const CONTEXT_BUCKET_LABELS: Record<ContextBucketId, string> = {
   "system-prompt": "System prompt",
   "system-tools": "System tool definitions",
   skills: "Skills",
-  messages: "Messages (context)",
+  messages: "Messages",
 };
 
 /** Palette for the stacked bar and the row swatches. Same six-color family the

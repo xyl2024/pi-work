@@ -1,5 +1,5 @@
 // Context-window occupancy signal — the tiering shared by every context ring
-// in the app (chat top bar `ContextUsageBar`, kanban card `CardContextRing`).
+// in the app (chat top bar `ContextUsageBar`).
 //
 // Tiers are keyed on the ABSOLUTE number of context tokens, not on the percent
 // of the model's window: what degrades the model is the size of the prompt, and

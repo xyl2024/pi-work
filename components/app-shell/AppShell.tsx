@@ -17,7 +17,6 @@ import { TabBar } from "../ui/TabBar";
 import { CollectionPanel } from "../sessions/CollectionPanel";
 import { TranslatePanel } from "../panels/TranslatePanel";
 import { RssPanel } from "../rss/RssPanel";
-import { KanbanPanel } from "../kanban/KanbanPanel";
 import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
@@ -113,7 +112,6 @@ interface PanelBodyCtx {
   onConversationTreeCardClick: (cardId: string) => void;
   gitDiffOpenCount: number;
   onExpandGitPanel: () => void;
-  onOpenKanbanSession: (sessionId: string) => void;
 }
 
 /**
@@ -151,16 +149,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       isStreaming={ctx.isStreaming}
       agentRunning={ctx.agentRunning}
       onCardClick={(card) => ctx.onConversationTreeCardClick(card.id)}
-    />
-  ),
-  kanban: (ctx) => (
-    <KanbanPanel
-      defaultCwd={ctx.cwd}
-      defaultModel={ctx.currentModel}
-      defaultThinkingLevel={ctx.thinkingLevel}
-      defaultTools={ctx.tools}
-      onOpenSession={ctx.onOpenKanbanSession}
-      expanded={ctx.rightPanelState === "expanded"}
     />
   ),
 };
@@ -424,7 +412,7 @@ export function AppShell() {
     }),
   );
   // Read through a ref where a callback must keep a stable identity yet act
-  // on the latest state (kanban's "open session", the keyboard toggle).
+  // on the latest state (the keyboard toggle, the layout-mode switch).
   const panelTabsRef = useRef(panelTabsState);
   panelTabsRef.current = panelTabsState;
   /** Today's name for the panel open state — the right column's width and
@@ -958,17 +946,6 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", handler);
   }, [paletteOpen, openPalette, getActiveChatInput]);
 
-  // Kanban "Open session" jumps to the workspace session AND steps the right
-  // panel down from expanded to normal (still open, but no longer full-width)
-  // so the chat gets more room. Kept separate from handleOpenScheduledSession
-  // (scheduler modal / command palette), which does not touch the right panel.
-  const handleOpenKanbanSession = useCallback((sessionId: string) => {
-    dispatchWorkspace({ type: "open_session_by_id", sessionId });
-    if (panelTabsRef.current.mode === "expanded") {
-      dispatchPanelTabs({ type: "set_mode", mode: "normal" });
-    }
-  }, []);
-
   // Click on a card in the conversation-tree panel. We always resolve the
   // clicked card to the deepest leaf entry in its subtree, so the chat
   // jumps to the *end* of that branch rather than stopping at an ancestor
@@ -1176,7 +1153,6 @@ export function AppShell() {
     onConversationTreeCardClick: handleConversationTreeCardClick,
     gitDiffOpenCount,
     onExpandGitPanel: handleExpandGitPanel,
-    onOpenKanbanSession: handleOpenKanbanSession,
   };
 
   // Ctrl+` toggles the terminal panel (VS Code muscle memory).

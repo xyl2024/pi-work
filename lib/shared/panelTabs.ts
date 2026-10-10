@@ -25,7 +25,6 @@ import {
   CONVERSATION_TREE_TAB_ID,
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
-  KANBAN_TAB_ID,
   LLM_AUDIT_TAB_ID,
   RSS_TAB_ID,
   TOKENS_TAB_ID,
@@ -49,7 +48,6 @@ export interface PanelTabParams {
   conversationTree: undefined;
   llmAudit: undefined;
   context: undefined;
-  kanban: undefined;
   file: { path: string };
 }
 
@@ -240,14 +238,6 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     labelKey: "Conversation Tree",
     defaultMode: "normal",
     sessionBound: true,
-  },
-  kanban: {
-    kind: "kanban",
-    tabId: KANBAN_TAB_ID,
-    labelKey: "Kanban",
-    // The four-column board needs the full column width.
-    defaultMode: "expanded",
-    sessionBound: false,
   },
 } as const satisfies { [K in PanelViewKind]: PanelTabSpec<K> };
 

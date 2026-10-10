@@ -11,6 +11,5 @@ export { TokensIcon } from "./TokensIcon";
 export { WrenchIcon } from "./WrenchIcon";
 export { TerminalIcon } from "./TerminalIcon";
 export { SettingsIcon } from "./SettingsIcon";
-export { MessageSquareMoreIcon } from "./MessageSquareMoreIcon";
 export { BellIcon } from "./BellIcon";
 export { ICON_WRAP, useIconHover } from "./shared";

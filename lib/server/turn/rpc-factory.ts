@@ -4,7 +4,7 @@
  * Kept in its own file so the orchestration core (`./orchestrate`) has no
  * import edge back into `rpc-manager`, and so this file can import both
  * statically without a cycle. The runtime knowledge lives here: a fresh
- * session per turn gets a unique registry key, mirroring the `__kanban__…` /
+ * session per turn gets a unique registry key, mirroring the `__sched__…` /
  * `__sched__…` temp-key pattern of the pre-seam runners; a reuse turn continues
  * the session the caller named (see `./reuse`).
  */
@@ -74,7 +74,7 @@ export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResul
       }
 
       // A fresh session per turn uses a unique registry key (the pre-seam
-      // runners used `__kanban__…` / `__sched__…` temp keys).
+      // scheduler runs used `__sched__…` temp keys).
       const tempKey = `__turn__${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       // "" as the session file means "create a new session" (startRpcSession).
       const { session, realSessionId } = await startRpcSession(

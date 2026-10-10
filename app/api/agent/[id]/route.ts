@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/server/session-reader";
 import { startRpcSession, getRpcSession } from "@/lib/server/rpc-manager";
-import { resumeTaskForSession } from "@/lib/server/kanban/store";
-import { markRunEnd } from "@/lib/server/kanban/store";
-import { attachSessionSyncWatcher } from "@/lib/server/kanban/session-sync";
 import type { AgentSessionWrapper } from "@/lib/server/rpc-manager";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
@@ -42,39 +39,14 @@ export async function POST(
       sessionSource = "started";
     }
 
-    // Kanban reverse-sync: revive the card ONLY now that we know we can send a
-    // prompt — a missing session file above already returned 404 before this.
-    const resumedTask =
-      commandType === "prompt" ? resumeTaskForSession(id) : null;
-
-    // Attach the watcher BEFORE sending so the very first agent_end of the
-    // continued conversation is captured even if the agent finishes quickly.
-    if (resumedTask) {
-      attachSessionSyncWatcher(sendWrapper, id, resumedTask.id);
-    }
-
-    try {
-      const result = await sendWrapper.send(body);
-      log.info("agent command completed", {
-        id,
-        commandType,
-        sessionSource,
-        durationMs: elapsedMs(startedAt),
-      });
-      return NextResponse.json({ success: true, data: result });
-    } catch (error) {
-      // A failed send shouldn't leave an orphaned `in_progress` card: the
-      // resume already flipped it, so put it back to review_test with the
-      // failure recorded instead of leaving a zombie in_progress row.
-      if (resumedTask) {
-        markRunEnd(resumedTask.id, {
-          status: "review_test",
-          resultSummary: null,
-          error: `resume failed: ${(error instanceof Error ? error.message : String(error)).slice(0, 2000)}`,
-        });
-      }
-      throw error;
-    }
+    const result = await sendWrapper.send(body);
+    log.info("agent command completed", {
+      id,
+      commandType,
+      sessionSource,
+      durationMs: elapsedMs(startedAt),
+    });
+    return NextResponse.json({ success: true, data: result });
   } catch (error) {
     log.error("agent command failed", { id, error, durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ error: String(error) }, { status: 500 });

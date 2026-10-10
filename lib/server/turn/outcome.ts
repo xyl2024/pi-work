@@ -10,7 +10,7 @@
  *
  * It reports facts, not verdicts. In particular "the turn produced no reply
  * text" is a fact (`hasReply === false`); whether that counts as success is the
- * caller's policy (kanban and the scheduler treat it as a failure, wechat
+ * caller's policy (the scheduler treats it as a failure, wechat
  * replies with a fallback line and treats it as success).
  */
 

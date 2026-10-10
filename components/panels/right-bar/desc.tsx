@@ -49,7 +49,6 @@ import {
   Languages,
   PanelRight,
   Rss,
-  SquareKanban,
   Star,
 } from "lucide-react";
 
@@ -208,13 +207,6 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     labelKey: "Open conversation tree",
     isDisabled: (ctx) => !ctx.selectedSessionId && !ctx.selectedCwd,
     icon: ({ size }) => <GitBranch size={size} />,
-  }),
-  // Kanban: global board (spans all cwds), not session-bound. Its spec
-  // declares an expanded default open state so the four columns have room,
-  // while a second click collapses the panel like any other toggle button.
-  kanban: panelButton("kanban", {
-    labelKey: "Kanban",
-    icon: ({ size }) => <SquareKanban size={size} />,
   }),
 };
 

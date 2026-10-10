@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
-  KANBAN_TAB_ID,
+  LLM_AUDIT_TAB_ID,
   RSS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
@@ -80,24 +80,23 @@ describe("panelTabs open", () => {
   });
 
   it("only upgrades the panel mode, never downgrades it", () => {
-    // Kanban declares an expanded default, so it widens a fresh strip.
-    const expanded = reduce(createPanelTabsState(), { type: "open", kind: "kanban" });
-    expect(expanded.mode).toBe("expanded");
-
-    // Opening a normal-default panel while expanded keeps it expanded.
-    const stillExpanded = reduce(expanded, { type: "open", kind: "translate" });
-    expect(stillExpanded.mode).toBe("expanded");
-
-    // Opening kanban re-uses its tab; from normal it upgrades to expanded.
-    const fromNormal = reduce(
+    // No spec declares an expanded default any more, so the wide mode is
+    // entered explicitly (the strip's expand button does the same).
+    const expanded = reduce(
       createPanelTabsState(),
       { type: "open", kind: "translate" },
-      { type: "open", kind: "kanban" },
+      { type: "set_mode", mode: "expanded" },
     );
-    expect(fromNormal.mode).toBe("expanded");
+    expect(expanded.mode).toBe("expanded");
 
-    // …and a re-open of a normal panel does not pull it back down.
-    expect(reduce(fromNormal, { type: "open", kind: "translate" }).mode).toBe("expanded");
+    // Opening a closed panel only ever reaches its declared default…
+    expect(reduce(createPanelTabsState(), { type: "open", kind: "llmAudit" }).mode).toBe("normal");
+
+    // …opening another panel while expanded keeps it expanded…
+    expect(reduce(expanded, { type: "open", kind: "llmAudit" }).mode).toBe("expanded");
+
+    // …and a re-open does not pull it back down.
+    expect(reduce(expanded, { type: "open", kind: "translate" }).mode).toBe("expanded");
   });
 
   it("keeps file preview tabs and panel view tabs in one strip", () => {
@@ -179,13 +178,13 @@ describe("panelTabs toggle", () => {
 
 describe("panelTabs close", () => {
   it("falls back to the oldest remaining tab when the active one closes", () => {
-    // Newest-first strip: kanban, translate, favorites (favorites is oldest).
+    // Newest-first strip: llmAudit, translate, favorites (favorites is oldest).
     const state = reduce(
       createPanelTabsState(),
       { type: "open", kind: "favorites" },
       { type: "open", kind: "translate" },
-      { type: "open", kind: "kanban" },
-      { type: "close", id: KANBAN_TAB_ID },
+      { type: "open", kind: "llmAudit" },
+      { type: "close", id: LLM_AUDIT_TAB_ID },
     );
 
     expect(kinds(state)).toEqual(["translate", "favorites"]);
@@ -207,9 +206,9 @@ describe("panelTabs close", () => {
   it("collapses the strip when the last tab closes", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "kanban" },
+      { type: "open", kind: "llmAudit" },
       { type: "set_mode", mode: "expanded" },
-      { type: "close", id: KANBAN_TAB_ID },
+      { type: "close", id: LLM_AUDIT_TAB_ID },
     );
 
     expect(state.tabs).toEqual([]);
@@ -218,7 +217,7 @@ describe("panelTabs close", () => {
   });
 
   it("ignores a close of an unknown tab", () => {
-    const before = reduce(createPanelTabsState(), { type: "open", kind: "kanban" });
+    const before = reduce(createPanelTabsState(), { type: "open", kind: "llmAudit" });
     const after = reduce(before, { type: "close", id: "file:/tmp/gone.md" });
 
     expect(after).toEqual(before);
@@ -226,34 +225,34 @@ describe("panelTabs close", () => {
 });
 
 describe("panelTabs batch close", () => {
-  // Newest-first strip used by the batch tests: translate, favorites, kanban,
-  // rss — i.e. rss is the oldest tab.
+  // Newest-first strip used by the batch tests: translate, favorites,
+  // llmAudit, rss — i.e. rss is the oldest tab.
   function strip(): PanelTabsState {
     return reduce(
       createPanelTabsState(),
       { type: "open", kind: "rss" },
-      { type: "open", kind: "kanban" },
+      { type: "open", kind: "llmAudit" },
       { type: "open", kind: "favorites" },
       { type: "open", kind: "translate" },
     );
   }
 
   it("close_left drops the tabs left of the reference tab", () => {
-    const state = reduce(strip(), { type: "close_left", id: KANBAN_TAB_ID });
+    const state = reduce(strip(), { type: "close_left", id: LLM_AUDIT_TAB_ID });
 
-    expect(kinds(state)).toEqual(["kanban", "rss"]);
+    expect(kinds(state)).toEqual(["llmAudit", "rss"]);
   });
 
   it("close_left re-activates the reference tab when the active one was dropped", () => {
     const state = reduce(
       strip(),
       { type: "activate", id: TRANSLATE_TAB_ID },
-      { type: "close_left", id: KANBAN_TAB_ID },
+      { type: "close_left", id: LLM_AUDIT_TAB_ID },
     );
 
-    expect(kinds(state)).toEqual(["kanban", "rss"]);
-    expect(state.activeId).toBe(KANBAN_TAB_ID);
-    expect(selectActiveKind(state)).toBe("kanban");
+    expect(kinds(state)).toEqual(["llmAudit", "rss"]);
+    expect(state.activeId).toBe(LLM_AUDIT_TAB_ID);
+    expect(selectActiveKind(state)).toBe("llmAudit");
   });
 
   it("close_right drops the tabs right of the reference tab", () => {
@@ -274,18 +273,18 @@ describe("panelTabs batch close", () => {
   });
 
   it("close_others keeps only the reference tab and activates it", () => {
-    const state = reduce(strip(), { type: "close_others", id: KANBAN_TAB_ID });
+    const state = reduce(strip(), { type: "close_others", id: LLM_AUDIT_TAB_ID });
 
-    expect(kinds(state)).toEqual(["kanban"]);
-    expect(state.activeId).toBe(KANBAN_TAB_ID);
+    expect(kinds(state)).toEqual(["llmAudit"]);
+    expect(state.activeId).toBe(LLM_AUDIT_TAB_ID);
     expect(selectIsOpen(state)).toBe(true);
   });
 
   it("close_others never collapses the panel", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "kanban" },
-      { type: "close_others", id: KANBAN_TAB_ID },
+      { type: "open", kind: "llmAudit" },
+      { type: "close_others", id: LLM_AUDIT_TAB_ID },
     );
 
     expect(state.mode).not.toBe("closed");
@@ -317,7 +316,7 @@ describe("panelTabs selectors", () => {
   it("allows set_mode to downgrade on purpose", () => {
     const state = reduce(
       createPanelTabsState(),
-      { type: "open", kind: "kanban" },
+      { type: "open", kind: "llmAudit" },
       { type: "set_mode", mode: "normal" },
     );
 
@@ -327,7 +326,7 @@ describe("panelTabs selectors", () => {
   it("gates the expand button per layout mode", () => {
     const closed = createPanelTabsState();
     const openNoTabs = { ...createPanelTabsState(), mode: "normal" as const };
-    const openWithTabs = reduce(createPanelTabsState(), { type: "open", kind: "kanban" });
+    const openWithTabs = reduce(createPanelTabsState(), { type: "open", kind: "llmAudit" });
 
     // Agentic: only visible once the strip actually has tabs.
     expect(selectCanExpand(closed, "agentic")).toBe(false);
@@ -350,6 +349,7 @@ describe("panelTabs registry", () => {
     "btw",
     "notes",
     "plans",
+    "kanban",
   ];
 
   it("declares a label key and keywords for every spec and palette entry", () => {
@@ -385,7 +385,6 @@ describe("panelTabs registry", () => {
         "conversationTree",
         "favorites",
         "gitDiff",
-        "kanban",
         "llmAudit",
         "rss",
         "tokens",
@@ -394,14 +393,15 @@ describe("panelTabs registry", () => {
     );
   });
 
-  it("marks session-bound panels and only expands kanban by default", () => {
+  it("marks session-bound panels and declares no expanded default", () => {
     const sessionBound = PANEL_TAB_SPECS.filter((spec) => spec.sessionBound).map((spec) => spec.kind);
     expect([...sessionBound].sort()).toEqual(
       ["context", "conversationTree", "gitDiff", "llmAudit"].sort(),
     );
 
+    // The wide mode is the user's expand button, never an open default.
     const expanded = PANEL_TAB_SPECS.filter((spec) => spec.defaultMode === "expanded").map((spec) => spec.kind);
-    expect(expanded).toEqual(["kanban"]);
+    expect(expanded).toEqual([]);
   });
 });
 

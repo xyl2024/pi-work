@@ -25,5 +25,6 @@
 - 分段边界的识别逻辑已经存在，但困在 `components/app-shell/AppShell.tsx`（`:261` `splitSystemPrompt`、`:296` `BASE_HEADING_ANCHORS`、`:305` `SKILLS_SECTION_RE`、`:309` `findPiDocsEnd`、`:316` `hasAppendSection`、`:322` `splitBaseBlocks`），而该文件第 1 行是 `"use client"`。要在服务端复用必须先下沉到 `lib/shared`。
 - `system prompt` 与 `系统工具定义` 是两个量级差 50 倍的东西（工具 JSON schema ~1300 token vs prompt 里那几行 `- read: …` 清单 ~30 token），而右栏 Context 面板已有一个同名 anchor 叫 `Available tools`（`AppShell.tsx:296`）指的是后者。UI 必须让两者各归其位，否则"关掉一个工具能省多少"会被算错。
 - Kanban 的卡片圆环走 JSONL 回退路径（`lib/server/kanban/session-context.ts:198-212`），拿不到 `agent.state`，因此拿不到 systemPrompt 与 tools，**不显示构成**。同一个会话在两个 surface 给出不同分类，比其中一个没有分类更糟。
+  （2026-10-11 更新：看板已移除，这条举例对应的 surface 不复存在；「拿不到构成就不显示构成」的规则继续适用于只读 JSONL 会话。）
 - Anthropic 从未公开真实 tokenizer，`@anthropic-ai/tokenizer` 是 GPT-2 时代的近似实现且已废弃。因此 Claude 会话的比例误差不会通过换编码消除——这个契约对 Claude 是**一等公民而不是例外**。
 - 全局归一化有一个要认的后果：单个桶的绝对数不是"本地直接计数"，而是"按本地比例分摊到 provider 精确总量"。既然本地计数本身带 ±2% 的 tokenizer 误差，分摊值反而更贴近 provider 的真实分配；但读代码的人会看到"token 数"经过了两次变换，需要注释讲清楚。

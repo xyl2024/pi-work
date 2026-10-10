@@ -186,7 +186,6 @@ export class AgentSessionWrapper {
 
   /** Context-window occupancy ({percent, contextWindow, tokens}) for the live
    *  session — the same value pi draws in the chat top-bar circle. Shared with
-   *  the Kanban board so cards can mirror the circle without duplicating pi's
    *  estimation logic. */
   getContextUsage(): ContextUsage | undefined {
     return this.inner.getContextUsage();

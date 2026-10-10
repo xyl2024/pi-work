@@ -21,7 +21,7 @@ _Avoid_: 用 Workspace 指代磁盘路径
 _Avoid_: 把它当作登录页（那只是服务器轨道签发信任的一个入口）；用「鉴权」泛指它（那只是 401 与登录那一层）
 
 **桌面轨道（Desktop track）**：
-Pi Work 由 Electron 外壳拥有并拉起的那条运行方式（`PI_WORK_DESKTOP`）：服务端原生跑在 Windows 上、只监听 loopback、信任凭据每次启动随机生成、没有登录页。外壳用自己捆绑的独立 Node 运行时跑生产服务端（不是 Electron 自带的 Node，原生模块不必按 Electron ABI 重编译），端口每次启动随机，退出时结束整个进程树；窗口与应用寿命是两件事——关窗只把窗口藏进托盘，服务端与它里面的后台循环（定时任务、RSS、看板、频道）继续跑，只有托盘「退出」才结束进程树。决策在 `electron-shell/server-process.js` 与 `electron-shell/lifecycle.js`。它与**服务器轨道**（用户自己部署的 Linux 服务器，保留登录页与 `PI_WORK_AUTH_*`）共用同一份代码。
+Pi Work 由 Electron 外壳拥有并拉起的那条运行方式（`PI_WORK_DESKTOP`）：服务端原生跑在 Windows 上、只监听 loopback、信任凭据每次启动随机生成、没有登录页。外壳用自己捆绑的独立 Node 运行时跑生产服务端（不是 Electron 自带的 Node，原生模块不必按 Electron ABI 重编译），端口每次启动随机，退出时结束整个进程树；窗口与应用寿命是两件事——关窗只把窗口藏进托盘，服务端与它里面的后台循环（定时任务、RSS、频道）继续跑，只有托盘「退出」才结束进程树。决策在 `electron-shell/server-process.js` 与 `electron-shell/lifecycle.js`。它与**服务器轨道**（用户自己部署的 Linux 服务器，保留登录页与 `PI_WORK_AUTH_*`）共用同一份代码。
 _Avoid_: 把它当作「桌面版 UI」或第二条代码分支；用「本地模式」指代它
 
 ### 界面
@@ -43,7 +43,7 @@ _Avoid_: 与「会话标签页」混用「标签页」
 _Avoid_: 用「面板」指代其中的某个视图
 
 **面板视图（Panel view）**：
-面板标签页所承载的单个工具界面，如翻译、Token 审计、看板。
+面板标签页所承载的单个工具界面，如翻译、Token 审计、对话树。
 _Avoid_: 用「面板」指代它
 
 **面板标签条（Panel tab strip）**：
@@ -233,7 +233,7 @@ _Avoid_: 把它当成删除会话
 _Avoid_: 用「工具」指代一组工具
 
 **工具集（Tool set）**：
-一次会话、调度任务或看板任务实际选定的那组工具。
+一次会话或调度任务实际选定的那组工具。
 _Avoid_: 用「工具」指代工具集
 
 **自定义工具（Custom Tool）**：

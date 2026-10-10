@@ -15,9 +15,9 @@ import type {
 
 // ── Fixtures ──
 //
-// These deliberately mirror the shapes the chat window / tool-stats panel /
-// kanban read off real sessions: an assistant message carrying toolCall
-// blocks, and an id → toolResult map.
+// These deliberately mirror the shapes the chat window reads off real
+// sessions: an assistant message carrying toolCall blocks, and an id →
+// toolResult map.
 
 function assistantWithCalls(
   calls: Array<{ id: string; toolName: string; input: Record<string, unknown> }>,
