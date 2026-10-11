@@ -1,16 +1,10 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
-import type { Locale } from "@/hooks/useI18n";
 
 export type ThemePreset = "light" | "dark";
 
 export const PRESETS: ThemePreset[] = ["light", "dark"];
-
-export const PRESET_LABELS: Record<ThemePreset, Record<Locale, string>> = {
-  light: { en: "Light", zh: "明亮" },
-  dark: { en: "Dark", zh: "暗色" },
-};
 
 /** Whether a preset uses dark background tones — used for syntax-highlighter themes. */
 export const PRESET_IS_DARK: Record<ThemePreset, boolean> = {

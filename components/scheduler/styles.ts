@@ -70,18 +70,6 @@ export const btnPrimary: CSSProperties = {
   fontFamily: "inherit",
 };
 
-export const btnSecondary: CSSProperties = {
-  background: "var(--bg-hover)",
-  color: "var(--text)",
-  border: "1px solid var(--border)",
-  borderRadius: 6,
-  padding: "5px 12px",
-  fontSize: 12,
-  fontWeight: 500,
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
-
 export const btnGhost: CSSProperties = {
   background: "transparent",
   color: "var(--text-muted)",
@@ -94,42 +82,7 @@ export const btnGhost: CSSProperties = {
   fontFamily: "inherit",
 };
 
-export const btnIcon: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 26,
-  height: 26,
-  padding: 0,
-  background: "transparent",
-  border: "1px solid transparent",
-  borderRadius: 5,
-  color: "var(--text-muted)",
-  cursor: "pointer",
-  transition: "background 0.12s, border-color 0.12s, color 0.12s",
-};
-
-export const btnIconHover: CSSProperties = {
-  ...btnIcon,
-  borderColor: "var(--border)",
-};
-
-// ── Cards / list items ──────────────────────────────────────────
-export const cardStyle: CSSProperties = {
-  background: "var(--bg-panel)",
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  padding: "10px 12px",
-};
-
 // ── Misc ─────────────────────────────────────────────────────────
-export const dividerStyle: CSSProperties = {
-  height: 1,
-  background: "var(--border)",
-  border: "none",
-  margin: "12px 0",
-};
-
 export const tabBarStyle: CSSProperties = {
   display: "flex",
   gap: 4,
@@ -149,26 +102,5 @@ export function tabItemStyle(active: boolean): CSSProperties {
     cursor: "pointer",
     fontFamily: "inherit",
     transition: "color 0.12s",
-  };
-}
-
-// ── Dropdown option button (for model / thinking / tools) ────────
-export function optionButtonStyle(active: boolean): CSSProperties {
-  return {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    width: "100%",
-    padding: "6px 10px",
-    borderRadius: 5,
-    background: active ? "var(--bg-selected)" : "none",
-    border: "none",
-    color: active ? "var(--text)" : "var(--text-muted)",
-    cursor: "pointer",
-    fontSize: 12,
-    textAlign: "left",
-    fontWeight: active ? 600 : 400,
-    whiteSpace: "nowrap",
-    fontFamily: "inherit",
   };
 }

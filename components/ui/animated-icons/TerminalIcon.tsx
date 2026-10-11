@@ -79,4 +79,3 @@ export const TerminalIcon = forwardRef<TerminalIconHandle, TerminalIconProps>(
 
 TerminalIcon.displayName = "TerminalIcon";
 
-export default TerminalIcon;

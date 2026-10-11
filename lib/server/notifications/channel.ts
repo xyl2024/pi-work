@@ -40,8 +40,3 @@ export function registerChannel(channel: NotificationChannel): void {
 export function getChannel(type: string): NotificationChannel | undefined {
   return channels.get(type);
 }
-
-/** All registered channel types (for UI listing / validation). */
-export function listChannelTypes(): string[] {
-  return Array.from(channels.keys());
-}

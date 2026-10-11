@@ -74,23 +74,6 @@ export function pickHighestAvailableThinkingLevel(
  *   [off, high]               → off       (2 items, floor((2-1)/2)=0)
  *   [off]                     → off
  *
- * Falls back to "off" when no reasoning-capable levels are advertised —
- * same safe default as pickHighestAvailableThinkingLevel for
- * non-reasoning models.
- */
-export function pickMiddleAvailableThinkingLevel(
-  available: readonly string[] | null | undefined,
-): ThinkingLevelOption {
-  const list = available ?? [];
-  const supported: ThinkingLevelOption[] = [];
-  for (const level of THINKING_LEVEL_ORDER) {
-    if (list.includes(level)) supported.push(level);
-  }
-  if (supported.length === 0) return "off";
-  const idx = Math.floor((supported.length - 1) / 2);
-  return supported[idx];
-}
-
 /**
  * Pick the closest available thinking level for the requested value.
  * Mirrors pi-ai's `clampThinkingLevel` semantics: if the requested

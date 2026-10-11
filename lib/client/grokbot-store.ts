@@ -155,10 +155,6 @@ function syncAutoPlayTimer() {
 
 // ── Public API ───────────────────────────────────────────────────────────
 
-export function getGrokbotConfig(): GrokbotConfig {
-  return state;
-}
-
 export function setGrokbotConfig(patch: Partial<GrokbotConfig>): void {
   // colorId is no longer user-controllable — strip any stale patch so old
   // callers (`setGrokbotConfig({ colorId: "..." })`) can't reintroduce it.

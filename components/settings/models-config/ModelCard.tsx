@@ -38,25 +38,6 @@ const SUMMARY_STYLE = {
   color: "var(--text-muted)",
 } as const;
 
-/** Reasoning badge reused by both card variants. */
-export function ReasoningBadge() {
-  return (
-    <span
-      style={{
-        flexShrink: 0,
-        fontSize: 9,
-        padding: "1px 5px",
-        background: "rgba(99,102,241,0.12)",
-        color: "rgba(99,102,241,0.9)",
-        borderRadius: 3,
-        fontWeight: 600,
-      }}
-    >
-      T
-    </span>
-  );
-}
-
 /**
  * Round avatar shared by the model cards. Renders the provider's brand icon
  * when one is available, otherwise a deterministic pastel initial avatar

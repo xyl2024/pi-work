@@ -68,4 +68,3 @@ export const SettingsIcon = forwardRef<SettingsIconHandle, SettingsIconProps>(
 
 SettingsIcon.displayName = "SettingsIcon";
 
-export default SettingsIcon;

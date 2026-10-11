@@ -14,7 +14,6 @@ import type {
   SessionContext,
   SessionEntry,
   SessionInfo,
-  SessionTreeNode,
 } from "@/lib/shared/types";
 import type {
   SessionEntry as PiSessionEntry,
@@ -469,42 +468,6 @@ export function cacheSessionPath(sessionId: string, filePath: string): void {
 
 export function invalidateSessionPathCache(sessionId: string): void {
   getPathCache().delete(sessionId);
-}
-
-export function buildTree(entries: SessionEntry[]): SessionTreeNode[] {
-  const nodeMap = new Map<string, SessionTreeNode>();
-  const labelsById = new Map<string, string>();
-
-  for (const entry of entries) {
-    if (entry.type === "label") {
-      const l = entry as { type: "label"; targetId: string; label?: string };
-      if (l.label) labelsById.set(l.targetId, l.label);
-      else labelsById.delete(l.targetId);
-    }
-  }
-
-  const roots: SessionTreeNode[] = [];
-  for (const entry of entries) {
-    nodeMap.set(entry.id, { entry, children: [], label: labelsById.get(entry.id) });
-  }
-  for (const entry of entries) {
-    const node = nodeMap.get(entry.id)!;
-    if (!entry.parentId) {
-      roots.push(node);
-    } else {
-      const parent = nodeMap.get(entry.parentId);
-      if (parent) parent.children.push(node);
-      else roots.push(node);
-    }
-  }
-
-  const stack = [...roots];
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    node.children.sort((a, b) => new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime());
-    stack.push(...node.children);
-  }
-  return roots;
 }
 
 /**

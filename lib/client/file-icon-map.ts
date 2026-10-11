@@ -4766,6 +4766,5 @@ export const folderIconByName: Record<string, string> = {
 };
 
 /** Default icon names (always present in /file-icons/) */
-export const defaultFileIcon = 'default_file';
 export const defaultFolderIcon = 'default_folder';
 export const defaultFolderOpenIcon = 'default_folder_opened';

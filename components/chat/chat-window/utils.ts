@@ -49,14 +49,6 @@ export function phaseLoaderVariant(phase: AgentPhase) {
   return "spark" as const;
 }
 
-export function hasStreamingThinking(message: Partial<AgentMessage> | null): boolean {
-  if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return false;
-  const currentBlock = message.content[message.content.length - 1];
-  return currentBlock?.type === "thinking" &&
-    typeof currentBlock.thinking === "string" &&
-    currentBlock.thinking.trim().length > 0;
-}
-
 /** Resolve a `read` tool's raw path against the session cwd. */
 export function resolveReadPath(raw: string, cwd?: string | null): string | null {
   const p = raw.startsWith("@") ? raw.slice(1) : raw;

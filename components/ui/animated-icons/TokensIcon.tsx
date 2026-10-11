@@ -76,4 +76,3 @@ export const TokensIcon = forwardRef<TokensIconHandle, TokensIconProps>(
 
 TokensIcon.displayName = "TokensIcon";
 
-export default TokensIcon;

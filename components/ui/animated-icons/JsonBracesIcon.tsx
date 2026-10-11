@@ -87,4 +87,3 @@ export const JsonBracesIcon = forwardRef<JsonBracesIconHandle, JsonBracesIconPro
 
 JsonBracesIcon.displayName = "JsonBracesIcon";
 
-export default JsonBracesIcon;

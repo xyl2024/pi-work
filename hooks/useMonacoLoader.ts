@@ -205,8 +205,3 @@ export function useMonacoLoader(): MonacoLoaderState {
 
 	return { monaco, loading, error, retry };
 }
-
-/** Test seam: clear the cached load promise. */
-export function __resetMonacoLoaderForTests(): void {
-	pendingLoad = null;
-}

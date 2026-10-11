@@ -81,13 +81,6 @@ export function extractWriteDiffStats(input: Record<string, unknown> | undefined
   return { additions: countContentLines(content), deletions: 0 };
 }
 
-/** Extract the target file path from an edit/write tool call input. */
-export function extractMutatingPath(input: Record<string, unknown> | undefined): string {
-  if (!input) return "";
-  const p = input["path"] ?? input["file_path"];
-  return typeof p === "string" ? p : "";
-}
-
 /** Sum a list of per-tool-call diff stats (null entries are ignored).
  *  Returns null when no entry carried data, so callers can distinguish
  *  "no edit/write data this turn" from an explicit +0/-0. */

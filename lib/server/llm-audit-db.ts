@@ -270,9 +270,3 @@ export function auditTotals(): LlmAuditTotals {
   return { calls, errors, errorBodyBytes: bytes };
 }
 
-/** Prune rows older than the given cutoff (ms). Returns deleted count. */
-export function pruneProviderCalls(beforeTs: number): number {
-  const db = getLlmAuditDb();
-  const res = db.prepare("DELETE FROM provider_calls WHERE ts < ?").run(beforeTs);
-  return res.changes;
-}

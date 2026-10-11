@@ -23,33 +23,6 @@ export const PANEL_LEFT =
 export const MENU =
   "M 3 6 H 21 M 3 12 H 21 M 3 18 H 21";
 
-/** Download-to-tray icon (idle export).
- *  Source:
- *    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
- *    <polyline points="7 10 12 15 17 10"/>
- *    <line x1="12" y1="15" x2="12" y2="3"/> */
-export const DOWNLOAD =
-  "M 21 15 V 19 A 2 2 0 0 1 19 21 H 5 A 2 2 0 0 1 3 19 V 15 M 7 10 L 12 15 L 17 10 M 12 15 V 3";
-
-/** Loader / spinner: six short radial strokes (12, 3, 6, 9 o'clock + the two diagonals).
- *  Source: 6 × <line ...> at angles 0/45/90/135/180/225 deg, inner radius 2,
- *  outer radius 6. */
-export const LOADER =
-  "M 12 2 V 6 M 12 18 V 22 M 4.93 4.93 L 7.76 7.76 M 16.24 16.24 L 19.07 19.07 M 2 12 H 6 M 18 12 H 22";
-
-/** Sparkle / star (idle auto-name) — a 4-point sparkle with a smaller satellite.
- *  Source:
- *    <path d="M12 2l1.8 5.4L19 9l-5.2 1.6L12 16l-1.8-5.4L5 9l5.2-1.6L12 2z"/>
- *    <path d="M19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9L19 14z"/> */
-export const SPARKLE =
-  "M 12 2 L 13.8 7.4 L 19 9 L 13.8 10.6 L 12 16 L 10.2 10.6 L 5 9 L 10.2 7.4 Z M 19 14 L 19.9 16.6 L 22 17.5 L 19.9 18.4 L 19 21 L 18.1 18.4 L 16 17.5 L 18.1 16.6 Z";
-
-/** Clock icon (auto-name in progress).
- *  Source: <circle cx="12" cy="12" r="9"/> + <path d="M12 7v5l3 2"/>
- *  Circle as two arcs joined with Z. */
-export const CLOCK =
-  "M 3 12 A 9 9 0 1 0 21 12 A 9 9 0 1 0 3 12 Z M 12 7 V 12 L 15 14";
-
 /** Copy icon (default copy button). Two subpaths: the front rounded rect
  *  and the back tab. Source:
  *    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -76,21 +49,6 @@ export const REFRESH =
  *  <polyline points="17 11 12 6 7 11"/> / <polyline points="17 18 12 13 7 18"/> */
 export const CHEVRONS_UP =
   "M 17 11 L 12 6 L 7 11 M 17 18 L 12 13 L 7 18";
-
-/** "Copy minify" icon: two diagonal arrows compressing. Source (4 subpaths):
- *    <polyline points="4 14 10 14 10 20"/>
- *    <polyline points="20 10 14 10 14 4"/>
- *    <line x1="14" y1="10" x2="21" y2="3"/>
- *    <line x1="3" y1="21" x2="10" y2="14"/> */
-export const MINIFY =
-  "M 4 14 L 10 14 L 10 20 M 20 10 L 14 10 L 14 4 M 14 10 L 21 3 M 3 21 L 10 14";
-
-/** "Copy minify & escape" icon: a document corner with a folded tab.
- *  Source (2 subpaths):
- *    <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
- *    <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/> */
-export const ESCAPE_DOC =
-  "M 14 3 V 7 A 1 1 0 0 0 15 8 H 19 M 17 21 H 7 A 2 2 0 0 1 5 19 V 5 A 2 2 0 0 1 7 3 H 14 L 19 8 V 19 A 2 2 0 0 1 17 21 Z";
 
 /** Thumbs-up icon (idle like button). Two subpaths: the hand/palm outline
  *  and the thumb shaft. Source (lucide `thumbs-up`):

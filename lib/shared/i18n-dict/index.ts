@@ -71,10 +71,3 @@ export const ZH_TRANSLATIONS = {
   ...usefulTips,
   ...askUserQuestions,
 } as const;
-
-export function tServer(key: string, locale: Locale): string {
-  if (locale === "zh") {
-    return ZH_TRANSLATIONS[key as keyof typeof ZH_TRANSLATIONS] ?? key;
-  }
-  return EN_TRANSLATIONS[key as keyof typeof EN_TRANSLATIONS] ?? key;
-}

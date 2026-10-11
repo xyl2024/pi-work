@@ -1,0 +1,33 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Next.js App Router entries (app/**/route.ts, page.tsx, ...) and the
+  // instrumentation / proxy entrypoints are detected by knip's Next plugin.
+  "entry": [
+    "scripts/*.{ts,mts,mjs}",
+    "electron-shell/*.js",
+    "tests/**/*.test.ts",
+    "tests/config.ts"
+  ],
+  "project": ["**/*.{ts,tsx,mjs,js}"],
+  "ignore": [
+    // Static assets (pdf.js worker etc.) are served, not imported.
+    "public/**",
+    // Deprecated compatibility shims kept on purpose for older integrations;
+    // nothing in-repo imports them, so knip would otherwise flag them.
+    "components/chat/ToolsDropdownPanel.tsx",
+    "components/settings/sections/CustomToolsSection.tsx",
+    "lib/server/custom-tools-config.ts"
+  ],
+  "rules": {
+    // Exported types are deliberately part of the shared/agent API surface and
+    // include compile-time exhaustiveness guards; not treated as dead code.
+    "types": "off"
+  },
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": [
+    // Platform binding vitest/rolldown resolves at runtime; not imported directly.
+    "@rolldown/binding-linux-x64-gnu",
+    // Declared in electron-shell/package.json (its own install tree).
+    "electron"
+  ]
+}

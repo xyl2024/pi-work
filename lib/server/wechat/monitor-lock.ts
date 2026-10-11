@@ -168,10 +168,6 @@ function installExitHooks(): void {
   }
 }
 
-export function isMonitorHost(): boolean {
-  return held;
-}
-
 export function tryBecomeMonitorHost(): boolean {
   if (held) return true;
   if (exiting) return false;

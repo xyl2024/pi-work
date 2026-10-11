@@ -5,7 +5,7 @@ import type { AgentMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { UserMessageView } from "./message-view/UserMessageView";
 import { AssistantMessageView } from "./message-view/AssistantMessageView";
-import { CollapseNonceProvider, useCollapseNonce } from "./message-view/context";
+import { CollapseNonceProvider } from "./message-view/context";
 
 interface Props {
   message: AgentMessage;
@@ -74,4 +74,4 @@ function MessageViewInner({ message, isStreaming, toolResults, modelNames, model
 export const MessageView = memo(MessageViewInner);
 MessageView.displayName = "MessageView";
 
-export { CollapseNonceProvider, useCollapseNonce };
+export { CollapseNonceProvider };

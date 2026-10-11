@@ -115,4 +115,3 @@ export const GitDiffIcon = forwardRef<GitDiffIconHandle, GitDiffIconProps>(
 
 GitDiffIcon.displayName = "GitDiffIcon";
 
-export default GitDiffIcon;

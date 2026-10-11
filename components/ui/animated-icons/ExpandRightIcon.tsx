@@ -88,4 +88,3 @@ export const ExpandRightIcon = forwardRef<
 
 ExpandRightIcon.displayName = "ExpandRightIcon";
 
-export default ExpandRightIcon;

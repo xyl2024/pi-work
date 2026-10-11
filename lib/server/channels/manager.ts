@@ -1,5 +1,5 @@
 import { createLogger } from "@/lib/server/logger";
-import { getChannel, listChannels, updateChannel } from "./db";
+import { getChannel, updateChannel } from "./db";
 
 const log = createLogger("channels/manager");
 
@@ -55,18 +55,6 @@ export function setEnabled(channelId: string, enabled: boolean): boolean {
   stopChannel(channelId);
   updateChannel(channelId, { status: "disabled" });
   return true;
-}
-
-/** Start workers for every currently `connected` channel (process boot). */
-export function startAll(): void {
-  for (const channel of listChannels("wechat")) {
-    if (channel.status === "connected") startChannel(channel.id);
-  }
-}
-
-/** Stop every registered worker (process shutdown / HMR teardown). */
-export function stopAll(): void {
-  for (const channelId of workers.keys()) stopChannel(channelId);
 }
 
 export function isRunning(channelId: string): boolean {

@@ -90,36 +90,6 @@ const EXTENSION_MAP: Record<string, FileLanguageInfo> = {
 	log: { id: "text", label: "Log" },
 };
 
-/** Monaco languages we ask the loader to register up-front (preinstalled
- *  in the lazy chunk). Anything not in this set still loads on demand
- *  via `monaco.languages.register({ id })` if a user opens such a file;
- *  the loader is the only place this set needs editing.
- *
- *  IDs match what we return from the files API (see
- *  lib/shared/monaco-language-map.ts) — Monaco accepts both "bash" and
- *  "shell" as the shellscript language, but we stick with "bash" so the
- *  same identifier works in Prism's react-syntax-highlighter (used by
- *  CodeBlock in chat messages). */
-export const PREINSTALLED_MONACO_LANGUAGES = new Set<string>([
-	"typescript",
-	"javascript",
-	"json",
-	"css",
-	"scss",
-	"less",
-	"html",
-	"markdown",
-	"python",
-	"yaml",
-	"bash",
-	"sql",
-	"go",
-	"rust",
-	"java",
-	"c",
-	"cpp",
-]);
-
 /**
  * Resolve a file path to its Monaco language info.
  *
@@ -152,9 +122,4 @@ export function getFileLanguage(filePath: string): FileLanguageInfo {
 
 	// Fallback
 	return { id: "text", label: "Plain Text" };
-}
-
-/** Convenience: just the language ID. */
-export function getFileLanguageId(filePath: string): string {
-	return getFileLanguage(filePath).id;
 }

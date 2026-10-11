@@ -111,16 +111,6 @@ export function listActivity(channelId: string, limit = 50): ChannelActivity[] {
   }
 }
 
-/** Drop all buffered activity for a channel (delete / re-login). */
-export function clearActivity(channelId: string): void {
-  try {
-    ensureTable();
-    db().prepare("DELETE FROM channel_activity WHERE channel_id = ?").run(channelId);
-  } catch {
-    // best effort
-  }
-}
-
 /** Remove rows older than `olderThanMs`; returns the number removed. */
 export function prune(olderThanMs: number): number {
   const cutoff = new Date(Date.now() - olderThanMs).toISOString();

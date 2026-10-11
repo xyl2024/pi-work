@@ -11,11 +11,6 @@ export interface LanguageOption {
   i18nKey: string;
 }
 
-export const SUPPORTED_LANGUAGES: readonly LanguageOption[] = [
-  { code: "en", label: "English", i18nKey: "English" },
-  { code: "zh", label: "Chinese", i18nKey: "Chinese" },
-] as const;
-
 export const DEFAULT_TARGET_LANGUAGE: LanguageCode = "en";
 
 export function isLanguageCode(v: unknown): v is LanguageCode {

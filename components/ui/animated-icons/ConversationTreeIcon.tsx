@@ -104,4 +104,3 @@ export const ConversationTreeIcon = forwardRef<
 
 ConversationTreeIcon.displayName = "ConversationTreeIcon";
 
-export default ConversationTreeIcon;

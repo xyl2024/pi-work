@@ -6,9 +6,8 @@
 // 填充图标：./filled
 // 名称注册表：./registry
 export * from "./primitives";
-export { LlmAuditGlyphIcon as LlmAuditIcon } from "./primitives";
 export * from "./animated";
 export * from "./domains";
 export * from "./filled";
-export { ICONS, ANIMATED_ICONS } from "./registry";
+export { ICONS } from "./registry";
 export type { IconName, AnimatedIconName } from "./registry";

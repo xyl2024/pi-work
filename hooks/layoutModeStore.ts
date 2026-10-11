@@ -21,11 +21,6 @@ export type LayoutMode = "agentic" | "classic";
 
 export const LAYOUT_MODES: LayoutMode[] = ["agentic", "classic"];
 
-export const LAYOUT_MODE_LABELS: Record<LayoutMode, string> = {
-  agentic: "Agentic",
-  classic: "Classic",
-};
-
 const STORAGE_KEY = "pi-work.layoutMode";
 const DEFAULT_MODE: LayoutMode = "agentic";
 
@@ -98,10 +93,4 @@ export function useSetLayoutMode(): (next: LayoutMode) => void {
     persist(next);
     emit();
   }, []);
-}
-
-export function useLayoutModeControls() {
-  const mode = useLayoutMode();
-  const setMode = useSetLayoutMode();
-  return { mode, setMode };
 }

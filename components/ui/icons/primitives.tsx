@@ -52,7 +52,6 @@ export const FolderIcon = (props: IconProps) => <Icon {...props}><path d="M3 7a2
 export const TerminalGlyphIcon = (props: IconProps) => <Icon {...props}><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></Icon>;
 export const StopIcon = (props: IconProps) => <Icon {...props}><rect x="6" y="6" width="12" height="12" rx="1" /></Icon>;
 export const PlayIcon = (props: IconProps) => <Icon {...props}><polygon points="6 4 20 12 6 20 6 4" /></Icon>;
-export const PauseIcon = (props: IconProps) => <Icon {...props}><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></Icon>;
 export const StarIcon = (props: IconProps & { filled?: boolean }) => <Icon {...props} fill={props.filled ? "currentColor" : "none"}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></Icon>;
 export const SunIcon = (props: IconProps) => <Icon {...props}><circle cx="12" cy="12" r="4" /><line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="4.22" y1="4.22" x2="6.34" y2="6.34" /><line x1="17.66" y1="17.66" x2="19.78" y2="19.78" /><line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" /><line x1="4.22" y1="19.78" x2="6.34" y2="17.66" /><line x1="17.66" y1="6.34" x2="19.78" y2="4.22" /></Icon>;
 export const MoonIcon = (props: IconProps) => <Icon {...props}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></Icon>;
@@ -82,11 +81,9 @@ export const McpIcon = (props: IconProps) => (
 );
 export const JsonIcon = (props: IconProps) => <Icon {...props}><path d="M8 3H6a2 2 0 0 0-2 2v3a2 2 0 0 1-2 2 2 2 0 0 1 2 2v3a2 2 0 0 0 2 2h2M16 3h2a2 2 0 0 1 2 2v3a2 2 0 0 0 2 2 2 2 0 0 1-2 2v3a2 2 0 0 1-2 2h-2" /></Icon>;
 export const ConversationTreeGlyphIcon = (props: IconProps) => <Icon {...props}><circle cx="4" cy="5" r="1.5" /><circle cx="4" cy="19" r="1.5" /><circle cx="20" cy="5" r="1.5" /><path d="M4 6.5v11M20 6.5a10 10 0 0 1-10 10" /></Icon>;
-export const PanelToggleIcon = (props: IconProps) => <Icon {...props}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" /></Icon>;
 export const ExpandLeftIcon = (props: IconProps) => <Icon {...props}><polyline points="13 7 18 12 13 17" /><polyline points="6 7 11 12 6 17" /></Icon>;
 export const MaximizeIcon = (props: IconProps) => <Icon {...props}><polyline points="8 3 3 3 3 8" /><polyline points="16 3 21 3 21 8" /><polyline points="8 21 3 21 3 16" /><polyline points="16 21 21 21 21 16" /><line x1="3" y1="3" x2="8" y2="8" /><line x1="21" y1="3" x2="16" y2="8" /><line x1="3" y1="21" x2="8" y2="16" /><line x1="21" y1="21" x2="16" y2="16" /></Icon>;
 export const MinimizeIcon = (props: IconProps) => <Icon {...props}><polyline points="8 3 8 8 3 8" /><polyline points="16 3 16 8 21 8" /><polyline points="8 21 8 16 3 16" /><polyline points="16 21 16 16 21 16" /></Icon>;
 export const DownloadIcon = (props: IconProps) => <Icon {...props}><path d="M12 3v11" /><polyline points="7 10 12 15 17 10" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></Icon>;
 export const NotificationIcon = (props: IconProps) => <Icon {...props}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></Icon>;
 export const CompressIcon = (props: IconProps) => <Icon {...props}><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="15" y2="12" /><line x1="4" y1="17" x2="10" y2="17" /></Icon>;
-export const StarIconWithFill = ({ fill = "none", ...props }: IconProps & { fill?: string }) => <Icon {...props} fill={fill}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></Icon>;

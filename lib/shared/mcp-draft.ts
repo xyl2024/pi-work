@@ -124,13 +124,6 @@ export function addDraftEntry(draft: McpDraft, scope: McpScope): { draft: McpDra
   };
 }
 
-export function updateDraftEntry(draft: McpDraft, uid: string, patch: Partial<McpDraftEntry>): McpDraft {
-  return {
-    ...draft,
-    entries: draft.entries.map((entry) => (entry.uid === uid ? { ...entry, ...patch } : entry)),
-  };
-}
-
 /** Apply a form edit: the parsed object is the model, its text is derived from it. */
 export function withEntryConfig(entry: McpDraftEntry, config: Record<string, unknown>): McpDraftEntry {
   return { ...entry, config, rawJson: JSON.stringify(config, null, 2) };

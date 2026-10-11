@@ -99,16 +99,6 @@ export function useSessionUiState(): SessionUiState {
   return useSyncExternalStore(subscribeSessionUi, getSessionUiSnapshot, getSessionUiServerSnapshot);
 }
 
-/** Reset the active projection (used only for full workspace teardown). */
-export function resetSessionUi() {
-  state = INITIAL;
-  leafChangeHandlerRef = null;
-  leafChangeOwner = null;
-  agentControlsRef = null;
-  agentControlsOwner = null;
-  emit();
-}
-
 // ── Branch leaf change handler ────────────────────────────────────────────
 // The handler is a useCallback inside useAgentSession, regenerated on each
 // render. We can't put it in the snapshot (would cause infinite loops) and

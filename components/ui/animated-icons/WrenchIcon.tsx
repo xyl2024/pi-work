@@ -79,4 +79,3 @@ export const WrenchIcon = forwardRef<WrenchIconHandle, WrenchIconProps>(
 
 WrenchIcon.displayName = "WrenchIcon";
 
-export default WrenchIcon;

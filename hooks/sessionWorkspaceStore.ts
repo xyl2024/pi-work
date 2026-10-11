@@ -298,10 +298,6 @@ export function getActiveSessionTab(state: SessionWorkspaceState): SessionTab | 
   return state.activeTabId ? state.tabs[state.activeTabId] ?? null : null;
 }
 
-export function getDraftTab(state: SessionWorkspaceState): SessionTab | null {
-  return findDraft(state) ?? null;
-}
-
 export function getSessionTab(state: SessionWorkspaceState, sessionId: string): SessionTab | null {
   return findSessionTab(state, sessionId) ?? null;
 }

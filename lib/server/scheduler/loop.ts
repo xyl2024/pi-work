@@ -25,10 +25,6 @@ const log = createLogger("scheduler/loop");
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-export function isLoopRunning(): boolean {
-  return timer !== null;
-}
-
 /** Start the scheduling loop. Idempotent. */
 export function ensureLoop(): void {
   if (timer !== null) return;
@@ -58,15 +54,6 @@ function reconcileStaleTasks(now: number): void {
   });
   for (const row of rows) {
     advanceNextRun(row.id, row.cron, row.timezone ?? "UTC");
-  }
-}
-
-/** Stop the scheduling loop. Safe to call when not running. */
-export function stopLoop(): void {
-  if (timer !== null) {
-    clearTimeout(timer);
-    timer = null;
-    log.info("scheduler loop stopped");
   }
 }
 

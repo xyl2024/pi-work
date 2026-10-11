@@ -463,10 +463,6 @@ export function deleteTask(id: string): void {
   log.info("task deleted", { id });
 }
 
-export function setEnabled(id: string, enabled: boolean): ScheduledTask {
-  return updateTask({ id, enabled });
-}
-
 export function listRunningRuns(): RunningTaskRun[] {
   const rows = getSchedulerDb()
     .prepare("SELECT id, started_at, session_id FROM task_runs WHERE status = 'running'")

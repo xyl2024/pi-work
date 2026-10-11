@@ -40,16 +40,6 @@ export function getDisplayableAssistantBlocks(
   );
 }
 
-/** Returns the trimmed errorMessage for a stopped-with-error assistant
- *  message, or null. Streaming messages never surface an error. */
-export function getAssistantErrorMessage(
-  message: AssistantMessage,
-  options: DisplayOptions = {},
-): string | null {
-  if (options.isStreaming || message.stopReason !== "error") return null;
-  return message.errorMessage?.trim() || "Unknown provider error";
-}
-
 /** Final-answer blocks are text and images. Thinking + tool calls are process. */
 function isFinalAnswerBlock(block: AssistantContentBlock): boolean {
   return block.type === "text" || block.type === "image";

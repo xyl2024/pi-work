@@ -50,10 +50,6 @@ export function updateSession(sessionKey: string, patch: Partial<LoginSession>):
   return merged;
 }
 
-export function dropSession(sessionKey: string): void {
-  sessions.delete(sessionKey);
-}
-
 /** Drop every login session bound to a channel (start-of-scan cleanup). */
 export function dropSessionsForChannel(channelId: string): void {
   for (const [key, session] of sessions) {

@@ -16,7 +16,6 @@ import { readFileSync } from "fs";
 import { createLogger } from "@/lib/server/logger";
 import type {
   BaseInfo,
-  GetConfigResp,
   GetUpdatesResp,
   NotifyResp,
   QrCodeResponse,
@@ -192,25 +191,8 @@ export async function sendTextMessage(params: {
   return postJson<SendMessageResp>(params.baseUrl, "ilink/bot/sendmessage", { ...req, base_info: baseInfo() }, params.token);
 }
 
-export async function getConfig(params: { baseUrl: string; token: string; ilinkUserId: string; contextToken?: string }): Promise<GetConfigResp> {
-  return postJson<GetConfigResp>(
-    params.baseUrl,
-    "ilink/bot/getconfig",
-    {
-      ilink_user_id: params.ilinkUserId,
-      context_token: params.contextToken,
-      base_info: baseInfo(),
-    },
-    params.token,
-  );
-}
-
 export async function notifyStart(params: { baseUrl: string; token: string }): Promise<NotifyResp> {
   return postJson<NotifyResp>(params.baseUrl, "ilink/bot/msg/notifystart", { base_info: baseInfo() }, params.token);
-}
-
-export async function notifyStop(params: { baseUrl: string; token: string }): Promise<NotifyResp> {
-  return postJson<NotifyResp>(params.baseUrl, "ilink/bot/msg/notifystop", { base_info: baseInfo() }, params.token);
 }
 
 /**

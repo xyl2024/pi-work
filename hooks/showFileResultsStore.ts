@@ -55,8 +55,3 @@ export function setShowFileResult(toolCallId: string, files: readonly ShowFileEn
   resultsByToolCallId = next;
   emit();
 }
-
-export function resetShowFileResults(): void {
-  resultsByToolCallId = new Map();
-  emit();
-}

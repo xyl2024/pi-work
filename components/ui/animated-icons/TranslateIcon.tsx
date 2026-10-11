@@ -109,4 +109,3 @@ export const TranslateIcon = forwardRef<TranslateIconHandle, TranslateIconProps>
 
 TranslateIcon.displayName = "TranslateIcon";
 
-export default TranslateIcon;

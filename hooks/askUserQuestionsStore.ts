@@ -31,7 +31,6 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type {
   AskUserQuestion,
-  AskUserQuestionAnswer,
   AskUserQuestionsCancel,
   AskUserQuestionsDecision,
 } from "@/lib/shared/ask-user-questions-tool-types";
@@ -94,12 +93,6 @@ export function usePendingAskUserQuestions(
   return s.get(sessionId) ?? null;
 }
 
-/** Read-only check for the sidebar: does this session have a pending entry? */
-export function useHasPendingAskUserQuestions(sessionId: string): boolean {
-  const s = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  return s.has(sessionId);
-}
-
 /** Synchronous read of a session's pending entry (no subscription). Used by
  *  the panel's cleanup path to check whether a stale entry is still the one
  *  it submitted before clearing it. */
@@ -141,26 +134,12 @@ export function clearPendingAskUserQuestions(sessionId: string): void {
   setState(next);
 }
 
-/** Pure helper: build a decision payload for the given answers. Centralized
- *  here so the panel and the SSE handler share the exact wire shape. */
-export function buildAskUserQuestionsDecision(
-  answers: AskUserQuestionAnswer[],
-): AskUserQuestionsDecision {
-  return { answers };
-}
-
 /** Pure helper: build the cancel wire shape. An empty or whitespace-only
  *  note is a plain cancel — the server treats it that way anyway, but keeping
  *  the empty key off the wire keeps the two paths identical. */
 export function buildAskUserQuestionsCancel(message?: string): AskUserQuestionsCancel {
   const note = (message ?? "").trim();
   return note.length > 0 ? { cancelled: true, message: note } : { cancelled: true };
-}
-
-/** Reset the entire store (e.g. on global state transitions). */
-export function resetAskUserQuestionsStore(): void {
-  if (state.size === 0) return;
-  setState(new Map());
 }
 
 /** Imperative submit hook used by the panel — wraps the fetch. Returns true

@@ -21,14 +21,6 @@ export function useIsStreamingThinking(key: string): boolean {
   );
 }
 
-export function useIsStreaming(key: string): boolean {
-  return useSyncExternalStore(
-    (listener) => subscribeStreaming(key, listener),
-    () => getStreamingSnapshot(key).isStreaming,
-    () => false,
-  );
-}
-
 export function useStreamingHasContent(key: string): boolean {
   return useSyncExternalStore(
     (listener) => subscribeStreaming(key, listener),

@@ -88,4 +88,3 @@ export function endStreaming(key: string, preserveError = false) {
   if (preserveError && message?.role === "assistant" && message.stopReason === "error") return;
   if (e.snapshot.isStreaming || e.snapshot.streamingMessage !== null) setSnapshot(e, EMPTY_SNAPSHOT);
 }
-export function __resetStreamingStoreForTests() { for (const key of entries.keys()) { clear(key); } entries.clear(); }
