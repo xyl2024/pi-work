@@ -28,6 +28,11 @@ import {
   refreshLimit,
   showChainFallback,
 } from "@/lib/shared/sidebar-paging";
+import {
+  TODAY_MIN_ROWS,
+  TODAY_VISIBLE_ROWS,
+  sidebarListHeightPx,
+} from "@/lib/shared/sidebar-section";
 
 interface Props {
   selectedSession?: SessionInfo | null;
@@ -833,16 +838,20 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
 
       {/* Today's sessions — a flat, time-windowed view over the same rows
           the grouped Sessions section below renders. Intrinsically sized
-          (grow: 0) and capped so a light day doesn't reserve blank space
-          and a heavy day scrolls inside its cap. keepMounted keeps the list
-          (and its already-loaded rows) alive across toggles so collapsing /
-          expanding never replays the fetch. */}
+          (grow: 0), capped by visible rows (not a viewport percentage) so a
+          light day doesn't reserve blank space and a heavy day scrolls inside
+          its cap. It is also the first section to give up height when the
+          column runs short: minHeight keeps it from collapsing below one row
+          while the Sessions list and Explorer keep their space. keepMounted
+          keeps the list (and its already-loaded rows) alive across toggles so
+          collapsing / expanding never replays the fetch. */}
       <SidebarSection
         title={t("Today's Sessions")}
         open={todayOpen}
         onToggle={() => setTodayOpen((v) => !v)}
         grow={0}
-        maxHeight="40vh"
+        maxHeight={sidebarListHeightPx(TODAY_VISIBLE_ROWS)}
+        minHeight={sidebarListHeightPx(TODAY_MIN_ROWS)}
         keepMounted
         actions={
           <RefreshIconButton

@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useState, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref, type RefObject } from "react";
+import {
+  NO_SCROLL_EDGES,
+  decideScrollEdges,
+  scrollFadeMaskImage,
+  type ScrollEdges,
+} from "@/lib/shared/sidebar-section";
 
 interface Props {
   /** Header label rendered next to the chevron (uppercased, matching the
@@ -25,8 +31,16 @@ interface Props {
   /** Optional max height for the scrollable body (any CSS length). Only
    *  meaningful for intrinsically-sized sections (grow: 0): a grow:1 section
    *  already gets exactly its share of free space. A heavy list then scrolls
-   *  inside the cap instead of stretching the section past it. */
+   *  inside the cap instead of stretching the section past it. A capped body
+   *  also gets the top/bottom scroll hints (see below). */
   maxHeight?: number | string;
+  /** Optional *minimum* body height (any CSS length), the symmetric partner of
+   *  `maxHeight` and equally only meaningful for intrinsically-sized sections
+   *  (grow: 0). Without it such a section is rigid (it never gives up height).
+   *  With it the section becomes compressible down to its header plus this
+   *  body floor, so a sibling that is squeezed can hand its height back to the
+   *  working sections first. The body also stays scrollable while squeezed. */
+  minHeight?: number | string;
   /** Keep the content mounted while collapsed (it stays squashed to zero
    *  height). Default false — unmounting releases things like FileExplorer's
    *  git polling. Pass true for sections whose body refetches on mount (e.g.
@@ -37,6 +51,58 @@ interface Props {
    *  scrolling (the Sessions infinite scroll) read its metrics and attach
    *  their listener to it. Leave unset and the section behaves as before. */
   scrollRef?: Ref<HTMLDivElement>;
+}
+
+// A capped section is the sidebar's sacrificial height: when the column runs
+// short it gives up its own rows (down to `minHeight`) before the working
+// sections lose theirs. Draining it first is a flex-shrink *weight*, not a
+// switch, so a high value deliberately outweighs the much taller siblings —
+// once this section is clamped at its floor the remaining deficit flows to
+// them as usual.
+const CAP_SACRIFICE_SHRINK = 999;
+
+/**
+ * Scroll hint wiring for a capped section. Watches the scroll container's own
+ * box and its content (a `ResizeObserver` covers the expand animation
+ * finishing, the window resizing, and rows arriving while the box itself is
+ * already clamped at the cap) plus its scroll position, and turns the pure
+ * edge decision into a mask. Uncapped sections cannot overflow and keep the
+ * mask undefined.
+ */
+function useScrollFadeMask(elRef: RefObject<HTMLDivElement | null>, active: boolean): string | undefined {
+  const [edges, setEdges] = useState<ScrollEdges>(NO_SCROLL_EDGES);
+
+  useEffect(() => {
+    if (!active) {
+      setEdges((prev) => (prev.top || prev.bottom ? NO_SCROLL_EDGES : prev));
+      return;
+    }
+    const el = elRef.current;
+    if (!el) return;
+    const read = () => {
+      const next = decideScrollEdges({
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
+        clientHeight: el.clientHeight,
+      });
+      setEdges((prev) => (prev.top === next.top && prev.bottom === next.bottom ? prev : next));
+    };
+    read();
+    el.addEventListener("scroll", read, { passive: true });
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    // The scroll container's own box stops changing once content is clamped at
+    // the cap, so a row added while already overflowing would otherwise not be
+    // noticed. The content element still grows, so watch it too.
+    const content = el.firstElementChild;
+    if (content) observer.observe(content);
+    return () => {
+      el.removeEventListener("scroll", read);
+      observer.disconnect();
+    };
+  }, [elRef, active]);
+
+  return scrollFadeMaskImage(edges);
 }
 
 // Collapsible section for the left sidebar. Explorer today, future sections
@@ -62,7 +128,19 @@ interface Props {
 // `grid-template-rows: 0fr ↔ 1fr`, which interpolates toward the content's own
 // height (still without measuring, and capped by `maxHeight` below), so a short
 // list animates at the same pace as a full one.
-export function SidebarSection({ title, open, onToggle, actions, children, durationMs = 180, grow = 1, maxHeight, keepMounted = false, scrollRef }: Props) {
+export function SidebarSection({
+  title,
+  open,
+  onToggle,
+  actions,
+  children,
+  durationMs = 180,
+  grow = 1,
+  maxHeight,
+  minHeight,
+  keepMounted = false,
+  scrollRef,
+}: Props) {
   // Keep the content mounted through the collapse animation (it must be in
   // the DOM to squeeze to zero), then unmount it after the transition
   // settles — same lifecycle as MultiCwdList's body. Unmounting releases
@@ -86,6 +164,25 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
   // grow=1 sections use to absorb free space. A flex-basis-0 wrapper would
   // collapse to 0 height and clip the content away.
   const isFixedHeight = grow === 0;
+  // Only a grow:0 section with a body floor can be squeezed; everything else
+  // keeps the exact flex behaviour it had before.
+  const compressible = isFixedHeight && minHeight !== undefined;
+
+  // The internal scroll container is always ours to observe; a caller that
+  // also wants it (the Sessions infinite scroll) still gets the same node.
+  const scrollElRef = useRef<HTMLDivElement | null>(null);
+  const setScrollRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollElRef.current = node;
+      if (typeof scrollRef === "function") scrollRef(node);
+      else if (scrollRef) scrollRef.current = node;
+    },
+    [scrollRef],
+  );
+  // `mounted` is in the condition so the effect re-runs once the body
+  // actually mounts: a capped section that starts collapsed has no scroll
+  // container to observe at the moment `open` flips.
+  const fadeMask = useScrollFadeMask(scrollElRef, open && mounted && maxHeight !== undefined);
 
   return (
     <div
@@ -93,9 +190,13 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
         display: "flex",
         flexDirection: "column",
         flexGrow: open ? grow : 0,
-        flexShrink: open ? (grow > 0 ? 1 : 0) : 0,
+        flexShrink: !open ? 0 : grow > 0 ? 1 : compressible ? CAP_SACRIFICE_SHRINK : 0,
         flexBasis: "auto",
-        minHeight: 0,
+        // A compressible section floors at its own content minimum: the header
+        // (never compressed) plus the body's `minHeight` below. Without this
+        // the high shrink weight above could squeeze the section past its
+        // floor and clip it. Rigid sections keep the old `minHeight: 0`.
+        minHeight: compressible ? "min-content" : 0,
         overflow: "hidden",
         transition: `flex-grow ${durationMs}ms ${ease}`,
       }}
@@ -148,20 +249,58 @@ export function SidebarSection({ title, open, onToggle, actions, children, durat
             style={{
               display: "grid",
               gridTemplateRows: open ? "1fr" : "0fr",
-              flex: "0 0 auto",
-              minHeight: 0,
-              transition: `grid-template-rows ${durationMs}ms ${ease}`,
+              // A compressible section may be squeezed by the sidebar; a rigid
+              // one still only claims its content height.
+              flex: compressible ? "0 1 auto" : "0 0 auto",
+              // The floor lives on the body, so the section's hard minimum is
+              // its header plus this. Transitioning it alongside the row tracks
+              // keeps the collapse/expand animation from jumping when the floor
+              // becomes active.
+              minHeight: compressible ? (open ? minHeight : 0) : 0,
+              transition: `grid-template-rows ${durationMs}ms ${ease}${compressible ? `, min-height ${durationMs}ms ${ease}` : ""}`,
             }}
           >
-            <div style={{ minHeight: 0, overflow: "hidden" }}>
-              <div ref={scrollRef} data-scroll-side style={{ maxHeight, overflowY: "auto", overflowX: "hidden" }}>
+            <div
+              style={{
+                minHeight: 0,
+                overflow: "hidden",
+                // When the body can shrink, the inner box is a column so the
+                // scroll container below receives the squeezed height instead
+                // of overflowing it (which would clip the scrollbar and the
+                // last row).
+                ...(compressible ? { display: "flex", flexDirection: "column" as const } : null),
+              }}
+            >
+              <div
+                ref={setScrollRef}
+                data-scroll-side
+                style={{
+                  maxHeight,
+                  overflowY: "auto",
+                  overflowX: "hidden",
+                  ...(compressible ? { flex: "0 1 auto", minHeight: 0 } : null),
+                  maskImage: fadeMask,
+                  WebkitMaskImage: fadeMask,
+                }}
+              >
                 {children}
               </div>
             </div>
           </div>
         ) : (
           <div style={{ flex: "1 1 0", minHeight: 0, overflow: "hidden" }}>
-            <div ref={scrollRef} data-scroll-side style={{ height: "100%", maxHeight, overflowY: "auto", overflowX: "hidden" }}>
+            <div
+              ref={setScrollRef}
+              data-scroll-side
+              style={{
+                height: "100%",
+                maxHeight,
+                overflowY: "auto",
+                overflowX: "hidden",
+                maskImage: fadeMask,
+                WebkitMaskImage: fadeMask,
+              }}
+            >
               {children}
             </div>
           </div>

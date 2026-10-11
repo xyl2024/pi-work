@@ -6,7 +6,18 @@ import { useI18n } from "@/hooks/useI18n";
 import { useAllPendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { startOfLocalDayMs } from "@/lib/shared/session-today";
+import {
+  SIDEBAR_LIST_PADDING_Y_PX,
+  TODAY_MIN_ROWS,
+  sidebarListHeightPx,
+} from "@/lib/shared/sidebar-section";
 import { SessionItem } from "./SessionItem";
+
+// The list's vertical padding: 4px above the first row, the rest below. The
+// two must add up to the shared SIDEBAR_LIST_PADDING_Y_PX so that the
+// "one row" floor below stays exact.
+const LIST_PADDING_TOP_PX = 4;
+const LIST_PADDING_BOTTOM_PX = SIDEBAR_LIST_PADDING_Y_PX - LIST_PADDING_TOP_PX;
 
 interface TodaySessionsListProps {
   selectedSessionId: string | null;
@@ -88,7 +99,14 @@ export function TodaySessionsList({
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", padding: "4px 8px 8px", minHeight: 40 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        padding: `${LIST_PADDING_TOP_PX}px 8px ${LIST_PADDING_BOTTOM_PX}px`,
+        minHeight: sidebarListHeightPx(TODAY_MIN_ROWS),
+      }}
+    >
       {loading && rows.length === 0 && (
         <div style={{ padding: "16px 8px 6px", color: "var(--text-muted)", fontSize: 12 }}>
           {t("Loading sessions...")}
