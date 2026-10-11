@@ -532,27 +532,35 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
         fontSize: 12,
         lineHeight: 1.5,
         overflowX: "auto",
-        whiteSpace: "pre",
+        whiteSpace: "pre-wrap",
       }}
     >
       {timeout !== null && (
         <div style={{ color: dimFg }}>(timeout={timeout}s)</div>
       )}
       <span style={{ color: isError ? "#f87171" : "#16a34a" }}>{prompt}</span>
+      {/* The command (the call's input) soft-wraps instead of scrolling
+          sideways: long commands are read, not re-run, so keeping them fully
+          visible matters more than preserving terminal column alignment. The
+          output below deliberately keeps its own layout. */}
       <SyntaxHighlighter
         language="bash"
         style={isDark ? vscDarkPlus : vs}
         PreTag="span"
-        customStyle={{ margin: 0, padding: 0, background: terminalBg, fontSize: "inherit", lineHeight: "inherit", display: "inline", border: "none" }}
-        codeTagProps={{ style: { background: terminalBg, fontFamily: "inherit", whiteSpace: "pre", border: "none" } }}
+        customStyle={{ margin: 0, padding: 0, background: terminalBg, fontSize: "inherit", lineHeight: "inherit", display: "inline", border: "none", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+        codeTagProps={{ style: { background: terminalBg, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "none" } }}
       >
         {command}
       </SyntaxHighlighter>
+      {/* One blank line between the call's input and its output: a wrapped
+          command can span several lines, and without the gap the first line of
+          output reads like part of the command. */}
       {resultText !== null && (
         resultIsEmpty ? (
           <pre
             style={{
               margin: 0,
+              marginTop: "1.5em",
               padding: 0,
               color: isError ? "#f87171" : dimFg,
               font: "inherit",
@@ -568,6 +576,7 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
           <pre
             style={{
               margin: 0,
+              marginTop: "1.5em",
               padding: 0,
               color: "#f87171",
               font: "inherit",
@@ -582,7 +591,7 @@ function BashToolCallContent({ command, timeout, cwd, resultText, resultIsEmpty,
             language="bash"
             style={isDark ? vscDarkPlus : vs}
             PreTag="pre"
-            customStyle={{ margin: 0, padding: 0, background: terminalBg, fontSize: "inherit", lineHeight: "inherit", border: "none", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+            customStyle={{ margin: 0, marginTop: "1.5em", padding: 0, background: terminalBg, fontSize: "inherit", lineHeight: "inherit", border: "none", whiteSpace: "pre-wrap", wordBreak: "break-word" }}
             codeTagProps={{ style: { background: terminalBg, fontFamily: "inherit", whiteSpace: "pre-wrap", wordBreak: "break-word", border: "none" } }}
           >
             {resultText}
