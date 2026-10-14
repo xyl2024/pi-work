@@ -99,7 +99,7 @@ Pi Work 默认使用以下数据目录：
 - 用户 Todo 数据库：`~/.pi-work/todos.db`
 - 定时任务数据库：`~/.pi-work/scheduler.db`
 - Token 审计数据库：`~/.pi-work/token-audit.db`
-- LLM 审计数据库：`~/.pi-work/llm-audit.db`
+- LLM 审计数据库：`~/.pi-work/llm-audit.db`（只保留最近 30 天的记录，`PI_WORK_LLM_AUDIT_RETENTION_DAYS` 可调整，设为 0 表示不清理）
 
 可通过 `PI_CODING_AGENT_DIR` 指定 pi 数据目录。各数据库也支持对应的 `PI_WORK_*_DB` 环境变量覆盖路径。
 

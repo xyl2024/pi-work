@@ -11,6 +11,12 @@
  * File location: the data root's `llm-audit.db` by default
  * (`~/.pi-work`, or `PI_WORK_DATA_DIR`), override with
  * `PI_WORK_LLM_AUDIT_DB` env var.
+ *
+ * Retention: rows older than 30 days are pruned opportunistically (see
+ * `pruneProviderCalls`), because this log keeps a row plus request/response
+ * bodies for every provider call and would otherwise grow without bound.
+ * Override the window with `PI_WORK_LLM_AUDIT_RETENTION_DAYS` (0 = keep
+ * everything).
  */
 
 import Database from "better-sqlite3";
@@ -30,6 +36,7 @@ const log = createLogger("llm-audit-db");
 
 declare global {
   var __piLlmAuditDb: Database.Database | undefined;
+  var __piLlmAuditLastPrune: number | undefined;
 }
 
 function resolveDbPath(): string {
@@ -110,8 +117,80 @@ export function getLlmAuditDb(): Database.Database {
   ensureSchema(db);
 
   globalThis.__piLlmAuditDb = db;
+  // A server that was off for a while (or upgraded from a build without
+  // retention) may be sitting on months of rows; don't make the call that
+  // opened the DB wait for the cleanup.
+  schedulePrune();
   log.info("llm-audit db opened", { dbPath });
   return db;
+}
+
+// ── Retention ─────────────────────────────────────────────────────────────
+
+/**
+ * Days of history kept by default. A row here carries the full request and
+ * (for failures) response body, so a busy install accumulates hundreds of MB;
+ * 30 days is plenty to debug recent provider behavior.
+ */
+const DEFAULT_RETENTION_DAYS = 30;
+
+/** Rows deleted per statement, so one prune never becomes a huge transaction. */
+const PRUNE_BATCH_ROWS = 500;
+
+/** Batches per prune run; a larger backlog drains over the following runs. */
+const PRUNE_MAX_BATCHES = 40;
+
+/** Minimum gap between two prune runs — writes happen on every LLM call. */
+const PRUNE_THROTTLE_MS = 5 * 60 * 1000;
+
+function retentionDays(): number {
+  const raw = process.env.PI_WORK_LLM_AUDIT_RETENTION_DAYS?.trim();
+  if (!raw) return DEFAULT_RETENTION_DAYS;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return DEFAULT_RETENTION_DAYS;
+  return Math.floor(n);
+}
+
+/**
+ * Delete rows older than the retention window. Returns the number of removed
+ * rows. Deletes in bounded batches (oldest first, `ts` is indexed) so a large
+ * backlog doesn't turn into one long write transaction.
+ */
+export function pruneProviderCalls(now = Date.now()): number {
+  const days = retentionDays();
+  if (days <= 0) return 0;
+  const cutoff = now - days * 24 * 60 * 60 * 1000;
+  const db = getLlmAuditDb();
+  const stmt = db.prepare(
+    `DELETE FROM provider_calls WHERE id IN (
+       SELECT id FROM provider_calls WHERE ts < ? ORDER BY ts ASC LIMIT ?
+     )`,
+  );
+  let deleted = 0;
+  for (let i = 0; i < PRUNE_MAX_BATCHES; i++) {
+    const changes = stmt.run(cutoff, PRUNE_BATCH_ROWS).changes;
+    deleted += changes;
+    if (changes < PRUNE_BATCH_ROWS) break;
+  }
+  return deleted;
+}
+
+/**
+ * Fire-and-forget, throttled prune. Runs off the caller's turn (insert path
+ * and DB open) so the request that triggered it never pays for the cleanup.
+ */
+function schedulePrune(): void {
+  const now = Date.now();
+  if (now - (globalThis.__piLlmAuditLastPrune ?? 0) < PRUNE_THROTTLE_MS) return;
+  globalThis.__piLlmAuditLastPrune = now;
+  setImmediate(() => {
+    try {
+      const deleted = pruneProviderCalls(Date.now());
+      if (deleted > 0) log.info("llm-audit pruned old rows", { deleted, retentionDays: retentionDays() });
+    } catch (e) {
+      log.warn("llm-audit prune failed", { error: String(e) });
+    }
+  });
 }
 
 interface Row {
@@ -177,6 +256,7 @@ const INSERT_SQL = `
 export function insertProviderCall(input: ProviderCallInsert): number {
   const db = getLlmAuditDb();
   const res = db.prepare(INSERT_SQL).run(input);
+  schedulePrune();
   return Number(res.lastInsertRowid);
 }
 
