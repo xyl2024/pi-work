@@ -9,6 +9,7 @@ import { ModelPickerModal } from "../ModelPickerModal";
 import { ToolsPickerModal, matchNamedToolPreset, TOOL_PRESET_PATTERNS, TOOL_PRESET_TRIGGER_LABELS } from "../ToolsPickerModal";
 import { ThinkingPicker, THINKING_LEVEL_COLOR, type ThinkingLevel } from "../ThinkingPicker";
 import { MoreMenu } from "../MoreMenu";
+import { NewSessionNotifyPicker } from "../chat-window/NewSessionNotifyPicker";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import type { ContextUsage, SessionStats } from "@/hooks/sessionUiStore";
 import type { ContextComposition } from "@/lib/shared/context-composition";
@@ -67,13 +68,22 @@ export interface BottomToolbarProps {
    *  is triggered exactly once per session). */
   toggleCustomExpanded: () => void;
 
+  // RIGHT - notify channel (empty new-session screen only)
+  /** Show the icon-only notification-channel picker right of the tools
+   *  picker. Only the parent knows whether the session is still empty; a
+   *  session with messages binds its channel through the More menu. */
+  showNotifyPicker?: boolean;
+  notifyChannelId?: string | null;
+  onNotifyChannelChange?: (channelId: string | null) => void;
+
   // RIGHT - abort
   onAbort: () => void;
 }
 
 /**
  * Bottom toolbar beneath the textarea: LEFT (new session + upload + model +
- * cwd), MIDDLE (context usage), RIGHT (thinking + tools + more + stop).
+ * cwd), MIDDLE (context usage), RIGHT (thinking + tools + notify + more +
+ * stop).
  *
  * Pure presentational — every state/derivative the JSX needs comes from
  * props. The corresponding state machine (slash menu, history, tools
@@ -94,6 +104,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
     toolDropdownRef,
     onToolSelectionChange, onEnsureAvailableTools,
     customExpanded, toggleCustomExpanded,
+    showNotifyPicker = false, notifyChannelId = null, onNotifyChannelChange,
     onAbort,
   } = props;
 
@@ -434,6 +445,12 @@ export function BottomToolbar(props: BottomToolbarProps) {
               onClose={() => setToolsPickerOpen(false)}
             />
           </div>
+        )}
+        {showNotifyPicker && onNotifyChannelChange && (
+          <NewSessionNotifyPicker
+            value={notifyChannelId}
+            onChange={onNotifyChannelChange}
+          />
         )}
         <MoreMenu />
 

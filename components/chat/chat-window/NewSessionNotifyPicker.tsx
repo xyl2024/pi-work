@@ -1,13 +1,18 @@
 "use client";
 
 /**
- * NewSessionNotifyPicker — pick the messaging channel (from the Channels
- * page, WeChat for now) that should receive this session's assistant
- * replies. Shown on the new-session welcome screen. Only connected channels
- * with a bound user are selectable; choosing none means "don't notify".
+ * NewSessionNotifyPicker — icon-only bell button that picks the messaging
+ * channel (from the Channels page, WeChat for now) which should receive this
+ * session's assistant replies. Rendered in the chat input's bottom toolbar,
+ * right of the tools picker, and only while the session is still empty (a
+ * session with messages binds its channel through the More menu instead).
+ * Only connected channels with a bound user are selectable; choosing none
+ * means "don't notify".
  */
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { Tooltip } from "../../ui/Tooltip";
+import { AnimatedPopover } from "../../ui/AnimatedPopover";
 import type { ChannelRecord } from "@/lib/shared/channels/types";
 
 interface Props {
@@ -63,47 +68,60 @@ export function NewSessionNotifyPicker({ value, onChange }: Props) {
   const selected = channels.find((c) => c.id === value) ?? null;
 
   return (
-    <div ref={rootRef} style={{ position: "relative", display: "inline-block" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        title={t("Notify this session's replies to a channel")}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 7,
-          padding: "7px 12px",
-          background: "var(--bg-subtle)",
-          border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
-          borderRadius: 20,
-          color: "var(--text)",
-          cursor: "pointer",
-          fontSize: 12.5,
-        }}
-      >
-        <span style={{ color: selected ? "var(--accent)" : "var(--text-muted)", display: "flex" }}>
-          <BellIcon />
-        </span>
-        <span>{selected ? selected.name : t("Notification channel")}</span>
-        <span style={{ color: "var(--text-muted)", fontSize: 10, opacity: 0.8 }}>▾</span>
-      </button>
-
-      {open && (
-        <div
+    <div ref={rootRef} style={{ position: "relative", display: "flex", alignItems: "center" }}>
+      <Tooltip content={selected ? `${t("Notification channel")} · ${selected.name}` : t("Notification channel")}>
+        <button
+          type="button"
+          aria-label={t("Notification channel")}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
           style={{
-            position: "absolute",
-            top: "calc(100% + 6px)",
-            left: 0,
-            zIndex: 40,
-            minWidth: 220,
-            maxWidth: 320,
-            background: "var(--bg-panel)",
-            border: "1px solid var(--border)",
-            borderRadius: 10,
-            boxShadow: "0 12px 32px rgba(0,0,0,0.22)",
-            padding: 6,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 32,
+            height: 32,
+            padding: 0,
+            flexShrink: 0,
+            border: "none",
+            borderRadius: 9999,
+            background: open ? "var(--bg-hover)" : "none",
+            color: selected ? "var(--accent)" : "var(--text-muted)",
+            cursor: "pointer",
+            transition: "background 0.12s, color 0.12s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--bg-hover)";
+            e.currentTarget.style.color = selected ? "var(--accent)" : "var(--text)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = open ? "var(--bg-hover)" : "none";
+            e.currentTarget.style.color = selected ? "var(--accent)" : "var(--text-muted)";
           }}
         >
+          <BellIcon />
+        </button>
+      </Tooltip>
+
+      <AnimatedPopover
+        open={open}
+        role="menu"
+        maxHeight={320}
+        style={{
+          position: "absolute",
+          bottom: "calc(100% + 6px)",
+          right: 0,
+          zIndex: 120,
+          background: "var(--bg-panel)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          boxShadow: "0 10px 32px rgba(0,0,0,0.25)",
+          minWidth: 220,
+          maxWidth: 320,
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", padding: 6 }}>
           <button
             type="button"
             onClick={() => { onChange(null); setOpen(false); }}
@@ -162,7 +180,7 @@ export function NewSessionNotifyPicker({ value, onChange }: Props) {
             })
           )}
         </div>
-      )}
+      </AnimatedPopover>
     </div>
   );
 }

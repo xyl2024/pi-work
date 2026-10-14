@@ -42,7 +42,6 @@ import { SessionSearch } from "../sessions/SessionSearch";
 import { phaseLabel, phaseLoaderVariant, resolveReadPath, isGroupAnchor, findFinalAssistantIndex, hasDisplayableProcessMessage } from "./chat-window/utils";
 import { ProcessDetailsGroup } from "./chat-window/ProcessDetailsGroup";
 import { NewSessionPresets } from "./chat-window/NewSessionPresets";
-import { NewSessionNotifyPicker } from "./chat-window/NewSessionNotifyPicker";
 import { useAutoNaming } from "./chat-window/hooks/useAutoNaming";
 import { useSessionNotifyBinding } from "./chat-window/hooks/useSessionNotifyBinding";
 import { useSessionSearch } from "./chat-window/hooks/useSessionSearch";
@@ -788,6 +787,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         onDraftChange={onDraftChange}
         cwd={cwd ?? null}
         onCwdChange={onCwdChange ?? (() => {})}
+        // The notify picker lives in the bottom toolbar (right of the tools
+        // picker) and is only offered while the new-session screen is still
+        // empty; sessions with messages bind their channel via the More menu.
+        showNotifyPicker={isEmptyNew}
+        notifyChannelId={pickedChannelId}
+        onNotifyChannelChange={setPickedChannelId}
       />
     </>
   );
@@ -882,13 +887,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
             </div>
 
             <NewSessionPresets onPickPrompt={(prompt) => chatInputRef?.current?.insertText(prompt)} />
-
-            <div style={{ marginTop: 26, display: "flex", justifyContent: "center" }}>
-              <NewSessionNotifyPicker
-                value={pickedChannelId}
-                onChange={setPickedChannelId}
-              />
-            </div>
           </div>
           <div className="relative">{chatInputElement}</div>
         </>

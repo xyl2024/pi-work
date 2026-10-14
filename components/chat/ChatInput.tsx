@@ -101,6 +101,13 @@ interface Props {
   hideToolbar?: boolean;
   /** Hard-disable the whole input (no session, not ready, ...). */
   disabled?: boolean;
+  /** Show the icon-only notification-channel picker in the bottom toolbar,
+   *  right of the tools picker. Set only while the new-session screen is
+   *  still empty — sessions with messages use the More menu instead. */
+  showNotifyPicker?: boolean;
+  /** Channel id the first prompt's replies should be sent to (null = none). */
+  notifyChannelId?: string | null;
+  onNotifyChannelChange?: (channelId: string | null) => void;
 }
 
 export interface ChatInputHandle {
@@ -126,6 +133,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   enterToSend = false,
   hideToolbar = false,
   disabled = false,
+  showNotifyPicker = false,
+  notifyChannelId = null,
+  onNotifyChannelChange,
 }: Props, ref) {
   const { t } = useI18n();
   const { contextUsage, sessionStats, contextComposition } = useSessionUiState();
@@ -683,6 +693,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             onEnsureAvailableTools={onEnsureAvailableTools}
             customExpanded={customExpanded}
             toggleCustomExpanded={() => toggleCustomExpanded(() => onEnsureAvailableTools?.())}
+            showNotifyPicker={showNotifyPicker}
+            notifyChannelId={notifyChannelId}
+            onNotifyChannelChange={onNotifyChannelChange}
             onAbort={onAbort}
           />
         )}
