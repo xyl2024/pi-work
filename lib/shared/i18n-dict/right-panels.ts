@@ -148,7 +148,6 @@ export const rightPanels = {
   "Open LLM API audit": "打开 LLM API 审计",
   "Total calls": "总调用",
   "All sources": "全部来源",
-  "BTW": "BTW",
   "Subagent": "子代理",
   "SubAgent": "子代理",
   "Subagent sessions": "子代理会话",

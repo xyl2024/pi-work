@@ -25,7 +25,7 @@ import type { ProviderCall } from "@/lib/shared/llm-audit-types";
 const PAGE_LIMIT = 10;
 
 type StatusFilter = "" | "ok" | "error";
-type SourceFilter = "" | "user" | "scheduled" | "subagent" | "direct" | "btw" | "unknown";
+type SourceFilter = "" | "user" | "scheduled" | "subagent" | "direct" | "unknown";
 
 // ── formatters ────────────────────────────────────────────────────────────
 
@@ -96,9 +96,8 @@ export function LlmAuditPanel({ currentSessionId }: LlmAuditPanelProps) {
       });
       if (filter) params.set("status", filter);
       if (sourceFilter) params.set("source", sourceFilter);
-      // LLM audit is session-scoped whenever a main session is active. The
-      // `btw` source is kept only for rows recorded before that panel was
-      // removed; never broaden its filter to all sessions.
+      // LLM audit is session-scoped whenever a main session is active; never
+      // broaden the filter to all sessions.
       if (effectiveSessionId) params.set("sessionId", effectiveSessionId);
       const res = await fetch(`/api/llm-audit/calls?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -394,7 +393,6 @@ function Toolbar({
       <div style={{ display: "flex", gap: 4 }}>
         {([
           ["", t("All sources")],
-          ["btw", t("BTW")],
           ["user", t("User")],
           ["scheduled", t("Scheduled")],
           ["subagent", t("Subagent")],
