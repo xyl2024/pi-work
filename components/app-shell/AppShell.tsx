@@ -73,8 +73,10 @@ import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
 import { useLayoutMode, getLayoutModeSync } from "@/hooks/layoutModeStore";
 import {
+  APP_TITLE,
   createSessionWorkspaceState,
   getActiveSessionTab,
+  getDocumentTitleForTab,
   getSessionTab,
   sessionWorkspaceReducer,
   type SessionTab,
@@ -460,6 +462,17 @@ export function AppShell() {
   const workspaceRef = useRef(workspace);
   workspaceRef.current = workspace;
   const activeTab = getActiveSessionTab(workspace);
+  // The browser tab title (and, under the Electron shell, the native window
+  // title) tracks the active session so parallel windows are distinguishable.
+  // A draft tab has no session yet and falls back to the plain app name; the
+  // cleanup restores it when the shell unmounts (e.g. on the login route).
+  const documentTitle = getDocumentTitleForTab(activeTab);
+  useEffect(() => {
+    document.title = documentTitle;
+    return () => {
+      document.title = APP_TITLE;
+    };
+  }, [documentTitle]);
   const selectedSession = activeTab?.kind === "session" ? activeTab.session : null;
   const newSessionCwd = activeTab?.kind === "draft" ? activeTab.cwd : null;
   const activeTabId = workspace.activeTabId;

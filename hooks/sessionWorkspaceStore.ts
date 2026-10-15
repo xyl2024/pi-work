@@ -306,3 +306,16 @@ export function getSessionTab(state: SessionWorkspaceState, sessionId: string): 
 export function getSessionTabTitle(session: SessionInfo): string {
   return session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
 }
+
+/** Product name used as the browser tab title suffix and as the no-session fallback. */
+export const APP_TITLE = "Pi Work";
+
+/**
+ * Browser tab title for the active tab: the active session's name, suffixed
+ * with the app name so parallel windows stay identifiable, or the plain app
+ * name when the tab is a draft / the workspace is empty.
+ */
+export function getDocumentTitleForTab(tab: SessionTab | null | undefined): string {
+  if (!tab || tab.kind !== "session" || !tab.session) return APP_TITLE;
+  return `${getSessionTabTitle(tab.session)} · ${APP_TITLE}`;
+}
