@@ -20,8 +20,8 @@ const log = createLogger("mcp-config");
  *
  * The file format, the merge rule (project entries replace global ones by
  * name) and the validation are pi's. `loadMcpConfig` / `validateMcpServerConfig`
- * are not exported from the package root (`exports` only opens `.`,
- * `./rpc-entry`, `./client` and `./experimental/plugin`), so the shape checks
+ * are not exported from the package root (`exports` only opens `.` and
+ * `./rpc-entry`; 1.2.0 dropped `./client` and `./experimental/plugin`), so the shape checks
  * below are a deliberate mirror of `dist/core/mcp-servers.js`. When pi changes
  * that validator, this has to change with it; `tests/unit/mcp-config.test.ts`
  * pins the rules that matter.
