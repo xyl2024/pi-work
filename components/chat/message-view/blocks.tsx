@@ -9,13 +9,9 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useCollapseHeight } from "@/hooks/useCollapseHeight";
-import { Tooltip } from "../../ui/Tooltip";
-import { openSessionLibrary } from "@/hooks/sessionLibraryStore";
-import { isShowFileToolName } from "@/lib/shared/show-file-tool-types";
 import { classifyToolCall, isToolResultEmpty, toolCallDiffStats } from "@/lib/shared/tool-call-display";
 import { extractMessageText } from "@/lib/shared/message-content";
 import { deriveSubagentBlockState } from "@/lib/shared/subagent-block-state";
-import { useShowFileResults } from "@/hooks/showFileResultsStore";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
 import { SpawnSubagentLivePanel } from "./SpawnSubagentLivePanel";
 import { useCollapseNonce } from "./context";
@@ -164,7 +160,6 @@ function ThinkingBlock({ block, keywords, isSearchMatch, isStreaming, onImageCli
 }
 
 function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?: ToolResultMessage; cwd?: string | null }) {
-  const { t } = useI18n();
   const { isDark } = useTheme();
   // The tool-call-display module owns "what kind of call is this"; the block
   // never compares tool names itself.
@@ -200,25 +195,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
     () => (isFileMutation ? toolCallDiffStats(block, result) : null),
     [isFileMutation, block, result],
   );
-
-  const isShowFile = isShowFileToolName(block.toolName);
-  const showFilePaths: string[] | null = (() => {
-    if (!isShowFile || !block.input) return null;
-    const raw = block.input.paths;
-    if (!Array.isArray(raw)) return null;
-    const filtered = raw.filter((path): path is string => typeof path === "string" && path.length > 0);
-    return filtered.length > 0 ? filtered : null;
-  })();
-  const showFileResults = useShowFileResults();
-  const showFileFailedCount = (() => {
-    if (!isShowFile) return 0;
-    const files = showFileResults.get(block.toolCallId);
-    if (!files) return 0;
-    return files.filter((file) => !file.exists).length;
-  })();
-  const handleOpenInLibrary = () => {
-    openSessionLibrary({ focusToolCallId: block.toolCallId });
-  };
 
   // spawn_subagent: while the child session is still running, the output area
   // shows the live activity panel (details arrive via in-flight
@@ -269,48 +245,6 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
             <span style={{ color: "#16a34a" }}>+{diffStats.additions}</span>
             {diffStats.deletions > 0 && <span style={{ color: "#f87171", marginLeft: 3 }}>-{diffStats.deletions}</span>}
           </span>
-        )}
-        {isShowFile && showFilePaths && (
-          <Tooltip content={t("Open in session library")}>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenInLibrary();
-              }}
-              aria-label={t("Open in session library")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                padding: "2px 8px",
-                fontSize: 11,
-                fontFamily: "var(--font-mono)",
-                color: showFileFailedCount > 0 ? "#f87171" : "var(--text-muted)",
-                background: showFileFailedCount > 0 ? "rgba(248,113,113,0.08)" : "var(--bg-selected)",
-                border: "1px solid var(--border)",
-                borderRadius: 999,
-                cursor: "pointer",
-                flexShrink: 0,
-                whiteSpace: "nowrap",
-              }}
-            >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-              </svg>
-              <span>
-                {showFileFailedCount > 0
-                  ? t("{n} files added · {m} failed", { n: showFilePaths.length, m: showFileFailedCount })
-                  : showFilePaths.length === 1
-                    ? t("{n} file added", { n: 1 })
-                    : t("{n} files added", { n: showFilePaths.length })}
-              </span>
-              <span aria-hidden="true">↗</span>
-            </button>
-          </Tooltip>
         )}
         {isSubagentRunning && (
           <span aria-hidden="true" className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a", flexShrink: 0 }} />

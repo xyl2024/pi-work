@@ -23,7 +23,6 @@ import { common } from "./common";
 import { fileViewer } from "./file-viewer";
 import { grokbot } from "./grokbot";
 import { mcp } from "./mcp";
-import { media } from "./media";
 import { models } from "./models";
 import { permissions } from "./permissions";
 import { profile } from "./profile";
@@ -52,7 +51,6 @@ export const ZH_TRANSLATIONS = {
   ...fileViewer,
   ...grokbot,
   ...mcp,
-  ...media,
   ...models,
   ...permissions,
   ...profile,

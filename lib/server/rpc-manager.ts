@@ -17,7 +17,6 @@ import path from "node:path";
 import { recordCall } from "./token-audit-store";
 import { getAuditModelRuntime, installLlmFetchAudit, runWithLlmAuditContext } from "./llm-audit";
 import type { LlmAuditSource } from "../shared/llm-audit-types";
-import { buildShowFileTool, SHOW_MEDIA_SYSTEM_PROMPT_BLOCK } from "./show-file-tool";
 import { writeSessionName, deleteSessionName } from "./session-names";
 import {
   readSessionToolSelection,
@@ -1044,7 +1043,6 @@ export async function startRpcSession(
         const blocks: string[] = [];
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("spawn_subagent")) blocks.push(buildSpawnSubagentSystemPromptBlock());
-        if (sessionHasTool("show_media")) blocks.push(SHOW_MEDIA_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
         return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
       },
@@ -1286,7 +1284,6 @@ export async function startRpcSession(
         // (`excludeTools` filters custom definitions too), so "which shells
         // exist here" stays one decision (lib/shared/agent-shell-tools.ts).
         createPiWorkPowerShellTool(cwd),
-        ...buildShowFileTool(),
         // Core orchestration tool. Child profiles exclude it through
         // allowedToolNames, so subagents cannot recursively spawn more
         // subagents in the MVP.

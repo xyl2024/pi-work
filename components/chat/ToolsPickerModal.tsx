@@ -21,7 +21,7 @@ export const TOOL_PRESET_PATTERNS = {
   read_only: READ_ONLY_TOOLS,
   minimal: ["bash", "read", "write", "edit", "ls", "find", "grep"],
   code: ["bash", "read", "write", "edit", "ls", "find", "grep", "codemode", "spawn_subagent", "celebrate", "ask_user_questions"],
-  assistant: ["bash", "read", "write", "edit", "ls", "find", "grep", "codemode", "pi_work_*", "celebrate", "show_media", "ask_user_questions"],
+  assistant: ["bash", "read", "write", "edit", "ls", "find", "grep", "codemode", "pi_work_*", "celebrate", "ask_user_questions"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type NamedToolPresetId = keyof typeof TOOL_PRESET_PATTERNS;

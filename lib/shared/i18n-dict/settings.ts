@@ -82,7 +82,6 @@ export const settings = {
   "Align session-bound buttons to the bottom (default)": "会话绑定按钮底部对齐（默认）",
   "Inline with button order (legacy)": "按顺序混排（保留旧行为）",
 
-  "Show Media": "Show Media（内联展示多媒体文件）",
   "Ask User Questions": "Ask User Questions（向用户提问）",
   "No tools available": "此项目下没有可用工具",
 

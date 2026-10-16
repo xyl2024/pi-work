@@ -16,10 +16,6 @@ import { ReadFileChips } from "./ReadFileChips";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
 import { useIsStreamingBody, useIsStreamingError, useIsStreamingThinking, useIsStreamingToolCall, useStreamingHasContent, useStreamingToolCall } from "@/hooks/useStreamingMessage";
-import { SessionLibraryModal } from "../sessions/session-library/SessionLibraryModal";
-import { SessionLibraryOpenButton } from "../sessions/SessionLibraryOpenButton";
-import { useSessionLibraryEntries } from "@/hooks/useSessionLibraryEntries";
-import { resetSessionLibrary } from "@/hooks/sessionLibraryStore";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ModelPickerModal } from "./ModelPickerModal";
 import { Tooltip } from "../ui/Tooltip";
@@ -82,8 +78,8 @@ interface Props {
   onSessionNameChange?: (name: string) => void;
   /** Fired when the full session payload finishes loading. */
   onSessionInfoLoaded?: (session: SessionInfo) => void;
-  /** Open a file path in the right-hand panel (used by Session Library
-   *  "Open in tab" buttons). Optional; ChatWindow renders a working
+  /** Open a file path in the right-hand panel (used by file chips and the
+   *  streaming turn footer). Optional; ChatWindow renders a working
    *  "open file" experience even without it (falls back to a no-op). */
   onOpenFile?: (filePath: string, fileName: string) => void;
   /** Publish this tab's unsent input state for close confirmation. */
@@ -270,22 +266,16 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     // re-register when the bits that drive `when()` predicates change.
   }, [isActive, agentRunning, tabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Session Library: derive entries + reset on session change ──
-  const { entries: sessionLibraryEntries } = useSessionLibraryEntries(messages);
-
   // ── AskUserQuestions: when the panel is pending for the active session
   //    we hide the bottom-right button stack — otherwise the row of
-  //    launchers (Session Library, Collapse all, Scroll
-  //    to bottom) sits *behind* the question panel and looks like dead
-  //    UI, since the panel takes over the chat area's focused interaction
-  //    surface. Same `usePendingAskUserQuestions` store hook as the panel
-  //    itself, so visibility is automatically in sync without an extra
-  //    layer of state. ──
+  //    launchers (Collapse all, Scroll to bottom) sits *behind* the
+  //    question panel and looks like dead UI, since the panel takes over
+  //    the chat area's focused interaction surface. Same
+  //    `usePendingAskUserQuestions` store hook as the panel itself, so
+  //    visibility is automatically in sync without an extra layer of
+  //    state. ──
   const pendingAskUserQuestions = usePendingAskUserQuestions(currentSessionId);
-  useEffect(() => {
-    if (isActive) resetSessionLibrary();
-  }, [isActive, currentSessionId]);
-  const handleOpenFileFromLibrary = useCallback(
+  const handleOpenFile = useCallback(
     (filePath: string, fileName: string) => {
       if (onOpenFile) onOpenFile(filePath, fileName);
     },
@@ -560,16 +550,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     }
   }, [liveTurnActive, streamingStoreHasContent]);
 
-  let lastAnchorIdx = -1;
-  for (let i = renderMessages.length - 1; i >= 0; i--) {
-    if (isGroupAnchor(renderMessages[i])) { lastAnchorIdx = i; break; }
-  }
-  // lastAnchorIdx was previously used to gate the per-turn gallery rendering.
-  // With the Session Library modal owning all show_file rendering, the only
-  // remaining live consumer was `isLiveTurn`, which we just removed. Keep the
-  // calculation here so a future reintroduction (e.g. a "currently streaming"
-  // banner) has the index ready without having to recompute it.
-  void lastAnchorIdx;
   // Scroll a tool call into view by its toolCallId, resolving the landing
   // message through the timeline projection. Consumed by the
   // context-composition panel's Top-5 list: the
@@ -1158,7 +1138,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     // below the streaming viewport — not the footer here.
                     readFiles: isCurrentTurnInProgress ? undefined : readFiles,
                     turnDiffStats: isCurrentTurnInProgress ? undefined : turnDiffStats,
-                    onOpenFile: handleOpenFileFromLibrary,
+                    onOpenFile: handleOpenFile,
                     inStreamingViewport: isCurrentTurnInProgress,
                   }),
                 );
@@ -1191,7 +1171,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                       )}
                       {streamingStartedThisTurn && (streamingTurnReadFiles.length > 0 || streamingTurnDiffStats) && (
                         <div className="pb-1">
-                          <ReadFileChips files={streamingTurnReadFiles} diffStats={streamingTurnDiffStats} onOpenFile={handleOpenFileFromLibrary} />
+                          <ReadFileChips files={streamingTurnReadFiles} diffStats={streamingTurnDiffStats} onOpenFile={handleOpenFile} />
                         </div>
                       )}
                       <div className="py-2" style={{ height: 40, boxSizing: "border-box" }}>
@@ -1303,13 +1283,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           className="pointer-events-none absolute bottom-4 z-10 flex items-end gap-2"
           style={{ right: "max(16px, calc((100% - 820px) / 2))" }}
         >
-          {/* Session Library launcher (Q10A: second position). Always
-              visible — empty state is shown inside the modal. Unread
-              badge appears when entries land while the modal is closed. */}
-          <SessionLibraryOpenButton
-            count={sessionLibraryEntries.length}
-            sessionId={currentSessionId}
-          />
           <SubagentSessionsButton
             parentSessionId={session?.id ?? currentSessionId}
             refreshKey={subagentRefreshKey}
@@ -1379,16 +1352,6 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         )}
         {chatInputElement}
       </div>
-      {/* Session Library modal — portal'd into document.body so it sits
-          above all chat UI. Reads UI state from sessionLibraryStore and
-          entry data from the live messages array. */}
-      {isActive && (
-        <SessionLibraryModal
-          messages={messages}
-          cwd={session?.cwd}
-          onOpenFile={handleOpenFileFromLibrary}
-        />
-      )}
       </>
       )}
       {/* /model modal — portal'd into document.body; selection happens via
