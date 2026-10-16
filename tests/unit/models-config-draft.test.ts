@@ -2,13 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalModelsJson,
   cloneModelFromCatalog,
-  firstProviderSelection,
   isModelsConfigDirty,
   modelsConfigDraftFrom,
   modelsConfigProblem,
   normalizeModelsJson,
   parseModelEntryJson,
-  renameSelection,
   withAddedModel,
   withCustomProvider,
   withModel,
@@ -120,12 +118,6 @@ describe("provider edits", () => {
     const after = withoutProvider({ providers: { a: {}, b: {} } }, "a");
     expect(after.providers).toEqual({ b: {} });
   });
-
-  it("selects the first remaining provider after a delete, or nothing", () => {
-    expect(firstProviderSelection({ providers: { b: {}, c: {} } })).toEqual({ type: "provider", name: "b" });
-    expect(firstProviderSelection({ providers: {} })).toBeNull();
-    expect(firstProviderSelection({})).toBeNull();
-  });
 });
 
 describe("model edits", () => {
@@ -186,25 +178,6 @@ describe("cloneModelFromCatalog", () => {
     });
     expect(cloned.input).not.toBe(source.input);
     expect(cloned.cost).not.toBe(source.cost);
-  });
-});
-
-describe("renameSelection", () => {
-  it("follows a selected provider through a rename", () => {
-    expect(renameSelection({ type: "provider", name: "a" }, "a", "b")).toEqual({ type: "provider", name: "b" });
-  });
-
-  it("follows a selected model's provider through a rename", () => {
-    expect(renameSelection({ type: "model", providerName: "a", index: 2 }, "a", "b")).toEqual({
-      type: "model",
-      providerName: "b",
-      index: 2,
-    });
-  });
-
-  it("leaves unrelated selections alone", () => {
-    const oauth = { type: "oauth", providerId: "x" } as const;
-    expect(renameSelection(oauth, "a", "b")).toBe(oauth);
   });
 });
 

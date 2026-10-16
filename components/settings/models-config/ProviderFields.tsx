@@ -8,9 +8,7 @@ import { Field, TextInput, SecretTextInput, Select, IconField } from "./form-fie
 
 /**
  * The editable provider fields — name (with rename), icon, Base URL, API Key
- * and API protocol. Shared by the modal's `ProviderDetail` (which adds the
- * delete header and the model grid) and the panel's provider page, so both
- * surfaces edit the same draft the same way.
+ * and API protocol. Used by the panel's provider page.
  */
 export function ProviderFields({
   name,

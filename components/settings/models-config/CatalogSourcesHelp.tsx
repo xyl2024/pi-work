@@ -5,9 +5,8 @@ import { Tooltip } from "@/components/ui/Tooltip";
 
 /**
  * The "?" beside the model catalog: where the runtime catalog comes from and
- * how to refresh it. Extracted from the setting modal's header so the panel's
- * catalog page and the modal render the same explanation instead of two copies
- * drifting apart.
+ * how to refresh it. Shared by the panel's catalog page so the explanation lives
+ * in one place instead of being copied around.
  */
 export function CatalogSourcesHelp() {
   const { t } = useI18n();

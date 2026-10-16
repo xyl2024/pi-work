@@ -1,16 +1,11 @@
 "use client";
 
 /**
- * HTTP wiring shared by the models-config surfaces.
+ * HTTP wiring for the models-config panel store.
  *
- * Both the legacy modal holder (`hooks/useModelsConfig.ts`) and the panel store
- * (`lib/client/models-config-store.ts`) read and write the same endpoints. The
- * requests live here once so a contract change (a new field, a different error
- * shape) lands in one place instead of two; the two surfaces differ only in the
- * state they keep around the result.
- *
- * The modal holder is deleted in the收口 slice (#119); until then this module is
- * what keeps the split from duplicating the transport.
+ * The requests live here so a contract change (a new field, a different error
+ * shape) lands in one place instead of being duplicated across the panel's
+ * pages.
  */
 
 import type { ApiKeyProvider, ModelsJson, OAuthProvider } from "@/lib/shared/models-config";
@@ -20,9 +15,8 @@ import type { ApiKeyProvider, ModelsJson, OAuthProvider } from "@/lib/shared/mod
  *
  * The shell subscribes to refresh new-session model defaults when the file is
  * actually written, instead of keying that off a modal close (which fired on
- * "open then cancel" too). Both surfaces — the panel store and the legacy
- * modal hook — go through `putModelsConfig`, so a save from either one lands
- * here and there is no second place to keep in sync.
+ * "open then cancel" too). The save goes through `putModelsConfig`, so the
+ * refresh signal lands here and there is no second place to keep in sync.
  */
 const savedListeners = new Set<() => void>();
 

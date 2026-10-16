@@ -15,11 +15,6 @@
  * the wiring — requests, the `useSyncExternalStore` subscription, the "first
  * open loads, later opens keep the draft" policy — which ADR-0003 rule 3 leaves
  * to the manual checklist.
- *
- * The legacy modal keeps its own `hooks/useModelsConfig.ts` until the收口 slice
- * deletes it; the two are deliberately separate holders so the modal's
- * read-fresh-on-open / discard-on-close semantics never touch a panel draft.
- * They share the transport through `lib/client/models-config-io.ts`.
  */
 
 import { useSyncExternalStore } from "react";

@@ -11,10 +11,10 @@
  *
  * The rule for "unsaved changes" lives here once (normalized JSON vs. the
  * baseline), instead of being re-derived by each surface that renders the
- * draft. `hooks/useModelsConfig.ts` is the stateful consumer.
+ * draft. `lib/client/models-config-store.ts` is the stateful consumer.
  */
 
-import type { ModelEntry, ModelsJson, ProviderEntry, RuntimeModelInfo, Selection } from "./models-config";
+import type { ModelEntry, ModelsJson, ProviderEntry, RuntimeModelInfo } from "./models-config";
 
 export interface ModelsConfigDraft {
   /** The editable config — what a save would write. */
@@ -204,17 +204,4 @@ export function cloneModelFromCatalog(source: RuntimeModelInfo): ModelEntry {
     },
     compat: source.compat ? { ...source.compat } : undefined,
   };
-}
-
-/** The root selection after any provider is deleted: first remaining, or none. */
-export function firstProviderSelection(config: ModelsJson): Selection | null {
-  const keys = Object.keys(config.providers ?? {});
-  return keys.length > 0 ? { type: "provider", name: keys[0] } : null;
-}
-
-/** Move a selection along when a provider is renamed; other selections stay. */
-export function renameSelection(selection: Selection, oldName: string, newName: string): Selection {
-  if (selection.type === "provider" && selection.name === oldName) return { type: "provider", name: newName };
-  if (selection.type === "model" && selection.providerName === oldName) return { ...selection, providerName: newName };
-  return selection;
 }

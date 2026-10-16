@@ -7,8 +7,8 @@ import { SectionTitle } from "./form-fields";
 /**
  * The raw-JSON view of a model: the serialized entry to read or copy, and a
  * textarea to edit it. Purely presentational — the owner decides what `draft`
- * means (the modal keeps it in the component, the panel keeps it in the store)
- * and translates `error` before passing it in.
+ * means (the panel keeps it in the store) and translates `error` before passing
+ * it in.
  */
 export function ModelRawSection({
   summaryJson,

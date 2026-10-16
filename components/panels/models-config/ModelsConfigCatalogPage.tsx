@@ -10,7 +10,7 @@ import { ModelsConfigBackButton } from "./ModelsConfigBackButton";
  * models-config panel view — a root-level sibling of the provider list, not a
  * second panel or a second right-bar button. Back returns to the list.
  *
- * The body is the modal's read-only `RuntimeModelCatalog`, which loads the
+ * The body is the shared read-only `RuntimeModelCatalog`, which loads the
  * catalog on mount and re-fetches with `?refresh=true` when the user presses
  * Refresh, so "刷新目录" really replaces the data on screen. The "?" keeps the
  * catalog-sources explanation reachable from the panel.

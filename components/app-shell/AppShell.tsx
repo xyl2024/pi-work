@@ -18,7 +18,6 @@ import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
 import { GitPanel } from "../panels/GitPanel";
-import { ModelsConfig } from "../settings/ModelsConfig";
 import { SkillsConfig } from "../settings/SkillsConfig";
 import { McpConfig } from "../settings/McpConfig";
 import { Tooltip } from "../ui/Tooltip";
@@ -489,7 +488,6 @@ export function AppShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [pendingScrollEntryIds, setPendingScrollEntryIds] = useState<Record<string, string | null>>({});
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
-  const [modelsConfigOpen, setModelsConfigOpen] = useState(false);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [mcpConfigOpen, setMcpConfigOpen] = useState(false);
@@ -523,8 +521,7 @@ export function AppShell() {
     if (!modelsConfigTabOpen) releaseModelsConfigDraft();
   }, [modelsConfigTabOpen]);
   // New sessions must pick up a just-saved default model. The refresh signal is
-  // the successful PUT (shared by the panel and the legacy modal), not a modal
-  // close — "open then cancel" no longer refreshes anything.
+  // the successful PUT, not a modal close — "open then cancel" refreshes nothing.
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
 
   useEffect(() => {
@@ -539,7 +536,6 @@ export function AppShell() {
   const openPalette = useCallback(() => {
     // The palette is the top-level modal — opening it closes every other
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
-    setModelsConfigOpen(false);
     setSkillsConfigOpen(false);
     setMcpConfigOpen(false);
     setPromptsConfigOpen(false);
@@ -1563,7 +1559,6 @@ export function AppShell() {
       onFileDeleted={handleFileDeleted}
       favoriteIds={favoriteIds}
       onToggleFavorite={toggleSessionFavorite}
-      onOpenModels={() => setModelsConfigOpen(true)}
       onOpenSkills={() => setSkillsConfigOpen(true)}
       onOpenPrompts={() => setPromptsConfigOpen(true)}
       onOpenScheduler={() => setSchedulerOpen(true)}
@@ -1836,7 +1831,6 @@ export function AppShell() {
     </div>
 
   </div>
-  {modelsConfigOpen && <ModelsConfig onClose={() => setModelsConfigOpen(false)} />}
     {skillsConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
       <SkillsConfig cwd={(selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setSkillsConfigOpen(false)} />
     )}

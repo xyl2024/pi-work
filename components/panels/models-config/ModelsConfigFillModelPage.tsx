@@ -22,7 +22,6 @@ export function ModelsConfigFillModelPage({
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <ModelCatalogPickerBody
         onBack={modelsConfigBack}
-        onClose={modelsConfigBack}
         onSelect={(model) => fillModelsConfigModelFromCatalog(providerName, index, model)}
       />
     </div>

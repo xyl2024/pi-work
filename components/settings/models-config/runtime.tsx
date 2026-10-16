@@ -10,9 +10,8 @@ import { ModelCard } from "./ModelCard";
 import type { ApiKeyProvider, OAuthProvider, RuntimeCatalog, RuntimeCatalogProvider, RuntimeModelInfo } from "./types";
 
 /**
- * Icon-only "up one level" control for the bodies when they are mounted as
- * panel pages. The modal keeps the × those bodies render otherwise, so the
- * close affordance still matches the container it sits in.
+ * Icon-only "up one level" control, shared by the panel pages that host these
+ * bodies.
  */
 function BodyBackButton({ onClick }: { onClick: () => void }) {
   const { t } = useI18n();
@@ -153,13 +152,10 @@ export function RuntimeModelCatalog() {
 
 export function ModelCatalogPickerBody({
   onSelect,
-  onClose,
   onBack,
 }: {
   onSelect: (model: RuntimeModelInfo) => void;
-  onClose: () => void;
-  /** Panel-page mode: show an up-one-level control instead of a close button. */
-  onBack?: () => void;
+  onBack: () => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -200,14 +196,11 @@ export function ModelCatalogPickerBody({
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        {onBack && <BodyBackButton onClick={onBack} />}
+        <BodyBackButton onClick={onBack} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 700 }}>{t("Fill from model catalog")}</div>
           <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11 }}>{t("Only model fields are filled; provider settings stay unchanged.")}</div>
         </div>
-        {!onBack && (
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
-        )}
       </div>
 
       <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
@@ -215,7 +208,7 @@ export function ModelCatalogPickerBody({
           ref={inputRef}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+          onKeyDown={(e) => { if (e.key === "Escape") onBack(); }}
           placeholder={t("Search all providers and models...")}
           style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
         />
@@ -262,14 +255,11 @@ export function ModelCatalogPickerBody({
 export function AddModelNameStepBody({
   onSelect,
   onSkip,
-  onClose,
   onBack,
 }: {
   onSelect: (model: RuntimeModelInfo) => void;
   onSkip: () => void;
-  onClose: () => void;
-  /** Panel-page mode: show an up-one-level control beside the search field. */
-  onBack?: () => void;
+  onBack: () => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -325,7 +315,7 @@ export function AddModelNameStepBody({
       if (picked) onSelect(picked.model);
     } else if (e.key === "Escape") {
       e.preventDefault();
-      onClose();
+      onBack();
     }
   };
 
@@ -333,7 +323,7 @@ export function AddModelNameStepBody({
     <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
       <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {onBack && <BodyBackButton onClick={onBack} />}
+          <BodyBackButton onClick={onBack} />
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
@@ -628,14 +618,12 @@ interface AddProviderPickerBodyProps {
   onSelectOAuth: (id: string) => void;
   onSelectApiKey: (id: string) => void;
   onAddCustom: () => void;
-  onClose: () => void;
-  /** Panel-page mode: show an up-one-level control beside the search field. */
-  onBack?: () => void;
+  onBack: () => void;
 }
 
 export function AddProviderPickerBody({
   oauthProviders, apiKeyProviders,
-  onSelectOAuth, onSelectApiKey, onAddCustom, onClose, onBack,
+  onSelectOAuth, onSelectApiKey, onAddCustom, onBack,
 }: AddProviderPickerBodyProps) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
@@ -666,7 +654,7 @@ export function AddProviderPickerBody({
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
       <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
-        {onBack && <BodyBackButton onClick={onBack} />}
+        <BodyBackButton onClick={onBack} />
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
           <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
@@ -674,7 +662,7 @@ export function AddProviderPickerBody({
           ref={inputRef}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+          onKeyDown={(e) => { if (e.key === "Escape") onBack(); }}
           placeholder={t("Search providers...")}
           style={{ flex: 1, background: "none", border: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
         />

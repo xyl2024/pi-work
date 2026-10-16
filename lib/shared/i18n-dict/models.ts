@@ -28,7 +28,6 @@ export const models = {
   "Skip and fill in manually": "跳过，手动填写",
   "No matching models": "没有匹配的模型",
   "{n} matching models": "{n} 个匹配模型",
-  "Back to configuration": "返回配置",
   "{n} providers": "{n} 个厂商",
   "{n} models": "{n} 个模型",
   "Search providers and models...": "搜索厂商和模型...",
@@ -67,7 +66,6 @@ export const models = {
   "Edit as JSON": "以 JSON 编辑",
   "Apply raw JSON": "应用原始 JSON",
   "Copy raw JSON": "复制原始 JSON",
-  "Raw metadata applied": "原始元数据已应用",
   "Raw JSON must be an object": "原始 JSON 必须是一个对象",
   "Raw metadata hint": "未在表单中暴露的字段（如 compat）可点击\u201c以 JSON 编辑\u201d直接修改，或手编 ~/.pi/agent/models.json。",
 
@@ -112,9 +110,8 @@ export const models = {
   "Add model": "添加模型",
   "Add provider": "添加提供商",
   "No providers configured": "还没有配置任何提供商",
-  "Select a provider or model": "选择提供商或模型",
 
-  // Common action labels reused inside the models modal
+  // Common action labels reused inside the models panel
   "Add Skill": "添加技能",
   "Select a prompt template": "选择一个提示词模板",
   "Select a skill": "选择一个技能",
@@ -127,9 +124,7 @@ export const models = {
   "Locked by SKILL.md frontmatter (disable-model-invocation)": "已由 SKILL.md frontmatter（disable-model-invocation）锁定",
   "This skill sets disable-model-invocation: true in its frontmatter, so pi never lists it in the system prompt. It can still be invoked explicitly via /skill:name.": "该技能在 frontmatter 中声明了 disable-model-invocation: true，pi 不会将其列入系统提示词，只能通过 /skill:name 手动调用。",
 
-  // Models saved
-  "Models saved": "模型配置已保存",
-  "Failed to save models": "模型配置失败",
+  // Save / load feedback
   "Failed to load models": "加载模型配置失败",
   "API key saved": "API 密钥已保存",
   "API key removed": "API 密钥已移除",

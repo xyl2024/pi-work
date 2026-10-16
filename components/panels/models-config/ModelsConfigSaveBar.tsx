@@ -12,8 +12,7 @@ import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text
 /**
  * The panel's fixed save footer. It never scrolls away, and it is where both
  * the save feedback (saving / saved) and the failure text live — the panel
- * writes the whole draft to `models.json` in one PUT, exactly like the modal
- * did.
+ * writes the whole draft to `models.json` in one PUT.
  */
 export function ModelsConfigSaveBar() {
   const { t } = useI18n();

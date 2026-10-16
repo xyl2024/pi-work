@@ -7,7 +7,7 @@ import { ModelsConfigBackButton } from "./ModelsConfigBackButton";
 
 /**
  * One API-key provider's page: paste / replace / remove the key plus the
- * runtime model list, reusing the modal's `ApiKeyDetail` body with the panel's
+ * runtime model list, reusing the shared `ApiKeyDetail` body with the panel's
  * level-up control instead of a close button.
  */
 export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {

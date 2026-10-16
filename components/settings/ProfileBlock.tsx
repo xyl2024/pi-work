@@ -13,7 +13,6 @@ import { SUN, MOON } from "@/lib/client/icon-paths";
 
 interface Props {
   onOpenSettings?: () => void;
-  onOpenModels?: () => void;
   onOpenSkills?: () => void;
   onOpenPrompts?: () => void;
   onOpenScheduler?: () => void;
@@ -46,7 +45,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, refreshKey, onLogout }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, refreshKey, onLogout }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -140,7 +139,7 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onOpenModels || onOpenSkills || onOpenMcp || onOpenPrompts || onOpenScheduler || onOpenChannels || onOpenToolMarket || onLogout);
+  const hasAnyEntry = Boolean(onOpenSkills || onOpenMcp || onOpenPrompts || onOpenScheduler || onOpenChannels || onOpenToolMarket || onLogout);
 
   return (
     <div
@@ -325,25 +324,6 @@ export function ProfileBlock({ onOpenSettings, onOpenModels, onOpenSkills, onOpe
               "transform 180ms cubic-bezier(0.32, 0.72, 0, 1), opacity 180ms cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
-          {onOpenModels && (
-            <button
-              role="menuitem"
-              onClick={() => { setMenuOpen(false); onOpenModels(); }}
-              style={itemBaseStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <rect x="4" y="4" width="16" height="16" rx="2" />
-                <rect x="9" y="9" width="6" height="6" />
-                <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-                <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-                <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
-                <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
-              </svg>
-              <span>{t("Models")}</span>
-            </button>
-          )}
           {onOpenSkills && (
             <button
               role="menuitem"

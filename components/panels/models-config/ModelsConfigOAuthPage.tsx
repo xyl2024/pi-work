@@ -6,7 +6,7 @@ import { reloadModelsConfigOAuthProviders, useModelsConfigStore } from "@/lib/cl
 import { ModelsConfigBackButton } from "./ModelsConfigBackButton";
 
 /**
- * One subscription provider's page. It reuses the modal's `OAuthDetail` body
+ * One subscription provider's page. It reuses the shared `OAuthDetail` body
  * (whose login session already outlives its own mount) and adds the panel's
  * level-up control; there is no second overlay to fall back to.
  */

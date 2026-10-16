@@ -1,6 +1,6 @@
 /**
- * Data shapes shared by the models-config client surfaces (the modal today,
- * the panel view later) and the pure draft model in `models-config-draft.ts`.
+ * Data shapes shared by the models-config panel view and the pure draft model in
+ * `models-config-draft.ts`.
  *
  * These live in `lib/shared` so the pure draft logic can depend on them
  * without reaching into a component directory. No runtime value is exported
@@ -63,13 +63,6 @@ export interface ProviderEntry {
 export interface ModelsJson {
   providers?: Record<string, ProviderEntry>;
 }
-
-/** Which entity the configuration surface is currently showing. */
-export type Selection =
-  | { type: "provider"; name: string }
-  | { type: "model"; providerName: string; index: number }
-  | { type: "oauth"; providerId: string }
-  | { type: "apikey"; providerId: string };
 
 export interface RuntimeModelInfo {
   id: string;

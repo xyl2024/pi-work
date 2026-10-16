@@ -14,9 +14,9 @@ import { hasDeepseekCompat, setDeepseekCompat } from "./utils";
  * image flags, the DeepSeek compat toggle, the thinking-level map, the context
  * and output limits and the four cost columns.
  *
- * It carries no header actions and no raw-JSON view: the modal's `ModelDetail`
- * and the panel's model page each wrap it with the actions that fit their
- * surface, the same way `ProviderFields` is shared.
+ * It carries no header actions and no raw-JSON view: the panel's model page
+ * wraps it with the actions that fit its surface, the same way `ProviderFields`
+ * is shared.
  */
 export function ModelFields({
   model,

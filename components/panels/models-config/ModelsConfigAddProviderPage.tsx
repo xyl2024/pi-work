@@ -10,10 +10,10 @@ import {
 } from "@/lib/client/models-config-store";
 
 /**
- * The add-provider page: the modal's three-way picker (custom / subscription /
- * API key) mounted as a full-width panel page. Custom opens the new provider's
- * form; subscription and API-key entries open their own detail pages. Nothing
- * here escapes the panel, so the modal's second full-screen overlay is gone.
+ * The add-provider page: the three-way picker (custom / subscription / API key)
+ * mounted as a full-width panel page. Custom opens the new provider's form;
+ * subscription and API-key entries open their own detail pages. Nothing here
+ * escapes the panel, so there is no second full-screen overlay.
  */
 export function ModelsConfigAddProviderPage() {
   const { oauthProviders, apiKeyProviders } = useModelsConfigStore();
@@ -25,7 +25,6 @@ export function ModelsConfigAddProviderPage() {
         onSelectOAuth={openModelsConfigOAuth}
         onSelectApiKey={openModelsConfigApiKey}
         onAddCustom={addModelsConfigCustomProvider}
-        onClose={modelsConfigBack}
         onBack={modelsConfigBack}
       />
     </div>

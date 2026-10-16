@@ -17,7 +17,6 @@ export function ModelsConfigAddModelNamePage({ providerName }: { providerName: s
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
       <AddModelNameStepBody
         onBack={modelsConfigBack}
-        onClose={modelsConfigBack}
         onSelect={(model) => addModelsConfigModelFromCatalog(providerName, model)}
         onSkip={() => addModelsConfigModel(providerName)}
       />
