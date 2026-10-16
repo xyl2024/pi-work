@@ -29,7 +29,6 @@ import { celebrateTool, CELEBRATE_SYSTEM_PROMPT_BLOCK } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
 import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
-import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { matchSelfKillCommand } from "./self-protection";
@@ -1047,8 +1046,6 @@ export async function startRpcSession(
         if (sessionHasTool("spawn_subagent")) blocks.push(buildSpawnSubagentSystemPromptBlock());
         if (sessionHasTool("show_media")) blocks.push(SHOW_MEDIA_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("web_search")) blocks.push(WEB_SEARCH_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("fetch_content")) blocks.push(FETCH_CONTENT_SYSTEM_PROMPT_BLOCK);
         return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
       },
       // Codebase explorers receive no Skills section. Other sessions retain
@@ -1290,7 +1287,6 @@ export async function startRpcSession(
         // exist here" stays one decision (lib/shared/agent-shell-tools.ts).
         createPiWorkPowerShellTool(cwd),
         ...buildShowFileTool(),
-        ...(readConfig().web_access.enabled ? buildWebAccessTools() : []),
         // Core orchestration tool. Child profiles exclude it through
         // allowedToolNames, so subagents cannot recursively spawn more
         // subagents in the MVP.

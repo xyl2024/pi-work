@@ -49,7 +49,7 @@ pi-work/
 │       │                    # 权限确认、Ask User Questions、自定义工具与审计上下文
 │       ├── sessions/        # 会话读取、搜索与变更（JSONL 原子写入，并同步清理缓存/sidecar）
 │       ├── session-export/ files/ terminal/ wechat/ scheduler/ channels/
-│       │                    notifications/ self-tools/ turn/ web-access/ subagent-*
+│       │                    notifications/ self-tools/ turn/ subagent-*
 │       └── *-db.ts *-store.ts   # 各功能的 SQLite / JSON store（LLM Audit、Token Audit、
 │                                #   Profile、Subagent）
 ├── scripts/            # 迁移、恢复、部署与字体处理
