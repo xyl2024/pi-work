@@ -22,6 +22,7 @@ import { useSyncExternalStore } from "react";
 import type { OAuthLoginState } from "@/lib/shared/models-config";
 import {
   OAUTH_LOGIN_IDLE,
+  anyOAuthLoginInProgress,
   isOAuthLoginWorking,
   oauthLoginToken,
   parseOAuthLoginEvent,
@@ -121,6 +122,26 @@ export function startOAuthLogin(providerId: string): void {
 /** Close the stream (if any) and return the phase to idle. */
 export function cancelOAuthLogin(providerId: string): void {
   applyEvent(providerId, { type: "reset" });
+}
+
+/**
+ * Whether any provider still has a login running. The models-config panel's
+ * close guard reads this: closing the tab while an authorization is in flight
+ * is the one case that asks first.
+ */
+export function hasActiveOAuthLogin(): boolean {
+  return anyOAuthLoginInProgress([...sessions.values()].map((session) => session.state));
+}
+
+/**
+ * Drop every running login. Called when the user confirms closing the panel
+ * tab mid-authorization — that confirmation is only honest if the session
+ * really ends here instead of continuing invisibly behind a closed tab.
+ */
+export function cancelActiveOAuthLogins(): void {
+  for (const [providerId, session] of sessions) {
+    if (isOAuthLoginWorking(session.state)) cancelOAuthLogin(providerId);
+  }
 }
 
 /**

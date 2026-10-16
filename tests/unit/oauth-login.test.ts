@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   OAUTH_LOGIN_IDLE,
+  anyOAuthLoginInProgress,
   isOAuthLoginWorking,
   oauthLoginToken,
   parseOAuthLoginEvent,
@@ -168,5 +169,12 @@ describe("oauth login helpers", () => {
     expect(isOAuthLoginWorking(OAUTH_LOGIN_IDLE)).toBe(false);
     expect(isOAuthLoginWorking({ phase: "success" })).toBe(false);
     expect(isOAuthLoginWorking({ phase: "error", message: "e" })).toBe(false);
+  });
+
+  it("reports whether any provider still has a login in flight", () => {
+    expect(anyOAuthLoginInProgress([])).toBe(false);
+    expect(anyOAuthLoginInProgress([OAUTH_LOGIN_IDLE, { phase: "success" }, { phase: "error", message: "e" }])).toBe(false);
+    expect(anyOAuthLoginInProgress([OAUTH_LOGIN_IDLE, { phase: "connecting" }])).toBe(true);
+    expect(anyOAuthLoginInProgress([{ phase: "auth", url: "u", instructions: null, token: "t" }])).toBe(true);
   });
 });

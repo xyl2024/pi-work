@@ -173,3 +173,13 @@ export function oauthLoginToken(state: OAuthLoginState): string | null {
 export function isOAuthLoginWorking(state: OAuthLoginState): boolean {
   return state.phase !== "idle" && state.phase !== "success" && state.phase !== "error";
 }
+
+/**
+ * Whether any provider still has a login in flight. The panel-tab close guard
+ * aggregates every provider's session through this, so "is an authorization
+ * running?" is one rule instead of a `some(isOAuthLoginWorking)` written per
+ * call site.
+ */
+export function anyOAuthLoginInProgress(states: readonly OAuthLoginState[]): boolean {
+  return states.some(isOAuthLoginWorking);
+}

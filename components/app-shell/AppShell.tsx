@@ -58,6 +58,7 @@ import {
   selectActiveTab,
   selectCanExpand,
   selectOpenCount,
+  selectTab,
   type PanelMode,
   type PanelTabsState,
   type PanelViewKind,
@@ -69,6 +70,8 @@ import { buildCommands, type Command, type CommandContext } from "@/lib/client/c
 import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
+import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
+import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
@@ -973,28 +976,60 @@ export function AppShell() {
     setPanelMode("expanded");
   }, [setPanelMode]);
 
-  const handleCloseFileTab = useCallback((tabId: string) => {
+  // The models-config panel's close guard (pure, in
+  // lib/shared/models-config-close). Today it only covers a running
+  // subscription authorization: confirming the close cancels it, which is
+  // what the prompt promises. Every close path that can drop that tab asks
+  // through here — the single × and the batch closes alike, so "Close other
+  // tabs" cannot swallow a login either.
+  const confirmDropModelsConfig = useCallback(async (dropsModelsConfig: boolean): Promise<boolean> => {
+    if (!dropsModelsConfig) return true;
+    const guard = selectModelsConfigCloseConfirm({ oauthInProgress: hasActiveOAuthLogin() });
+    if (!guard) return true;
+    const ok = await confirm({
+      title: t(guard.titleKey),
+      description: t(guard.descriptionKey),
+      confirmLabel: t("Close"),
+      cancelLabel: t("Cancel"),
+      destructive: true,
+    });
+    if (ok) cancelActiveOAuthLogins();
+    return ok;
+  }, [confirm, t]);
+
+  const handleCloseFileTab = useCallback(async (tabId: string) => {
+    const tab = selectTab(panelTabsState, tabId);
+    if (!(await confirmDropModelsConfig(tab?.kind === "modelsConfig"))) return;
     dispatchPanelTabs({ type: "close", id: tabId });
-  }, []);
+  }, [panelTabsState, confirmDropModelsConfig]);
 
   // Close every tab strictly to the left of `tabId` (the right-clicked one).
   // If the active tab is being closed, fall back to `tabId` (still open).
-  const handleCloseLeftTabs = useCallback((tabId: string) => {
+  // Tabs are stored newest-first, so "left" is the slice before the index.
+  const handleCloseLeftTabs = useCallback(async (tabId: string) => {
+    const index = panelTabsState.tabs.findIndex((tab) => tab.id === tabId);
+    const drops = index > 0 && panelTabsState.tabs.slice(0, index).some((tab) => tab.kind === "modelsConfig");
+    if (!(await confirmDropModelsConfig(drops))) return;
     dispatchPanelTabs({ type: "close_left", id: tabId });
-  }, []);
+  }, [panelTabsState, confirmDropModelsConfig]);
 
   // Close every tab strictly to the right of `tabId`. If the active tab is
   // being closed, fall back to `tabId`.
-  const handleCloseRightTabs = useCallback((tabId: string) => {
+  const handleCloseRightTabs = useCallback(async (tabId: string) => {
+    const index = panelTabsState.tabs.findIndex((tab) => tab.id === tabId);
+    const drops = panelTabsState.tabs.slice(index + 1).some((tab) => tab.kind === "modelsConfig");
+    if (!(await confirmDropModelsConfig(drops))) return;
     dispatchPanelTabs({ type: "close_right", id: tabId });
-  }, []);
+  }, [panelTabsState, confirmDropModelsConfig]);
 
   // Close every tab other than `tabId`. The right-clicked tab is preserved
   // (and becomes the active one if it wasn't already), so the panel never
   // collapses from this action.
-  const handleCloseOtherTabs = useCallback((tabId: string) => {
+  const handleCloseOtherTabs = useCallback(async (tabId: string) => {
+    const drops = panelTabsState.tabs.some((tab) => tab.kind === "modelsConfig" && tab.id !== tabId);
+    if (!(await confirmDropModelsConfig(drops))) return;
     dispatchPanelTabs({ type: "close_others", id: tabId });
-  }, []);
+  }, [panelTabsState, confirmDropModelsConfig]);
 
   // Build the per-tab right-click menu. Single tab → no batch actions shown.
   const handleTabContextMenu = useCallback((tabId: string, x: number, y: number, triggerElement: HTMLElement | null) => {

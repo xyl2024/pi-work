@@ -102,6 +102,9 @@ export const models = {
   "Enter new key to replace...": "输入新 key 以替换...",
   "Removing...": "正在移除...",
   "Disconnect": "断开连接",
+  // Panel close guard: the tab × while a subscription login is running.
+  "Close while signing in?": "登录尚未完成，确认关闭？",
+  "The authorization in progress will be cancelled.": "进行中的授权将被取消。",
   "new model": "新模型",
   "Add model": "添加模型",
   "Add provider": "添加提供商",
