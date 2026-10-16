@@ -5,6 +5,7 @@
  *
  *   • `modelsConfigDraftFrom` — server payload → draft + baseline.
  *   • `isModelsConfigDirty`   — is the draft still equal to the loaded baseline?
+ *   • `modelsConfigProblem`   — the one blocking problem, or null. Gates "Save".
  *   • the `with*` / `without*` helpers — the draft edits the surface performs.
  *   • selection helpers — how an edit moves the thing being viewed.
  *
@@ -20,6 +21,59 @@ export interface ModelsConfigDraft {
   config: ModelsJson;
   /** The config as it was read from disk, normalized. */
   baseline: ModelsJson;
+}
+
+/**
+ * A model being edited through the raw-JSON view. The text is kept even while
+ * it does not parse, so an unparsable edit can be repaired in place instead of
+ * being silently dropped — and so the save that would skip it can be blocked.
+ * `originalJson` is the model as the edit began, so Cancel can restore it after
+ * a valid edit has already landed on the draft.
+ */
+export interface ModelsConfigRawEdit {
+  providerName: string;
+  index: number;
+  originalJson: string;
+  text: string;
+}
+
+/** The first thing that must be fixed before saving, or null. */
+export type ModelsConfigProblem = {
+  reason: "syntax" | "not-object";
+  message: string;
+};
+
+/** Parse a model's raw-JSON text; a non-object is rejected like bad syntax. */
+export function parseModelEntryJson(
+  text: string,
+): { ok: true; model: ModelEntry } | { ok: false; reason: "syntax" | "not-object"; message: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    return { ok: false, reason: "syntax", message: error instanceof Error ? error.message : String(error) };
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, reason: "not-object", message: "not a JSON object" };
+  }
+  const model = { ...(parsed as ModelEntry) };
+  if (typeof model.id !== "string") model.id = "";
+  if (model.icon === undefined || model.icon === null || model.icon === "") delete model.icon;
+  return { ok: true, model };
+}
+
+/**
+ * The one problem that blocks saving, or null. Only an in-flight raw-JSON edit
+ * can block today: the text is what the user sees, and while it does not parse
+ * it cannot be part of the payload the save would write.
+ */
+export function modelsConfigProblem(
+  rawText: string | null | undefined,
+): ModelsConfigProblem | null {
+  if (!rawText) return null;
+  const parsed = parseModelEntryJson(rawText);
+  if (parsed.ok) return null;
+  return { reason: parsed.reason, message: parsed.message };
 }
 
 /** Normalize whatever `GET /api/models-config` returned into a `ModelsJson`. */

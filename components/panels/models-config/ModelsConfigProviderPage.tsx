@@ -2,9 +2,13 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderFields } from "@/components/settings/models-config/ProviderFields";
+import { ModelEntryCard } from "@/components/settings/models-config/ModelEntryCard";
+import { SectionTitle } from "@/components/settings/models-config/form-fields";
 import {
+  addModelsConfigModel,
   deleteModelsConfigProvider,
   modelsConfigBack,
+  openModelsConfigModel,
   renameModelsConfigProvider,
   updateModelsConfigProvider,
   useModelsConfigStore,
@@ -15,15 +19,15 @@ import {
  * the provider list — the panel navigates in levels instead of the modal's
  * 210px sidebar plus a detail column.
  *
- * The model grid and its "open a model" navigation belong to the model-detail
- * slice; this page covers the fields the provider slice asks for (name, icon,
- * Base URL, API), plus the provider's own API key.
+ * Its model grid opens each model's own detail page; the model-detail slice
+ * adds the grid and the "open a model" navigation the provider slice left out.
  */
 export function ModelsConfigProviderPage({ name }: { name: string }) {
   const { t } = useI18n();
   const { config } = useModelsConfigStore();
   const provider = config.providers?.[name];
   if (!provider) return null;
+  const models = provider.models ?? [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: 12 }}>
@@ -56,6 +60,33 @@ export function ModelsConfigProviderPage({ name }: { name: string }) {
         onChange={(next) => updateModelsConfigProvider(name, next)}
         onRename={(nextName) => renameModelsConfigProvider(name, nextName)}
       />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <SectionTitle>{t("Models")}</SectionTitle>
+          <button
+            type="button"
+            onClick={() => addModelsConfigModel(name)}
+            style={{ padding: "3px 8px", background: "none", border: "1px dashed var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
+          >
+            + {t("Model")}
+          </button>
+        </div>
+        {models.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No models")}</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+            {models.map((model, index) => (
+              <ModelEntryCard
+                key={index}
+                model={model}
+                providerIcon={provider.icon}
+                onOpen={() => openModelsConfigModel(name, index)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

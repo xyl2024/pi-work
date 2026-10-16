@@ -17,14 +17,15 @@
  *     an empty stack still resolves to root.
  *
  * The page union only carries what the panel can actually navigate to today.
- * Later slices add the model / OAuth / API-key / add pages to the union; the
- * stack rules above do not change.
+ * Later slices add the OAuth / API-key / add pages to the union; the stack
+ * rules above do not change.
  */
 
 /** One level of the panel's navigation. */
 export type ModelsConfigPage =
   | { kind: "root" }
-  | { kind: "provider"; name: string };
+  | { kind: "provider"; name: string }
+  | { kind: "model"; providerName: string; index: number };
 
 /** The provider list — the bottom of every stack. */
 export const MODELS_CONFIG_ROOT_PAGE: ModelsConfigPage = { kind: "root" };
@@ -54,14 +55,18 @@ export function backModelsConfigPage(pages: readonly ModelsConfigPage[]): Models
   return pages.slice(0, -1);
 }
 
-/** Follow a provider rename so the open detail page keeps showing the entity. */
+/**
+ * Follow a provider rename so an open provider or model detail page keeps
+ * showing the entity it was opened for.
+ */
 export function renameModelsConfigProviderPage(
   pages: readonly ModelsConfigPage[],
   oldName: string,
   newName: string,
 ): ModelsConfigPage[] {
-  if (currentModelsConfigPage(pages).kind !== "provider") return [...pages];
-  return pages.map((page) =>
-    page.kind === "provider" && page.name === oldName ? { kind: "provider", name: newName } : page,
-  );
+  return pages.map((page) => {
+    if (page.kind === "provider" && page.name === oldName) return { kind: "provider", name: newName };
+    if (page.kind === "model" && page.providerName === oldName) return { ...page, providerName: newName };
+    return page;
+  });
 }

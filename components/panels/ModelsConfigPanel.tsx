@@ -6,6 +6,7 @@ import { currentModelsConfigPage } from "@/lib/shared/models-config-pages";
 import { ensureModelsConfigLoaded, useModelsConfigStore } from "@/lib/client/models-config-store";
 import { ModelsConfigRootPage } from "./models-config/ModelsConfigRootPage";
 import { ModelsConfigProviderPage } from "./models-config/ModelsConfigProviderPage";
+import { ModelsConfigModelPage } from "./models-config/ModelsConfigModelPage";
 import { ModelsConfigSaveBar } from "./models-config/ModelsConfigSaveBar";
 
 /**
@@ -48,6 +49,8 @@ export function ModelsConfigPanel() {
           </div>
         ) : page.kind === "provider" ? (
           <ModelsConfigProviderPage name={page.name} />
+        ) : page.kind === "model" ? (
+          <ModelsConfigModelPage providerName={page.providerName} index={page.index} />
         ) : (
           <ModelsConfigRootPage />
         )}

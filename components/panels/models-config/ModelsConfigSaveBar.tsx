@@ -4,8 +4,10 @@ import { useI18n } from "@/hooks/useI18n";
 import {
   saveModelsConfig,
   selectModelsConfigDirty,
+  selectModelsConfigProblem,
   useModelsConfigStore,
 } from "@/lib/client/models-config-store";
+import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text";
 
 /**
  * The panel's fixed save footer. It never scrolls away, and it is where both
@@ -18,15 +20,19 @@ export function ModelsConfigSaveBar() {
   const state = useModelsConfigStore();
   const { saving, savedOk, saveError } = state;
   const dirty = selectModelsConfigDirty(state);
-  const disabled = saving || savedOk || !dirty;
+  const problem = selectModelsConfigProblem(state);
+  // An unparsable raw edit is not part of the draft; the save button stays down
+  // and the bar says what is wrong so the text can be repaired in place.
+  const blockedText = modelsConfigProblemText(problem, t);
+  const disabled = saving || savedOk || !dirty || problem !== null;
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: "1px solid var(--border)", background: "var(--bg)", flexShrink: 0 }}>
       <span
-        title={saveError ?? undefined}
-        style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: saveError ? "var(--error)" : "var(--text-dim)", fontSize: 11 }}
+        title={saveError ?? blockedText ?? undefined}
+        style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: saveError || blockedText ? "var(--error)" : "var(--text-dim)", fontSize: 11 }}
       >
-        {saveError ?? ""}
+        {saveError ?? blockedText ?? ""}
       </span>
       <button
         type="button"

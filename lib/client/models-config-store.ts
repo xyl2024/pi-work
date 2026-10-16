@@ -33,9 +33,16 @@ import {
 import {
   isModelsConfigDirty,
   modelsConfigDraftFrom,
+  modelsConfigProblem,
+  parseModelEntryJson,
+  withAddedModel,
+  withModel,
   withProvider,
   withRenamedProvider,
+  withoutModel,
   withoutProvider,
+  type ModelsConfigProblem,
+  type ModelsConfigRawEdit,
 } from "@/lib/shared/models-config-draft";
 import {
   MODELS_CONFIG_ROOT_PAGE,
@@ -47,6 +54,7 @@ import {
 } from "@/lib/shared/models-config-pages";
 import type {
   ApiKeyProvider,
+  ModelEntry,
   ModelsJson,
   OAuthProvider,
   ProviderEntry,
@@ -62,6 +70,8 @@ export interface ModelsConfigStoreState {
   config: ModelsJson;
   baseline: ModelsJson;
   pages: ModelsConfigPage[];
+  /** The model being edited through the raw-JSON view, if any. */
+  rawEdit: ModelsConfigRawEdit | null;
   saving: boolean;
   savedOk: boolean;
   saveError: string | null;
@@ -78,6 +88,7 @@ const INITIAL: ModelsConfigStoreState = {
   config: EMPTY_CONFIG,
   baseline: EMPTY_CONFIG,
   pages: [MODELS_CONFIG_ROOT_PAGE],
+  rawEdit: null,
   saving: false,
   savedOk: false,
   saveError: null,
@@ -130,6 +141,13 @@ export function selectModelsConfigDirty(snapshot: ModelsConfigStoreState): boole
   return isModelsConfigDirty({ config: snapshot.config, baseline: snapshot.baseline });
 }
 
+/** The single "cannot save yet" rule — the save bar and the raw editor read it. */
+export function selectModelsConfigProblem(
+  snapshot: ModelsConfigStoreState,
+): ModelsConfigProblem | null {
+  return modelsConfigProblem(snapshot.rawEdit?.text);
+}
+
 // ── Loading ─────────────────────────────────────────────────────────────
 
 async function loadFromDisk(): Promise<void> {
@@ -165,6 +183,10 @@ export function ensureModelsConfigLoaded(): void {
 }
 
 export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string }> {
+  // An in-flight raw edit that does not parse is not part of the draft; saving
+  // around it would drop it silently.
+  const problem = modelsConfigProblem(state.rawEdit?.text);
+  if (problem) return { ok: false, error: problem.message };
   // Snapshot what we are about to write: an edit made while the PUT is in
   // flight must stay dirty against this payload, not silently become saved.
   const payload = state.config;
@@ -190,12 +212,17 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
 
 /** Open a provider's detail page (replacing a sibling detail page). */
 export function openModelsConfigProvider(name: string): void {
-  patch({ pages: openModelsConfigPage({ kind: "provider", name }) });
+  patch({ pages: openModelsConfigPage({ kind: "provider", name }), rawEdit: null });
+}
+
+/** Open a model's detail page (a sibling of the provider page). */
+export function openModelsConfigModel(providerName: string, index: number): void {
+  patch({ pages: openModelsConfigPage({ kind: "model", providerName, index }), rawEdit: null });
 }
 
 /** Pop one level; the provider list is the floor. */
 export function modelsConfigBack(): void {
-  patch({ pages: backPageStack(state.pages) });
+  patch({ pages: backPageStack(state.pages), rawEdit: null });
 }
 
 // ── Provider edits ──────────────────────────────────────────────────────
@@ -209,6 +236,10 @@ export function renameModelsConfigProvider(oldName: string, newName: string): vo
   patch({
     config: withRenamedProvider(state.config, oldName, newName),
     pages: renameModelsConfigProviderPage(state.pages, oldName, newName),
+    rawEdit:
+      state.rawEdit && state.rawEdit.providerName === oldName
+        ? { ...state.rawEdit, providerName: newName }
+        : state.rawEdit,
   });
 }
 
@@ -217,5 +248,80 @@ export function deleteModelsConfigProvider(name: string): void {
   patch({
     config: withoutProvider(state.config, name),
     pages: createModelsConfigPageStack(),
+    rawEdit: null,
+  });
+}
+
+// ── Model edits ─────────────────────────────────────────────────────────
+
+/** Replace one model entry in place (key unchanged). */
+export function updateModelsConfigModel(providerName: string, index: number, model: ModelEntry): void {
+  patch({ config: withModel(state.config, providerName, index, model) });
+}
+
+/**
+ * Append a model to a provider's list and open its detail page. Both the add
+ * and any subsequent edit stay in the draft — only a save writes them.
+ */
+export function addModelsConfigModel(providerName: string): void {
+  const { config, index } = withAddedModel(state.config, providerName);
+  patch({
+    config,
+    pages: openModelsConfigPage({ kind: "model", providerName, index }),
+    rawEdit: null,
+  });
+}
+
+/** Remove a model from the draft and draw the panel back to the list. */
+export function removeModelsConfigModel(providerName: string, index: number): void {
+  patch({
+    config: withoutModel(state.config, providerName, index),
+    pages: createModelsConfigPageStack(),
+    rawEdit: null,
+  });
+}
+
+// ── Raw-JSON editing ────────────────────────────────────────────────────
+
+/** Start editing a model as raw JSON, seeded with its current serialization. */
+export function beginModelsConfigRawEdit(providerName: string, index: number, text: string): void {
+  patch({ rawEdit: { providerName, index, originalJson: text, text } });
+}
+
+/**
+ * The raw text is the editable model: a parse that succeeds lands on the draft
+ * immediately (so the edit counts as unsaved and a save writes it), while a
+ * parse that fails keeps the text and blocks the save through
+ * `selectModelsConfigProblem`.
+ */
+export function updateModelsConfigRawEdit(text: string): void {
+  const rawEdit = state.rawEdit;
+  if (!rawEdit) return;
+  const parsed = parseModelEntryJson(text);
+  patch({
+    rawEdit: { ...rawEdit, text },
+    config: parsed.ok
+      ? withModel(state.config, rawEdit.providerName, rawEdit.index, parsed.model)
+      : state.config,
+  });
+}
+
+/** Leave the raw view. The text is already applied on every keystroke. */
+export function applyModelsConfigRawEdit(): void {
+  if (!state.rawEdit) return;
+  if (!parseModelEntryJson(state.rawEdit.text).ok) return;
+  patch({ rawEdit: null });
+}
+
+/** Abandon the raw edit and restore the model to how it was when it began. */
+export function cancelModelsConfigRawEdit(): void {
+  const rawEdit = state.rawEdit;
+  if (!rawEdit) return;
+  const parsed = parseModelEntryJson(rawEdit.originalJson);
+  patch({
+    rawEdit: null,
+    config: parsed.ok
+      ? withModel(state.config, rawEdit.providerName, rawEdit.index, parsed.model)
+      : state.config,
   });
 }

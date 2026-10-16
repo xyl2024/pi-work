@@ -68,6 +68,7 @@ export const models = {
   "Apply raw JSON": "应用原始 JSON",
   "Copy raw JSON": "复制原始 JSON",
   "Raw metadata applied": "原始元数据已应用",
+  "Raw JSON must be an object": "原始 JSON 必须是一个对象",
   "Raw metadata hint": "未在表单中暴露的字段（如 compat）可点击\u201c以 JSON 编辑\u201d直接修改，或手编 ~/.pi/agent/models.json。",
 
   // Provider / model management

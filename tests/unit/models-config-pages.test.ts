@@ -19,6 +19,10 @@ function provider(name: string): ModelsConfigPage {
   return { kind: "provider", name };
 }
 
+function model(providerName: string, index: number): ModelsConfigPage {
+  return { kind: "model", providerName, index };
+}
+
 describe("createModelsConfigPageStack", () => {
   it("starts on the provider list", () => {
     expect(createModelsConfigPageStack()).toEqual([MODELS_CONFIG_ROOT_PAGE]);
@@ -45,6 +49,13 @@ describe("openModelsConfigPage", () => {
     ]);
   });
 
+  it("opens a model above the list", () => {
+    expect(openModelsConfigPage(model("openai", 1))).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      model("openai", 1),
+    ]);
+  });
+
   it("replaces a sibling detail page instead of growing the stack", () => {
     const first = openModelsConfigPage(provider("openai"));
     const second = openModelsConfigPage(provider("anthropic"));
@@ -52,6 +63,13 @@ describe("openModelsConfigPage", () => {
     expect(first).toHaveLength(2);
     expect(second).toHaveLength(2);
     expect(second).toEqual([MODELS_CONFIG_ROOT_PAGE, provider("anthropic")]);
+  });
+
+  it("replaces a provider page with a model page (both are first-level details)", () => {
+    expect(openModelsConfigPage(model("openai", 0))).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      model("openai", 0),
+    ]);
   });
 
   it("returns to the list when opening the root page", () => {
@@ -80,6 +98,12 @@ describe("renameModelsConfigProviderPage", () => {
     expect(
       renameModelsConfigProviderPage([MODELS_CONFIG_ROOT_PAGE, provider("openai")], "openai", "oa"),
     ).toEqual([MODELS_CONFIG_ROOT_PAGE, provider("oa")]);
+  });
+
+  it("follows a rename when a model page is open", () => {
+    expect(
+      renameModelsConfigProviderPage([MODELS_CONFIG_ROOT_PAGE, model("openai", 2)], "openai", "oa"),
+    ).toEqual([MODELS_CONFIG_ROOT_PAGE, model("oa", 2)]);
   });
 
   it("leaves an unrelated detail page alone", () => {

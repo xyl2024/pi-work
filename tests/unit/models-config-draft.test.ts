@@ -5,7 +5,9 @@ import {
   firstProviderSelection,
   isModelsConfigDirty,
   modelsConfigDraftFrom,
+  modelsConfigProblem,
   normalizeModelsJson,
+  parseModelEntryJson,
   renameSelection,
   withAddedModel,
   withCustomProvider,
@@ -203,5 +205,54 @@ describe("renameSelection", () => {
   it("leaves unrelated selections alone", () => {
     const oauth = { type: "oauth", providerId: "x" } as const;
     expect(renameSelection(oauth, "a", "b")).toBe(oauth);
+  });
+});
+
+describe("parseModelEntryJson", () => {
+  it("parses an object and keeps its fields", () => {
+    const result = parseModelEntryJson('{"id":"gpt-4","name":"GPT-4","reasoning":true}');
+    expect(result).toEqual({ ok: true, model: { id: "gpt-4", name: "GPT-4", reasoning: true } });
+  });
+
+  it("defaults a missing or non-string id to an empty string", () => {
+    expect(parseModelEntryJson('{"name":"x"}')).toEqual({ ok: true, model: { name: "x", id: "" } });
+    expect(parseModelEntryJson('{"id":5}')).toEqual({ ok: true, model: { id: "" } });
+  });
+
+  it("drops an empty icon so it does not shadow the provider's", () => {
+    expect(parseModelEntryJson('{"id":"a","icon":""}')).toEqual({ ok: true, model: { id: "a" } });
+  });
+
+  it("reports a syntax error", () => {
+    const result = parseModelEntryJson('{"id":"a"');
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe("syntax");
+  });
+
+  it("rejects a non-object payload", () => {
+    expect(parseModelEntryJson("[1,2]")) .toEqual({ ok: false, reason: "not-object", message: "not a JSON object" });
+    expect(parseModelEntryJson("null")).toEqual({ ok: false, reason: "not-object", message: "not a JSON object" });
+  });
+});
+
+describe("modelsConfigProblem", () => {
+  it("is null when there is no raw edit", () => {
+    expect(modelsConfigProblem(null)).toBeNull();
+    expect(modelsConfigProblem(undefined)).toBeNull();
+    expect(modelsConfigProblem("")).toBeNull();
+  });
+
+  it("is null while the raw text parses", () => {
+    expect(modelsConfigProblem('{"id":"x"}')).toBeNull();
+  });
+
+  it("carries the parse error while the text is invalid", () => {
+    const problem = modelsConfigProblem("{");
+    expect(problem?.reason).toBe("syntax");
+    expect(problem?.message).toBeTruthy();
+  });
+
+  it("flags a JSON payload that is not an object", () => {
+    expect(modelsConfigProblem("42")).toEqual({ reason: "not-object", message: "not a JSON object" });
   });
 });
