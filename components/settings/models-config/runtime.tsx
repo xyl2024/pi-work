@@ -130,7 +130,7 @@ export function RuntimeModelCatalog() {
   );
 }
 
-export function ModelCatalogPicker({
+export function ModelCatalogPickerBody({
   onSelect,
   onClose,
 }: {
@@ -174,59 +174,54 @@ export function ModelCatalogPicker({
   const displayedModels = visibleModels.slice(0, 200);
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 1300, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{ width: 760, maxWidth: "calc(100vw - 32px)", height: "min(76vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <div>
-            <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 700 }}>{t("Fill from model catalog")}</div>
-            <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11 }}>{t("Only model fields are filled; provider settings stay unchanged.")}</div>
+    <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <div>
+          <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 700 }}>{t("Fill from model catalog")}</div>
+          <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11 }}>{t("Only model fields are filled; provider settings stay unchanged.")}</div>
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+      </div>
+
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <input
+          ref={inputRef}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+          placeholder={t("Search all providers and models...")}
+          style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+        />
+        {!loading && !error && <div style={{ marginTop: 5, color: "var(--text-dim)", fontSize: 10 }}>{t("{n} matching models", { n: visibleModels.length })}</div>}
+      </div>
+
+      <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
+        {loading ? (
+          <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("Loading catalog...")}</div>
+        ) : error ? (
+          <div style={{ padding: 20, color: "var(--error)", fontSize: 12, textAlign: "center" }}>{error}</div>
+        ) : displayedModels.length === 0 ? (
+          <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("No matching providers or models")}</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {displayedModels.map(({ model, providerName }) => (
+              <button
+                key={`${model.provider}:${model.id}`}
+                onClick={() => onSelect(model)}
+                style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", cursor: "pointer", textAlign: "left" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
+              >
+                <ProviderIcon id={model.provider} size={20} fallback={<ProviderGearIcon size={16} />} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600 }}>{model.name}</span>
+                  <span style={{ display: "block", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{model.provider} / {model.id}</span>
+                </span>
+                <span style={{ color: "var(--text-muted)", fontSize: 10, flexShrink: 0 }}>{providerName}</span>
+              </button>
+            ))}
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
-        </div>
-
-        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <input
-            ref={inputRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-            placeholder={t("Search all providers and models...")}
-            style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
-          />
-          {!loading && !error && <div style={{ marginTop: 5, color: "var(--text-dim)", fontSize: 10 }}>{t("{n} matching models", { n: visibleModels.length })}</div>}
-        </div>
-
-        <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 14 }}>
-          {loading ? (
-            <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("Loading catalog...")}</div>
-          ) : error ? (
-            <div style={{ padding: 20, color: "var(--error)", fontSize: 12, textAlign: "center" }}>{error}</div>
-          ) : displayedModels.length === 0 ? (
-            <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{t("No matching providers or models")}</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {displayedModels.map(({ model, providerName }) => (
-                <button
-                  key={`${model.provider}:${model.id}`}
-                  onClick={() => onSelect(model)}
-                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "9px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text)", cursor: "pointer", textAlign: "left" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
-                >
-                  <ProviderIcon id={model.provider} size={20} fallback={<ProviderGearIcon size={16} />} />
-                  <span style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600 }}>{model.name}</span>
-                    <span style={{ display: "block", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{model.provider} / {model.id}</span>
-                  </span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 10, flexShrink: 0 }}>{providerName}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -237,7 +232,7 @@ export function ModelCatalogPicker({
  * search the runtime catalog, pick a result with ↑/↓ + Enter to fill the
  * model entry, or skip to continue with an empty form.
  */
-export function AddModelNameStep({
+export function AddModelNameStepBody({
   onSelect,
   onSkip,
   onClose,
@@ -305,79 +300,74 @@ export function AddModelNameStep({
   };
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 1300, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{ width: 560, maxWidth: "calc(100vw - 32px)", height: "min(64vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              ref={inputRef}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={t("Search model name...")}
-              style={{ flex: 1, background: "none", border: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
-            />
-          </div>
-          <div style={{ marginTop: 5, color: "var(--text-dim)", fontSize: 10 }}>
-            {loading
-              ? t("Loading catalog...")
-              : error
-                ? error
-                : search.trim()
-                  ? t("{n} matching models", { n: visible.length })
-                  : t("Type a model name to search the catalog")}
-          </div>
+    <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            ref={inputRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={t("Search model name...")}
+            style={{ flex: 1, background: "none", border: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
+          />
         </div>
+        <div style={{ marginTop: 5, color: "var(--text-dim)", fontSize: 10 }}>
+          {loading
+            ? t("Loading catalog...")
+            : error
+              ? error
+              : search.trim()
+                ? t("{n} matching models", { n: visible.length })
+                : t("Type a model name to search the catalog")}
+        </div>
+      </div>
 
-        <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 10 }}>
-          {loading ? null : error ? null : visible.length === 0 ? (
-            <div style={{ padding: "20px 0", color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
-              {search.trim() ? t("No matching models") : t("Type a model name to search the catalog")}
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {visible.map(({ model }, index) => {
-                const active = index === activeIndex;
-                return (
-                  <button
-                    key={`${model.provider}:${model.id}`}
-                    ref={(el) => { rowRefs.current[index] = el; }}
-                    onClick={() => onSelect(model)}
-                    onMouseEnter={() => setHighlight(index)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "8px 10px",
-                      background: active ? "var(--bg-hover)" : "var(--bg)",
-                      border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
-                      borderRadius: 6, color: "var(--text)", cursor: "pointer", textAlign: "left",
-                    }}
-                  >
-                    <ProviderIcon id={model.provider} size={18} fallback={<ProviderGearIcon size={14} />} />
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600 }}>{model.name}</span>
-                      <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{model.provider} / {model.id}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 10 }}>
+        {loading ? null : error ? null : visible.length === 0 ? (
+          <div style={{ padding: "20px 0", color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>
+            {search.trim() ? t("No matching models") : t("Type a model name to search the catalog")}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {visible.map(({ model }, index) => {
+              const active = index === activeIndex;
+              return (
+                <button
+                  key={`${model.provider}:${model.id}`}
+                  ref={(el) => { rowRefs.current[index] = el; }}
+                  onClick={() => onSelect(model)}
+                  onMouseEnter={() => setHighlight(index)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "8px 10px",
+                    background: active ? "var(--bg-hover)" : "var(--bg)",
+                    border: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                    borderRadius: 6, color: "var(--text)", cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <ProviderIcon id={model.provider} size={18} fallback={<ProviderGearIcon size={14} />} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12, fontWeight: 600 }}>{model.name}</span>
+                    <span style={{ display: "block", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{model.provider} / {model.id}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 14px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-          <span style={{ color: "var(--text-dim)", fontSize: 10 }}>{t("↑↓ to navigate · Enter to select · Esc to cancel")}</span>
-          <button
-            onClick={onSkip}
-            style={{ padding: "4px 10px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, flexShrink: 0 }}
-          >
-            {t("Skip and fill in manually")}
-          </button>
-        </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 14px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+        <span style={{ color: "var(--text-dim)", fontSize: 10 }}>{t("↑↓ to navigate · Enter to select · Esc to cancel")}</span>
+        <button
+          onClick={onSkip}
+          style={{ padding: "4px 10px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 11, flexShrink: 0 }}
+        >
+          {t("Skip and fill in manually")}
+        </button>
       </div>
     </div>
   );
@@ -601,7 +591,7 @@ export function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider
   );
 }
 
-interface AddProviderPickerProps {
+interface AddProviderPickerBodyProps {
   oauthProviders: OAuthProvider[];
   apiKeyProviders: ApiKeyProvider[];
   onSelectOAuth: (id: string) => void;
@@ -610,10 +600,10 @@ interface AddProviderPickerProps {
   onClose: () => void;
 }
 
-export function AddProviderPicker({
+export function AddProviderPickerBody({
   oauthProviders, apiKeyProviders,
   onSelectOAuth, onSelectApiKey, onAddCustom, onClose,
-}: AddProviderPickerProps) {
+}: AddProviderPickerBodyProps) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -641,88 +631,83 @@ export function AddProviderPicker({
   };
 
   return (
-    <div
-      style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
-        <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            ref={inputRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-            placeholder={t("Search providers...")}
-            style={{ flex: 1, background: "none", border: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
-          />
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
+          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          ref={inputRef}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+          placeholder={t("Search providers...")}
+          style={{ flex: 1, background: "none", border: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
+        />
+      </div>
 
-        <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-          {totalCount === 0 ? (
-            <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>{t("No providers match")}</div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: 8 }}>
-              {showCustom && (
-                <div style={{ gridColumn: "1 / -1", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("Custom")}</div>
-              )}
-              {showCustom && (
-                <button
-                  onClick={() => { onAddCustom(); onClose(); }}
-                  style={cardStyle}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("OpenAI / Anthropic compatible")}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("Custom endpoint format")}</div>
-                  </div>
-                  <span style={{ width: 26, height: 26, borderRadius: 5, background: "var(--bg-hover)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)" }}>
-                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                  </span>
-                </button>
-              )}
+      <div data-scroll-wide style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+        {totalCount === 0 ? (
+          <div style={{ padding: "20px 0", fontSize: 12, color: "var(--text-dim)", textAlign: "center" }}>{t("No providers match")}</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(240px, 100%), 1fr))", gap: 8 }}>
+            {showCustom && (
+              <div style={{ gridColumn: "1 / -1", fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("Custom")}</div>
+            )}
+            {showCustom && (
+              <button
+                onClick={() => { onAddCustom(); onClose(); }}
+                style={cardStyle}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("OpenAI / Anthropic compatible")}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{t("Custom endpoint format")}</div>
+                </div>
+                <span style={{ width: 26, height: 26, borderRadius: 5, background: "var(--bg-hover)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)" }}>
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                </span>
+              </button>
+            )}
 
-              {availableOAuth.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", paddingTop: showCustom ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("Subscriptions")}</div>
-              )}
-              {availableOAuth.map((p) => (
-                <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
-                  style={cardStyle}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>OAuth</div>
-                  </div>
-                  <ProviderIcon id={p.id} size={28} />
-                </button>
-              ))}
+            {availableOAuth.length > 0 && (
+              <div style={{ gridColumn: "1 / -1", paddingTop: showCustom ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("Subscriptions")}</div>
+            )}
+            {availableOAuth.map((p) => (
+              <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
+                style={cardStyle}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>OAuth</div>
+                </div>
+                <ProviderIcon id={p.id} size={28} />
+              </button>
+            ))}
 
-              {availableApiKey.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("API Key")}</div>
-              )}
-              {availableApiKey.map((p) => (
-                <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
-                  style={cardStyle}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>
-                    <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount} models</div>
-                  </div>
-                  <ProviderIcon id={p.id} size={28} />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+            {availableApiKey.length > 0 && (
+              <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("API Key")}</div>
+            )}
+            {availableApiKey.map((p) => (
+              <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
+                style={cardStyle}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount} models</div>
+                </div>
+                <ProviderIcon id={p.id} size={28} />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

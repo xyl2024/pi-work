@@ -10,7 +10,8 @@ import { ProviderDetail } from "./models-config/ProviderDetail";
 import { ModelDetail } from "./models-config/ModelDetail";
 import { useModelsConfig } from "@/hooks/useModelsConfig";
 import { OAuthDetail } from "./models-config/OAuthDetail";
-import { RuntimeModelCatalog, ApiKeyDetail, AddProviderPicker, AddModelNameStep } from "./models-config/runtime";
+import { RuntimeModelCatalog, ApiKeyDetail, AddProviderPickerBody, AddModelNameStepBody } from "./models-config/runtime";
+import { ModalShell } from "./models-config/ModalShell";
 
 export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
@@ -314,21 +315,25 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       {pickerOpen && (
-        <AddProviderPicker
-          oauthProviders={oauthProviders}
-          apiKeyProviders={apiKeyProviders}
-          onSelectOAuth={(id) => setSelection({ type: "oauth", providerId: id })}
-          onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
-          onAddCustom={() => addCustomProvider()}
-          onClose={() => setPickerOpen(false)}
-        />
+        <ModalShell width={820} maxHeight="min(72vh, calc(100vh - 32px))" zIndex={1100} onClose={() => setPickerOpen(false)}>
+          <AddProviderPickerBody
+            oauthProviders={oauthProviders}
+            apiKeyProviders={apiKeyProviders}
+            onSelectOAuth={(id) => setSelection({ type: "oauth", providerId: id })}
+            onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
+            onAddCustom={() => addCustomProvider()}
+            onClose={() => setPickerOpen(false)}
+          />
+        </ModalShell>
       )}
       {nameSearchProvider && (
-        <AddModelNameStep
-          onSelect={(model) => { addModelFromCatalog(nameSearchProvider, model); setNameSearchProvider(null); }}
-          onSkip={() => { addModel(nameSearchProvider); setNameSearchProvider(null); }}
-          onClose={() => setNameSearchProvider(null)}
-        />
+        <ModalShell width={560} height="min(64vh, calc(100vh - 32px))" onClose={() => setNameSearchProvider(null)}>
+          <AddModelNameStepBody
+            onSelect={(model) => { addModelFromCatalog(nameSearchProvider, model); setNameSearchProvider(null); }}
+            onSkip={() => { addModel(nameSearchProvider); setNameSearchProvider(null); }}
+            onClose={() => setNameSearchProvider(null)}
+          />
+        </ModalShell>
       )}
     </>
   );

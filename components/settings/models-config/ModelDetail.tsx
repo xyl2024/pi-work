@@ -13,7 +13,8 @@ import { Field, TextInput, Check, SectionTitle, IconField, Select } from "./form
 import { ThinkingLevelMapEditor } from "./ThinkingLevelMapEditor";
 import { hasDeepseekCompat, setDeepseekCompat } from "./utils";
 import { cloneModelFromCatalog } from "@/lib/shared/models-config-draft";
-import { ModelCatalogPicker } from "./runtime";
+import { ModelCatalogPickerBody } from "./runtime";
+import { ModalShell } from "./ModalShell";
 
 export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; onChange: (m: ModelEntry) => void; onDelete: () => void }) {
   const { t } = useI18n();
@@ -246,7 +247,11 @@ export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; 
           </div>
         </div>
       </div>
-      {fillPickerOpen && <ModelCatalogPicker onSelect={fillFromCatalog} onClose={() => setFillPickerOpen(false)} />}
+      {fillPickerOpen && (
+        <ModalShell width={760} height="min(76vh, calc(100vh - 32px))" onClose={() => setFillPickerOpen(false)}>
+          <ModelCatalogPickerBody onSelect={fillFromCatalog} onClose={() => setFillPickerOpen(false)} />
+        </ModalShell>
+      )}
     </>
   );
 }
