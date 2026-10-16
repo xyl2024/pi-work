@@ -3,15 +3,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../../ui/Toast";
-import type { OAuthLoginState, OAuthProvider } from "./types";
+import type { OAuthProvider } from "./types";
 import { SectionTitle } from "./form-fields";
+import {
+  bindOAuthLoginSuccess,
+  cancelOAuthLogin,
+  logoutOAuthProvider,
+  resetSettledOAuthLogin,
+  startOAuthLogin,
+  submitOAuthLoginCode,
+  useOAuthLoginState,
+} from "@/lib/client/oauth-login-store";
+import { isOAuthLoginWorking } from "@/lib/client/oauth-login";
 
+/**
+ * The subscription view for one provider. The login session itself is held by
+ * `lib/client/oauth-login-store.ts`, keyed by provider id, so this component can
+ * unmount and remount without dropping an authorization that is still running.
+ */
 export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefresh: () => void }) {
   const { t } = useI18n();
   const toast = useToast();
-  const [loginState, setLoginState] = useState<OAuthLoginState>({ phase: "idle" });
+  const loginState = useOAuthLoginState(provider.id);
   const [inputValue, setInputValue] = useState("");
-  const eventSourceRef = useRef<EventSource | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -20,121 +34,43 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
     }
   }, [loginState.phase]);
 
-  useEffect(() => {
-    setLoginState({ phase: "idle" });
-    setInputValue("");
-    eventSourceRef.current?.close();
-    eventSourceRef.current = null;
-  }, [provider.id]);
+  const handleLoginSuccess = useCallback(() => {
+    onRefresh();
+    toast.show({ kind: "success", message: t("Connected") });
+  }, [onRefresh, t, toast]);
 
-  useEffect(() => () => {
-    eventSourceRef.current?.close();
-  }, []);
+  // A remount takes over the success callback, so an in-flight login still
+  // refreshes the list and toasts through the current view's wiring.
+  useEffect(() => {
+    bindOAuthLoginSuccess(provider.id, handleLoginSuccess);
+  }, [provider.id, handleLoginSuccess]);
+
+  // A session that finished before this view opened is stale: show idle again
+  // (a login still in flight is left untouched).
+  useEffect(() => {
+    resetSettledOAuthLogin(provider.id);
+  }, [provider.id]);
 
   const handleLogin = useCallback(() => {
-    eventSourceRef.current?.close();
-    setLoginState({ phase: "connecting" });
     setInputValue("");
+    startOAuthLogin(provider.id);
+  }, [provider.id]);
 
-    const es = new EventSource(`/api/auth/login/${encodeURIComponent(provider.id)}`);
-    eventSourceRef.current = es;
-
-    es.onmessage = (e) => {
-      const data = JSON.parse(e.data) as {
-        type: string;
-        url?: string;
-        instructions?: string | null;
-        token?: string;
-        message?: string;
-        placeholder?: string | null;
-        userCode?: string;
-        verificationUri?: string;
-        intervalSeconds?: number | null;
-        expiresInSeconds?: number | null;
-        options?: { id: string; label: string }[];
-      };
-      if (data.type === "auth") {
-        setLoginState({ phase: "auth", url: data.url!, instructions: data.instructions ?? null, token: data.token! });
-        window.open(data.url!, "_blank", "noopener,noreferrer");
-      } else if (data.type === "device_code") {
-        setLoginState({
-          phase: "device_code",
-          userCode: data.userCode!,
-          verificationUri: data.verificationUri!,
-          intervalSeconds: data.intervalSeconds ?? null,
-          expiresInSeconds: data.expiresInSeconds ?? null,
-        });
-      } else if (data.type === "prompt_request") {
-        setLoginState({ phase: "prompt", message: data.message!, placeholder: data.placeholder ?? null, token: data.token! });
-      } else if (data.type === "select_request") {
-        setLoginState({ phase: "select", message: data.message!, options: data.options ?? [], token: data.token! });
-      } else if (data.type === "progress") {
-        setLoginState({ phase: "progress", message: data.message! });
-      } else if (data.type === "success") {
-        es.close();
-        setLoginState({ phase: "success" });
-        onRefresh();
-        toast.show({ kind: "success", message: t("Connected") });
-      } else if (data.type === "error") {
-        es.close();
-        setLoginState({ phase: "error", message: data.message! });
-      } else if (data.type === "cancelled") {
-        es.close();
-        setLoginState({ phase: "idle" });
-      }
-    };
-    es.onerror = () => {
-      es.close();
-      setLoginState((prev) => prev.phase === "success" ? prev : { phase: "error", message: "Connection lost" });
-    };
-  }, [provider.id, onRefresh, t, toast]);
-
-  const handleLogout = useCallback(async () => {
-    await fetch(`/api/auth/logout/${encodeURIComponent(provider.id)}`, { method: "POST" });
-    setLoginState({ phase: "idle" });
-    onRefresh();
+  const handleLogout = useCallback(() => {
+    void logoutOAuthProvider(provider.id).then(onRefresh);
   }, [provider.id, onRefresh]);
 
-  const submitCode = useCallback(async (token: string, code: string) => {
+  const submitCode = useCallback(async (code: string) => {
     if (!code.trim()) return;
-    setLoginState({ phase: "progress", message: "Verifying…" });
-    try {
-      const res = await fetch(`/api/auth/login/${encodeURIComponent(provider.id)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, code: code.trim() }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: string };
-        setLoginState({ phase: "error", message: data.error ?? `Server error ${res.status}` });
-        return;
-      }
-      setInputValue("");
-    } catch (e) {
-      setLoginState({ phase: "error", message: e instanceof Error ? e.message : "Network error" });
-    }
+    const ok = await submitOAuthLoginCode(provider.id, code, "Verifying…");
+    if (ok) setInputValue("");
   }, [provider.id]);
 
-  const submitSelection = useCallback(async (token: string, value: string) => {
-    setLoginState({ phase: "progress", message: "Continuing…" });
-    try {
-      const res = await fetch(`/api/auth/login/${encodeURIComponent(provider.id)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, code: value }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: string };
-        setLoginState({ phase: "error", message: data.error ?? `Server error ${res.status}` });
-      }
-    } catch (e) {
-      setLoginState({ phase: "error", message: e instanceof Error ? e.message : "Network error" });
-    }
+  const submitSelection = useCallback(async (value: string) => {
+    await submitOAuthLoginCode(provider.id, value, "Continuing…");
   }, [provider.id]);
 
-  const isWorking = loginState.phase === "connecting" || loginState.phase === "progress" ||
-    loginState.phase === "auth" || loginState.phase === "device_code" ||
-    loginState.phase === "prompt" || loginState.phase === "select";
+  const isWorking = isOAuthLoginWorking(loginState);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -166,7 +102,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
               {loginState.options.map((option) => (
                 <button
                   key={option.id}
-                  onClick={() => submitSelection(loginState.token, option.id)}
+                  onClick={() => submitSelection(option.id)}
                   style={{ padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", cursor: "pointer", fontSize: 12, textAlign: "left" }}
                 >
                   {option.label}
@@ -196,12 +132,12 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
                 ref={inputRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") submitCode(loginState.token, inputValue); }}
+                onKeyDown={(e) => { if (e.key === "Enter") submitCode(inputValue); }}
                 placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? "Enter value…")}
                 style={{ flex: 1, padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 12, fontFamily: "var(--font-mono)", boxSizing: "border-box" }}
               />
               <button
-                onClick={() => submitCode(loginState.token, inputValue)}
+                onClick={() => submitCode(inputValue)}
                 disabled={!inputValue.trim()}
                 style={{ padding: "6px 12px", background: inputValue.trim() ? "var(--accent)" : "var(--bg)", border: "none", borderRadius: 5, color: inputValue.trim() ? "#fff" : "var(--text-dim)", cursor: inputValue.trim() ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
               >
@@ -240,7 +176,7 @@ export function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; 
       <div style={{ display: "flex", gap: 8 }}>
         {isWorking ? (
           <button
-            onClick={() => { eventSourceRef.current?.close(); setLoginState({ phase: "idle" }); }}
+            onClick={() => cancelOAuthLogin(provider.id)}
             style={{ padding: "5px 12px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}
           >
             {t("Cancel")}
