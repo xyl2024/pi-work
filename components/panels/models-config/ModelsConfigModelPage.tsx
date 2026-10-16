@@ -21,8 +21,8 @@ import { modelsConfigProblemText } from "@/lib/client/models-config-problem-text
 
 /**
  * One model's detail page. Full width, with a back control that returns to the
- * provider list, and the shared `ModelFields` for everything a model entry
- * edits.
+ * provider page it was opened from, and the shared `ModelFields` for everything
+ * a model entry edits.
  *
  * The raw-JSON text lives in the panel store, so an unparsable edit survives a
  * tab switch and blocks the fixed save bar instead of being quietly dropped.

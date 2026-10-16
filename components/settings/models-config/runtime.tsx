@@ -63,7 +63,11 @@ export function RuntimeModelCatalog() {
   const query = search.trim().toLowerCase();
   const visibleProviders = useMemo(() => catalog.providers.map((provider) => {
     if (!query) return provider;
-    const providerMatches = `${provider.id} ${provider.name} ${JSON.stringify(provider)}`.toLowerCase().includes(query);
+    // Provider metadata only: `JSON.stringify(provider)` would embed every model,
+    // so a model hit would make the whole provider look like a match.
+    const providerMatches = `${provider.id} ${provider.name} ${JSON.stringify({ ...provider, models: undefined })}`
+      .toLowerCase()
+      .includes(query);
     const models = providerMatches ? provider.models : provider.models.filter((model) => JSON.stringify(model).toLowerCase().includes(query));
     return models.length > 0 || providerMatches ? { ...provider, models } : null;
   }).filter((provider): provider is RuntimeCatalogProvider => provider !== null), [catalog.providers, query]);
@@ -71,11 +75,7 @@ export function RuntimeModelCatalog() {
   return (
     <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", flexShrink: 0 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            {t("{n} providers", { n: catalog.providers.length })} · {t("{n} models", { n: catalog.modelCount })}
-          </div>
-        </div>
+        <div style={{ flex: 1, minWidth: 0 }} />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}

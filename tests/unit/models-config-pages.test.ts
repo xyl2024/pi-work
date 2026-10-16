@@ -66,9 +66,10 @@ describe("openModelsConfigPage", () => {
     ]);
   });
 
-  it("opens a model above the list", () => {
+  it("opens a model above its provider page", () => {
     expect(openModelsConfigPage(model("openai", 1))).toEqual([
       MODELS_CONFIG_ROOT_PAGE,
+      provider("openai"),
       model("openai", 1),
     ]);
   });
@@ -82,9 +83,10 @@ describe("openModelsConfigPage", () => {
     expect(second).toEqual([MODELS_CONFIG_ROOT_PAGE, provider("anthropic")]);
   });
 
-  it("replaces a provider page with a model page (both are first-level details)", () => {
+  it("keeps the provider page under the model page", () => {
     expect(openModelsConfigPage(model("openai", 0))).toEqual([
       MODELS_CONFIG_ROOT_PAGE,
+      provider("openai"),
       model("openai", 0),
     ]);
   });
@@ -123,6 +125,7 @@ describe("openModelsConfigPage", () => {
   it("keeps the model page under the fill-from-catalog page", () => {
     expect(openModelsConfigPage(fillModel("openai", 2))).toEqual([
       MODELS_CONFIG_ROOT_PAGE,
+      provider("openai"),
       model("openai", 2),
       fillModel("openai", 2),
     ]);
@@ -142,6 +145,11 @@ describe("backModelsConfigPage", () => {
     ]);
   });
 
+  it("returns to the provider page from a model page", () => {
+    const stack = openModelsConfigPage(model("openai", 1));
+    expect(backModelsConfigPage(stack)).toEqual([MODELS_CONFIG_ROOT_PAGE, provider("openai")]);
+  });
+
   it("stays on the list when already there", () => {
     expect(backModelsConfigPage([MODELS_CONFIG_ROOT_PAGE])).toEqual([MODELS_CONFIG_ROOT_PAGE]);
   });
@@ -157,7 +165,11 @@ describe("backModelsConfigPage", () => {
 
   it("returns to the model page from a fill-from-catalog page", () => {
     const stack = openModelsConfigPage(fillModel("openai", 1));
-    expect(backModelsConfigPage(stack)).toEqual([MODELS_CONFIG_ROOT_PAGE, model("openai", 1)]);
+    expect(backModelsConfigPage(stack)).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      provider("openai"),
+      model("openai", 1),
+    ]);
   });
 });
 
@@ -177,9 +189,12 @@ describe("renameModelsConfigProviderPage", () => {
   });
 
   it("follows a rename when a model page is open", () => {
-    expect(
-      renameModelsConfigProviderPage([MODELS_CONFIG_ROOT_PAGE, model("openai", 2)], "openai", "oa"),
-    ).toEqual([MODELS_CONFIG_ROOT_PAGE, model("oa", 2)]);
+    const stack = openModelsConfigPage(model("openai", 2));
+    expect(renameModelsConfigProviderPage(stack, "openai", "oa")).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      provider("oa"),
+      model("oa", 2),
+    ]);
   });
 
   it("follows a rename when the name-search page is open", () => {
@@ -195,6 +210,7 @@ describe("renameModelsConfigProviderPage", () => {
     const stack = openModelsConfigPage(fillModel("openai", 3));
     expect(renameModelsConfigProviderPage(stack, "openai", "oa")).toEqual([
       MODELS_CONFIG_ROOT_PAGE,
+      provider("oa"),
       model("oa", 3),
       fillModel("oa", 3),
     ]);
@@ -202,6 +218,11 @@ describe("renameModelsConfigProviderPage", () => {
 
   it("leaves an unrelated detail page alone", () => {
     const stack = [MODELS_CONFIG_ROOT_PAGE, provider("anthropic")];
+    expect(renameModelsConfigProviderPage(stack, "openai", "oa")).toEqual(stack);
+  });
+
+  it("leaves a model page of another provider alone", () => {
+    const stack = openModelsConfigPage(model("anthropic", 0));
     expect(renameModelsConfigProviderPage(stack, "openai", "oa")).toEqual(stack);
   });
 

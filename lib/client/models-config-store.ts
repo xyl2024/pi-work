@@ -254,7 +254,7 @@ export function openModelsConfigProvider(name: string): void {
   patch({ pages: openModelsConfigPage({ kind: "provider", name }), rawEdit: null });
 }
 
-/** Open a model's detail page (a sibling of the provider page). */
+/** Open a model's detail page (nested under its provider's page). */
 export function openModelsConfigModel(providerName: string, index: number): void {
   patch({ pages: openModelsConfigPage({ kind: "model", providerName, index }), rawEdit: null });
 }

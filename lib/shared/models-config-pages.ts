@@ -2,27 +2,29 @@
  * Page stack for the models-config panel view.
  *
  * The panel navigates in levels instead of squeezing a two-column layout into
- * a narrow strip. There are at most three levels:
+ * a narrow strip. There are at most four levels:
  *
  *   0. root — the provider list;
- *   1. a detail page — provider / model / OAuth / API key, or the read-only
- *      model catalog ("模型目录 / All model data", a root-level sibling);
- *   2. an add page — the add-provider three-way picker, the "name a model"
- *      catalog search, or the "fill this model from the catalog" picker.
+ *   1. a provider-level detail page — provider / OAuth / API key, or the
+ *      read-only model catalog ("模型目录 / All model data", a root-level
+ *      sibling);
+ *   2. a model detail page — nested under its provider's page, so Back returns
+ *      to the provider the model belongs to instead of jumping to the list;
+ *   3. an add page — the add-provider three-way picker (above the list), the
+ *      "name a model" catalog search (above its provider page), or the "fill
+ *      this model from the catalog" picker (above its model page).
  *
- * Add pages hang off the detail page they were opened from (a model page under
- * a provider page under the list), and every page carries the context it needs
- * (a provider name, a model index, a runtime provider id) so a tab switch that
- * remounts the view can rebuild the same page. This module owns the stack rules
- * so they can be driven from `tests/unit` without a browser —
- * `lib/client/models-config-store.ts` holds the current stack and the panel
- * renders `currentModelsConfigPage`.
+ * Every page carries the context it needs (a provider name, a model index, a
+ * runtime provider id) so a tab switch that remounts the view can rebuild the
+ * same page. This module owns the stack rules so they can be driven from
+ * `tests/unit` without a browser — `lib/client/models-config-store.ts` holds
+ * the current stack and the panel renders `currentModelsConfigPage`.
  *
  * Two rules matter here:
  *
  *   • the stack is bounded — opening any page replaces whatever sits at or
- *     above the page's own level, so provider → provider, or provider → add
- *     model → model, never grows the stack past the level it opened;
+ *     above the page's own level, so provider → provider, or provider → model
+ *     → fill model, never grows the stack past the level it opened;
  *   • the root page is never popped — `backModelsConfigPage` stops there and
  *     an empty stack still resolves to root.
  */
@@ -53,28 +55,33 @@ export function currentModelsConfigPage(pages: readonly ModelsConfigPage[]): Mod
 }
 
 /**
- * The stack a page opens onto. Detail pages replace any other detail (so
- * provider → model is a two-page stack), while an add page keeps the detail
- * page it was opened from so `back` returns there.
+ * The stack a page opens onto. A provider-level detail replaces any other
+ * provider-level detail (so provider → OAuth is a two-page stack), while a
+ * nested page keeps the pages it hangs off so `back` is always "up one level".
  */
 function baseStackFor(page: ModelsConfigPage): ModelsConfigPage[] {
   switch (page.kind) {
     case "root":
       return [];
+    // A model belongs to a provider, so its page sits above the provider page
+    // (and the add-model / fill-model pages above the model page). Back from a
+    // model therefore lands on the provider, not on the provider list.
+    case "model":
+      return [MODELS_CONFIG_ROOT_PAGE, { kind: "provider", name: page.providerName }];
     case "addModelName":
       return [MODELS_CONFIG_ROOT_PAGE, { kind: "provider", name: page.providerName }];
     case "fillModel":
       return [
         MODELS_CONFIG_ROOT_PAGE,
+        { kind: "provider", name: page.providerName },
         { kind: "model", providerName: page.providerName, index: page.index },
       ];
-    // Every other page is either a first-level detail or (like the add-provider
+    // Every other page is a provider-level detail or (like the add-provider
     // picker) a page reached straight from the list. The catalog is a
     // root-level sibling: it opens straight above the list and Back returns
     // there, which is what keeps it inside this panel view rather than a second
     // panel / a second button.
     case "provider":
-    case "model":
     case "oauth":
     case "apikey":
     case "catalog":
