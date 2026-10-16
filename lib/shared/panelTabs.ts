@@ -15,10 +15,11 @@
 //     panels that need to refresh (git diff).
 //
 // Presentation (icon and panel body) deliberately stays outside this module:
-// the right-bar descriptors look a body up by kind. Adding a panel view is two
-// registrations — one spec here, one presentation entry there. The shell holds
-// the reducer state directly, so there is no adapter layer duplicating the tab
-// shape here.
+// the right-bar descriptors look a body up by kind. Adding a panel view is
+// three registrations — one spec here (plus its tab-id constant in ./types),
+// one presentation entry there, one body entry in the shell's
+// `PANEL_BODY_BY_KIND`. The shell holds the reducer state directly, so there is
+// no adapter layer duplicating the tab shape here.
 
 import {
   CONTEXT_TAB_ID,
@@ -26,6 +27,7 @@ import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
+  MODELS_CONFIG_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "./types";
@@ -46,6 +48,7 @@ export interface PanelTabParams {
   conversationTree: undefined;
   llmAudit: undefined;
   context: undefined;
+  modelsConfig: undefined;
   file: { path: string };
 }
 
@@ -220,6 +223,23 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open LLM API audit",
         keywords: ["llm", "api", "audit", "request", "response", "调用", "审计", "请求", "响应"],
+      },
+    ],
+  },
+  modelsConfig: {
+    kind: "modelsConfig",
+    tabId: MODELS_CONFIG_TAB_ID,
+    // Tab-strip label; the right-bar button and the palette entry keep the
+    // longer "Open models config" wording (see the descriptor registry).
+    labelKey: "Models config",
+    defaultMode: "normal",
+    // Provider / API-key / OAuth configuration is global, not a property of
+    // the selected session — it stays enabled on the new-session page.
+    sessionBound: false,
+    commands: [
+      {
+        labelKey: "Open models config",
+        keywords: ["models", "config", "providers", "api", "模型", "配置", "服务商"],
       },
     ],
   },

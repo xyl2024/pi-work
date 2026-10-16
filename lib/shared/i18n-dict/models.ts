@@ -2,6 +2,10 @@
 // All keys relating to /api/models, ~/.pi/agent/models.json, provider cards.
 
 export const models = {
+  // Panel view label (tab strip). The right-bar tooltip and palette entry
+  // reuse the longer "Open models config" wording from the commands dict.
+  "Models config": "模型配置",
+
   // About / sources
   "About model catalog sources": "关于模型目录来源",
   "Pi's pi-ai SDK builds the static catalog with generate-models.ts. It combines external catalogs with Pi-maintained provider-specific overrides, then generates the bundled model metadata files.": "Pi 的 pi-ai SDK 会在构建时运行 generate-models.ts，合并外部目录与 Pi 维护的 provider 专属覆盖配置，再生成随 SDK 发布的模型元数据文件。",

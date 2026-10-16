@@ -49,6 +49,7 @@ import {
   PanelRight,
   Star,
 } from "lucide-react";
+import { ProviderGearIcon } from "../../ui/ProviderIcon";
 
 /** Options for rendering a panel view's glyph. The right-bar button, the tab
  *  strip and the command palette share one icon per kind, differing only in
@@ -194,6 +195,15 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
   llmAudit: panelButton("llmAudit", {
     labelKey: "Open LLM API audit",
     icon: ({ size }) => <ChartColumn size={size} />,
+  }),
+  modelsConfig: panelButton("modelsConfig", {
+    // The tooltip keeps the long "Open …" wording; the tab strip uses the
+    // shorter "Models config" label from the registry — same glyph for both.
+    labelKey: "Open models config",
+    // Reuse the gear the model cards already show for providers without an
+    // icon, so button / tab / palette render the same glyph. `inherit` lets
+    // the glyph flip with the host's active / hover colour.
+    icon: ({ size }) => <ProviderGearIcon size={size} color="inherit" />,
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

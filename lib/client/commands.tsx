@@ -36,7 +36,6 @@ const MoonIcon = ICONS.moon;
 const SidebarIcon = ICONS.sidebar;
 const GlobeIcon = ICONS.globe;
 const GearIcon = ICONS.gear;
-const ChipIcon = ICONS.chip;
 const SparkleIcon = ICONS.sparkle;
 const BookIcon = ICONS.book;
 const McpIcon = ICONS.mcp;
@@ -100,7 +99,6 @@ export interface CommandContext {
   // Modal openers
   openSettings: () => void;
   openCwdPicker: () => void;
-  openModels: () => void;
   openSkills: () => void;
   openPrompts: () => void;
   openScheduler: () => void;
@@ -228,7 +226,7 @@ export function buildCommands(
   // ── Panel ──
   // One command per registry spec that opts in; see buildPanelCommands.
   cmds.push(...buildPanelCommands(ctx, t, panelIcons));
-  // ── Modal (5) ──
+  // ── Modal (7) ──
   cmds.push({
     id: "modal.settings",
     title: t("Open settings"),
@@ -236,14 +234,6 @@ export function buildCommands(
     keywords: ["settings", "preferences", "config", "设置", "偏好", "配置"],
     icon: <GearIcon />,
     run: () => ctx.openSettings(),
-  });
-  cmds.push({
-    id: "modal.models",
-    title: t("Open models config"),
-    group: "Modal",
-    keywords: ["models", "config", "providers", "api", "模型", "配置", "服务商"],
-    icon: <ChipIcon />,
-    run: () => ctx.openModels(),
   });
   cmds.push({
     id: "modal.skills",

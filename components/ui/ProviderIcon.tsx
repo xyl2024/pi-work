@@ -92,8 +92,13 @@ export function hasProviderIcon(providerId: string | null | undefined): boolean 
 /** All provider ids that have an icon — used by the ModelsConfig icon picker. */
 export const PROVIDER_ICON_IDS: string[] = Object.keys(PROVIDER_ICONS);
 
-/** The default fallback icon shown when a model has no provider icon and no custom icon. */
-export function ProviderGearIcon({ size }: { size: number }) {
+/**
+ * The default fallback icon shown when a model has no provider icon and no
+ * custom icon. `color` defaults to the muted text colour model cards want;
+ * interactive hosts (right-bar button / tab strip) pass `"inherit"` so the
+ * glyph follows their active / hover colour like every other panel glyph.
+ */
+export function ProviderGearIcon({ size, color = "var(--text-muted)" }: { size: number; color?: string }) {
   return (
     <svg
       width={size}
@@ -104,7 +109,7 @@ export function ProviderGearIcon({ size }: { size: number }) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ color: "var(--text-muted)", flexShrink: 0 }}
+      style={{ color, flexShrink: 0 }}
       aria-hidden="true"
     >
       <rect x="4" y="4" width="16" height="16" rx="2" />

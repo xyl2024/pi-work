@@ -386,6 +386,7 @@ describe("panelTabs registry", () => {
         "favorites",
         "gitDiff",
         "llmAudit",
+        "modelsConfig",
         "tokens",
         "translate",
       ].sort(),
@@ -549,7 +550,6 @@ describe("panelTabs registry → command palette", () => {
       newSession: () => {},
       openSettings: () => {},
       openCwdPicker: () => {},
-      openModels: () => {},
       openSkills: () => {},
       openPrompts: () => {},
       openScheduler: () => {},
@@ -587,7 +587,7 @@ describe("panelTabs registry → command palette", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("keeps the palette down to exactly the entries seven panels declare", () => {
+  it("keeps the palette down to exactly the entries the registry declares", () => {
     // Output-side pin: another palette entry appearing (or one of these
     // disappearing) fails here, not just in the registry declaration.
     expect(
@@ -599,10 +599,18 @@ describe("panelTabs registry → command palette", () => {
         "panel.favorites",
         "panel.gitDiff",
         "panel.llmAudit",
+        "panel.modelsConfig",
         "panel.tokens",
         "panel.translate",
       ].sort(),
     );
+  });
+
+  it("reaches the models-config panel through the palette keywords", () => {
+    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.modelsConfig");
+
+    expect(cmd?.title).toBe("Open models config");
+    expect(cmd?.keywords).toEqual(expect.arrayContaining(["模型", "配置", "服务商"]));
   });
 
   it("titles and keywords come from the spec, not from the call site", () => {

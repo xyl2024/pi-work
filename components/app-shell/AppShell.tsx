@@ -29,6 +29,7 @@ import { SchedulerModal } from "../scheduler";
 import { ChannelsModal } from "../channels/ChannelsModal";
 import { ToolsMarketModal } from "../tools-market/ToolsMarketModal";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
+import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
 // System-prompt segmentation lives in a pure module so the context panel and
 // the context-composition estimate share one set of boundaries (ADR-0005).
@@ -146,6 +147,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       onCardClick={(card) => ctx.onConversationTreeCardClick(card.id)}
     />
   ),
+  modelsConfig: () => <ModelsConfigPanel />,
 };
 
 function formatBytes(bytes: number): string {
@@ -1222,7 +1224,6 @@ export function AppShell() {
     newSession: handleSlashNew,
     openSettings: () => setSettingsConfigOpen(true),
     openCwdPicker: () => setCwdPickerOpen(true),
-    openModels: () => setModelsConfigOpen(true),
     openSkills: () => setSkillsConfigOpen(true),
     openPrompts: () => setPromptsConfigOpen(true),
     openScheduler: () => setSchedulerOpen(true),
