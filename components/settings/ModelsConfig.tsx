@@ -8,10 +8,9 @@ import { Tooltip } from "../ui/Tooltip";
 import { ProviderIcon, ProviderGearIcon, hasProviderIcon } from "../ui/ProviderIcon";
 import { ProviderDetail } from "./models-config/ProviderDetail";
 import { ModelDetail } from "./models-config/ModelDetail";
+import { useModelsConfig } from "@/hooks/useModelsConfig";
 import { OAuthDetail } from "./models-config/OAuthDetail";
 import { RuntimeModelCatalog, ApiKeyDetail, AddProviderPicker, AddModelNameStep } from "./models-config/runtime";
-import { cloneModelFromCatalog } from "./models-config/utils";
-import type { ApiKeyProvider, ModelsJson, OAuthProvider, Selection, ModelEntry, ProviderEntry, RuntimeModelInfo } from "./models-config/types";
 
 export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
@@ -20,159 +19,45 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     isOpen: true,
     onClose,
   });
-  const [config, setConfig] = useState<ModelsJson>({ providers: {} });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedOk, setSavedOk] = useState(false);
-  const [selection, setSelection] = useState<Selection | null>(null);
-  const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
-  const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
+  const {
+    config,
+    loading,
+    saving,
+    saveError,
+    savedOk,
+    selection,
+    oauthProviders,
+    apiKeyProviders,
+    load,
+    save,
+    setSelection,
+    addCustomProvider,
+    updateProvider,
+    renameProvider,
+    deleteProvider,
+    addModel,
+    addModelFromCatalog,
+    updateModel,
+    removeModel,
+    reloadOAuthProviders,
+    reloadApiKeyProviders,
+  } = useModelsConfig();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [nameSearchProvider, setNameSearchProvider] = useState<string | null>(null);
 
-  const loadOAuthProviders = useCallback(() => {
-    fetch("/api/auth/providers")
-      .then((r) => r.json())
-      .then((d: { providers: OAuthProvider[] }) => setOauthProviders(d.providers))
-      .catch(() => {});
-  }, []);
-
-  const loadApiKeyProviders = useCallback(() => {
-    fetch("/api/auth/all-providers")
-      .then((r) => r.json())
-      .then((d: { providers: ApiKeyProvider[] }) => setApiKeyProviders(d.providers))
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
-    fetch("/api/models-config")
-      .then((r) => r.json())
-      .then((d: ModelsJson) => {
-        const normalized = d.providers ? d : { ...d, providers: {} };
-        setConfig(normalized);
-        const keys = Object.keys(normalized.providers ?? {});
-        if (keys.length > 0) setSelection({ type: "provider", name: keys[0] });
-      })
-      .catch(() => {
-        setConfig({ providers: {} });
-        toast.show({ kind: "error", message: t("Failed to load models") });
-      })
-      .finally(() => setLoading(false));
-    loadOAuthProviders();
-    loadApiKeyProviders();
-  }, [loadOAuthProviders, loadApiKeyProviders, t, toast]);
-
-  const addCustomProvider = useCallback(() => {
-    let finalName = "new-provider";
-    let n = 1;
-    while (config.providers?.[finalName]) finalName = `new-provider-${n++}`;
-    setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [finalName]: { api: "openai-completions" } } }));
-    setSelection({ type: "provider", name: finalName });
-  }, [config.providers]);
-
-  const updateProvider = useCallback((name: string, provider: ProviderEntry) => {
-    setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [name]: provider } }));
-  }, []);
-
-  const renameProvider = useCallback((oldName: string, newName: string) => {
-    setConfig((prev) => {
-      const entries = Object.entries(prev.providers ?? {});
-      const idx = entries.findIndex(([key]) => key === oldName);
-      if (idx === -1) return prev;
-      entries[idx] = [newName, entries[idx][1]];
-      return { ...prev, providers: Object.fromEntries(entries) };
+    void load().then((ok) => {
+      if (!ok) toast.show({ kind: "error", message: t("Failed to load models") });
     });
-    setSelection((prev) => {
-      if (!prev) return prev;
-      if (prev.type === "provider" && prev.name === oldName) return { type: "provider", name: newName };
-      if (prev.type === "model" && prev.providerName === oldName) return { ...prev, providerName: newName };
-      return prev;
-    });
-  }, []);
+  }, [load, t, toast]);
 
-  const deleteProvider = useCallback((name: string) => {
-    setConfig((prev) => {
-      const providers = { ...(prev.providers ?? {}) };
-      delete providers[name];
-      const next = { ...prev, providers };
-      setSelection(Object.keys(providers).length > 0 ? { type: "provider", name: Object.keys(providers)[0] } : null);
-      return next;
+  const handleSave = useCallback(() => {
+    void save().then((result) => {
+      if (result.ok) toast.show({ kind: "success", message: t("Models saved") });
+      else toast.show({ kind: "error", message: result.error ?? t("Failed to save models") });
     });
-  }, []);
-
-  const addModel = useCallback((providerName: string) => {
-    setConfig((prev) => {
-      const provider = prev.providers?.[providerName] ?? {};
-      const models = [...(provider.models ?? []), { id: "" }];
-      return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
-    });
-    setConfig((prev) => {
-      const index = (prev.providers?.[providerName]?.models?.length ?? 1) - 1;
-      setSelection({ type: "model", providerName, index });
-      return prev;
-    });
-  }, []);
-
-  const addModelFromCatalog = useCallback((providerName: string, source: RuntimeModelInfo) => {
-    setConfig((prev) => {
-      const provider = prev.providers?.[providerName] ?? {};
-      const models = [...(provider.models ?? []), cloneModelFromCatalog(source)];
-      return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
-    });
-    setConfig((prev) => {
-      const index = (prev.providers?.[providerName]?.models?.length ?? 1) - 1;
-      setSelection({ type: "model", providerName, index });
-      return prev;
-    });
-  }, []);
-
-  const updateModel = useCallback((providerName: string, index: number, model: ModelEntry) => {
-    setConfig((prev) => {
-      const provider = prev.providers?.[providerName] ?? {};
-      const models = [...(provider.models ?? [])];
-      models[index] = model;
-      return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models } } };
-    });
-  }, []);
-
-  const removeModel = useCallback((providerName: string, index: number) => {
-    setConfig((prev) => {
-      const provider = prev.providers?.[providerName] ?? {};
-      const models = [...(provider.models ?? [])];
-      models.splice(index, 1);
-      return { ...prev, providers: { ...(prev.providers ?? {}), [providerName]: { ...provider, models: models.length ? models : undefined } } };
-    });
-    setSelection({ type: "provider", name: providerName });
-  }, []);
-
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    setSaveError(null);
-    setSavedOk(false);
-    try {
-      const res = await fetch("/api/models-config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-      });
-      const body = await res.json() as { success?: boolean; error?: string };
-      if (!res.ok || body.error) {
-        setSaveError(body.error ?? `HTTP ${res.status}`);
-        toast.show({ kind: "error", message: body.error ?? `HTTP ${res.status}` });
-      } else {
-        setSavedOk(true);
-        setTimeout(() => setSavedOk(false), 2000);
-        toast.show({ kind: "success", message: t("Models saved") });
-      }
-    } catch (e) {
-      setSaveError(String(e));
-      toast.show({ kind: "error", message: String(e) });
-    } finally {
-      setSaving(false);
-    }
-  }, [config, t, toast]);
+  }, [save, t, toast]);
 
   const providers = Object.entries(config.providers ?? {});
   const activeOAuth = oauthProviders.filter((provider) => provider.loggedIn);
@@ -199,12 +84,12 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     if (selection.type === "oauth") {
       const provider = oauthProviders.find((item) => item.id === selection.providerId);
       if (!provider) return null;
-      return <OAuthDetail key={provider.id} provider={provider} onRefresh={loadOAuthProviders} />;
+      return <OAuthDetail key={provider.id} provider={provider} onRefresh={reloadOAuthProviders} />;
     }
     if (selection.type === "apikey") {
       const provider = apiKeyProviders.find((item) => item.id === selection.providerId);
       if (!provider) return null;
-      return <ApiKeyDetail key={provider.id} provider={provider} onRefresh={loadApiKeyProviders} />;
+      return <ApiKeyDetail key={provider.id} provider={provider} onRefresh={reloadApiKeyProviders} />;
     }
     if (selection.type === "provider") {
       const provider = config.providers?.[selection.name];
@@ -434,7 +319,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           apiKeyProviders={apiKeyProviders}
           onSelectOAuth={(id) => setSelection({ type: "oauth", providerId: id })}
           onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
-          onAddCustom={addCustomProvider}
+          onAddCustom={() => addCustomProvider()}
           onClose={() => setPickerOpen(false)}
         />
       )}

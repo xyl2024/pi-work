@@ -25,24 +25,3 @@ export function setDeepseekCompat(model: ModelEntry, enabled: boolean): ModelEnt
   delete rest.requiresReasoningContentOnAssistantMessages;
   return { ...model, compat: Object.keys(rest).length ? rest : undefined };
 }
-
-export function cloneModelFromCatalog(source: RuntimeModelInfo): ModelEntry {
-  return {
-    id: source.id,
-    name: source.name,
-    api: source.api,
-    reasoning: source.reasoning,
-    thinkingLevelMap: source.thinkingLevelMap ? { ...source.thinkingLevelMap } : undefined,
-    input: [...source.input],
-    contextWindow: source.contextWindow,
-    maxTokens: source.maxTokens,
-    cost: {
-      input: source.cost.input,
-      output: source.cost.output,
-      cacheRead: source.cost.cacheRead,
-      cacheWrite: source.cost.cacheWrite,
-      tiers: source.cost.tiers ? [...source.cost.tiers] : undefined,
-    },
-    compat: source.compat ? { ...source.compat } : undefined,
-  };
-}

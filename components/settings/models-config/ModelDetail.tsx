@@ -11,7 +11,8 @@ import { API_OPTIONS } from "./constants";
 import type { ModelEntry, RuntimeModelInfo } from "./types";
 import { Field, TextInput, Check, SectionTitle, IconField, Select } from "./form-fields";
 import { ThinkingLevelMapEditor } from "./ThinkingLevelMapEditor";
-import { cloneModelFromCatalog, hasDeepseekCompat, setDeepseekCompat } from "./utils";
+import { hasDeepseekCompat, setDeepseekCompat } from "./utils";
+import { cloneModelFromCatalog } from "@/lib/shared/models-config-draft";
 import { ModelCatalogPicker } from "./runtime";
 
 export function ModelDetail({ model, onChange, onDelete }: { model: ModelEntry; onChange: (m: ModelEntry) => void; onDelete: () => void }) {
