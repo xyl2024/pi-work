@@ -55,6 +55,7 @@ import {
   renameModelsConfigProviderPage,
   type ModelsConfigPage,
 } from "@/lib/shared/models-config-pages";
+import { selectModelsConfigOpenAction } from "@/lib/shared/models-config-close";
 import type {
   ApiKeyProvider,
   ModelEntry,
@@ -145,6 +146,19 @@ export function selectModelsConfigDirty(snapshot: ModelsConfigStoreState): boole
   return isModelsConfigDirty({ config: snapshot.config, baseline: snapshot.baseline });
 }
 
+/** Non-reactive read of the same rule — the close guard asks at confirm time. */
+export function getModelsConfigDirty(): boolean {
+  return selectModelsConfigDirty(state);
+}
+
+/**
+ * Subscribe to just the dirty flag (the right-bar badge). A boolean snapshot
+ * keeps the shell from re-rendering on every other store change.
+ */
+export function useModelsConfigDirty(): boolean {
+  return useSyncExternalStore(subscribe, getModelsConfigDirty, () => false);
+}
+
 /** The single "cannot save yet" rule — the save bar and the raw editor read it. */
 export function selectModelsConfigProblem(
   snapshot: ModelsConfigStoreState,
@@ -190,10 +204,26 @@ async function loadFromDisk(): Promise<void> {
 /**
  * Read the config the first time the panel opens. Later opens reuse the draft
  * and the page stack, so a panel collapse or a tab switch never loses edits.
+ * The draft is released when the tab closes (`releaseModelsConfigDraft`), which
+ * is what makes the next open read disk again — see
+ * `selectModelsConfigOpenAction` in lib/shared/models-config-close.ts.
  */
 export function ensureModelsConfigLoaded(): void {
-  if (state.loaded || state.loading) return;
+  if (selectModelsConfigOpenAction({ loaded: state.loaded, loading: state.loading }) === "reuse") return;
   void loadFromDisk();
+}
+
+/**
+ * Throw the draft away. Called by the shell when the models-config tab closes:
+ * the tab is the lifetime of the draft in #109's model, so the next open reads
+ * disk and rebuilds the page stack instead of resurrecting discarded edits.
+ * Collapsing the panel or switching tabs does not close the tab, so it never
+ * lands here.
+ */
+export function releaseModelsConfigDraft(): void {
+  if (state === INITIAL) return;
+  state = INITIAL;
+  emit();
 }
 
 export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string }> {
@@ -237,6 +267,11 @@ export function openModelsConfigModel(providerName: string, index: number): void
 /** Open a subscription (OAuth) provider's detail page. */
 export function openModelsConfigOAuth(providerId: string): void {
   patch({ pages: openModelsConfigPage({ kind: "oauth", providerId }), rawEdit: null });
+}
+
+/** Open the read-only model catalog as a root-level sibling of the list. */
+export function openModelsConfigCatalog(): void {
+  patch({ pages: openModelsConfigPage({ kind: "catalog" }), rawEdit: null });
 }
 
 /** Open an API-key provider's detail page. */

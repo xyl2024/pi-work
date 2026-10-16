@@ -17,6 +17,7 @@ import { ModelsConfigApiKeyPage } from "./models-config/ModelsConfigApiKeyPage";
 import { ModelsConfigAddProviderPage } from "./models-config/ModelsConfigAddProviderPage";
 import { ModelsConfigAddModelNamePage } from "./models-config/ModelsConfigAddModelNamePage";
 import { ModelsConfigFillModelPage } from "./models-config/ModelsConfigFillModelPage";
+import { ModelsConfigCatalogPage } from "./models-config/ModelsConfigCatalogPage";
 import { ModelsConfigSaveBar } from "./models-config/ModelsConfigSaveBar";
 
 /**
@@ -40,7 +41,10 @@ export function ModelsConfigPanel({ onCloseTab }: { onCloseTab?: () => void }) {
 
   const page = currentModelsConfigPage(pages);
   const fullHeightPage =
-    page.kind === "addProvider" || page.kind === "addModelName" || page.kind === "fillModel";
+    page.kind === "addProvider" ||
+    page.kind === "addModelName" ||
+    page.kind === "fillModel" ||
+    page.kind === "catalog";
 
   // Each page is a full-width view, so entering or leaving a scrolling one
   // starts at the top instead of inheriting the previous page's offset. The
@@ -96,6 +100,8 @@ export function ModelsConfigPanel({ onCloseTab }: { onCloseTab?: () => void }) {
           <ModelsConfigApiKeyPage providerId={page.providerId} />
         ) : page.kind === "addProvider" ? (
           <ModelsConfigAddProviderPage />
+        ) : page.kind === "catalog" ? (
+          <ModelsConfigCatalogPage />
         ) : page.kind === "addModelName" ? (
           <ModelsConfigAddModelNamePage providerName={page.providerName} />
         ) : page.kind === "fillModel" ? (

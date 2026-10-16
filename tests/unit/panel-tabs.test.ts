@@ -516,6 +516,7 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       activeTabKind: null,
       selectedSessionId: null,
       selectedCwd: null,
+      modelsConfigDirty: false,
       t: (key) => key,
       toggleRightPanel: () => {},
       togglePanel: () => {},
@@ -523,6 +524,23 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     for (const desc of RIGHT_BAR_DESCRIPTORS) {
       expect(desc.icon({ size: 16, active: desc.isActive(ctx) })).toBeTruthy();
     }
+  });
+
+  it("badges the models-config button only while the draft is dirty", () => {
+    const ctx: RightBarCtx = {
+      rightPanelState: "closed",
+      activeTabKind: null,
+      selectedSessionId: null,
+      selectedCwd: null,
+      modelsConfigDirty: false,
+      t: (key) => key,
+      toggleRightPanel: () => {},
+      togglePanel: () => {},
+    };
+    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig");
+
+    expect(descriptor?.badge?.(ctx)).toBeFalsy();
+    expect(descriptor?.badge?.({ ...ctx, modelsConfigDirty: true })).toBeTruthy();
   });
 
   it("derives exactly one right-bar button id per panel kind", () => {

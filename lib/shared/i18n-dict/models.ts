@@ -105,6 +105,9 @@ export const models = {
   // Panel close guard: the tab × while a subscription login is running.
   "Close while signing in?": "登录尚未完成，确认关闭？",
   "The authorization in progress will be cancelled.": "进行中的授权将被取消。",
+  // Panel close guard: the tab × while the draft has unsaved changes.
+  "Your model configuration changes will be lost.": "你的模型配置改动将会丢失。",
+  "Your model configuration changes will be lost and the authorization in progress will be cancelled.": "你的模型配置改动将会丢失，进行中的授权也将被取消。",
   "new model": "新模型",
   "Add model": "添加模型",
   "Add provider": "添加提供商",

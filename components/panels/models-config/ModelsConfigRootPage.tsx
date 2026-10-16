@@ -6,6 +6,7 @@ import { ProviderIcon, ProviderGearIcon, hasProviderIcon } from "@/components/ui
 import {
   openModelsConfigAddProvider,
   openModelsConfigApiKey,
+  openModelsConfigCatalog,
   openModelsConfigOAuth,
   openModelsConfigProvider,
   useModelsConfigStore,
@@ -40,9 +41,17 @@ export function ModelsConfigRootPage() {
     </button>
   );
 
+  // The catalog is a root-level sibling: this row opens it as a page inside
+  // the same panel view (never a second panel / button), and its Back returns
+  // here. It stays reachable even with no providers configured.
+  const catalogRow = (
+    <NavRow icon={<CatalogIcon />} label={t("View all model data")} onClick={openModelsConfigCatalog} />
+  );
+
   if (subscriptions.length === 0 && apiKeyConfigured.length === 0 && providers.length === 0) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "24px 12px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "14px 12px" }}>
+        {catalogRow}
         <div style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
           {t("No providers configured")}
         </div>
@@ -53,12 +62,13 @@ export function ModelsConfigRootPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, padding: "14px 12px" }}>
+      {catalogRow}
       {subscriptions.length > 0 && (
         <Group label={t("Subscriptions")}>
           {subscriptions.map((provider) => (
             <NavRow
               key={provider.id}
-              iconId={provider.id}
+              icon={<RowIcon iconId={provider.id} />}
               label={provider.name}
               onClick={() => openModelsConfigOAuth(provider.id)}
             />
@@ -71,7 +81,7 @@ export function ModelsConfigRootPage() {
           {apiKeyConfigured.map((provider) => (
             <NavRow
               key={provider.id}
-              iconId={provider.id}
+              icon={<RowIcon iconId={provider.id} />}
               label={provider.displayName}
               onClick={() => openModelsConfigApiKey(provider.id)}
             />
@@ -83,17 +93,11 @@ export function ModelsConfigRootPage() {
         <Group label={t("Custom")}>
           {providers.map(([name, provider]) => (
             <div key={name}>
-              <button
-                type="button"
+              <NavRow
+                icon={<RowIcon iconId={provider.icon} />}
+                label={name}
                 onClick={() => openModelsConfigProvider(name)}
-                style={rowButtonStyle}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-              >
-                <RowIcon iconId={provider.icon} />
-                <span style={rowLabelStyle(false)}>{name}</span>
-                <Chevron />
-              </button>
+              />
               {(provider.models ?? []).map((model, index) => (
                 <div key={index} style={{ display: "flex", alignItems: "center", gap: 7, padding: "4px 8px 4px 26px" }}>
                   <RowIcon iconId={model.icon ?? provider.icon} size={13} />
@@ -121,7 +125,7 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function NavRow({ iconId, label, onClick }: { iconId?: string; label: string; onClick: () => void }) {
+function NavRow({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -130,10 +134,24 @@ function NavRow({ iconId, label, onClick }: { iconId?: string; label: string; on
       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
     >
-      <RowIcon iconId={iconId} />
+      {icon}
       <span style={rowLabelStyle(false)}>{label}</span>
       <Chevron />
     </button>
+  );
+}
+
+/** Grid glyph for the read-only "All model data" row. */
+function CatalogIcon() {
+  return (
+    <span style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--text-muted)" }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+    </span>
   );
 }
 

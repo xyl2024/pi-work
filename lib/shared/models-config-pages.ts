@@ -5,7 +5,8 @@
  * a narrow strip. There are at most three levels:
  *
  *   0. root — the provider list;
- *   1. a detail page — provider / model / OAuth / API key;
+ *   1. a detail page — provider / model / OAuth / API key, or the read-only
+ *      model catalog ("模型目录 / All model data", a root-level sibling);
  *   2. an add page — the add-provider three-way picker, the "name a model"
  *      catalog search, or the "fill this model from the catalog" picker.
  *
@@ -33,6 +34,7 @@ export type ModelsConfigPage =
   | { kind: "model"; providerName: string; index: number }
   | { kind: "oauth"; providerId: string }
   | { kind: "apikey"; providerId: string }
+  | { kind: "catalog" }
   | { kind: "addProvider" }
   | { kind: "addModelName"; providerName: string }
   | { kind: "fillModel"; providerName: string; index: number };
@@ -67,11 +69,15 @@ function baseStackFor(page: ModelsConfigPage): ModelsConfigPage[] {
         { kind: "model", providerName: page.providerName, index: page.index },
       ];
     // Every other page is either a first-level detail or (like the add-provider
-    // picker) a page reached straight from the list.
+    // picker) a page reached straight from the list. The catalog is a
+    // root-level sibling: it opens straight above the list and Back returns
+    // there, which is what keeps it inside this panel view rather than a second
+    // panel / a second button.
     case "provider":
     case "model":
     case "oauth":
     case "apikey":
+    case "catalog":
     case "addProvider":
       return [MODELS_CONFIG_ROOT_PAGE];
     default:

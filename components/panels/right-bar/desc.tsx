@@ -68,6 +68,10 @@ export interface RightBarCtx {
   activeTabKind: PanelTabKind | null;
   selectedSessionId: string | null;
   selectedCwd: string | null;
+  /** The models-config draft differs from `models.json` on disk. Lives in the
+   *  ctx — not in the panel body — because the button must keep the dirty
+   *  badge while the panel is collapsed. */
+  modelsConfigDirty: boolean;
   /** Active tool-call counter is the only thing that requires i18n inside
    *  the descriptor body, so we expose the AppShell-bound t() to avoid
    *  re-resolving the same key in two places. */
@@ -204,6 +208,16 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     // icon, so button / tab / palette render the same glyph. `inherit` lets
     // the glyph flip with the host's active / hover colour.
     icon: ({ size }) => <ProviderGearIcon size={size} color="inherit" />,
+    // Unsaved-changes dot: the one wire-up for the descriptor badge hook. It
+    // is shown while the panel is collapsed too, because the dirty flag lives
+    // in the module store, not in the panel mount.
+    badge: (ctx) =>
+      ctx.modelsConfigDirty ? (
+        <span
+          aria-hidden="true"
+          style={{ position: "absolute", top: 5, right: 5, width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 0 2px var(--bg-panel)" }}
+        />
+      ) : null,
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

@@ -36,6 +36,10 @@ function fillModel(providerName: string, index: number): ModelsConfigPage {
   return { kind: "fillModel", providerName, index };
 }
 
+function catalog(): ModelsConfigPage {
+  return { kind: "catalog" };
+}
+
 describe("createModelsConfigPageStack", () => {
   it("starts on the provider list", () => {
     expect(createModelsConfigPageStack()).toEqual([MODELS_CONFIG_ROOT_PAGE]);
@@ -104,6 +108,10 @@ describe("openModelsConfigPage", () => {
     ]);
   });
 
+  it("opens the model catalog as a root-level sibling of the list", () => {
+    expect(openModelsConfigPage(catalog())).toEqual([MODELS_CONFIG_ROOT_PAGE, catalog()]);
+  });
+
   it("keeps the provider page under the name-search page", () => {
     expect(openModelsConfigPage(addModelName("openai"))).toEqual([
       MODELS_CONFIG_ROOT_PAGE,
@@ -124,6 +132,12 @@ describe("openModelsConfigPage", () => {
 describe("backModelsConfigPage", () => {
   it("returns to the list from a detail page", () => {
     expect(backModelsConfigPage([MODELS_CONFIG_ROOT_PAGE, provider("openai")])).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+    ]);
+  });
+
+  it("returns to the list from the model catalog", () => {
+    expect(backModelsConfigPage([MODELS_CONFIG_ROOT_PAGE, catalog()])).toEqual([
       MODELS_CONFIG_ROOT_PAGE,
     ]);
   });
@@ -195,5 +209,10 @@ describe("renameModelsConfigProviderPage", () => {
     expect(renameModelsConfigProviderPage([MODELS_CONFIG_ROOT_PAGE], "openai", "oa")).toEqual([
       MODELS_CONFIG_ROOT_PAGE,
     ]);
+  });
+
+  it("leaves the model catalog alone", () => {
+    const stack = [MODELS_CONFIG_ROOT_PAGE, catalog()];
+    expect(renameModelsConfigProviderPage(stack, "openai", "oa")).toEqual(stack);
   });
 });

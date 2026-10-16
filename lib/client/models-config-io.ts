@@ -15,6 +15,29 @@
 
 import type { ApiKeyProvider, ModelsJson, OAuthProvider } from "@/lib/shared/models-config";
 
+/**
+ * Listeners told after every successful `PUT /api/models-config`.
+ *
+ * The shell subscribes to refresh new-session model defaults when the file is
+ * actually written, instead of keying that off a modal close (which fired on
+ * "open then cancel" too). Both surfaces — the panel store and the legacy
+ * modal hook — go through `putModelsConfig`, so a save from either one lands
+ * here and there is no second place to keep in sync.
+ */
+const savedListeners = new Set<() => void>();
+
+/** Subscribe to successful saves; returns the unsubscribe. */
+export function subscribeModelsConfigSaved(listener: () => void): () => void {
+  savedListeners.add(listener);
+  return () => {
+    savedListeners.delete(listener);
+  };
+}
+
+function notifyModelsConfigSaved(): void {
+  for (const listener of savedListeners) listener();
+}
+
 /** GET the raw `models.json` payload (parsed, not yet normalized). */
 export async function fetchModelsConfigPayload(): Promise<unknown> {
   const res = await fetch("/api/models-config");
@@ -33,6 +56,7 @@ export async function putModelsConfig(config: ModelsJson): Promise<{ ok: boolean
   if (!res.ok || body.error) {
     return { ok: false, error: body.error ?? `HTTP ${res.status}` };
   }
+  notifyModelsConfigSaved();
   return { ok: true };
 }
 

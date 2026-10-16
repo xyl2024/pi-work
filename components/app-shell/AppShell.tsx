@@ -59,6 +59,7 @@ import {
   selectCanExpand,
   selectOpenCount,
   selectTab,
+  selectTabByKind,
   type PanelMode,
   type PanelTabsState,
   type PanelViewKind,
@@ -71,6 +72,8 @@ import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
+import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
+import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";
@@ -507,6 +510,22 @@ export function AppShell() {
   const rightPanelSelection = useTextSelection(rightPanelRef);
   const confirm = useConfirm();
   const { setActiveSessionId: setActivePermissionSession } = usePendingPermissions();
+
+  // ── Models-config panel lifecycle ──
+  // The draft lives in a module store (the panel body unmounts on a tab
+  // switch), so the shell watches it here: the right-bar badge reads the dirty
+  // flag, and the draft is released when the tab closes so the next open reads
+  // disk again. Collapsing the panel / switching tabs keeps the tab, so the
+  // draft survives those.
+  const modelsConfigDirty = useModelsConfigDirty();
+  const modelsConfigTabOpen = selectTabByKind(panelTabsState, "modelsConfig") !== null;
+  useEffect(() => {
+    if (!modelsConfigTabOpen) releaseModelsConfigDraft();
+  }, [modelsConfigTabOpen]);
+  // New sessions must pick up a just-saved default model. The refresh signal is
+  // the successful PUT (shared by the panel and the legacy modal), not a modal
+  // close — "open then cancel" no longer refreshes anything.
+  useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
 
   useEffect(() => {
     setActivePermissionSession(selectedSession?.id ?? null);
@@ -977,23 +996,27 @@ export function AppShell() {
   }, [setPanelMode]);
 
   // The models-config panel's close guard (pure, in
-  // lib/shared/models-config-close). Today it only covers a running
-  // subscription authorization: confirming the close cancels it, which is
-  // what the prompt promises. Every close path that can drop that tab asks
-  // through here — the single × and the batch closes alike, so "Close other
-  // tabs" cannot swallow a login either.
+  // lib/shared/models-config-close). Closing can lose two things: an unsaved
+  // draft and a running subscription authorization. Every close path that can
+  // drop that tab asks through here — the single × and the batch closes alike,
+  // so "Close other tabs" cannot swallow a draft or a login either. Confirming
+  // discards the draft (the shell releases the module store once the tab
+  // actually closes) and cancels any authorization.
   const confirmDropModelsConfig = useCallback(async (dropsModelsConfig: boolean): Promise<boolean> => {
     if (!dropsModelsConfig) return true;
-    const guard = selectModelsConfigCloseConfirm({ oauthInProgress: hasActiveOAuthLogin() });
+    const guard = selectModelsConfigCloseConfirm({
+      dirty: getModelsConfigDirty(),
+      oauthInProgress: hasActiveOAuthLogin(),
+    });
     if (!guard) return true;
     const ok = await confirm({
       title: t(guard.titleKey),
       description: t(guard.descriptionKey),
-      confirmLabel: t("Close"),
+      confirmLabel: t(guard.confirmLabelKey),
       cancelLabel: t("Cancel"),
       destructive: true,
     });
-    if (ok) cancelActiveOAuthLogins();
+    if (ok && hasActiveOAuthLogin()) cancelActiveOAuthLogins();
     return ok;
   }, [confirm, t]);
 
@@ -1167,6 +1190,7 @@ export function AppShell() {
     activeTabKind: activeRightPanelKind,
     selectedSessionId,
     selectedCwd,
+    modelsConfigDirty,
     t,
     toggleRightPanel: () =>
       setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),
@@ -1812,7 +1836,7 @@ export function AppShell() {
     </div>
 
   </div>
-  {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); setModelsRefreshKey((k) => k + 1); }} />}
+  {modelsConfigOpen && <ModelsConfig onClose={() => setModelsConfigOpen(false)} />}
     {skillsConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
       <SkillsConfig cwd={(selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setSkillsConfigOpen(false)} />
     )}
