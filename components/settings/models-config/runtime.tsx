@@ -9,6 +9,27 @@ import { filterCatalogModels, type CatalogModelEntry } from "./catalog-search";
 import { ModelCard } from "./ModelCard";
 import type { ApiKeyProvider, OAuthProvider, RuntimeCatalog, RuntimeCatalogProvider, RuntimeModelInfo } from "./types";
 
+/**
+ * Icon-only "up one level" control for the bodies when they are mounted as
+ * panel pages. The modal keeps the × those bodies render otherwise, so the
+ * close affordance still matches the container it sits in.
+ */
+function BodyBackButton({ onClick }: { onClick: () => void }) {
+  const { t } = useI18n();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={t("Back")}
+      style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, padding: 0, background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", flexShrink: 0 }}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="15 6 9 12 15 18" />
+      </svg>
+    </button>
+  );
+}
+
 export function RuntimeModelCatalog() {
   const { t } = useI18n();
   const toast = useToast();
@@ -133,9 +154,12 @@ export function RuntimeModelCatalog() {
 export function ModelCatalogPickerBody({
   onSelect,
   onClose,
+  onBack,
 }: {
   onSelect: (model: RuntimeModelInfo) => void;
   onClose: () => void;
+  /** Panel-page mode: show an up-one-level control instead of a close button. */
+  onBack?: () => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -175,12 +199,15 @@ export function ModelCatalogPickerBody({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        {onBack && <BodyBackButton onClick={onBack} />}
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 700 }}>{t("Fill from model catalog")}</div>
           <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 11 }}>{t("Only model fields are filled; provider settings stay unchanged.")}</div>
         </div>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+        {!onBack && (
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+        )}
       </div>
 
       <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
@@ -236,10 +263,13 @@ export function AddModelNameStepBody({
   onSelect,
   onSkip,
   onClose,
+  onBack,
 }: {
   onSelect: (model: RuntimeModelInfo) => void;
   onSkip: () => void;
   onClose: () => void;
+  /** Panel-page mode: show an up-one-level control beside the search field. */
+  onBack?: () => void;
 }) {
   const { t } = useI18n();
   const toast = useToast();
@@ -303,6 +333,7 @@ export function AddModelNameStepBody({
     <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
       <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {onBack && <BodyBackButton onClick={onBack} />}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
@@ -598,11 +629,13 @@ interface AddProviderPickerBodyProps {
   onSelectApiKey: (id: string) => void;
   onAddCustom: () => void;
   onClose: () => void;
+  /** Panel-page mode: show an up-one-level control beside the search field. */
+  onBack?: () => void;
 }
 
 export function AddProviderPickerBody({
   oauthProviders, apiKeyProviders,
-  onSelectOAuth, onSelectApiKey, onAddCustom, onClose,
+  onSelectOAuth, onSelectApiKey, onAddCustom, onClose, onBack,
 }: AddProviderPickerBodyProps) {
   const { t } = useI18n();
   const [search, setSearch] = useState("");
@@ -633,6 +666,7 @@ export function AddProviderPickerBody({
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0, minWidth: 0 }}>
       <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
+        {onBack && <BodyBackButton onClick={onBack} />}
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
           <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
@@ -656,7 +690,7 @@ export function AddProviderPickerBody({
             )}
             {showCustom && (
               <button
-                onClick={() => { onAddCustom(); onClose(); }}
+                onClick={() => onAddCustom()}
                 style={cardStyle}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
@@ -677,7 +711,7 @@ export function AddProviderPickerBody({
               <div style={{ gridColumn: "1 / -1", paddingTop: showCustom ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("Subscriptions")}</div>
             )}
             {availableOAuth.map((p) => (
-              <button key={p.id} onClick={() => { onSelectOAuth(p.id); onClose(); }}
+              <button key={p.id} onClick={() => onSelectOAuth(p.id)}
                 style={cardStyle}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}
@@ -694,7 +728,7 @@ export function AddProviderPickerBody({
               <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("API Key")}</div>
             )}
             {availableApiKey.map((p) => (
-              <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
+              <button key={p.id} onClick={() => onSelectApiKey(p.id)}
                 style={cardStyle}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg)"; }}

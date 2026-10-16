@@ -5,9 +5,9 @@ import { ProviderFields } from "@/components/settings/models-config/ProviderFiel
 import { ModelEntryCard } from "@/components/settings/models-config/ModelEntryCard";
 import { SectionTitle } from "@/components/settings/models-config/form-fields";
 import {
-  addModelsConfigModel,
   deleteModelsConfigProvider,
   modelsConfigBack,
+  openModelsConfigAddModelName,
   openModelsConfigModel,
   renameModelsConfigProvider,
   updateModelsConfigProvider,
@@ -66,7 +66,7 @@ export function ModelsConfigProviderPage({ name }: { name: string }) {
           <SectionTitle>{t("Models")}</SectionTitle>
           <button
             type="button"
-            onClick={() => addModelsConfigModel(name)}
+            onClick={() => openModelsConfigAddModelName(name)}
             style={{ padding: "3px 8px", background: "none", border: "1px dashed var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 11 }}
           >
             + {t("Model")}

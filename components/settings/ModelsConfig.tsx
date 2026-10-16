@@ -319,9 +319,9 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           <AddProviderPickerBody
             oauthProviders={oauthProviders}
             apiKeyProviders={apiKeyProviders}
-            onSelectOAuth={(id) => setSelection({ type: "oauth", providerId: id })}
-            onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
-            onAddCustom={() => addCustomProvider()}
+            onSelectOAuth={(id) => { setSelection({ type: "oauth", providerId: id }); setPickerOpen(false); }}
+            onSelectApiKey={(id) => { setSelection({ type: "apikey", providerId: id }); setPickerOpen(false); }}
+            onAddCustom={() => { addCustomProvider(); setPickerOpen(false); }}
             onClose={() => setPickerOpen(false)}
           />
         </ModalShell>

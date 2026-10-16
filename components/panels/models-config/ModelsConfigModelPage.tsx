@@ -10,6 +10,7 @@ import {
   beginModelsConfigRawEdit,
   cancelModelsConfigRawEdit,
   modelsConfigBack,
+  openModelsConfigFillModel,
   removeModelsConfigModel,
   selectModelsConfigProblem,
   updateModelsConfigModel,
@@ -70,6 +71,13 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text)" }}>
           {title}
         </span>
+        <button
+          type="button"
+          onClick={() => openModelsConfigFillModel(providerName, index)}
+          style={{ padding: "3px 8px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, flexShrink: 0 }}
+        >
+          {t("Fill from model catalog")}
+        </button>
         <button
           type="button"
           onClick={() => removeModelsConfigModel(providerName, index)}

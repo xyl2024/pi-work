@@ -3,7 +3,13 @@
 import type { ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon, ProviderGearIcon, hasProviderIcon } from "@/components/ui/ProviderIcon";
-import { openModelsConfigProvider, useModelsConfigStore } from "@/lib/client/models-config-store";
+import {
+  openModelsConfigAddProvider,
+  openModelsConfigApiKey,
+  openModelsConfigOAuth,
+  openModelsConfigProvider,
+  useModelsConfigStore,
+} from "@/lib/client/models-config-store";
 
 /**
  * The panel's root page: every provider the user can configure, in one
@@ -11,9 +17,8 @@ import { openModelsConfigProvider, useModelsConfigStore } from "@/lib/client/mod
  * subscription providers already logged in, API-key providers already
  * configured, then the user's own providers with their model entries.
  *
- * Subscription and API-key rows become navigable in the OAuth / API-key slice;
- * here they are what the acceptance criteria ask for — visible — while the
- * custom-provider rows already open their detail page.
+ * Subscription and API-key rows open their own detail pages; the custom-provider
+ * rows open theirs. The bottom of the page carries the "Add provider" entry.
  */
 export function ModelsConfigRootPage() {
   const { t } = useI18n();
@@ -23,10 +28,25 @@ export function ModelsConfigRootPage() {
   const apiKeyConfigured = apiKeyProviders.filter((provider) => provider.configured);
   const providers = Object.entries(config.providers ?? {});
 
+  const addProviderButton = (
+    <button
+      type="button"
+      onClick={() => openModelsConfigAddProvider()}
+      style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, width: "100%", padding: "7px 0", background: "none", border: "1px dashed var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+    >
+      + {t("Add provider")}
+    </button>
+  );
+
   if (subscriptions.length === 0 && apiKeyConfigured.length === 0 && providers.length === 0) {
     return (
-      <div style={{ padding: "24px 12px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-        {t("No providers configured")}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "24px 12px" }}>
+        <div style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
+          {t("No providers configured")}
+        </div>
+        {addProviderButton}
       </div>
     );
   }
@@ -36,11 +56,11 @@ export function ModelsConfigRootPage() {
       {subscriptions.length > 0 && (
         <Group label={t("Subscriptions")}>
           {subscriptions.map((provider) => (
-            <StaticRow
+            <NavRow
               key={provider.id}
               iconId={provider.id}
               label={provider.name}
-              trailing={t("Configured")}
+              onClick={() => openModelsConfigOAuth(provider.id)}
             />
           ))}
         </Group>
@@ -49,11 +69,11 @@ export function ModelsConfigRootPage() {
       {apiKeyConfigured.length > 0 && (
         <Group label={t("API Key")}>
           {apiKeyConfigured.map((provider) => (
-            <StaticRow
+            <NavRow
               key={provider.id}
               iconId={provider.id}
               label={provider.displayName}
-              trailing={t("Configured")}
+              onClick={() => openModelsConfigApiKey(provider.id)}
             />
           ))}
         </Group>
@@ -84,6 +104,8 @@ export function ModelsConfigRootPage() {
           ))}
         </Group>
       )}
+
+      {addProviderButton}
     </div>
   );
 }
@@ -99,13 +121,19 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function StaticRow({ iconId, label, trailing }: { iconId?: string; label: string; trailing?: ReactNode }) {
+function NavRow({ iconId, label, onClick }: { iconId?: string; label: string; onClick: () => void }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px" }}>
+    <button
+      type="button"
+      onClick={onClick}
+      style={rowButtonStyle}
+      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+    >
       <RowIcon iconId={iconId} />
       <span style={rowLabelStyle(false)}>{label}</span>
-      {trailing && <span style={{ flexShrink: 0, fontSize: 10, color: "var(--text-dim)" }}>{trailing}</span>}
-    </div>
+      <Chevron />
+    </button>
   );
 }
 

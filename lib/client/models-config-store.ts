@@ -31,11 +31,13 @@ import {
   putModelsConfig,
 } from "./models-config-io";
 import {
+  cloneModelFromCatalog,
   isModelsConfigDirty,
   modelsConfigDraftFrom,
   modelsConfigProblem,
   parseModelEntryJson,
   withAddedModel,
+  withCustomProvider,
   withModel,
   withProvider,
   withRenamedProvider,
@@ -48,6 +50,7 @@ import {
   MODELS_CONFIG_ROOT_PAGE,
   backModelsConfigPage as backPageStack,
   createModelsConfigPageStack,
+  isModelsConfigRootPage,
   openModelsConfigPage,
   renameModelsConfigProviderPage,
   type ModelsConfigPage,
@@ -58,6 +61,7 @@ import type {
   ModelsJson,
   OAuthProvider,
   ProviderEntry,
+  RuntimeModelInfo,
 } from "@/lib/shared/models-config";
 
 export interface ModelsConfigStoreState {
@@ -150,14 +154,24 @@ export function selectModelsConfigProblem(
 
 // ── Loading ─────────────────────────────────────────────────────────────
 
-async function loadFromDisk(): Promise<void> {
-  patch({ loading: true, loadError: null });
+/** Re-read the subscription provider list (after an OAuth login / logout). */
+export function reloadModelsConfigOAuthProviders(): void {
   void fetchOAuthProviders()
     .then((providers) => patch({ oauthProviders: providers }))
     .catch(() => {});
+}
+
+/** Re-read the API-key provider list (after a key is saved / removed). */
+export function reloadModelsConfigApiKeyProviders(): void {
   void fetchApiKeyProviders()
     .then((providers) => patch({ apiKeyProviders: providers }))
     .catch(() => {});
+}
+
+async function loadFromDisk(): Promise<void> {
+  patch({ loading: true, loadError: null });
+  reloadModelsConfigOAuthProviders();
+  reloadModelsConfigApiKeyProviders();
   try {
     const raw = await fetchModelsConfigPayload();
     const draft = modelsConfigDraftFrom(raw);
@@ -220,12 +234,53 @@ export function openModelsConfigModel(providerName: string, index: number): void
   patch({ pages: openModelsConfigPage({ kind: "model", providerName, index }), rawEdit: null });
 }
 
+/** Open a subscription (OAuth) provider's detail page. */
+export function openModelsConfigOAuth(providerId: string): void {
+  patch({ pages: openModelsConfigPage({ kind: "oauth", providerId }), rawEdit: null });
+}
+
+/** Open an API-key provider's detail page. */
+export function openModelsConfigApiKey(providerId: string): void {
+  patch({ pages: openModelsConfigPage({ kind: "apikey", providerId }), rawEdit: null });
+}
+
+/** Open the add-provider picker above the list. */
+export function openModelsConfigAddProvider(): void {
+  patch({ pages: openModelsConfigPage({ kind: "addProvider" }), rawEdit: null });
+}
+
+/** Open the "name a model" catalog search above the provider page. */
+export function openModelsConfigAddModelName(providerName: string): void {
+  patch({ pages: openModelsConfigPage({ kind: "addModelName", providerName }), rawEdit: null });
+}
+
+/** Open the "fill this model from the catalog" picker above the model page. */
+export function openModelsConfigFillModel(providerName: string, index: number): void {
+  patch({ pages: openModelsConfigPage({ kind: "fillModel", providerName, index }), rawEdit: null });
+}
+
 /** Pop one level; the provider list is the floor. */
 export function modelsConfigBack(): void {
   patch({ pages: backPageStack(state.pages), rawEdit: null });
 }
 
+/**
+ * Run Escape against the page stack: pop one level, or — when the list is
+ * already on top — report that the panel tab is free to run its close rules.
+ */
+export function escapeModelsConfig(): { closePanel: boolean } {
+  if (isModelsConfigRootPage(state.pages)) return { closePanel: true };
+  patch({ pages: backPageStack(state.pages), rawEdit: null });
+  return { closePanel: false };
+}
+
 // ── Provider edits ──────────────────────────────────────────────────────
+
+/** Create a custom provider under a free name and open its detail page. */
+export function addModelsConfigCustomProvider(): void {
+  const { config, name } = withCustomProvider(state.config);
+  patch({ config, pages: openModelsConfigPage({ kind: "provider", name }), rawEdit: null });
+}
 
 export function updateModelsConfigProvider(name: string, provider: ProviderEntry): void {
   patch({ config: withProvider(state.config, name, provider) });
@@ -268,6 +323,35 @@ export function addModelsConfigModel(providerName: string): void {
   patch({
     config,
     pages: openModelsConfigPage({ kind: "model", providerName, index }),
+    rawEdit: null,
+  });
+}
+
+/**
+ * Append a model cloned from a catalog entry and open its detail page. Like
+ * `addModelsConfigModel`, the addition stays in the draft until a save.
+ */
+export function addModelsConfigModelFromCatalog(
+  providerName: string,
+  source: RuntimeModelInfo,
+): void {
+  const { config, index } = withAddedModel(state.config, providerName, cloneModelFromCatalog(source));
+  patch({
+    config,
+    pages: openModelsConfigPage({ kind: "model", providerName, index }),
+    rawEdit: null,
+  });
+}
+
+/** Fill an existing model's fields from a catalog entry and return to it. */
+export function fillModelsConfigModelFromCatalog(
+  providerName: string,
+  index: number,
+  source: RuntimeModelInfo,
+): void {
+  patch({
+    config: withModel(state.config, providerName, index, cloneModelFromCatalog(source)),
+    pages: backPageStack(state.pages),
     rawEdit: null,
   });
 }

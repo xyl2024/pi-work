@@ -4,6 +4,7 @@ import {
   backModelsConfigPage,
   createModelsConfigPageStack,
   currentModelsConfigPage,
+  isModelsConfigRootPage,
   openModelsConfigPage,
   renameModelsConfigProviderPage,
   type ModelsConfigPage,
@@ -21,6 +22,18 @@ function provider(name: string): ModelsConfigPage {
 
 function model(providerName: string, index: number): ModelsConfigPage {
   return { kind: "model", providerName, index };
+}
+
+function addProvider(): ModelsConfigPage {
+  return { kind: "addProvider" };
+}
+
+function addModelName(providerName: string): ModelsConfigPage {
+  return { kind: "addModelName", providerName };
+}
+
+function fillModel(providerName: string, index: number): ModelsConfigPage {
+  return { kind: "fillModel", providerName, index };
 }
 
 describe("createModelsConfigPageStack", () => {
@@ -75,6 +88,37 @@ describe("openModelsConfigPage", () => {
   it("returns to the list when opening the root page", () => {
     expect(openModelsConfigPage(MODELS_CONFIG_ROOT_PAGE)).toEqual([MODELS_CONFIG_ROOT_PAGE]);
   });
+
+  it("opens the add-provider picker above the list", () => {
+    expect(openModelsConfigPage(addProvider())).toEqual([MODELS_CONFIG_ROOT_PAGE, addProvider()]);
+  });
+
+  it("opens a subscription / API-key detail above the list", () => {
+    expect(openModelsConfigPage({ kind: "oauth", providerId: "anthropic" })).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      { kind: "oauth", providerId: "anthropic" },
+    ]);
+    expect(openModelsConfigPage({ kind: "apikey", providerId: "openrouter" })).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      { kind: "apikey", providerId: "openrouter" },
+    ]);
+  });
+
+  it("keeps the provider page under the name-search page", () => {
+    expect(openModelsConfigPage(addModelName("openai"))).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      provider("openai"),
+      addModelName("openai"),
+    ]);
+  });
+
+  it("keeps the model page under the fill-from-catalog page", () => {
+    expect(openModelsConfigPage(fillModel("openai", 2))).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      model("openai", 2),
+      fillModel("openai", 2),
+    ]);
+  });
 });
 
 describe("backModelsConfigPage", () => {
@@ -91,6 +135,24 @@ describe("backModelsConfigPage", () => {
   it("never lets the stack empty out", () => {
     expect(backModelsConfigPage([])).toEqual([MODELS_CONFIG_ROOT_PAGE]);
   });
+
+  it("returns to the provider page from an add-model page", () => {
+    const stack = openModelsConfigPage(addModelName("openai"));
+    expect(backModelsConfigPage(stack)).toEqual([MODELS_CONFIG_ROOT_PAGE, provider("openai")]);
+  });
+
+  it("returns to the model page from a fill-from-catalog page", () => {
+    const stack = openModelsConfigPage(fillModel("openai", 1));
+    expect(backModelsConfigPage(stack)).toEqual([MODELS_CONFIG_ROOT_PAGE, model("openai", 1)]);
+  });
+});
+
+describe("isModelsConfigRootPage", () => {
+  it("is true only while the list is on top", () => {
+    expect(isModelsConfigRootPage(createModelsConfigPageStack())).toBe(true);
+    expect(isModelsConfigRootPage([])).toBe(true);
+    expect(isModelsConfigRootPage([MODELS_CONFIG_ROOT_PAGE, provider("openai")])).toBe(false);
+  });
 });
 
 describe("renameModelsConfigProviderPage", () => {
@@ -104,6 +166,24 @@ describe("renameModelsConfigProviderPage", () => {
     expect(
       renameModelsConfigProviderPage([MODELS_CONFIG_ROOT_PAGE, model("openai", 2)], "openai", "oa"),
     ).toEqual([MODELS_CONFIG_ROOT_PAGE, model("oa", 2)]);
+  });
+
+  it("follows a rename when the name-search page is open", () => {
+    const stack = openModelsConfigPage(addModelName("openai"));
+    expect(renameModelsConfigProviderPage(stack, "openai", "oa")).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      provider("oa"),
+      addModelName("oa"),
+    ]);
+  });
+
+  it("follows a rename when the fill-from-catalog page is open", () => {
+    const stack = openModelsConfigPage(fillModel("openai", 3));
+    expect(renameModelsConfigProviderPage(stack, "openai", "oa")).toEqual([
+      MODELS_CONFIG_ROOT_PAGE,
+      model("oa", 3),
+      fillModel("oa", 3),
+    ]);
   });
 
   it("leaves an unrelated detail page alone", () => {

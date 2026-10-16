@@ -109,6 +109,8 @@ interface PanelBodyCtx {
   onConversationTreeCardClick: (cardId: string) => void;
   gitDiffOpenCount: number;
   onExpandGitPanel: () => void;
+  /** Close the panel tab that is currently active (Escape at the root page). */
+  onClosePanelTab: () => void;
 }
 
 /**
@@ -147,7 +149,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
       onCardClick={(card) => ctx.onConversationTreeCardClick(card.id)}
     />
   ),
-  modelsConfig: () => <ModelsConfigPanel />,
+  modelsConfig: (ctx) => <ModelsConfigPanel onCloseTab={ctx.onClosePanelTab} />,
 };
 
 function formatBytes(bytes: number): string {
@@ -1152,6 +1154,10 @@ export function AppShell() {
     onConversationTreeCardClick: handleConversationTreeCardClick,
     gitDiffOpenCount,
     onExpandGitPanel: handleExpandGitPanel,
+    // Escape from the models-config list closes its tab the same way its × does.
+    onClosePanelTab: () => {
+      if (activeFileTabId) handleCloseFileTab(activeFileTabId);
+    },
   };
 
   // Ctrl+` toggles the terminal panel (VS Code muscle memory).

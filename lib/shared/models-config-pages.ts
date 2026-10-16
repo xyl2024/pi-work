@@ -2,30 +2,40 @@
  * Page stack for the models-config panel view.
  *
  * The panel navigates in levels instead of squeezing a two-column layout into
- * a narrow strip: the root page (the provider list) sits at the bottom, and
- * every detail / add page is a full-width page above it. This module owns the
- * stack rules so they can be driven from `tests/unit` without a browser —
+ * a narrow strip. There are at most three levels:
+ *
+ *   0. root — the provider list;
+ *   1. a detail page — provider / model / OAuth / API key;
+ *   2. an add page — the add-provider three-way picker, the "name a model"
+ *      catalog search, or the "fill this model from the catalog" picker.
+ *
+ * Add pages hang off the detail page they were opened from (a model page under
+ * a provider page under the list), and every page carries the context it needs
+ * (a provider name, a model index, a runtime provider id) so a tab switch that
+ * remounts the view can rebuild the same page. This module owns the stack rules
+ * so they can be driven from `tests/unit` without a browser —
  * `lib/client/models-config-store.ts` holds the current stack and the panel
  * renders `currentModelsConfigPage`.
  *
  * Two rules matter here:
  *
- *   • the stack never grows forever — entering a detail page replaces
- *     anything above root, so going provider → provider → provider is always
- *     a two-page stack;
+ *   • the stack is bounded — opening any page replaces whatever sits at or
+ *     above the page's own level, so provider → provider, or provider → add
+ *     model → model, never grows the stack past the level it opened;
  *   • the root page is never popped — `backModelsConfigPage` stops there and
  *     an empty stack still resolves to root.
- *
- * The page union only carries what the panel can actually navigate to today.
- * Later slices add the OAuth / API-key / add pages to the union; the stack
- * rules above do not change.
  */
 
 /** One level of the panel's navigation. */
 export type ModelsConfigPage =
   | { kind: "root" }
   | { kind: "provider"; name: string }
-  | { kind: "model"; providerName: string; index: number };
+  | { kind: "model"; providerName: string; index: number }
+  | { kind: "oauth"; providerId: string }
+  | { kind: "apikey"; providerId: string }
+  | { kind: "addProvider" }
+  | { kind: "addModelName"; providerName: string }
+  | { kind: "fillModel"; providerName: string; index: number };
 
 /** The provider list — the bottom of every stack. */
 export const MODELS_CONFIG_ROOT_PAGE: ModelsConfigPage = { kind: "root" };
@@ -41,12 +51,47 @@ export function currentModelsConfigPage(pages: readonly ModelsConfigPage[]): Mod
 }
 
 /**
- * Enter a page reached from the list. Anything above root is replaced, so
- * sibling navigation (provider A → provider B) cannot grow the stack.
+ * The stack a page opens onto. Detail pages replace any other detail (so
+ * provider → model is a two-page stack), while an add page keeps the detail
+ * page it was opened from so `back` returns there.
+ */
+function baseStackFor(page: ModelsConfigPage): ModelsConfigPage[] {
+  switch (page.kind) {
+    case "root":
+      return [];
+    case "addModelName":
+      return [MODELS_CONFIG_ROOT_PAGE, { kind: "provider", name: page.providerName }];
+    case "fillModel":
+      return [
+        MODELS_CONFIG_ROOT_PAGE,
+        { kind: "model", providerName: page.providerName, index: page.index },
+      ];
+    // Every other page is either a first-level detail or (like the add-provider
+    // picker) a page reached straight from the list.
+    case "provider":
+    case "model":
+    case "oauth":
+    case "apikey":
+    case "addProvider":
+      return [MODELS_CONFIG_ROOT_PAGE];
+    default:
+      return assertNever(page);
+  }
+}
+
+/** Compile-time exhaustiveness guard for the page union. */
+function assertNever(page: never): never {
+  throw new Error(`unhandled models-config page: ${JSON.stringify(page)}`);
+}
+
+/**
+ * Enter a page. Anything at or above the page's own level is replaced, so
+ * sibling navigation (provider A → provider B, or adding a second model) cannot
+ * grow the stack.
  */
 export function openModelsConfigPage(page: ModelsConfigPage): ModelsConfigPage[] {
   if (page.kind === "root") return createModelsConfigPageStack();
-  return [MODELS_CONFIG_ROOT_PAGE, page];
+  return [...baseStackFor(page), page];
 }
 
 /** Pop one level. The provider list is a floor: backing off it is a no-op. */
@@ -56,7 +101,15 @@ export function backModelsConfigPage(pages: readonly ModelsConfigPage[]): Models
 }
 
 /**
- * Follow a provider rename so an open provider or model detail page keeps
+ * Whether the stack is sitting on the root page, i.e. an Escape cannot pop a
+ * level and the panel is free to run its tab-close rules instead.
+ */
+export function isModelsConfigRootPage(pages: readonly ModelsConfigPage[]): boolean {
+  return pages.length <= 1;
+}
+
+/**
+ * Follow a provider rename so an open provider / model / add page keeps
  * showing the entity it was opened for.
  */
 export function renameModelsConfigProviderPage(
@@ -67,6 +120,8 @@ export function renameModelsConfigProviderPage(
   return pages.map((page) => {
     if (page.kind === "provider" && page.name === oldName) return { kind: "provider", name: newName };
     if (page.kind === "model" && page.providerName === oldName) return { ...page, providerName: newName };
+    if (page.kind === "addModelName" && page.providerName === oldName) return { ...page, providerName: newName };
+    if (page.kind === "fillModel" && page.providerName === oldName) return { ...page, providerName: newName };
     return page;
   });
 }
