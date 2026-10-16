@@ -26,7 +26,6 @@ import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerModal } from "../scheduler";
 import { ChannelsModal } from "../channels/ChannelsModal";
-import { ToolsMarketModal } from "../tools-market/ToolsMarketModal";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import type { SessionTreeNode } from "@/lib/shared/types";
@@ -496,7 +495,6 @@ export function AppShell() {
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
-  const [toolsMarketOpen, setToolsMarketOpen] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -1289,7 +1287,6 @@ export function AppShell() {
     openPrompts: () => setPromptsConfigOpen(true),
     openScheduler: () => setSchedulerOpen(true),
     openChannels: () => setChannelsOpen(true),
-    openToolMarket: () => setToolsMarketOpen(true),
     openMcp: () => setMcpConfigOpen(true),
     toggleSidebar: () => setSidebarOpen((v) => !v),
     toggleRightPanel: () => dispatchPanelTabs({
@@ -1563,7 +1560,6 @@ export function AppShell() {
       onOpenPrompts={() => setPromptsConfigOpen(true)}
       onOpenScheduler={() => setSchedulerOpen(true)}
       onOpenChannels={() => setChannelsOpen(true)}
-      onOpenToolMarket={() => setToolsMarketOpen(true)}
       onOpenMcp={() => setMcpConfigOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onLogout={handleLogout}
@@ -1859,7 +1855,6 @@ export function AppShell() {
         onOpenSession={handleOpenScheduledSession}
       />
     )}
-    {toolsMarketOpen && <ToolsMarketModal open={toolsMarketOpen} onClose={() => setToolsMarketOpen(false)} />}
     {channelsOpen && (
       <ChannelsModal
         open={channelsOpen}

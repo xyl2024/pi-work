@@ -8,7 +8,6 @@ import {
   stripDefaultSystemPromptSections,
   stripPiDocumentationSection,
 } from "../shared/system-prompt-segments";
-import type { ToolMarketId } from "../shared/tools-market";
 import { createLogger, elapsedMs } from "./logger";
 import { readConfig } from "./config";
 import { loadMcpConfigForPiWork } from "./mcp-config";
@@ -32,7 +31,6 @@ import { piWorkCallTool } from "./self-tools/pi-work-call";
 import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
 import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
-import { readEnabledTools } from "./tools-market-config";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { matchSelfKillCommand } from "./self-protection";
 import { createPiWorkBashTool, createPiWorkPowerShellTool } from "./pi-shell-tools";
@@ -974,12 +972,6 @@ export async function startRpcSession(
     // the tool closure captures this ref and reads the wrapper at execute
     // time. Set immediately after the wrapper is constructed below.
     const requestUserInputRef: { current: AgentSessionWrapper | null } = { current: null };
-    // Snapshot which agent-side custom tools are enabled for this session.
-    // Read once here so the value is stable across the IIFE (an in-flight
-    // config write shouldn't change the tool set mid-session). Custom
-    // tools are passed to createAgentSession below — already-running
-    // sessions keep their original set even if the user toggles a switch.
-    const enabledTools = new Set(readEnabledTools());
     // APPEND_SYSTEM.md loader toggle (see PiWorkConfig.append_system): when the
     // user has disabled it, we hand DefaultResourceLoader an explicit empty
     // array so the `??` on `appendSystemPromptSource` short-circuits and
@@ -1035,14 +1027,12 @@ export async function startRpcSession(
       // once per session so a mid-session toggle doesn't change the prompt.
       appendSystemPromptOverride: (baseAppend) => {
         if (options.systemPromptPrefix) return [];
-        // Whole-block system-prompt contributions from enabled custom /
-        // tool-market tools. Gate each block on the tools-market enablement
-        // AND the session's actual tool selection: if a tool is excluded
-        // from this session (per-session tool picker, cwd default, or
-        // allowedToolNames), its append block must not leak into the
-        // system prompt.
+        // Whole-block system-prompt contributions from the agent-side custom
+        // tools. Gate each block on the session's actual tool selection: if a
+        // tool is excluded from this session (per-session tool picker, cwd
+        // default, or allowedToolNames), its append block must not leak into
+        // the system prompt.
         const sessionHasTool = (name: string): boolean =>
-          enabledTools.has(name as ToolMarketId) &&
           (!options.allowedToolNames || options.allowedToolNames.includes(name)) &&
           (effectiveToolNames === "all" ||
             // The stored selection may carry trailing-`*` prefix patterns
@@ -1288,12 +1278,8 @@ export async function startRpcSession(
       resourceLoader,
       ...(requestedModel ? { model: requestedModel } : {}),
       ...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
-      // Per-session customTools: gated by ~/.pi-work/config.yaml →
-      // custom_tools.enabled. Read at startRpcSession
-      // time only — already-running sessions keep their original tool set.
-      // `show_file` is accepted as a legacy alias of `show_media` so users
-      // with an existing config.yaml entry don't lose access after the
-      // rename.
+      // Per-session customTools. The set is fixed at startRpcSession time —
+      // already-running sessions keep their original tool set.
       customTools: [
         // Override the SDK built-in bash definition. Its hook runs after
         // session PI_* variables are injected and does not mutate process.env.
@@ -1303,42 +1289,36 @@ export async function startRpcSession(
         // (`excludeTools` filters custom definitions too), so "which shells
         // exist here" stays one decision (lib/shared/agent-shell-tools.ts).
         createPiWorkPowerShellTool(cwd),
-        ...(enabledTools.has("show_media")
-          ? buildShowFileTool()
-          : []),
-        ...(readConfig().web_access.enabled && (enabledTools.has("web_search") || enabledTools.has("fetch_content"))
-          ? buildWebAccessTools().filter((tool) => enabledTools.has(tool.name as ToolMarketId))
-          : []),
-        // Core orchestration tool. It is controlled by the tool market for
-        // normal sessions; child profiles exclude it through allowedToolNames,
-        // so subagents cannot recursively spawn more subagents in the MVP.
-        ...(enabledTools.has("spawn_subagent") ? [spawnSubagentTool] : []),
-        ...(enabledTools.has("ask_user_questions")
-          ? buildAskUserQuestionsTool({
-              // Read the wrapper lazily at execute time. By the time the
-              // agent can invoke the tool, the wrapper exists and the slot
-              // is filled (see below). If the slot is somehow still null
-              // (defensive), the tool returns an error result.
-              requestUserInput: (toolCallId, questions) => {
-                const w = requestUserInputRef.current;
-                if (!w) {
-                  return Promise.reject(
-                    new Error("ask_user_questions wrapper not initialized"),
-                  );
-                }
-                // The gate module owns the wait (ADR-0008). No deadline:
-                // today a question never expires (#66 keeps that out of scope).
-                return w.gates.requestUserInput({ toolCallId, questions, timeoutMs: null });
-              },
-              source: capturedSource,
-            })
-          : []),
-        ...(enabledTools.has("celebrate") ? [celebrateTool] : []),
+        ...buildShowFileTool(),
+        ...(readConfig().web_access.enabled ? buildWebAccessTools() : []),
+        // Core orchestration tool. Child profiles exclude it through
+        // allowedToolNames, so subagents cannot recursively spawn more
+        // subagents in the MVP.
+        spawnSubagentTool,
+        ...buildAskUserQuestionsTool({
+          // Read the wrapper lazily at execute time. By the time the
+          // agent can invoke the tool, the wrapper exists and the slot
+          // is filled (see below). If the slot is somehow still null
+          // (defensive), the tool returns an error result.
+          requestUserInput: (toolCallId, questions) => {
+            const w = requestUserInputRef.current;
+            if (!w) {
+              return Promise.reject(
+                new Error("ask_user_questions wrapper not initialized"),
+              );
+            }
+            // The gate module owns the wait (ADR-0008). No deadline:
+            // today a question never expires (#66 keeps that out of scope).
+            return w.gates.requestUserInput({ toolCallId, questions, timeoutMs: null });
+          },
+          source: capturedSource,
+        }),
+        celebrateTool,
         // Pi Work platform dispatcher: read-only visibility into Pi Work's
         // own live sessions + disk-backed session details, consolidated into
         // one tool (pi_work_call) to keep tool descriptions out of the
-        // system prompt. Gated via TOOL_MARKET_IDS.
-        ...(enabledTools.has("pi_work_call") ? [piWorkCallTool] : []),
+        // system prompt.
+        piWorkCallTool,
       ],
       // The SDK's public option is `tools`; it becomes the hard allowlist
       // passed to AgentSession.allowedToolNames. This is intentionally used

@@ -82,11 +82,9 @@ export const settings = {
   "Align session-bound buttons to the bottom (default)": "会话绑定按钮底部对齐（默认）",
   "Inline with button order (legacy)": "按顺序混排（保留旧行为）",
 
-  // Custom tools enable/disable
-  "Custom Tools": "自定义工具",
-  "Enable or disable custom pi tools. Changes apply to sessions started after this point; running sessions keep their original tool set.": "启用或禁用自定义 pi 工具。修改只对之后启动的会话生效；已运行的会话保持原有工具集。",
   "Show Media": "Show Media（内联展示多媒体文件）",
   "Ask User Questions": "Ask User Questions（向用户提问）",
+  "No tools available": "此项目下没有可用工具",
 
   // File preview size limits (Settings modal + file viewer 413)
   "File preview limits": "文件预览大小",

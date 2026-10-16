@@ -8,8 +8,7 @@
  * reaches the browser (see hooks/useAgentSession/events.ts →
  * lib/client/celebrate-store.ts → components/effects/CelebrationOverlay.tsx).
  *
- * Registered in rpc-manager.ts, gated by ~/.pi-work/tools-market.json
- * (TOOL_MARKET_IDS "celebrate").
+ * Registered in rpc-manager.ts.
  */
 
 import { Type } from "typebox";

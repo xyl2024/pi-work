@@ -59,7 +59,6 @@ interface Props {
   onOpenPrompts?: () => void;
   onOpenScheduler?: () => void;
   onOpenChannels?: () => void;
-  onOpenToolMarket?: () => void;
   onOpenMcp?: () => void;
   onOpenSettings?: () => void;
   onLogout?: () => void;
@@ -158,7 +157,7 @@ function PiAgentTitle() {
 
 const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, onOpenSettings, onLogout, profileRefreshKey }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenSettings, onLogout, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
@@ -971,7 +970,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           onOpenPrompts={onOpenPrompts}
           onOpenScheduler={onOpenScheduler}
           onOpenChannels={onOpenChannels}
-          onOpenToolMarket={onOpenToolMarket}
           onOpenMcp={onOpenMcp}
           onLogout={onLogout}
           refreshKey={profileRefreshKey}

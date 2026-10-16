@@ -11,7 +11,6 @@ import {
   LetterText,
   PanelRight,
   FolderOpen,
-  Store,
 } from "lucide-react";
 
 // ── AgentControls ────────────────────────────────────────────────────────
@@ -46,7 +45,6 @@ const ClockIcon = ICONS.clock;
 // descriptor's.
 const RightPanelIcon = () => <PanelRight size={16} />;
 const CwdPickerIcon = () => <FolderOpen size={16} />;
-const ToolMarketIcon = () => <Store size={16} />;
 const EnglishLanguageIcon = () => <LetterText size={16} />;
 const ChineseLanguageIcon = () => <Languages size={16} />;
 
@@ -103,7 +101,6 @@ export interface CommandContext {
   openPrompts: () => void;
   openScheduler: () => void;
   openChannels: () => void;
-  openToolMarket: () => void;
   openMcp: () => void;
 
   // View toggles
@@ -277,15 +274,6 @@ export function buildCommands(
     keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
     icon: <GlobeIcon />,
     run: () => ctx.openChannels(),
-  });
-
-  cmds.push({
-    id: "open-tool-market",
-    title: t("Open Tool Market"),
-    group: "Modal",
-    keywords: ["tools", "market", "custom tools", "工具", "工具市场"],
-    icon: <ToolMarketIcon />,
-    run: () => ctx.openToolMarket(),
   });
 
   // ── Language (2) ──

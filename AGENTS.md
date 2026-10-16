@@ -21,7 +21,7 @@ pi-work/
 │                       #   file-mentions、files、git、home、llm-audit、models、
 │                       #   models-config、profile、prompts、scheduled-tasks、
 │                       #   sessions、settings、skills、slash-commands、status-bar、subagents、terminal、
-│                       #   token-audit、tools-market、translate、workspaces
+│                       #   token-audit、translate、workspaces
 ├── components/         # React UI，按产品功能拆分
 │   ├── app-shell/      # 应用外壳与命令面板
 │   ├── chat/           # 聊天、输入、消息渲染、模型/思考级别/工具选择、权限确认、Ask User Questions
@@ -36,8 +36,8 @@ pi-work/
 │   │                   #   仍在此，供面板视图复用）
 │   ├── renderers/      # 消息中的代码块、ECharts、Mermaid、SVG 与图片渲染器
 │   ├── ui/             # 公共 UI 原语、图标与动画图标
-│   └── scheduler/ grokbot/ tools-market/ channels/ auth/ effects/
-│                       # 定时任务、Grokbot、工具市场、频道、登录、庆祝动画
+│   └── scheduler/ grokbot/ channels/ auth/ effects/
+│                       # 定时任务、Grokbot、频道、登录、庆祝动画
 ├── hooks/              # 客户端 hooks、store 与会话状态；useAgentSession/ 只从 index.ts 导出，
 │                       # 内部文件不是稳定 API
 ├── lib/

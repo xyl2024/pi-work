@@ -247,7 +247,7 @@ export interface SessionInfo {
 
 /**
  * How many subagent child sessions may run at the same time, process-wide.
- * Shared with `lib/shared/tools-market.ts` so the server's slot pool and the
+ * Shared with `lib/server/subagent-tool.ts` so the server's slot pool and the
  * prompt text shown for `spawn_subagent` state one number. A call beyond the
  * limit waits for a free slot: that wait is invisible to the UI and does not
  * count against the child's runtime limit.

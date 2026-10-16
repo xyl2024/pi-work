@@ -21,8 +21,8 @@
  *   - disk session detail:      lib/server/session-reader.ts (readSessionDetails)
  *
  * These tools are intentionally READ-ONLY: the agent can inspect Pi Work
- * sessions but never mutate them. Gated via TOOL_MARKET_IDS and only
- * registered inside pi-work sessions (rpc-manager.ts). Because they read
+ * sessions but never mutate them. Only registered inside pi-work sessions
+ * (rpc-manager.ts). Because they read
  * server state, this module is server-only and must not be imported by
  * client code.
  */

@@ -30,12 +30,6 @@ import type { RightBarButtonId, RightSideBarConfig } from "../shared/right-bar";
 import { resolveSessionBoundAlignment } from "../shared/right-bar";
 import { PANEL_TAB_SPEC_BY_KIND } from "../shared/panelTabs";
 
-// ── Custom tools enabled by `customTools` on createAgentSession ───────────
-// Names match the tool names registered in lib/rpc-manager.ts. Adding a new
-// tool to `customTools` in rpc-manager.ts requires adding it here too, or
-// the validator will silently drop it (fail-open default still applies, but
-// the user setting is lost).
-
 // ── APPEND_SYSTEM.md loader toggle ───────────────────────────────────────
 // pi's DefaultResourceLoader auto-loads ~/.pi/agent/APPEND_SYSTEM.md on
 // every session. Disabling here passes `appendSystemPrompt: []` to the

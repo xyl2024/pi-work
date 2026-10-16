@@ -25,13 +25,6 @@ export interface DangerousPatternsConfig {
   timeout_ms: number;
 }
 
-/** Names of custom tools registered when a Pi session starts. */
-export type AgentCustomToolName = "show_media" | "show_file" | "ask_user_questions";
-
-export interface CustomToolsConfig {
-  enabled: AgentCustomToolName[];
-}
-
 export interface AppendSystemConfig {
   enabled: boolean;
 }

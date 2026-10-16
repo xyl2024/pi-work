@@ -17,7 +17,6 @@ interface Props {
   onOpenPrompts?: () => void;
   onOpenScheduler?: () => void;
   onOpenChannels?: () => void;
-  onOpenToolMarket?: () => void;
   onOpenMcp?: () => void;
   refreshKey?: number;
   /** Sign-out entry (POST /api/auth/session/logout + reload). Rendered only
@@ -45,7 +44,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, onOpenToolMarket, refreshKey, onLogout }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, refreshKey, onLogout }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -139,7 +138,7 @@ export function ProfileBlock({ onOpenSettings, onOpenSkills, onOpenMcp, onOpenPr
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onOpenSkills || onOpenMcp || onOpenPrompts || onOpenScheduler || onOpenChannels || onOpenToolMarket || onLogout);
+  const hasAnyEntry = Boolean(onOpenSkills || onOpenMcp || onOpenPrompts || onOpenScheduler || onOpenChannels || onLogout);
 
   return (
     <div
@@ -381,13 +380,6 @@ export function ProfileBlock({ onOpenSettings, onOpenSkills, onOpenMcp, onOpenPr
                 <polyline points="12 7 12 12 15 14" />
               </svg>
               <span>{t("Scheduled tasks")}</span>
-            </button>
-          )}
-          {onOpenToolMarket && (
-            <button role="menuitem" onClick={() => { setMenuOpen(false); onOpenToolMarket(); }} style={itemBaseStyle} onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-              </svg><span>{t("Tool Market")}</span>
             </button>
           )}
           {onOpenChannels && (
