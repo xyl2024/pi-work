@@ -104,6 +104,7 @@ export const models = {
   "new model": "新模型",
   "Add model": "添加模型",
   "Add provider": "添加提供商",
+  "No providers configured": "还没有配置任何提供商",
   "Select a provider or model": "选择提供商或模型",
 
   // Common action labels reused inside the models modal

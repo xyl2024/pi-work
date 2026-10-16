@@ -2,6 +2,12 @@
 
 import { useCallback, useMemo, useState } from "react";
 import {
+  fetchApiKeyProviders,
+  fetchModelsConfigPayload,
+  fetchOAuthProviders,
+  putModelsConfig,
+} from "@/lib/client/models-config-io";
+import {
   cloneModelFromCatalog,
   firstProviderSelection,
   isModelsConfigDirty,
@@ -35,10 +41,12 @@ import type {
  * edits. The modal renders this hook; the future panel view consumes the same
  * hook without copying the logic.
  *
- * It is a per-mount hook, not a module-level store: one open surface has no
- * cross-tab sharing, so ADR-0003 rule 1 gives it the hook shape. If the panel
- * view ends up unmounting mid-edit, lifting this to a store is that change's
- * job — not a thing to pre-build here.
+ * It is a per-mount hook, not a module-level store: the modal reads fresh on
+ * open and discards on close, so it must NOT share state with the panel view.
+ * The panel's holder is `lib/client/models-config-store.ts` (ADR-0003 rule 1:
+ * the panel body unmounts on a tab switch, so its draft has to outlive the
+ * mount). The two share the HTTP wiring through
+ * `lib/client/models-config-io.ts`; this hook is deleted in the收口 slice (#119).
  *
  * The rules themselves live in `lib/shared/models-config-draft.ts`; this file
  * is only the wiring (state, requests, timers), which ADR-0003 rule 3 leaves to
@@ -104,18 +112,14 @@ export function useModelsConfig(): ModelsConfigController {
   const [state, setState] = useState<State>(INITIAL);
 
   const reloadOAuthProviders = useCallback(() => {
-    fetch("/api/auth/providers")
-      .then((r) => r.json())
-      .then((d: { providers: OAuthProvider[] }) => setState((prev) => ({ ...prev, oauthProviders: d.providers })))
+    void fetchOAuthProviders()
+      .then((providers) => setState((prev) => ({ ...prev, oauthProviders: providers })))
       .catch(() => {});
   }, []);
 
   const reloadApiKeyProviders = useCallback(() => {
-    fetch("/api/auth/all-providers")
-      .then((r) => r.json())
-      .then((d: { providers: ApiKeyProvider[] }) =>
-        setState((prev) => ({ ...prev, apiKeyProviders: d.providers })),
-      )
+    void fetchApiKeyProviders()
+      .then((providers) => setState((prev) => ({ ...prev, apiKeyProviders: providers })))
       .catch(() => {});
   }, []);
 
@@ -124,8 +128,7 @@ export function useModelsConfig(): ModelsConfigController {
     reloadOAuthProviders();
     reloadApiKeyProviders();
     try {
-      const res = await fetch("/api/models-config");
-      const raw: unknown = await res.json();
+      const raw = await fetchModelsConfigPayload();
       const draft = modelsConfigDraftFrom(raw);
       setState({
         ...INITIAL,
@@ -147,14 +150,9 @@ export function useModelsConfig(): ModelsConfigController {
     const payload = state.config;
     setState((prev) => ({ ...prev, saving: true, savedOk: false, saveError: null }));
     try {
-      const res = await fetch("/api/models-config", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const body = (await res.json()) as { success?: boolean; error?: string };
-      if (!res.ok || body.error) {
-        const error = body.error ?? `HTTP ${res.status}`;
+      const result = await putModelsConfig(payload);
+      if (!result.ok) {
+        const error = result.error ?? "unknown";
         setState((prev) => ({ ...prev, saving: false, saveError: error }));
         return { ok: false, error };
       }
