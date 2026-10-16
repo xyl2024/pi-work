@@ -1165,6 +1165,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                               modelNames={modelNames}
                               modelIcons={modelIcons}
                               cwd={session?.cwd ?? cwd}
+                              onOpenFile={handleOpenFile}
                             />
                           )}
                         </StreamingMessageViewport>
@@ -1226,6 +1227,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 toolResults={toolResultsMap}
                 modelNames={modelNames}
                 modelIcons={modelIcons}
+                cwd={session?.cwd ?? cwd}
+                onOpenFile={handleOpenFile}
               />
             )}
 

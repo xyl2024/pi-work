@@ -1,11 +1,11 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import type { AgentMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared/types";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { UserMessageView } from "./message-view/UserMessageView";
 import { AssistantMessageView } from "./message-view/AssistantMessageView";
-import { CollapseNonceProvider } from "./message-view/context";
+import { CollapseNonceProvider, FileLinkProvider } from "./message-view/context";
 
 interface Props {
   message: AgentMessage;
@@ -50,6 +50,12 @@ interface Props {
  */
 function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, turnDiffStats, onOpenFile, cwd }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
+  // Feeds the markdown link renderer so bare file paths open in the right
+  // panel instead of navigating; null when the shell gave no opener.
+  const fileLinkHandler = useMemo(
+    () => (onOpenFile ? { openFile: onOpenFile, cwd } : null),
+    [onOpenFile, cwd],
+  );
 
   if (message.role === "user") {
     return (
@@ -61,7 +67,9 @@ function MessageViewInner({ message, isStreaming, toolResults, modelNames, model
   if (message.role === "assistant") {
     return (
       <div className={isFocused ? "search-flash" : undefined}>
-        <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} turnDiffStats={turnDiffStats} onOpenFile={onOpenFile} cwd={cwd} />
+        <FileLinkProvider value={fileLinkHandler}>
+          <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} turnDiffStats={turnDiffStats} onOpenFile={onOpenFile} cwd={cwd} />
+        </FileLinkProvider>
       </div>
     );
   }
