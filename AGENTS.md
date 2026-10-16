@@ -27,11 +27,13 @@ pi-work/
 │   ├── chat/           # 聊天、输入、消息渲染、模型/思考级别/工具选择、权限确认、Ask User Questions
 │   ├── sessions/       # 会话侧栏、标签页、搜索、会话库、多 cwd、收藏、Conversation Tree
 │   ├── files/          # 文件浏览、Git 状态与查看器（file-viewer/ 支持文本/代码、图片、音频、视频、PDF）
-│   ├── panels/         # 右侧面板 body（Context、Translate、Git Diff 含 Git Log、
-│   │                   #   Favorites、Tokens、LLM Audit、Conversation Tree）
-│   │                   #   + TerminalPanel；right-bar/ 是按钮列，desc.tsx 注册描述符
-│   ├── settings/       # 设置弹窗与各配置区块（模型、Prompt、Skill、Profile、重试、Append System、
-│   │                   #   自定义工具、文件预览、右侧按钮、音效）
+│   ├── panels/         # 右侧面板 body 组件（Translate、Tokens、LLM Audit、Models config、
+│   │                   #   Git Diff 含 Git Log、TerminalPanel）；models-config/ 是模型配置
+│   │                   #   面板视图的页；right-bar/ 是按钮列，desc.tsx 注册描述符
+│   │                   #   （Context、Favorites、Conversation Tree 的 body 在 app-shell/ 与 sessions/）
+│   ├── settings/       # 设置弹窗与各配置区块（Prompt、Skill、Profile、重试、Append System、
+│   │                   #   自定义工具、文件预览、右侧按钮、音效；models-config/ 的模型表单控件
+│   │                   #   仍在此，供面板视图复用）
 │   ├── renderers/      # 消息中的代码块、ECharts、Mermaid、SVG 与图片渲染器
 │   ├── ui/             # 公共 UI 原语、图标与动画图标
 │   └── scheduler/ grokbot/ tools-market/ channels/ auth/ effects/

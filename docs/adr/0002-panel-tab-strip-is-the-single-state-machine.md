@@ -26,3 +26,5 @@ Presentation deliberately stays out of the shared layer, in two kind-keyed looku
 上一条的「another product decision」发生了，并记录在此而不是静默覆盖：注册表条目现在可以声明 `action: "open"` 的命令，执行时走 `openPanel` 而**永不折叠**面板——用于「现在就做」类命令（计划面板的「新建计划」）。切换语义对右栏按钮、Tab 条以及未声明 `action` 的命令条目完全不变，唯一的额外行为是：面板自己在**被打开时**把自己的输入框接管键盘（沿用 BTW 既有的 `openCount` 交接形态，不新增 shell 状态）。参见 #40 的「面板与入口」与 ADR-0006。
 
 **2026-10-11 更新**：计划面板已被移除，`action: "open"` 与 `openPanel` 也随之下线——这条修订所描述的额外行为不再存在，调色板条目（与右栏按钮、Tab 条一样）一律走 `togglePanel`。
+
+**参见**：ADR-0012「模型配置是面板视图而不是模态框」给这条状态机新增了一个 `modelsConfig` 成员；它只按此处既有的规则接入，不改动状态机本身。
