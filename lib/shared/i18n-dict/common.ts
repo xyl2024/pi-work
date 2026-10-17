@@ -59,6 +59,8 @@ export const common = {
   "Previous month": "上个月",
   "Next month": "下个月",
   "Today": "今天",
+  "Yesterday": "昨天",
+  "{n} days ago": "{n} 天前",
   "Pick a date": "选择日期",
   "Pick a date and time": "请选择日期和时间",
   "Pick a time": "请选择时间",
