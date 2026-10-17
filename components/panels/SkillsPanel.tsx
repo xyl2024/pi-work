@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useI18n } from "@/hooks/useI18n";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import { currentSkillsPage } from "@/lib/shared/skills-pages";
 import {
@@ -11,7 +10,7 @@ import {
 } from "@/lib/client/skills-store";
 import { SkillsRootPage } from "./skills/SkillsRootPage";
 import { SkillDetailPage } from "./skills/SkillDetailPage";
-import { SkillsBackButton } from "./skills/SkillsBackButton";
+import { SkillsAddPage } from "./skills/SkillsAddPage";
 
 /**
  * The 技能 panel view body.
@@ -45,9 +44,12 @@ export function SkillsPanel({
   const page = currentSkillsPage(pages);
 
   // Focus is kept inside the panel while it is the active surface, so a
-  // palette / dialog that has taken focus keeps its own Escape.
+  // palette / dialog that has taken focus keeps its own Escape. A page that
+  // focuses its own control (the add page's search box) already satisfies
+  // that, so the container does not steal it back.
   useEffect(() => {
-    containerRef.current?.focus({ preventScroll: true });
+    const el = containerRef.current;
+    if (el && !el.contains(document.activeElement)) el.focus({ preventScroll: true });
   }, [page]);
 
   usePanelEscapeGuard(containerRef, () => {
@@ -65,32 +67,10 @@ export function SkillsPanel({
         // the skill actually on screen when one detail page replaces another.
         <SkillDetailPage key={page.filePath} filePath={page.filePath} />
       ) : page.kind === "add" ? (
-        <AddPagePlaceholder />
+        <SkillsAddPage />
       ) : (
         <SkillsRootPage />
       )}
-    </div>
-  );
-}
-
-/**
- * Temporary chrome for the add page: the search + streaming install body lands
- * in the next slice. The back control and the page stack are already the real
- * ones, so Back / Escape behave as they will once the body arrives.
- */
-function AddPagePlaceholder() {
-  const { t } = useI18n();
-  return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 12px 8px", flexShrink: 0 }}>
-        <SkillsBackButton />
-        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t("Add Skill")}</span>
-      </div>
-      <div data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 12px 18px" }}>
-        <div style={{ padding: "10px 2px", fontSize: 12, color: "var(--text-dim)" }}>
-          {t("Coming soon")}
-        </div>
-      </div>
     </div>
   );
 }

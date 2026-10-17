@@ -5,14 +5,19 @@
  *
  * The requests live here so a contract change (a new field, a different error
  * shape) lands in one place instead of being duplicated across the panel's
- * pages. The search / install endpoints join the panel in the follow-up slices
- * and are wired through this same module.
+ * pages: list / toggle / detail are plain JSON, search is a POST, and install
+ * is a hand-read SSE body (the browser's `EventSource` only speaks GET).
  */
 
+import { splitSseEvents } from "@/lib/shared/sse";
 import type {
   Skill,
   SkillDetailData,
+  SkillInstallEvent,
+  SkillInstallRequest,
   SkillListResponse,
+  SkillSearchResponse,
+  SkillSearchResult,
   SkillSubFileResponse,
   SkillToggleRequest,
   SkillToggleResponse,
@@ -67,4 +72,88 @@ export async function fetchSkillSubFile(filePath: string, subFilePath: string): 
   const body = (await res.json().catch(() => ({}))) as Partial<SkillSubFileResponse> & { error?: string };
   if (!res.ok || body.error) throw new Error(body.error ?? `HTTP ${res.status}`);
   return body.subFileContent ?? "";
+}
+
+/**
+ * Search skills.sh for one page. skills.sh has no offset, so the server serves
+ * "page N" by asking upstream for `pageSize × N` rows and keeping the tail; the
+ * caller still pages by asking for the next number.
+ */
+export async function searchSkills(
+  query: string,
+  page: number,
+  pageSize: number,
+): Promise<SkillSearchResponse> {
+  const res = await fetch("/api/skills/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, page, pageSize }),
+  });
+  const body = (await res.json().catch(() => ({}))) as Partial<SkillSearchResponse> & { error?: string };
+  if (!res.ok || body.error) throw new Error(body.error ?? `HTTP ${res.status}`);
+  return {
+    results: (body.results ?? []) as SkillSearchResult[],
+    page: body.page ?? page,
+    pageSize: body.pageSize ?? pageSize,
+    hasMore: body.hasMore ?? false,
+  };
+}
+
+/** Callbacks for one streaming install. `onLog` fires for every line the CLI
+ *  prints, in arrival order, so the page can show live progress. */
+export interface SkillInstallHandlers {
+  onLog: (line: string) => void;
+}
+
+/**
+ * Run `npx skills add` and pump its SSE body to `onLog`. Resolves when the
+ * server reports `done`; throws the server's message on an `error` event (the
+ * route folds the tail of the CLI output into it) or when the stream ends
+ * without a result.
+ *
+ * The stream is read here rather than with an `EventSource` in the component,
+ * so a component unmount cannot abort the request mid-flight: nobody may be
+ * listening to `onLog` any more, but the CLI keeps running to completion.
+ * Making the progress *state* survive a tab switch is a separate concern
+ * (#126), owned by the store rather than this module.
+ */
+export async function installSkill(
+  req: SkillInstallRequest,
+  handlers: SkillInstallHandlers,
+): Promise<void> {
+  const res = await fetch("/api/skills/install", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok || !res.body) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let done = false;
+  try {
+    while (true) {
+      const { done: streamDone, value } = await reader.read();
+      if (streamDone) break;
+      buffer += decoder.decode(value, { stream: true });
+      const { events, rest } = splitSseEvents(buffer);
+      buffer = rest;
+      for (const data of events) {
+        if (!data.trim()) continue;
+        const event = JSON.parse(data) as SkillInstallEvent;
+        if (event.type === "log" && event.line) handlers.onLog(event.line);
+        else if (event.type === "done") done = true;
+        else if (event.type === "error") throw new Error(event.message || "Install failed");
+      }
+    }
+  } finally {
+    // Abandoning a failed stream must not leave the reader locked.
+    void reader.cancel().catch(() => {});
+  }
+
+  if (!done) throw new Error("Install stream ended without a result");
 }
