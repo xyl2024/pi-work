@@ -28,6 +28,7 @@ import {
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MODELS_CONFIG_TAB_ID,
+  SKILLS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "./types";
@@ -49,6 +50,7 @@ export interface PanelTabParams {
   llmAudit: undefined;
   context: undefined;
   modelsConfig: undefined;
+  skills: undefined;
   file: { path: string };
 }
 
@@ -240,6 +242,24 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open models config",
         keywords: ["models", "config", "providers", "api", "模型", "配置", "服务商"],
+      },
+    ],
+  },
+  skills: {
+    kind: "skills",
+    tabId: SKILLS_TAB_ID,
+    // Strip label; the right-bar button and the palette entry keep the
+    // "Open skills" wording (see the descriptor registry).
+    labelKey: "Skills",
+    defaultMode: "normal",
+    // Browsing skills is global: Pi Work's own skills plus pi's global ones
+    // are always listed, so the button stays usable on the new-session page.
+    // The list itself follows the selected session's cwd (project skills).
+    sessionBound: false,
+    commands: [
+      {
+        labelKey: "Open skills",
+        keywords: ["skills", "extensions", "skill", "技能", "扩展"],
       },
     ],
   },

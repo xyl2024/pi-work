@@ -50,6 +50,7 @@ import {
   Star,
 } from "lucide-react";
 import { ProviderGearIcon } from "../../ui/ProviderIcon";
+import { ToolIcon } from "../../ui/icons";
 
 /** Options for rendering a panel view's glyph. The right-bar button, the tab
  *  strip and the command palette share one icon per kind, differing only in
@@ -218,6 +219,15 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
           style={{ position: "absolute", top: 5, right: 5, width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 0 2px var(--bg-panel)" }}
         />
       ) : null,
+  }),
+  skills: panelButton("skills", {
+    // Same long "Open …" wording as the models-config button; the tab strip
+    // uses the shorter "Skills" label from the registry — one glyph for both.
+    labelKey: "Open skills",
+    // Wrench: the same generic tool glyph the chat's SKILL.md file chip
+    // renders (`ReadFileChips`), so button / strip / palette and the chip
+    // read as one idea.
+    icon: ({ size }) => <ToolIcon size={size} />,
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

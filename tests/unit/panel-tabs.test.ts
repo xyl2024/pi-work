@@ -3,6 +3,7 @@ import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
+  SKILLS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
@@ -387,10 +388,26 @@ describe("panelTabs registry", () => {
         "gitDiff",
         "llmAudit",
         "modelsConfig",
+        "skills",
         "tokens",
         "translate",
       ].sort(),
     );
+  });
+
+  it("registers skills between models config and the conversation tree", () => {
+    const order = PANEL_TAB_KINDS as readonly string[];
+    const skills = PANEL_TAB_SPECS.find((spec) => spec.kind === "skills");
+
+    expect(skills?.tabId).toBe(SKILLS_TAB_ID);
+    // Strip label reuses the existing "Skills" entry — resolved at render time
+    // so a locale switch relabels the open tab.
+    expect(skills?.labelKey).toBe("Skills");
+    expect(order.indexOf("skills")).toBe(order.indexOf("modelsConfig") + 1);
+    expect(order.indexOf("skills")).toBe(order.indexOf("conversationTree") - 1);
+    // Global button: it still has content (global + Pi Work skills) without a
+    // selected session, so it must never be greyed out.
+    expect(skills?.sessionBound).toBe(false);
   });
 
   it("marks session-bound panels and declares no expanded default", () => {
@@ -568,7 +585,6 @@ describe("panelTabs registry → command palette", () => {
       newSession: () => {},
       openSettings: () => {},
       openCwdPicker: () => {},
-      openSkills: () => {},
       openPrompts: () => {},
       openScheduler: () => {},
       openChannels: () => {},
@@ -617,6 +633,7 @@ describe("panelTabs registry → command palette", () => {
         "panel.gitDiff",
         "panel.llmAudit",
         "panel.modelsConfig",
+        "panel.skills",
         "panel.tokens",
         "panel.translate",
       ].sort(),
@@ -628,6 +645,14 @@ describe("panelTabs registry → command palette", () => {
 
     expect(cmd?.title).toBe("Open models config");
     expect(cmd?.keywords).toEqual(expect.arrayContaining(["模型", "配置", "服务商"]));
+  });
+
+  it("reaches the skills panel through english and chinese keywords", () => {
+    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.skills");
+
+    expect(cmd?.title).toBe("Open skills");
+    expect(cmd?.group).toBe("Panel");
+    expect(cmd?.keywords).toEqual(expect.arrayContaining(["skills", "技能", "扩展"]));
   });
 
   it("titles and keywords come from the spec, not from the call site", () => {

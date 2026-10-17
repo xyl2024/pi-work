@@ -444,6 +444,7 @@ export const CONVERSATION_TREE_TAB_ID = "conversationTree:global";
 export const LLM_AUDIT_TAB_ID = "llmAudit:global";
 export const CONTEXT_TAB_ID = "context:global";
 export const MODELS_CONFIG_TAB_ID = "modelsConfig:global";
+export const SKILLS_TAB_ID = "skills:global";
 
 // Map a Tab.kind back to the corresponding configurable right-bar button id
 // lives in `lib/shared/panelTabs` (`panelButtonIdForKind`), derived from the

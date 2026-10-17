@@ -35,7 +35,6 @@ const MoonIcon = ICONS.moon;
 const SidebarIcon = ICONS.sidebar;
 const GlobeIcon = ICONS.globe;
 const GearIcon = ICONS.gear;
-const SparkleIcon = ICONS.sparkle;
 const BookIcon = ICONS.book;
 const McpIcon = ICONS.mcp;
 
@@ -97,7 +96,6 @@ export interface CommandContext {
   // Modal openers
   openSettings: () => void;
   openCwdPicker: () => void;
-  openSkills: () => void;
   openPrompts: () => void;
   openScheduler: () => void;
   openChannels: () => void;
@@ -223,7 +221,9 @@ export function buildCommands(
   // ── Panel ──
   // One command per registry spec that opts in; see buildPanelCommands.
   cmds.push(...buildPanelCommands(ctx, t, panelIcons));
-  // ── Modal (7) ──
+  // ── Modal ──
+  // Skills is not here: it is a panel view now, so the palette entry is
+  // generated from the panel registry (same glyph, same toggle rule).
   cmds.push({
     id: "modal.settings",
     title: t("Open settings"),
@@ -231,15 +231,6 @@ export function buildCommands(
     keywords: ["settings", "preferences", "config", "设置", "偏好", "配置"],
     icon: <GearIcon />,
     run: () => ctx.openSettings(),
-  });
-  cmds.push({
-    id: "modal.skills",
-    title: t("Open skills"),
-    group: "Modal",
-    keywords: ["skills", "extensions", "技能", "扩展"],
-    icon: <SparkleIcon />,
-    when: (c) => c.hasCwd,
-    run: () => ctx.openSkills(),
   });
   cmds.push({
     id: "modal.mcp",
