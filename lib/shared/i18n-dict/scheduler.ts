@@ -132,6 +132,7 @@ export const scheduler = {
   "Next run": "下次运行",
   "Last run": "上次运行",
   "Runs history": "运行历史",
+  "Runs": "运行",
   "No runs yet": "暂无运行记录",
   "View runs": "查看运行历史",
   "Open session": "打开会话",

@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import { currentSchedulerPage } from "@/lib/shared/scheduler-pages";
 import {
-  ensureSchedulerLoaded,
   escapeScheduler,
+  reloadSchedulerTasks,
   setSchedulerPanelMounted,
   useSchedulerStore,
 } from "@/lib/client/scheduler-store";
@@ -40,7 +40,7 @@ export function SchedulerPanel({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    ensureSchedulerLoaded();
+    void reloadSchedulerTasks();
   }, []);
 
   // The poll tier reads this while the panel body is mounted.

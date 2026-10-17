@@ -13,9 +13,9 @@
  * The rules stay pure and live in `lib/shared/scheduler-pages.ts` (page stack),
  * `lib/shared/scheduler-close.ts` (dirty + close guard) and
  * `lib/shared/scheduler-cadence.ts` (poll tiers). This file is only the wiring
- * — requests, the `useSyncExternalStore` subscription, the "first open loads,
- * later mounts reuse" policy, and the background poll that keeps the right-bar
- * badge honest while the panel is collapsed.
+ * — requests, the `useSyncExternalStore` subscription, the re-read on panel
+ * entry, and the background poll that keeps the right-bar badge honest while
+ * the panel is collapsed.
  *
  * Two things deliberately do *not* live here:
  *   • the run history — it is volatile (it is re-read every 2s while a run is
@@ -269,16 +269,12 @@ async function loadFromDisk(): Promise<void> {
 }
 
 /**
- * Read the list the first time the panel opens. Later mounts reuse it (the
- * background poll keeps it fresh, so there is nothing to re-read); the tab
- * closing releases it, which makes the next open read again.
+ * Read the list when the panel opens. Always re-reads: the task list is live
+ * data (every run rewrites last / next run time), and a background poll may have
+ * gone stale while the tab was closed, so the panel wants the newest copy on
+ * entry. The cached list is kept until the response arrives, so a tab switch
+ * does not flash a loading state.
  */
-export function ensureSchedulerLoaded(): void {
-  if (state.loaded || state.loading) return;
-  void loadFromDisk();
-}
-
-/** Re-read the list on demand (the list page's retry / after a CRUD write). */
 export async function reloadSchedulerTasks(): Promise<void> {
   await loadFromDisk();
 }

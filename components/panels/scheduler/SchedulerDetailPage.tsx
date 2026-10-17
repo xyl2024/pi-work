@@ -219,7 +219,7 @@ export function SchedulerDetailPage({
         {(
           [
             { id: "overview", label: t("Overview") },
-            { id: "runs", label: `${t("Runs history")} (${runs.length})` },
+            { id: "runs", label: `${t("Runs")} (${runs.length})` },
             { id: "prompt", label: t("Prompt") },
             { id: "config", label: t("Config") },
           ] as const
