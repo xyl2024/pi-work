@@ -19,7 +19,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { StatusBadge } from "./StatusBadge";
 import { useNow } from "./useNow";
 import { formatDuration, formatRelative } from "./utils";
-import type { TaskRun } from "./types";
+import type { TaskRun } from "@/lib/shared/scheduler";
 import { AlertIcon, ChevronDownIcon, ExternalLinkIcon } from "@/components/ui/icons";
 import { useMarkdownComponents } from "@/components/chat/message-view/utils";
 

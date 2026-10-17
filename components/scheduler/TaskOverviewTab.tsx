@@ -13,7 +13,7 @@ import { StatusBadge } from "./StatusBadge";
 import { CronHumanizer } from "./CronHumanizer";
 import { useNow } from "./useNow";
 import { computeStats, formatDuration, formatRelative } from "./utils";
-import type { ScheduledTask, TaskRun } from "./types";
+import type { ScheduledTask, TaskRun } from "@/lib/shared/scheduler";
 import { ThinkingBadge } from "./TaskConfigTab";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/icons";
 

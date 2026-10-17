@@ -3,6 +3,7 @@ import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
+  SCHEDULER_TAB_ID,
   SKILLS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
@@ -388,6 +389,7 @@ describe("panelTabs registry", () => {
         "gitDiff",
         "llmAudit",
         "modelsConfig",
+        "scheduler",
         "skills",
         "tokens",
         "translate",
@@ -395,7 +397,7 @@ describe("panelTabs registry", () => {
     );
   });
 
-  it("registers skills between models config and the conversation tree", () => {
+  it("registers skills between models config and the scheduled-tasks panel", () => {
     const order = PANEL_TAB_KINDS as readonly string[];
     const skills = PANEL_TAB_SPECS.find((spec) => spec.kind === "skills");
 
@@ -404,11 +406,24 @@ describe("panelTabs registry", () => {
     // so a locale switch relabels the open tab.
     expect(skills?.labelKey).toBe("Skills");
     expect(order.indexOf("skills")).toBe(order.indexOf("modelsConfig") + 1);
-    expect(order.indexOf("skills")).toBe(order.indexOf("conversationTree") - 1);
     // Session-bound: the list follows the selected session's cwd, so the
     // button groups with the other live-state buttons (it is never greyed
     // out — the flag only drives column grouping).
     expect(skills?.sessionBound).toBe(true);
+    expect(order.indexOf("scheduler")).toBe(order.indexOf("skills") + 1);
+    expect(order.indexOf("scheduler")).toBe(order.indexOf("conversationTree") - 1);
+  });
+
+  it("registers the scheduled-tasks panel as a global button before the conversation tree", () => {
+    const scheduler = PANEL_TAB_SPECS.find((spec) => spec.kind === "scheduler");
+
+    expect(scheduler?.tabId).toBe(SCHEDULER_TAB_ID);
+    expect(scheduler?.labelKey).toBe("Scheduled tasks");
+    // The task list is global data, so the button stays enabled on the
+    // new-session page; only the form's cwd default follows the session.
+    expect(scheduler?.sessionBound).toBe(false);
+    expect(scheduler?.commands?.[0]?.labelKey).toBe("Open scheduled tasks");
+    expect(scheduler?.commands?.[0]?.keywords).toContain("定时");
   });
 
   it("marks session-bound panels and declares no expanded default", () => {
@@ -538,6 +553,7 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       selectedCwd: null,
       modelsConfigDirty: false,
       skillsInstalling: false,
+      schedulerRunning: false,
       t: (key) => key,
       toggleRightPanel: () => {},
       togglePanel: () => {},
@@ -619,7 +635,6 @@ describe("panelTabs registry → command palette", () => {
       newSession: () => {},
       openSettings: () => {},
       openCwdPicker: () => {},
-      openScheduler: () => {},
       openChannels: () => {},
       openMcp: () => {},
       toggleSidebar: () => {},
@@ -666,6 +681,7 @@ describe("panelTabs registry → command palette", () => {
         "panel.gitDiff",
         "panel.llmAudit",
         "panel.modelsConfig",
+        "panel.scheduler",
         "panel.skills",
         "panel.tokens",
         "panel.translate",

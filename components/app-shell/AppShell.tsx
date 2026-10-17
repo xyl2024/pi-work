@@ -22,7 +22,7 @@ import { McpConfig } from "../settings/McpConfig";
 import { Tooltip } from "../ui/Tooltip";
 import { SettingsModal } from "../settings/SettingsModal";
 
-import { SchedulerModal } from "../scheduler";
+import { SchedulerPanel } from "../panels/SchedulerPanel";
 import { ChannelsModal } from "../channels/ChannelsModal";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
@@ -71,6 +71,11 @@ import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
 import { selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
+import {
+  releaseSchedulerState,
+  schedulerCloseGuard,
+  useSchedulerRunning,
+} from "@/lib/client/scheduler-store";
 import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
 import {
   cancelSkillInstall,
@@ -120,6 +125,8 @@ interface PanelBodyCtx {
   onConversationTreeCardClick: (cardId: string) => void;
   gitDiffOpenCount: number;
   onExpandGitPanel: () => void;
+  /** Open a session by id without collapsing the scheduler panel. */
+  openSessionById: (sessionId: string) => void;
   /** Close the panel tab that is currently active (Escape at the root page). */
   onClosePanelTab: () => void;
 }
@@ -162,6 +169,9 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   ),
   modelsConfig: (ctx) => <ModelsConfigPanel onCloseTab={ctx.onClosePanelTab} />,
   skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onCloseTab={ctx.onClosePanelTab} />,
+  scheduler: (ctx) => (
+    <SchedulerPanel cwd={ctx.cwd} onOpenSession={ctx.openSessionById} onCloseTab={ctx.onClosePanelTab} />
+  ),
 };
 
 /** The shape every panel close guard returns — the shell only needs the copy. */
@@ -186,6 +196,7 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
       oauthInProgress: hasActiveOAuthLogin(),
     }),
   skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
+  scheduler: () => schedulerCloseGuard(),
 };
 
 /** What confirming a guard does, run only once every guard has passed. */
@@ -540,7 +551,6 @@ export function AppShell() {
   const [mcpConfigOpen, setMcpConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
-  const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -573,6 +583,15 @@ export function AppShell() {
   useEffect(() => {
     if (!skillsTabOpen) releaseSkillsState();
   }, [skillsTabOpen]);
+  // Same lifecycle for the scheduler list + draft: the task list is live data,
+  // so closing the tab drops it and the next open lands back on the list and
+  // re-reads freshly-run data. Collapsing the panel keeps the tab and the
+  // draft; a background poll keeps the running badge honest either way.
+  const schedulerRunning = useSchedulerRunning();
+  const schedulerTabOpen = selectTabByKind(panelTabsState, "scheduler") !== null;
+  useEffect(() => {
+    if (!schedulerTabOpen) releaseSchedulerState();
+  }, [schedulerTabOpen]);
   // New sessions must pick up a just-saved default model. The refresh signal is
   // the successful PUT, not a modal close — "open then cancel" refreshes nothing.
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
@@ -591,7 +610,6 @@ export function AppShell() {
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
     setMcpConfigOpen(false);
     setSettingsConfigOpen(false);
-    setSchedulerOpen(false);
     setChannelsOpen(false);
     setPaletteOpen(true);
   }, []);
@@ -796,8 +814,9 @@ export function AppShell() {
     void fetchTools(session.id);
   }, [fetchTools]);
 
-  // Called by SchedulerModal "Open session" — routes through the same
-  // de-duplicating open path as the sidebar.
+  // Called by the scheduler panel's run-history "Open session" — routes
+  // through the same de-duplicating open path as the sidebar, without
+  // collapsing the panel (the run history stays on screen next to it).
   const handleOpenScheduledSession = useCallback((sessionId: string) => {
     // Switch immediately; the tab controller loads the session payload in the
     // background and reports the real metadata once it arrives.
@@ -1246,6 +1265,7 @@ export function AppShell() {
     selectedCwd,
     modelsConfigDirty,
     skillsInstalling,
+    schedulerRunning,
     t,
     toggleRightPanel: () =>
       setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),
@@ -1268,6 +1288,7 @@ export function AppShell() {
     onConversationTreeCardClick: handleConversationTreeCardClick,
     gitDiffOpenCount,
     onExpandGitPanel: handleExpandGitPanel,
+    openSessionById: handleOpenScheduledSession,
     // Escape from the models-config list closes its tab the same way its × does.
     onClosePanelTab: () => {
       if (activeFileTabId) handleCloseFileTab(activeFileTabId);
@@ -1344,7 +1365,6 @@ export function AppShell() {
     newSession: handleSlashNew,
     openSettings: () => setSettingsConfigOpen(true),
     openCwdPicker: () => setCwdPickerOpen(true),
-    openScheduler: () => setSchedulerOpen(true),
     openChannels: () => setChannelsOpen(true),
     openMcp: () => setMcpConfigOpen(true),
     toggleSidebar: () => setSidebarOpen((v) => !v),
@@ -1615,7 +1635,6 @@ export function AppShell() {
       onFileDeleted={handleFileDeleted}
       favoriteIds={favoriteIds}
       onToggleFavorite={toggleSessionFavorite}
-      onOpenScheduler={() => setSchedulerOpen(true)}
       onOpenChannels={() => setChannelsOpen(true)}
       onOpenMcp={() => setMcpConfigOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
@@ -1899,13 +1918,6 @@ export function AppShell() {
       onOpenSignalHandled={() => setCwdPickerOpen(false)}
       hideTrigger
     />
-    {schedulerOpen && (
-      <SchedulerModal
-        open={schedulerOpen}
-        onClose={() => setSchedulerOpen(false)}
-        onOpenSession={handleOpenScheduledSession}
-      />
-    )}
     {channelsOpen && (
       <ChannelsModal
         open={channelsOpen}

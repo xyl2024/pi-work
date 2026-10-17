@@ -196,4 +196,8 @@ export const scheduler = {
   "Please enter a WeChat recipient": "请输入微信接收人",
   "Known contacts": "已知联系人",
   "No outcome selected": "未选择任何通知时机",
+
+  // Panel view (originally a modal): close guard + missing-task page
+  "Your scheduled task changes will be lost.": "你的定时任务改动将会丢失。",
+  "Task not found": "未找到该任务",
 } as const;

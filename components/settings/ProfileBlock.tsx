@@ -13,7 +13,6 @@ import { SUN, MOON } from "@/lib/client/icon-paths";
 
 interface Props {
   onOpenSettings?: () => void;
-  onOpenScheduler?: () => void;
   onOpenChannels?: () => void;
   onOpenMcp?: () => void;
   refreshKey?: number;
@@ -42,7 +41,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenMcp, onOpenScheduler, onOpenChannels, refreshKey, onLogout }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenMcp, onOpenChannels, refreshKey, onLogout }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -136,7 +135,7 @@ export function ProfileBlock({ onOpenSettings, onOpenMcp, onOpenScheduler, onOpe
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onOpenMcp || onOpenScheduler || onOpenChannels || onLogout);
+  const hasAnyEntry = Boolean(onOpenMcp || onOpenChannels || onLogout);
 
   return (
     <div
@@ -331,21 +330,6 @@ export function ProfileBlock({ onOpenSettings, onOpenMcp, onOpenScheduler, onOpe
             >
               <McpIcon size={14} />
               <span>{t("mcp.title")}</span>
-            </button>
-          )}
-          {onOpenScheduler && (
-            <button
-              role="menuitem"
-              onClick={() => { setMenuOpen(false); onOpenScheduler(); }}
-              style={itemBaseStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <circle cx="12" cy="12" r="9" />
-                <polyline points="12 7 12 12 15 14" />
-              </svg>
-              <span>{t("Scheduled tasks")}</span>
             </button>
           )}
           {onOpenChannels && (

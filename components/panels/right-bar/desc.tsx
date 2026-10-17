@@ -43,6 +43,7 @@ import {
   Bot,
   ChartColumn,
   ChartSpline,
+  Clock,
   GitBranch,
   GitGraph,
   Languages,
@@ -77,6 +78,10 @@ export interface RightBarCtx {
    *  the install lives in the module store, so the badge stays lit while the
    *  panel is collapsed. */
   skillsInstalling: boolean;
+  /** At least one scheduled task's last run is still in flight. Same reasoning
+   *  again: the task list lives in the scheduler module store, so the dot stays
+   *  lit while the panel is collapsed. */
+  schedulerRunning: boolean;
   /** Active tool-call counter is the only thing that requires i18n inside
    *  the descriptor body, so we expose the AppShell-bound t() to avoid
    *  re-resolving the same key in two places. */
@@ -256,6 +261,18 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     // dot is visible while the panel is collapsed — which is exactly when the
     // user needs to know a background install is still running.
     badge: (ctx) => (ctx.skillsInstalling ? <CornerBadge /> : null),
+  }),
+  scheduler: panelButton("scheduler", {
+    // Same long "Open …" wording as its neighbours; the tab strip uses the
+    // shorter "Scheduled tasks" label from the registry — one glyph for both.
+    labelKey: "Open scheduled tasks",
+    // Clock: matches the empty state and the command palette's scheduling glyph.
+    icon: ({ size }) => <Clock size={size} />,
+    // Running dot, through the same badge hook as the models-config / skills
+    // buttons. The task list lives in the scheduler module store, so the dot is
+    // visible while the panel is collapsed — which is exactly when the user
+    // cannot otherwise tell that a background run is in flight.
+    badge: (ctx) => (ctx.schedulerRunning ? <CornerBadge /> : null),
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

@@ -37,8 +37,6 @@ const GlobeIcon = ICONS.globe;
 const GearIcon = ICONS.gear;
 const McpIcon = ICONS.mcp;
 
-const ClockIcon = ICONS.clock;
-
 // Keep the right-panel toggle command icon identical to the right-bar
 // descriptor's.
 const RightPanelIcon = () => <PanelRight size={16} />;
@@ -95,7 +93,6 @@ export interface CommandContext {
   // Modal openers
   openSettings: () => void;
   openCwdPicker: () => void;
-  openScheduler: () => void;
   openChannels: () => void;
   openMcp: () => void;
 
@@ -220,8 +217,8 @@ export function buildCommands(
   // One command per registry spec that opts in; see buildPanelCommands.
   cmds.push(...buildPanelCommands(ctx, t, panelIcons));
   // ── Modal ──
-  // Skills is not here: it is a panel view now, so the palette entry is
-  // generated from the panel registry (same glyph, same toggle rule).
+  // Skills and scheduled tasks are not here: they are panel views now, so
+  // their palette entries are generated from the panel registry.
   cmds.push({
     id: "modal.settings",
     title: t("Open settings"),
@@ -238,14 +235,6 @@ export function buildCommands(
     icon: <McpIcon />,
     when: (c) => c.hasCwd,
     run: () => ctx.openMcp(),
-  });
-  cmds.push({
-    id: "modal.scheduler",
-    title: t("Open scheduled tasks"),
-    group: "Modal",
-    keywords: ["scheduler", "cron", "schedule", "timer", "tasks", "定时", "任务", "定时任务"],
-    icon: <ClockIcon />,
-    run: () => ctx.openScheduler(),
   });
   cmds.push({
     id: "modal.channels",
