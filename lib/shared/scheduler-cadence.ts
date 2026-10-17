@@ -13,9 +13,9 @@
  *     change while a task is in flight, so this is the fast one.
  *   • `panel`     — the scheduler panel is open somewhere else (list / form).
  *     The badge only needs to stay honest, not live.
- *   • `collapsed` — the scheduler tab is not mounted (the panel is collapsed,
- *     or another tab is showing). A dot that lights up within half a minute is
- *     enough, and 30s keeps a hidden panel from leaning on the server.
+ *   • `collapsed` — the scheduler panel is not the active open view (collapsed,
+ *     or another panel tab is showing). A dot that lights up within half a
+ *     minute is enough, and 30s keeps a hidden panel from leaning on the server.
  *
  * A hidden browser tab always stops the loop; the poll resumes on the next
  * tick after visibility returns (see `lib/client/scheduler-store.ts`).
@@ -33,9 +33,10 @@ export const SCHEDULER_POLL_MS: Record<SchedulerPollTier, number> = {
 
 /** What the tier decision reads. */
 export interface SchedulerPollConditions {
-  /** The scheduler panel body is mounted (its tab is the active one). */
-  mounted: boolean;
-  /** The mounted panel is showing a task's run history. */
+  /** The scheduler panel is the active, open panel tab (not collapsed, and not
+   *  hidden behind another panel tab). */
+  panelOpen: boolean;
+  /** The open panel is showing a task's run history. */
   runsVisible: boolean;
   /** `document.hidden` — the browser tab is in the background. */
   hidden: boolean;
@@ -43,7 +44,7 @@ export interface SchedulerPollConditions {
 
 /** Which tier the current panel state belongs to. */
 export function schedulerPollTier(conditions: SchedulerPollConditions): SchedulerPollTier {
-  if (!conditions.mounted) return "collapsed";
+  if (!conditions.panelOpen) return "collapsed";
   return conditions.runsVisible ? "runs" : "panel";
 }
 

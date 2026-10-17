@@ -201,4 +201,9 @@ export const scheduler = {
   // Panel view (originally a modal): close guard + missing-task page
   "Your scheduled task changes will be lost.": "你的定时任务改动将会丢失。",
   "Task not found": "未找到该任务",
+  "Timezone": "时区",
+  "Timezone hint": "cron 表达式按照这个时区解释；默认取浏览器时区",
+  "WeChat channel": "微信频道",
+  "Select a channel": "选择频道",
+  "Please select a WeChat channel": "请选择微信频道",
 } as const;

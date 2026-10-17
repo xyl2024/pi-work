@@ -18,16 +18,16 @@ const TIERS: SchedulerPollTier[] = ["runs", "panel", "collapsed"];
 
 describe("schedulerPollTier", () => {
   it("uses the runs tier only while the run history is on screen", () => {
-    expect(schedulerPollTier({ mounted: true, runsVisible: true, hidden: false })).toBe("runs");
+    expect(schedulerPollTier({ panelOpen: true, runsVisible: true, hidden: false })).toBe("runs");
   });
 
-  it("falls back to the panel tier on the other mounted pages", () => {
-    expect(schedulerPollTier({ mounted: true, runsVisible: false, hidden: false })).toBe("panel");
+  it("falls back to the panel tier on the other open pages", () => {
+    expect(schedulerPollTier({ panelOpen: true, runsVisible: false, hidden: false })).toBe("panel");
   });
 
-  it("uses the collapsed tier when the panel body is not mounted", () => {
-    expect(schedulerPollTier({ mounted: false, runsVisible: false, hidden: false })).toBe("collapsed");
-    expect(schedulerPollTier({ mounted: false, runsVisible: true, hidden: false })).toBe("collapsed");
+  it("uses the collapsed tier when the scheduler view is not the open panel", () => {
+    expect(schedulerPollTier({ panelOpen: false, runsVisible: false, hidden: false })).toBe("collapsed");
+    expect(schedulerPollTier({ panelOpen: false, runsVisible: true, hidden: false })).toBe("collapsed");
   });
 });
 
@@ -36,10 +36,10 @@ describe("schedulerPollDelayMs", () => {
     for (const tier of TIERS) {
       const conditions =
         tier === "runs"
-          ? { mounted: true, runsVisible: true, hidden: false }
+          ? { panelOpen: true, runsVisible: true, hidden: false }
           : tier === "panel"
-            ? { mounted: true, runsVisible: false, hidden: false }
-            : { mounted: false, runsVisible: false, hidden: false };
+            ? { panelOpen: true, runsVisible: false, hidden: false }
+            : { panelOpen: false, runsVisible: false, hidden: false };
       expect(schedulerPollDelayMs(conditions)).toBe(SCHEDULER_POLL_MS[tier]);
     }
   });
@@ -47,7 +47,7 @@ describe("schedulerPollDelayMs", () => {
   it("stops entirely while the browser tab is hidden", () => {
     for (const tier of TIERS) {
       const conditions: SchedulerPollConditions = {
-        mounted: tier !== "collapsed",
+        panelOpen: tier !== "collapsed",
         runsVisible: tier === "runs",
         hidden: true,
       };

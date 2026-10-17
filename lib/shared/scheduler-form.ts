@@ -29,6 +29,7 @@ export const EMPTY_SCHEDULER_FORM: SchedulerTaskForm = {
   thinkingLevel: "",
   toolSelection: "all",
   maxLifetimeMinutes: "",
+  timezone: "",
   notifyEnabled: false,
   notifySuccess: true,
   notifyError: true,
@@ -38,9 +39,33 @@ export const EMPTY_SCHEDULER_FORM: SchedulerTaskForm = {
   recipientId: "",
 };
 
+/** The browser's IANA zone — the default for a new task's schedule. */
+export function browserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+/**
+ * Every IANA zone the runtime knows, for the form's timezone picker. Falls back
+ * to UTC where `Intl.supportedValuesOf` is unavailable.
+ */
+export function listTimezones(): string[] {
+  const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
+  try {
+    const zones = intl.supportedValuesOf?.("timeZone");
+    if (zones && zones.length > 0) return zones;
+  } catch {
+    // fall through
+  }
+  return [browserTimezone(), "UTC"];
+}
+
 /** A fresh form for a new task, defaulting the working directory to the cwd. */
 export function newSchedulerForm(cwd: string | null): SchedulerTaskForm {
-  return { ...EMPTY_SCHEDULER_FORM, cwd: cwd ?? "" };
+  return { ...EMPTY_SCHEDULER_FORM, cwd: cwd ?? "", timezone: browserTimezone() };
 }
 
 /** Map an existing task onto the form for editing. */
@@ -59,6 +84,7 @@ export function schedulerFormFromTask(task: ScheduledTask): SchedulerTaskForm {
     thinkingLevel: task.thinkingLevel && task.thinkingLevel !== "auto" ? task.thinkingLevel : "",
     toolSelection: task.toolNames === null ? "all" : task.toolNames,
     maxLifetimeMinutes: formatMaxLifetimeForForm(task.maxLifetimeMs),
+    timezone: task.timezone || browserTimezone(),
     notifyEnabled: !!notification && notification.channels.length > 0,
     notifySuccess: notification?.onSuccess ?? true,
     notifyError: notification?.onError ?? true,

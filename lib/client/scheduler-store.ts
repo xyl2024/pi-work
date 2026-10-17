@@ -53,6 +53,7 @@ import {
 } from "@/lib/shared/scheduler-close";
 import { schedulerPollDelayMs } from "@/lib/shared/scheduler-cadence";
 import {
+  browserTimezone,
   newSchedulerForm,
   parseMaxLifetimeMinutes,
   schedulerFormFromTask,
@@ -94,9 +95,9 @@ export interface SchedulerStoreState {
   saveError: string | null;
   /** A "run now" request is in flight. */
   triggering: boolean;
-  /** The scheduler panel body is mounted (its tab is the active one). */
-  mounted: boolean;
-  /** The mounted panel is showing a task's run history. */
+  /** The scheduler panel is the active, open panel tab (drives the poll tier). */
+  panelOpen: boolean;
+  /** The open panel is showing a task's run history. */
   runsVisible: boolean;
 }
 
@@ -116,7 +117,7 @@ const INITIAL: SchedulerStoreState = {
   saving: false,
   saveError: null,
   triggering: false,
-  mounted: false,
+  panelOpen: false,
   runsVisible: false,
 };
 
@@ -149,12 +150,29 @@ function patch(partial: Partial<SchedulerStoreState>): void {
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let pollInFlight = false;
 let polling = false;
+// Bumped by every explicit write. A poll whose request started before a write
+// must not patch the list after it, or the (older) response would revert what
+// the write just did. `writesInFlight` additionally suppresses poll writes for
+// the whole duration of a write, so a poll started mid-write cannot land with
+// pre-commit data either.
+let writeGeneration = 0;
+let writesInFlight = 0;
+
+function beginWrite(): void {
+  writesInFlight += 1;
+  writeGeneration += 1;
+}
+
+function endWrite(): void {
+  writesInFlight -= 1;
+  writeGeneration += 1;
+}
 
 function schedulePoll(): void {
   if (!polling) return;
   if (pollTimer) clearTimeout(pollTimer);
   const delay = schedulerPollDelayMs({
-    mounted: state.mounted,
+    panelOpen: state.panelOpen,
     runsVisible: state.runsVisible,
     hidden: typeof document !== "undefined" && document.hidden,
   });
@@ -164,14 +182,21 @@ function schedulePoll(): void {
 
 async function poll(): Promise<void> {
   if (!polling) return;
+  // A poll armed while visible must not run after the tab went hidden.
+  if (typeof document !== "undefined" && document.hidden) return;
   if (pollInFlight) {
     schedulePoll();
     return;
   }
   pollInFlight = true;
+  const generation = writeGeneration;
   try {
     const tasks = await fetchScheduledTasks();
-    patch({ tasks, loadError: null, loaded: true });
+    // A write landed (or is still landing) while this read was in flight: its
+    // response is newer than ours, so drop ours instead of reverting it.
+    if (generation === writeGeneration && writesInFlight === 0) {
+      patch({ tasks, loadError: null, loaded: true });
+    }
   } catch {
     // Best effort; retain the last known list.
   } finally {
@@ -181,7 +206,14 @@ async function poll(): Promise<void> {
 }
 
 function onVisibilityChange(): void {
-  if (typeof document !== "undefined" && !document.hidden) void poll();
+  if (typeof document === "undefined") return;
+  if (document.hidden) {
+    // Hard stop: drop the armed timer instead of letting it fire once more.
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = null;
+    return;
+  }
+  void poll();
 }
 
 function subscribe(listener: () => void): () => void {
@@ -234,17 +266,13 @@ export function useSchedulerRunning(): boolean {
   return useSyncExternalStore(subscribe, () => selectSchedulerRunning(state), () => false);
 }
 
-export function getSchedulerRunning(): boolean {
-  return selectSchedulerRunning(state);
-}
-
 /** The form's unsaved-changes flag, read from one snapshot. */
-export function selectSchedulerDirty(snapshot: SchedulerStoreState): boolean {
+function selectSchedulerDirty(snapshot: SchedulerStoreState): boolean {
   return isSchedulerFormDirty(snapshot.form, snapshot.formBaseline);
 }
 
 /** Non-reactive read of the same rule — the shell's close guard asks at confirm time. */
-export function getSchedulerDirty(): boolean {
+function getSchedulerDirty(): boolean {
   return selectSchedulerDirty(state);
 }
 
@@ -293,8 +321,8 @@ export function releaseSchedulerState(): void {
 
 // ── Panel mount signals (drive the poll tier) ────────────────────────────
 
-export function setSchedulerPanelMounted(mounted: boolean): void {
-  patch({ mounted });
+export function setSchedulerPanelOpen(panelOpen: boolean): void {
+  patch({ panelOpen });
 }
 
 export function setSchedulerRunsVisible(runsVisible: boolean): void {
@@ -402,11 +430,13 @@ export async function saveSchedulerForm(): Promise<{ ok: boolean; error?: string
     notification: buildNotification(form),
     // null = use the runner default; otherwise the parsed ms.
     maxLifetimeMs: form.maxLifetimeMinutes.trim() === "" ? null : parseMaxLifetimeMinutes(form.maxLifetimeMinutes),
-    // Cron is wall-clock based; persist the browser's IANA timezone so a
-    // UTC-hosted server still runs the task at the time shown in the UI.
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    // The zone the user picked (defaults to the browser's): cron is wall-clock
+    // based, so persisting it lets a UTC-hosted server run the task at the time
+    // shown in the UI.
+    timezone: form.timezone.trim() || browserTimezone(),
   };
   patch({ saving: true, saveError: null });
+  beginWrite();
   try {
     const saved = state.formTaskId
       ? await updateScheduledTask({ id: state.formTaskId, ...base } satisfies TaskUpdatePayload)
@@ -427,6 +457,8 @@ export async function saveSchedulerForm(): Promise<{ ok: boolean; error?: string
     const error = e instanceof Error ? e.message : String(e);
     patch({ saving: false, saveError: error });
     return { ok: false, error };
+  } finally {
+    endWrite();
   }
 }
 
@@ -442,29 +474,46 @@ function upsertTask(tasks: ScheduledTask[], task: ScheduledTask): ScheduledTask[
 
 /** Enable / disable a task. Writes through immediately. */
 export async function toggleSchedulerTask(taskId: string, enabled: boolean): Promise<void> {
-  const saved = await patchScheduledTask(taskId, enabled);
-  patch({ tasks: upsertTask(state.tasks, saved) });
+  beginWrite();
+  try {
+    const saved = await patchScheduledTask(taskId, enabled);
+    patch({ tasks: upsertTask(state.tasks, saved) });
+  } finally {
+    endWrite();
+  }
 }
 
 /** Delete a task and its run history, then draw the stack back to the list. */
 export async function removeSchedulerTask(taskId: string): Promise<void> {
-  await deleteScheduledTask(taskId);
-  patch({
-    tasks: state.tasks.filter((task) => task.id !== taskId),
-    pages: schedulerPagesAfterDelete(),
-    selectedTaskId: null,
-    runsVisible: false,
-  });
+  beginWrite();
+  try {
+    await deleteScheduledTask(taskId);
+    patch({
+      tasks: state.tasks.filter((task) => task.id !== taskId),
+      pages: schedulerPagesAfterDelete(),
+      selectedTaskId: null,
+      runsVisible: false,
+    });
+  } finally {
+    endWrite();
+  }
 }
 
-/** Enqueue an immediate run, then refresh the list so the badge lights up. */
-export async function triggerSchedulerTaskNow(taskId: string): Promise<void> {
-  if (state.triggering) return;
+/**
+ * Enqueue an immediate run, then refresh the list so the badge lights up.
+ * Returns false when a trigger was already in flight (the caller must not show
+ * a success toast for a request that was never sent).
+ */
+export async function triggerSchedulerTaskNow(taskId: string): Promise<boolean> {
+  if (state.triggering) return false;
   patch({ triggering: true });
+  beginWrite();
   try {
     await triggerScheduledTask(taskId);
     await reloadSchedulerTasks();
+    return true;
   } finally {
     patch({ triggering: false });
+    endWrite();
   }
 }

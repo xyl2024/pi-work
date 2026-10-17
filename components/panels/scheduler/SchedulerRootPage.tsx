@@ -28,7 +28,7 @@ import { AlertIcon, ClockIcon, PlusIcon, SearchIcon } from "@/components/ui/icon
  */
 export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
   const { t } = useI18n();
-  const { tasks, loading, loadError, filter, query, selectedTaskId } = useSchedulerStore();
+  const { tasks, loaded, loadError, filter, query, selectedTaskId } = useSchedulerStore();
   const now = useNow(30_000);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -169,12 +169,12 @@ export function SchedulerRootPage({ cwd }: { cwd: string | null }) {
 
       {/* List */}
       <div ref={listRef} data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        {loading && tasks.length === 0 && <EmptyHint text={t("Loading...")} />}
+        {!loaded && !loadError && <EmptyHint text={t("Loading...")} />}
         {loadError && <EmptyHint text={t("Failed to load: {error}", { error: loadError })} variant="error" />}
-        {!loading && !loadError && tasks.length === 0 && (
+        {loaded && !loadError && tasks.length === 0 && (
           <EmptyState onCreate={() => openSchedulerForm(null, cwd)} />
         )}
-        {!loading && !loadError && tasks.length > 0 && filtered.length === 0 && (
+        {loaded && !loadError && tasks.length > 0 && filtered.length === 0 && (
           <EmptyHint text={t("No matching tasks")} />
         )}
         {filtered.map((task) => (

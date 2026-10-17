@@ -280,7 +280,7 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     commands: [
       {
         labelKey: "Open scheduled tasks",
-        keywords: ["scheduler", "cron", "timer", "tasks", "定时", "任务", "定时任务"],
+        keywords: ["scheduler", "cron", "timer", "tasks", "schedule", "定时", "任务", "定时任务"],
       },
     ],
   },

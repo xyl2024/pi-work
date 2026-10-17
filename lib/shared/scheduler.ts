@@ -127,6 +127,8 @@ export interface SchedulerTaskForm {
   toolSelection: ToolSelection;
   /** Max lifetime in minutes. Empty / 0 ⇒ use the runner's default (2h). */
   maxLifetimeMinutes: string;
+  /** IANA timezone the cron expression is interpreted in. */
+  timezone: string;
   notifyEnabled: boolean;
   notifySuccess: boolean;
   notifyError: boolean;

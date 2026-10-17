@@ -74,6 +74,7 @@ import { selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
 import {
   releaseSchedulerState,
   schedulerCloseGuard,
+  setSchedulerPanelOpen,
   useSchedulerRunning,
 } from "@/lib/client/scheduler-store";
 import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
@@ -592,6 +593,12 @@ export function AppShell() {
   useEffect(() => {
     if (!schedulerTabOpen) releaseSchedulerState();
   }, [schedulerTabOpen]);
+  // The scheduler's poll tier follows whether its view is the active, open
+  // panel. The body stays mounted even while the panel is collapsed, so the
+  // shell — which knows both — is the one that reports it.
+  useEffect(() => {
+    setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
+  }, [activeRightPanelKind, rightPanelState]);
   // New sessions must pick up a just-saved default model. The refresh signal is
   // the successful PUT, not a modal close — "open then cancel" refreshes nothing.
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);

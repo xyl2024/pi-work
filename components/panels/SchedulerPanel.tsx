@@ -6,7 +6,6 @@ import { currentSchedulerPage } from "@/lib/shared/scheduler-pages";
 import {
   escapeScheduler,
   reloadSchedulerTasks,
-  setSchedulerPanelMounted,
   useSchedulerStore,
 } from "@/lib/client/scheduler-store";
 import { SchedulerRootPage } from "./scheduler/SchedulerRootPage";
@@ -18,14 +17,10 @@ import { SchedulerFormPage } from "./scheduler/SchedulerFormPage";
  *
  * The panel card only mounts the active tab's body, so this component owns no
  * page state: the list, the selection, the filters, the page stack and the form
- * draft all live in `lib/client/scheduler-store.ts`. Here it wires the
- * first-open load, dispatches the current page to a full-width view, and turns
- * Escape into "up one level" — falling back to the panel tab's close rule from
- * the task list.
- *
- * Mounting the body also flips the store's `mounted` flag, which is what lets
- * the background poll pick a slower tier while the panel is collapsed
- * (see `lib/shared/scheduler-cadence.ts`).
+ * draft all live in `lib/client/scheduler-store.ts`. Here it wires the re-read
+ * on entry, dispatches the current page to a full-width view, and turns Escape
+ * into "up one level" — falling back to the panel tab's close rule from the
+ * task list.
  */
 export function SchedulerPanel({
   cwd,
@@ -41,12 +36,6 @@ export function SchedulerPanel({
 
   useEffect(() => {
     void reloadSchedulerTasks();
-  }, []);
-
-  // The poll tier reads this while the panel body is mounted.
-  useEffect(() => {
-    setSchedulerPanelMounted(true);
-    return () => setSchedulerPanelMounted(false);
   }, []);
 
   const page = currentSchedulerPage(pages);

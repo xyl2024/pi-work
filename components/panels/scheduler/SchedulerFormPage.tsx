@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { CwdPicker } from "@/components/sessions/CwdPicker";
@@ -18,6 +18,7 @@ import {
 import { SchedulerBackButton } from "./SchedulerBackButton";
 import { btnGhost, btnPrimary, inputMonoStyle, inputStyle, textareaStyle } from "@/components/scheduler/styles";
 import {
+  listTimezones,
   parseMaxLifetimeMinutes,
   RUNNER_DEFAULT_MAX_LIFETIME_MS,
 } from "@/lib/shared/scheduler-form";
@@ -57,6 +58,13 @@ export function SchedulerFormPage() {
   }, []);
 
   const formCwd = form?.cwd ?? "";
+  // Every zone once; keep the task's own zone selectable even if the runtime's
+  // list does not include it (e.g. a legacy alias).
+  const timezones = useMemo(() => {
+    const zones = listTimezones();
+    const current = form?.timezone;
+    return current && !zones.includes(current) ? [current, ...zones] : zones;
+  }, [form?.timezone]);
 
   // Keep the tool catalog in sync with the selected working directory, using
   // the same catalog endpoint as the chat tool picker.
@@ -214,6 +222,15 @@ export function SchedulerFormPage() {
               />
               <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("minutes")}</span>
             </div>
+          </Field>
+          <Field label={t("Timezone")} hint={t("Timezone hint")}>
+            <select value={form.timezone} onChange={(e) => update({ timezone: e.target.value })} style={inputStyle}>
+              {timezones.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone}
+                </option>
+              ))}
+            </select>
           </Field>
         </Section>
 

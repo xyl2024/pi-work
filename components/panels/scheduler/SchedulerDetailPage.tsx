@@ -86,12 +86,35 @@ export function SchedulerDetailPage({
     return () => setSchedulerRunsVisible(false);
   }, [block]);
 
-  // Re-read the runs while one is in flight on screen.
+  // Re-read the runs while one is in flight on screen, and pause the loop
+  // while the browser tab is in the background (the store's own poll does the
+  // same; both are covered by the spec's "hidden ⇒ paused" rule).
   useEffect(() => {
     if (block !== "runs") return;
     if (!runs.some((run) => run.status === "running")) return;
-    const id = setInterval(() => void loadRuns(), 2_000);
-    return () => clearInterval(id);
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (timer === null) timer = setInterval(() => void loadRuns(), 2_000);
+    };
+    const stop = () => {
+      if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else {
+        void loadRuns();
+        start();
+      }
+    };
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [block, runs, loadRuns]);
 
   // Channel metadata for the read-only notification rows.
@@ -131,7 +154,8 @@ export function SchedulerDetailPage({
 
   const handleTrigger = async () => {
     try {
-      await triggerSchedulerTaskNow(task.id);
+      const triggered = await triggerSchedulerTaskNow(task.id);
+      if (!triggered) return; // a trigger was already in flight — nothing was sent
       toast.show({ kind: "success", message: t("Task triggered") });
       void loadRuns();
     } catch (e) {
