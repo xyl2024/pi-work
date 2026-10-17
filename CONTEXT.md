@@ -263,8 +263,12 @@ _Avoid_: 把它混同于 Prompt 模板
 _Avoid_: 把它当成第三种资源
 
 **技能（Skill）**：
-一个 SKILL.md 目录。运行时会加载的来源有三处：`~/.pi/agent/skills/`（全局）、`<cwd>/.pi/skills/`（项目）、`~/.pi-work/skills/`（Pi Work 自有，pi 的 loader 不扫描）；仓库内 `agent-skills/` 只是平台维护的分发源，需用户自行拷贝到 `~/.pi-work/skills/` 后才会生效。
-_Avoid_: 与 `.agents/skills/`（跨仓库共享技能）混用；把 `agent-skills/` 当作会被自动加载的目录
+一个 SKILL.md 目录。运行时会加载的来源有三处：`~/.pi/agent/skills/`（全局）、`<cwd>/.pi/skills/`（项目）、`~/.pi-work/skills/`（Pi Work 自有，pi 的 loader 不扫描）；仓库内 `agent-skills/` 只是平台维护的分发源，需用户自行拷贝到 `~/.pi-work/skills/` 后才会生效。它在界面上是一个**面板视图**（右侧按钮列上的全局按钮，内容跟选中会话的 cwd 走），启用状态按工作目录分桶，是 Pi Work 对来源的覆盖项。
+_Avoid_: 与 `.agents/skills/`（跨仓库共享技能）混用；把 `agent-skills/` 当作会被自动加载的目录；与聊天里「这次用哪个技能」的入口（输入框 `/skill:...` 菜单、SKILL.md 文件 chip）混用
+
+**技能安装（Skill install）**：
+从 skills.sh 搜索技能、经 `npx skills add` 落盘到全局或当前项目的过程；由技能面板的添加页发起，日志流式回显。
+_Avoid_: 与手工把 `agent-skills/` 拷进 `~/.pi-work/skills/` 混用（那不是这条安装流程）；用「添加技能」指代它（那是面板里的按钮/页面，不是过程）
 
 ### MCP
 

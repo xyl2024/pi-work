@@ -10,8 +10,7 @@
  * Exactly one condition can make a close lossy — an install still streaming.
  * The skills panel deliberately holds no draft (enable / disable writes
  * through immediately), so `dirty` never enters the picture here even though
- * its sibling has it; see ADR-0012's counterpart in #128 for why the two
- * panels' save semantics differ.
+ * its sibling has it; see ADR-0014 for why the two panels' save semantics differ.
  *
  * Collapsing the panel and switching tabs both keep the tab, so neither is a
  * close and neither asks. Only the close paths (the strip × and the batch
