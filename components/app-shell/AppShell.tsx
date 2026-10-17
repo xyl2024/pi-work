@@ -72,6 +72,7 @@ import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
 import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
+import { releaseSkillsState } from "@/lib/client/skills-store";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
@@ -155,7 +156,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   modelsConfig: (ctx) => <ModelsConfigPanel onCloseTab={ctx.onClosePanelTab} />,
-  skills: () => <SkillsPanel />,
+  skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onCloseTab={ctx.onClosePanelTab} />,
 };
 
 function formatBytes(bytes: number): string {
@@ -520,6 +521,13 @@ export function AppShell() {
   useEffect(() => {
     if (!modelsConfigTabOpen) releaseModelsConfigDraft();
   }, [modelsConfigTabOpen]);
+  // Same lifecycle for the skills cache: collapsing the panel / switching tabs
+  // keeps the tab and the cached list, closing the tab drops it so the next
+  // open reads disk again.
+  const skillsTabOpen = selectTabByKind(panelTabsState, "skills") !== null;
+  useEffect(() => {
+    if (!skillsTabOpen) releaseSkillsState();
+  }, [skillsTabOpen]);
   // New sessions must pick up a just-saved default model. The refresh signal is
   // the successful PUT, not a modal close — "open then cancel" refreshes nothing.
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);

@@ -3,8 +3,8 @@
 import { type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon, hasProviderIcon } from "@/components/ui/ProviderIcon";
-import { avatarPalette } from "../skills-config/SkillCard";
-import { TruncatedText } from "../skills-config/TruncatedText";
+import { avatarPalette } from "@/lib/client/avatar-palette";
+import { TruncatedText } from "@/components/ui/TruncatedText";
 import { SectionTitle } from "./form-fields";
 import { getDisplayedThinkingLevels } from "./utils";
 import type { RuntimeModelInfo } from "./types";

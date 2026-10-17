@@ -4,19 +4,22 @@ import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useToast } from "@/components/ui/Toast";
-import { shortenPath, sourceLabel } from "./skills-config/utils";
+import { shortenPath } from "@/lib/client/paths";
+import { groupSkills } from "@/lib/shared/skills";
 import { SkillDetail } from "./skills-config/SkillDetail";
 import { AddSkillPanel } from "./skills-config/AddSkillPanel";
-import { SkillCard } from "./skills-config/SkillCard";
-import type { Skill } from "./skills-config/types";
+// The card is owned by the panel grid and shared with this modal until the
+// modal is retired (see #127).
+import { SkillCard } from "@/components/panels/skills/SkillCard";
+import type { Skill } from "@/lib/shared/skills";
 
 /**
  * Modal for browsing / installing / inspecting skills.
  *
  * Layout
  * ──────
- *   • Overview — every skill as a card in a grid grouped by `sourceLabel`
- *     (`project` / `global` / `path`). Each card shows the skill's
+ *   • Overview — every skill as a card in a grid grouped by `skillGroup`
+ *     (`pi-work` / `project` / `global` / `path`). Each card shows the skill's
  *     initial-letter avatar, name, description and an inline enable/disable
  *     toggle. Clicking a card opens its detail page.
  *   • Detail    — `SkillDetail` (SKILL.md + files) for the clicked skill,
@@ -24,9 +27,11 @@ import type { Skill } from "./skills-config/types";
  *   • Add       — the "Add Skill" toolbar button swaps the body for
  *     `AddSkillPanel`, also with a back button.
  *
- * The detailed sub-views (SkillCard, SubFileRow, SkillDetail, AddSkillPanel)
- * and the shared types / utilities live alongside under `./skills-config/`.
- * This file holds only the modal chrome and the view-selection state machine.
+ * The detailed sub-views (SubFileRow, SkillDetail, AddSkillPanel) and the
+ * shared utilities live alongside under `./skills-config/`. This file holds
+ * only the modal chrome and the view-selection state machine. The card grid
+ * and the grouping rule already live in the panel world (the panel view is
+ * the replacement for this modal).
  */
 export function SkillsConfig({
   cwd,
@@ -107,14 +112,7 @@ export function SkillsConfig({
     [toggleSkillInvocation, toast, setBusy],
   );
 
-  const groups = (() => {
-    const result: { label: string; skills: Skill[] }[] = [];
-    for (const grpLabel of ["pi-work", "project", "global", "path"] as const) {
-      const grpSkills = skills.filter((s) => sourceLabel(s) === grpLabel);
-      if (grpSkills.length > 0) result.push({ label: grpLabel, skills: grpSkills });
-    }
-    return result;
-  })();
+  const groups = groupSkills(skills);
 
   const BackHeader = ({ label, onClick }: { label: string; onClick: () => void }) => (
     <div
@@ -317,8 +315,8 @@ export function SkillsConfig({
                 {t("No skills found")}
               </div>
             ) : (
-              groups.map(({ label, skills: grpSkills }) => (
-                <section key={label} style={{ marginBottom: 24 }}>
+              groups.map(({ group, skills: grpSkills }) => (
+                <section key={group} style={{ marginBottom: 24 }}>
                   <div
                     style={{
                       display: "flex",
@@ -336,7 +334,7 @@ export function SkillsConfig({
                         letterSpacing: "0.06em",
                       }}
                     >
-                      {t(label)}
+                      {t(group)}
                     </span>
                     <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
                       {grpSkills.length}

@@ -3,26 +3,21 @@
  *
  * CONTENTS
  * ────────
- * • shortenPath          — collapse `/Users/xxx/...` and `/home/xxx/...` to `~`.
  * • EXT_TO_LANGUAGE      — file extension → react-syntax-highlighter language.
  * • fileLanguage         — resolve a filename to a language id (handles
  *                          extensionless files like Dockerfile/Makefile).
- * • sourceLabel          — collapse Skill.sourceInfo into the three labels
- *                          the sidebar groups by (`project` / `global` / `path`).
+ * • stripFrontmatter     — drop the leading YAML block before rendering.
  * • FILE_GROUP_LABELS    — pretty-print names for the known top-level
  *                          directories inside a skill (`scripts`, `references`,
  *                          `assets`). Used to render SkillDetail's file groups.
  *
  * EXT_TO_LANGUAGE mirrors the map in app/api/files/[...path]/route.ts — any
  * new extension added there should be mirrored here too.
+ *
+ * The display helpers that are not skills-specific have moved on: path
+ * shortening is `lib/client/paths`, and the source grouping rule is
+ * `skillGroup` in `lib/shared/skills`.
  */
-
-import type { Skill } from "./types";
-
-export function shortenPath(p: string): string {
-  // Match common home dir patterns: /Users/xxx, /home/xxx
-  return p.replace(/^\/(?:Users|home)\/[^/]+/, "~");
-}
 
 // ── File extension → syntax-highlighter language ──
 // Mirrors the EXT_TO_LANGUAGE map in app/api/files/[...path]/route.ts
@@ -48,17 +43,6 @@ export function fileLanguage(fileName: string): string {
   if (base === "makefile") return "makefile";
   if (base.startsWith(".env")) return "bash";
   return EXT_TO_LANGUAGE[ext] || "text";
-}
-
-export type SkillGroup = "pi-work" | "global" | "project" | "path";
-
-export function sourceLabel(skill: Skill): SkillGroup {
-  const src = skill.sourceInfo?.source;
-  const scope = skill.sourceInfo?.scope;
-  if (src === "pi-work" || scope === "pi-work") return "pi-work";
-  if (scope === "user" || src === "user") return "global";
-  if (scope === "project" || src === "project") return "project";
-  return "path";
 }
 
 /** Strip a leading YAML frontmatter block (`--- ... ---`) from a markdown

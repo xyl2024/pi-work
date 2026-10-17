@@ -8,8 +8,9 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { useMarkdownComponents } from "@/components/chat/message-view/utils";
 import { TextSelectionToolbar } from "@/components/chat/text-selection-toolbar";
-import { sourceLabel, shortenPath, stripFrontmatter, FILE_GROUP_LABELS } from "./utils";
-import type { Skill, SkillDetailData, SkillDetailFile } from "./types";
+import { stripFrontmatter, FILE_GROUP_LABELS } from "./utils";
+import { shortenPath } from "@/lib/client/paths";
+import { skillGroup, type Skill, type SkillDetailData, type SkillDetailFile } from "@/lib/shared/skills";
 import { SubFileRow } from "./SubFileRow";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 
@@ -37,7 +38,7 @@ export function SkillDetail({
   onToggleInvocation: (disableModelInvocation: boolean) => Promise<void>;
 }) {
   const { t } = useI18n();
-  const label = sourceLabel(skill);
+  const label = skillGroup(skill);
   const markdownComponents = useMarkdownComponents(false);
   // Text selection scoped to the detail content, so the user can select an
   // English phrase in the rendered SKILL.md and translate it inline. The

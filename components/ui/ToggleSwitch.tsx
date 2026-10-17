@@ -50,6 +50,10 @@ export function ToggleSwitch({
         if (disabled) return;
         onChange(!on);
       }}
+      // Enter / Space activate the switch natively; they must not bubble to a
+      // clickable parent card, which would treat the same keypress as a click
+      // on the card (and open it).
+      onKeyDown={(event) => event.stopPropagation()}
       style={{
         width,
         height,

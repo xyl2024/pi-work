@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { SkillSearchResult } from "@/app/api/skills/search/route";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
-import { shortenPath } from "./utils";
-import { avatarPalette } from "./SkillCard";
-import { TruncatedText } from "./TruncatedText";
+import { TruncatedText } from "@/components/ui/TruncatedText";
+import { avatarPalette } from "@/lib/client/avatar-palette";
+import { shortenPath } from "@/lib/client/paths";
+import type { SkillInstallEvent, SkillSearchResult } from "@/lib/shared/skills";
 
 /**
  * Card for one skills.sh search result. Mirrors the look of `SkillCard`
@@ -161,12 +161,6 @@ function ResultCard({
 
 const PAGE_SIZE = 6;
 
-/** Events sent by the streaming /api/skills/install endpoint. */
-interface InstallEvent {
-  type: "log" | "done" | "error";
-  line?: string;
-  message?: string;
-}
 // Reveal the next page when the list is scrolled within this many px of the
 // bottom, so the new cards are already there by the time the user arrives.
 const SCROLL_THRESHOLD_PX = 240;
@@ -331,7 +325,7 @@ export function AddSkillPanel({
           for (const chunk of chunks) {
             const line = chunk.trim();
             if (!line.startsWith("data:")) continue;
-            const ev = JSON.parse(line.slice(5).trim()) as InstallEvent;
+            const ev = JSON.parse(line.slice(5).trim()) as SkillInstallEvent;
             if (ev.type === "log" && ev.line) {
               const text = ev.line;
               setInstallLogs((prev) => [...prev, text]);

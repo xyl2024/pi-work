@@ -7,7 +7,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { fileLanguage } from "./utils";
-import type { SkillDetailFile } from "./types";
+import type { SkillDetailFile } from "@/lib/shared/skills";
 
 /**
  * One row inside a skill's file tree. Clicking a text file expands a

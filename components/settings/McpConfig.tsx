@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PrimaryButton, SecondaryButton } from "./controls";
-import { shortenPath } from "./skills-config/utils";
+import { shortenPath } from "@/lib/client/paths";
 import { McpEntryCard } from "./mcp-config/McpEntryCard";
 import { McpEntryForm } from "./mcp-config/McpEntryForm";
 import {
