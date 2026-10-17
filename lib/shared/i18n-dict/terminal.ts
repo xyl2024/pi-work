@@ -17,4 +17,6 @@ export const terminal = {
   "Terminal connection failed": "终端连接失败",
   "Terminal connection closed": "终端连接已关闭",
   "Terminal server unavailable": "终端服务不可用",
+  "Clipboard access denied": "无法访问剪贴板",
+  "Use Ctrl + Shift + V to paste": "请使用 Ctrl + Shift + V 粘贴",
 } as const;

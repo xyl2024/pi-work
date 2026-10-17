@@ -5,7 +5,6 @@ import type { SessionRuntimeState, StateUpdater } from "@/lib/shared/session-run
 import { notifyMutated } from "@/lib/client/git-status-store";
 import { playUiSoundEvent } from "@/lib/client/ui-sounds";
 import { setGrokbotConfig } from "@/lib/client/grokbot-store";
-import { setShowFileResult } from "../showFileResultsStore";
 import { triggerCelebration } from "@/lib/client/celebrate-store";
 import { setPendingAskUserQuestions } from "../askUserQuestionsStore";
 import {
@@ -154,9 +153,6 @@ function performEffect(
       if (cwd) notifyMutated(cwd, effect.force);
       return;
     }
-    case "show_file_result":
-      setShowFileResult(effect.toolCallId, effect.files);
-      return;
     case "celebrate":
       triggerCelebration(effect.details);
       return;

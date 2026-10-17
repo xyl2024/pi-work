@@ -28,7 +28,6 @@ export const commands = {
   "Open settings": "打开设置",
   "Open channels": "打开频道",
   "Open skills": "打开技能",
-  "Open prompts": "打开提示词",
   "Language: English": "语言：English",
   "Language: Chinese": "语言：中文",
   "Command palette": "命令面板",

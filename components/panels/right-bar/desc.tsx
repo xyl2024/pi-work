@@ -43,6 +43,7 @@ import {
   Bot,
   ChartColumn,
   ChartSpline,
+  Clock,
   GitBranch,
   GitGraph,
   Languages,
@@ -50,6 +51,7 @@ import {
   Star,
 } from "lucide-react";
 import { ProviderGearIcon } from "../../ui/ProviderIcon";
+import { ToolIcon } from "../../ui/icons";
 
 /** Options for rendering a panel view's glyph. The right-bar button, the tab
  *  strip and the command palette share one icon per kind, differing only in
@@ -72,6 +74,14 @@ export interface RightBarCtx {
    *  ctx — not in the panel body — because the button must keep the dirty
    *  badge while the panel is collapsed. */
   modelsConfigDirty: boolean;
+  /** A skill install is still streaming. Same reasoning as `modelsConfigDirty`:
+   *  the install lives in the module store, so the badge stays lit while the
+   *  panel is collapsed. */
+  skillsInstalling: boolean;
+  /** At least one scheduled task's last run is still in flight. Same reasoning
+   *  again: the task list lives in the scheduler module store, so the dot stays
+   *  lit while the panel is collapsed. */
+  schedulerRunning: boolean;
   /** Active tool-call counter is the only thing that requires i18n inside
    *  the descriptor body, so we expose the AppShell-bound t() to avoid
    *  re-resolving the same key in two places. */
@@ -102,10 +112,11 @@ export interface RightBarDescriptor {
   slot?: "top" | "bottom";
   /** True when the button reads from active-session-bound state (system
    *  prompt / tools, per-session tool-call stats, branch tree, cwd's git
-   *  status, per-session LLM audit). Such buttons become empty/disabled
-   *  on the new-session page, so the configurable row groups them by
-   *  `cfg.session_bound_alignment` so the user can decide whether they
-   *  sit at the top, bottom, or interleave with the global buttons. */
+   *  status, per-session LLM audit, cwd-scoped skills). Such buttons
+   *  become empty/disabled on the new-session page, so the configurable
+   *  row groups them by `cfg.session_bound_alignment` so the user can
+   *  decide whether they sit at the top, bottom, or interleave with the
+   *  global buttons. */
   sessionBound?: true;
   /** Translation key consumed by `t()`. */
   labelKey: string;
@@ -136,6 +147,30 @@ const panelToggleDescriptor: RightBarDescriptor = {
   isActive: (ctx) => ctx.rightPanelState !== "closed",
   onClick: (ctx) => ctx.toggleRightPanel(),
 };
+
+/**
+ * The right-bar corner badge: a small accent dot. Declared once because every
+ * descriptor badge renders the same mark — the `badge(ctx)` hook is shared,
+ * only the predicate differs (models config: unsaved draft; skills: install in
+ * flight).
+ */
+function CornerBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        top: 5,
+        right: 5,
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        background: "var(--accent)",
+        boxShadow: "0 0 0 2px var(--bg-panel)",
+      }}
+    />
+  );
+}
 
 // Configurable: one entry per panel view. Identity (button id, tab id,
 // session binding) and behaviour (active state, click = toggle) come from the
@@ -211,13 +246,33 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     // Unsaved-changes dot: the one wire-up for the descriptor badge hook. It
     // is shown while the panel is collapsed too, because the dirty flag lives
     // in the module store, not in the panel mount.
-    badge: (ctx) =>
-      ctx.modelsConfigDirty ? (
-        <span
-          aria-hidden="true"
-          style={{ position: "absolute", top: 5, right: 5, width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 0 2px var(--bg-panel)" }}
-        />
-      ) : null,
+    badge: (ctx) => (ctx.modelsConfigDirty ? <CornerBadge /> : null),
+  }),
+  skills: panelButton("skills", {
+    // Same long "Open …" wording as the models-config button; the tab strip
+    // uses the shorter "Skills" label from the registry — one glyph for both.
+    labelKey: "Open skills",
+    // Wrench: the same generic tool glyph the chat's SKILL.md file chip
+    // renders (`ReadFileChips`), so button / strip / palette and the chip
+    // read as one idea.
+    icon: ({ size }) => <ToolIcon size={size} />,
+    // Install-in-flight dot, through the same badge hook the models-config
+    // button uses. The install stream lives in the skills module store, so the
+    // dot is visible while the panel is collapsed — which is exactly when the
+    // user needs to know a background install is still running.
+    badge: (ctx) => (ctx.skillsInstalling ? <CornerBadge /> : null),
+  }),
+  scheduler: panelButton("scheduler", {
+    // Same long "Open …" wording as its neighbours; the tab strip uses the
+    // shorter "Scheduled tasks" label from the registry — one glyph for both.
+    labelKey: "Open scheduled tasks",
+    // Clock: matches the empty state and the command palette's scheduling glyph.
+    icon: ({ size }) => <Clock size={size} />,
+    // Running dot, through the same badge hook as the models-config / skills
+    // buttons. The task list lives in the scheduler module store, so the dot is
+    // visible while the panel is collapsed — which is exactly when the user
+    // cannot otherwise tell that a background run is in flight.
+    badge: (ctx) => (ctx.schedulerRunning ? <CornerBadge /> : null),
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

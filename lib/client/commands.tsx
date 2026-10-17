@@ -35,11 +35,7 @@ const MoonIcon = ICONS.moon;
 const SidebarIcon = ICONS.sidebar;
 const GlobeIcon = ICONS.globe;
 const GearIcon = ICONS.gear;
-const SparkleIcon = ICONS.sparkle;
-const BookIcon = ICONS.book;
 const McpIcon = ICONS.mcp;
-
-const ClockIcon = ICONS.clock;
 
 // Keep the right-panel toggle command icon identical to the right-bar
 // descriptor's.
@@ -97,9 +93,6 @@ export interface CommandContext {
   // Modal openers
   openSettings: () => void;
   openCwdPicker: () => void;
-  openSkills: () => void;
-  openPrompts: () => void;
-  openScheduler: () => void;
   openChannels: () => void;
   openMcp: () => void;
 
@@ -223,7 +216,9 @@ export function buildCommands(
   // ── Panel ──
   // One command per registry spec that opts in; see buildPanelCommands.
   cmds.push(...buildPanelCommands(ctx, t, panelIcons));
-  // ── Modal (7) ──
+  // ── Modal ──
+  // Skills and scheduled tasks are not here: they are panel views now, so
+  // their palette entries are generated from the panel registry.
   cmds.push({
     id: "modal.settings",
     title: t("Open settings"),
@@ -233,15 +228,6 @@ export function buildCommands(
     run: () => ctx.openSettings(),
   });
   cmds.push({
-    id: "modal.skills",
-    title: t("Open skills"),
-    group: "Modal",
-    keywords: ["skills", "extensions", "技能", "扩展"],
-    icon: <SparkleIcon />,
-    when: (c) => c.hasCwd,
-    run: () => ctx.openSkills(),
-  });
-  cmds.push({
     id: "modal.mcp",
     title: t("mcp.open"),
     group: "Modal",
@@ -249,23 +235,6 @@ export function buildCommands(
     icon: <McpIcon />,
     when: (c) => c.hasCwd,
     run: () => ctx.openMcp(),
-  });
-  cmds.push({
-    id: "modal.prompts",
-    title: t("Open prompts"),
-    group: "Modal",
-    keywords: ["prompts", "templates", "slash", "提示词", "模板"],
-    icon: <BookIcon />,
-    when: (c) => c.hasCwd,
-    run: () => ctx.openPrompts(),
-  });
-  cmds.push({
-    id: "modal.scheduler",
-    title: t("Open scheduled tasks"),
-    group: "Modal",
-    keywords: ["scheduler", "cron", "schedule", "timer", "tasks", "定时", "任务", "定时任务"],
-    icon: <ClockIcon />,
-    run: () => ctx.openScheduler(),
   });
   cmds.push({
     id: "modal.channels",

@@ -28,6 +28,8 @@ import {
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
   MODELS_CONFIG_TAB_ID,
+  SCHEDULER_TAB_ID,
+  SKILLS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "./types";
@@ -49,6 +51,8 @@ export interface PanelTabParams {
   llmAudit: undefined;
   context: undefined;
   modelsConfig: undefined;
+  skills: undefined;
+  scheduler: undefined;
   file: { path: string };
 }
 
@@ -240,6 +244,43 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open models config",
         keywords: ["models", "config", "providers", "api", "模型", "配置", "服务商"],
+      },
+    ],
+  },
+  skills: {
+    kind: "skills",
+    tabId: SKILLS_TAB_ID,
+    // Strip label; the right-bar button and the palette entry keep the
+    // "Open skills" wording (see the descriptor registry).
+    labelKey: "Skills",
+    defaultMode: "normal",
+    // Session-bound: the list follows the selected session's cwd (project
+    // skills), so the button groups with the other live-state buttons. It
+    // still renders Pi Work's own skills plus pi's global ones on the
+    // new-session page — the flag only drives column grouping, not disabling.
+    sessionBound: true,
+    commands: [
+      {
+        labelKey: "Open skills",
+        keywords: ["skills", "extensions", "skill", "技能", "扩展"],
+      },
+    ],
+  },
+  scheduler: {
+    kind: "scheduler",
+    tabId: SCHEDULER_TAB_ID,
+    // Strip label; the right-bar button and the palette entry keep the
+    // "Open scheduled tasks" wording (see the descriptor registry).
+    labelKey: "Scheduled tasks",
+    defaultMode: "normal",
+    // The task list is global data — it stays available on the new-session
+    // page. The flag only drives column grouping; the form's working-directory
+    // default still follows the selected session's cwd.
+    sessionBound: false,
+    commands: [
+      {
+        labelKey: "Open scheduled tasks",
+        keywords: ["scheduler", "cron", "timer", "tasks", "schedule", "定时", "任务", "定时任务"],
       },
     ],
   },

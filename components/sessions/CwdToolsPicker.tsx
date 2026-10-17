@@ -10,7 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { ToolCheckRow, ToolPresetCard } from "@/components/ui/ToolPicker";
+import { ToolCheckRow } from "@/components/ui/ToolPicker";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import type { ToolSelection } from "@/lib/shared/types";
@@ -20,24 +20,16 @@ import {
   isToolChecklistRowChecked,
   toggleSelectionEntry,
 } from "@/lib/shared/tool-selection";
-import {
-  TOOL_PRESET_PATTERNS,
-  TOOL_PRESET_LABELS,
-  TOOL_PRESET_DESCRIPTIONS,
-  matchNamedToolPreset,
-  type NamedToolPresetId,
-} from "@/components/chat/ToolsPickerModal";
 
 /**
  * Modal to configure the *default* tool set a cwd starts new sessions with
  * (persisted per-cwd via `/api/cwd-tools`). Its chrome mirrors the chat
  * tools picker (ToolsPickerModal) / model & project pickers: portal +
- * modal animation, a search box, a preset-card grid, and a live checkbox
- * grid for the custom selection.
+ * modal animation, a search box, and a live checkbox grid for the custom
+ * selection.
  *
  * Unlike the in-session tools picker this is a *setting*, so the selection
- * is staged locally and only persisted on Save; presets stage without
- * closing so the user can refine before committing. The change takes effect
+ * is staged locally and only persisted on Save. The change takes effect
  * on sessions started afterwards (the server reads the cwd default at
  * session start).
  */
@@ -57,7 +49,7 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const itemRefs = useRef<(HTMLButtonElement | HTMLLabelElement | null)[]>([]);
+  const itemRefs = useRef<(HTMLLabelElement | null)[]>([]);
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
 
   useEffect(() => { setPortalEl(document.body); }, []);
@@ -98,39 +90,13 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
     return new Set(expandToolPatterns(Array.isArray(selection) ? selection : [], allNames));
   }, [selection, allNames]);
 
-  // Preset cards, mirroring the chat tools picker: Off / Full / named.
-  const presets = useMemo(() => {
-    const named = (Object.keys(TOOL_PRESET_PATTERNS) as NamedToolPresetId[]).map((id) => ({
-      id: `preset:${id}`,
-      label: t(TOOL_PRESET_LABELS[id]),
-      description: t(TOOL_PRESET_DESCRIPTIONS[id]),
-    }));
-    return [
-      { id: "off", label: t("Off"), description: t("No tools, chat only") },
-      { id: "full", label: t("Full"), description: t("All available tools") },
-      ...named,
-    ];
-  }, [t]);
-
-  const matchedPreset = useMemo<NamedToolPresetId | null>(() => {
-    if (!Array.isArray(selection)) return null;
-    return matchNamedToolPreset(selection);
-  }, [selection]);
-
-  const activePresetId = useMemo(() => {
-    if (selection === "all") return "full";
-    if (Array.isArray(selection) && selection.length === 0) return "off";
-    return matchedPreset ? `preset:${matchedPreset}` : null;
-  }, [selection, matchedPreset]);
-
-  const presetActive = (id: string) => activePresetId === id;
-
   // Fresh modal per open: clear search, reset the active row and focus the
   // input. Since this modal is conditionally mounted (open === true while
   // alive) the open edge effectively happens once on mount.
   useEffect(() => {
     if (!open) return;
     setQuery("");
+    setActiveIndex(0);
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
   }, [open]);
@@ -144,22 +110,12 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
 
   // Reset navigation when the list filters change so Enter stays in range.
   useEffect(() => {
-    setActiveIndex((i) => Math.min(i, Math.max(0, presets.length + filteredRows.length - 1)));
-  }, [presets.length, filteredRows.length]);
+    setActiveIndex((i) => Math.min(i, Math.max(0, filteredRows.length - 1)));
+  }, [filteredRows.length]);
 
   useEffect(() => {
     itemRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);
-
-  const applyPreset = useCallback((id: string) => {
-    if (phase !== "open") return;
-    if (id === "off") setSelection([]);
-    else if (id === "full") setSelection("all");
-    else {
-      const preset = id.replace(/^preset:/, "") as NamedToolPresetId;
-      setSelection([...TOOL_PRESET_PATTERNS[preset]]);
-    }
-  }, [phase]);
 
   const toggleTool = useCallback((name: string, checked: boolean) => {
     if (phase !== "open") return;
@@ -174,7 +130,7 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); requestClose(); return; }
       if (phase !== "open") return;
-      const itemCount = presets.length + filteredRows.length;
+      const itemCount = filteredRows.length;
       if (!itemCount) return;
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
         e.preventDefault();
@@ -183,23 +139,17 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
           return (index + delta + itemCount) % itemCount;
         });
       } else if (e.key === "Enter") {
-        const index = activeIndex;
-        if (index < presets.length) {
+        const row = filteredRows[activeIndex];
+        if (row) {
           e.preventDefault();
-          applyPreset(presets[index].id);
-        } else {
-          const row = filteredRows[index - presets.length];
-          if (row) {
-            e.preventDefault();
-            const checked = isToolChecklistRowChecked(row, selectedSet, allNames);
-            toggleTool(row.name, !checked);
-          }
+          const checked = isToolChecklistRowChecked(row, selectedSet, allNames);
+          toggleTool(row.name, !checked);
         }
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isVisible, phase, requestClose, activeIndex, presets, filteredRows, selectedSet, allNames, applyPreset, toggleTool]);
+  }, [isVisible, phase, requestClose, activeIndex, filteredRows, selectedSet, allNames, toggleTool]);
 
   const save = async () => {
     setSaving(true);
@@ -233,27 +183,10 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
         ) : (
           <>
             {/* Search */}
-            <div style={{ padding: "0 14px 10px", flexShrink: 0 }}>
+            <div style={{ padding: "0 14px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 8px" }}>
                 <span style={{ color: "var(--text-dim)", fontSize: 12 }}>⌕</span>
                 <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search tools...")} spellCheck={false} style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, padding: "8px 2px" }} />
-              </div>
-            </div>
-
-            {/* Presets */}
-            <div style={{ padding: "0 14px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 7 }}>
-                {presets.map((preset, index) => (
-                  <ToolPresetCard
-                    key={preset.id}
-                    ref={(el) => { itemRefs.current[index] = el; }}
-                    label={preset.label}
-                    description={preset.description}
-                    active={presetActive(preset.id)}
-                    focused={activeIndex === index}
-                    onClick={() => applyPreset(preset.id)}
-                  />
-                ))}
               </div>
             </div>
 
@@ -268,15 +201,14 @@ export function CwdToolsPicker({ cwd, open, onClose }: { cwd: string; open: bool
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>
                   {filteredRows.map((row, index) => {
-                    const itemIndex = presets.length + index;
                     const checked = isToolChecklistRowChecked(row, selectedSet, allNames);
                     const item = (
                       <ToolCheckRow
                         key={row.key}
-                        ref={(el) => { itemRefs.current[itemIndex] = el; }}
+                        ref={(el) => { itemRefs.current[index] = el; }}
                         name={row.name}
                         checked={checked}
-                        focused={activeIndex === itemIndex}
+                        focused={activeIndex === index}
                         memberCount={row.group && row.memberCount > 0 ? row.memberCount : 0}
                         onChange={(v) => toggleTool(row.name, v)}
                       />

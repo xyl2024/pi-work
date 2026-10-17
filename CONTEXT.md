@@ -230,6 +230,16 @@ _Avoid_: 用「新会话」指代它
 清掉频道的当前会话，使下一条入站消息重新冷启动。
 _Avoid_: 把它当成删除会话
 
+### 定时任务
+
+**定时任务（Scheduled task）**：
+一条在指定 cron 表达式与工作目录上、由服务端后台调度循环到点触发的任务。它在界面上是一个**面板视图**（右侧按钮列上的全局按钮；任务列表是全局数据，只有新建表单的工作目录默认值跟选中会话走）；启停是**即时生效项**，任务表单是**待保存项**。
+_Avoid_: 用「计划」「定时器」「调度」指代它；把它和「运行记录」混用
+
+**运行记录（Task run）**：
+定时任务一次执行的记录（状态、回复正文、错误、耗时、会话 id），由服务端在每次触发时写入，有运行中记录时面板每 2 秒重拉。它属于任务，不属于会话。
+_Avoid_: 与「定时任务」混用；把它当成会话的一部分（任务不绑定会话，只有每次运行写一个会话 id 供跳转）
+
 ### 工具
 
 **工具（Tool）**：
@@ -250,21 +260,21 @@ _Avoid_: 用「队列」指代它（那是承载它的数据结构）；用「�
 
 ### 提示词与技能
 
-**提示词（Prompt）**：
-可编辑的 prompt 模板文件，只有 `~/.pi/agent/prompts/`（全局）与 `<cwd>/.pi/prompts`（项目）两处可编辑。
-_Avoid_: 用它指代系统提示词
-
 **追加系统提示词（Append System）**：
 附加到系统提示词末尾的单文件 `~/.pi/agent/APPEND_SYSTEM.md`。
-_Avoid_: 把它混同于 Prompt 模板
+_Avoid_: 用它指代系统提示词本身
 
 **斜杠命令（Slash command）**：
-界面层对 Prompt 与 Skill 的统一调用入口，`source` 为 `"prompt"` 或 `"skill"`。
+聊天输入框里 `/` 唤起的统一调用入口，`source` 为 `"skill"` 或 `"action"`（Pi Work 内置的 `/new`、`/compact`、`/model`）。Pi Work 不展示也不管理 pi 的 prompt 模板文件（`~/.pi/agent/prompts/`、`<cwd>/.pi/prompts`），直接输入 `/name` 仍由 pi 自身展开。
 _Avoid_: 把它当成第三种资源
 
 **技能（Skill）**：
-一个 SKILL.md 目录。运行时会加载的来源有三处：`~/.pi/agent/skills/`（全局）、`<cwd>/.pi/skills/`（项目）、`~/.pi-work/skills/`（Pi Work 自有，pi 的 loader 不扫描）；仓库内 `agent-skills/` 只是平台维护的分发源，需用户自行拷贝到 `~/.pi-work/skills/` 后才会生效。
-_Avoid_: 与 `.agents/skills/`（跨仓库共享技能）混用；把 `agent-skills/` 当作会被自动加载的目录
+一个 SKILL.md 目录。运行时会加载的来源有三处：`~/.pi/agent/skills/`（全局）、`<cwd>/.pi/skills/`（项目）、`~/.pi-work/skills/`（Pi Work 自有，pi 的 loader 不扫描）；仓库内 `agent-skills/` 只是平台维护的分发源，需用户自行拷贝到 `~/.pi-work/skills/` 后才会生效。它在界面上是一个**面板视图**（右侧按钮列上的全局按钮，内容跟选中会话的 cwd 走），启用状态按工作目录分桶，是 Pi Work 对来源的覆盖项。
+_Avoid_: 与 `.agents/skills/`（跨仓库共享技能）混用；把 `agent-skills/` 当作会被自动加载的目录；与聊天里「这次用哪个技能」的入口（输入框 `/skill:...` 菜单、SKILL.md 文件 chip）混用
+
+**技能安装（Skill install）**：
+从 skills.sh 搜索技能、经 `npx skills add` 落盘到全局或当前项目的过程；由技能面板的添加页发起，日志流式回显。
+_Avoid_: 与手工把 `agent-skills/` 拷进 `~/.pi-work/skills/` 混用（那不是这条安装流程）；用「添加技能」指代它（那是面板里的按钮/页面，不是过程）
 
 ### MCP
 

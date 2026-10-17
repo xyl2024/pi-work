@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
-import type { ScheduledTask } from "./types";
+import type { ScheduledTask } from "@/lib/shared/scheduler";
 import { CheckIcon, CopyIcon } from "@/components/ui/icons";
 import { copyText } from "@/lib/client/clipboard";
 

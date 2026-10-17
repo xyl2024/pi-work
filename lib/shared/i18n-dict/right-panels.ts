@@ -178,4 +178,12 @@ export const rightPanels = {
   "Cost by category": "按类别分摊",
   "Top sessions by cost": "Top 会话成本",
 
+  // Skills panel. Its other copy lives with the older skills strings in
+  // ./models (the grid and add page), so only the panel's close guard is here.
+  // The install keeps running server-side — the route never watches the client
+  // connection — so the prompt promises the log, not the install.
+  "Close while installing?": "安装尚未完成，确认关闭？",
+  "The installation keeps running in the background, but its log will be lost.":
+    "安装会在后台继续，但本次安装日志将不再显示。",
+
 } as const;

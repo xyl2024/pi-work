@@ -8,6 +8,8 @@ import { EchartsBlock } from "@/components/renderers/EchartsBlock";
 import { SvgBlock } from "@/components/renderers/SvgBlock";
 import { CodeBlock } from "@/components/renderers/CodeBlock";
 import { MarkdownImage } from "@/components/renderers/ImageLightbox";
+import { resolveFileLink } from "@/lib/shared/file-link";
+import { useFileLinkHandler } from "./context";
 
 export function formatTime(ts?: number): string | null {
   if (!ts) return null;
@@ -117,8 +119,41 @@ export function useMarkdownComponents(
             />
           )
         : undefined,
+      a: MarkdownLink,
     }),
     [isStreaming, onImageClick],
+  );
+}
+
+/**
+ * Anchors in chat markdown: a bare path (`/abs/a.ts` or a cwd-relative
+ * `src/a.ts`) opens in the right panel instead of navigating. External links,
+ * fragments and routes fall through to the plain anchor, leaving
+ * `useExternalLinks` to handle http(s).
+ */
+function MarkdownLink({ href, children, ...props }: React.ComponentPropsWithoutRef<"a">) {
+  const handler = useFileLinkHandler();
+  const target = handler ? resolveFileLink(href, handler.cwd) : null;
+  if (handler && target) {
+    return (
+      <a
+        {...props}
+        href={href}
+        title={target.path}
+        style={{ cursor: "pointer", ...props.style }}
+        onClick={(event) => {
+          event.preventDefault();
+          handler.openFile(target.path, target.name);
+        }}
+      >
+        {children}
+      </a>
+    );
+  }
+  return (
+    <a {...props} href={href}>
+      {children}
+    </a>
   );
 }
 

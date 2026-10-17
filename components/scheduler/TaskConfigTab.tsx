@@ -10,7 +10,8 @@
 import type { CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/icons";
-import type { ScheduledTask } from "./types";
+import type { ScheduledTask } from "@/lib/shared/scheduler";
+import { RUNNER_DEFAULT_MAX_LIFETIME_MS } from "@/lib/shared/scheduler-form";
 
 interface Props {
   task: ScheduledTask;
@@ -26,10 +27,9 @@ export function TaskConfigTab({ task, modelIcons, onEdit, channelMeta }: Props) 
   const modelIcon = resolveProviderIcon(provider, modelId, modelIcons);
 
   // Render the max lifetime as a human-friendly "Xh Ym" string. The
-  // server-side default is 2h, kept in sync with lib/scheduler/runner.ts.
-  const DEFAULT_MAX_LIFETIME_MS = 2 * 60 * 60 * 1000;
+  // server-side default is the shared runner default (2h).
   const lifetimeDisplay = (() => {
-    const ms = maxLifetimeMs ?? DEFAULT_MAX_LIFETIME_MS;
+    const ms = maxLifetimeMs ?? RUNNER_DEFAULT_MAX_LIFETIME_MS;
     const totalMinutes = Math.round(ms / 60_000);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;

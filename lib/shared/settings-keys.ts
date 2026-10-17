@@ -3,7 +3,6 @@ import type {
   NetworkProxyConfig,
   PiWorkConfig,
   UiSoundsConfig,
-  WebAccessConfig,
 } from "./config-types";
 import type { FileViewerConfig } from "./file-viewer-limits";
 import type { RightSideBarConfig } from "./right-bar";
@@ -26,16 +25,14 @@ export const SETTINGS_OWNED_KEYS = [
   "load_pi_docs",
   "file_viewer",
   "ui_sounds",
-  "web_access",
   "network_proxy",
 ] as const satisfies readonly (keyof PiWorkConfig)[];
 
 export type SettingsOwnedKey = (typeof SETTINGS_OWNED_KEYS)[number];
 
 /**
- * A patch for the settings route. Each owned key carries its full value; the
- * server replaces that key on disk (except `web_access`, whose Tavily sub-tree
- * is merged so a key can be set or explicitly cleared).
+ * A patch for the settings route. Each owned key carries its full value and
+ * the server replaces that key on disk.
  */
 export type SettingsPatch = Partial<{
   right_side_bar: RightSideBarConfig;
@@ -43,13 +40,6 @@ export type SettingsPatch = Partial<{
   load_pi_docs: boolean;
   file_viewer: FileViewerConfig;
   ui_sounds: UiSoundsConfig;
-  web_access: {
-    enabled?: boolean;
-    tavily?: Partial<Omit<WebAccessConfig["tavily"], "api_key">> & {
-      api_key?: string;
-      clear_api_key?: boolean;
-    };
-  };
   network_proxy: NetworkProxyConfig;
 }>;
 

@@ -23,14 +23,14 @@ allowBuilds:
   unrs-resolver: false
 
 # `canvas` is deliberately never installed. It is only an *optional* peer of
-# linkedom / jsdom / pdfjs-dist (server-side <canvas> rasterisation), none of
-# which this app uses — but pnpm's autoInstallPeers would pull it in, and its
+# jsdom / pdfjs-dist (server-side <canvas> rasterisation), neither of which
+# this app uses — but pnpm's autoInstallPeers would pull it in, and its
 # native `canvas.node` binding then makes webpack choke ("Module parse failed")
 # because the .pnpm path escapes Next's `node_modules/<pkg>` externals regex.
 ignoredOptionalDependencies:
   - canvas
 
-# linkedom / jsdom declare canvas as an optional peer; without ignoreMissing,
+# jsdom declares canvas as an optional peer; without ignoreMissing,
 # autoInstallPeers would put it back.
 peerDependencyRules:
   ignoreMissing:

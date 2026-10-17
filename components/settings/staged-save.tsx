@@ -5,7 +5,7 @@ import { PrimaryButton } from "./controls";
 
 /**
  * The one staged-save button. Every explicit-save setting (append system
- * prompt, network proxy, profile, Tavily key) uses the same three states so
+ * prompt, network proxy, profile) uses the same three states so
  * the user does not have to learn a different vocabulary per section:
  *
  *   - can save  → accent, clickable

@@ -38,8 +38,6 @@ export const settings = {
   "You are now in …": "你现在处于……",
   "The child's working directory is appended automatically at run time.": "运行时会自动追加子代理的当前工作目录。",
   "Pi Bot appearance": "Pi Bot 形象",
-  "Read only + shells": "只读 + 终端",
-  "Read, grep, ls, find and shells": "read、grep、ls、find 与终端",
   "{n} min": "{n} 分钟",
   "{n} tools": "{n} 个工具",
   "Name must start with a lowercase letter and use only lowercase letters, digits, '_' or '-'.": "名称必须以小写字母开头，只能包含小写字母、数字、下划线或连字符。",
@@ -76,13 +74,12 @@ export const settings = {
 
   // Session-bound button vertical alignment
   "Session-bound button alignment": "会话绑定按钮对齐",
-  "Where session-bound buttons sit in the right-side bar. Session-bound buttons (Context, Tool Calls, Conversation Tree, Git Diff, LLM API audit) read from the active session and become empty on the new-session page.":
-    "设置会话绑定按钮在右侧按钮列中的纵向对齐方式。会话绑定按钮（Context、Tool Calls、Conversation Tree、Git Diff、LLM API audit）依赖当前会话的数据，在新建会话页面会变成空状态。",
+  "Where session-bound buttons sit in the right-side bar. Session-bound buttons (Context, Tool Calls, Conversation Tree, Git Diff, LLM API audit, Skills) read from the active session and become empty on the new-session page.":
+    "设置会话绑定按钮在右侧按钮列中的纵向对齐方式。会话绑定按钮（Context、Tool Calls、Conversation Tree、Git Diff、LLM API audit、Skills）依赖当前会话的数据，在新建会话页面会变成空状态。",
   "Align session-bound buttons to the top": "会话绑定按钮顶部对齐",
   "Align session-bound buttons to the bottom (default)": "会话绑定按钮底部对齐（默认）",
   "Inline with button order (legacy)": "按顺序混排（保留旧行为）",
 
-  "Show Media": "Show Media（内联展示多媒体文件）",
   "Ask User Questions": "Ask User Questions（向用户提问）",
   "No tools available": "此项目下没有可用工具",
 

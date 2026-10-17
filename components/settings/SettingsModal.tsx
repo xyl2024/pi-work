@@ -24,7 +24,6 @@ import { NetworkProxySection } from "./sections/NetworkProxySection";
 import { SubagentSection } from "./sections/SubagentSection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 import { ToastTestSection } from "./sections/ToastTestSection";
-import { WebAccessSection } from "./sections/WebAccessSection";
 
 /**
  * Settings modal shell. Holds the modal chrome (backdrop, header,
@@ -78,7 +77,7 @@ export function SettingsModal({
 
   const loading = reloading && config === null;
 
-  const { apply, submit } = useSettingsWrite();
+  const { apply } = useSettingsWrite();
 
   const reportDirty = useCallback<DirtyReporter>((key, dirty) => {
     if (dirty) markDirty(key);
@@ -189,8 +188,6 @@ export function SettingsModal({
         return <RetrySection />;
       case "network-proxy":
         return <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />;
-      case "web-access":
-        return <WebAccessSection config={config} apply={apply} submit={submit} onDirtyChange={reportDirty} />;
       case "toast-test":
         return <ToastTestSection />;
     }

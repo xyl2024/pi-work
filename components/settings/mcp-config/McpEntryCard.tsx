@@ -3,8 +3,8 @@
 import { type CSSProperties } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
-import { TruncatedText } from "../skills-config/TruncatedText";
-import { avatarPalette } from "../skills-config/SkillCard";
+import { TruncatedText } from "@/components/ui/TruncatedText";
+import { avatarPalette } from "@/lib/client/avatar-palette";
 import { isEntryDirty, type McpDraftEntry } from "@/lib/shared/mcp-draft";
 import { isEnabled, summarizeEntry, transportOf } from "./utils";
 

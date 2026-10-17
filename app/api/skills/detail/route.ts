@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { join, relative, extname } from "path";
+import type { SkillDetailData, SkillDetailFile, SkillSubFileResponse } from "@/lib/shared/skills";
 
 export const dynamic = "force-dynamic";
 
@@ -29,22 +30,13 @@ function isTextFile(filePath: string): boolean {
   return TEXT_EXTS.has(ext);
 }
 
-interface FileEntry {
-  name: string;
-  path: string;
-  relativePath: string;
-  size: number;
-  isText: boolean;
-  isDirectory: boolean;
-}
-
 /**
  * Recursively list files in a directory (up to maxDepth).
- * Returns flat array of FileEntry.
+ * Returns flat array of SkillDetailFile.
  */
-function scanFiles(dir: string, baseDir: string, maxDepth: number): FileEntry[] {
+function scanFiles(dir: string, baseDir: string, maxDepth: number): SkillDetailFile[] {
   if (maxDepth <= 0) return [];
-  const entries: FileEntry[] = [];
+  const entries: SkillDetailFile[] = [];
 
   try {
     const names = readdirSync(dir);
@@ -92,7 +84,7 @@ function scanFiles(dir: string, baseDir: string, maxDepth: number): FileEntry[] 
   return entries;
 }
 
-function parseDir(dir: string): { files: FileEntry[] } {
+function parseDir(dir: string): { files: SkillDetailFile[] } {
   // Scan 2 levels deep (skill dir → immediate children)
   // Dirs are included as entries, so a file at scripts/process.sh
   // will appear both:
@@ -136,7 +128,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "file too large to preview (max 256 KiB)" }, { status: 413 });
     }
     const content = readFileSync(resolvedPath, "utf-8");
-    return NextResponse.json({ subFileContent: content, subFilePath });
+    const body: SkillSubFileResponse = { subFileContent: content, subFilePath };
+    return NextResponse.json(body);
   }
 
   // Read SKILL.md content
@@ -152,9 +145,6 @@ export async function GET(req: NextRequest) {
   // Scan the skill directory for sub-files
   const { files } = parseDir(skillDir);
 
-  return NextResponse.json({
-    content,
-    directory: skillDir,
-    files,
-  });
+  const body: SkillDetailData = { content, directory: skillDir, files };
+  return NextResponse.json(body);
 }

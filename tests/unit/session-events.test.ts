@@ -424,30 +424,6 @@ describe("session event reducer: tool execution", () => {
     expect(kindsOf(endAgain.effects)).not.toContain("refresh_subagent_panel");
   });
 
-  it("publishes a show_media result for the session library", () => {
-    const files = [{ path: "/tmp/a.png", exists: true, category: "image" }];
-    const started = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "show_media", {}));
-
-    const reduction = reduceSessionEvent(
-      started.state,
-      toolEnd("call-1", "show_media", { details: { files, summary: "1 file" } }),
-    );
-
-    expect(reduction.effects).toContainEqual({ kind: "show_file_result", toolCallId: "call-1", files });
-  });
-
-  it("publishes a result from the legacy show_file name too", () => {
-    const files = [{ path: "/tmp/old.png", exists: true }];
-    const started = reduceSessionEvent(createSessionRuntimeState(), toolStart("call-1", "show_file", {}));
-
-    const reduction = reduceSessionEvent(
-      started.state,
-      toolEnd("call-1", "show_file", { details: { files } }),
-    );
-
-    expect(kindsOf(reduction.effects)).toContain("show_file_result");
-  });
-
   it("flashes the bot only for a failed tool call", () => {
     const failed = reduceSessionEvent(createSessionRuntimeState(), toolEnd("call-1", "bash", undefined, true));
     expect(failed.effects).toContainEqual({ kind: "flash_bot_state", stateKey: "suspicious" });

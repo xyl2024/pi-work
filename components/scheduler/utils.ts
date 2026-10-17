@@ -5,7 +5,7 @@
  */
 
 import type { Locale } from "@/lib/shared/i18n-dict";
-import type { TaskRun, TaskRunStatus } from "./types";
+import type { TaskRun, TaskRunStatus } from "@/lib/shared/scheduler";
 
 // ── Time helpers ─────────────────────────────────────────────────
 
@@ -308,39 +308,4 @@ export function statusVar(s: StatusVariant | null): { fg: string; bg: string } {
     case "done":     return { fg: "var(--text-muted)", bg: "var(--bg-subtle)" };
     default:         return { fg: "var(--text-muted)", bg: "var(--bg-subtle)" };
   }
-}
-
-// ── Fetch ────────────────────────────────────────────────────────
-
-/**
- * Thin fetch wrapper used by every CRUD call. We don't pass credentials
- * because the scheduler endpoints live on the same origin and Next.js
- * cookies are sent by default.
- *
- * Throws on non-2xx with the server-provided error message attached
- * when available; UI callers display `err.message` in a toast.
- */
-export async function apiFetch<T>(input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      // Cron expressions represent wall-clock time. Send the browser's IANA
-      // zone so the server can interpret legacy tasks consistently.
-      "X-Pi-Work-Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    let detail = `HTTP ${res.status}`;
-    try {
-      const data = (await res.json()) as { error?: string };
-      if (data?.error) detail = data.error;
-    } catch {
-      // Body wasn't JSON — keep the generic message.
-    }
-    throw new Error(detail);
-  }
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
 }

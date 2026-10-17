@@ -6,8 +6,7 @@ import type { SlashResource } from "@/lib/shared/slash-commands";
 
 /**
  * Inline chip rendered above the textarea once the user has picked a
- * prompt/skill action from the slash menu. Shows the source badge
- * (skill gets a green chip, prompt/skill use the accent color) plus the
+ * skill from the slash menu. Shows the `skill` source badge plus the
  * `/command` and a small remove button. Shift+Backspace on the textarea
  * is the keyboard equivalent of the remove button.
  */
@@ -25,7 +24,7 @@ export function SlashCommandHint({ resource, onRemove }: {
         borderRadius: 7, color: "var(--text-muted)", fontSize: 12,
       }}>
         <span style={{
-          color: resource.source === "skill" ? "#059669" : "var(--accent)",
+          color: "#059669",
           fontWeight: 700, textTransform: "uppercase", fontSize: 10,
         }}>
           {resource.source}

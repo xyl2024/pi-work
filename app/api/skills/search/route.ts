@@ -3,6 +3,11 @@ import { runNpx } from "@/lib/server/npx";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { sanitizeChildEnv } from "@/lib/server/env-sanitize";
 import { fetchSkillDescriptions } from "@/lib/server/skills-describe";
+import type {
+  SkillSearchRequest,
+  SkillSearchResponse,
+  SkillSearchResult,
+} from "@/lib/shared/skills";
 
 export const dynamic = "force-dynamic";
 
@@ -13,17 +18,6 @@ const MAX_PAGE_SIZE = 50;
 const SEARCH_API_BASE = process.env.SKILLS_API_URL || "https://skills.sh";
 const QUERY_CACHE_TTL_MS = 5 * 60 * 1000;
 const log = createLogger("api/skills/search");
-
-export interface SkillSearchResult {
-  package: string;
-  installs: string;
-  url: string;
-  /** skills.sh page path (`owner/repo/skill`), used to resolve the description. */
-  slug: string;
-  /** Full SKILL.md description, resolved server-side with the search so the
-   *  panel never has to fetch it lazily. Empty when unavailable. */
-  description: string;
-}
 
 interface SkillsApiSkill {
   id?: string;
@@ -158,8 +152,7 @@ async function getResults(query: string, limit: number, source: "api" | "npx"): 
 export async function POST(req: Request) {
   const startedAt = Date.now();
   try {
-    const { query, page: rawPage, pageSize: rawPageSize } = await req.json() as {
-      query?: string;
+    const { query, page: rawPage, pageSize: rawPageSize } = await req.json() as Partial<SkillSearchRequest> & {
       page?: unknown;
       pageSize?: unknown;
     };
@@ -190,7 +183,8 @@ export async function POST(req: Request) {
         source,
         durationMs: elapsedMs(startedAt),
       });
-      return NextResponse.json({ results, page, pageSize, hasMore });
+      const body: SkillSearchResponse = { results, page, pageSize, hasMore };
+      return NextResponse.json(body);
     };
 
     log.info("skill search requested", { query: trimmedQuery, page, pageSize, upstreamLimit });
@@ -214,7 +208,8 @@ export async function POST(req: Request) {
       });
       const withDescriptions = await fetchSkillDescriptions(recovered.map((r) => r.slug).filter(Boolean));
       const all = recovered.map((r) => ({ ...r, description: r.slug ? withDescriptions[r.slug] ?? "" : "" }));
-      return NextResponse.json({ results: all, page: 1, pageSize: all.length, hasMore: false });
+      const body: SkillSearchResponse = { results: all, page: 1, pageSize: all.length, hasMore: false };
+      return NextResponse.json(body);
     }
     log.error("skill search failed", { error: err.message ?? String(e), durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ error: err.message ?? String(e) }, { status: 500 });

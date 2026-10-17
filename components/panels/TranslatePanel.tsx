@@ -461,7 +461,7 @@ export function TranslatePanel() {
           <button
             onClick={() => setPreviewOpen((v) => !v)}
             aria-pressed={previewOpen}
-            aria-label={t("Prompt Templates")}
+            aria-label={t("Prompt preview")}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 28, padding: 0, height: 28,

@@ -17,7 +17,6 @@ import path from "node:path";
 import { recordCall } from "./token-audit-store";
 import { getAuditModelRuntime, installLlmFetchAudit, runWithLlmAuditContext } from "./llm-audit";
 import type { LlmAuditSource } from "../shared/llm-audit-types";
-import { buildShowFileTool, SHOW_MEDIA_SYSTEM_PROMPT_BLOCK } from "./show-file-tool";
 import { writeSessionName, deleteSessionName } from "./session-names";
 import {
   readSessionToolSelection,
@@ -29,12 +28,11 @@ import { celebrateTool, CELEBRATE_SYSTEM_PROMPT_BLOCK } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
 import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
-import { buildWebAccessTools, WEB_SEARCH_SYSTEM_PROMPT_BLOCK, FETCH_CONTENT_SYSTEM_PROMPT_BLOCK } from "./web-access/tools";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { matchSelfKillCommand } from "./self-protection";
 import { createPiWorkBashTool, createPiWorkPowerShellTool } from "./pi-shell-tools";
-import { unavailableAgentShellTools } from "../shared/agent-shell-tools";
+import { agentToolDenylist } from "./agent-tool-denylist";
 import { notify } from "./notifications";
 import { readSessionNotify } from "./session-notify";
 import { computeContextComposition, type ContextComposition } from "../shared/context-composition";
@@ -1045,10 +1043,7 @@ export async function startRpcSession(
         const blocks: string[] = [];
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("spawn_subagent")) blocks.push(buildSpawnSubagentSystemPromptBlock());
-        if (sessionHasTool("show_media")) blocks.push(SHOW_MEDIA_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("web_search")) blocks.push(WEB_SEARCH_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("fetch_content")) blocks.push(FETCH_CONTENT_SYSTEM_PROMPT_BLOCK);
         return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
       },
       // Codebase explorers receive no Skills section. Other sessions retain
@@ -1289,8 +1284,6 @@ export async function startRpcSession(
         // (`excludeTools` filters custom definitions too), so "which shells
         // exist here" stays one decision (lib/shared/agent-shell-tools.ts).
         createPiWorkPowerShellTool(cwd),
-        ...buildShowFileTool(),
-        ...(readConfig().web_access.enabled ? buildWebAccessTools() : []),
         // Core orchestration tool. Child profiles exclude it through
         // allowedToolNames, so subagents cannot recursively spawn more
         // subagents in the MVP.
@@ -1324,12 +1317,12 @@ export async function startRpcSession(
       // passed to AgentSession.allowedToolNames. This is intentionally used
       // for specialized sessions rather than relying only on active tools.
       ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
-      // Shells this platform cannot run never enter the registry: pi offers
-      // `powershell` on every platform but its `getPowerShellConfig()` throws
-      // off Windows, so a session that lists it is a turn waiting to die.
-      // Denylisting here (rather than only hiding it in the UI) is what makes
-      // `get_tools`, the tool picker and an "all tools" selection agree.
-      excludeTools: [...unavailableAgentShellTools(process.platform)],
+      // Two kinds of built-in never enter the registry: shells this platform
+      // cannot run, and tools the product does not ship (the reasons live in
+      // lib/server/agent-tool-denylist.ts). Denylisting here (rather than only
+      // hiding rows in the UI) is what makes `get_tools`, the tool picker and
+      // an "all tools" selection agree.
+      excludeTools: [...agentToolDenylist(process.platform)],
     });
     capturedSessionId = inner.sessionId as string;
 

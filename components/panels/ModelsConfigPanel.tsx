@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { useEscapeKey } from "@/hooks/useEscapeKey";
+import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import { currentModelsConfigPage } from "@/lib/shared/models-config-pages";
 import {
   ensureModelsConfigLoaded,
@@ -60,13 +60,7 @@ export function ModelsConfigPanel({ onCloseTab }: { onCloseTab?: () => void }) {
     containerRef.current?.focus({ preventScroll: true });
   }, [page]);
 
-  useEscapeKey(true, (e) => {
-    const active = document.activeElement;
-    if (active !== null && active !== document.body && !containerRef.current?.contains(active)) {
-      return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
+  usePanelEscapeGuard(containerRef, () => {
     if (escapeModelsConfig().closePanel) onCloseTab?.();
   });
 
