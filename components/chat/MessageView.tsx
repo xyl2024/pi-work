@@ -31,7 +31,7 @@ interface Props {
   turnDuration?: { startMs: number; endMs?: number; running?: boolean };
   /** Files surfaced by this turn's `read` tool calls (footer chips). */
   readFiles?: ReadFileInfo[];
-  /** Turn-level aggregate added/deleted line counts (footer chip). */
+  /** Turn-level aggregate added/deleted line counts (footer label). */
   turnDiffStats?: ToolDiffStats | null;
   /** Open a file in the right-hand panel (threaded from AppShell). */
   onOpenFile?: (filePath: string, fileName: string) => void;

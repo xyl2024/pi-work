@@ -1035,13 +1035,13 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   continue;
                 }
 
-                // Turn-level files and added/deleted totals both come out of a
-                // single tool-call-display traversal: read / edit / write calls
-                // across this turn's assistant messages, deduped by resolved
-                // path (read-first; a mutation attaches its per-file counts),
-                // errored results dropped. Surfaced as footer chips plus one
-                // aggregate on the final assistant message; the two can never
-                // disagree because they came from the same pass.
+                // Turn-level read / edit / write files and their added/deleted
+                // totals, from a single tool-call-display traversal across this
+                // turn's assistant messages, deduped by resolved path
+                // (read-first; a mutation attaches its per-file counts), errored
+                // results dropped. Files surface as chips in the final assistant
+                // message footer (or the live status row while streaming); the
+                // totals ride along as one [+N][-M] label next to them.
                 const turnCwd = session?.cwd ?? cwd ?? null;
                 const { readFiles, diffStats: turnDiffStats } = summarizeTurn(
                   renderMessages.slice(userIdx + 1, endIdx),
@@ -1170,37 +1170,49 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                           )}
                         </StreamingMessageViewport>
                       )}
-                      {streamingStartedThisTurn && (streamingTurnReadFiles.length > 0 || streamingTurnDiffStats) && (
-                        <div className="pb-1">
-                          <ReadFileChips files={streamingTurnReadFiles} diffStats={streamingTurnDiffStats} onOpenFile={handleOpenFile} />
+                      {/* Live status row: the phase hint on the left and this
+                          turn's file chips right-aligned on the same line. */}
+                      <div
+                        className="py-2"
+                        style={{ height: 40, boxSizing: "border-box", display: "flex", alignItems: "center", gap: 12 }}
+                      >
+                        <div style={{ minWidth: 0, flexShrink: 1 }}>
+                          {isStreamingThinking ? (
+                            <LoadingState label={t("Thinking...")} variant="dot-pulse" />
+                          ) : streamingStoreIsBody ? (
+                            <LoadingState label={t("Outputting...")} variant="spark" />
+                          ) : streamingStoreIsToolCall ? (
+                            <LoadingState
+                              label={phaseLabel(
+                                agentPhase?.kind === "running_tools" && agentPhase.tools.length > 0
+                                  ? agentPhase
+                                  : {
+                                      kind: "running_tools",
+                                      tools: streamingToolCall
+                                        ? [{ id: streamingToolCall.toolCallId, name: streamingToolCall.toolName, args: streamingToolCall.input }]
+                                        : [],
+                                    },
+                                t,
+                              )}
+                              variant="rotor"
+                            />
+                          ) : agentRunning && !streamingStoreHasContent ? (
+                            <LoadingState
+                              label={phaseLabel(agentPhase, t)}
+                              variant={phaseLoaderVariant(agentPhase)}
+                            />
+                          ) : null}
                         </div>
-                      )}
-                      <div className="py-2" style={{ height: 40, boxSizing: "border-box" }}>
-                        {isStreamingThinking ? (
-                          <LoadingState label={t("Thinking...")} variant="dot-pulse" />
-                        ) : streamingStoreIsBody ? (
-                          <LoadingState label={t("Outputting...")} variant="spark" />
-                        ) : streamingStoreIsToolCall ? (
-                          <LoadingState
-                            label={phaseLabel(
-                              agentPhase?.kind === "running_tools" && agentPhase.tools.length > 0
-                                ? agentPhase
-                                : {
-                                    kind: "running_tools",
-                                    tools: streamingToolCall
-                                      ? [{ id: streamingToolCall.toolCallId, name: streamingToolCall.toolName, args: streamingToolCall.input }]
-                                      : [],
-                                  },
-                              t,
-                            )}
-                            variant="rotor"
-                          />
-                        ) : agentRunning && !streamingStoreHasContent ? (
-                          <LoadingState
-                            label={phaseLabel(agentPhase, t)}
-                            variant={phaseLoaderVariant(agentPhase)}
-                          />
-                        ) : null}
+                        {streamingStartedThisTurn && (streamingTurnReadFiles.length > 0 || streamingTurnDiffStats) && (
+                          <div style={{ marginLeft: "auto", minWidth: 0 }}>
+                            <ReadFileChips
+                              files={streamingTurnReadFiles}
+                              align="end"
+                              diffStats={streamingTurnDiffStats}
+                              onOpenFile={handleOpenFile}
+                            />
+                          </div>
+                        )}
                       </div>
                     </>
                   )}
