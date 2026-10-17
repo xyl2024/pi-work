@@ -211,7 +211,6 @@ export const common = {
   "No sessions found": "未找到会话",
   "No prompt templates found": "未找到提示词模板",
   "No skills found": "未找到技能",
-  "Metadata": "元信息",
   "Source files": "源文件",
   "No files": "无文件",
   "Search more": "搜索更多",

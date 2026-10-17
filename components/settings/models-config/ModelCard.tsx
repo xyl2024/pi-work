@@ -167,7 +167,7 @@ export function ModelCardShell({
 
 /**
  * One runtime model rendered as a card in `RuntimeModelList`, mirroring the
- * SkillsConfig `SkillCard` (round avatar + bold name + muted meta lines).
+ * `SkillCard` (round avatar + bold name + muted meta lines) in the skills panel.
  *
  * Card anatomy:
  *   ┌──────────────────────────────────────────┐

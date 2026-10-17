@@ -36,7 +36,7 @@ export function SkillsPanel({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // The list follows the selected session's working directory (the shell
-  // passes the same fallback - new-session cwd - the modal used).
+  // passes the new-session cwd as the fallback when no session is selected).
   useEffect(() => {
     ensureSkillsLoaded(cwd);
   }, [cwd]);

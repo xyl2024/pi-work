@@ -19,7 +19,7 @@ import type { Skill } from "@/lib/shared/skills";
  *
  * The whole card is clickable and opens the skill detail page; the toggle
  * stops propagation (see ToggleSwitch) so it can be flipped in place. The
- * temporarily-still-mounted modal grid imports this same card.
+ * panel's root grid imports this same card.
  */
 
 const CLAMP_STYLE: CSSProperties = {

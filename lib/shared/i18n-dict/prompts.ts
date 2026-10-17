@@ -1,6 +1,6 @@
 // Slash-command prompt templates (PromptsConfig modal).
-// "Select a prompt" / "No prompts found" already live in models.ts
-// because they're co-located with the SkillsConfig panel chrome.
+// The generic picker phrases ("Select a prompt template" /
+// "No prompt templates found") live with the shared UI dictionaries, not here.
 
 export const prompts = {
   "New Prompt Template": "新建提示词模板",

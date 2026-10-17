@@ -18,7 +18,6 @@ import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
 import { GitPanel } from "../panels/GitPanel";
-import { SkillsConfig } from "../settings/SkillsConfig";
 import { McpConfig } from "../settings/McpConfig";
 import { Tooltip } from "../ui/Tooltip";
 import { PromptsConfig } from "../settings/PromptsConfig";
@@ -539,7 +538,6 @@ export function AppShell() {
   const [pendingScrollEntryIds, setPendingScrollEntryIds] = useState<Record<string, string | null>>({});
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
-  const [skillsConfigOpen, setSkillsConfigOpen] = useState(false);
   const [mcpConfigOpen, setMcpConfigOpen] = useState(false);
   const [promptsConfigOpen, setPromptsConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
@@ -593,7 +591,6 @@ export function AppShell() {
   const openPalette = useCallback(() => {
     // The palette is the top-level modal — opening it closes every other
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
-    setSkillsConfigOpen(false);
     setMcpConfigOpen(false);
     setPromptsConfigOpen(false);
     setSettingsConfigOpen(false);
@@ -1622,7 +1619,6 @@ export function AppShell() {
       onFileDeleted={handleFileDeleted}
       favoriteIds={favoriteIds}
       onToggleFavorite={toggleSessionFavorite}
-      onOpenSkills={() => setSkillsConfigOpen(true)}
       onOpenPrompts={() => setPromptsConfigOpen(true)}
       onOpenScheduler={() => setSchedulerOpen(true)}
       onOpenChannels={() => setChannelsOpen(true)}
@@ -1893,9 +1889,6 @@ export function AppShell() {
     </div>
 
   </div>
-    {skillsConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
-      <SkillsConfig cwd={(selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setSkillsConfigOpen(false)} />
-    )}
     {mcpConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
       <McpConfig
         cwd={(selectedSession?.cwd ?? newSessionCwd)!}
@@ -1941,7 +1934,7 @@ export function AppShell() {
       onHide={rightPanelSelection.hide}
     />
     {/* Single global translate bubble — mounted here (not inside ChatWindow)
-        so it also works over fullscreen modals such as SkillsConfig. It is
+        so it also works over fullscreen modals such as McpConfig. It is
         position:fixed + z-index 8000, above the modal backdrop (1000). */}
     <TranslateBubble />
     </>

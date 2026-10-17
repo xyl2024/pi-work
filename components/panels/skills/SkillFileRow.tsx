@@ -23,7 +23,7 @@ import type { SkillDetailFile } from "@/lib/shared/skills";
  * re-expanding never re-requests. A failed load is not retried until the user
  * collapses and expands again.
  *
- * Shared by the panel detail page and the retiring modal (see #127).
+ * Used by the panel detail page.
  */
 export function SkillFileRow({
   file,

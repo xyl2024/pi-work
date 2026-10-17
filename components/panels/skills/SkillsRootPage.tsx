@@ -16,8 +16,7 @@ import { SkillCard } from "./SkillCard";
 
 /**
  * The panel's root page: every discoverable skill as a card in a grid grouped
- * by source (`pi-work` / `project` / `global` / `path`), in the same order and
- * with the same grouping rule the modal grid used.
+ * by source (`pi-work` / `project` / `global` / `path`).
  *
  * The header row stays put while the grid scrolls, so "Add Skill" is always
  * reachable in the narrow strip. There is no save affordance by design:

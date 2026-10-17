@@ -1,7 +1,6 @@
 /**
  * The Skills contract shared by the `/api/skills*` routes and every client
- * that reads them (the panel view, and the retired modal while it is being
- * dismantled).
+ * that reads them (the panel view).
  *
  * Pure data only — no fs / path / pi SDK — so the same definitions are the
  * server routes' response type and the browser bundle's input type, and a
@@ -136,7 +135,7 @@ export type SkillGroup = "pi-work" | "global" | "project" | "path";
 /**
  * Group render order — Pi Work's own skills first, then the project's, then
  * the user's global ones, then anything reached by an explicit path. This is
- * the order the modal used and the panel keeps.
+ * the order the grid keeps.
  */
 export const SKILL_GROUP_ORDER: readonly SkillGroup[] = [
   "pi-work",

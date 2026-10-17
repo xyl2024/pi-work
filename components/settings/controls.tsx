@@ -6,9 +6,10 @@ import { Tooltip } from "../ui/Tooltip";
 import { ProviderIcon, ProviderGearIcon, hasProviderIcon, PROVIDER_ICON_IDS } from "../ui/ProviderIcon";
 
 /**
- * The settings control skin — one definition every settings section (and the
- * three resource modals, via the re-export shim in `models-config/form-fields`)
- * shares. Changing the look of a control is a change to this file, not to
+ * The settings control skin — one definition every settings section (the MCP
+ * config modal, which imports it directly, and the models-config panel, which
+ * reaches it via the re-export shim in `models-config/form-fields`) shares.
+ * Changing the look of a control is a change to this file, not to
  * thirteen section files.
  *
  * The skin is the one that appeared most often and is most consistent with the
