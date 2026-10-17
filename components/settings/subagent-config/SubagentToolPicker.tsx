@@ -4,13 +4,12 @@
  * SubagentToolPicker — chooses a profile's tool set from the live tool catalog.
  *
  * Mirrors the cwd tools picker (`components/sessions/CwdToolsPicker.tsx`): a
- * search box, preset cards, and a checkbox grid. Selections are stored as
- * concrete tool names, so patterns are expanded against the catalog before they
- * are handed back.
+ * search box and a checkbox grid. Selections are stored as concrete tool names,
+ * so patterns are expanded against the catalog before they are handed back.
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { ToolCheckRow, ToolPresetCard } from "@/components/ui/ToolPicker";
+import { ToolCheckRow } from "@/components/ui/ToolPicker";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -19,22 +18,6 @@ import {
   isToolChecklistRowChecked,
   toggleSelectionEntry,
 } from "@/lib/shared/tool-selection";
-import {
-  TOOL_PRESET_PATTERNS,
-  TOOL_PRESET_LABELS,
-  TOOL_PRESET_DESCRIPTIONS,
-  type NamedToolPresetId,
-} from "@/components/chat/ToolsPickerModal";
-
-/** The pattern a new subagent profile starts from: read-only core + shells. */
-export const SUBAGENT_DEFAULT_TOOL_PATTERN: readonly string[] = [
-  "read",
-  "grep",
-  "ls",
-  "find",
-  "bash",
-  "powershell",
-];
 
 interface ToolCatalogEntry {
   name: string;
@@ -89,28 +72,6 @@ export function SubagentToolPicker({
 
   const selectedSet = useMemo(() => new Set(value), [value]);
 
-  const presets = useMemo(() => {
-    const named = (Object.keys(TOOL_PRESET_PATTERNS) as NamedToolPresetId[]).map((id) => ({
-      id: `preset:${id}`,
-      label: t(TOOL_PRESET_LABELS[id]),
-      description: t(TOOL_PRESET_DESCRIPTIONS[id]),
-    }));
-    return [
-      { id: "off", label: t("Off"), description: t("No tools, chat only") },
-      { id: "full", label: t("Full"), description: t("All available tools") },
-      { id: "subagent-default", label: t("Read only + shells"), description: t("Read, grep, ls, find and shells") },
-      ...named,
-    ];
-  }, [t]);
-
-  const applyPreset = (id: string) => {
-    if (id === "off") { onChange([]); return; }
-    if (id === "full") { onChange([...allNames]); return; }
-    if (id === "subagent-default") { onChange(expandToolPatterns(SUBAGENT_DEFAULT_TOOL_PATTERN, allNames)); return; }
-    const preset = id.replace(/^preset:/, "") as NamedToolPresetId;
-    onChange(expandToolPatterns(TOOL_PRESET_PATTERNS[preset], allNames));
-  };
-
   const toggleTool = (name: string, checked: boolean) => {
     const next = toggleSelectionEntry(value, name, checked, allNames);
     onChange(expandToolPatterns(next, allNames));
@@ -125,18 +86,6 @@ export function SubagentToolPicker({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
-        {presets.map((preset) => (
-          <ToolPresetCard
-            key={preset.id}
-            label={preset.label}
-            description={preset.description}
-            active={false}
-            onClick={() => applyPreset(preset.id)}
-          />
-        ))}
-      </div>
-
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <input
           value={query}

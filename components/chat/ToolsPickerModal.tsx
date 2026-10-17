@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from "rea
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "@/components/ui/Tooltip";
-import { ToolCheckRow, ToolPresetCard } from "@/components/ui/ToolPicker";
+import { ToolCheckRow } from "@/components/ui/ToolPicker";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
@@ -15,55 +15,15 @@ import {
   toggleSelectionEntry,
 } from "@/lib/shared/tool-selection";
 
-export const READ_ONLY_TOOLS = ["find", "ls", "grep", "read"] as const;
-
-export const TOOL_PRESET_PATTERNS = {
-  read_only: READ_ONLY_TOOLS,
-  minimal: ["bash", "read", "write", "edit", "ls", "find", "grep"],
-  code: ["bash", "read", "write", "edit", "ls", "find", "grep", "codemode", "spawn_subagent", "celebrate", "ask_user_questions"],
-  assistant: ["bash", "read", "write", "edit", "ls", "find", "grep", "codemode", "pi_work_*", "celebrate", "ask_user_questions"],
-} as const satisfies Record<string, readonly string[]>;
-
-export type NamedToolPresetId = keyof typeof TOOL_PRESET_PATTERNS;
-export type ToolPresetId = "off" | "full" | NamedToolPresetId;
-
-export const TOOL_PRESET_LABELS: Record<NamedToolPresetId, string> = {
-  read_only: "Read only", minimal: "Minimal", code: "Coding", assistant: "Assistant",
-};
-
-export const TOOL_PRESET_DESCRIPTIONS: Record<NamedToolPresetId, string> = {
-  read_only: "Find, ls, grep, read", minimal: "Pi's default tools",
-  code: "Coding and subagent capabilities",
-  assistant: "Pi Work platform control capabilities",
-};
-
-export const TOOL_PRESET_TRIGGER_LABELS: Record<NamedToolPresetId, string> = {
-  read_only: "Tools · Read only", minimal: "Tools · Minimal",
-  code: "Tools · Coding", assistant: "Tools · Assistant",
-};
-
-export function matchNamedToolPreset(selection: ToolSelection): NamedToolPresetId | null {
-  if (!Array.isArray(selection)) return null;
-  for (const [id, patterns] of Object.entries(TOOL_PRESET_PATTERNS)) {
-    if (selection.length === patterns.length && selection.every((name) => (patterns as readonly string[]).includes(name))) {
-      return id as NamedToolPresetId;
-    }
-  }
-  return null;
-}
-
-type PresetOption = { id: ToolPresetId; label: string; description: string };
-
 export function ToolsPickerModal({
   open, toolSelection, availableTools, toolsLoading, toolsError,
-  onSelectPreset, onToggleTool, onRetryEnsureTools, onClose,
+  onToggleTool, onRetryEnsureTools, onClose,
 }: {
   open: boolean;
   toolSelection: ToolSelection;
   availableTools: ToolInfo[];
   toolsLoading: boolean;
   toolsError: string | null;
-  onSelectPreset: (preset: ToolPresetId) => void;
   onToggleTool: (selection: ToolSelection) => void;
   onRetryEnsureTools?: () => Promise<void>;
   onClose: () => void;
@@ -82,7 +42,7 @@ export function ToolsPickerModal({
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const itemRefs = useRef<(HTMLButtonElement | HTMLLabelElement | null)[]>([]);
+  const itemRefs = useRef<(HTMLLabelElement | null)[]>([]);
   const openFetchRef = useRef(false);
 
   const allNames = useMemo(() => availableTools.map((tool) => tool.name), [availableTools]);
@@ -99,20 +59,6 @@ export function ToolsPickerModal({
     return new Set(expandToolPatterns(Array.isArray(toolSelection) ? toolSelection : [], allNames));
   }, [toolSelection, allNames]);
 
-  const presets = useMemo<PresetOption[]>(() => [
-    { id: "off", label: t("Off"), description: t("No tools, chat only") },
-    { id: "full", label: t("Full"), description: t("All available tools") },
-    ...Object.keys(TOOL_PRESET_PATTERNS).map((id) => ({
-      id: id as NamedToolPresetId,
-      label: t(TOOL_PRESET_LABELS[id as NamedToolPresetId]),
-      description: t(TOOL_PRESET_DESCRIPTIONS[id as NamedToolPresetId]),
-    })),
-  ], [t]);
-  const namedPreset = matchNamedToolPreset(toolSelection);
-  const presetActive = (id: ToolPresetId) => id === "off"
-    ? Array.isArray(toolSelection) && toolSelection.length === 0
-    : id === "full" ? toolSelection === "all" : namedPreset === id;
-
   useEffect(() => {
     setPortalEl(document.body);
   }, []);
@@ -122,30 +68,20 @@ export function ToolsPickerModal({
       return;
     }
     setQuery("");
-    // Default focus: the currently active preset (off/full/named); custom selections start at 0.
-    if (toolSelection === "all") setActiveIndex(1);
-    else if (Array.isArray(toolSelection) && toolSelection.length === 0) setActiveIndex(0);
-    else {
-      const named = matchNamedToolPreset(toolSelection);
-      const presetKeys = ["off", "full", ...Object.keys(TOOL_PRESET_PATTERNS)];
-      const idx = named ? presetKeys.indexOf(named) : -1;
-      setActiveIndex(idx >= 0 ? idx : 0);
-    }
+    setActiveIndex(0);
     if (!openFetchRef.current && !availableTools.length && !toolsLoading) {
       openFetchRef.current = true;
       void onRetryEnsureTools?.();
     }
     const id = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(id);
-    // toolSelection is intentionally read-only here: re-running on change would reset keyboard focus mid-session.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, availableTools.length, toolsLoading, onRetryEnsureTools]);
   useEffect(() => {
     if (!isVisible) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.preventDefault(); requestClose(); return; }
       if (phase !== "open") return;
-      const itemCount = presets.length + filteredRows.length;
+      const itemCount = filteredRows.length;
       if (!itemCount) return;
       if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
         e.preventDefault();
@@ -155,24 +91,17 @@ export function ToolsPickerModal({
         });
       }
       if (e.key === "Enter") {
-        const index = activeIndex;
-        if (index < presets.length) {
+        const row = filteredRows[activeIndex];
+        if (row) {
           e.preventDefault();
-          onSelectPreset(presets[index].id);
-          requestClose();
-        } else {
-          const row = filteredRows[index - presets.length];
-          if (row) {
-            e.preventDefault();
-            const checked = isToolChecklistRowChecked(row, selectedSet, allNames);
-            onToggleTool(toggleSelectionEntry(toolSelection === "all" ? [...allNames] : Array.isArray(toolSelection) ? [...toolSelection] : [], row.name, !checked, allNames));
-          }
+          const checked = isToolChecklistRowChecked(row, selectedSet, allNames);
+          onToggleTool(toggleSelectionEntry(toolSelection === "all" ? [...allNames] : Array.isArray(toolSelection) ? [...toolSelection] : [], row.name, !checked, allNames));
         }
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [isVisible, phase, requestClose, activeIndex, presets, filteredRows, selectedSet, allNames, toolSelection, onSelectPreset, onToggleTool]);
+  }, [isVisible, phase, requestClose, activeIndex, filteredRows, selectedSet, allNames, toolSelection, onToggleTool]);
   useEffect(() => {
     itemRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);
@@ -197,25 +126,10 @@ export function ToolsPickerModal({
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="4" x2="20" y2="20" /><line x1="20" y1="4" x2="4" y2="20" /></svg>
           </button>
         </div>
-        <div style={{ padding: "0 14px 10px", flexShrink: 0 }}>
+        <div style={{ padding: "0 14px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "0 8px" }}>
             <span style={{ color: "var(--text-dim)", fontSize: 12 }}>⌕</span>
             <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t("Search tools...")} spellCheck={false} style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, padding: "8px 2px" }} />
-          </div>
-        </div>
-        <div style={{ padding: "0 14px 10px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 7 }}>
-            {presets.map((preset, index) => (
-              <ToolPresetCard
-                key={preset.id}
-                ref={(el) => { itemRefs.current[index] = el; }}
-                label={preset.label}
-                description={preset.description}
-                active={presetActive(preset.id)}
-                focused={activeIndex === index}
-                onClick={() => { onSelectPreset(preset.id); requestClose(); }}
-              />
-            ))}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px 6px", flexShrink: 0 }}>
@@ -227,15 +141,14 @@ export function ToolsPickerModal({
             : toolsError ? <div style={{ padding: 16, color: "#ef4444", fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}><span style={{ flex: 1 }}>{t("Failed to load tools")}: {toolsError}</span><button type="button" onClick={() => void onRetryEnsureTools?.()}>{t("Retry")}</button></div>
             : filteredRows.length === 0 ? <div style={{ padding: 20, color: "var(--text-dim)", fontSize: 12, textAlign: "center" }}>{availableTools.length ? t("No matches") : t("No tools available for this session")}</div>
             : <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7 }}>{filteredRows.map((row, index) => {
-              const itemIndex = presets.length + index;
               const checked = isToolChecklistRowChecked(row, selectedSet, allNames);
               const item = (
                 <ToolCheckRow
                   key={row.key}
-                  ref={(el) => { itemRefs.current[itemIndex] = el; }}
+                  ref={(el) => { itemRefs.current[index] = el; }}
                   name={row.name}
                   checked={checked}
-                  focused={activeIndex === itemIndex}
+                  focused={activeIndex === index}
                   memberCount={row.group ? row.memberCount : 0}
                   onChange={(v) => toggleTool(row.name, v)}
                 />

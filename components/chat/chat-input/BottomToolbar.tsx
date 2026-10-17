@@ -6,7 +6,7 @@ import { ContextUsageBar } from "../ContextUsageBar";
 import { CwdPicker } from "../../sessions/CwdPicker";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
 import { ModelPickerModal } from "../ModelPickerModal";
-import { ToolsPickerModal, matchNamedToolPreset, TOOL_PRESET_PATTERNS, TOOL_PRESET_TRIGGER_LABELS } from "../ToolsPickerModal";
+import { ToolsPickerModal } from "../ToolsPickerModal";
 import { ThinkingPicker, THINKING_LEVEL_COLOR, type ThinkingLevel } from "../ThinkingPicker";
 import { MoreMenu } from "../MoreMenu";
 import { NewSessionNotifyPicker } from "../chat-window/NewSessionNotifyPicker";
@@ -175,24 +175,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
     ? currentThinkingMapped
     : currentThinkingLevel;
 
-  // Tools trigger button label. "Tools · Off" when no tools, the named
-  // preset's label ("Tools · Read only" / "Tools · Minimal" / …) when one of
-  // the quick presets is active, "Tools · Custom (N)" when a partial subset
-  // is active, plain "Tools" for Full (the default). The selection is the
-  // session's live one (restored from `get_state` for existing sessions), so
-  // the user can tell at a glance which mode they're in without opening the
-  // popover.
-  const namedPreset = matchNamedToolPreset(toolSelection);
-  const toolsTriggerLabel = Array.isArray(toolSelection)
-    ? toolSelection.length === 0
-      ? t("Tools · Off")
-      : namedPreset
-        ? t(TOOL_PRESET_TRIGGER_LABELS[namedPreset])
-        : t("Tools · Custom ({count})", { count: toolSelection.length })
-    : t("Tools");
-
   // `onToolSelectionChange` is optional on Props (older call sites), so an
-  // explicit no-op keeps the inline preset/toggle callbacks total.
+  // explicit no-op keeps the inline toggle callback total.
   const handleToolSelectionChangeLocal = onToolSelectionChange ?? (() => {});
 
   return (
@@ -394,7 +378,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "0 10px", height: 32,
-                maxWidth: 220, overflow: "hidden",
+                overflow: "hidden",
                 background: toolsPickerOpen ? "var(--bg-hover)" : "none",
                 border: "none", borderRadius: 9,
                 color: "var(--text-muted)",
@@ -415,8 +399,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                 <path d="M14.7 6a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
               </svg>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                {toolsTriggerLabel}
+              <span style={{ whiteSpace: "nowrap" }}>
+                {t("Tools")}
               </span>
             </button>
             <ToolsPickerModal
@@ -426,19 +410,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
               toolsLoading={toolsLoading}
               toolsError={toolsError}
               customExpanded={customExpanded}
-              onSelectPreset={(preset) => {
-                // Each preset maps to a fixed ToolSelection:
-                //   off       → []                    (no tools, system prompt cleared)
-                //   full      → "all"                 (sentinel so future tools auto-include)
-                //   named     → its names/patterns    (`*` patterns are expanded
-                //                                        server-side when applied)
-                const next: ToolSelection =
-                  preset === "off" ? []
-                  : preset === "full" ? "all"
-                  : [...TOOL_PRESET_PATTERNS[preset]];
-                handleToolSelectionChangeLocal(next);
-                setToolsPickerOpen(false);
-              }}
               onToggleTool={handleToolSelectionChangeLocal}
               onRetryEnsureTools={onEnsureAvailableTools}
               onToggleCustomExpanded={toggleCustomExpanded}

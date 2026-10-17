@@ -6,18 +6,17 @@
  * project's default tool set). Keeping the visuals in one place guarantees
  * the chat picker and the settings picker stay pixel-consistent.
  *
- * The structural classes (`tool-picker__row` / `tool-picker__card`) live in
- * `app/globals.css` so `:hover`, `:active`, and the `[data-*]` driven
- * selected / focused fills can transition smoothly; this file only supplies
- * the inline layout metrics, the hand-drawn checkbox / radio glyphs, and the
- * correct data attributes.
+ * The structural class (`tool-picker__row`) lives in `app/globals.css` so
+ * `:hover`, `:active`, and the `[data-*]` driven selected / focused fills can
+ * transition smoothly; this file only supplies the inline layout metrics, the
+ * hand-drawn checkbox glyph, and the correct data attributes.
  *
  * Each component forwards a ref and spreads its remaining DOM props so it can
  * be used as the asChild trigger of a Radix `Tooltip`.
  */
 
 import { forwardRef } from "react";
-import type { CSSProperties, LabelHTMLAttributes, ButtonHTMLAttributes } from "react";
+import type { CSSProperties, LabelHTMLAttributes } from "react";
 
 /* ── Color helpers (kept readable without a design-token lookup table) ── */
 const accentTint = (strength: number) => `color-mix(in srgb, var(--accent) ${strength}%, transparent)`;
@@ -53,50 +52,6 @@ export function ToolCheckbox({ checked }: { checked: boolean }) {
       }}
     >
       {checked && (
-        <svg
-          className="tool-picker__check"
-          width="11"
-          height="11"
-          viewBox="0 0 20 20"
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth="2.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ display: "block" }}
-        >
-          <path d="M4.8 10.5 8.4 14.2 15.2 6" />
-        </svg>
-      )}
-    </span>
-  );
-}
-
-/* A circle that reads like the ask-user-questions radio: at rest a faint
-   ring; once active the ring fades out entirely and only an accent,
-   stroke-drawn ✓ remains (mirroring ToolCheckbox, just in a circle). The
-   transparent border keeps the outer size stable so the card doesn't shift
-   when the choice changes. */
-function ToolRadio({ active }: { active: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="tool-picker__box"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: 16,
-        height: 16,
-        boxSizing: "border-box",
-        flexShrink: 0,
-        borderRadius: "50%",
-        background: "transparent",
-        border: `2px solid ${active ? "transparent" : "color-mix(in srgb, var(--text-dim) 70%, transparent)"}`,
-        transition: "border-color 0.15s ease",
-      }}
-    >
-      {active && (
         <svg
           className="tool-picker__check"
           width="11"
@@ -215,77 +170,3 @@ export const ToolCheckRow = forwardRef<HTMLLabelElement, ToolCheckRowProps & Row
   },
 );
 
-/* ---------------------------------------------------------------------- *
- * A preset card (Off / Full / named presets). Single-choice, so it uses the
- * circular radio glyph rather than the square checkbox.
- * ---------------------------------------------------------------------- */
-export interface ToolPresetCardProps {
-  label: string;
-  description?: string;
-  active?: boolean;
-  /** Keyboard navigation target. */
-  focused?: boolean;
-  onClick: () => void;
-}
-
-type CardBase = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onClick">;
-
-export const ToolPresetCard = forwardRef<HTMLButtonElement, ToolPresetCardProps & CardBase>(
-  function ToolPresetCard({ label, description, active = false, focused = false, onClick, className, style, ...rest }, ref) {
-    return (
-      <button
-        {...rest}
-        ref={ref}
-        type="button"
-        onClick={onClick}
-        aria-pressed={active}
-        data-active={active ? "true" : "false"}
-        data-focused={focused ? "true" : "false"}
-        className={["tool-picker__card", className].filter(Boolean).join(" ")}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          minWidth: 0,
-          minHeight: 52,
-          padding: "9px 11px",
-          borderRadius: 9,
-          textAlign: "left",
-          color: "inherit",
-          ...(style as CSSProperties),
-        }}
-      >
-        <ToolRadio active={active} />
-        <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-          <span
-            style={{
-              fontSize: 12.5,
-              fontWeight: active ? 600 : 500,
-              lineHeight: 1.2,
-              color: active ? "var(--text)" : "var(--text-muted)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {label}
-          </span>
-          {description && (
-            <span
-              style={{
-                fontSize: 10.5,
-                lineHeight: 1.3,
-                color: "var(--text-dim)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {description}
-            </span>
-          )}
-        </span>
-      </button>
-    );
-  },
-);

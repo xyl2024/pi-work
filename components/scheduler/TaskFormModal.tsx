@@ -40,7 +40,7 @@ import {
   textareaStyle,
 } from "./styles";
 import { CheckIcon, CloseIcon, LightbulbIcon, ToolIcon } from "@/components/ui/icons";
-import { ToolsPickerModal, matchNamedToolPreset, TOOL_PRESET_LABELS, TOOL_PRESET_PATTERNS } from "@/components/chat/ToolsPickerModal";
+import { ToolsPickerModal } from "@/components/chat/ToolsPickerModal";
 import { listToolsForCwd } from "@/lib/client/agent-client";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import { expandToolPatterns } from "@/lib/shared/tool-selection";
@@ -987,18 +987,15 @@ function ToolsSelect({ form, update, availableTools, toolsLoading, toolsError, c
   const { open, setOpen, rootRef } = useDropdown();
   const selection = form.toolSelection;
   // Patterns (e.g. "pi_work_*") expand against the catalog for display; the
-  // raw selection (patterns included) is what gets stored so the preset stays
-  // recognisable and the server re-expands it when the task's session starts.
+  // raw selection (patterns included) is what gets stored so the server
+  // re-expands it when the task's session starts.
   const toolNames = availableTools.map((tool) => tool.name);
   const selectedCount = selection === "all" ? availableTools.length : expandToolPatterns(Array.isArray(selection) ? selection : [], toolNames).length;
-  const namedPreset = matchNamedToolPreset(selection);
   const triggerLabel = selection === "all"
     ? t("All tools")
     : selection.length === 0
       ? t("No tools")
-      : namedPreset
-        ? t(TOOL_PRESET_LABELS[namedPreset])
-        : t("Custom selection ({count}/{total})", { count: selectedCount, total: availableTools.length });
+      : t("Custom selection ({count}/{total})", { count: selectedCount, total: availableTools.length });
 
   return (
     <Field label={t("Tool set")} hint={t("all: all tools, none: chat only, custom: comma-separated tool names")}>
@@ -1028,16 +1025,6 @@ function ToolsSelect({ form, update, availableTools, toolsLoading, toolsError, c
           toolsLoading={toolsLoading}
           toolsError={toolsError}
           customExpanded={customExpanded}
-          onSelectPreset={(preset) => {
-            // Named presets are stored raw (patterns included); the server
-            // expands them when the task's session starts, and unknown names
-            // are ignored at apply time.
-            const next: ToolSelection = preset === "off" ? []
-              : preset === "full" ? "all"
-              : [...TOOL_PRESET_PATTERNS[preset]];
-            update("toolSelection", next);
-            if (preset !== "read_only") setOpen(false);
-          }}
           onToggleTool={(next) => update("toolSelection", next)}
           onToggleCustomExpanded={onToggleCustomExpanded}
           onRetryEnsureTools={onRetry}
