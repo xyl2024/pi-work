@@ -527,37 +527,70 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     }
   });
 
-  it("resolves a truthy glyph for every descriptor", () => {
-    const ctx: RightBarCtx = {
+  /** The ctx every descriptor is exercised against; individual tests flip one
+   *  observable at a time. */
+  function barCtx(overrides: Partial<RightBarCtx> = {}): RightBarCtx {
+    return {
       rightPanelState: "normal",
       activeTabKind: null,
       selectedSessionId: null,
       selectedCwd: null,
       modelsConfigDirty: false,
+      skillsInstalling: false,
       t: (key) => key,
       toggleRightPanel: () => {},
       togglePanel: () => {},
+      ...overrides,
     };
+  }
+
+  it("resolves a truthy glyph for every descriptor", () => {
+    const ctx = barCtx();
     for (const desc of RIGHT_BAR_DESCRIPTORS) {
       expect(desc.icon({ size: 16, active: desc.isActive(ctx) })).toBeTruthy();
     }
   });
 
   it("badges the models-config button only while the draft is dirty", () => {
-    const ctx: RightBarCtx = {
-      rightPanelState: "closed",
-      activeTabKind: null,
-      selectedSessionId: null,
-      selectedCwd: null,
-      modelsConfigDirty: false,
-      t: (key) => key,
-      toggleRightPanel: () => {},
-      togglePanel: () => {},
-    };
+    const ctx = barCtx({ rightPanelState: "closed" });
     const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig");
 
     expect(descriptor?.badge?.(ctx)).toBeFalsy();
     expect(descriptor?.badge?.({ ...ctx, modelsConfigDirty: true })).toBeTruthy();
+  });
+
+  it("badges the skills button while an install is running, collapsed or not", () => {
+    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
+
+    // The install lives in the module store, so the badge follows the store
+    // flag — not the panel being open. Collapsed is the case that matters.
+    expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
+    expect(
+      descriptor?.badge?.(barCtx({ rightPanelState: "closed", skillsInstalling: true })),
+    ).toBeTruthy();
+    expect(descriptor?.badge?.(barCtx({ skillsInstalling: true }))).toBeTruthy();
+    // The install flag must not light the models-config dot, and vice versa.
+    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ skillsInstalling: true }))).toBeFalsy();
+  });
+
+  it("routes both badges through the one shared corner-dot hook", () => {
+    // Same mark, different predicate: whatever the models-config badge renders
+    // while dirty is what the skills badge renders while installing.
+    const dirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(
+      barCtx({ modelsConfigDirty: true }),
+    );
+    const installing = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills")?.badge?.(
+      barCtx({ skillsInstalling: true }),
+    );
+
+    // Deep equality on the React element: same component, same (empty) props.
+    expect(dirty).toEqual(installing);
+
+    // …and the shared mark really is the small corner dot.
+    const rendered = (
+      dirty as unknown as { type: () => { props: { style: Record<string, unknown> } } }
+    ).type();
+    expect(rendered.props.style.borderRadius).toBe("50%");
   });
 
   it("derives exactly one right-bar button id per panel kind", () => {

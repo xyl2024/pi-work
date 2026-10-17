@@ -73,6 +73,10 @@ export interface RightBarCtx {
    *  ctx — not in the panel body — because the button must keep the dirty
    *  badge while the panel is collapsed. */
   modelsConfigDirty: boolean;
+  /** A skill install is still streaming. Same reasoning as `modelsConfigDirty`:
+   *  the install lives in the module store, so the badge stays lit while the
+   *  panel is collapsed. */
+  skillsInstalling: boolean;
   /** Active tool-call counter is the only thing that requires i18n inside
    *  the descriptor body, so we expose the AppShell-bound t() to avoid
    *  re-resolving the same key in two places. */
@@ -137,6 +141,30 @@ const panelToggleDescriptor: RightBarDescriptor = {
   isActive: (ctx) => ctx.rightPanelState !== "closed",
   onClick: (ctx) => ctx.toggleRightPanel(),
 };
+
+/**
+ * The right-bar corner badge: a small accent dot. Declared once because every
+ * descriptor badge renders the same mark — the `badge(ctx)` hook is shared,
+ * only the predicate differs (models config: unsaved draft; skills: install in
+ * flight).
+ */
+function CornerBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        top: 5,
+        right: 5,
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        background: "var(--accent)",
+        boxShadow: "0 0 0 2px var(--bg-panel)",
+      }}
+    />
+  );
+}
 
 // Configurable: one entry per panel view. Identity (button id, tab id,
 // session binding) and behaviour (active state, click = toggle) come from the
@@ -212,13 +240,7 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     // Unsaved-changes dot: the one wire-up for the descriptor badge hook. It
     // is shown while the panel is collapsed too, because the dirty flag lives
     // in the module store, not in the panel mount.
-    badge: (ctx) =>
-      ctx.modelsConfigDirty ? (
-        <span
-          aria-hidden="true"
-          style={{ position: "absolute", top: 5, right: 5, width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", boxShadow: "0 0 0 2px var(--bg-panel)" }}
-        />
-      ) : null,
+    badge: (ctx) => (ctx.modelsConfigDirty ? <CornerBadge /> : null),
   }),
   skills: panelButton("skills", {
     // Same long "Open …" wording as the models-config button; the tab strip
@@ -228,6 +250,11 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     // renders (`ReadFileChips`), so button / strip / palette and the chip
     // read as one idea.
     icon: ({ size }) => <ToolIcon size={size} />,
+    // Install-in-flight dot, through the same badge hook the models-config
+    // button uses. The install stream lives in the skills module store, so the
+    // dot is visible while the panel is collapsed — which is exactly when the
+    // user needs to know a background install is still running.
+    badge: (ctx) => (ctx.skillsInstalling ? <CornerBadge /> : null),
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

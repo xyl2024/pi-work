@@ -114,6 +114,20 @@ export interface SkillInstallEvent {
   message?: string;
 }
 
+/**
+ * How far an install has got, as the panel's store tracks it.
+ *
+ *   • `idle` — nothing has been installed from the panel yet;
+ *   • `running` — `npx skills add` is still streaming;
+ *   • `done` — the last install succeeded (the panel has already returned to
+ *     the grid and re-read the list);
+ *   • `error` — the last install failed and its log is still on screen.
+ *
+ * Only `running` makes closing the panel tab lossy — that is the whole input
+ * to `selectSkillsCloseConfirm` in ./skills-close.
+ */
+export type SkillInstallPhase = "idle" | "running" | "done" | "error";
+
 // ── Grouping (one source for the grid's grouping rule) ──────────────────
 
 /** The four buckets a skill can be loaded from. */

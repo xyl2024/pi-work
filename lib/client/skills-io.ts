@@ -112,19 +112,22 @@ export interface SkillInstallHandlers {
  * without a result.
  *
  * The stream is read here rather than with an `EventSource` in the component,
- * so a component unmount cannot abort the request mid-flight: nobody may be
- * listening to `onLog` any more, but the CLI keeps running to completion.
- * Making the progress *state* survive a tab switch is a separate concern
- * (#126), owned by the store rather than this module.
+ * so a component unmount cannot abort the request mid-flight: the store drives
+ * it (see `skills-store`), nobody may be listening to `onLog` any more, but the
+ * CLI keeps running to completion. Only the store's explicit cancel passes
+ * `signal`, which drops the client reader — the server's child process still
+ * finishes, because the route never watches the connection.
  */
 export async function installSkill(
   req: SkillInstallRequest,
   handlers: SkillInstallHandlers,
+  signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch("/api/skills/install", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
+    signal,
   });
   if (!res.ok || !res.body) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };

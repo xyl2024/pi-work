@@ -4,17 +4,21 @@
  * Module-scoped holder for the skills *panel view*.
  *
  * The panel card only renders the active tab's body, so switching panel tabs
- * unmounts the view. Two things the user would notice losing therefore have to
- * live outside that mount: the page-stack position and the list already read
- * for the selected session's working directory. Keeping the list here is also
- * what stops a tab switch from flashing a loading state that was already paid
- * for; closing the tab (`releaseSkillsState`) is the only thing that drops it,
- * so reopening the tab reads disk again instead of resurrecting a stale list.
+ * unmounts the view. Three things the user would notice losing therefore have
+ * to live outside that mount: the page-stack position, the list already read
+ * for the selected session's working directory, and the install in flight.
+ * Keeping the list here is also what stops a tab switch from flashing a
+ * loading state that was already paid for; keeping the install here is what
+ * lets its log keep growing while the panel is collapsed, and what feeds the
+ * right-bar "installing" badge (the shell reads the same phase). Closing the
+ * tab (`releaseSkillsState`) is the only thing that drops any of it, so
+ * reopening the tab reads disk again instead of resurrecting a stale list.
  *
- * The rules stay pure and live in `lib/shared/skills-pages.ts` (page stack) and
- * `lib/shared/skills.ts` (grouping). This file is only the wiring — requests,
- * the `useSyncExternalStore` subscription, the "first open per cwd loads,
- * later mounts reuse" policy.
+ * The rules stay pure and live in `lib/shared/skills-pages.ts` (page stack),
+ * `lib/shared/skills.ts` (grouping) and `lib/shared/skills-close.ts` (the
+ * install phase the close guard reads). This file is only the wiring —
+ * requests, the `useSyncExternalStore` subscription, the "first open per cwd
+ * loads, later mounts reuse" policy, and the install stream.
  *
  * Enable / disable is deliberately *not* a draft: the toggle writes through
  * immediately (no save bar, no unsaved-changes marker), unlike the models
@@ -23,15 +27,44 @@
 
 import { useSyncExternalStore } from "react";
 import { isContentEqual } from "./shallowEqual";
-import { fetchSkills, patchSkillInvocation } from "./skills-io";
-import type { Skill } from "@/lib/shared/skills";
+import { fetchSkills, installSkill, patchSkillInvocation } from "./skills-io";
+import type { Skill, SkillInstallPhase, SkillInstallRequest } from "@/lib/shared/skills";
 import {
   backSkillsPage,
   createSkillsPageStack,
+  currentSkillsPage,
   isSkillsRootPage,
   openSkillsPage,
   type SkillsPage,
 } from "@/lib/shared/skills-pages";
+
+/**
+ * The install slot: the attempt in flight, or the last one's outcome. It is
+ * one slot rather than a queue because the add page only ever runs one install
+ * at a time — a second package waits for the first to settle.
+ */
+export interface SkillsInstallState {
+  /** idle → running → done | error. Only `running` makes a close lossy — see
+   *  `selectSkillsCloseConfirm` in lib/shared/skills-close.ts. */
+  phase: SkillInstallPhase;
+  /** The request being run; Retry re-runs it verbatim, same scope and cwd. */
+  request: SkillInstallRequest | null;
+  /** CLI output lines in arrival order. */
+  logs: string[];
+  /** The server's message while `phase === "error"`. */
+  error: string | null;
+  /** Packages installed while this tab has been open; a search hit for one of
+   *  them reads "Installed" instead of offering another install. */
+  installed: string[];
+}
+
+const IDLE_INSTALL: SkillsInstallState = {
+  phase: "idle",
+  request: null,
+  logs: [],
+  error: null,
+  installed: [],
+};
 
 export interface SkillsStoreState {
   /** The working directory the cached list belongs to; null when unknown. */
@@ -46,6 +79,7 @@ export interface SkillsStoreState {
   pages: SkillsPage[];
   /** filePaths whose toggle write is still in flight. */
   toggleBusy: string[];
+  install: SkillsInstallState;
 }
 
 const INITIAL: SkillsStoreState = {
@@ -56,6 +90,7 @@ const INITIAL: SkillsStoreState = {
   skills: [],
   pages: createSkillsPageStack(),
   toggleBusy: [],
+  install: IDLE_INSTALL,
 };
 
 let state: SkillsStoreState = INITIAL;
@@ -96,6 +131,27 @@ function getServerSnapshot(): SkillsStoreState {
 
 export function useSkillsStore(): SkillsStoreState {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+/**
+ * The install phase, for the close guard at confirm time (non-reactive — the
+ * shell's tab × asks once, it does not render from it).
+ */
+export function getSkillInstallPhase(): SkillInstallPhase {
+  return state.install.phase;
+}
+
+/**
+ * Whether an install is streaming. Subscribed to by the shell, not by the
+ * panel, so the right-bar badge stays lit while the panel is collapsed; a
+ * boolean snapshot keeps the shell from re-rendering on every log line.
+ */
+export function useSkillInstallRunning(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.install.phase === "running",
+    () => false,
+  );
 }
 
 function errorMessage(e: unknown): string {
@@ -166,6 +222,12 @@ export function reloadSkills(): void {
  */
 export function releaseSkillsState(): void {
   if (state === INITIAL) return;
+  // An install started from this tab may still be streaming. Invalidate it and
+  // stop reading, so the late callbacks cannot repopulate the state we are
+  // dropping (the server's npx still finishes on its own).
+  installGeneration += 1;
+  installAbort?.abort();
+  installAbort = null;
   state = INITIAL;
   emit();
 }
@@ -201,6 +263,102 @@ export async function toggleSkillInvocation(
     patch({ toggleBusy: state.toggleBusy.filter((busy) => busy !== filePath) });
     return { ok: false, error: errorMessage(e) };
   }
+}
+
+// ── Installing (module-owned, so it outlives the panel mount) ────────────
+
+/** The abort handle for the stream in flight; null when nothing is running. */
+let installAbort: AbortController | null = null;
+/**
+ * Bumped when the tab closes (or an install is cancelled). Each run captures
+ * its own generation and drops every late callback that no longer matches, so
+ * a stream outliving the tab cannot write into the state that replaced it.
+ */
+let installGeneration = 0;
+
+/**
+ * Run one install, streaming its log into the store.
+ *
+ * The stream lives here rather than in the add page because the page unmounts
+ * on every tab switch: keeping the phase and the log in the store is what lets
+ * an install keep running with the panel collapsed (the badge shows it) and
+ * what makes the log still be there on the way back. On success the store also
+ * draws the panel back to the grid and re-reads the list, so the new skill is
+ * already in place wherever the user went meanwhile — unless they moved on to
+ * a skill's detail page, which is a deliberate move and is left alone rather
+ * than yanked away.
+ *
+ * `onSuccess` is the one hook back into React (the add page's success toast);
+ * failures are already on screen through the install slot. The toast provider
+ * outlives the page, so a completion that lands after the page unmounted still
+ * notifies.
+ */
+export function startSkillInstall(
+  request: SkillInstallRequest,
+  onSuccess?: () => void,
+): void {
+  if (state.install.phase === "running") return;
+  const generation = ++installGeneration;
+  const abort = new AbortController();
+  installAbort = abort;
+  patch({
+    install: { phase: "running", request, logs: [], error: null, installed: state.install.installed },
+  });
+
+  void installSkill(
+    request,
+    {
+      onLog: (line) => {
+        if (generation !== installGeneration) return;
+        patch({ install: { ...state.install, logs: [...state.install.logs, line] } });
+      },
+    },
+    abort.signal,
+  )
+    .then(() => {
+      if (generation !== installGeneration) return;
+      installAbort = null;
+      const installed = state.install.installed;
+      patch({
+        install: {
+          ...state.install,
+          phase: "done",
+          error: null,
+          installed: installed.includes(request.package)
+            ? installed
+            : [...installed, request.package],
+        },
+      });
+      // The convergence rule for a successful install: the add page goes back
+      // to the grid. The list is re-read too when there is a cwd to read (with
+      // none there is no list to refresh, but the panel still has to leave the
+      // add page). A detail page the user moved on to is deliberate, so it is
+      // left alone rather than yanked back to the grid.
+      if (currentSkillsPage(state.pages).kind !== "detail") {
+        patch({ pages: createSkillsPageStack() });
+        reloadSkills();
+      }
+      onSuccess?.();
+    })
+    .catch((e: unknown) => {
+      if (generation !== installGeneration) return;
+      installAbort = null;
+      patch({ install: { ...state.install, phase: "error", error: errorMessage(e) } });
+    });
+}
+
+/**
+ * Drop the install in flight. Called when the user confirms closing the tab:
+ * the client stops reading the stream and the log goes with the tab. The
+ * server's `npx` keeps running — the install route never watches the client
+ * connection — so the confirmation copy promises the log, not the install.
+ */
+export function cancelSkillInstall(): void {
+  if (state.install.phase !== "running") return;
+  installGeneration += 1;
+  installAbort?.abort();
+  installAbort = null;
+  patch({ install: { ...IDLE_INSTALL, installed: state.install.installed } });
 }
 
 // ── Navigation ──────────────────────────────────────────────────────────

@@ -6,8 +6,8 @@ import { useToast } from "@/components/ui/Toast";
 import { TruncatedText } from "@/components/ui/TruncatedText";
 import { avatarPalette } from "@/lib/client/avatar-palette";
 import { shortenPath } from "@/lib/client/paths";
-import { installSkill, searchSkills } from "@/lib/client/skills-io";
-import { reloadSkills, skillsBack, useSkillsStore } from "@/lib/client/skills-store";
+import { searchSkills } from "@/lib/client/skills-io";
+import { startSkillInstall, useSkillsStore } from "@/lib/client/skills-store";
 import type { SkillInstallRequest, SkillInstallScope, SkillSearchResult } from "@/lib/shared/skills";
 import { SkillsBackButton } from "./SkillsBackButton";
 
@@ -171,19 +171,18 @@ function ResultCard({
  * selected session's project path (`<cwd>/.pi/agent/skills/`).
  *
  * Install progress is streamed: the CLI's lines appear one by one instead of a
- * spinner with nothing behind it. Success leaves the page: the list is re-read
- * (which also draws the page stack back to the grid), so the new skill is
- * already there. Failure keeps the log on screen, shows the server's message
- * and a Retry that re-runs the same package.
- *
- * The install state is local to this mount in this slice; keeping it alive
- * across a tab switch / panel collapse is the next ticket (#126), which lifts
- * it into `skills-store`.
+ * spinner with nothing behind it. The stream itself belongs to
+ * `skills-store`, not to this mount — switching panel tabs or collapsing the
+ * panel must not stop it — so this page only renders the store's install slot
+ * and starts new runs through it. Success leaves the page: the store re-reads
+ * the list (which also draws the page stack back to the grid), so the new
+ * skill is already there. Failure keeps the log on screen, shows the server's
+ * message and a Retry that re-runs the same package.
  */
 export function SkillsAddPage() {
   const { t } = useI18n();
   const toast = useToast();
-  const { cwd } = useSkillsStore();
+  const { cwd, install } = useSkillsStore();
 
   const [query, setQuery] = useState("");
   const [activeQuery, setActiveQuery] = useState("");
@@ -194,33 +193,28 @@ export function SkillsAddPage() {
   const [hasMore, setHasMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [scope, setScope] = useState<SkillInstallScope>("global");
-  const [installing, setInstalling] = useState<string | null>(null);
-  const [lastAttempt, setLastAttempt] = useState<SkillInstallRequest | null>(null);
-  const [installError, setInstallError] = useState<string | null>(null);
-  const [installLogs, setInstallLogs] = useState<string[]>([]);
-  const [installedPackages, setInstalledPackages] = useState<Set<string>>(new Set());
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   // Guards against a late answer to an older query overwriting a newer one.
   const requestSeqRef = useRef(0);
-  // A finished install must not yank a user who already navigated elsewhere
-  // back to the grid.
-  const mountedRef = useRef(true);
 
   useEffect(() => {
     inputRef.current?.focus();
-    return () => {
-      mountedRef.current = false;
-    };
   }, []);
+
+  const running = install.phase === "running";
+  const installingPackage = running ? install.request?.package ?? null : null;
+  // A failure keeps the tail of the log on screen; a running install keeps all
+  // of it.
+  const visibleLogs = running ? install.logs : install.logs.slice(-FAILURE_TAIL_LINES);
 
   // Keep the progress log pinned to the newest line.
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [installLogs]);
+  }, [install.logs]);
 
   const search = useCallback(
     async (rawQuery: string) => {
@@ -277,31 +271,15 @@ export function SkillsAddPage() {
     }
   }, [hasMore, loadingMore, searching, loadMore]);
 
-  const install = useCallback(
-    async (request: SkillInstallRequest) => {
-      setInstalling(request.package);
-      setLastAttempt(request);
-      setInstallError(null);
-      setInstallLogs([]);
-      try {
-        await installSkill(request, {
-          onLog: (line) => setInstallLogs((previous) => [...previous, line]),
-        });
-        setInstalledPackages((previous) => new Set(previous).add(request.package));
-        toast.show({ kind: "success", message: t("Skill installed") });
-        // Success leaves the page: draw the stack back to the grid and re-read
-        // the list so the freshly installed skill is already there. The reload
-        // alone would do both, but it no-ops without a cwd, so the back step is
-        // explicit. Skipped if the user already navigated off this page.
-        if (mountedRef.current) {
-          skillsBack();
-          reloadSkills();
-        }
-      } catch (e) {
-        setInstallError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setInstalling(null);
-      }
+  // The store owns the stream and the convergence rule (back to the grid +
+  // re-read on success); the page only asks for the run and raises the result
+  // toast. The toast provider outlives this page, so a completion that lands
+  // after a tab switch still notifies.
+  const runInstall = useCallback(
+    (request: SkillInstallRequest) => {
+      startSkillInstall(request, () =>
+        toast.show({ kind: "success", message: t("Skill installed") }),
+      );
     },
     [t, toast],
   );
@@ -319,7 +297,7 @@ export function SkillsAddPage() {
       : `${shortenPath(cwd)}/.pi/agent/skills/`;
 
   const showEmptySearchResult = !searching && !searchError && activeQuery !== "" && results.length === 0;
-  const showInstallBlock = installing !== null || installError !== null;
+  const showInstallBlock = running || install.error !== null;
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -428,7 +406,7 @@ export function SkillsAddPage() {
 
         {showInstallBlock && (
           <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
-            {installing !== null && (
+            {running && (
               <div
                 style={{
                   display: "flex",
@@ -438,7 +416,7 @@ export function SkillsAddPage() {
                   fontSize: 11.5,
                   fontWeight: 600,
                   color: "var(--text)",
-                  borderBottom: installLogs.length ? "1px solid var(--border)" : "none",
+                  borderBottom: install.logs.length ? "1px solid var(--border)" : "none",
                 }}
               >
                 <span
@@ -460,11 +438,11 @@ export function SkillsAddPage() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {installing} · {t("Installing...")}
+                  {installingPackage} · {t("Installing...")}
                 </span>
               </div>
             )}
-            {(installing !== null ? installLogs : installLogs.slice(-FAILURE_TAIL_LINES)).length > 0 && (
+            {visibleLogs.length > 0 && (
               <div
                 ref={logRef}
                 style={{
@@ -479,12 +457,12 @@ export function SkillsAddPage() {
                   wordBreak: "break-all",
                 }}
               >
-                {(installing !== null ? installLogs : installLogs.slice(-FAILURE_TAIL_LINES)).map((line, i) => (
+                {visibleLogs.map((line, i) => (
                   <div key={`${i}:${line}`}>{line}</div>
                 ))}
               </div>
             )}
-            {installError !== null && (
+            {install.error !== null && (
               <div
                 style={{
                   display: "flex",
@@ -492,19 +470,19 @@ export function SkillsAddPage() {
                   gap: 6,
                   alignItems: "flex-start",
                   padding: "6px 10px",
-                  borderTop: installLogs.length ? "1px solid var(--border)" : "none",
+                  borderTop: install.logs.length ? "1px solid var(--border)" : "none",
                 }}
               >
                 <div style={{ fontSize: 11.5, color: "var(--error)", wordBreak: "break-word" }}>
-                  {installError}
+                  {install.error}
                 </div>
                 {/* Re-run the package that just failed, with the same scope. */}
                 <button
                   type="button"
                   onClick={() => {
-                    if (lastAttempt !== null) void install(lastAttempt);
+                    if (install.request !== null) runInstall(install.request);
                   }}
-                  disabled={lastAttempt === null}
+                  disabled={install.request === null}
                   style={{
                     padding: "3px 12px",
                     fontSize: 12,
@@ -512,7 +490,7 @@ export function SkillsAddPage() {
                     border: "1px solid var(--border)",
                     background: "none",
                     color: "var(--text-muted)",
-                    cursor: lastAttempt === null ? "not-allowed" : "pointer",
+                    cursor: install.request === null ? "not-allowed" : "pointer",
                   }}
                 >
                   {t("Retry")}
@@ -562,10 +540,10 @@ export function SkillsAddPage() {
                 <ResultCard
                   key={result.package}
                   result={result}
-                  isInstalled={installedPackages.has(result.package)}
-                  isInstalling={installing === result.package}
-                  installDisabled={installing !== null}
-                  onInstall={() => void install(requestFor(result.package))}
+                  isInstalled={install.installed.includes(result.package)}
+                  isInstalling={installingPackage === result.package}
+                  installDisabled={running}
+                  onInstall={() => runInstall(requestFor(result.package))}
                 />
               ))}
             </div>

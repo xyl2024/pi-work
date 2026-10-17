@@ -52,6 +52,7 @@ import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
 import {
   createPanelTabsState,
   panelButtonIdForKind,
+  type AnyPanelTab,
   panelTabsReducer,
   selectActiveKind,
   selectActiveTab,
@@ -71,8 +72,14 @@ import { useAgentControls } from "@/hooks/sessionUiStore";
 import { RightBarColumn } from "../panels/right-bar/RightBarColumn";
 import { PANEL_COMMAND_ICON_BY_KIND, type RightBarCtx } from "../panels/right-bar/desc";
 import { selectModelsConfigCloseConfirm } from "@/lib/shared/models-config-close";
+import { selectSkillsCloseConfirm } from "@/lib/shared/skills-close";
 import { getModelsConfigDirty, releaseModelsConfigDraft, useModelsConfigDirty } from "@/lib/client/models-config-store";
-import { releaseSkillsState } from "@/lib/client/skills-store";
+import {
+  cancelSkillInstall,
+  getSkillInstallPhase,
+  releaseSkillsState,
+  useSkillInstallRunning,
+} from "@/lib/client/skills-store";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
@@ -158,6 +165,47 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   modelsConfig: (ctx) => <ModelsConfigPanel onCloseTab={ctx.onClosePanelTab} />,
   skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onCloseTab={ctx.onClosePanelTab} />,
 };
+
+/** The shape every panel close guard returns — the shell only needs the copy. */
+interface PanelCloseGuard {
+  titleKey: string;
+  descriptionKey: string;
+  confirmLabelKey: string;
+}
+
+/**
+ * One guard per panel view whose tab owns state a close would throw away. A
+ * panel not listed here has nothing to lose and closes silently.
+ *
+ * This table is the only place that knowledge lives: the ask loop, the
+ * batch-close check and the post-confirm side effects all read it, so they
+ * cannot drift apart in what they warn about.
+ */
+const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | null>> = {
+  modelsConfig: () =>
+    selectModelsConfigCloseConfirm({
+      dirty: getModelsConfigDirty(),
+      oauthInProgress: hasActiveOAuthLogin(),
+    }),
+  skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
+};
+
+/** What confirming a guard does, run only once every guard has passed. */
+const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
+  modelsConfig: () => {
+    if (hasActiveOAuthLogin()) cancelActiveOAuthLogins();
+  },
+  skills: () => cancelSkillInstall(),
+};
+
+/** Panel views whose tab owns close-lossy state, in guard-table order. */
+const PANEL_KINDS_WITH_CLOSE_GUARD = Object.keys(PANEL_CLOSE_GUARDS) as PanelViewKind[];
+
+/** Which guards a set of tabs being closed would need. */
+function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
+  const closing = new Set(tabs.map((tab) => tab.kind));
+  return PANEL_KINDS_WITH_CLOSE_GUARD.filter((kind) => closing.has(kind));
+}
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "—";
@@ -524,6 +572,7 @@ export function AppShell() {
   // Same lifecycle for the skills cache: collapsing the panel / switching tabs
   // keeps the tab and the cached list, closing the tab drops it so the next
   // open reads disk again.
+  const skillsInstalling = useSkillInstallRunning();
   const skillsTabOpen = selectTabByKind(panelTabsState, "skills") !== null;
   useEffect(() => {
     if (!skillsTabOpen) releaseSkillsState();
@@ -999,64 +1048,71 @@ export function AppShell() {
     setPanelMode("expanded");
   }, [setPanelMode]);
 
-  // The models-config panel's close guard (pure, in
-  // lib/shared/models-config-close). Closing can lose two things: an unsaved
-  // draft and a running subscription authorization. Every close path that can
-  // drop that tab asks through here — the single × and the batch closes alike,
-  // so "Close other tabs" cannot swallow a draft or a login either. Confirming
-  // discards the draft (the shell releases the module store once the tab
-  // actually closes) and cancels any authorization.
-  const confirmDropModelsConfig = useCallback(async (dropsModelsConfig: boolean): Promise<boolean> => {
-    if (!dropsModelsConfig) return true;
-    const guard = selectModelsConfigCloseConfirm({
-      dirty: getModelsConfigDirty(),
-      oauthInProgress: hasActiveOAuthLogin(),
-    });
-    if (!guard) return true;
-    const ok = await confirm({
-      title: t(guard.titleKey),
-      description: t(guard.descriptionKey),
-      confirmLabel: t(guard.confirmLabelKey),
-      cancelLabel: t("Cancel"),
-      destructive: true,
-    });
-    if (ok && hasActiveOAuthLogin()) cancelActiveOAuthLogins();
-    return ok;
-  }, [confirm, t]);
+  // The panel close guards (pure, in lib/shared/models-config-close and
+  // lib/shared/skills-close). Closing a panel tab can lose panel-owned state:
+  // models config an unsaved draft or a running subscription authorization,
+  // skills an install still streaming. Every close path that can drop one of
+  // those tabs asks through here — the single × and the batch closes alike, so
+  // "Close other tabs" cannot swallow a draft, a login or a running install
+  // either. Every guard is asked before any side effect runs: cancelling the
+  // second prompt must not leave the first guard's cancellation behind on a
+  // tab that stays open. Actually closing the tab is what releases the module
+  // store (the shell's lifecycle effects).
+  const confirmDropPanelTabs = useCallback(
+    async (kinds: readonly PanelViewKind[]): Promise<boolean> => {
+      const confirmed: PanelViewKind[] = [];
+      for (const kind of kinds) {
+        const guard = PANEL_CLOSE_GUARDS[kind]?.();
+        if (!guard) continue;
+        const ok = await confirm({
+          title: t(guard.titleKey),
+          description: t(guard.descriptionKey),
+          confirmLabel: t(guard.confirmLabelKey),
+          cancelLabel: t("Cancel"),
+          destructive: true,
+        });
+        if (!ok) return false;
+        confirmed.push(kind);
+      }
+      for (const kind of confirmed) PANEL_CLOSE_SIDE_EFFECTS[kind]?.();
+      return true;
+    },
+    [confirm, t],
+  );
 
   const handleCloseFileTab = useCallback(async (tabId: string) => {
     const tab = selectTab(panelTabsState, tabId);
-    if (!(await confirmDropModelsConfig(tab?.kind === "modelsConfig"))) return;
+    if (!(await confirmDropPanelTabs(lossyPanelKinds(tab ? [tab] : [])))) return;
     dispatchPanelTabs({ type: "close", id: tabId });
-  }, [panelTabsState, confirmDropModelsConfig]);
+  }, [panelTabsState, confirmDropPanelTabs]);
 
   // Close every tab strictly to the left of `tabId` (the right-clicked one).
   // If the active tab is being closed, fall back to `tabId` (still open).
   // Tabs are stored newest-first, so "left" is the slice before the index.
   const handleCloseLeftTabs = useCallback(async (tabId: string) => {
     const index = panelTabsState.tabs.findIndex((tab) => tab.id === tabId);
-    const drops = index > 0 && panelTabsState.tabs.slice(0, index).some((tab) => tab.kind === "modelsConfig");
-    if (!(await confirmDropModelsConfig(drops))) return;
+    const drops = index > 0 ? panelTabsState.tabs.slice(0, index) : [];
+    if (!(await confirmDropPanelTabs(lossyPanelKinds(drops)))) return;
     dispatchPanelTabs({ type: "close_left", id: tabId });
-  }, [panelTabsState, confirmDropModelsConfig]);
+  }, [panelTabsState, confirmDropPanelTabs]);
 
   // Close every tab strictly to the right of `tabId`. If the active tab is
   // being closed, fall back to `tabId`.
   const handleCloseRightTabs = useCallback(async (tabId: string) => {
     const index = panelTabsState.tabs.findIndex((tab) => tab.id === tabId);
-    const drops = panelTabsState.tabs.slice(index + 1).some((tab) => tab.kind === "modelsConfig");
-    if (!(await confirmDropModelsConfig(drops))) return;
+    const drops = panelTabsState.tabs.slice(index + 1);
+    if (!(await confirmDropPanelTabs(lossyPanelKinds(drops)))) return;
     dispatchPanelTabs({ type: "close_right", id: tabId });
-  }, [panelTabsState, confirmDropModelsConfig]);
+  }, [panelTabsState, confirmDropPanelTabs]);
 
   // Close every tab other than `tabId`. The right-clicked tab is preserved
   // (and becomes the active one if it wasn't already), so the panel never
   // collapses from this action.
   const handleCloseOtherTabs = useCallback(async (tabId: string) => {
-    const drops = panelTabsState.tabs.some((tab) => tab.kind === "modelsConfig" && tab.id !== tabId);
-    if (!(await confirmDropModelsConfig(drops))) return;
+    const drops = panelTabsState.tabs.filter((tab) => tab.id !== tabId);
+    if (!(await confirmDropPanelTabs(lossyPanelKinds(drops)))) return;
     dispatchPanelTabs({ type: "close_others", id: tabId });
-  }, [panelTabsState, confirmDropModelsConfig]);
+  }, [panelTabsState, confirmDropPanelTabs]);
 
   // Build the per-tab right-click menu. Single tab → no batch actions shown.
   const handleTabContextMenu = useCallback((tabId: string, x: number, y: number, triggerElement: HTMLElement | null) => {
@@ -1195,6 +1251,7 @@ export function AppShell() {
     selectedSessionId,
     selectedCwd,
     modelsConfigDirty,
+    skillsInstalling,
     t,
     toggleRightPanel: () =>
       setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),
