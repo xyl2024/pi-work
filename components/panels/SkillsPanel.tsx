@@ -7,10 +7,11 @@ import { currentSkillsPage } from "@/lib/shared/skills-pages";
 import {
   ensureSkillsLoaded,
   escapeSkills,
-  skillsBack,
   useSkillsStore,
 } from "@/lib/client/skills-store";
 import { SkillsRootPage } from "./skills/SkillsRootPage";
+import { SkillDetailPage } from "./skills/SkillDetailPage";
+import { SkillsBackButton } from "./skills/SkillsBackButton";
 
 /**
  * The 技能 panel view body.
@@ -20,6 +21,10 @@ import { SkillsRootPage } from "./skills/SkillsRootPage";
  * `lib/client/skills-store.ts`. Here it wires the per-cwd load, dispatches the
  * current page to a full-width view, and turns Escape into "up one level" —
  * falling back to the panel tab's close rule from the grid.
+ *
+ * The detail page fetches its own SKILL.md on mount (never cached in the
+ * store); only the page stack survives a tab switch, so returning to the panel
+ * lands back on the same skill and re-reads it from disk.
  */
 export function SkillsPanel({
   cwd,
@@ -28,8 +33,7 @@ export function SkillsPanel({
   cwd: string | null;
   onCloseTab?: () => void;
 }) {
-  const { t } = useI18n();
-  const { pages, skills } = useSkillsStore();
+  const { pages } = useSkillsStore();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   // The list follows the selected session's working directory (the shell
@@ -50,97 +54,42 @@ export function SkillsPanel({
     if (escapeSkills().closePanel) onCloseTab?.();
   });
 
-  const detailName =
-    page.kind === "detail"
-      ? skills.find((skill) => skill.filePath === page.filePath)?.name ?? page.filePath
-      : "";
-
   return (
     <div
       ref={containerRef}
       tabIndex={-1}
       style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, outline: "none" }}
     >
-      {page.kind === "root" ? (
-        <SkillsRootPage />
+      {page.kind === "detail" ? (
+        // Remounting on filePath keeps the fetch / expansion state scoped to
+        // the skill actually on screen when one detail page replaces another.
+        <SkillDetailPage key={page.filePath} filePath={page.filePath} />
+      ) : page.kind === "add" ? (
+        <AddPagePlaceholder />
       ) : (
-        <SubPagePlaceholder
-          label={page.kind === "detail" ? detailName : t("Add Skill")}
-          body={t("Coming soon")}
-          onBack={skillsBack}
-        />
+        <SkillsRootPage />
       )}
     </div>
   );
 }
 
 /**
- * Temporary chrome for the two deeper levels: the real SKILL.md / attached-file
- * page and the search+install page land in the next slices. The back control
- * and the page stack are already the real ones, so Escape / Back behave as
- * they will once the bodies arrive.
+ * Temporary chrome for the add page: the search + streaming install body lands
+ * in the next slice. The back control and the page stack are already the real
+ * ones, so Back / Escape behave as they will once the body arrives.
  */
-function SubPagePlaceholder({
-  label,
-  body,
-  onBack,
-}: {
-  label: string;
-  body: string;
-  onBack: () => void;
-}) {
+function AddPagePlaceholder() {
   const { t } = useI18n();
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 12px 8px", flexShrink: 0 }}>
-        <button
-          type="button"
-          onClick={onBack}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            background: "none",
-            border: "none",
-            padding: 0,
-            color: "var(--text-muted)",
-            cursor: "pointer",
-            fontSize: 12,
-            flexShrink: 0,
-          }}
-        >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          {t("Skills")}
-        </button>
-        <span style={{ color: "var(--text-dim)", fontSize: 12 }}>/</span>
-        <span
-          style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: "var(--text)",
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-          title={label}
-        >
-          {label}
-        </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 12px 8px", flexShrink: 0 }}>
+        <SkillsBackButton />
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{t("Add Skill")}</span>
       </div>
       <div data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 12px 18px" }}>
-        <div style={{ padding: "10px 2px", fontSize: 12, color: "var(--text-dim)" }}>{body}</div>
+        <div style={{ padding: "10px 2px", fontSize: 12, color: "var(--text-dim)" }}>
+          {t("Coming soon")}
+        </div>
       </div>
     </div>
   );

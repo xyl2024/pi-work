@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -8,10 +8,10 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTextSelection } from "@/hooks/useTextSelection";
 import { useMarkdownComponents } from "@/components/chat/message-view/utils";
 import { TextSelectionToolbar } from "@/components/chat/text-selection-toolbar";
-import { stripFrontmatter, FILE_GROUP_LABELS } from "./utils";
+import { stripFrontmatter, groupSkillFiles } from "@/lib/shared/skill-files";
 import { shortenPath } from "@/lib/client/paths";
-import { skillGroup, type Skill, type SkillDetailData, type SkillDetailFile } from "@/lib/shared/skills";
-import { SubFileRow } from "./SubFileRow";
+import { skillGroup, type Skill, type SkillDetailData } from "@/lib/shared/skills";
+import { SkillFileRow } from "@/components/panels/skills/SkillFileRow";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 
 /**
@@ -97,64 +97,11 @@ export function SkillDetail({
     return shortenPath(p);
   }
 
-  // ── Group files by top-level directory ──
-  const fileGroups = useCallback(() => {
-    if (!detail) return [] as { label: string; dirName: string; files: SkillDetailFile[] }[];
-
-    const dirs: { label: string; dirName: string; files: SkillDetailFile[] }[] = [];
-    const rootFiles: SkillDetailFile[] = [];
-
-    // The main SKILL.md gets its own first group so its raw source is viewable.
-    const skillMd = detail.files.find(
-      (f) => !f.isDirectory && f.name === "SKILL.md" && !f.relativePath.includes("/"),
-    );
-    if (skillMd) dirs.push({ label: "SKILL.md", dirName: "__skillmd", files: [skillMd] });
-
-    // Collect top-level directories
-    const topDirs = detail.files.filter((f) => f.isDirectory && !f.relativePath.includes("/"));
-
-    // Collect children for each dir
-    for (const dir of topDirs) {
-      const prefix = dir.relativePath + "/";
-      const children = detail.files.filter(
-        (f) => !f.isDirectory && f.relativePath.startsWith(prefix),
-      );
-      if (children.length > 0) {
-        const customLabel = FILE_GROUP_LABELS[dir.name] ?? dir.name;
-        dirs.push({ label: customLabel, dirName: dir.name, files: children.sort((a, b) => a.name.localeCompare(b.name)) });
-      }
-    }
-
-    // Collect root-level files (excluding SKILL.md itself)
-    for (const f of detail.files) {
-      if (!f.isDirectory && !f.relativePath.includes("/") && f.name !== "SKILL.md") {
-        rootFiles.push(f);
-      }
-    }
-
-    // Sort dirs so known groups come first, then alphabetical (SKILL.md pinned first)
-    const knownOrder = ["scripts", "references", "assets"];
-    dirs.sort((a, b) => {
-      if (a.dirName === "__skillmd") return -1;
-      if (b.dirName === "__skillmd") return 1;
-      const ai = knownOrder.indexOf(a.dirName);
-      const bi = knownOrder.indexOf(b.dirName);
-      if (ai !== -1 && bi !== -1) return ai - bi;
-      if (ai !== -1) return -1;
-      if (bi !== -1) return 1;
-      return a.dirName.localeCompare(b.dirName);
-    });
-
-    if (rootFiles.length > 0) {
-      dirs.push({
-        label: "Other files",
-        dirName: "other",
-        files: rootFiles.sort((a, b) => a.name.localeCompare(b.name)),
-      });
-    }
-
-    return dirs;
-  }, [detail])();
+  // ── Group files by top-level directory (shared rule) ──
+  const fileGroups = useMemo(
+    () => (detail ? groupSkillFiles(detail.files) : []),
+    [detail],
+  );
 
   const skillContent = detail?.content ?? null;
   const skillBody = skillContent != null ? stripFrontmatter(skillContent) : null;
@@ -354,7 +301,7 @@ export function SkillDetail({
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {fileGroups.map((group) => (
                   <div
-                    key={group.dirName}
+                    key={group.key}
                     style={{ display: "flex", flexDirection: "column", gap: 4 }}
                   >
                     <span
@@ -375,7 +322,7 @@ export function SkillDetail({
                       }}
                     >
                       {group.files.map((file) => (
-                        <SubFileRow
+                        <SkillFileRow
                           key={file.relativePath}
                           file={file}
                           skillFilePath={skill.filePath}

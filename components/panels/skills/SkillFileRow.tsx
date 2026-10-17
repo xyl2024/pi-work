@@ -1,25 +1,31 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTheme } from "@/hooks/useTheme";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { fileLanguage } from "./utils";
+import { fileLanguage } from "@/lib/shared/skill-files";
+import { fetchSkillSubFile } from "@/lib/client/skills-io";
 import type { SkillDetailFile } from "@/lib/shared/skills";
 
 /**
- * One row inside a skill's file tree. Clicking a text file expands a
- * syntax-highlighted preview; sub-file content is fetched lazily from
- * `/api/skills/detail?filePath=...&subFilePath=...` and cached per-path
- * in a ref Map so re-expanding the same row is instant.
+ * One attached file inside a skill's detail page. Clicking a text file expands
+ * a syntax-highlighted preview inline — never a second overlay, so the panel
+ * stays a single surface. Sub-file content is fetched lazily through the
+ * skills io layer the first time a row is expanded, so re-expanding the same
+ * row never re-requests.
  *
- * Pure controlled component: the parent (SkillDetail) owns expansion state
- * and passes `expanded` + `onToggle` down. The file's own exception is
- * the per-path content cache, which is internal to this row.
+ * Pure controlled component: the parent owns the expansion set and passes
+ * `expanded` + `onToggle` down. The only state the row owns is the loaded
+ * text, which is kept while the row stays mounted so collapsing and
+ * re-expanding never re-requests. A failed load is not retried until the user
+ * collapses and expands again.
+ *
+ * Shared by the panel detail page and the retiring modal (see #127).
  */
-export function SubFileRow({
+export function SkillFileRow({
   file,
   skillFilePath,
   expanded,
@@ -35,36 +41,22 @@ export function SubFileRow({
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const contentCache = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
-    if (expanded && content === null && !loading) {
-      // Check cache first
-      const cached = contentCache.current.get(file.relativePath);
-      if (cached) {
-        setContent(cached);
-        return;
-      }
-      setLoading(true);
-      setLoadError(null);
-      fetch(
-        `/api/skills/detail?filePath=${encodeURIComponent(skillFilePath)}&subFilePath=${encodeURIComponent(file.relativePath)}`,
-      )
-        .then((r) => r.json())
-        .then((d: { subFileContent?: string; error?: string }) => {
-          if (d.error) {
-            setLoadError(d.error);
-            return;
-          }
-          if (d.subFileContent != null) {
-            contentCache.current.set(file.relativePath, d.subFileContent);
-            setContent(d.subFileContent);
-          }
-        })
-        .catch((e) => setLoadError(String(e)))
-        .finally(() => setLoading(false));
+    if (!expanded) {
+      // Forget a previous failure so the next expand retries instead of the
+      // row being stuck on the error.
+      if (loadError !== null) setLoadError(null);
+      return;
     }
-  }, [expanded, content, loading, file.relativePath, skillFilePath]);
+    // Already loaded, in flight, or failed — do not start another request.
+    if (content !== null || loading || loadError !== null) return;
+    setLoading(true);
+    fetchSkillSubFile(skillFilePath, file.relativePath)
+      .then((text) => setContent(text))
+      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setLoading(false));
+  }, [expanded, content, loading, loadError, file.relativePath, skillFilePath]);
 
   const sizeLabel =
     file.size < 1024

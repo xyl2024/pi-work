@@ -27,11 +27,12 @@ import type { Skill } from "@/lib/shared/skills";
  *   • Add       — the "Add Skill" toolbar button swaps the body for
  *     `AddSkillPanel`, also with a back button.
  *
- * The detailed sub-views (SubFileRow, SkillDetail, AddSkillPanel) and the
- * shared utilities live alongside under `./skills-config/`. This file holds
- * only the modal chrome and the view-selection state machine. The card grid
- * and the grouping rule already live in the panel world (the panel view is
- * the replacement for this modal).
+ * The detailed sub-views (SkillDetail, AddSkillPanel) live alongside under
+ * `./skills-config/`. The shared file row and the pure helpers now live in the
+ * panel world (`components/panels/skills/SkillFileRow`, `lib/shared/skill-files`)
+ * and are reused here. This file holds only the modal chrome and the
+ * view-selection state machine. The card grid and the grouping rule already
+ * live in the panel world (the panel view is the replacement for this modal).
  */
 export function SkillsConfig({
   cwd,
