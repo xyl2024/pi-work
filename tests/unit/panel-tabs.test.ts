@@ -405,15 +405,16 @@ describe("panelTabs registry", () => {
     expect(skills?.labelKey).toBe("Skills");
     expect(order.indexOf("skills")).toBe(order.indexOf("modelsConfig") + 1);
     expect(order.indexOf("skills")).toBe(order.indexOf("conversationTree") - 1);
-    // Global button: it still has content (global + Pi Work skills) without a
-    // selected session, so it must never be greyed out.
-    expect(skills?.sessionBound).toBe(false);
+    // Session-bound: the list follows the selected session's cwd, so the
+    // button groups with the other live-state buttons (it is never greyed
+    // out — the flag only drives column grouping).
+    expect(skills?.sessionBound).toBe(true);
   });
 
   it("marks session-bound panels and declares no expanded default", () => {
     const sessionBound = PANEL_TAB_SPECS.filter((spec) => spec.sessionBound).map((spec) => spec.kind);
     expect([...sessionBound].sort()).toEqual(
-      ["context", "conversationTree", "gitDiff", "llmAudit"].sort(),
+      ["context", "conversationTree", "gitDiff", "llmAudit", "skills"].sort(),
     );
 
     // The wide mode is the user's expand button, never an open default.

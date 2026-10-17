@@ -107,10 +107,11 @@ export interface RightBarDescriptor {
   slot?: "top" | "bottom";
   /** True when the button reads from active-session-bound state (system
    *  prompt / tools, per-session tool-call stats, branch tree, cwd's git
-   *  status, per-session LLM audit). Such buttons become empty/disabled
-   *  on the new-session page, so the configurable row groups them by
-   *  `cfg.session_bound_alignment` so the user can decide whether they
-   *  sit at the top, bottom, or interleave with the global buttons. */
+   *  status, per-session LLM audit, cwd-scoped skills). Such buttons
+   *  become empty/disabled on the new-session page, so the configurable
+   *  row groups them by `cfg.session_bound_alignment` so the user can
+   *  decide whether they sit at the top, bottom, or interleave with the
+   *  global buttons. */
   sessionBound?: true;
   /** Translation key consumed by `t()`. */
   labelKey: string;

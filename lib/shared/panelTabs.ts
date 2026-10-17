@@ -252,10 +252,11 @@ export const PANEL_TAB_SPEC_BY_KIND = {
     // "Open skills" wording (see the descriptor registry).
     labelKey: "Skills",
     defaultMode: "normal",
-    // Browsing skills is global: Pi Work's own skills plus pi's global ones
-    // are always listed, so the button stays usable on the new-session page.
-    // The list itself follows the selected session's cwd (project skills).
-    sessionBound: false,
+    // Session-bound: the list follows the selected session's cwd (project
+    // skills), so the button groups with the other live-state buttons. It
+    // still renders Pi Work's own skills plus pi's global ones on the
+    // new-session page — the flag only drives column grouping, not disabling.
+    sessionBound: true,
     commands: [
       {
         labelKey: "Open skills",
