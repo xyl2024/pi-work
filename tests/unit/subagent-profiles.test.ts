@@ -27,4 +27,15 @@ describe("subagent profiles", () => {
       }
     }
   });
+
+  // ADR-0015 removed the trio from the registry, so seeding a profile with it
+  // would only write names pi's allowlist matcher silently drops.
+  it("explores with read plus a shell, not with the removed search-and-list trio", () => {
+    for (const platform of PLATFORMS) {
+      expect(subagentTools(platform)).toContain("read");
+      for (const removed of ["grep", "find", "ls"]) {
+        expect(subagentTools(platform)).not.toContain(removed);
+      }
+    }
+  });
 });

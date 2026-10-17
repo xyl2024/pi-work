@@ -32,7 +32,7 @@ import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared
 import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { matchSelfKillCommand } from "./self-protection";
 import { createPiWorkBashTool, createPiWorkPowerShellTool } from "./pi-shell-tools";
-import { unavailableAgentShellTools } from "../shared/agent-shell-tools";
+import { agentToolDenylist } from "./agent-tool-denylist";
 import { notify } from "./notifications";
 import { readSessionNotify } from "./session-notify";
 import { computeContextComposition, type ContextComposition } from "../shared/context-composition";
@@ -1317,12 +1317,12 @@ export async function startRpcSession(
       // passed to AgentSession.allowedToolNames. This is intentionally used
       // for specialized sessions rather than relying only on active tools.
       ...(options.allowedToolNames ? { tools: options.allowedToolNames } : {}),
-      // Shells this platform cannot run never enter the registry: pi offers
-      // `powershell` on every platform but its `getPowerShellConfig()` throws
-      // off Windows, so a session that lists it is a turn waiting to die.
-      // Denylisting here (rather than only hiding it in the UI) is what makes
-      // `get_tools`, the tool picker and an "all tools" selection agree.
-      excludeTools: [...unavailableAgentShellTools(process.platform)],
+      // Two kinds of built-in never enter the registry: shells this platform
+      // cannot run, and tools the product does not ship (the reasons live in
+      // lib/server/agent-tool-denylist.ts). Denylisting here (rather than only
+      // hiding rows in the UI) is what makes `get_tools`, the tool picker and
+      // an "all tools" selection agree.
+      excludeTools: [...agentToolDenylist(process.platform)],
     });
     capturedSessionId = inner.sessionId as string;
 

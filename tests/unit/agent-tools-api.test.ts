@@ -19,9 +19,18 @@ import { api, expectOk } from "./helpers";
  * `getPowerShellConfig()` refuses to resolve a shell (it throws off Windows),
  * and present where it is real. `bash` (Git Bash on Windows) must survive
  * everywhere.
+ *
+ * Both surfaces also answer the second half of the registry denylist: the
+ * built-ins Pi Work does not ship (ADR-0015) must be absent from the catalog
+ * and from an "all tools" session alike, on every platform.
  */
 const shellToolsOf = (tools: Array<{ name: string }>): string[] =>
   tools.map((tool) => tool.name).filter((name) => name === "bash" || name === "powershell");
+
+/** The search-and-list trio removed from the registry in ADR-0015. */
+const REMOVED_TOOLS = ["grep", "find", "ls"];
+
+const namesOf = (tools: Array<{ name: string }>): string[] => tools.map((tool) => tool.name);
 
 const powershellExpected = process.platform === "win32";
 
@@ -50,6 +59,9 @@ describe("agent shell tools (API)", () => {
     const available = (body.data as { available: Array<{ name: string }> }).available;
     expect(available.map((tool) => tool.name)).toContain("bash");
     expect(shellToolsOf(available).includes("powershell")).toBe(powershellExpected);
+    for (const removed of REMOVED_TOOLS) {
+      expect(namesOf(available)).not.toContain(removed);
+    }
   });
 
   it("offers powershell only where the platform can run it (live session, all tools)", async () => {
@@ -64,6 +76,10 @@ describe("agent shell tools (API)", () => {
       expect(Array.isArray(tools)).toBe(true);
       expect(tools.map((tool) => tool.name)).toContain("bash");
       expect(shellToolsOf(tools).includes("powershell")).toBe(powershellExpected);
+      // "all" cannot reach a tool that never entered the registry.
+      for (const removed of REMOVED_TOOLS) {
+        expect(namesOf(tools)).not.toContain(removed);
+      }
     } finally {
       await removeSession(sessionId);
     }

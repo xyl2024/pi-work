@@ -12,17 +12,15 @@
  */
 
 /**
- * The platform-independent half of a default profile's tool set: the read-only
- * exploration core. Callers compose the shells they know the machine has
- * (`lib/shared/agent-shell-tools.ts` for the server, both shells listed and
- * filtered by the tool picker's catalog for the editor).
+ * The platform-independent half of a default profile's tool set: `read`, and
+ * nothing else. `grep` / `find` / `ls` used to sit beside it; they left the
+ * registry with the rest of the search-and-list trio (ADR-0015), so a read-only
+ * profile explores with `read` plus the shell of its platform. Callers compose
+ * the shells they know the machine has (`lib/shared/agent-shell-tools.ts` for
+ * the server, both shells listed and filtered by the tool picker's catalog for
+ * the editor).
  */
-export const SUBAGENT_DEFAULT_TOOL_IDS: readonly string[] = [
-  "read",
-  "grep",
-  "ls",
-  "find",
-];
+export const SUBAGENT_DEFAULT_TOOL_IDS: readonly string[] = ["read"];
 
 /** Thinking levels a subagent session can be started with (mirrors pi's). */
 export const SUBAGENT_THINKING_LEVELS = [
