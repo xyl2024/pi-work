@@ -13,7 +13,6 @@ import { SUN, MOON } from "@/lib/client/icon-paths";
 
 interface Props {
   onOpenSettings?: () => void;
-  onOpenPrompts?: () => void;
   onOpenScheduler?: () => void;
   onOpenChannels?: () => void;
   onOpenMcp?: () => void;
@@ -43,7 +42,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, refreshKey, onLogout }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenMcp, onOpenScheduler, onOpenChannels, refreshKey, onLogout }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -137,7 +136,7 @@ export function ProfileBlock({ onOpenSettings, onOpenMcp, onOpenPrompts, onOpenS
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onOpenMcp || onOpenPrompts || onOpenScheduler || onOpenChannels || onLogout);
+  const hasAnyEntry = Boolean(onOpenMcp || onOpenScheduler || onOpenChannels || onLogout);
 
   return (
     <div
@@ -332,22 +331,6 @@ export function ProfileBlock({ onOpenSettings, onOpenMcp, onOpenPrompts, onOpenS
             >
               <McpIcon size={14} />
               <span>{t("mcp.title")}</span>
-            </button>
-          )}
-          {onOpenPrompts && (
-            <button
-              role="menuitem"
-              onClick={() => { setMenuOpen(false); onOpenPrompts(); }}
-              style={itemBaseStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <path d="M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5" />
-                <path d="M8 7h8" />
-                <path d="M8 11h6" />
-              </svg>
-              <span>{t("Prompt Templates")}</span>
             </button>
           )}
           {onOpenScheduler && (

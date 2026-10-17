@@ -35,7 +35,6 @@ const MoonIcon = ICONS.moon;
 const SidebarIcon = ICONS.sidebar;
 const GlobeIcon = ICONS.globe;
 const GearIcon = ICONS.gear;
-const BookIcon = ICONS.book;
 const McpIcon = ICONS.mcp;
 
 const ClockIcon = ICONS.clock;
@@ -96,7 +95,6 @@ export interface CommandContext {
   // Modal openers
   openSettings: () => void;
   openCwdPicker: () => void;
-  openPrompts: () => void;
   openScheduler: () => void;
   openChannels: () => void;
   openMcp: () => void;
@@ -240,15 +238,6 @@ export function buildCommands(
     icon: <McpIcon />,
     when: (c) => c.hasCwd,
     run: () => ctx.openMcp(),
-  });
-  cmds.push({
-    id: "modal.prompts",
-    title: t("Open prompts"),
-    group: "Modal",
-    keywords: ["prompts", "templates", "slash", "提示词", "模板"],
-    icon: <BookIcon />,
-    when: (c) => c.hasCwd,
-    run: () => ctx.openPrompts(),
   });
   cmds.push({
     id: "modal.scheduler",

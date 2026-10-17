@@ -19,7 +19,7 @@ pi-work/
 │   └── api/            # 按领域的路由目录：agent、agent-settings、append-system、auth、btw、channels、
 │                       #   create-space、cwd-aliases/-icons/-tools、default-cwd、exchange-rate、favorites、
 │                       #   file-mentions、files、git、home、llm-audit、models、
-│                       #   models-config、profile、prompts、scheduled-tasks、
+│                       #   models-config、profile、scheduled-tasks、
 │                       #   sessions、settings、skills、slash-commands、status-bar、subagents、terminal、
 │                       #   token-audit、translate、workspaces
 ├── components/         # React UI，按产品功能拆分

@@ -1,4 +1,3 @@
-import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { NextResponse } from "next/server";
 import { DefaultResourceLoader, getAgentDir, SessionManager } from "@earendil-works/pi-coding-agent";
@@ -10,21 +9,16 @@ import { loadPiWorkSkillsSafety } from "@/lib/server/pi-work-skills";
 const log = createLogger("api/slash-commands");
 
 type SlashResource = {
-  source: "prompt" | "skill";
+  source: "skill";
   name: string;
   command: string;
   description: string;
-  argumentHint?: string;
   path: string;
-  location?: string;
-  content: string;
 };
 
-// Module-level cache: cwd → { prompts, skills, commands, expiresAt }
+// Module-level cache: cwd → { commands, expiresAt }
 const SLASH_CACHE_TTL_MS = 30_000;
 type CachedSlash = {
-  prompts: SlashResource[];
-  skills: SlashResource[];
   commands: SlashResource[];
   expiresAt: number;
 };
@@ -49,8 +43,7 @@ async function loadSlashCommands(cwd: string, startedAt: number): Promise<Cached
   if (cached && cached.expiresAt > startedAt) {
     log.debug("slash commands cached", {
       cwd,
-      promptCount: cached.prompts.length,
-      skillCount: cached.skills.length,
+      commandCount: cached.commands.length,
       durationMs: elapsedMs(startedAt),
     });
     return cached;
@@ -61,37 +54,28 @@ async function loadSlashCommands(cwd: string, startedAt: number): Promise<Cached
     const result = await existing;
     log.debug("slash commands joined in-flight load", {
       cwd,
-      promptCount: result.prompts.length,
-      skillCount: result.skills.length,
+      commandCount: result.commands.length,
       durationMs: elapsedMs(startedAt),
     });
     return result;
   }
 
   const loadPromise = (async (): Promise<CachedSlash> => {
-    // This endpoint only needs prompt and skill resources. Do not execute user
-    // extensions here: an extension factory may perform arbitrary startup work
-    // (for example, a network probe) and make slash-command loading depend on
-    // unrelated services.
+    // This endpoint only needs skill resources. Do not execute user extensions
+    // here: an extension factory may perform arbitrary startup work (for
+    // example, a network probe) and make slash-command loading depend on
+    // unrelated services. Prompt templates are skipped as well — Pi Work only
+    // surfaces skills (`/skill:<name>`); pi itself still expands a typed
+    // `/name` prompt template server-side.
     const loader = new DefaultResourceLoader({
       cwd,
       agentDir: getAgentDir(),
       noExtensions: true,
       noThemes: true,
       noContextFiles: true,
+      noPromptTemplates: true,
     });
     await loader.reload();
-
-    const prompts: SlashResource[] = loader.getPrompts().prompts.map((prompt) => ({
-      source: "prompt",
-      name: prompt.name,
-      command: prompt.name,
-      description: prompt.description,
-      ...(prompt.argumentHint ? { argumentHint: prompt.argumentHint } : {}),
-      path: prompt.filePath,
-      location: prompt.sourceInfo.scope,
-      content: prompt.content,
-    }));
 
     // Hide Skills the user has disabled (disabled_skills in Pi Work config,
     // keyed by cwd) from the slash menu — same rule /api/skills uses for
@@ -103,28 +87,22 @@ async function loadSlashCommands(cwd: string, startedAt: number): Promise<Cached
       ...loader.getSkills().skills,
       ...loadPiWorkSkillsSafety(),
     ];
-    const skills: SlashResource[] = await Promise.all(
-      loaderAndPiWorkSkills
-        .filter((skill) => !disabledSkillPaths.has(skill.filePath))
-        .map(async (skill) => ({
+    const commands: SlashResource[] = loaderAndPiWorkSkills
+      .filter((skill) => !disabledSkillPaths.has(skill.filePath))
+      .map((skill) => ({
         source: "skill" as const,
         name: skill.name,
         command: `skill:${skill.name}`,
         description: skill.description,
         path: skill.filePath,
-        location: skill.sourceInfo.scope,
-        content: await readFile(skill.filePath, "utf-8"),
-      }))
-    );
+      }));
 
-    const commands = [...prompts, ...skills];
-    const result: CachedSlash = { prompts, skills, commands, expiresAt: startedAt + SLASH_CACHE_TTL_MS };
+    const result: CachedSlash = { commands, expiresAt: startedAt + SLASH_CACHE_TTL_MS };
     slashCache.set(cwd, result);
 
     log.info("slash commands loaded", {
       cwd,
-      promptCount: prompts.length,
-      skillCount: skills.length,
+      commandCount: commands.length,
       durationMs: elapsedMs(startedAt),
     });
 
@@ -156,11 +134,7 @@ export async function GET(req: Request) {
     }
 
     const result = await loadSlashCommands(cwd, startedAt);
-    return NextResponse.json({
-      prompts: result.prompts,
-      skills: result.skills,
-      commands: result.commands,
-    });
+    return NextResponse.json({ commands: result.commands });
   } catch (error) {
     log.error("slash commands failed", { error, durationMs: elapsedMs(startedAt) });
     return NextResponse.json({ error: String(error) }, { status: 500 });

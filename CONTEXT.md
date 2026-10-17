@@ -250,16 +250,12 @@ _Avoid_: 用「队列」指代它（那是承载它的数据结构）；用「�
 
 ### 提示词与技能
 
-**提示词（Prompt）**：
-可编辑的 prompt 模板文件，只有 `~/.pi/agent/prompts/`（全局）与 `<cwd>/.pi/prompts`（项目）两处可编辑。
-_Avoid_: 用它指代系统提示词
-
 **追加系统提示词（Append System）**：
 附加到系统提示词末尾的单文件 `~/.pi/agent/APPEND_SYSTEM.md`。
-_Avoid_: 把它混同于 Prompt 模板
+_Avoid_: 用它指代系统提示词本身
 
 **斜杠命令（Slash command）**：
-界面层对 Prompt 与 Skill 的统一调用入口，`source` 为 `"prompt"` 或 `"skill"`。
+聊天输入框里 `/` 唤起的统一调用入口，`source` 为 `"skill"` 或 `"action"`（Pi Work 内置的 `/new`、`/compact`、`/model`）。Pi Work 不展示也不管理 pi 的 prompt 模板文件（`~/.pi/agent/prompts/`、`<cwd>/.pi/prompts`），直接输入 `/name` 仍由 pi 自身展开。
 _Avoid_: 把它当成第三种资源
 
 **技能（Skill）**：

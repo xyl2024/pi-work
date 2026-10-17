@@ -618,7 +618,6 @@ describe("panelTabs registry → command palette", () => {
       newSession: () => {},
       openSettings: () => {},
       openCwdPicker: () => {},
-      openPrompts: () => {},
       openScheduler: () => {},
       openChannels: () => {},
       openMcp: () => {},

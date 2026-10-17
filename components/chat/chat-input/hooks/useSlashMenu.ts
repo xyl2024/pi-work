@@ -38,7 +38,7 @@ export interface UseSlashMenuResult {
   setSlashMenuOpen: (open: boolean) => void;
   setSelectedSlashResource: (resource: SlashResource | null) => void;
   /** Apply a slash resource: for built-in actions, fires `onSlashAction`
-   *  directly; for prompt templates, records it as the selected resource
+   *  directly; for skills, records it as the selected resource
    *  so `formatSlashContent` runs at send time. */
   selectSlashResource: (item: SlashResource) => void;
   /** Handle arrow / enter / escape keys while the slash menu is open.
@@ -55,8 +55,8 @@ export interface UseSlashMenuResult {
 /**
  * Slash-command menu: filter the catalog by the typed prefix, paginate the
  * results, and own the cursor / keyboard navigation. Built-in `/new` and
- * `/compact` actions fire through `onSlashAction` rather than expanding a
- * prompt template.
+ * `/compact` actions fire through `onSlashAction` instead of being
+ * recorded as a selected resource.
  */
 export function useSlashMenu({
   slashResourceKey,

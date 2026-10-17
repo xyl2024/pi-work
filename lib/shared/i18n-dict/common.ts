@@ -5,9 +5,6 @@ export const common = {
   // Identity / labels
   "Name": "名称",
   "Description": "描述",
-  "Content": "内容",
-  "Optional": "可选",
-  "Argument hint": "参数提示",
   "Name already exists": "名称已存在",
 
   // General actions
@@ -17,7 +14,6 @@ export const common = {
   "Saved": "已保存",
   "Save failed": "保存失败",
   "Create": "创建",
-  "Creating...": "正在创建...",
   "Delete": "删除",
   "Deleted": "已删除",
   "Delete failed": "删除失败",
@@ -25,7 +21,6 @@ export const common = {
   "Renamed": "已重命名",
   "Rename failed": "重命名失败",
   "Edit": "编辑",
-  "Editing...": "正在编辑...",
   "Refresh": "刷新",
   "Replace": "替换",
   "Discard": "丢弃",
@@ -209,7 +204,6 @@ export const common = {
   "No description": "无描述",
   "No matches": "无匹配项",
   "No sessions found": "未找到会话",
-  "No prompt templates found": "未找到提示词模板",
   "No skills found": "未找到技能",
   "Source files": "源文件",
   "No files": "无文件",

@@ -88,7 +88,6 @@ export const chat = {
   "Tools": "工具",
   "More actions": "更多操作",
   "Skills": "技能",
-  "Prompt Templates": "提示词模板",
 
   "Close": "关闭",
   "Open": "打开",

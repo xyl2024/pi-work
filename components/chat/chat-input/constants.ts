@@ -27,12 +27,11 @@ export const BUILTIN_NEW_SESSION: SlashResource = {
   command: "new",
   description: "新建会话",
   path: "",
-  content: "",
 };
 
 /** Built-in `/compact` slash command — triggers the same path as the
  *  toolbar's `Compact` button (handleCompact in ChatWindow → useAgentSession).
- *  `source: "action"` skips the prompt-template expansion step in
+ *  `source: "action"` skips the skill-selection step in
  *  selectSlashResource and just invokes `onSlashAction?.("compact")`. */
 export const BUILTIN_COMPACT: SlashResource = {
   source: "action",
@@ -40,7 +39,6 @@ export const BUILTIN_COMPACT: SlashResource = {
   command: "compact",
   description: "压缩当前会话上下文",
   path: "",
-  content: "",
 };
 
 /** Built-in `/model` slash command — opens the model-picker modal (same
@@ -54,7 +52,6 @@ export const BUILTIN_MODEL: SlashResource = {
   command: "model",
   description: "切换模型 / Switch model",
   path: "",
-  content: "",
 };
 
 export const BUILTIN_SLASH_ACTIONS: SlashResource[] = [BUILTIN_NEW_SESSION, BUILTIN_COMPACT, BUILTIN_MODEL];

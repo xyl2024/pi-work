@@ -20,7 +20,6 @@ import { LlmAuditPanel } from "../panels/LlmAuditPanel";
 import { GitPanel } from "../panels/GitPanel";
 import { McpConfig } from "../settings/McpConfig";
 import { Tooltip } from "../ui/Tooltip";
-import { PromptsConfig } from "../settings/PromptsConfig";
 import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerModal } from "../scheduler";
@@ -539,7 +538,6 @@ export function AppShell() {
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
   const [mcpConfigOpen, setMcpConfigOpen] = useState(false);
-  const [promptsConfigOpen, setPromptsConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
@@ -592,7 +590,6 @@ export function AppShell() {
     // The palette is the top-level modal — opening it closes every other
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
     setMcpConfigOpen(false);
-    setPromptsConfigOpen(false);
     setSettingsConfigOpen(false);
     setSchedulerOpen(false);
     setChannelsOpen(false);
@@ -1347,7 +1344,6 @@ export function AppShell() {
     newSession: handleSlashNew,
     openSettings: () => setSettingsConfigOpen(true),
     openCwdPicker: () => setCwdPickerOpen(true),
-    openPrompts: () => setPromptsConfigOpen(true),
     openScheduler: () => setSchedulerOpen(true),
     openChannels: () => setChannelsOpen(true),
     openMcp: () => setMcpConfigOpen(true),
@@ -1619,7 +1615,6 @@ export function AppShell() {
       onFileDeleted={handleFileDeleted}
       favoriteIds={favoriteIds}
       onToggleFavorite={toggleSessionFavorite}
-      onOpenPrompts={() => setPromptsConfigOpen(true)}
       onOpenScheduler={() => setSchedulerOpen(true)}
       onOpenChannels={() => setChannelsOpen(true)}
       onOpenMcp={() => setMcpConfigOpen(true)}
@@ -1895,9 +1890,6 @@ export function AppShell() {
         onClose={() => setMcpConfigOpen(false)}
         onNewSession={() => handleSlashNew()}
       />
-    )}
-    {promptsConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
-      <PromptsConfig cwd={(selectedSession?.cwd ?? newSessionCwd)!} onClose={() => setPromptsConfigOpen(false)} />
     )}
     {settingsConfigOpen && <SettingsModal onClose={() => setSettingsConfigOpen(false)} onProfileSaved={() => setProfileRefreshKey((k) => k + 1)} />}
     <CwdPicker
