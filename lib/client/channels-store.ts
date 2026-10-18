@@ -23,7 +23,16 @@
 
 import { useSyncExternalStore } from "react";
 import { isContentEqual } from "./shallowEqual";
-import { createChannel, deleteChannel, fetchChannels, patchChannel, switchChannelWorkspace } from "./channels-io";
+import {
+  createChannel,
+  deleteChannel,
+  fetchChannels,
+  fetchWechatLoginStatus,
+  patchChannel,
+  startWechatLogin,
+  submitWechatLoginCode,
+  switchChannelWorkspace,
+} from "./channels-io";
 import {
   backChannelsPage,
   channelsPagesAfterCreate,
@@ -35,6 +44,42 @@ import {
   type ChannelsPage,
 } from "@/lib/shared/channels-pages";
 import type { ChannelRecord } from "@/lib/shared/channels/types";
+import { isLoginInProgress, type LoginPhase } from "@/lib/shared/channels-login";
+
+/**
+ * The live scan-login session. It lives in the store — not in the detail page's
+ * mount — so scanning a QR code, glancing at a session and coming back never
+ * loses the code, the phase or a half-typed pairing code. The 2s poll also
+ * lives here for the same reason (see `pollLogin`).
+ */
+export interface ChannelsLoginState {
+  /** The channel the live session belongs to; null = no session. */
+  channelId: string | null;
+  sessionKey: string | null;
+  qrDataUrl: string | null;
+  qrUrl: string | null;
+  /** Epoch ms the QR code stops being scannable. */
+  expiresAt: number | null;
+  phase: LoginPhase | null;
+  /** Server-supplied i18n key for a phase detail, e.g. `channels.msg.*`. */
+  phaseMessage: string | null;
+  /** The pairing-code input; local, but it must survive a tab switch too. */
+  code: string;
+  /** A start / verify request is in flight. */
+  busy: boolean;
+}
+
+const IDLE_LOGIN: ChannelsLoginState = {
+  channelId: null,
+  sessionKey: null,
+  qrDataUrl: null,
+  qrUrl: null,
+  expiresAt: null,
+  phase: null,
+  phaseMessage: null,
+  code: "",
+  busy: false,
+};
 
 export interface ChannelsStoreState {
   /** A channel-list read is in flight. */
@@ -52,6 +97,8 @@ export interface ChannelsStoreState {
   nameDraft: string;
   /** True while a create / rename / delete / workspace write is in flight. */
   busy: boolean;
+  /** The live WeChat scan-login session (QR / phase / pairing code). */
+  login: ChannelsLoginState;
 }
 
 const INITIAL: ChannelsStoreState = {
@@ -63,6 +110,7 @@ const INITIAL: ChannelsStoreState = {
   pages: createChannelsPageStack(),
   nameDraft: "",
   busy: false,
+  login: IDLE_LOGIN,
 };
 
 let state: ChannelsStoreState = INITIAL;
@@ -140,12 +188,136 @@ export function reloadChannels(): void {
 /**
  * Drop everything. Called by the shell when the channels tab closes: the tab is
  * the lifetime of the cache, so the next open lands back on the list and reads
- * the live statuses instead of resurrecting a stale list.
+ * the live statuses instead of resurrecting a stale list. A login session in
+ * flight is stopped here too — confirming the close guard is what gets us here.
  */
 export function releaseChannelsState(): void {
   if (state === INITIAL) return;
+  stopLoginPoll();
+  loginGeneration += 1;
   state = INITIAL;
   emit();
+}
+
+// ── Scan login (module-owned, survives a tab switch / panel collapse) ───
+
+let loginPollTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Bumped when a session is replaced, stopped or the tab closes. A poll that
+ * resolves after that drops its answer instead of writing into the new state.
+ */
+let loginGeneration = 0;
+
+function stopLoginPoll(): void {
+  if (loginPollTimer) {
+    clearTimeout(loginPollTimer);
+    loginPollTimer = null;
+  }
+}
+
+/**
+ * Read the login phase once, then re-arm while the session is still in flight.
+ * The poll is not paused when the browser tab is hidden: the QR code's lifetime
+ * is the server's, and a user who scanned on their phone often switched away —
+ * pausing would miss `confirmed`. It only runs at all while a session exists.
+ */
+async function pollLogin(): Promise<void> {
+  const { channelId, sessionKey } = state.login;
+  if (!channelId || !sessionKey) return;
+  const generation = loginGeneration;
+  let phase = state.login.phase;
+  try {
+    const result = await fetchWechatLoginStatus(channelId, sessionKey);
+    if (generation !== loginGeneration) return;
+    if (result.kind === "expired") {
+      patch({ login: { ...state.login, phase: "expired", phaseMessage: "channels.sessionExpired" } });
+      return;
+    }
+    phase = result.phase;
+    patch({ login: { ...state.login, phase, phaseMessage: result.message ?? null } });
+    if (phase === "confirmed") {
+      // The server flipped the channel to `connected`; pull the new record in.
+      reloadChannels();
+      return;
+    }
+  } catch {
+    // Transient — retry on the next tick if the phase is still in progress.
+  }
+  if (generation !== loginGeneration) return;
+  if (isLoginInProgress(phase)) {
+    loginPollTimer = setTimeout(() => void pollLogin(), 2000);
+  }
+}
+
+/** Start (or restart) the QR login for a channel and begin polling. */
+export async function startLogin(channelId: string): Promise<{ ok: boolean; error?: string }> {
+  stopLoginPoll();
+  const generation = ++loginGeneration;
+  patch({ login: { ...IDLE_LOGIN, channelId, phase: "waiting", busy: true } });
+  try {
+    const info = await startWechatLogin(channelId);
+    if (generation !== loginGeneration) return { ok: false };
+    patch({
+      login: {
+        channelId,
+        sessionKey: info.sessionKey,
+        qrDataUrl: info.qrDataUrl,
+        qrUrl: info.qrUrl,
+        expiresAt: info.expiresAt,
+        phase: "waiting",
+        phaseMessage: null,
+        code: "",
+        busy: false,
+      },
+    });
+    loginPollTimer = setTimeout(() => void pollLogin(), 2000);
+    return { ok: true };
+  } catch (e) {
+    if (generation === loginGeneration) patch({ login: IDLE_LOGIN });
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+/** Update the pairing-code input (kept in the store so a tab switch keeps it). */
+export function setLoginCode(code: string): void {
+  if (state.login.channelId === null) return;
+  patch({ login: { ...state.login, code } });
+}
+
+/** Submit the pairing code WeChat shows after a scan. */
+export async function submitLoginCode(): Promise<{ ok: boolean; error?: string }> {
+  const { channelId, sessionKey, code } = state.login;
+  if (!channelId || !sessionKey || !code.trim()) return { ok: false };
+  patch({ login: { ...state.login, busy: true } });
+  try {
+    await submitWechatLoginCode(channelId, sessionKey, code.trim());
+    patch({ login: { ...state.login, code: "", busy: false } });
+    return { ok: true };
+  } catch (e) {
+    patch({ login: { ...state.login, busy: false } });
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+/** Drop the live session and generate a fresh QR code. */
+export function refreshLoginQr(channelId: string): void {
+  void startLogin(channelId);
+}
+
+/**
+ * Stop the poll and forget the phase. Called by the shell after the user
+ * confirms closing the tab mid-scan; the server's login session expires on its
+ * own, so no extra request is sent.
+ */
+export function stopLogin(): void {
+  stopLoginPoll();
+  loginGeneration += 1;
+  patch({ login: IDLE_LOGIN });
+}
+
+/** The login phase, for the close guard at confirm time (non-reactive). */
+export function getLoginPhase(): LoginPhase | null {
+  return state.login.phase;
 }
 
 // ── Create input ────────────────────────────────────────────────────────

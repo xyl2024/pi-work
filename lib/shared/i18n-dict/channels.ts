@@ -94,6 +94,10 @@ export const channels = {
   "channels.healthNoHeartbeat": "无心跳",
   "channels.healthLastPoll": "上次轮询",
   "channels.healthAgo": "{s}前",
+  "channels.healthTitle": "健康",
+  "channels.healthWorker": "监控进程",
+  "channels.healthFailures": "连续失败 {n} 次",
+  "channels.healthNextRetry": "下次重试 {s}",
 
   "Notification channel": "通知渠道",
   "No notification": "不通知",
