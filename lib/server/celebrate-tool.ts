@@ -49,20 +49,6 @@ function pickRandomStyle(): (typeof CONCRETE_STYLES)[number] {
   return CONCRETE_STYLES[Math.floor(Math.random() * CONCRETE_STYLES.length)];
 }
 
-/**
- * Hardcoded, whole-block system-prompt contribution for `celebrate`.
- * Appended at the very end of the system prompt via
- * `appendSystemPromptOverride`, gated on the tool being enabled AND part of
- * the session's tool set. Replaces the flat
- * `promptGuidelines` array that used to live on the tool definition.
- */
-export const CELEBRATE_SYSTEM_PROMPT_BLOCK = `\
-## Tool celebrate guidelines
-- Use celebrate when a milestone is reached and it deserves a bit of joy: a big task finished, all tests passing, a successful deployment, a release shipped, or when the user asks to celebrate / 恭喜 / 庆祝.
-- Call it once per milestone — do not spam it after every minor step.
-- The tool returns instantly and never blocks; continue your reply right after calling it.
-`;
-
 export const celebrateTool = defineTool<typeof CelebrateParams, CelebrateDetails>({
   name: CELEBRATE_TOOL_NAME,
   label: "Celebrate",
@@ -71,8 +57,6 @@ export const celebrateTool = defineTool<typeof CelebrateParams, CelebrateDetails
   parameters: CelebrateParams,
   executionMode: "sequential",
   promptSnippet: "Play a confetti/cannon celebration animation in the UI.",
-  // Guidelines moved to CELEBRATE_SYSTEM_PROMPT_BLOCK — injected via
-  // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params) {
     const style: CelebrationStyle = params.style ?? "auto";
     const resolvedStyle =

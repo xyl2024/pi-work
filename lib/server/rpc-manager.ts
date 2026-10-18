@@ -24,7 +24,7 @@ import {
 } from "./session-tools-config";
 import { readCwdToolSelection } from "./cwd-tools-config";
 import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } from "./ask-user-questions-tool";
-import { celebrateTool, CELEBRATE_SYSTEM_PROMPT_BLOCK } from "./celebrate-tool";
+import { celebrateTool } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
 import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
@@ -1043,7 +1043,6 @@ export async function startRpcSession(
         const blocks: string[] = [];
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
         if (sessionHasTool("spawn_subagent")) blocks.push(buildSpawnSubagentSystemPromptBlock());
-        if (sessionHasTool("celebrate")) blocks.push(CELEBRATE_SYSTEM_PROMPT_BLOCK);
         return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
       },
       // Codebase explorers receive no Skills section. Other sessions retain
