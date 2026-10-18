@@ -1,4 +1,4 @@
-// Multi-cwd sidebar / favorites / activity / session library.
+// Multi-cwd sidebar / favorites / activity.
 // Session chrome (Sessions, Commands, etc.) lives in chat.ts since they
 // share the sidebar component.
 

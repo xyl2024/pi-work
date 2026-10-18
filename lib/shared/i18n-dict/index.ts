@@ -23,11 +23,9 @@ import { common } from "./common";
 import { fileViewer } from "./file-viewer";
 import { grokbot } from "./grokbot";
 import { mcp } from "./mcp";
-import { media } from "./media";
 import { models } from "./models";
 import { permissions } from "./permissions";
 import { profile } from "./profile";
-import { prompts } from "./prompts";
 import { renderers } from "./renderers";
 import { rightPanels } from "./right-panels";
 import { scheduler } from "./scheduler";
@@ -52,11 +50,9 @@ export const ZH_TRANSLATIONS = {
   ...fileViewer,
   ...grokbot,
   ...mcp,
-  ...media,
   ...models,
   ...permissions,
   ...profile,
-  ...prompts,
   ...renderers,
   ...rightPanels,
   ...scheduler,

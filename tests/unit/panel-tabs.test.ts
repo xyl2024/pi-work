@@ -3,6 +3,8 @@ import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
+  SCHEDULER_TAB_ID,
+  SKILLS_TAB_ID,
   TOKENS_TAB_ID,
   TRANSLATE_TAB_ID,
 } from "@/lib/shared/types";
@@ -387,16 +389,47 @@ describe("panelTabs registry", () => {
         "gitDiff",
         "llmAudit",
         "modelsConfig",
+        "scheduler",
+        "skills",
         "tokens",
         "translate",
       ].sort(),
     );
   });
 
+  it("registers skills between models config and the scheduled-tasks panel", () => {
+    const order = PANEL_TAB_KINDS as readonly string[];
+    const skills = PANEL_TAB_SPECS.find((spec) => spec.kind === "skills");
+
+    expect(skills?.tabId).toBe(SKILLS_TAB_ID);
+    // Strip label reuses the existing "Skills" entry — resolved at render time
+    // so a locale switch relabels the open tab.
+    expect(skills?.labelKey).toBe("Skills");
+    expect(order.indexOf("skills")).toBe(order.indexOf("modelsConfig") + 1);
+    // Session-bound: the list follows the selected session's cwd, so the
+    // button groups with the other live-state buttons (it is never greyed
+    // out — the flag only drives column grouping).
+    expect(skills?.sessionBound).toBe(true);
+    expect(order.indexOf("scheduler")).toBe(order.indexOf("skills") + 1);
+    expect(order.indexOf("scheduler")).toBe(order.indexOf("conversationTree") - 1);
+  });
+
+  it("registers the scheduled-tasks panel as a global button before the conversation tree", () => {
+    const scheduler = PANEL_TAB_SPECS.find((spec) => spec.kind === "scheduler");
+
+    expect(scheduler?.tabId).toBe(SCHEDULER_TAB_ID);
+    expect(scheduler?.labelKey).toBe("Scheduled tasks");
+    // The task list is global data, so the button stays enabled on the
+    // new-session page; only the form's cwd default follows the session.
+    expect(scheduler?.sessionBound).toBe(false);
+    expect(scheduler?.commands?.[0]?.labelKey).toBe("Open scheduled tasks");
+    expect(scheduler?.commands?.[0]?.keywords).toContain("定时");
+  });
+
   it("marks session-bound panels and declares no expanded default", () => {
     const sessionBound = PANEL_TAB_SPECS.filter((spec) => spec.sessionBound).map((spec) => spec.kind);
     expect([...sessionBound].sort()).toEqual(
-      ["context", "conversationTree", "gitDiff", "llmAudit"].sort(),
+      ["context", "conversationTree", "gitDiff", "llmAudit", "skills"].sort(),
     );
 
     // The wide mode is the user's expand button, never an open default.
@@ -510,37 +543,71 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     }
   });
 
-  it("resolves a truthy glyph for every descriptor", () => {
-    const ctx: RightBarCtx = {
+  /** The ctx every descriptor is exercised against; individual tests flip one
+   *  observable at a time. */
+  function barCtx(overrides: Partial<RightBarCtx> = {}): RightBarCtx {
+    return {
       rightPanelState: "normal",
       activeTabKind: null,
       selectedSessionId: null,
       selectedCwd: null,
       modelsConfigDirty: false,
+      skillsInstalling: false,
+      schedulerRunning: false,
       t: (key) => key,
       toggleRightPanel: () => {},
       togglePanel: () => {},
+      ...overrides,
     };
+  }
+
+  it("resolves a truthy glyph for every descriptor", () => {
+    const ctx = barCtx();
     for (const desc of RIGHT_BAR_DESCRIPTORS) {
       expect(desc.icon({ size: 16, active: desc.isActive(ctx) })).toBeTruthy();
     }
   });
 
   it("badges the models-config button only while the draft is dirty", () => {
-    const ctx: RightBarCtx = {
-      rightPanelState: "closed",
-      activeTabKind: null,
-      selectedSessionId: null,
-      selectedCwd: null,
-      modelsConfigDirty: false,
-      t: (key) => key,
-      toggleRightPanel: () => {},
-      togglePanel: () => {},
-    };
+    const ctx = barCtx({ rightPanelState: "closed" });
     const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig");
 
     expect(descriptor?.badge?.(ctx)).toBeFalsy();
     expect(descriptor?.badge?.({ ...ctx, modelsConfigDirty: true })).toBeTruthy();
+  });
+
+  it("badges the skills button while an install is running, collapsed or not", () => {
+    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills");
+
+    // The install lives in the module store, so the badge follows the store
+    // flag — not the panel being open. Collapsed is the case that matters.
+    expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
+    expect(
+      descriptor?.badge?.(barCtx({ rightPanelState: "closed", skillsInstalling: true })),
+    ).toBeTruthy();
+    expect(descriptor?.badge?.(barCtx({ skillsInstalling: true }))).toBeTruthy();
+    // The install flag must not light the models-config dot, and vice versa.
+    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ skillsInstalling: true }))).toBeFalsy();
+  });
+
+  it("routes both badges through the one shared corner-dot hook", () => {
+    // Same mark, different predicate: whatever the models-config badge renders
+    // while dirty is what the skills badge renders while installing.
+    const dirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(
+      barCtx({ modelsConfigDirty: true }),
+    );
+    const installing = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills")?.badge?.(
+      barCtx({ skillsInstalling: true }),
+    );
+
+    // Deep equality on the React element: same component, same (empty) props.
+    expect(dirty).toEqual(installing);
+
+    // …and the shared mark really is the small corner dot.
+    const rendered = (
+      dirty as unknown as { type: () => { props: { style: Record<string, unknown> } } }
+    ).type();
+    expect(rendered.props.style.borderRadius).toBe("50%");
   });
 
   it("derives exactly one right-bar button id per panel kind", () => {
@@ -568,9 +635,6 @@ describe("panelTabs registry → command palette", () => {
       newSession: () => {},
       openSettings: () => {},
       openCwdPicker: () => {},
-      openSkills: () => {},
-      openPrompts: () => {},
-      openScheduler: () => {},
       openChannels: () => {},
       openMcp: () => {},
       toggleSidebar: () => {},
@@ -617,6 +681,8 @@ describe("panelTabs registry → command palette", () => {
         "panel.gitDiff",
         "panel.llmAudit",
         "panel.modelsConfig",
+        "panel.scheduler",
+        "panel.skills",
         "panel.tokens",
         "panel.translate",
       ].sort(),
@@ -628,6 +694,14 @@ describe("panelTabs registry → command palette", () => {
 
     expect(cmd?.title).toBe("Open models config");
     expect(cmd?.keywords).toEqual(expect.arrayContaining(["模型", "配置", "服务商"]));
+  });
+
+  it("reaches the skills panel through english and chinese keywords", () => {
+    const cmd = panelCommands(commandCtx()).find((entry) => entry.id === "panel.skills");
+
+    expect(cmd?.title).toBe("Open skills");
+    expect(cmd?.group).toBe("Panel");
+    expect(cmd?.keywords).toEqual(expect.arrayContaining(["skills", "技能", "扩展"]));
   });
 
   it("titles and keywords come from the spec, not from the call site", () => {

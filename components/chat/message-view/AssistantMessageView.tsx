@@ -31,7 +31,7 @@ interface AssistantMessageViewProps {
   afterContent?: React.ReactNode;
   turnDuration?: { startMs: number; endMs?: number; running?: boolean };
   readFiles?: ReadFileInfo[];
-  /** Turn-level aggregate added/deleted line counts (footer chip). */
+  /** Turn-level aggregate added/deleted line counts (footer label). */
   turnDiffStats?: ToolDiffStats | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
   cwd?: string | null;

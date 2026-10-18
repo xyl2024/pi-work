@@ -7,7 +7,7 @@ import { dataPath } from "./data-dir";
  * directories (`~/.pi/agent/skills/` global scope and `<cwd>/.pi/skills/`
  * project scope): pi's DefaultResourceLoader does not scan it, so Pi Work
  * discovers it explicitly and merges the result wherever pi's skill list is
- * consumed (the /api/skills modal and the rpc-manager skillsOverride).
+ * consumed (the /api/skills routes and the rpc-manager skillsOverride).
  *
  * Uses the SDK's `loadSkillsFromDir`, so discovery/likely validation follow
  * the same rules as pi's builtin skill dirs (SKILL.md roots, direct .md

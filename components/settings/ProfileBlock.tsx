@@ -13,9 +13,6 @@ import { SUN, MOON } from "@/lib/client/icon-paths";
 
 interface Props {
   onOpenSettings?: () => void;
-  onOpenSkills?: () => void;
-  onOpenPrompts?: () => void;
-  onOpenScheduler?: () => void;
   onOpenChannels?: () => void;
   onOpenMcp?: () => void;
   refreshKey?: number;
@@ -44,7 +41,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenSkills, onOpenMcp, onOpenPrompts, onOpenScheduler, onOpenChannels, refreshKey, onLogout }: Props) {
+export function ProfileBlock({ onOpenSettings, onOpenMcp, onOpenChannels, refreshKey, onLogout }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -138,7 +135,7 @@ export function ProfileBlock({ onOpenSettings, onOpenSkills, onOpenMcp, onOpenPr
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onOpenSkills || onOpenMcp || onOpenPrompts || onOpenScheduler || onOpenChannels || onLogout);
+  const hasAnyEntry = Boolean(onOpenMcp || onOpenChannels || onLogout);
 
   return (
     <div
@@ -323,22 +320,6 @@ export function ProfileBlock({ onOpenSettings, onOpenSkills, onOpenMcp, onOpenPr
               "transform 180ms cubic-bezier(0.32, 0.72, 0, 1), opacity 180ms cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
-          {onOpenSkills && (
-            <button
-              role="menuitem"
-              onClick={() => { setMenuOpen(false); onOpenSkills(); }}
-              style={itemBaseStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-              <span>{t("Skills")}</span>
-            </button>
-          )}
           {onOpenMcp && (
             <button
               role="menuitem"
@@ -349,37 +330,6 @@ export function ProfileBlock({ onOpenSettings, onOpenSkills, onOpenMcp, onOpenPr
             >
               <McpIcon size={14} />
               <span>{t("mcp.title")}</span>
-            </button>
-          )}
-          {onOpenPrompts && (
-            <button
-              role="menuitem"
-              onClick={() => { setMenuOpen(false); onOpenPrompts(); }}
-              style={itemBaseStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <path d="M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5" />
-                <path d="M8 7h8" />
-                <path d="M8 11h6" />
-              </svg>
-              <span>{t("Prompt Templates")}</span>
-            </button>
-          )}
-          {onOpenScheduler && (
-            <button
-              role="menuitem"
-              onClick={() => { setMenuOpen(false); onOpenScheduler(); }}
-              style={itemBaseStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <circle cx="12" cy="12" r="9" />
-                <polyline points="12 7 12 12 15 14" />
-              </svg>
-              <span>{t("Scheduled tasks")}</span>
             </button>
           )}
           {onOpenChannels && (

@@ -1,10 +1,10 @@
 /**
  * Shared inline-style primitives for the scheduler UI.
  *
- * Centralising these avoids the magic-number drift the old SchedulerModal
- * had (different sub-components hard-coding the same `padding: 6px 10px`
- * slightly differently). Every component here uses `var(--*)` so theming
- * works without per-component overrides.
+ * Centralising these avoids the magic-number drift the scheduler view's
+ * sub-components had (different sub-components hard-coding the same
+ * `padding: 6px 10px` slightly differently). Every component here uses `var(--*)`
+ * so theming works without per-component overrides.
  */
 
 import type { CSSProperties } from "react";

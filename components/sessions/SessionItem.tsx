@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { SessionInfo } from "@/lib/shared/types";
 import { SESSION_ROW_HEIGHT_PX } from "@/lib/shared/sidebar-section";
+import { sessionTimeLabel } from "@/lib/shared/session-today";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
@@ -132,6 +133,22 @@ export function SessionItem({
   useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
 
   const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
+
+  // Hover time badge — relative for the last few days, `MM.DD` beyond that.
+  // Computed only while the badge is actually rendered (row hover / menu open)
+  // so "now" is fresh each time the user hovers. `null` = unparseable
+  // timestamp, in which case nothing is shown.
+  const showActions = hovered || triggerHovered || menuOpen;
+  const timeLabel = showActions ? sessionTimeLabel(session.modified, new Date()) : null;
+  const timeText = timeLabel === null
+    ? null
+    : timeLabel.kind === "date"
+      ? timeLabel.text
+      : timeLabel.days === 0
+        ? t("Today")
+        : timeLabel.days === 1
+          ? t("Yesterday")
+          : t("{n} days ago", { n: timeLabel.days });
 
   const beginRename = useCallback(() => {
     setRenameValue(session.name ?? "");
@@ -360,9 +377,23 @@ export function SessionItem({
             </Tooltip>
           </div>
 
-          {/* "..." trigger — shown on row hover; toggles the action menu on click (no hover-open) */}
-          {(hovered || triggerHovered || menuOpen) && (
-            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          {/* Last-activity time + "..." trigger — both shown on row hover;
+              the trigger toggles the action menu on click (no hover-open). */}
+          {showActions && (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              {timeText && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "var(--text-muted)",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {timeText}
+                </span>
+              )}
               <button
                 ref={triggerRef}
                 aria-label={t("More actions")}

@@ -19,15 +19,12 @@ export interface SettingsWrite {
 /**
  * The single write entry for `~/.pi-work/config.yaml` settings.
  *
- * Two modalities share one implementation — the optimistic store update, the
- * rollback and the success/error feedback:
+ * One implementation owns the optimistic store update, the rollback and the
+ * success/error feedback:
  *
  * - {@link useSettingsWrite.apply} — an immediate setting: the caller computes
  *   the next config and the patch is derived from the top-level keys that
  *   actually changed. Only those keys are sent.
- * - {@link useSettingsWrite.submit} — a staged form: the caller supplies the
- *   explicit patch (it may carry server-only fields such as
- *   `web_access.tavily.clear_api_key`) plus the optimistic next state.
  *
  * Sections never `fetch("/api/settings")` themselves; bypasses lose optimistic
  * update and rollback and must not grow back.
@@ -75,20 +72,7 @@ export function useSettingsWrite() {
     [runWrite],
   );
 
-  /** Staged form: the caller supplies the patch for one or more keys. */
-  const submit = useCallback(
-    (
-      patch: SettingsPatch,
-      computeNext: (prev: PiWorkConfig) => PiWorkConfig = (prev) => prev,
-    ): Promise<boolean> => {
-      const prev = configRef.current;
-      if (!prev) return Promise.resolve(false);
-      return runWrite({ next: computeNext(prev), patch });
-    },
-    [runWrite],
-  );
-
-  return { apply, submit };
+  return { apply };
 }
 
 /** Top-level keys in {@link SETTINGS_OWNED_KEYS} whose content changed. */
@@ -101,4 +85,3 @@ export function diffPatch(prev: PiWorkConfig, next: PiWorkConfig): SettingsPatch
 }
 
 export type SettingsApply = ReturnType<typeof useSettingsWrite>["apply"];
-export type SettingsSubmit = ReturnType<typeof useSettingsWrite>["submit"];

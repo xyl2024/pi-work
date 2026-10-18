@@ -1,11 +1,11 @@
 services:
   pi-work:
-    # Use the pre-built image (with playwright-cli manually installed) instead
-    # of rebuilding from the upstream base. The CMD from that image is not
-    # `next start`, so we set `command:` explicitly.
-    image: playwright-cli-devenv:extended-piwork
+    image: pi-work:slim
+    build:
+      context: .
+      args:
+        BASE_IMAGE: ${BASE_IMAGE:-node:24-bookworm-slim}
     command: node_modules/.bin/next start -p 30141
-    # build: omitted — we're using the existing image, not rebuilding
 
     network_mode: host
 
@@ -17,3 +17,6 @@ services:
     environment:
       HOME: /root
       NODE_ENV: production
+      # host networking: keep the terminal WS off 30142 so a local dev
+      # instance on the same host can run side by side
+      PI_WORK_TERMINAL_PORT: 30145

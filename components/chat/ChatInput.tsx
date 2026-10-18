@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent, useMemo } from "react";
+import React, { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
 import { AttachmentList } from "./AttachmentList";
 import { SlashCommandHint } from "./SlashCommandHint";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import { FileMentionMenu } from "./FileMentionMenu";
-import { PromptPreview } from "./PromptPreview";
 import { CollapsiblePanel } from "../ui/CollapsiblePanel";
 import { findDirectSlashResource, formatSlashContent, type SlashResource } from "@/lib/shared/slash-commands";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
@@ -96,7 +95,7 @@ interface Props {
    *  plain-Enter sending. */
   enterToSend?: boolean;
   /** Renders only the bordered input box itself: no bottom toolbar, no
-   *  image attachments / slash / prompt UI. While streaming, a stop button
+   *  image attachments, no slash menu. While streaming, a stop button
    *  replaces the send button (the toolbar's abort affordance is hidden). */
   hideToolbar?: boolean;
   /** Hard-disable the whole input (no session, not ready, ...). */
@@ -256,7 +255,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     (rawMessage: string) => {
       const msg = rawMessage.trim();
       if (selectedSlashResource) {
-        return formatSlashContent(selectedSlashResource, msg, true);
+        return formatSlashContent(selectedSlashResource, msg);
       }
       const directSlash = findDirectSlashResource(msg, slashResources);
       if (directSlash) {
@@ -306,8 +305,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
       if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return false;
       if (!(e.ctrlKey || e.metaKey) && !enterToSend) return false;
       // Bare built-in slash actions (no trailing args) trigger the action
-      // directly, bypassing the prompt-template expansion that prompt/skill
-      // commands go through in selectSlashResource.
+      // directly, bypassing the skill selection that skill commands go
+      // through in selectSlashResource.
       const trimmed = value.trim();
       if (trimmed === "/new" || trimmed === "/compact" || trimmed === "/model") {
         const action = trimmed.slice(1);
@@ -445,13 +444,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     },
   }));
 
-  const selectedPromptResource = selectedSlashResource?.source === "prompt" ? selectedSlashResource : null;
-  const selectedPromptPreview = useMemo(
-    () =>
-      selectedPromptResource ? formatSlashContent(selectedPromptResource, value.trim()) : null,
-    [selectedPromptResource, value],
-  );
-
   return (
     <div
       style={{
@@ -493,10 +485,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         )}
         {/* Image previews */}
         {!hideToolbar && <AttachmentList images={attachedImages} onRemove={removeImage} />}
-
-        {!hideToolbar && selectedPromptResource && (
-          <PromptPreview resource={selectedPromptResource} preview={selectedPromptPreview} />
-        )}
 
         {/* Main input — stays visible while the agent is streaming (abort button handles cancel) */}
         <CollapsiblePanel open={true}>

@@ -18,9 +18,13 @@ const CHIP_MAX_WIDTH = 150;
 
 interface Props {
   files: ReadFileInfo[];
+  /** Edge the chip group is pinned to inside its row. `end` (right-aligned)
+   *  also mirrors the "..." expansion bubble so it opens leftward instead of
+   *  overflowing the row. */
+  align?: "start" | "end";
   /** Turn-level aggregate added/deleted line counts from edit/write tool
-   *  calls (derived from the tools' own data, no git). Rendered as a chip to
-   *  the right of the read-file chips when non-null. */
+   *  calls (derived from the tools' own data, no git). Rendered after the
+   *  "..." button when non-null. */
   diffStats?: ToolDiffStats | null;
   onOpenFile: (filePath: string, fileName: string) => void;
 }
@@ -29,8 +33,9 @@ interface Props {
  *  message footer row. Shows at most {@link MAX_VISIBLE} chips, then a "..."
  *  that smoothly expands a bubble (down by default, up only when space below
  *  is tight) with the full list. Every chip/list row opens the file in the
- *  right-hand panel. Edit/write-touched files additionally show +N/-M. */
-export function ReadFileChips({ files, diffStats, onOpenFile }: Props) {
+ *  right-hand panel. Edit/write-touched files additionally show +N/-M in the
+ *  expanded list, plus one turn-level total after the "...". */
+export function ReadFileChips({ files, align = "start", diffStats, onOpenFile }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [direction, setDirection] = useState<"down" | "up">("down");
@@ -133,7 +138,7 @@ export function ReadFileChips({ files, diffStats, onOpenFile }: Props) {
               ...
             </button>
           </Tooltip>
-          <FileListBubble files={files} open={open} maxHeight={bubbleMaxHeight} direction={direction} onOpen={openFile} />
+          <FileListBubble files={files} open={open} maxHeight={bubbleMaxHeight} direction={direction} align={align} onOpen={openFile} />
         </div>
       )}
       {diffStats && (diffStats.additions > 0 || diffStats.deletions > 0) && <DiffStatChip stats={diffStats} />}
@@ -225,14 +230,13 @@ function Chip({ file, onClick }: { file: ReadFileInfo; onClick: () => void }) {
         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
           {chipLabel(file)}
         </span>
-        <FileDiffStats stats={file.diffStats} />
       </button>
     </Tooltip>
   );
 }
 
-/** Per-file [+N] [-M] shown inside a chip for files this turn's edit/write
- *  calls touched. Renders nothing for read-only files. */
+/** Per-file [+N] [-M] shown in the expanded list for files this turn's
+ *  edit/write calls touched. Renders nothing for read-only files. */
 function FileDiffStats({ stats }: { stats?: ToolDiffStats | null }) {
   if (!stats || (stats.additions <= 0 && stats.deletions <= 0)) return null;
   return (
@@ -248,11 +252,12 @@ function FileDiffStats({ stats }: { stats?: ToolDiffStats | null }) {
  *  mounted so close animates too: height transitions 0 ↔ measured content
  *  (clamped to BUBBLE_MAX_HEIGHT), then flips to scrollable once the
  *  transition settles for long lists. */
-function FileListBubble({ files, open, maxHeight, direction, onOpen }: {
+function FileListBubble({ files, open, maxHeight, direction, align, onOpen }: {
   files: ReadFileInfo[];
   open: boolean;
   maxHeight: number;
   direction: "down" | "up";
+  align: "start" | "end";
   onOpen: (f: ReadFileInfo) => void;
 }) {
   const { t } = useI18n();
@@ -261,6 +266,9 @@ function FileListBubble({ files, open, maxHeight, direction, onOpen }: {
   const targetHeight = contentHeight === null ? 0 : Math.min(contentHeight, maxHeight);
   const settled = scrolled || (contentHeight !== null && contentHeight <= maxHeight);
   const anchor = direction === "down" ? { top: "calc(100% + 8px)" } : { bottom: "calc(100% + 8px)" };
+  // "end" pins the bubble's right edge to the "..." button so a right-aligned
+  // chip group opens leftward, inside the message column.
+  const horizontal = align === "end" ? { right: 0 } : { left: 0 };
 
   useEffect(() => {
     if (!open) {
@@ -280,7 +288,7 @@ function FileListBubble({ files, open, maxHeight, direction, onOpen }: {
       style={{
         position: "absolute",
         ...anchor,
-        left: 0,
+        ...horizontal,
         zIndex: 50,
         width: BUBBLE_WIDTH,
         height: open ? targetHeight : 0,

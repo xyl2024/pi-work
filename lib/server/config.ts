@@ -12,7 +12,6 @@ import {
   type McpConfig,
   type UiSoundEventId,
   type UiSoundsConfig,
-  type WebAccessConfig,
 } from "../shared/config-types";
 import { DEFAULT_UI_SOUND_EVENTS } from "../shared/ui-sounds-defaults";
 import type { NetworkProxyConfig } from "../shared/config-types";
@@ -113,10 +112,6 @@ const DEFAULT_CONFIG: PiWorkConfig = {
   cwd_icons: {},
   cwd_aliases: {},
   disabled_skills: {},
-  web_access: {
-    enabled: true,
-    tavily: {},
-  },
   // Off by default: never silently route traffic through a proxy the user
   // did not ask for. `url` is required for the proxy to take effect.
   network_proxy: { enabled: false, url: "", no_proxy: "" },
@@ -279,20 +274,6 @@ function parseCwdAliases(raw: unknown): Record<string, string> {
   return out;
 }
 
-function parseWebAccess(raw: unknown): WebAccessConfig {
-  const defaults = DEFAULT_CONFIG.web_access;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { enabled: defaults.enabled, tavily: {} };
-  const obj = raw as Record<string, unknown>;
-  const tavilyRaw = obj.tavily;
-  const tavily = tavilyRaw && typeof tavilyRaw === "object" && !Array.isArray(tavilyRaw)
-    ? (tavilyRaw as Record<string, unknown>)
-    : {};
-  const apiKey = typeof tavily.api_key === "string" && tavily.api_key.trim().length > 0
-    ? tavily.api_key.trim()
-    : undefined;
-  return { enabled: obj.enabled !== false, tavily: apiKey ? { api_key: apiKey } : {} };
-}
-
 // Network proxy (Settings → Network proxy). Fail-open: a missing / garbled
 // block means "no proxy", which is the pre-feature behavior. The URL is
 // shape-checked at the PUT boundary (app/api/settings) so the UI can't
@@ -365,7 +346,6 @@ export function readConfig(): PiWorkConfig {
       cwd_icons: parseCwdIcons(cfg.cwd_icons),
       cwd_aliases: parseCwdAliases(cfg.cwd_aliases),
       disabled_skills: parseDisabledSkills(cfg.disabled_skills),
-      web_access: parseWebAccess(cfg.web_access),
       network_proxy: parseNetworkProxy(cfg.network_proxy),
       mcp: parseMcp(cfg.mcp),
     };

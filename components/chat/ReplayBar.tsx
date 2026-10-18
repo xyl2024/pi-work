@@ -25,7 +25,7 @@ interface ReplayBarProps {
 /**
  * Message-level "time travel" scrubber. Purely presentational + owns its own
  * playback clock; all replay state lives in ChatWindow. Reuses the scrubber /
- * IconButton interaction language from AudioPlayer.
+ * IconButton interaction language used elsewhere in the chat UI.
  */
 export function ReplayBar({
   total, index, playing, speed, positionLabel,

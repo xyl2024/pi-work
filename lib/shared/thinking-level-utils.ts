@@ -1,7 +1,7 @@
 // Shared helpers for reasoning about a model's thinking level support.
 //
 // Both the chat input (components/ChatInput.tsx) and the scheduler
-// form (components/Scheduler/TaskFormModal.tsx) drive a per-model
+// form (components/panels/scheduler/SchedulerFormFields.tsx) drive a per-model
 // thinking level dropdown and need to fall back when the user's
 // current pick isn't supported by the freshly-selected model. Keeping
 // the fallback rule in one place means chat and scheduler always

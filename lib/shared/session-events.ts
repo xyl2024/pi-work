@@ -47,7 +47,6 @@ import {
   type SessionRuntimeState,
   type SessionSnapshotPayload,
 } from "./session-runtime-state";
-import { isShowFileToolName, type ShowFileEntry } from "./show-file-tool-types";
 import type { AgentMessage, AssistantMessage, SessionTreeNode, ToolSelection } from "./types";
 import type { ContextComposition } from "./context-composition";
 
@@ -431,8 +430,6 @@ export type SessionEventEffect =
    *  session's cwd; the reducer only decides that a mutation happened (and
    *  whether it was a git-level one that must bypass the server's cache). */
   | { kind: "invalidate_git_status"; force: boolean }
-  /** Publish a `show_media` result so the Session Library can render it. */
-  | { kind: "show_file_result"; toolCallId: string; files: ShowFileEntry[] }
   /** Play one celebration animation. `details` is passed through verbatim;
    *  the overlay ignores an absent one. */
   | { kind: "celebrate"; details: CelebrateDetails | undefined }
@@ -918,12 +915,6 @@ function reduceReducedSessionEvent(
       // the server's status cache behind an earlier edit-triggered fetch.
       if (toolName === "bash" && bashCommandTouchesGit(inFlight?.args)) {
         effects.push({ kind: "invalidate_git_status", force: true });
-      }
-      if (toolName && isShowFileToolName(toolName) && resultParts?.details) {
-        const files = (resultParts.details as { files?: unknown }).files;
-        if (Array.isArray(files)) {
-          effects.push({ kind: "show_file_result", toolCallId, files: files as ShowFileEntry[] });
-        }
       }
       if (toolName === CELEBRATE_TOOL_NAME && state.seenCelebrateToolEndIds.claim(toolCallId)) {
         effects.push({ kind: "celebrate", details: resultParts?.details as CelebrateDetails | undefined });

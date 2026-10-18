@@ -8,7 +8,7 @@ Pi Work 是 pi coding agent 的 Next.js Web UI，负责会话浏览、实时对�
 
 - **会话与 Agent**：多会话工作区和标签页、SSE 流式事件、分支树导航、上下文压缩、模型/思考级别/工具选择、会话搜索/重命名/删除/导出/自动命名。
 - **项目工作区**：按 cwd 浏览和搜索文件，编辑、重命名、删除和查看文本、代码、Diff、图片、音频、视频、PDF、SVG、Mermaid、ECharts；支持 Git Diff 和独立终端。
-- **辅助面板**：右栏面板为 Context、翻译、Git Diff、收藏、Token 审计、LLM API 审计、Conversation Tree；另有独立的终端面板与定时任务模态。
+- **辅助面板**：右栏面板为 Context、翻译、Git Diff、收藏、Token 审计、LLM API 审计、模型配置（Models config）、技能（Skills）、定时任务（Scheduled tasks）、Conversation Tree；另有独立的终端面板。
 - **配置与集成**：模型/API Key/OAuth、Prompt、Skill、危险命令确认、自定义 Agent 工具、右侧按钮、音效和界面设置；另有微信登录/收发消息及 Grokbot 功能。
 
 ## 目录与架构
@@ -19,7 +19,7 @@ pi-work/
 │   └── api/            # 按领域的路由目录：agent、agent-settings、append-system、auth、btw、channels、
 │                       #   create-space、cwd-aliases/-icons/-tools、default-cwd、exchange-rate、favorites、
 │                       #   file-mentions、files、git、home、llm-audit、models、
-│                       #   models-config、profile、prompts、scheduled-tasks、
+│                       #   models-config、profile、scheduled-tasks、
 │                       #   sessions、settings、skills、slash-commands、status-bar、subagents、terminal、
 │                       #   token-audit、translate、workspaces
 ├── components/         # React UI，按产品功能拆分
@@ -28,16 +28,17 @@ pi-work/
 │   ├── sessions/       # 会话侧栏、标签页、搜索、会话库、多 cwd、收藏、Conversation Tree
 │   ├── files/          # 文件浏览、Git 状态与查看器（file-viewer/ 支持文本/代码、图片、音频、视频、PDF）
 │   ├── panels/         # 右侧面板 body 组件（Translate、Tokens、LLM Audit、Models config、
-│   │                   #   Git Diff 含 Git Log、TerminalPanel）；models-config/ 是模型配置
-│   │                   #   面板视图的页；right-bar/ 是按钮列，desc.tsx 注册描述符
-│   │                   #   （Context、Favorites、Conversation Tree 的 body 在 app-shell/ 与 sessions/）
-│   ├── settings/       # 设置弹窗与各配置区块（Prompt、Skill、Profile、重试、Append System、
+│   │                   #   Skills、Scheduler、Git Diff 含 Git Log、TerminalPanel）；models-config/、
+│   │                   #   skills/ 与 scheduler/ 是模型配置 / 技能 / 定时任务面板视图的页；right-bar/ 是按钮列，
+│   │                   #   desc.tsx 注册描述符（按钮含模型配置、技能、定时任务；
+│   │                   #   Context、Favorites、Conversation Tree 的 body 在 app-shell/ 与 sessions/）
+│   ├── settings/       # 设置弹窗与各配置区块（Prompt、Profile、重试、Append System、
 │   │                   #   自定义工具、文件预览、右侧按钮、音效；models-config/ 的模型表单控件
 │   │                   #   仍在此，供面板视图复用）
 │   ├── renderers/      # 消息中的代码块、ECharts、Mermaid、SVG 与图片渲染器
 │   ├── ui/             # 公共 UI 原语、图标与动画图标
 │   └── scheduler/ grokbot/ channels/ auth/ effects/
-│                       # 定时任务、Grokbot、频道、登录、庆祝动画
+│                       # 定时任务面板视图的共享原语、Grokbot、频道、登录、庆祝动画
 ├── hooks/              # 客户端 hooks、store 与会话状态；useAgentSession/ 只从 index.ts 导出，
 │                       # 内部文件不是稳定 API
 ├── lib/
@@ -49,7 +50,7 @@ pi-work/
 │       │                    # 权限确认、Ask User Questions、自定义工具与审计上下文
 │       ├── sessions/        # 会话读取、搜索与变更（JSONL 原子写入，并同步清理缓存/sidecar）
 │       ├── session-export/ files/ terminal/ wechat/ scheduler/ channels/
-│       │                    notifications/ self-tools/ turn/ web-access/ subagent-*
+│       │                    notifications/ self-tools/ turn/ subagent-*
 │       └── *-db.ts *-store.ts   # 各功能的 SQLite / JSON store（LLM Audit、Token Audit、
 │                                #   Profile、Subagent）
 ├── scripts/            # 迁移、恢复、部署与字体处理

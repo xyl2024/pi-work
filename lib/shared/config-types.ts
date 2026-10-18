@@ -30,15 +30,6 @@ export interface AppendSystemConfig {
 }
 
 
-export interface WebAccessConfig {
-  enabled: boolean;
-  tavily: {
-    api_key?: string;
-    /** Browser-only masked status; never persisted by the server parser. */
-    has_api_key?: boolean;
-  };
-}
-
 /**
  * Hosts that must never be proxied: the app talks to itself (and to the
  * terminal WebSocket service) over these. Always merged into the effective
@@ -101,7 +92,6 @@ export interface PiWorkConfig {
   cwd_aliases: Record<string, string>;
   /** Per-cwd Skill files excluded from the model prompt (resources are untouched). */
   disabled_skills: Record<string, string[]>;
-  web_access: WebAccessConfig;
   network_proxy: NetworkProxyConfig;
   mcp: McpConfig;
 }

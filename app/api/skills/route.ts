@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { DefaultResourceLoader, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readConfig, writeConfig } from "@/lib/server/config";
 import { loadPiWorkSkills } from "@/lib/server/pi-work-skills";
+import type {
+  Skill,
+  SkillListResponse,
+  SkillToggleRequest,
+  SkillToggleResponse,
+} from "@/lib/shared/skills";
 
 export const dynamic = "force-dynamic";
 
@@ -30,20 +36,19 @@ export async function GET(req: Request) {
     const piWorkSkills = loadPiWorkSkills().skills;
     const allSkills = [...skills, ...piWorkSkills];
     const disabled = new Set(readConfig().disabled_skills[cwd] ?? []);
-    return NextResponse.json({
-      skills: allSkills.map((skill) => ({
-        ...skill,
-        // The SKILL.md frontmatter (`disable-model-invocation: true`) is
-        // authoritative in pi: such a skill is NEVER rendered into the system
-        // prompt's <available_skills> (it is only invocable via /skill:name),
-        // no matter what Pi Work's per-cwd config says. Merge both sources so
-        // the UI shows the effective state, and expose `frontmatterDisabled`
-        // so the UI can explain why the toggle is locked.
-        disableModelInvocation: skill.disableModelInvocation || disabled.has(skill.filePath),
-        frontmatterDisabled: skill.disableModelInvocation === true,
-      })),
-      diagnostics,
-    });
+    const mapped: Skill[] = allSkills.map((skill) => ({
+      ...skill,
+      // The SKILL.md frontmatter (`disable-model-invocation: true`) is
+      // authoritative in pi: such a skill is NEVER rendered into the system
+      // prompt's <available_skills> (it is only invocable via /skill:name),
+      // no matter what Pi Work's per-cwd config says. Merge both sources so
+      // the UI shows the effective state, and expose `frontmatterDisabled`
+      // so the UI can explain why the toggle is locked.
+      disableModelInvocation: skill.disableModelInvocation || disabled.has(skill.filePath),
+      frontmatterDisabled: skill.disableModelInvocation === true,
+    }));
+    const body: SkillListResponse = { skills: mapped, diagnostics };
+    return NextResponse.json(body);
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
@@ -53,11 +58,7 @@ export async function GET(req: Request) {
 // The SKILL.md and all other installed resources remain untouched.
 export async function PATCH(req: Request) {
   try {
-    const body = await req.json() as {
-      cwd: string;
-      filePath: string;
-      disableModelInvocation: boolean;
-    };
+    const body = await req.json() as SkillToggleRequest;
     const { cwd, filePath, disableModelInvocation } = body;
     if (!cwd || !filePath || typeof disableModelInvocation !== "boolean") {
       return NextResponse.json({ error: "cwd, filePath and disableModelInvocation are required" }, { status: 400 });
@@ -91,7 +92,8 @@ export async function PATCH(req: Request) {
     else delete disabledSkills[cwd];
     writeConfig({ ...config, disabled_skills: disabledSkills });
 
-    return NextResponse.json({ success: true, disableModelInvocation });
+    const response: SkillToggleResponse = { success: true, disableModelInvocation };
+    return NextResponse.json(response);
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
