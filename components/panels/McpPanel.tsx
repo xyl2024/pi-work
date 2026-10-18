@@ -14,6 +14,7 @@ import {
   mcpPendingChanges,
   type McpDraftProblem,
 } from "@/lib/shared/mcp-draft";
+import { mcpOverrideExtraKeysError } from "@/lib/shared/mcp-panel";
 import {
   escapeMcp,
   ensureMcpLoaded,
@@ -89,6 +90,9 @@ export function McpPanel({
           return t("mcp.problemInvalidJson", { name: value.name });
         case "missing-transport":
           return t("mcp.problemMissingTransport", { name: value.name });
+        case "override-extra-keys":
+          // pi's own sentence, verbatim: the server would reject the same entry.
+          return mcpOverrideExtraKeysError(value.name);
       }
     },
     [t],

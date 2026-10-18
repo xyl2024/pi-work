@@ -2,8 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import {
+  isMcpOverride,
   MCP_SCOPES,
   MCP_SERVER_NAME,
+  mcpOverrideExtraKeys,
+  mcpOverrideExtraKeysError,
+  mcpOverrideMissingBaseError,
   pruneMcpDefaults,
   type McpPanelChange,
   type McpPanelData,
@@ -112,18 +116,48 @@ export function readMcpPanelData(options: ReadMcpPanelOptions): McpPanelData {
   const errors: string[] = [];
   const entries: McpPanelEntry[] = [];
 
+  // The validated global servers by name: a project override is validated
+  // against the server it amends, exactly as pi's loader does.
+  const globalConfigs = new Map<string, Record<string, unknown>>();
+  const global = files.find((loaded) => loaded.file.scope === "global");
+  for (const [name, value] of Object.entries(global?.servers ?? {})) {
+    if (!isRecord(value) || isMcpOverride(value)) continue;
+    if (typeof validateMcpServerConfig(name, value) !== "string") globalConfigs.set(name, value);
+  }
+
   for (const loaded of files) {
     if (loaded.file.parseError) errors.push(`${loaded.file.path}: ${loaded.file.parseError}`);
     if (loaded.autoEnableError) errors.push(`${loaded.file.path}: ${loaded.autoEnableError}`);
     for (const [name, value] of Object.entries(loaded.servers ?? {})) {
-      const validated = validateMcpServerConfig(name, value);
-      const error = typeof validated === "string" ? validated : null;
+      let error: string | null = null;
+      let override = false;
+      if (loaded.file.scope === "project" && isRecord(value) && isMcpOverride(value)) {
+        // A transport-less project entry is an override, not an invalid entry:
+        // it only sets keys on the global server of the same name.
+        override = true;
+        const base = globalConfigs.get(name);
+        if (base === undefined) {
+          error = mcpOverrideMissingBaseError(name);
+        } else {
+          const extra = mcpOverrideExtraKeys(value);
+          if (extra.length > 0) {
+            error = mcpOverrideExtraKeysError(name);
+          } else {
+            const validated = validateMcpServerConfig(name, { ...base, ...value });
+            error = typeof validated === "string" ? validated : null;
+          }
+        }
+      } else {
+        const validated = validateMcpServerConfig(name, value);
+        error = typeof validated === "string" ? validated : null;
+      }
       if (error) errors.push(`${loaded.file.path}: ${error}`);
       entries.push({
         name,
         scope: loaded.file.scope,
         rawJson: JSON.stringify(value, null, 2),
         error,
+        override,
         shadowsGlobal: false,
         shadowedByProject: false,
       });
@@ -157,6 +191,28 @@ export interface ApplyMcpPanelChangesOptions extends McpFilePaths {
 }
 
 /**
+ * Validate one upsert. A project entry with no transport is an **override**: its
+ * base is the global server of the same name, and it may only set pi's override
+ * keys. Anything else is validated as a definition, as before.
+ */
+function validateUpsert(
+  scope: McpScope,
+  name: string,
+  config: Record<string, unknown>,
+  globalConfigs: Map<string, Record<string, unknown>>,
+): string[] {
+  if (scope === "project" && isMcpOverride(config)) {
+    const base = globalConfigs.get(name);
+    if (base === undefined) return [mcpOverrideMissingBaseError(name)];
+    if (mcpOverrideExtraKeys(config).length > 0) return [mcpOverrideExtraKeysError(name)];
+    const validated = validateMcpServerConfig(name, { ...base, ...config });
+    return typeof validated === "string" ? [validated] : [];
+  }
+  const validated = validateMcpServerConfig(name, config);
+  return typeof validated === "string" ? [validated] : [];
+}
+
+/**
  * Apply the panel's pending changes. Returns the reasons it refused, or an
  * empty list after writing. Nothing is written unless every change validated,
  * so a rejected save can never leave one file updated and the other not.
@@ -165,6 +221,15 @@ export function applyMcpPanelChanges(options: ApplyMcpPanelChangesOptions): stri
   const errors: string[] = [];
   const targets: { path: string; loaded: LoadedFile; change: McpPanelChange }[] = [];
   const seen = new Set<string>();
+
+  // The global servers by name, so a project override can be validated against
+  // the same base the loader uses.
+  const globalLoaded = loadFile("global", mcpFilePath("global", options));
+  const globalConfigs = new Map<string, Record<string, unknown>>();
+  for (const [name, value] of Object.entries(globalLoaded.servers ?? {})) {
+    if (!isRecord(value) || isMcpOverride(value)) continue;
+    if (typeof validateMcpServerConfig(name, value) !== "string") globalConfigs.set(name, value);
+  }
 
   for (const change of options.changes) {
     if (!MCP_SCOPES.includes(change.scope)) {
@@ -188,8 +253,7 @@ export function applyMcpPanelChanges(options: ApplyMcpPanelChangesOptions): stri
         continue;
       }
       if (operation.op === "upsert") {
-        const validated = validateMcpServerConfig(operation.name, operation.config);
-        if (typeof validated === "string") errors.push(validated);
+        errors.push(...validateUpsert(change.scope, operation.name, operation.config, globalConfigs));
       } else if (operation.op !== "remove") {
         errors.push(`unknown operation "${String((operation as { op: unknown }).op)}"`);
       }

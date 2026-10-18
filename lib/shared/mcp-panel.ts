@@ -45,6 +45,61 @@ export function resolveMcpExposure(value: unknown): McpExposure {
 /** Server names pi accepts — mirrors `SERVER_NAME` in `lib/server/mcp-config.ts`. */
 export const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/;
 
+/**
+ * The only keys a project entry may set when it has no transport of its own.
+ * pi calls such an entry an **override**: it merges these keys into the global
+ * server of the same name instead of defining a server. Mirrors pi's
+ * `OVERRIDE_KEYS` in `extensions/mcp/config.js`.
+ */
+export const MCP_OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"] as const;
+
+/**
+ * Whether an entry overrides a global server instead of defining one: it has no
+ * `command`, `url`, or `type`. pi's `isOverride`, kept in one place so the
+ * loader mirror, the panel reader, and the draft validator cannot drift.
+ */
+export function isMcpOverride(value: Record<string, unknown>): boolean {
+  return value.command === undefined && value.url === undefined && value.type === undefined;
+}
+
+/** The keys an override entry sets that pi does not allow. */
+export function mcpOverrideExtraKeys(value: Record<string, unknown>): string[] {
+  return Object.keys(value).filter((key) => !(MCP_OVERRIDE_KEYS as readonly string[]).includes(key));
+}
+
+/** pi's message for an override with extra keys — kept verbatim so both halves agree. */
+export function mcpOverrideExtraKeysError(name: string): string {
+  return `server "${name}": an override can only set ${MCP_OVERRIDE_KEYS.join(", ")}`;
+}
+
+/** pi's message for an override with no global server of the same name. */
+export function mcpOverrideMissingBaseError(name: string): string {
+  return `server "${name}" needs "command" or "url", or a global server to override`;
+}
+
+/**
+ * The keys the entry form models — the required trio (name / transport /
+ * command-or-url) plus everything the advanced section exposes. Used to tell
+ * the user how many fields the form does not cover (story 16).
+ */
+export const MCP_FORM_FIELDS = [
+  "command",
+  "args",
+  "env",
+  "cwd",
+  "url",
+  "headers",
+  "timeout",
+  "exposure",
+  "enabled",
+  "description",
+] as const;
+
+/** The keys present in an entry that the form does not model (`oauth`, `auth`, `toolExposure`, …). */
+export function mcpUncoveredFields(config: Record<string, unknown>): string[] {
+  return Object.keys(config).filter((key) => !(MCP_FORM_FIELDS as readonly string[]).includes(key));
+}
+
 /** One server entry as it sits in a file. */
 export interface McpPanelEntry {
   name: string;
@@ -57,6 +112,12 @@ export interface McpPanelEntry {
   shadowsGlobal: boolean;
   /** A global entry that a project entry replaces. */
   shadowedByProject: boolean;
+  /**
+   * A project entry with no transport of its own: it only merges `enabled` /
+   * `exposure` / `toolExposure` into the global server of the same name, rather
+   * than defining or replacing a server. See `isMcpOverride`.
+   */
+  override: boolean;
 }
 
 /** One `mcp.json`, whether or not it exists yet. */
@@ -112,6 +173,16 @@ const DROP_WHEN_EMPTY = new Set(["args", "env", "headers", "toolExposure"]);
  * and makes "nothing changed" actually mean nothing is written.
  */
 export function pruneMcpDefaults(config: Record<string, unknown>): Record<string, unknown> {
+  // An override entry's whole point is the key it sets, even at pi's default
+  // value (`enabled: true` re-enables a server the global file disabled), so its
+  // shape is never pruned down to `{}` — pi keeps it too.
+  if (isMcpOverride(config)) {
+    const kept: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(config)) {
+      if (value !== undefined) kept[key] = value;
+    }
+    return kept;
+  }
   const pruned: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
     if (value === undefined) continue;

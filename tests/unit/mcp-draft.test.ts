@@ -10,7 +10,7 @@ import {
   withEntryConfig,
   withEntryRawJson,
 } from "@/lib/shared/mcp-draft";
-import { canonicalMcpJson, pruneMcpDefaults, type McpPanelData } from "@/lib/shared/mcp-panel";
+import { canonicalMcpJson, mcpUncoveredFields, pruneMcpDefaults, type McpPanelData } from "@/lib/shared/mcp-panel";
 
 /**
  * The MCP panel's draft model (lib/shared/mcp-draft.ts): server state arrives,
@@ -38,6 +38,7 @@ const docsEntry = {
   error: null,
   shadowsGlobal: false,
   shadowedByProject: false,
+  override: false,
 } as const;
 
 describe("mcp-draft: entries", () => {
@@ -175,6 +176,54 @@ describe("mcp-draft: problems", () => {
   });
 });
 
+const overrideEntry = {
+  ...docsEntry,
+  scope: "project" as const,
+  rawJson: JSON.stringify({ enabled: false }, null, 2),
+  override: true,
+};
+
+describe("mcp-draft: override entries", () => {
+  it("saves a project entry that only disables a global server", () => {
+    const data = panelData([{ ...docsEntry }, { ...overrideEntry }]);
+    const draft = draftFromPanelData(data);
+
+    expect(isDraftDirty(draft, data)).toBe(false);
+    expect(mcpDraftProblem(draft)).toBeNull();
+
+    const reEnabled = draft.entries.map((entry) =>
+      entry.scope === "project" ? withEntryConfig(entry, { enabled: true }) : entry,
+    );
+    expect(mcpDraftProblem({ ...draft, entries: reEnabled })).toBeNull();
+    // The minimal shape survives the write: `enabled: true` is not pruned to `{}`.
+    expect(mcpPendingChanges({ ...draft, entries: reEnabled }, data)).toEqual([
+      { scope: "project", operations: [{ op: "upsert", name: "docs", config: { enabled: true } }] },
+    ]);
+  });
+
+  it("rejects an override that sets a key pi does not allow", () => {
+    const data = panelData([{ ...docsEntry }, { ...overrideEntry }]);
+    const draft = draftFromPanelData(data);
+    const bad = draft.entries.map((entry) =>
+      entry.scope === "project" ? withEntryConfig(entry, { enabled: false, oauth: { clientId: "x" } }) : entry,
+    );
+
+    expect(mcpDraftProblem({ ...draft, entries: bad })).toEqual({
+      kind: "override-extra-keys",
+      name: "docs",
+      keys: ["oauth"],
+    });
+  });
+
+  it("still requires a transport in the global file", () => {
+    const data = panelData([{ ...docsEntry }]);
+    const draft = draftFromPanelData(data);
+    const transportless = draft.entries.map((entry) => withEntryConfig(entry, { enabled: false }));
+
+    expect(mcpDraftProblem({ ...draft, entries: transportless })).toEqual({ kind: "missing-transport", name: "docs" });
+  });
+});
+
 describe("mcp-draft: file-level switch", () => {
   it("writes false when turned off and deletes the key when turned back on", () => {
     const data = panelData([], [{ autoEnableCodemode: null }]);
@@ -228,6 +277,18 @@ describe("mcp-panel: normalization", () => {
       exposure: "direct",
       toolExposure: { a: "hidden" },
     });
+  });
+
+  it("keeps an override's minimal shape instead of pruning it to an empty object", () => {
+    expect(pruneMcpDefaults({ enabled: true })).toEqual({ enabled: true });
+    expect(pruneMcpDefaults({ exposure: "codemode" })).toEqual({ exposure: "codemode" });
+    expect(canonicalMcpJson({ enabled: true })).not.toBe(canonicalMcpJson({}));
+  });
+
+  it("counts the keys the form does not model", () => {
+    expect(mcpUncoveredFields({ url: "https://example.com/mcp" })).toEqual([]);
+    expect(mcpUncoveredFields({ command: "x", args: [], env: {}, description: "d" })).toEqual([]);
+    expect(mcpUncoveredFields({ url: "https://example.com/mcp", oauth: {}, toolExposure: {} })).toEqual(["oauth", "toolExposure"]);
   });
 
   it("compares entries independently of key order", () => {

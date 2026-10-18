@@ -1,7 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR_NAME, type LoadedMcpConfig, type McpExposure, type McpServerConfig, type McpServerEntry } from "@earendil-works/pi-coding-agent";
-import { MCP_EXPOSURE_ALIASES } from "@/lib/shared/mcp-panel";
+import {
+  isMcpOverride,
+  MCP_EXPOSURE_ALIASES,
+  mcpOverrideExtraKeys,
+  mcpOverrideExtraKeysError,
+  mcpOverrideMissingBaseError,
+} from "@/lib/shared/mcp-panel";
 import { createLogger } from "./logger";
 
 const log = createLogger("mcp-config");
@@ -224,6 +230,23 @@ function readConfigFile(path: string, scope: "global" | "project", state: LoadSt
     state.errors.push(`${path}: autoEnableCodemode must be a boolean`);
   }
   for (const [name, value] of Object.entries((parsed.mcpServers as Record<string, unknown>) ?? {})) {
+    // pi's override branch: a project entry with no transport of its own only
+    // amends the global server of the same name. Pi Work mirrored the loader
+    // without this branch, so project overrides were silently dropped; this is
+    // alignment with `extensions/mcp/config.js`, not new semantics.
+    if (scope === "project" && isRecord(value) && isMcpOverride(value)) {
+      const base = state.servers.get(name);
+      if (!base) {
+        state.errors.push(`${path}: ${mcpOverrideMissingBaseError(name)}`);
+      } else if (mcpOverrideExtraKeys(value).length > 0) {
+        state.errors.push(`${path}: ${mcpOverrideExtraKeysError(name)}`);
+      } else {
+        const config = validateMcpServerConfig(name, { ...(base.config as unknown as Record<string, unknown>), ...value });
+        if (typeof config === "string") state.errors.push(`${path}: ${config}`);
+        else state.servers.set(name, { ...base, config, override: path });
+      }
+      continue;
+    }
     const config = validateMcpServerConfig(name, value);
     if (typeof config === "string") {
       state.errors.push(`${path}: ${config}`);
