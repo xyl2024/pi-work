@@ -15,6 +15,7 @@ export const mcp = {
   "mcp.discardTitle": "放弃未保存的改动？",
   "mcp.discardBody": "对 mcp.json 的改动还没有保存。",
   "mcp.loadFailed": "加载 MCP 服务器失败：{error}",
+  "mcp.verifying": "正在核对磁盘…",
   "mcp.noCwd": "还没有选中工作目录。选择一个会话或工作目录后再管理本工作目录的 mcp.json。",
   "mcp.empty": "这个文件里还没有服务器",
   "mcp.global": "全局",

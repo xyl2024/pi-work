@@ -112,6 +112,7 @@ export const EN_TRANSLATIONS = {
   "mcp.discardTitle": "Discard unsaved changes?",
   "mcp.discardBody": "Your edits to mcp.json have not been saved.",
   "mcp.loadFailed": "Failed to load MCP servers: {error}",
+  "mcp.verifying": "Checking the files…",
   "mcp.noCwd": "No working directory is selected yet. Pick a session or working directory to manage the workspace mcp.json.",
   "mcp.empty": "No servers in this file",
   "mcp.global": "Global",

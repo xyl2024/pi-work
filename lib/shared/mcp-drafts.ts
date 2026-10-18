@@ -32,6 +32,12 @@ export interface McpDraftBucket {
   pages: McpPage[];
   /** The draft differs from `data` (i.e. a save would write something). */
   dirty: boolean;
+  /**
+   * The snapshot has been checked against disk since it was placed here. False
+   * while a background reconcile is in flight — the panel shows the snapshot
+   * with a subtle "checking" indicator instead of blocking.
+   */
+  verified: boolean;
 }
 
 /** All live buckets, keyed by cwd. */
@@ -46,12 +52,7 @@ export function parkMcpBucket(
   buckets: McpDraftBuckets,
   cwd: string | null,
 ): McpDraftBuckets {
-  if (cwd === null) return buckets;
-  const bucket = buckets[cwd];
-  if (!bucket || bucket.dirty) return buckets;
-  const next = { ...buckets };
-  delete next[cwd];
-  return next;
+  return cwd === null || !buckets[cwd] ? buckets : buckets;
 }
 
 /** Put one bucket in place, replacing the cwd's previous entry. */
@@ -78,4 +79,32 @@ export function selectMcpBucket(
   cwd: string | null,
 ): McpDraftBucket | null {
   return cwd === null ? null : buckets[cwd] ?? null;
+}
+
+/**
+ * Whether the "checking the disk" indicator belongs on screen: a snapshot is
+ * held but the background reconcile has not finished yet.
+ */
+export function isMcpBucketVerifying(bucket: McpDraftBucket | null): boolean {
+  return bucket !== null && !bucket.verified;
+}
+
+/**
+ * Whether a freshly read snapshot may replace the bucket on screen. A dirty
+ * draft wins: the user's edits are never overwritten by a reconcile that
+ * started before them.
+ */
+export function shouldApplyMcpSnapshot(bucket: McpDraftBucket | null): boolean {
+  return bucket === null || !bucket.dirty;
+}
+
+/** The same bucket, with its snapshot marked as reconciled (or not). */
+export function withMcpBucketVerified(
+  buckets: McpDraftBuckets,
+  cwd: string,
+  verified: boolean,
+): McpDraftBuckets {
+  const bucket = buckets[cwd];
+  if (!bucket || bucket.verified === verified) return buckets;
+  return withMcpBucket(buckets, { ...bucket, verified });
 }
