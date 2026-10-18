@@ -22,8 +22,8 @@ import { canonicalMcpJson, mcpUncoveredFields, pruneMcpDefaults, type McpPanelDa
 function panelData(entries: McpPanelData["entries"], files?: Partial<McpPanelData["files"][number]>[]): McpPanelData {
   return {
     files: [
-      { scope: "global", path: "/agent/mcp.json", exists: true, parseError: null, autoEnableCodemode: null, ...files?.[0] },
-      { scope: "project", path: "/cwd/.pi/mcp.json", exists: false, parseError: null, autoEnableCodemode: null, ...files?.[1] },
+      { scope: "global", path: "/agent/mcp.json", exists: true, parseError: null, autoEnableError: null, autoEnableCodemode: null, ...files?.[0] },
+      { scope: "project", path: "/cwd/.pi/mcp.json", exists: false, parseError: null, autoEnableError: null, autoEnableCodemode: null, ...files?.[1] },
     ],
     entries,
     projectTrusted: false,

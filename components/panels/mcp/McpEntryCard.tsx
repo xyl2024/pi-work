@@ -6,7 +6,8 @@ import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { TruncatedText } from "@/components/ui/TruncatedText";
 import { avatarPalette } from "@/lib/client/avatar-palette";
 import { isEntryDirty, type McpDraftEntry } from "@/lib/shared/mcp-draft";
-import { isEnabled, summarizeEntry, transportOf } from "./utils";
+import { isMcpOverride } from "@/lib/shared/mcp-panel";
+import { exposureOf, isEnabled, summarizeEntry } from "./utils";
 
 /**
  * One MCP server entry as a card in the panel's grid — deliberately the same
@@ -14,9 +15,9 @@ import { isEnabled, summarizeEntry, transportOf } from "./utils";
  * summary line. Clicking the card opens the entry's form; the toggle edits the
  * draft in place (nothing is written until Save).
  *
- * The badge row is where the panel's vocabulary shows up: pi's validation
- * error, the cross-file override, and whether the entry is new / edited /
- * marked for deletion.
+ * The form is the place that explains *why* an entry is invalid; the card only
+ * carries a red dot (reason in its `title`). The remaining badges are the states
+ * a user has to act on: override / disabled / unsaved / new / deleting.
  */
 
 const CLAMP_STYLE: CSSProperties = {
@@ -26,9 +27,8 @@ const CLAMP_STYLE: CSSProperties = {
   overflow: "hidden",
 };
 
-function Badge({ label, tone, title }: { label: string; tone: "error" | "accent" | "muted" | "warn"; title?: string }) {
-  const color =
-    tone === "error" ? "var(--error)" : tone === "accent" ? "var(--accent)" : tone === "warn" ? "var(--text)" : "var(--text-dim)";
+function Badge({ label, tone, title }: { label: string; tone: "accent" | "muted" | "warn"; title?: string }) {
+  const color = tone === "accent" ? "var(--accent)" : tone === "warn" ? "var(--text)" : "var(--text-dim)";
   return (
     <span
       title={title}
@@ -60,9 +60,11 @@ export function McpEntryCard({
 }) {
   const { t } = useI18n();
   const palette = avatarPalette(entry.name || "mcp");
-  const transport = transportOf(entry.config);
   const initial = (entry.name.trim()[0] ?? "?").toUpperCase();
-  const summary = summarizeEntry(entry.config) || t("mcp.empty");
+  const override = entry.config !== null && entry.scope === "project" && isMcpOverride(entry.config);
+  const summary = override
+    ? t("mcp.overrideSummary", { exposure: exposureOf(entry.config) })
+    : summarizeEntry(entry.config) || t("mcp.empty");
   const dirty = isEntryDirty(entry);
 
   return (
@@ -133,6 +135,20 @@ export function McpEntryCard({
             whiteSpace: "nowrap",
           }}
         />
+        {entry.loadError && !entry.deleted && (
+          <span
+            title={entry.loadError}
+            aria-label={t("mcp.invalid")}
+            style={{
+              flexShrink: 0,
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "var(--error)",
+              boxShadow: "0 0 0 3px color-mix(in srgb, var(--error) 18%, transparent)",
+            }}
+          />
+        )}
         <span style={{ display: "inline-flex" }}>
           <ToggleSwitch
             size="sm"
@@ -151,13 +167,10 @@ export function McpEntryCard({
       />
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {transport !== "unknown" && (
-          <Badge label={transport === "http" ? "HTTP" : "stdio"} tone="muted" />
-        )}
-        {entry.deleted && <Badge label={t("mcp.deleted")} tone="error" />}
-        {!entry.deleted && entry.loadError && <Badge label={t("mcp.invalid")} tone="error" title={entry.loadError} />}
-        {!entry.deleted && entry.shadowsGlobal && <Badge label={t("mcp.shadowsGlobal")} tone="warn" />}
-        {!entry.deleted && entry.shadowedByProject && <Badge label={t("mcp.shadowedByProject")} tone="warn" />}
+        {entry.deleted && <Badge label={t("mcp.deleted")} tone="warn" />}
+        {!entry.deleted && override && <Badge label={t("mcp.overrideBadge")} tone="warn" title={t("mcp.overrideEntryHint")} />}
+        {!entry.deleted && !override && entry.shadowsGlobal && <Badge label={t("mcp.shadowsGlobal")} tone="warn" />}
+        {!entry.deleted && entry.shadowedByProject && <Badge label={t("mcp.shadowedByProject")} tone="muted" />}
         {!entry.deleted && entry.originalName === null && <Badge label={t("mcp.new")} tone="accent" />}
         {!entry.deleted && dirty && entry.originalName !== null && <Badge label={t("mcp.unsaved")} tone="accent" />}
         {!entry.deleted && !isEnabled(entry.config) && <Badge label={t("mcp.disabled")} tone="muted" />}

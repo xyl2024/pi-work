@@ -127,6 +127,8 @@ export interface McpPanelFile {
   exists: boolean;
   /** File-level failure (JSON syntax, or a top-level shape pi rejects): the panel refuses to save. */
   parseError: string | null;
+  /** `autoEnableCodemode` was present but not a boolean: pi logs it and keeps the servers. */
+  autoEnableError: string | null;
   /** `autoEnableCodemode` as written; null when the key is absent (pi defaults to true). */
   autoEnableCodemode: boolean | null;
 }
@@ -219,4 +221,74 @@ export function parseMcpEntryConfig(rawJson: string): Record<string, unknown> | 
   } catch {
     return null;
   }
+}
+
+/**
+ * One problem the list page reports, attributed to the file or the entry it
+ * came from. `level` is the distinction the raw error strings cannot carry:
+ *
+ *   • `file` — the file is unusable and the panel refuses to save it;
+ *   • `entry` — pi skips that server and every other server still connects.
+ */
+export interface McpProblem {
+  scope: McpScope | null;
+  level: "file" | "entry";
+  /** The entry name for entry-level problems, null otherwise. */
+  name: string | null;
+  message: string;
+}
+
+/**
+ * Collapse the panel's three error sources (the loader's `errors[]`, each
+ * file's `parseError` / `autoEnableError`, each entry's `error`) into one
+ * de-duplicated list. A string in `errors[]` that no structured fact already
+ * accounts for still surfaces, so nothing pi said is lost.
+ */
+export function projectMcpProblems(data: McpPanelData): McpProblem[] {
+  const problems: McpProblem[] = [];
+  const seen = new Set<string>();
+  const push = (problem: McpProblem) => {
+    const key = `${problem.scope ?? ""}|${problem.level}|${problem.name ?? ""}|${problem.message}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    problems.push(problem);
+  };
+
+  for (const file of data.files) {
+    if (file.parseError) push({ scope: file.scope, level: "file", name: null, message: file.parseError });
+    if (file.autoEnableError) push({ scope: file.scope, level: "file", name: null, message: file.autoEnableError });
+  }
+  for (const entry of data.entries) {
+    if (entry.error) push({ scope: entry.scope, level: "entry", name: entry.name, message: entry.error });
+  }
+  for (const error of data.errors) {
+    if (problems.some((problem) => error.endsWith(problem.message))) continue;
+    push({ scope: null, level: "file", name: null, message: error });
+  }
+  return problems;
+}
+
+/** The summary line's two numbers: files that cannot be saved, invalid entries. */
+export interface McpProblemSummary {
+  files: number;
+  entries: number;
+}
+
+export function summarizeMcpProblems(problems: McpProblem[]): McpProblemSummary {
+  const files = new Set<McpScope | "">();
+  let entries = 0;
+  for (const problem of problems) {
+    if (problem.level === "file") files.add(problem.scope ?? "");
+    else entries += 1;
+  }
+  return { files: files.size, entries };
+}
+
+/**
+ * Whether the file-level codemode switch can affect anything here. pi only acts
+ * on it for non-`direct` exposure, so a file with only `direct` servers hides
+ * the switch instead of offering a control with no visible effect.
+ */
+export function entryUsesCodemode(config: Record<string, unknown> | null): boolean {
+  return config !== null && resolveMcpExposure(config.exposure) !== "direct";
 }

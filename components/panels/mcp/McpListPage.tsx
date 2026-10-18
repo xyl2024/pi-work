@@ -2,7 +2,14 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { shortenPath } from "@/lib/client/paths";
-import { MCP_SCOPES, type McpScope } from "@/lib/shared/mcp-panel";
+import {
+  entryUsesCodemode,
+  MCP_SCOPES,
+  projectMcpProblems,
+  summarizeMcpProblems,
+  type McpProblem,
+  type McpScope,
+} from "@/lib/shared/mcp-panel";
 import type { McpDraftBucket } from "@/lib/shared/mcp-drafts";
 import {
   addMcpServer,
@@ -20,16 +27,23 @@ import { mcpScopeLabelKey } from "./scopeLabel";
  * The MCP panel's list page: both `mcp.json` files, one section each, in the
  * fixed global-first order pi reads them in.
  *
- * Each section carries the file's own affordances — the `autoEnableCodemode`
- * switch, its parse error, the "saving creates it" hint — and the entries as
- * cards. Everything reads and writes the module store, so a tab switch never
+ * One problem summary at the top (expandable) is the single voice for every
+ * parse / validation / trust error; each file section only carries its own
+ * affordances — the codemode switch when it can do something, and the entries
+ * as cards. Everything reads and writes the module store, so a tab switch never
  * resets the draft or the page the user is on.
  */
 export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
   const { t } = useI18n();
   const { data, draft } = bucket;
 
+  const problems = projectMcpProblems(data);
+  const summary = summarizeMcpProblems(problems);
   const scopeLabel = (scope: McpScope) => t(mcpScopeLabelKey(scope));
+  const problemLevel = (problem: McpProblem) =>
+    problem.level === "file"
+      ? t("mcp.problemFileLevel")
+      : t("mcp.problemEntryLevel", { name: problem.name ?? "" });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -64,15 +78,30 @@ export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
 
       <div data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 14px 16px" }}>
         {!data.projectTrusted && <McpNotice tone="warn">{t("mcp.untrusted")}</McpNotice>}
-        {data.errors.length > 0 && (
+
+        {problems.length > 0 && (
           <McpNotice tone="error">
-            <div style={{ fontWeight: 600, marginBottom: 4 }}>{t("mcp.errorsTitle", { count: data.errors.length })}</div>
-            {data.errors.slice(0, 6).map((error, index) => (
-              <div key={`${error}-${index}`} style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                {error}
+            <details>
+              <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+                {t("mcp.problemsTitle")} ·{" "}
+                {[
+                  summary.files > 0 ? t("mcp.problemsFiles", { count: summary.files }) : null,
+                  summary.entries > 0 ? t("mcp.problemsEntries", { count: summary.entries }) : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </summary>
+              <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+                {problems.map((problem, index) => (
+                  <div key={`${problem.scope}-${problem.level}-${problem.name}-${index}`}>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      {problemLevel(problem)}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{problem.message}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-            {data.errors.length > 6 && <div style={{ marginTop: 2 }}>+{data.errors.length - 6}</div>}
+            </details>
           </McpNotice>
         )}
 
@@ -80,6 +109,7 @@ export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
           const file = data.files.find((item) => item.scope === scope);
           const entries = draft.entries.filter((entry) => entry.scope === scope);
           if (!file) return null;
+          const codemodeAffects = entries.some((entry) => entryUsesCodemode(entry.config));
           return (
             <section key={scope} style={{ marginBottom: 24 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 0 10px", flexWrap: "wrap" }}>
@@ -101,26 +131,28 @@ export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
                   {shortenPath(file.path)}
                 </code>
                 <span style={{ fontSize: 11, color: "var(--text-dim)" }}>{entries.length}</span>
-                <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <Tooltip content={t("mcp.autoEnableCodemodeHint")} side="top">
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("mcp.autoEnableCodemode")}</span>
-                  </Tooltip>
-                  <ToggleSwitch
-                    size="sm"
-                    on={draft.autoEnableCodemode[scope]}
-                    disabled={!file.exists && entries.length === 0}
-                    onChange={(next) => setMcpAutoEnable(scope, next)}
-                    label={t("mcp.autoEnableCodemode")}
-                  />
-                </span>
+                {codemodeAffects && (
+                  <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <Tooltip content={t("mcp.autoEnableCodemodeHint")} side="top">
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{t("mcp.autoEnableCodemode")}</span>
+                    </Tooltip>
+                    <ToggleSwitch
+                      size="sm"
+                      on={draft.autoEnableCodemode[scope]}
+                      disabled={!file.exists && entries.length === 0}
+                      onChange={(next) => setMcpAutoEnable(scope, next)}
+                      label={t("mcp.autoEnableCodemode")}
+                    />
+                  </span>
+                )}
               </div>
 
               {file.parseError ? (
                 <McpNotice tone="error">{t("mcp.fileError", { error: file.parseError })}</McpNotice>
               ) : !file.exists ? (
-                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("mcp.fileMissing")}</div>
+                <McpNotice tone="info">{t("mcp.fileMissing")}</McpNotice>
               ) : entries.length === 0 ? (
-                <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("mcp.empty")}</div>
+                <McpNotice tone="info">{t("mcp.empty")}</McpNotice>
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 12 }}>
                   {entries.map((entry) => (

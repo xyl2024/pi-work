@@ -63,14 +63,21 @@ interface LoadedFile {
 }
 
 function loadFile(scope: McpScope, path: string): LoadedFile {
-  const empty: McpPanelFile = { scope, path, exists: false, parseError: null, autoEnableCodemode: null };
+  const empty: McpPanelFile = {
+    scope,
+    path,
+    exists: false,
+    parseError: null,
+    autoEnableError: null,
+    autoEnableCodemode: null,
+  };
   if (!existsSync(path)) {
     return { file: empty, raw: null, parsed: null, servers: null, autoEnableError: null };
   }
 
   const raw = readFileSync(path, "utf8");
   const fail = (parseError: string): LoadedFile => ({
-    file: { scope, path, exists: true, parseError, autoEnableCodemode: null },
+    file: { scope, path, exists: true, parseError, autoEnableError: null, autoEnableCodemode: null },
     raw,
     parsed: null,
     servers: null,
@@ -89,15 +96,16 @@ function loadFile(scope: McpScope, path: string): LoadedFile {
   }
 
   const autoEnableCodemode = typeof parsed.autoEnableCodemode === "boolean" ? parsed.autoEnableCodemode : null;
+  const autoEnableError =
+    parsed.autoEnableCodemode === undefined || typeof parsed.autoEnableCodemode === "boolean"
+      ? null
+      : "autoEnableCodemode must be a boolean";
   return {
-    file: { scope, path, exists: true, parseError: null, autoEnableCodemode },
+    file: { scope, path, exists: true, parseError: null, autoEnableError, autoEnableCodemode },
     raw,
     parsed,
     servers: isRecord(parsed.mcpServers) ? parsed.mcpServers : {},
-    autoEnableError:
-      parsed.autoEnableCodemode === undefined || typeof parsed.autoEnableCodemode === "boolean"
-        ? null
-        : "autoEnableCodemode must be a boolean",
+    autoEnableError,
   };
 }
 
