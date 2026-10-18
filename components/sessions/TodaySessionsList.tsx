@@ -30,6 +30,10 @@ interface TodaySessionsListProps {
   refreshKey?: number;
   /** Parent-driven manual refresh (the section header button). */
   refreshSignal?: number;
+  /** Reports how many sessions are in today's list, for the section header
+   *  count. Not called while loading or after a load error, so the header can
+   *  keep showing the last known count until a fresh one arrives. */
+  onCountChange?: (count: number) => void;
 }
 
 /**
@@ -49,6 +53,7 @@ export function TodaySessionsList({
   onSessionDeleted,
   refreshKey,
   refreshSignal,
+  onCountChange,
 }: TodaySessionsListProps) {
   const { t } = useI18n();
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -92,6 +97,14 @@ export function TodaySessionsList({
   const { byId: runningById } = useRunningSessions();
   const pendingQuestions = useAllPendingAskUserQuestions();
   const pendingQuestionSessionIds = new Set(pendingQuestions.map((p) => p.sessionId));
+
+  // Report the count for the section header. Skipped while loading and after a
+  // failed load so the header keeps its last known value instead of flashing a
+  // stale 0. Deletions shrink `sessions`, so this also tracks row removal.
+  useEffect(() => {
+    if (loading || loadError) return;
+    onCountChange?.(sessions.length);
+  }, [loading, loadError, sessions.length, onCountChange]);
 
   const rows = sessions.map((s) => {
     const running = runningById.get(s.id);

@@ -202,6 +202,10 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const [sessionsOpen, setSessionsOpen] = useState(true);
   const [todayOpen, setTodayOpen] = useState(true);
   const [todayRefreshSignal, setTodayRefreshSignal] = useState(0);
+  // Today's session count, reported by TodaySessionsList for the section
+  // header. null until the first successful load, so the header shows no
+  // count rather than a misleading (0).
+  const [todayCount, setTodayCount] = useState<number | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerCollapseKey, setExplorerCollapseKey] = useState(0);
@@ -839,7 +843,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           keeps the list (and its already-loaded rows) alive across toggles so
           collapsing / expanding never replays the fetch. */}
       <SidebarSection
-        title={t("Today's Sessions")}
+        title={todayCount === null ? t("Today's Sessions") : `${t("Today's Sessions")} (${todayCount})`}
         open={todayOpen}
         onToggle={() => setTodayOpen((v) => !v)}
         grow={0}
@@ -862,6 +866,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           onSessionDeleted={handleSessionDeleted}
           refreshKey={refreshKey}
           refreshSignal={todayRefreshSignal}
+          onCountChange={setTodayCount}
         />
       </SidebarSection>
 
