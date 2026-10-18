@@ -23,7 +23,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerPanel } from "../panels/SchedulerPanel";
-import { ChannelsModal } from "../channels/ChannelsModal";
+import { ChannelsPanel } from "../panels/ChannelsPanel";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import { SkillsPanel } from "../panels/SkillsPanel";
@@ -84,6 +84,8 @@ import {
   releaseSkillsState,
   useSkillInstallRunning,
 } from "@/lib/client/skills-store";
+import { releaseChannelsState, getLoginPhase, stopLogin } from "@/lib/client/channels-store";
+import { selectChannelsCloseConfirm } from "@/lib/shared/channels-close";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
@@ -173,6 +175,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   scheduler: (ctx) => (
     <SchedulerPanel cwd={ctx.cwd} onOpenSession={ctx.openSessionById} onCloseTab={ctx.onClosePanelTab} />
   ),
+  channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
 };
 
 /** The shape every panel close guard returns — the shell only needs the copy. */
@@ -198,6 +201,7 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
     }),
   skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
   scheduler: () => schedulerCloseGuard(),
+  channels: () => selectChannelsCloseConfirm({ phase: getLoginPhase() }),
 };
 
 /** What confirming a guard does, run only once every guard has passed. */
@@ -206,6 +210,7 @@ const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
     if (hasActiveOAuthLogin()) cancelActiveOAuthLogins();
   },
   skills: () => cancelSkillInstall(),
+  channels: () => stopLogin(),
 };
 
 /** Panel views whose tab owns close-lossy state, in guard-table order. */
@@ -552,7 +557,6 @@ export function AppShell() {
   const [mcpConfigOpen, setMcpConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
-  const [channelsOpen, setChannelsOpen] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -599,6 +603,13 @@ export function AppShell() {
   useEffect(() => {
     setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
   }, [activeRightPanelKind, rightPanelState]);
+  // Same lifecycle for the channels list: it is live data (statuses change), so
+  // closing the tab drops it and the next open lands back on the list and reads
+  // the live statuses. Collapsing the panel / switching tabs keeps the tab.
+  const channelsTabOpen = selectTabByKind(panelTabsState, "channels") !== null;
+  useEffect(() => {
+    if (!channelsTabOpen) releaseChannelsState();
+  }, [channelsTabOpen]);
   // New sessions must pick up a just-saved default model. The refresh signal is
   // the successful PUT, not a modal close — "open then cancel" refreshes nothing.
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
@@ -617,7 +628,6 @@ export function AppShell() {
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
     setMcpConfigOpen(false);
     setSettingsConfigOpen(false);
-    setChannelsOpen(false);
     setPaletteOpen(true);
   }, []);
   const closeTopPanel = useCallback(() => {}, []);
@@ -1372,7 +1382,6 @@ export function AppShell() {
     newSession: handleSlashNew,
     openSettings: () => setSettingsConfigOpen(true),
     openCwdPicker: () => setCwdPickerOpen(true),
-    openChannels: () => setChannelsOpen(true),
     openMcp: () => setMcpConfigOpen(true),
     toggleSidebar: () => setSidebarOpen((v) => !v),
     toggleRightPanel: () => dispatchPanelTabs({
@@ -1642,7 +1651,6 @@ export function AppShell() {
       onFileDeleted={handleFileDeleted}
       favoriteIds={favoriteIds}
       onToggleFavorite={toggleSessionFavorite}
-      onOpenChannels={() => setChannelsOpen(true)}
       onOpenMcp={() => setMcpConfigOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onLogout={handleLogout}
@@ -1925,12 +1933,6 @@ export function AppShell() {
       onOpenSignalHandled={() => setCwdPickerOpen(false)}
       hideTrigger
     />
-    {channelsOpen && (
-      <ChannelsModal
-        open={channelsOpen}
-        onClose={() => setChannelsOpen(false)}
-      />
-    )}
     <CommandPalette
       open={paletteOpen}
       onClose={() => setPaletteOpen(false)}

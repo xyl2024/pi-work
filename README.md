@@ -40,7 +40,7 @@ PORT=8080 pi-work                 # 也支持 PORT 环境变量
 - Markdown、代码、Mermaid、SVG、ECharts、图片、音频、视频和 PDF 查看
 - Todo、Agent Todo、收藏、终端、Canvas、Git Diff 面板
 - Token 使用审计和 LLM API 调用审计
-- 定时任务、技能、模型配置和提示词配置
+- 定时任务、技能、模型配置、频道管理和提示词配置
 - WeChat 登录、收发消息和入站监控
 - ⌘K / Ctrl+K 命令面板
 
@@ -177,6 +177,7 @@ components/
   files/                       文件浏览器和文件查看器
   panels/                      右侧工具面板
   scheduler/                   定时任务面板视图的共享原语（cron 构造器、状态徽标、运行历史分块）
+  channels/                    频道活动流组件（频道面板的详情页在 panels/channels/）
   sessions/                   会话侧栏、会话库和分支视图
   settings/                   设置、模型、技能和提示词配置
   todos/                       用户 Todo 与 Agent Todo UI

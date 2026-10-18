@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CHANNELS_TAB_ID,
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
@@ -383,6 +384,7 @@ describe("panelTabs registry", () => {
   it("covers exactly the panel views the shell knows about", () => {
     expect([...PANEL_TAB_KINDS].sort()).toEqual(
       [
+        "channels",
         "context",
         "conversationTree",
         "favorites",
@@ -411,7 +413,8 @@ describe("panelTabs registry", () => {
     // out — the flag only drives column grouping).
     expect(skills?.sessionBound).toBe(true);
     expect(order.indexOf("scheduler")).toBe(order.indexOf("skills") + 1);
-    expect(order.indexOf("scheduler")).toBe(order.indexOf("conversationTree") - 1);
+    expect(order.indexOf("channels")).toBe(order.indexOf("scheduler") + 1);
+    expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
   });
 
   it("registers the scheduled-tasks panel as a global button before the conversation tree", () => {
@@ -424,6 +427,25 @@ describe("panelTabs registry", () => {
     expect(scheduler?.sessionBound).toBe(false);
     expect(scheduler?.commands?.[0]?.labelKey).toBe("Open scheduled tasks");
     expect(scheduler?.commands?.[0]?.keywords).toContain("定时");
+  });
+
+  it("registers the channels panel as a global button before the conversation tree", () => {
+    const order = PANEL_TAB_KINDS as readonly string[];
+    const channels = PANEL_TAB_SPECS.find((spec) => spec.kind === "channels");
+
+    expect(channels?.tabId).toBe(CHANNELS_TAB_ID);
+    // Strip label reuses the existing "Channels" entry; the button and the
+    // palette entry keep the "Open channels" wording.
+    expect(channels?.labelKey).toBe("Channels");
+    // The channel list is global data, so the button stays enabled on the
+    // new-session page.
+    expect(channels?.sessionBound).toBe(false);
+    expect(channels?.commands?.[0]?.labelKey).toBe("Open channels");
+    expect(channels?.commands?.[0]?.keywords).toEqual(
+      expect.arrayContaining(["channels", "wechat", "微信", "频道", "消息"]),
+    );
+    expect(order.indexOf("channels")).toBe(order.indexOf("scheduler") + 1);
+    expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
   });
 
   it("marks session-bound panels and declares no expanded default", () => {
@@ -635,7 +657,6 @@ describe("panelTabs registry → command palette", () => {
       newSession: () => {},
       openSettings: () => {},
       openCwdPicker: () => {},
-      openChannels: () => {},
       openMcp: () => {},
       toggleSidebar: () => {},
       toggleRightPanel: () => {},
@@ -677,6 +698,7 @@ describe("panelTabs registry → command palette", () => {
         .sort(),
     ).toEqual(
       [
+        "panel.channels",
         "panel.favorites",
         "panel.gitDiff",
         "panel.llmAudit",

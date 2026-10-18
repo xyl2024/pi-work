@@ -51,7 +51,7 @@ import {
   Star,
 } from "lucide-react";
 import { ProviderGearIcon } from "../../ui/ProviderIcon";
-import { ToolIcon } from "../../ui/icons";
+import { GlobeIcon, ToolIcon } from "../../ui/icons";
 
 /** Options for rendering a panel view's glyph. The right-bar button, the tab
  *  strip and the command palette share one icon per kind, differing only in
@@ -273,6 +273,15 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     // visible while the panel is collapsed — which is exactly when the user
     // cannot otherwise tell that a background run is in flight.
     badge: (ctx) => (ctx.schedulerRunning ? <CornerBadge /> : null),
+  }),
+  channels: panelButton("channels", {
+    // Same long "Open …" wording as its neighbours; the tab strip uses the
+    // shorter "Channels" label from the registry — one glyph for both. The
+    // globe is the glyph the old hand-written palette entry used.
+    labelKey: "Open channels",
+    icon: ({ size }) => <GlobeIcon size={size} />,
+    // No corner badge: the existing badges all mean "a one-shot action has not
+    // finished". Channels have no such action — see ADR-0017.
   }),
   conversationTree: panelButton("conversationTree", {
     labelKey: "Open conversation tree",

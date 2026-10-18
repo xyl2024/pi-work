@@ -3,11 +3,6 @@
 export const channels = {
   "Channels": "频道",
   "Manage messaging channels.": "管理微信等 IM 平台的消息频道",
-  "platform.wechat": "微信",
-  "platform.dingtalk": "钉钉",
-  "platform.feishu": "飞书",
-  "platform.discord": "Discord",
-  "channels.notSupported": "暂未支持",
   "channels.channelName": "频道名",
   "channels.rename": "重命名",
   "channels.save": "保存",
@@ -90,10 +85,15 @@ export const channels = {
   "channels.act.workerStarted": "监控启动，开始轮询",
   "channels.act.workerStopped": "监控已停止",
 
-  "channels.healthBackoff": "退避中（{n} 次失败 · {s} 后重试）",
-  "channels.healthNoHeartbeat": "无心跳",
   "channels.healthLastPoll": "上次轮询",
   "channels.healthAgo": "{s}前",
+
+  "Close while scanning?": "扫码尚未完成，仍要关闭吗？",
+  "The scan will be interrupted and you'll need a new QR code.": "关闭会中断本次扫码，需要重新生成二维码。",
+  "Back to channels": "返回频道列表",
+  "channels.healthWorker": "监控进程",
+  "channels.healthFailures": "连续失败 {n} 次",
+  "channels.healthNextRetry": "下次重试 {s}",
 
   "Notification channel": "通知渠道",
   "No notification": "不通知",

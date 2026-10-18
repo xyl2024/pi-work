@@ -22,6 +22,7 @@
 // no adapter layer duplicating the tab shape here.
 
 import {
+  CHANNELS_TAB_ID,
   CONTEXT_TAB_ID,
   CONVERSATION_TREE_TAB_ID,
   FAVORITES_TAB_ID,
@@ -53,6 +54,7 @@ export interface PanelTabParams {
   modelsConfig: undefined;
   skills: undefined;
   scheduler: undefined;
+  channels: undefined;
   file: { path: string };
 }
 
@@ -281,6 +283,23 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open scheduled tasks",
         keywords: ["scheduler", "cron", "timer", "tasks", "schedule", "定时", "任务", "定时任务"],
+      },
+    ],
+  },
+  channels: {
+    kind: "channels",
+    tabId: CHANNELS_TAB_ID,
+    // Strip label reuses the existing "Channels" entry; the right-bar button
+    // and the palette entry keep the "Open channels" wording.
+    labelKey: "Channels",
+    defaultMode: "normal",
+    // The channel list is global data (it does not depend on the selected
+    // session's cwd), so the button stays enabled on the new-session page.
+    sessionBound: false,
+    commands: [
+      {
+        labelKey: "Open channels",
+        keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
       },
     ],
   },
