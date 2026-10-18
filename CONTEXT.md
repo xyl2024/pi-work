@@ -279,7 +279,7 @@ _Avoid_: 与手工把 `agent-skills/` 拷进 `~/.pi-work/skills/` 混用（那�
 ### MCP
 
 **MCP 服务器（MCP server）**：
-pi 的 MCP 扩展在一个会话启动时连接的外部工具来源，配置写在 pi 自己的 `mcp.json` 里而不是 Pi Work 的 `config.yaml`，工具以 `mcp__<服务器>__<工具>` 注册。
+pi 的 MCP 扩展在一个会话启动时连接的外部工具来源，配置写在 pi 自己的 `mcp.json` 里而不是 Pi Work 的 `config.yaml`，工具以 `mcp__<服务器>__<工具>` 注册。它在界面上是一个**面板视图**（右侧按钮列上的按钮，内容跟选中会话的 cwd 走），面板内的改动是**待保存项**，一次保存整批写回。
 _Avoid_: 把它当作 Pi Work 的集成（Pi Work 只读写它的配置文件，连接与工具注册都在 pi 那边）
 
 **服务器条目（Server entry）**：
