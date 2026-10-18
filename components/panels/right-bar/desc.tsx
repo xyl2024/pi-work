@@ -51,7 +51,7 @@ import {
   Star,
 } from "lucide-react";
 import { ProviderGearIcon } from "../../ui/ProviderIcon";
-import { GlobeIcon, ToolIcon } from "../../ui/icons";
+import { GlobeIcon, McpIcon, ToolIcon } from "../../ui/icons";
 
 /** Options for rendering a panel view's glyph. The right-bar button, the tab
  *  strip and the command palette share one icon per kind, differing only in
@@ -82,6 +82,11 @@ export interface RightBarCtx {
    *  again: the task list lives in the scheduler module store, so the dot stays
    *  lit while the panel is collapsed. */
   schedulerRunning: boolean;
+  /** At least one working directory holds an unsaved MCP draft. Lives in the
+   *  ctx for the same reason as `modelsConfigDirty`: the draft buckets live in
+   *  the module store, so the dot stays lit while the panel is collapsed (and
+   *  even in another session — see ADR-0018). */
+  mcpDirty: boolean;
   /** Active tool-call counter is the only thing that requires i18n inside
    *  the descriptor body, so we expose the AppShell-bound t() to avoid
    *  re-resolving the same key in two places. */
@@ -273,6 +278,18 @@ const PANEL_DESCRIPTOR_BY_KIND: Record<PanelViewKind, RightBarDescriptor> = {
     // visible while the panel is collapsed — which is exactly when the user
     // cannot otherwise tell that a background run is in flight.
     badge: (ctx) => (ctx.schedulerRunning ? <CornerBadge /> : null),
+  }),
+  mcp: panelButton("mcp", {
+    // The tooltip keeps the long "Open MCP servers" wording; the tab strip
+    // reuses the "MCP 服务器" entry from the registry — same glyph for both.
+    labelKey: "mcp.open",
+    // The same MCP glyph the old palette entry and the avatar menu used, kept
+    // identical across button / tab / palette.
+    icon: ({ size }) => <McpIcon size={size} />,
+    // Unsaved-changes dot: the same corner-dot hook as the models-config
+    // button, but the predicate spans every cwd bucket (ADR-0018) — so the dot
+    // stays lit when the user edits in one session and switches to another.
+    badge: (ctx) => (ctx.mcpDirty ? <CornerBadge /> : null),
   }),
   channels: panelButton("channels", {
     // Same long "Open …" wording as its neighbours; the tab strip uses the

@@ -7,13 +7,11 @@ import { useTheme } from "@/hooks/useTheme";
 import { Tooltip } from "../ui/Tooltip";
 import { SmartImage } from "../ui/SmartImage";
 import { SettingsIcon } from "../ui/animated-icons";
-import { McpIcon } from "../ui/icons";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { SUN, MOON } from "@/lib/client/icon-paths";
 
 interface Props {
   onOpenSettings?: () => void;
-  onOpenMcp?: () => void;
   refreshKey?: number;
   /** Sign-out entry (POST /api/auth/session/logout + reload). Rendered only
    *  when provided. */
@@ -40,7 +38,7 @@ const itemBaseStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
-export function ProfileBlock({ onOpenSettings, onOpenMcp, refreshKey, onLogout }: Props) {
+export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
   const { t } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
@@ -134,7 +132,7 @@ export function ProfileBlock({ onOpenSettings, onOpenMcp, refreshKey, onLogout }
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onOpenMcp || onLogout);
+  const hasAnyEntry = Boolean(onLogout);
 
   return (
     <div
@@ -319,18 +317,6 @@ export function ProfileBlock({ onOpenSettings, onOpenMcp, refreshKey, onLogout }
               "transform 180ms cubic-bezier(0.32, 0.72, 0, 1), opacity 180ms cubic-bezier(0.32, 0.72, 0, 1)",
           }}
         >
-          {onOpenMcp && (
-            <button
-              role="menuitem"
-              onClick={() => { setMenuOpen(false); onOpenMcp(); }}
-              style={itemBaseStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
-            >
-              <McpIcon size={14} />
-              <span>{t("mcp.title")}</span>
-            </button>
-          )}
           {onLogout && (
             <button
               role="menuitem"

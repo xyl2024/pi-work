@@ -18,7 +18,7 @@ import { TerminalPanel } from "../panels/TerminalPanel";
 import { TokensPanel } from "../panels/TokensPanel";
 import { LlmAuditPanel } from "../panels/LlmAuditPanel";
 import { GitPanel } from "../panels/GitPanel";
-import { McpConfig } from "../settings/McpConfig";
+import { McpPanel } from "../panels/McpPanel";
 import { Tooltip } from "../ui/Tooltip";
 import { SettingsModal } from "../settings/SettingsModal";
 
@@ -86,6 +86,8 @@ import {
 } from "@/lib/client/skills-store";
 import { releaseChannelsState, getLoginPhase, stopLogin } from "@/lib/client/channels-store";
 import { selectChannelsCloseConfirm } from "@/lib/shared/channels-close";
+import { getMcpDirty, releaseMcpState, useMcpDirty } from "@/lib/client/mcp-store";
+import { selectMcpCloseConfirm } from "@/lib/shared/mcp-close";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
@@ -127,9 +129,13 @@ interface PanelBodyCtx {
   agentRunning: boolean;
   onConversationTreeCardClick: (cardId: string) => void;
   gitDiffOpenCount: number;
+  /** Re-open counter for the MCP panel; a clean panel re-reads disk on each one. */
+  mcpOpenCount: number;
   onExpandGitPanel: () => void;
   /** Open a session by id without collapsing the scheduler panel. */
   openSessionById: (sessionId: string) => void;
+  /** Start a new session (the MCP footer's "servers connect at session start" action). */
+  onNewSession: () => void;
   /** Close the panel tab that is currently active (Escape at the root page). */
   onClosePanelTab: () => void;
 }
@@ -171,6 +177,15 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     />
   ),
   modelsConfig: (ctx) => <ModelsConfigPanel onCloseTab={ctx.onClosePanelTab} />,
+  mcp: (ctx) => (
+    <McpPanel
+      cwd={ctx.cwd}
+      visible={ctx.rightPanelState !== "closed"}
+      openCount={ctx.mcpOpenCount}
+      onCloseTab={ctx.onClosePanelTab}
+      onNewSession={ctx.onNewSession}
+    />
+  ),
   skills: (ctx) => <SkillsPanel cwd={ctx.cwd} onCloseTab={ctx.onClosePanelTab} />,
   scheduler: (ctx) => (
     <SchedulerPanel cwd={ctx.cwd} onOpenSession={ctx.openSessionById} onCloseTab={ctx.onClosePanelTab} />
@@ -202,6 +217,7 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
   skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
   scheduler: () => schedulerCloseGuard(),
   channels: () => selectChannelsCloseConfirm({ phase: getLoginPhase() }),
+  mcp: () => selectMcpCloseConfirm({ dirty: getMcpDirty() }),
 };
 
 /** What confirming a guard does, run only once every guard has passed. */
@@ -554,7 +570,6 @@ export function AppShell() {
   const [pendingScrollEntryIds, setPendingScrollEntryIds] = useState<Record<string, string | null>>({});
   const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
   const [modelsRefreshKey, setModelsRefreshKey] = useState(0);
-  const [mcpConfigOpen, setMcpConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
@@ -610,6 +625,14 @@ export function AppShell() {
   useEffect(() => {
     if (!channelsTabOpen) releaseChannelsState();
   }, [channelsTabOpen]);
+  // Same lifecycle for the MCP draft buckets: the tab is their lifetime, so
+  // closing it releases every cwd's draft (after the close guard was confirmed)
+  // and the next open re-reads disk. Collapsing / switching keeps the tab.
+  const mcpDirty = useMcpDirty();
+  const mcpTabOpen = selectTabByKind(panelTabsState, "mcp") !== null;
+  useEffect(() => {
+    if (!mcpTabOpen) releaseMcpState();
+  }, [mcpTabOpen]);
   // New sessions must pick up a just-saved default model. The refresh signal is
   // the successful PUT, not a modal close — "open then cancel" refreshes nothing.
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
@@ -626,7 +649,6 @@ export function AppShell() {
   const openPalette = useCallback(() => {
     // The palette is the top-level modal — opening it closes every other
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
-    setMcpConfigOpen(false);
     setSettingsConfigOpen(false);
     setPaletteOpen(true);
   }, []);
@@ -1283,6 +1305,7 @@ export function AppShell() {
     modelsConfigDirty,
     skillsInstalling,
     schedulerRunning,
+    mcpDirty,
     t,
     toggleRightPanel: () =>
       setPanelMode(rightPanelState === "closed" ? "normal" : "closed"),
@@ -1304,8 +1327,10 @@ export function AppShell() {
     agentRunning,
     onConversationTreeCardClick: handleConversationTreeCardClick,
     gitDiffOpenCount,
+    mcpOpenCount: selectOpenCount(panelTabsState, "mcp"),
     onExpandGitPanel: handleExpandGitPanel,
     openSessionById: handleOpenScheduledSession,
+    onNewSession: handleSlashNew,
     // Escape from the models-config list closes its tab the same way its × does.
     onClosePanelTab: () => {
       if (activeFileTabId) handleCloseFileTab(activeFileTabId);
@@ -1382,7 +1407,6 @@ export function AppShell() {
     newSession: handleSlashNew,
     openSettings: () => setSettingsConfigOpen(true),
     openCwdPicker: () => setCwdPickerOpen(true),
-    openMcp: () => setMcpConfigOpen(true),
     toggleSidebar: () => setSidebarOpen((v) => !v),
     toggleRightPanel: () => dispatchPanelTabs({
       type: "set_mode",
@@ -1391,7 +1415,6 @@ export function AppShell() {
     togglePanel: handleTogglePanel,
     agentControls,
     hasSession: selectedSession !== null || newSessionCwd !== null,
-    hasCwd: !!(selectedSession?.cwd ?? newSessionCwd),
   }), [
     theme.setPreset, setLocale, handleSlashNew,
     setCwdPickerOpen,
@@ -1651,7 +1674,6 @@ export function AppShell() {
       onFileDeleted={handleFileDeleted}
       favoriteIds={favoriteIds}
       onToggleFavorite={toggleSessionFavorite}
-      onOpenMcp={() => setMcpConfigOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onLogout={handleLogout}
       profileRefreshKey={profileRefreshKey}
@@ -1918,13 +1940,6 @@ export function AppShell() {
     </div>
 
   </div>
-    {mcpConfigOpen && (selectedSession?.cwd ?? newSessionCwd) && (
-      <McpConfig
-        cwd={(selectedSession?.cwd ?? newSessionCwd)!}
-        onClose={() => setMcpConfigOpen(false)}
-        onNewSession={() => handleSlashNew()}
-      />
-    )}
     {settingsConfigOpen && <SettingsModal onClose={() => setSettingsConfigOpen(false)} onProfileSaved={() => setProfileRefreshKey((k) => k + 1)} />}
     <CwdPicker
       cwd={selectedSession?.cwd ?? newSessionCwd ?? null}
@@ -1947,7 +1962,7 @@ export function AppShell() {
       onHide={rightPanelSelection.hide}
     />
     {/* Single global translate bubble — mounted here (not inside ChatWindow)
-        so it also works over fullscreen modals such as McpConfig. It is
+        so it also works over fullscreen dialogs. It is
         position:fixed + z-index 8000, above the modal backdrop (1000). */}
     <TranslateBubble />
     </>
