@@ -26,11 +26,12 @@ const CLAMP_STYLE: CSSProperties = {
   overflow: "hidden",
 };
 
-function Badge({ label, tone }: { label: string; tone: "error" | "accent" | "muted" | "warn" }) {
+function Badge({ label, tone, title }: { label: string; tone: "error" | "accent" | "muted" | "warn"; title?: string }) {
   const color =
     tone === "error" ? "var(--error)" : tone === "accent" ? "var(--accent)" : tone === "warn" ? "var(--text)" : "var(--text-dim)";
   return (
     <span
+      title={title}
       style={{
         fontSize: 10,
         fontWeight: 600,
@@ -154,7 +155,7 @@ export function McpEntryCard({
           <Badge label={transport === "http" ? "HTTP" : "stdio"} tone="muted" />
         )}
         {entry.deleted && <Badge label={t("mcp.deleted")} tone="error" />}
-        {!entry.deleted && entry.loadError && <Badge label={t("mcp.invalid")} tone="error" />}
+        {!entry.deleted && entry.loadError && <Badge label={t("mcp.invalid")} tone="error" title={entry.loadError} />}
         {!entry.deleted && entry.shadowsGlobal && <Badge label={t("mcp.shadowsGlobal")} tone="warn" />}
         {!entry.deleted && entry.shadowedByProject && <Badge label={t("mcp.shadowedByProject")} tone="warn" />}
         {!entry.deleted && entry.originalName === null && <Badge label={t("mcp.new")} tone="accent" />}

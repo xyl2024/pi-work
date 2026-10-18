@@ -15,6 +15,7 @@ export const mcp = {
   "mcp.discardTitle": "放弃未保存的改动？",
   "mcp.discardBody": "对 mcp.json 的改动还没有保存。",
   "mcp.loadFailed": "加载 MCP 服务器失败：{error}",
+  "mcp.noCwd": "还没有选中工作目录。选择一个会话或工作目录后再管理本工作目录的 mcp.json。",
   "mcp.empty": "这个文件里还没有服务器",
   "mcp.global": "全局",
   "mcp.project": "本工作目录",
@@ -30,6 +31,7 @@ export const mcp = {
   "mcp.confirmSpawn": "下个会话会以你的权限执行这些命令：\n{commands}",
   "mcp.saveFailed": "保存失败：{error}",
   "mcp.applyHint": "服务器在会话启动时才连接。",
+  "mcp.savedHint": "已保存 · 服务器在会话启动时才连接。",
   "mcp.newSession": "新建会话",
 
   "mcp.invalid": "无效",

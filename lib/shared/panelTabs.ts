@@ -28,6 +28,7 @@ import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
+  MCP_TAB_ID,
   MODELS_CONFIG_TAB_ID,
   SCHEDULER_TAB_ID,
   SKILLS_TAB_ID,
@@ -52,6 +53,7 @@ export interface PanelTabParams {
   llmAudit: undefined;
   context: undefined;
   modelsConfig: undefined;
+  mcp: undefined;
   skills: undefined;
   scheduler: undefined;
   channels: undefined;
@@ -246,6 +248,25 @@ export const PANEL_TAB_SPEC_BY_KIND = {
       {
         labelKey: "Open models config",
         keywords: ["models", "config", "providers", "api", "模型", "配置", "服务商"],
+      },
+    ],
+  },
+  mcp: {
+    kind: "mcp",
+    tabId: MCP_TAB_ID,
+    // Tab-strip label reuses the existing "MCP 服务器" entry; the right-bar
+    // button and the palette entry keep the "Open MCP servers" wording.
+    labelKey: "mcp.title",
+    defaultMode: "normal",
+    // Session-bound: the list follows the selected session's cwd (the
+    // workspace mcp.json section), so the button groups with the other
+    // live-state buttons. The flag only drives column grouping — the button
+    // stays enabled on the new-session page.
+    sessionBound: true,
+    commands: [
+      {
+        labelKey: "mcp.open",
+        keywords: ["mcp", "servers", "model context protocol", "tools", "服务器", "工具"],
       },
     ],
   },

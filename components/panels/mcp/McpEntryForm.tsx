@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
-import { Field, SegmentedControl, Select, TextArea, TextInput } from "../controls";
+import { Field, SegmentedControl, Select, TextArea, TextInput } from "@/components/settings/controls";
 import { MCP_EXPOSURES, MCP_SERVER_NAME } from "@/lib/shared/mcp-panel";
 import type { McpDraftEntry } from "@/lib/shared/mcp-draft";
 import {

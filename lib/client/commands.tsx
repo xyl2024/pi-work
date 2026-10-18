@@ -34,7 +34,6 @@ const SunIcon = ICONS.sun;
 const MoonIcon = ICONS.moon;
 const SidebarIcon = ICONS.sidebar;
 const GearIcon = ICONS.gear;
-const McpIcon = ICONS.mcp;
 
 // Keep the right-panel toggle command icon identical to the right-bar
 // descriptor's.
@@ -92,7 +91,6 @@ export interface CommandContext {
   // Modal openers
   openSettings: () => void;
   openCwdPicker: () => void;
-  openMcp: () => void;
 
   // View toggles
   toggleSidebar: () => void;
@@ -108,7 +106,6 @@ export interface CommandContext {
 
   // Cwd/session presence for when() predicates.
   hasSession: boolean;
-  hasCwd: boolean;
 }
 
 // ── buildCommands ────────────────────────────────────────────────────────
@@ -224,15 +221,6 @@ export function buildCommands(
     keywords: ["settings", "preferences", "config", "设置", "偏好", "配置"],
     icon: <GearIcon />,
     run: () => ctx.openSettings(),
-  });
-  cmds.push({
-    id: "modal.mcp",
-    title: t("mcp.open"),
-    group: "Modal",
-    keywords: ["mcp", "servers", "model context protocol", "tools", "服务器", "工具"],
-    icon: <McpIcon />,
-    when: (c) => c.hasCwd,
-    run: () => ctx.openMcp(),
   });
   // ── Language (2) ──
   cmds.push({

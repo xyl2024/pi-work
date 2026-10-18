@@ -4,6 +4,7 @@ import {
   FAVORITES_TAB_ID,
   GIT_DIFF_TAB_ID,
   LLM_AUDIT_TAB_ID,
+  MCP_TAB_ID,
   SCHEDULER_TAB_ID,
   SKILLS_TAB_ID,
   TOKENS_TAB_ID,
@@ -390,6 +391,7 @@ describe("panelTabs registry", () => {
         "favorites",
         "gitDiff",
         "llmAudit",
+        "mcp",
         "modelsConfig",
         "scheduler",
         "skills",
@@ -399,7 +401,7 @@ describe("panelTabs registry", () => {
     );
   });
 
-  it("registers skills between models config and the scheduled-tasks panel", () => {
+  it("registers skills between the MCP panel and the scheduled-tasks panel", () => {
     const order = PANEL_TAB_KINDS as readonly string[];
     const skills = PANEL_TAB_SPECS.find((spec) => spec.kind === "skills");
 
@@ -407,7 +409,7 @@ describe("panelTabs registry", () => {
     // Strip label reuses the existing "Skills" entry — resolved at render time
     // so a locale switch relabels the open tab.
     expect(skills?.labelKey).toBe("Skills");
-    expect(order.indexOf("skills")).toBe(order.indexOf("modelsConfig") + 1);
+    expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
     // Session-bound: the list follows the selected session's cwd, so the
     // button groups with the other live-state buttons (it is never greyed
     // out — the flag only drives column grouping).
@@ -415,6 +417,27 @@ describe("panelTabs registry", () => {
     expect(order.indexOf("scheduler")).toBe(order.indexOf("skills") + 1);
     expect(order.indexOf("channels")).toBe(order.indexOf("scheduler") + 1);
     expect(order.indexOf("channels")).toBe(order.indexOf("conversationTree") - 1);
+  });
+
+  it("registers the MCP panel as a session-bound button between models config and skills", () => {
+    const order = PANEL_TAB_KINDS as readonly string[];
+    const mcp = PANEL_TAB_SPECS.find((spec) => spec.kind === "mcp");
+
+    expect(mcp?.tabId).toBe(MCP_TAB_ID);
+    // Strip label reuses the existing "MCP 服务器" entry; the button and the
+    // palette entry keep the "Open MCP servers" wording.
+    expect(mcp?.labelKey).toBe("mcp.title");
+    // Session-bound: the workspace mcp.json section follows the selected
+    // session's cwd, so the button groups with the other live-state buttons.
+    // The flag only drives column grouping — the button stays enabled on the
+    // new-session page (ADR-0018).
+    expect(mcp?.sessionBound).toBe(true);
+    expect(mcp?.commands?.[0]?.labelKey).toBe("mcp.open");
+    expect(mcp?.commands?.[0]?.keywords).toEqual(
+      expect.arrayContaining(["mcp", "servers", "model context protocol", "服务器", "工具"]),
+    );
+    expect(order.indexOf("mcp")).toBe(order.indexOf("modelsConfig") + 1);
+    expect(order.indexOf("skills")).toBe(order.indexOf("mcp") + 1);
   });
 
   it("registers the scheduled-tasks panel as a global button before the conversation tree", () => {
@@ -451,7 +474,7 @@ describe("panelTabs registry", () => {
   it("marks session-bound panels and declares no expanded default", () => {
     const sessionBound = PANEL_TAB_SPECS.filter((spec) => spec.sessionBound).map((spec) => spec.kind);
     expect([...sessionBound].sort()).toEqual(
-      ["context", "conversationTree", "gitDiff", "llmAudit", "skills"].sort(),
+      ["context", "conversationTree", "gitDiff", "llmAudit", "mcp", "skills"].sort(),
     );
 
     // The wide mode is the user's expand button, never an open default.
@@ -576,6 +599,7 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
       modelsConfigDirty: false,
       skillsInstalling: false,
       schedulerRunning: false,
+      mcpDirty: false,
       t: (key) => key,
       toggleRightPanel: () => {},
       togglePanel: () => {},
@@ -612,18 +636,34 @@ describe("panelTabs registry ↔ right-bar presentation", () => {
     expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ skillsInstalling: true }))).toBeFalsy();
   });
 
-  it("routes both badges through the one shared corner-dot hook", () => {
+  it("badges the MCP button while any cwd holds an unsaved draft", () => {
+    const descriptor = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp");
+
+    // The dirty buckets live in the module store, so the dot follows the store
+    // flag — not the panel being open, and not the current session's cwd.
+    // Collapsed (and another session) is the case ADR-0018 calls out.
+    expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed" }))).toBeFalsy();
+    expect(descriptor?.badge?.(barCtx({ rightPanelState: "closed", mcpDirty: true }))).toBeTruthy();
+    expect(descriptor?.badge?.(barCtx({ mcpDirty: true }))).toBeTruthy();
+    // The MCP flag must not light the models-config dot, and vice versa.
+    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(barCtx({ mcpDirty: true }))).toBeFalsy();
+    expect(RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ modelsConfigDirty: true }))).toBeFalsy();
+  });
+
+  it("routes the models-config / skills / MCP badges through the one shared corner-dot hook", () => {
     // Same mark, different predicate: whatever the models-config badge renders
-    // while dirty is what the skills badge renders while installing.
+    // while dirty is what the skills / MCP badges render too.
     const dirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("modelsConfig")?.badge?.(
       barCtx({ modelsConfigDirty: true }),
     );
     const installing = RIGHT_BAR_DESCRIPTOR_BY_ID.get("skills")?.badge?.(
       barCtx({ skillsInstalling: true }),
     );
+    const mcpDirty = RIGHT_BAR_DESCRIPTOR_BY_ID.get("mcp")?.badge?.(barCtx({ mcpDirty: true }));
 
     // Deep equality on the React element: same component, same (empty) props.
     expect(dirty).toEqual(installing);
+    expect(dirty).toEqual(mcpDirty);
 
     // …and the shared mark really is the small corner dot.
     const rendered = (
@@ -657,13 +697,11 @@ describe("panelTabs registry → command palette", () => {
       newSession: () => {},
       openSettings: () => {},
       openCwdPicker: () => {},
-      openMcp: () => {},
       toggleSidebar: () => {},
       toggleRightPanel: () => {},
       togglePanel: () => {},
       agentControls: null,
       hasSession: false,
-      hasCwd: false,
       ...overrides,
     };
   }
@@ -702,6 +740,7 @@ describe("panelTabs registry → command palette", () => {
         "panel.favorites",
         "panel.gitDiff",
         "panel.llmAudit",
+        "panel.mcp",
         "panel.modelsConfig",
         "panel.scheduler",
         "panel.skills",

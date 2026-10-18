@@ -444,6 +444,7 @@ export const CONVERSATION_TREE_TAB_ID = "conversationTree:global";
 export const LLM_AUDIT_TAB_ID = "llmAudit:global";
 export const CONTEXT_TAB_ID = "context:global";
 export const MODELS_CONFIG_TAB_ID = "modelsConfig:global";
+export const MCP_TAB_ID = "mcp:global";
 export const SKILLS_TAB_ID = "skills:global";
 export const SCHEDULER_TAB_ID = "scheduler:global";
 export const CHANNELS_TAB_ID = "channels:global";
