@@ -31,6 +31,7 @@ import { isContentEqual } from "./shallowEqual";
 import { fetchMcpPanelData, putMcpPanelChanges } from "./mcp-io";
 import {
   addDraftEntry,
+  addOverrideDraftEntry,
   draftFromPanelData,
   isDraftDirty,
   mcpDraftProblem,
@@ -333,6 +334,25 @@ export function addMcpServer(scope: McpScope): string | null {
     }),
   });
   return added.uid;
+}
+
+/**
+ * Add a project override that turns a global server off for this working
+ * directory, and open its page so the pending change (and the save button) are
+ * visible. Nothing is written until Save, same as every other edit.
+ */
+export function disableGlobalInProject(name: string): void {
+  const bucket = currentBucket();
+  if (!bucket) return;
+  const added = addOverrideDraftEntry(bucket.draft, name);
+  patch({
+    buckets: withMcpBucket(state.buckets, {
+      ...bucket,
+      draft: added.draft,
+      pages: openMcpEntryPage(added.uid),
+      dirty: isDraftDirty(added.draft, bucket.data),
+    }),
+  });
 }
 
 // ── Navigation ──────────────────────────────────────────────────────────

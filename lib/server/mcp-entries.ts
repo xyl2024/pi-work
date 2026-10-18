@@ -8,6 +8,7 @@ import {
   mcpOverrideExtraKeys,
   mcpOverrideExtraKeysError,
   mcpOverrideMissingBaseError,
+  mcpProjectAuthError,
   pruneMcpDefaults,
   type McpPanelChange,
   type McpPanelData,
@@ -158,6 +159,10 @@ export function readMcpPanelData(options: ReadMcpPanelOptions): McpPanelData {
       } else {
         const validated = validateMcpServerConfig(name, value);
         error = typeof validated === "string" ? validated : null;
+        // pi refuses `auth` in a project file (see mcp-config.ts).
+        if (!error && loaded.file.scope === "project" && isRecord(value) && typeof value.url === "string" && value.auth !== undefined) {
+          error = mcpProjectAuthError(name);
+        }
       }
       if (error) errors.push(`${loaded.file.path}: ${error}`);
       entries.push({
@@ -217,7 +222,13 @@ function validateUpsert(
     return typeof validated === "string" ? [validated] : [];
   }
   const validated = validateMcpServerConfig(name, config);
-  return typeof validated === "string" ? [validated] : [];
+  if (typeof validated === "string") return [validated];
+  // pi refuses `auth` in a project file: the credential's destination is not a
+  // repository's decision. Matches the loader and the panel reader.
+  if (scope === "project" && typeof config.url === "string" && config.auth !== undefined) {
+    return [mcpProjectAuthError(name)];
+  }
+  return [];
 }
 
 /**

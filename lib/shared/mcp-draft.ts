@@ -127,6 +127,44 @@ export function addDraftEntry(draft: McpDraft, scope: McpScope): { draft: McpDra
   };
 }
 
+/**
+ * Add (or find) a project override that only turns the global server of the same
+ * name off. It is a normal new draft — nothing is written until Save — so the
+ * "disable in this working directory" action keeps the panel's one save model.
+ */
+export function addOverrideDraftEntry(draft: McpDraft, name: string): { draft: McpDraft; uid: string } {
+  const existing = draft.entries.find(
+    (entry) => entry.scope === "project" && entry.name === name && !entry.deleted,
+  );
+  if (existing) return { draft, uid: existing.uid };
+
+  const config: Record<string, unknown> = { enabled: false };
+  const rawJson = JSON.stringify(config, null, 2);
+  const uid = `override:${name}`;
+  return {
+    draft: {
+      ...draft,
+      entries: [
+        ...draft.entries,
+        {
+          uid,
+          name,
+          scope: "project",
+          rawJson,
+          config,
+          originalName: null,
+          originalJson: "",
+          deleted: false,
+          loadError: null,
+          shadowsGlobal: false,
+          shadowedByProject: false,
+        },
+      ],
+    },
+    uid,
+  };
+}
+
 /** Apply a form edit: the parsed object is the model, its text is derived from it. */
 export function withEntryConfig(entry: McpDraftEntry, config: Record<string, unknown>): McpDraftEntry {
   return { ...entry, config, rawJson: JSON.stringify(config, null, 2) };

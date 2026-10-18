@@ -13,6 +13,7 @@ import {
 import type { McpDraftBucket } from "@/lib/shared/mcp-drafts";
 import {
   addMcpServer,
+  disableGlobalInProject,
   openMcpEntry,
   setMcpAutoEnable,
   setMcpEntryConfig,
@@ -162,6 +163,11 @@ export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
                       onOpen={() => openMcpEntry(entry.uid)}
                       onToggleEnabled={(enabled) =>
                         setMcpEntryConfig(entry.uid, { ...(entry.config ?? {}), enabled })
+                      }
+                      onDisableInProject={
+                        scope === "global" && data.projectTrusted && !entry.shadowedByProject
+                          ? () => disableGlobalInProject(entry.name)
+                          : undefined
                       }
                     />
                   ))}

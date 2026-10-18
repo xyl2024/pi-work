@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addDraftEntry,
+  addOverrideDraftEntry,
   describedRemovals,
   describeStdioCommands,
   draftFromPanelData,
@@ -221,6 +222,24 @@ describe("mcp-draft: override entries", () => {
     const transportless = draft.entries.map((entry) => withEntryConfig(entry, { enabled: false }));
 
     expect(mcpDraftProblem({ ...draft, entries: transportless })).toEqual({ kind: "missing-transport", name: "docs" });
+  });
+
+  it("adds a project override that disables the global server, and reuses an existing one", () => {
+    const data = panelData([{ ...docsEntry }]);
+    const draft = draftFromPanelData(data);
+
+    const added = addOverrideDraftEntry(draft, "docs");
+    const entry = added.draft.entries.find((item) => item.uid === added.uid);
+    expect(entry?.scope).toBe("project");
+    expect(entry?.config).toEqual({ enabled: false });
+    expect(mcpDraftProblem(added.draft)).toBeNull();
+    expect(mcpPendingChanges(added.draft, data)).toEqual([
+      { scope: "project", operations: [{ op: "upsert", name: "docs", config: { enabled: false } }] },
+    ]);
+
+    const again = addOverrideDraftEntry(added.draft, "docs");
+    expect(again.uid).toBe(added.uid);
+    expect(again.draft).toBe(added.draft);
   });
 });
 

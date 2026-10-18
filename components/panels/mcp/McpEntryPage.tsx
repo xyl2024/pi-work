@@ -1,7 +1,7 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { MCP_SCOPES, type McpScope } from "@/lib/shared/mcp-panel";
+import { MCP_SCOPES, isMcpOverride, type McpScope } from "@/lib/shared/mcp-panel";
 import type { McpDraftBucket } from "@/lib/shared/mcp-drafts";
 import type { McpDraftEntry } from "@/lib/shared/mcp-draft";
 import {
@@ -15,6 +15,7 @@ import {
 } from "@/lib/client/mcp-store";
 import { SecondaryButton } from "@/components/settings/controls";
 import { McpEntryForm } from "./McpEntryForm";
+import { McpNotice } from "./McpNotice";
 import { mcpScopeLabelKey } from "./scopeLabel";
 
 /**
@@ -71,6 +72,7 @@ export function McpEntryPage({ bucket, entry }: { bucket: McpDraftBucket; entry:
               onChange={(scope) => setMcpEntryScope(entry.uid, scope)}
             />
           )}
+          {entry.scope === "project" && <McpNotice tone="info">{t("mcp.projectAuthNote")}</McpNotice>}
           <McpEntryForm
             key={entry.uid}
             entry={entry}
@@ -84,7 +86,9 @@ export function McpEntryPage({ bucket, entry }: { bucket: McpDraftBucket; entry:
             ) : entry.deleted ? (
               <SecondaryButton onClick={() => setMcpEntryDeleted(entry.uid, false)}>{t("mcp.undoDelete")}</SecondaryButton>
             ) : (
-              <SecondaryButton onClick={() => setMcpEntryDeleted(entry.uid, true)}>{t("mcp.delete")}</SecondaryButton>
+              <SecondaryButton onClick={() => setMcpEntryDeleted(entry.uid, true)}>
+                {entry.scope === "project" && entry.config && isMcpOverride(entry.config) ? t("mcp.deleteOverride") : t("mcp.delete")}
+              </SecondaryButton>
             )}
             {entry.deleted && <span style={{ fontSize: 11, color: "var(--error)" }}>{t("mcp.deleteHint")}</span>}
           </div>
@@ -105,7 +109,7 @@ function ScopePicker({
 }) {
   const { t } = useI18n();
   return (
-    <div role="radiogroup" aria-label={t("mcp.transport")} style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+    <div role="radiogroup" aria-label={t("mcp.scope")} style={{ display: "flex", gap: 6, marginBottom: 14 }}>
       {MCP_SCOPES.map((scope) => {
         const disabled = scope === "project" && projectDisabled;
         const active = scope === value;

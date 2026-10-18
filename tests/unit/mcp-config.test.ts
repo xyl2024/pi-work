@@ -270,4 +270,16 @@ describe("mcp-config: project overrides", () => {
     expect(loaded.servers).toEqual([]);
     expect(loaded.errors.join("\n")).toContain('needs either "command" (stdio) or "url"');
   });
+
+  it("allows auth in the global file but refuses it in a project file", () => {
+    const { agentDir, cwd } = sandbox();
+    writeGlobal(agentDir, { mcpServers: { docs: { url: "https://example.com/mcp", auth: { provider: "anthropic" } } } });
+    expect(loadMcpConfigForPiWork({ agentDir, cwd, projectTrusted: true }).servers).toHaveLength(1);
+
+    writeProject(cwd, { mcpServers: { local: { url: "https://project.example/mcp", auth: { provider: "anthropic" } } } });
+    const loaded = loadMcpConfigForPiWork({ agentDir, cwd, projectTrusted: true });
+
+    expect(loaded.servers.map((entry) => entry.name)).toEqual(["docs"]);
+    expect(loaded.errors.join("\n")).toContain("auth is only allowed in the global mcp.json");
+  });
 });

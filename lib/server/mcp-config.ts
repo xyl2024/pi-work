@@ -7,6 +7,7 @@ import {
   mcpOverrideExtraKeys,
   mcpOverrideExtraKeysError,
   mcpOverrideMissingBaseError,
+  mcpProjectAuthError,
 } from "@/lib/shared/mcp-panel";
 import { createLogger } from "./logger";
 
@@ -250,6 +251,13 @@ function readConfigFile(path: string, scope: "global" | "project", state: LoadSt
     const config = validateMcpServerConfig(name, value);
     if (typeof config === "string") {
       state.errors.push(`${path}: ${config}`);
+      continue;
+    }
+    // pi refuses `auth` in a project file: a repository must not pick where the
+    // credential goes. Mirrored here so a session and the panel agree.
+    const definition = config as unknown as Record<string, unknown>;
+    if (scope === "project" && typeof definition.url === "string" && definition.auth !== undefined) {
+      state.errors.push(`${path}: ${mcpProjectAuthError(name)}`);
       continue;
     }
     // Same shape as pi's loader: project entries replace global ones by name.

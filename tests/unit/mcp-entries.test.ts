@@ -353,4 +353,29 @@ describe("mcp-entries: project overrides", () => {
     expect(written.$schema).toBe("x");
     expect(written.mcpServers).toEqual({ other: { command: "keep" }, docs: { enabled: false } });
   });
+
+  it("flags a project entry that uses auth, and refuses to write one", () => {
+    const { agentDir, cwd } = sandbox();
+    write(globalPath(agentDir), { mcpServers: { docs: { url: "https://global.example/mcp" } } });
+    write(projectPath(cwd), { mcpServers: { local: { url: "https://project.example/mcp", auth: { provider: "x" } } } });
+
+    const data = readMcpPanelData({ agentDir, cwd, projectTrusted: true });
+    expect(data.entries.find((entry) => entry.name === "local")?.error).toContain(
+      "auth is only allowed in the global mcp.json",
+    );
+
+    const errors = applyMcpPanelChanges({
+      agentDir,
+      cwd,
+      changes: [
+        {
+          scope: "project",
+          operations: [
+            { op: "upsert", name: "local2", config: { url: "https://project.example/mcp", auth: { provider: "x" } } },
+          ],
+        },
+      ],
+    });
+    expect(errors.join("\n")).toContain("auth is only allowed in the global mcp.json");
+  });
 });

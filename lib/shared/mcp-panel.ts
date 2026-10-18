@@ -78,6 +78,14 @@ export function mcpOverrideMissingBaseError(name: string): string {
 }
 
 /**
+ * pi's message when a project entry tries to use `auth`: a repository must not
+ * pick where the credential goes, so the field only exists in the global file.
+ */
+export function mcpProjectAuthError(name: string): string {
+  return `server "${name}": auth is only allowed in the global mcp.json`;
+}
+
+/**
  * The keys the entry form models — the required trio (name / transport /
  * command-or-url) plus everything the advanced section exposes. Used to tell
  * the user how many fields the form does not cover (story 16).

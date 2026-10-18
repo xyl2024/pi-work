@@ -53,10 +53,13 @@ export function McpEntryCard({
   entry,
   onOpen,
   onToggleEnabled,
+  onDisableInProject,
 }: {
   entry: McpDraftEntry;
   onOpen: () => void;
   onToggleEnabled: (enabled: boolean) => void;
+  /** Present on a global entry that this working directory can override. */
+  onDisableInProject?: () => void;
 }) {
   const { t } = useI18n();
   const palette = avatarPalette(entry.name || "mcp");
@@ -175,6 +178,29 @@ export function McpEntryCard({
         {!entry.deleted && dirty && entry.originalName !== null && <Badge label={t("mcp.unsaved")} tone="accent" />}
         {!entry.deleted && !isEnabled(entry.config) && <Badge label={t("mcp.disabled")} tone="muted" />}
       </div>
+
+      {onDisableInProject && !entry.deleted && (
+        <button
+          type="button"
+          onClick={(event) => {
+            // The card itself opens the entry page; this action must not.
+            event.stopPropagation();
+            onDisableInProject();
+          }}
+          style={{
+            alignSelf: "flex-start",
+            padding: 0,
+            border: "none",
+            background: "none",
+            color: "var(--accent)",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: 11.5,
+          }}
+        >
+          {t("mcp.disableInProject")}
+        </button>
+      )}
     </div>
   );
 }
