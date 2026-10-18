@@ -24,7 +24,6 @@ import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerPanel } from "../panels/SchedulerPanel";
 import { ChannelsPanel } from "../panels/ChannelsPanel";
-import { ChannelsModal } from "../channels/ChannelsModal";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
 import { SkillsPanel } from "../panels/SkillsPanel";
@@ -558,7 +557,6 @@ export function AppShell() {
   const [mcpConfigOpen, setMcpConfigOpen] = useState(false);
   const [settingsConfigOpen, setSettingsConfigOpen] = useState(false);
   const [cwdPickerOpen, setCwdPickerOpen] = useState(false);
-  const [channelsOpen, setChannelsOpen] = useState(false);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -630,7 +628,6 @@ export function AppShell() {
     // modal so the screen never stacks. Sidebar button + ⌘K both route here.
     setMcpConfigOpen(false);
     setSettingsConfigOpen(false);
-    setChannelsOpen(false);
     setPaletteOpen(true);
   }, []);
   const closeTopPanel = useCallback(() => {}, []);
@@ -1654,7 +1651,6 @@ export function AppShell() {
       onFileDeleted={handleFileDeleted}
       favoriteIds={favoriteIds}
       onToggleFavorite={toggleSessionFavorite}
-      onOpenChannels={() => setChannelsOpen(true)}
       onOpenMcp={() => setMcpConfigOpen(true)}
       onOpenSettings={() => setSettingsConfigOpen(true)}
       onLogout={handleLogout}
@@ -1937,12 +1933,6 @@ export function AppShell() {
       onOpenSignalHandled={() => setCwdPickerOpen(false)}
       hideTrigger
     />
-    {channelsOpen && (
-      <ChannelsModal
-        open={channelsOpen}
-        onClose={() => setChannelsOpen(false)}
-      />
-    )}
     <CommandPalette
       open={paletteOpen}
       onClose={() => setPaletteOpen(false)}

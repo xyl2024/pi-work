@@ -3,11 +3,6 @@
 export const channels = {
   "Channels": "频道",
   "Manage messaging channels.": "管理微信等 IM 平台的消息频道",
-  "platform.wechat": "微信",
-  "platform.dingtalk": "钉钉",
-  "platform.feishu": "飞书",
-  "platform.discord": "Discord",
-  "channels.notSupported": "暂未支持",
   "channels.channelName": "频道名",
   "channels.rename": "重命名",
   "channels.save": "保存",
