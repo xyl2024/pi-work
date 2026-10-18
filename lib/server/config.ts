@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { readFileSync, statSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { load, dump } from "js-yaml";
 import { createLogger } from "./logger";
@@ -24,6 +24,24 @@ import {
 } from "../shared/file-viewer-limits";
 
 const log = createLogger("config");
+
+/**
+ * In-process `config.yaml` cache.
+ *
+ * State lives on `globalThis` because Next.js may evaluate this module more
+ * than once (the instrumentation bundle vs. a route bundle, dev hot reload);
+ * `network-proxy.ts` keeps its state there for the same reason. The contract is
+ * deliberately small:
+ *
+ *   • a `writeConfig` in this process is visible to the very next `readConfig`;
+ *   • a hand edit (or another process) is picked up as soon as the file's mtime
+ *     or size changes — the guard below — not necessarily instantly;
+ *   • cross-process real-time consistency is not promised (AGENTS.md already
+ *     says to use `dev:isolated` when two instances must not race).
+ */
+declare global {
+  var __piWorkConfigCache: { config: PiWorkConfig; mtimeMs: number; size: number } | undefined;
+}
 
 import type { RightBarButtonId, RightSideBarConfig } from "../shared/right-bar";
 import { resolveSessionBoundAlignment } from "../shared/right-bar";
@@ -316,15 +334,39 @@ function writeDefaultConfig(): PiWorkConfig {
   } catch (err) {
     log.error("failed to write default config", { error: String(err) });
   }
-  return { ...DEFAULT_CONFIG };
+  return cacheConfig({ ...DEFAULT_CONFIG }, statConfig());
+}
+
+/** The file's mtime + size guard, or null when it does not exist / is unreadable. */
+function statConfig(): { mtimeMs: number; size: number } | null {
+  try {
+    const stat = statSync(CONFIG_PATH);
+    return { mtimeMs: stat.mtimeMs, size: stat.size };
+  } catch {
+    return null;
+  }
+}
+
+/** Store the returned config, or drop the cache when the file cannot be stat'd. */
+function cacheConfig(config: PiWorkConfig, stat: { mtimeMs: number; size: number } | null): PiWorkConfig {
+  globalThis.__piWorkConfigCache = stat ? { config, ...stat } : undefined;
+  return config;
 }
 
 /**
  * Read config from ~/.pi-work/config.yaml.
  * On any error (file missing, corrupt yaml, wrong shape),
  * overwrites with defaults and returns them.
+ *
+ * Served from the in-process cache while the file's mtime and size are
+ * unchanged (see the cache note above).
  */
 export function readConfig(): PiWorkConfig {
+  const stat = statConfig();
+  const cached = globalThis.__piWorkConfigCache;
+  if (stat && cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.config;
+  }
   try {
     const raw = readFileSync(CONFIG_PATH, "utf8");
     const parsed = load(raw);
@@ -336,19 +378,22 @@ export function readConfig(): PiWorkConfig {
 
     const cfg = parsed as Record<string, unknown>;
 
-    return {
-      dangerous_patterns: parseDangerousPatterns(cfg.dangerous_patterns),
-      right_side_bar: parseRightSideBar(cfg.right_side_bar),
-      append_system: parseAppendSystem(cfg.append_system),
-      load_pi_docs: typeof cfg.load_pi_docs === "boolean" ? cfg.load_pi_docs : true,
-      file_viewer: parseFileViewer(cfg.file_viewer),
-      ui_sounds: parseUiSounds(cfg.ui_sounds),
-      cwd_icons: parseCwdIcons(cfg.cwd_icons),
-      cwd_aliases: parseCwdAliases(cfg.cwd_aliases),
-      disabled_skills: parseDisabledSkills(cfg.disabled_skills),
-      network_proxy: parseNetworkProxy(cfg.network_proxy),
-      mcp: parseMcp(cfg.mcp),
-    };
+    return cacheConfig(
+      {
+        dangerous_patterns: parseDangerousPatterns(cfg.dangerous_patterns),
+        right_side_bar: parseRightSideBar(cfg.right_side_bar),
+        append_system: parseAppendSystem(cfg.append_system),
+        load_pi_docs: typeof cfg.load_pi_docs === "boolean" ? cfg.load_pi_docs : true,
+        file_viewer: parseFileViewer(cfg.file_viewer),
+        ui_sounds: parseUiSounds(cfg.ui_sounds),
+        cwd_icons: parseCwdIcons(cfg.cwd_icons),
+        cwd_aliases: parseCwdAliases(cfg.cwd_aliases),
+        disabled_skills: parseDisabledSkills(cfg.disabled_skills),
+        network_proxy: parseNetworkProxy(cfg.network_proxy),
+        mcp: parseMcp(cfg.mcp),
+      },
+      statConfig(),
+    );
   } catch (err) {
     log.warn("failed to read config, resetting to defaults", { error: String(err) });
     return writeDefaultConfig();
@@ -363,5 +408,7 @@ export function writeConfig(config: PiWorkConfig): PiWorkConfig {
   ensureConfigDir();
   writeFileSync(CONFIG_PATH, dump(config), "utf8");
   log.info("config written", { path: CONFIG_PATH });
-  return config;
+  // Make this process's own write visible immediately, even if the filesystem
+  // timestamps have not moved enough for the next `readConfig` to notice.
+  return cacheConfig(config, statConfig());
 }
