@@ -54,7 +54,7 @@ describe("today section constants", () => {
   it("pins the row height, padding, cap and fade width", () => {
     expect(SESSION_ROW_HEIGHT_PX).toBe(28);
     expect(SIDEBAR_LIST_PADDING_Y_PX).toBe(12);
-    expect(TODAY_VISIBLE_ROWS).toBe(6);
+    expect(TODAY_VISIBLE_ROWS).toBe(4);
     expect(TODAY_MIN_ROWS).toBe(1);
     expect(SCROLL_FADE_PX).toBe(16);
   });

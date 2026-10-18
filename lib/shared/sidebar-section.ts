@@ -17,9 +17,9 @@
 //
 // `TODAY_VISIBLE_ROWS` is deliberately NOT `SESSION_PAGE_SIZE_GROUPED`: that
 // one is how many rows a page request asks the API for, while this one is how
-// many rows fit on screen. Both happen to be 6 today; tying "change the page
-// size" to "change the sidebar height" would make each change trip over the
-// other.
+// many rows fit on screen. This one is 4 while the page size stays 6; tying
+// "change the page size" to "change the sidebar height" would make each change
+// trip over the other.
 // ============================================================================
 
 import { distanceFromBottom, type ScrollMetrics } from "./scroll-follow";
@@ -31,7 +31,7 @@ export const SESSION_ROW_HEIGHT_PX = 28;
 export const SIDEBAR_LIST_PADDING_Y_PX = 12;
 
 /** Rows the "Today's Sessions" list shows before it scrolls. */
-export const TODAY_VISIBLE_ROWS = 6;
+export const TODAY_VISIBLE_ROWS = 4;
 
 /** Rows the section keeps when the sidebar compresses it. */
 export const TODAY_MIN_ROWS = 1;
