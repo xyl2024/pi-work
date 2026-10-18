@@ -457,7 +457,15 @@ export async function resolveSessionPath(sessionId: string): Promise<string | nu
   const cached = getPathCache().get(sessionId);
   if (cached) return cached;
 
-  // Cache miss: scan all sessions to populate cache, then retry
+  // Cache miss: the header-only listing fills the same id → path cache as the
+  // full scan, but opens each .jsonl for at most 16KB instead of reading every
+  // file to EOF (~30ms vs ~5s on a host with thousands of sessions). Only when
+  // the bounded reader can't see the id (malformed/short header, delete race)
+  // do we pay for the full `SessionManager.listAll()` scan.
+  await listAllSessionsHeaderOnly();
+  const fromHeaderScan = getPathCache().get(sessionId);
+  if (fromHeaderScan) return fromHeaderScan;
+
   await listAllSessions();
   return getPathCache().get(sessionId) ?? null;
 }
@@ -571,6 +579,20 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
   };
 }
 
+/**
+ * Parent session id for one session file, without scanning every session.
+ *
+ * The session header stores `parentSession` as a *path*; the id we hand the UI
+ * lives in that parent file's own header, so a single bounded 16KB read is
+ * enough — same mapping the full listing does (`parentSessionPath` → id).
+ * Missing/unreadable parents resolve to `undefined`, matching what the full
+ * scan produced when the parent wasn't in its path index.
+ */
+export function resolveParentSessionId(parentSessionPath: string | undefined): string | undefined {
+  if (!parentSessionPath) return undefined;
+  return readHeaderOnly(parentSessionPath)?.id;
+}
+
 /** Read the disk-backed session payload used by GET /api/sessions/[id]. */
 export async function readSessionDetails(sessionId: string) {
   const filePath = await resolveSessionPath(sessionId);
@@ -589,8 +611,7 @@ export async function readSessionDetails(sessionId: string) {
   } catch {
     // Use the header timestamp when stat fails.
   }
-  const allSessions = await listAllSessions();
-  const parentSessionId = allSessions.find((s) => s.id === sessionId)?.parentSessionId;
+  const parentSessionId = resolveParentSessionId(header?.parentSession);
   const info = header ? {
     path: filePath,
     id: header.id,
