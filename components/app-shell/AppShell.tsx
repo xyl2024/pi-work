@@ -85,7 +85,8 @@ import {
   releaseSkillsState,
   useSkillInstallRunning,
 } from "@/lib/client/skills-store";
-import { releaseChannelsState } from "@/lib/client/channels-store";
+import { releaseChannelsState, getLoginPhase, stopLogin } from "@/lib/client/channels-store";
+import { selectChannelsCloseConfirm } from "@/lib/shared/channels-close";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
@@ -201,6 +202,7 @@ const PANEL_CLOSE_GUARDS: Partial<Record<PanelViewKind, () => PanelCloseGuard | 
     }),
   skills: () => selectSkillsCloseConfirm({ installPhase: getSkillInstallPhase() }),
   scheduler: () => schedulerCloseGuard(),
+  channels: () => selectChannelsCloseConfirm({ phase: getLoginPhase() }),
 };
 
 /** What confirming a guard does, run only once every guard has passed. */
@@ -209,6 +211,7 @@ const PANEL_CLOSE_SIDE_EFFECTS: Partial<Record<PanelViewKind, () => void>> = {
     if (hasActiveOAuthLogin()) cancelActiveOAuthLogins();
   },
   skills: () => cancelSkillInstall(),
+  channels: () => stopLogin(),
 };
 
 /** Panel views whose tab owns close-lossy state, in guard-table order. */

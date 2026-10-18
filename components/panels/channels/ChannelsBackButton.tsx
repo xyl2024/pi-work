@@ -14,6 +14,7 @@ export function ChannelsBackButton() {
     <button
       type="button"
       onClick={channelsBack}
+      aria-label={t("Back to channels")}
       style={{
         display: "flex",
         alignItems: "center",

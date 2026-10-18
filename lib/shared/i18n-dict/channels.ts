@@ -94,6 +94,10 @@ export const channels = {
   "channels.healthNoHeartbeat": "无心跳",
   "channels.healthLastPoll": "上次轮询",
   "channels.healthAgo": "{s}前",
+
+  "Close while scanning?": "扫码尚未完成，仍要关闭吗？",
+  "The scan will be interrupted and you'll need a new QR code.": "关闭会中断本次扫码，需要重新生成二维码。",
+  "Back to channels": "返回频道列表",
   "channels.healthTitle": "健康",
   "channels.healthWorker": "监控进程",
   "channels.healthFailures": "连续失败 {n} 次",
