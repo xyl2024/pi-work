@@ -33,7 +33,6 @@ const StopIcon = ICONS.stop;
 const SunIcon = ICONS.sun;
 const MoonIcon = ICONS.moon;
 const SidebarIcon = ICONS.sidebar;
-const GlobeIcon = ICONS.globe;
 const GearIcon = ICONS.gear;
 const McpIcon = ICONS.mcp;
 
@@ -93,7 +92,6 @@ export interface CommandContext {
   // Modal openers
   openSettings: () => void;
   openCwdPicker: () => void;
-  openChannels: () => void;
   openMcp: () => void;
 
   // View toggles
@@ -236,15 +234,6 @@ export function buildCommands(
     when: (c) => c.hasCwd,
     run: () => ctx.openMcp(),
   });
-  cmds.push({
-    id: "modal.channels",
-    title: t("Open channels"),
-    group: "Modal",
-    keywords: ["channels", "wechat", "weixin", "im", "platform", "微信", "频道", "消息"],
-    icon: <GlobeIcon />,
-    run: () => ctx.openChannels(),
-  });
-
   // ── Language (2) ──
   cmds.push({
     id: "lang.en",

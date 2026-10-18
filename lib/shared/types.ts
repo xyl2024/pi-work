@@ -446,6 +446,7 @@ export const CONTEXT_TAB_ID = "context:global";
 export const MODELS_CONFIG_TAB_ID = "modelsConfig:global";
 export const SKILLS_TAB_ID = "skills:global";
 export const SCHEDULER_TAB_ID = "scheduler:global";
+export const CHANNELS_TAB_ID = "channels:global";
 
 // Map a Tab.kind back to the corresponding configurable right-bar button id
 // lives in `lib/shared/panelTabs` (`panelButtonIdForKind`), derived from the

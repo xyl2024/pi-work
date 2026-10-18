@@ -23,6 +23,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { SettingsModal } from "../settings/SettingsModal";
 
 import { SchedulerPanel } from "../panels/SchedulerPanel";
+import { ChannelsPanel } from "../panels/ChannelsPanel";
 import { ChannelsModal } from "../channels/ChannelsModal";
 import { ConversationTreePanel } from "../sessions/ConversationTreePanel";
 import { ModelsConfigPanel } from "../panels/ModelsConfigPanel";
@@ -84,6 +85,7 @@ import {
   releaseSkillsState,
   useSkillInstallRunning,
 } from "@/lib/client/skills-store";
+import { releaseChannelsState } from "@/lib/client/channels-store";
 import { subscribeModelsConfigSaved } from "@/lib/client/models-config-io";
 import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth-login-store";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
@@ -173,6 +175,7 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
   scheduler: (ctx) => (
     <SchedulerPanel cwd={ctx.cwd} onOpenSession={ctx.openSessionById} onCloseTab={ctx.onClosePanelTab} />
   ),
+  channels: (ctx) => <ChannelsPanel onCloseTab={ctx.onClosePanelTab} />,
 };
 
 /** The shape every panel close guard returns — the shell only needs the copy. */
@@ -599,6 +602,13 @@ export function AppShell() {
   useEffect(() => {
     setSchedulerPanelOpen(activeRightPanelKind === "scheduler" && rightPanelState !== "closed");
   }, [activeRightPanelKind, rightPanelState]);
+  // Same lifecycle for the channels list: it is live data (statuses change), so
+  // closing the tab drops it and the next open lands back on the list and reads
+  // the live statuses. Collapsing the panel / switching tabs keeps the tab.
+  const channelsTabOpen = selectTabByKind(panelTabsState, "channels") !== null;
+  useEffect(() => {
+    if (!channelsTabOpen) releaseChannelsState();
+  }, [channelsTabOpen]);
   // New sessions must pick up a just-saved default model. The refresh signal is
   // the successful PUT, not a modal close — "open then cancel" refreshes nothing.
   useEffect(() => subscribeModelsConfigSaved(() => setModelsRefreshKey((k) => k + 1)), []);
@@ -1372,7 +1382,6 @@ export function AppShell() {
     newSession: handleSlashNew,
     openSettings: () => setSettingsConfigOpen(true),
     openCwdPicker: () => setCwdPickerOpen(true),
-    openChannels: () => setChannelsOpen(true),
     openMcp: () => setMcpConfigOpen(true),
     toggleSidebar: () => setSidebarOpen((v) => !v),
     toggleRightPanel: () => dispatchPanelTabs({
