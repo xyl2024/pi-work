@@ -408,7 +408,10 @@ export function writeConfig(config: PiWorkConfig): PiWorkConfig {
   ensureConfigDir();
   writeFileSync(CONFIG_PATH, dump(config), "utf8");
   log.info("config written", { path: CONFIG_PATH });
-  // Make this process's own write visible immediately, even if the filesystem
-  // timestamps have not moved enough for the next `readConfig` to notice.
-  return cacheConfig(config, statConfig());
+  // Invalidate rather than cache the argument: a caller may hand us a config
+  // carrying keys this module normalizes away (a stale `right_side_bar` id), and
+  // a read must return the normalized shape. The next `readConfig` re-parses the
+  // file we just wrote, so a same-process write is still visible immediately.
+  globalThis.__piWorkConfigCache = undefined;
+  return config;
 }
