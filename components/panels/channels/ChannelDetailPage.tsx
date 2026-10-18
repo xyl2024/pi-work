@@ -20,7 +20,7 @@ import {
 import { loginPhaseLabelKey } from "@/lib/shared/channels-login";
 import { ChannelActivityFeed } from "@/components/channels/ChannelActivityFeed";
 import { ChannelsBackButton } from "./ChannelsBackButton";
-import { channelStatusColor, channelStatusLabelKey } from "./ChannelsRootPage";
+import { channelStatusColor, channelStatusLabelKey } from "./channelStatus";
 
 function shortenPath(p: string, max = 36): string {
   if (p.length <= max) return p;
@@ -149,7 +149,9 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
       setWorkspaceMenuOpen(false);
       const result = await setChannelWorkspace(channel.id, workspaceId);
       if (!result.ok) {
-        toast.show({ kind: "error", message: t(result.error ?? "channels.operationFailed") });
+        // Server machine codes (workspace_not_found …) are not i18n keys, so
+        // they pass through untranslated — same as the scheduler's errors.
+        toast.show({ kind: "error", message: result.error ?? t("channels.operationFailed") });
         return;
       }
       toast.show({ kind: "info", message: t("Workspace switched") });
@@ -205,17 +207,16 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
   const workspace = status?.currentWorkspaceId ?? channel.workspaceId;
   const workspaceBroken = status?.workspaceAvailable === false;
   const health = status?.health;
-  const healthParts = [
-    health?.lastPollAt
-      ? `${t("channels.healthLastPoll")} ${t("channels.healthAgo", { s: fmtAgo(health.lastPollAt) })}`
-      : null,
-    health && health.consecutiveFailures > 0
-      ? t("channels.healthFailures", { n: health.consecutiveFailures })
-      : null,
-    health?.backingOff && health.retryInMs != null
-      ? t("channels.healthNextRetry", { s: retryIn(health.retryInMs) })
-      : null,
-  ].filter((part): part is string => part !== null);
+  // All four health fields are always on screen (ticket #142): the worker line,
+  // then last poll · failures · next retry, with an em dash where the server has
+  // no value yet — a healthy channel shows "0 连续失败" rather than hiding it.
+  const lastPollLine = health?.lastPollAt
+    ? `${t("channels.healthLastPoll")} ${t("channels.healthAgo", { s: fmtAgo(health.lastPollAt) })}`
+    : `${t("channels.healthLastPoll")} —`;
+  const failuresLine = t("channels.healthFailures", { n: health?.consecutiveFailures ?? 0 });
+  const nextRetryLine = t("channels.healthNextRetry", {
+    s: health?.backingOff && health.retryInMs != null ? retryIn(health.retryInMs) : "—",
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -229,7 +230,6 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
               onChange={(e) => setNameDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void saveRename();
-                else if (e.key === "Escape") setRenaming(false);
               }}
               autoFocus
               maxLength={50}
@@ -295,18 +295,18 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
           <code style={{ fontFamily: "var(--font-mono)", color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountId ?? "—"}</code>
         </section>
 
-        {/* Health: worker heartbeat, last poll, backoff countdown. */}
+        {/* Health: worker heartbeat, last poll, failures, retry countdown. */}
         <section style={{ display: "flex", flexDirection: "column", gap: 6, padding: 12, borderRadius: 8, background: "var(--bg)", fontSize: 12 }}>
-          <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>{t("channels.healthTitle")}</span>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ color: "var(--text-muted)", flexShrink: 0 }}>{t("channels.healthWorker")}</span>
             <span style={{ color: status?.monitorRunning ? "var(--accent)" : "var(--text-dim)" }}>
               {status?.monitorRunning ? t("channels.statusLive") : t("channels.statusIdle")}
             </span>
           </div>
-          {healthParts.length > 0 && (
-            <div style={{ color: "var(--text-muted)" }}>{healthParts.join(" · ")}</div>
-          )}
+          <div style={{ color: "var(--text-muted)" }}>{lastPollLine}</div>
+          <div style={{ color: "var(--text-muted)" }}>
+            {failuresLine} · {nextRetryLine}
+          </div>
         </section>
 
         {/* Workspace */}
@@ -435,7 +435,7 @@ export function ChannelDetailPage({ channelId }: { channelId: string }) {
               <div style={{ padding: 10, background: "#fff", borderRadius: 8, border: "1px solid var(--border)", maxWidth: "100%", boxSizing: "border-box" }}>
                 <SmartImage
                   src={login.qrDataUrl}
-                  alt="WeChat login QR"
+                  alt=""
                   loaderSize={96}
                   width={224}
                   height={224}

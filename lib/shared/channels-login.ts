@@ -28,7 +28,7 @@ export type LoginPhase =
   | "expired"
   | "error";
 
-/** Every phase, in the order the UI lists them. */
+/** Every phase. The close-guard test uses this list to prove it covers all nine. */
 export const LOGIN_PHASES: readonly LoginPhase[] = [
   "waiting",
   "scanned",
@@ -73,9 +73,4 @@ export function isLoginInProgress(phase: LoginPhase | null): boolean {
     phase === "verify_blocked" ||
     phase === "redirected"
   );
-}
-
-/** A terminal phase can no longer change by polling. */
-export function isLoginTerminal(phase: LoginPhase | null): boolean {
-  return phase !== null && !isLoginInProgress(phase);
 }

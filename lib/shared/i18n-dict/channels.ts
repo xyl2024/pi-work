@@ -85,15 +85,12 @@ export const channels = {
   "channels.act.workerStarted": "监控启动，开始轮询",
   "channels.act.workerStopped": "监控已停止",
 
-  "channels.healthBackoff": "退避中（{n} 次失败 · {s} 后重试）",
-  "channels.healthNoHeartbeat": "无心跳",
   "channels.healthLastPoll": "上次轮询",
   "channels.healthAgo": "{s}前",
 
   "Close while scanning?": "扫码尚未完成，仍要关闭吗？",
   "The scan will be interrupted and you'll need a new QR code.": "关闭会中断本次扫码，需要重新生成二维码。",
   "Back to channels": "返回频道列表",
-  "channels.healthTitle": "健康",
   "channels.healthWorker": "监控进程",
   "channels.healthFailures": "连续失败 {n} 次",
   "channels.healthNextRetry": "下次重试 {s}",

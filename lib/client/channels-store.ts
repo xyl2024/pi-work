@@ -38,7 +38,6 @@ import {
   channelsPagesAfterCreate,
   channelsPagesAfterDelete,
   createChannelsPageStack,
-  currentChannelsPage,
   isChannelsRootPage,
   openChannelsPage,
   type ChannelsPage,
@@ -450,11 +449,4 @@ export function escapeChannels(): { closePanel: boolean } {
   if (isChannelsRootPage(state.pages)) return { closePanel: true };
   channelsBack();
   return { closePanel: false };
-}
-
-/** The channel whose detail page is open, if the stack is on one. */
-export function currentChannel(state: ChannelsStoreState): ChannelRecord | null {
-  const page = currentChannelsPage(state.pages);
-  if (page.kind !== "detail") return null;
-  return state.channels.find((channel) => channel.id === page.channelId) ?? null;
 }

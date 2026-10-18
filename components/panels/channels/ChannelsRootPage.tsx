@@ -9,7 +9,8 @@ import {
   setChannelsNameDraft,
   useChannelsStore,
 } from "@/lib/client/channels-store";
-import type { ChannelRecord, ChannelStatus } from "@/lib/shared/channels/types";
+import type { ChannelRecord } from "@/lib/shared/channels/types";
+import { channelStatusColor, channelStatusLabelKey } from "./channelStatus";
 
 /**
  * The channels panel's root page: the new-channel input and every channel as a
@@ -122,34 +123,6 @@ export function ChannelsRootPage() {
       </div>
     </div>
   );
-}
-
-/** Accent per status: connected / expired / disabled / pending. */
-export function channelStatusColor(status: ChannelStatus): string {
-  switch (status) {
-    case "connected":
-      return "var(--accent)";
-    case "expired":
-      return "#ef4444";
-    case "disabled":
-      return "var(--text-muted)";
-    case "pending":
-      return "#f59e0b";
-  }
-}
-
-/** The i18n key for a channel's status word. */
-export function channelStatusLabelKey(status: ChannelStatus): string {
-  switch (status) {
-    case "connected":
-      return "channels.connected";
-    case "expired":
-      return "channels.expired";
-    case "disabled":
-      return "channels.disabled";
-    case "pending":
-      return "channels.pending";
-  }
 }
 
 function ChannelRow({
