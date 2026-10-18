@@ -364,7 +364,9 @@ export async function saveMcpChanges(): Promise<{ ok: boolean; error?: string }>
       savedOnce: true,
       buckets: withMcpBucket(state.buckets, { ...bucket, pages: mcpPagesAfterSave(), dirty: false }),
     });
-    await load(bucket.cwd);
+    // Only pull the fresh copy when this cwd is still the one on screen; a save
+    // that resolves after the user switched sessions must not yank them back.
+    if (state.currentCwd === bucket.cwd) await load(bucket.cwd);
     return { ok: true };
   } catch (e) {
     const message = errorMessage(e);

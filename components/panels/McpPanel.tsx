@@ -96,7 +96,7 @@ export function McpPanel({
 
   const problem = bucket ? mcpDraftProblem(bucket.draft) : null;
   const dirty = bucket?.dirty ?? false;
-  const loadError = state.loadErrorCwd === state.currentCwd ? state.loadError : null;
+  const loadError = state.loadErrorCwd === cwd ? state.loadError : null;
 
   const save = useCallback(async () => {
     if (!bucket || problem) return;
@@ -156,9 +156,9 @@ export function McpPanel({
               </button>
             </div>
           </div>
-        ) : state.currentCwd === null ? (
+        ) : cwd === null ? (
           <div style={{ padding: "24px 14px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>{t("mcp.noCwd")}</div>
-        ) : !bucket ? (
+        ) : !bucket || state.currentCwd !== cwd ? (
           <div style={{ padding: "24px 14px", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>{t("Loading...")}</div>
         ) : entry ? (
           <McpEntryPage bucket={bucket} entry={entry} />
@@ -167,7 +167,7 @@ export function McpPanel({
         )}
       </div>
 
-      {bucket && (
+      {bucket && state.currentCwd === cwd && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderTop: "1px solid var(--border)", background: "var(--bg)", flexShrink: 0 }}>
           <span
             title={footerStatus.tone === "error" ? footerStatus.text : undefined}
