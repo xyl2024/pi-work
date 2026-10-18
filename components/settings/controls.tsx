@@ -7,8 +7,8 @@ import { ProviderIcon, ProviderGearIcon, hasProviderIcon, PROVIDER_ICON_IDS } fr
 
 /**
  * The settings control skin — one definition every settings section (the MCP
- * config modal, which imports it directly, and the models-config panel, which
- * reaches it via the re-export shim in `models-config/form-fields`) shares.
+ * and models-config panel views, which reach it directly or through the
+ * re-export shim in `models-config/form-fields`) shares.
  * Changing the look of a control is a change to this file, not to
  * thirteen section files.
  *

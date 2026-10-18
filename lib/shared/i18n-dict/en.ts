@@ -128,6 +128,7 @@ export const EN_TRANSLATIONS = {
   "mcp.confirmSpawn": "The next session runs these commands with your permissions:\n{commands}",
   "mcp.saveFailed": "Save failed: {error}",
   "mcp.applyHint": "Servers connect when a session starts.",
+  "mcp.savedHint": "Saved · Servers connect when a session starts.",
   "mcp.newSession": "New session",
   "mcp.invalid": "Invalid",
   "mcp.enabled": "Enabled",

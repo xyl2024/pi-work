@@ -31,6 +31,7 @@ export const mcp = {
   "mcp.confirmSpawn": "下个会话会以你的权限执行这些命令：\n{commands}",
   "mcp.saveFailed": "保存失败：{error}",
   "mcp.applyHint": "服务器在会话启动时才连接。",
+  "mcp.savedHint": "已保存 · 服务器在会话启动时才连接。",
   "mcp.newSession": "新建会话",
 
   "mcp.invalid": "无效",

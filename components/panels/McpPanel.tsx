@@ -5,7 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { usePanelEscapeGuard } from "@/hooks/usePanelEscapeGuard";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
-import { SecondaryButton } from "@/components/settings/controls";
+import { PrimaryButton, SecondaryButton } from "@/components/settings/controls";
 import { MCP_LIST_PAGE, currentMcpPage } from "@/lib/shared/mcp-pages";
 import {
   describeStdioCommands,
@@ -17,6 +17,7 @@ import {
 import {
   escapeMcp,
   ensureMcpLoaded,
+  reloadMcp,
   saveMcpChanges,
   useMcpStore,
 } from "@/lib/client/mcp-store";
@@ -33,20 +34,18 @@ import { McpEntryPage } from "./mcp/McpEntryPage";
  * per-cwd load, dispatches the current page to a full-width view, keeps Escape
  * meaning "up one level", and renders the fixed save footer.
  *
- * `openCount` is the shell's re-open counter for this panel and `visible`
- * whether the panel is expanded right now: the panel card stays mounted while
- * collapsed, so without these a re-open / re-expand would not re-read disk.
+ * `visible` tells the body whether the panel is expanded right now: the panel
+ * card stays mounted while collapsed, so without it a re-expand would not
+ * re-read disk.
  */
 export function McpPanel({
   cwd,
   visible,
-  openCount,
   onCloseTab,
   onNewSession,
 }: {
   cwd: string | null;
   visible: boolean;
-  openCount: number;
   onCloseTab?: () => void;
   onNewSession?: () => void;
 }) {
@@ -56,12 +55,12 @@ export function McpPanel({
   const state = useMcpStore();
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Re-read whenever the panel becomes visible (and on every re-open); a dirty
-  // draft is reused instead (selectMcpOpenAction). A different cwd parks the
-  // previous bucket. A collapse is not a reload trigger by itself.
+  // Re-read whenever the panel becomes visible; a dirty draft is reused instead
+  // (selectMcpOpenAction). A different cwd parks the previous bucket, and a
+  // collapse is not a reload trigger by itself.
   useEffect(() => {
     if (visible) ensureMcpLoaded(cwd);
-  }, [cwd, openCount, visible]);
+  }, [cwd, visible]);
 
   const bucket = selectMcpBucket(state.buckets, state.currentCwd);
   const page = bucket ? currentMcpPage(bucket.pages) : MCP_LIST_PAGE;
@@ -132,7 +131,7 @@ export function McpPanel({
     const text = problemText(problem);
     if (text) return { tone: "error" as const, text };
     if (state.savedOnce) {
-      return { tone: "muted" as const, text: dirty ? t("mcp.applyHint") : `${t("Saved")} · ${t("mcp.applyHint")}` };
+      return { tone: "muted" as const, text: dirty ? t("mcp.applyHint") : t("mcp.savedHint") };
     }
     return { tone: "muted" as const, text: t("mcp.applyHint") };
   }, [dirty, problem, problemText, state.saveError, state.savedOnce, t]);
@@ -150,7 +149,7 @@ export function McpPanel({
             <div style={{ marginTop: 8 }}>
               <button
                 type="button"
-                onClick={() => ensureMcpLoaded(state.currentCwd)}
+                onClick={() => reloadMcp()}
                 style={{ padding: "4px 10px", fontSize: 12, border: "1px solid var(--border)", borderRadius: 6, background: "none", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" }}
               >
                 {t("Retry")}
@@ -187,26 +186,13 @@ export function McpPanel({
           {state.savedOnce && onNewSession && (
             <SecondaryButton onClick={onNewSession}>{t("mcp.newSession")}</SecondaryButton>
           )}
-          <button
-            type="button"
+          <PrimaryButton
             onClick={() => void save()}
             disabled={state.saving || !dirty || problem !== null}
-            style={{
-              padding: "5px 16px",
-              minWidth: 92,
-              background: state.saving || !dirty || problem !== null ? "var(--bg)" : "var(--accent)",
-              border: state.saving || !dirty || problem !== null ? "1px solid var(--border)" : "none",
-              borderRadius: 6,
-              color: state.saving || !dirty || problem !== null ? "var(--text-dim)" : "#fff",
-              cursor: state.saving || !dirty || problem !== null ? "default" : "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-              flexShrink: 0,
-              fontFamily: "inherit",
-            }}
+            style={{ minWidth: 92 }}
           >
             {state.saving ? t("mcp.saving") : t("mcp.save")}
-          </button>
+          </PrimaryButton>
         </div>
       )}
     </div>

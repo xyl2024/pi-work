@@ -356,10 +356,13 @@ export async function saveMcpChanges(): Promise<{ ok: boolean; error?: string }>
   patch({ saving: true, saveError: null });
   try {
     await putMcpPanelChanges(bucket.cwd, changes);
+    // A successful PUT means the draft now equals disk, so the bucket is clean —
+    // set that before the re-read, otherwise the load guard would mistake it for
+    // a user edit made mid-flight and keep the stale snapshot.
     patch({
       saving: false,
       savedOnce: true,
-      buckets: withMcpBucket(state.buckets, { ...bucket, pages: mcpPagesAfterSave() }),
+      buckets: withMcpBucket(state.buckets, { ...bucket, pages: mcpPagesAfterSave(), dirty: false }),
     });
     await load(bucket.cwd);
     return { ok: true };

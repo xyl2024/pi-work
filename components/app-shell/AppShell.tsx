@@ -129,8 +129,6 @@ interface PanelBodyCtx {
   agentRunning: boolean;
   onConversationTreeCardClick: (cardId: string) => void;
   gitDiffOpenCount: number;
-  /** Re-open counter for the MCP panel; a clean panel re-reads disk on each one. */
-  mcpOpenCount: number;
   onExpandGitPanel: () => void;
   /** Open a session by id without collapsing the scheduler panel. */
   openSessionById: (sessionId: string) => void;
@@ -181,7 +179,6 @@ const PANEL_BODY_BY_KIND: Record<PanelViewKind, (ctx: PanelBodyCtx) => ReactNode
     <McpPanel
       cwd={ctx.cwd}
       visible={ctx.rightPanelState !== "closed"}
-      openCount={ctx.mcpOpenCount}
       onCloseTab={ctx.onClosePanelTab}
       onNewSession={ctx.onNewSession}
     />
@@ -1100,16 +1097,17 @@ export function AppShell() {
     setPanelMode("expanded");
   }, [setPanelMode]);
 
-  // The panel close guards (pure, in lib/shared/models-config-close and
-  // lib/shared/skills-close). Closing a panel tab can lose panel-owned state:
-  // models config an unsaved draft or a running subscription authorization,
-  // skills an install still streaming. Every close path that can drop one of
-  // those tabs asks through here — the single × and the batch closes alike, so
-  // "Close other tabs" cannot swallow a draft, a login or a running install
-  // either. Every guard is asked before any side effect runs: cancelling the
-  // second prompt must not leave the first guard's cancellation behind on a
-  // tab that stays open. Actually closing the tab is what releases the module
-  // store (the shell's lifecycle effects).
+  // The panel close guards (pure, in lib/shared/models-config-close,
+  // lib/shared/skills-close, lib/shared/channels-close and lib/shared/mcp-close).
+  // Closing a panel tab can lose panel-owned state: models config an unsaved
+  // draft or a running subscription authorization, skills an install still
+  // streaming, channels a live scan login, MCP an unsaved draft in any cwd.
+  // Every close path that can drop one of those tabs asks through here — the
+  // single × and the batch closes alike, so "Close other tabs" cannot swallow a
+  // draft, a login or a running install either. Every guard is asked before any
+  // side effect runs: cancelling the second prompt must not leave the first
+  // guard's cancellation behind on a tab that stays open. Actually closing the
+  // tab is what releases the module store (the shell's lifecycle effects).
   const confirmDropPanelTabs = useCallback(
     async (kinds: readonly PanelViewKind[]): Promise<boolean> => {
       const confirmed: PanelViewKind[] = [];
@@ -1327,7 +1325,6 @@ export function AppShell() {
     agentRunning,
     onConversationTreeCardClick: handleConversationTreeCardClick,
     gitDiffOpenCount,
-    mcpOpenCount: selectOpenCount(panelTabsState, "mcp"),
     onExpandGitPanel: handleExpandGitPanel,
     openSessionById: handleOpenScheduledSession,
     onNewSession: handleSlashNew,

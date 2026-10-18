@@ -15,6 +15,7 @@ import {
 } from "@/lib/client/mcp-store";
 import { SecondaryButton } from "@/components/settings/controls";
 import { McpEntryForm } from "./McpEntryForm";
+import { mcpScopeLabelKey } from "./scopeLabel";
 
 /**
  * One server's entry page: the full-width form / raw-JSON editor, plus the
@@ -26,7 +27,7 @@ import { McpEntryForm } from "./McpEntryForm";
  */
 export function McpEntryPage({ bucket, entry }: { bucket: McpDraftBucket; entry: McpDraftEntry }) {
   const { t } = useI18n();
-  const scopeLabel = (scope: McpScope) => t(scope === "global" ? "mcp.global" : "mcp.project");
+  const scopeLabel = (scope: McpScope) => t(mcpScopeLabelKey(scope));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -47,6 +48,7 @@ export function McpEntryPage({ bucket, entry }: { bucket: McpDraftBucket; entry:
             fontFamily: "inherit",
             flexShrink: 0,
           }}
+          aria-label={t("Back")}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
@@ -129,7 +131,7 @@ function ScopePicker({
               fontFamily: "inherit",
             }}
           >
-            {t(scope === "global" ? "mcp.global" : "mcp.project")}
+            {t(mcpScopeLabelKey(scope))}
           </button>
         );
       })}

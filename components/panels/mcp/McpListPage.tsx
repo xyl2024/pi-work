@@ -14,6 +14,7 @@ import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { McpEntryCard } from "./McpEntryCard";
 import { McpNotice } from "./McpNotice";
+import { mcpScopeLabelKey } from "./scopeLabel";
 
 /**
  * The MCP panel's list page: both `mcp.json` files, one section each, in the
@@ -28,7 +29,7 @@ export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
   const { t } = useI18n();
   const { data, draft } = bucket;
 
-  const scopeLabel = (scope: McpScope) => t(scope === "global" ? "mcp.global" : "mcp.project");
+  const scopeLabel = (scope: McpScope) => t(mcpScopeLabelKey(scope));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
