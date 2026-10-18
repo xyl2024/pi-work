@@ -15,12 +15,13 @@
  *     releases the whole bucket map, so a draft parked while the user looked at
  *     another session is lost too. The badge reads the same predicate — one
  *     source of truth, never two copies.
- *   • the reopen action is `reload` when the panel is clean, even though a
- *     previous read completed. `mcp.json` has more than one writer (pi CLI /
- *     TUI, a hand edit), and every save is a read-modify-write that never
- *     assumes its own snapshot is current — so the display half must not assume
- *     either. Only a dirty draft (or an in-flight read) reuses what the store
- *     holds.
+ *   • the reopen action first shows the last-read snapshot and reconciles it in
+ *     the background (ADR-0018 revision), but a clean panel still *checks* disk
+ *     on every re-open — `mcp.json` has more than one writer (pi CLI / TUI, a
+ *     hand edit), and every save is a read-modify-write that never assumes its
+ *     own snapshot is current. What changed is only that the first frame no
+ *     longer blocks on that check. A dirty draft (or an in-flight read) reuses
+ *     what the store holds and never reconciles over the user's edits.
  *
  * Pure — no React / DOM / server imports — so the decisions are driven from
  * `tests/unit`. The shell maps the returned i18n keys through `t()`.
@@ -59,10 +60,11 @@ export function selectMcpCloseConfirm(
 
 /**
  * What the next open of the panel should do: `reuse` the held draft (a dirty
- * draft or a read still in flight), or `reload` from disk (the clean case — the
- * file may have changed under us since we last looked).
+ * draft or a read still in flight), `show-snapshot` the last read while a
+ * background reconcile checks the disk, or `reload` from disk when there is no
+ * snapshot yet.
  */
-export type McpOpenAction = "reuse" | "reload";
+export type McpOpenAction = "reuse" | "show-snapshot" | "reload";
 
 /** The store facts the reopen rule reads. */
 export interface McpOpenState {
@@ -70,13 +72,17 @@ export interface McpOpenState {
   loading: boolean;
   /** The held draft for this cwd differs from disk. */
   dirty: boolean;
+  /** A previous read for this cwd is still held (the snapshot to show). */
+  hasSnapshot: boolean;
 }
 
 /**
  * The reopen rule. A dirty draft survives a collapse / tab switch (the store
- * keeps it) and is reused; a clean panel re-reads, because `mcp.json` can be
- * edited by pi itself between two looks and stale content would be a lie.
+ * keeps it) and is reused untouched; a clean panel with a snapshot shows it
+ * immediately and reconciles in the background; only a cwd we have never read
+ * blocks on a fresh read.
  */
 export function selectMcpOpenAction(state: McpOpenState): McpOpenAction {
-  return state.dirty || state.loading ? "reuse" : "reload";
+  if (state.dirty || state.loading) return "reuse";
+  return state.hasSnapshot ? "show-snapshot" : "reload";
 }

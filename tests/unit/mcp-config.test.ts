@@ -226,3 +226,60 @@ describe("mcp-config: validation", () => {
     );
   });
 });
+
+describe("mcp-config: project overrides", () => {
+  it("merges a transport-less project entry into the global server of the same name", () => {
+    const { agentDir, cwd } = sandbox();
+    writeGlobal(agentDir, { mcpServers: { docs: { url: "https://global.example/mcp", exposure: "direct" } } });
+    writeProject(cwd, { mcpServers: { docs: { enabled: false } } });
+
+    const loaded = loadMcpConfigForPiWork({ agentDir, cwd, projectTrusted: true });
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.servers).toHaveLength(1);
+    expect(loaded.servers[0].config).toMatchObject({ url: "https://global.example/mcp", exposure: "direct", enabled: false });
+    expect(loaded.servers[0].override).toContain("project");
+  });
+
+  it("rejects an override that sets anything but the three keys", () => {
+    const { agentDir, cwd } = sandbox();
+    writeGlobal(agentDir, { mcpServers: { docs: { url: "https://global.example/mcp" } } });
+    writeProject(cwd, { mcpServers: { docs: { enabled: false, oauth: { clientId: "x" } } } });
+
+    const loaded = loadMcpConfigForPiWork({ agentDir, cwd, projectTrusted: true });
+
+    expect(loaded.errors.join("\n")).toContain("an override can only set enabled, exposure, toolExposure");
+  });
+
+  it("reports an override with no global server to attach to", () => {
+    const { agentDir, cwd } = sandbox();
+    writeProject(cwd, { mcpServers: { ghost: { enabled: false } } });
+
+    const loaded = loadMcpConfigForPiWork({ agentDir, cwd, projectTrusted: true });
+
+    expect(loaded.servers).toEqual([]);
+    expect(loaded.errors.join("\n")).toContain('needs "command" or "url", or a global server to override');
+  });
+
+  it("still requires a transport in the global file", () => {
+    const { agentDir, cwd } = sandbox();
+    writeGlobal(agentDir, { mcpServers: { docs: { enabled: false } } });
+
+    const loaded = loadMcpConfigForPiWork({ agentDir, cwd, projectTrusted: true });
+
+    expect(loaded.servers).toEqual([]);
+    expect(loaded.errors.join("\n")).toContain('needs either "command" (stdio) or "url"');
+  });
+
+  it("allows auth in the global file but refuses it in a project file", () => {
+    const { agentDir, cwd } = sandbox();
+    writeGlobal(agentDir, { mcpServers: { docs: { url: "https://example.com/mcp", auth: { provider: "anthropic" } } } });
+    expect(loadMcpConfigForPiWork({ agentDir, cwd, projectTrusted: true }).servers).toHaveLength(1);
+
+    writeProject(cwd, { mcpServers: { local: { url: "https://project.example/mcp", auth: { provider: "anthropic" } } } });
+    const loaded = loadMcpConfigForPiWork({ agentDir, cwd, projectTrusted: true });
+
+    expect(loaded.servers.map((entry) => entry.name)).toEqual(["docs"]);
+    expect(loaded.errors.join("\n")).toContain("auth is only allowed in the global mcp.json");
+  });
+});

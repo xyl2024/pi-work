@@ -16,8 +16,10 @@
 
 import {
   canonicalMcpJson,
+  isMcpOverride,
   MCP_SCOPES,
   MCP_SERVER_NAME,
+  mcpOverrideExtraKeys,
   parseMcpEntryConfig,
   pruneMcpDefaults,
   type McpPanelChange,
@@ -59,7 +61,8 @@ export type McpDraftProblem =
   | { kind: "duplicate-name"; scope: McpScope; name: string }
   | { kind: "invalid-json"; name: string }
   | { kind: "not-an-object"; name: string }
-  | { kind: "missing-transport"; name: string };
+  | { kind: "missing-transport"; name: string }
+  | { kind: "override-extra-keys"; name: string; keys: string[] };
 
 function fileValue(data: McpPanelData, scope: McpScope): boolean {
   return data.files.find((file) => file.scope === scope)?.autoEnableCodemode ?? true;
@@ -111,6 +114,44 @@ export function addDraftEntry(draft: McpDraft, scope: McpScope): { draft: McpDra
           scope,
           rawJson,
           config: parseMcpEntryConfig(rawJson),
+          originalName: null,
+          originalJson: "",
+          deleted: false,
+          loadError: null,
+          shadowsGlobal: false,
+          shadowedByProject: false,
+        },
+      ],
+    },
+    uid,
+  };
+}
+
+/**
+ * Add (or find) a project override that only turns the global server of the same
+ * name off. It is a normal new draft — nothing is written until Save — so the
+ * "disable in this working directory" action keeps the panel's one save model.
+ */
+export function addOverrideDraftEntry(draft: McpDraft, name: string): { draft: McpDraft; uid: string } {
+  const existing = draft.entries.find(
+    (entry) => entry.scope === "project" && entry.name === name && !entry.deleted,
+  );
+  if (existing) return { draft, uid: existing.uid };
+
+  const config: Record<string, unknown> = { enabled: false };
+  const rawJson = JSON.stringify(config, null, 2);
+  const uid = `override:${name}`;
+  return {
+    draft: {
+      ...draft,
+      entries: [
+        ...draft.entries,
+        {
+          uid,
+          name,
+          scope: "project",
+          rawJson,
+          config,
           originalName: null,
           originalJson: "",
           deleted: false,
@@ -185,7 +226,17 @@ export function mcpDraftProblem(draft: McpDraft): McpDraftProblem | null {
     for (const entry of live.filter(wouldWrite)) {
       if (!MCP_SERVER_NAME.test(entry.name)) return { kind: "invalid-name", name: entry.name };
       if (!entry.config) return { kind: parsesAsJson(entry.rawJson) ? "not-an-object" : "invalid-json", name: entry.name };
-      if (!hasTransport(entry.config)) return { kind: "missing-transport", name: entry.name };
+      const config = entry.config;
+      if (isMcpOverride(config)) {
+        // A transport-less project entry is a valid **override** (it amends the
+        // global server), but only global entries may define a server, so the
+        // same shape in the global file is still missing its transport.
+        if (entry.scope === "global") return { kind: "missing-transport", name: entry.name };
+        const extra = mcpOverrideExtraKeys(config);
+        if (extra.length > 0) return { kind: "override-extra-keys", name: entry.name, keys: extra };
+        continue;
+      }
+      if (!hasTransport(config)) return { kind: "missing-transport", name: entry.name };
     }
   }
   return null;

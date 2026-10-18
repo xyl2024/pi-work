@@ -1,7 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONFIG_DIR_NAME, type LoadedMcpConfig, type McpExposure, type McpServerConfig, type McpServerEntry } from "@earendil-works/pi-coding-agent";
-import { MCP_EXPOSURE_ALIASES } from "@/lib/shared/mcp-panel";
+import {
+  isMcpOverride,
+  MCP_EXPOSURE_ALIASES,
+  mcpOverrideExtraKeys,
+  mcpOverrideExtraKeysError,
+  mcpOverrideMissingBaseError,
+  mcpProjectAuthError,
+} from "@/lib/shared/mcp-panel";
 import { createLogger } from "./logger";
 
 const log = createLogger("mcp-config");
@@ -199,6 +206,22 @@ export function validateMcpServerConfig(name: string, value: unknown): McpServer
   return `server "${name}" needs either "command" (stdio) or "url" (streamable HTTP)`;
 }
 
+/**
+ * Resolve a project override against the global server it amends: the merged
+ * (validated) config, or pi's error string. This is the one place the three
+ * callers — the session loader, the panel reader and the panel write validation
+ * — ask the same question, so their answers cannot drift.
+ */
+export function resolveMcpOverride(
+  name: string,
+  value: Record<string, unknown>,
+  base: Record<string, unknown> | undefined,
+): McpServerConfig | string {
+  if (base === undefined) return mcpOverrideMissingBaseError(name);
+  if (mcpOverrideExtraKeys(value).length > 0) return mcpOverrideExtraKeysError(name);
+  return validateMcpServerConfig(name, { ...base, ...value });
+}
+
 interface LoadState {
   servers: Map<string, McpServerEntry>;
   errors: string[];
@@ -224,9 +247,31 @@ function readConfigFile(path: string, scope: "global" | "project", state: LoadSt
     state.errors.push(`${path}: autoEnableCodemode must be a boolean`);
   }
   for (const [name, value] of Object.entries((parsed.mcpServers as Record<string, unknown>) ?? {})) {
+    // pi's override branch: a project entry with no transport of its own only
+    // amends the global server of the same name. Pi Work mirrored the loader
+    // without this branch, so project overrides were silently dropped; this is
+    // alignment with `extensions/mcp/config.js`, not new semantics.
+    if (scope === "project" && isRecord(value) && isMcpOverride(value)) {
+      const base = state.servers.get(name);
+      const resolved = resolveMcpOverride(
+        name,
+        value,
+        base?.config as unknown as Record<string, unknown> | undefined,
+      );
+      if (typeof resolved === "string") state.errors.push(`${path}: ${resolved}`);
+      else if (base) state.servers.set(name, { ...base, config: resolved, override: path });
+      continue;
+    }
     const config = validateMcpServerConfig(name, value);
     if (typeof config === "string") {
       state.errors.push(`${path}: ${config}`);
+      continue;
+    }
+    // pi refuses `auth` in a project file: a repository must not pick where the
+    // credential goes. Mirrored here so a session and the panel agree.
+    const definition = config as unknown as Record<string, unknown>;
+    if (scope === "project" && typeof definition.url === "string" && definition.auth) {
+      state.errors.push(`${path}: ${mcpProjectAuthError(name)}`);
       continue;
     }
     // Same shape as pi's loader: project entries replace global ones by name.

@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
-import { Field, SegmentedControl, Select, TextArea, TextInput } from "@/components/settings/controls";
-import { MCP_EXPOSURES, MCP_SERVER_NAME } from "@/lib/shared/mcp-panel";
+import { CollapsiblePanel } from "@/components/ui/CollapsiblePanel";
+import { Field, SecondaryButton, SegmentedControl, Select, TextArea, TextInput } from "@/components/settings/controls";
+import { isMcpOverride, MCP_EXPOSURES, MCP_SERVER_NAME, mcpUncoveredFields } from "@/lib/shared/mcp-panel";
 import type { McpDraftEntry } from "@/lib/shared/mcp-draft";
 import {
   exposureOf,
   formatKeyValueLines,
-  isEnabled,
   joinLines,
   parseKeyValueLines,
   parseTimeout,
@@ -19,18 +18,21 @@ import {
 } from "./utils";
 
 /**
- * One entry's editor. Two views over the same entry text:
+ * One entry's editor.
  *
- *   • Form — the fields a server normally needs (transport, command/url, args,
- *     env, headers, timeout, exposure, enabled). Array- and map-shaped fields
- *     are textareas; their text lives in `McpFormFields` so typing stays
- *     natural, and each edit pushes the parsed value up.
- *   • Raw JSON — the entry's own object, for everything the form does not model
- *     (`oauth`, `toolExposure`) and for repairing an entry pi rejects. An entry
- *     that is not a JSON object at all has no form, only this.
+ * The required face is only what a server cannot do without: name, transport,
+ * and the command or URL. Everything else (args / env / cwd / headers / timeout
+ * / exposure / description) lives in a collapsed advanced section. The raw JSON
+ * is no longer a sibling mode of the form — it is an action ("edit raw JSON")
+ * that still covers the fields the form does not model (`oauth`, `auth`,
+ * `toolExposure`), and it reports how many such fields an entry carries.
  *
- * `config === null` means the text is not a JSON object: the form is unusable
- * until the raw view fixes it, and the panel refuses to save it.
+ * A transport-less project entry is an **override**: it only sets `enabled` /
+ * `exposure` / `toolExposure` on the global server of the same name, so the
+ * form shows exactly those, not a transport.
+ *
+ * `config === null` means the text is not a JSON object: only the raw editor is
+ * usable until it is fixed, and the panel refuses to save it.
  */
 
 const STDIO_ONLY_KEYS = ["command", "args", "env", "cwd"];
@@ -64,11 +66,10 @@ export function McpEntryForm({
   onRawJsonChange: (text: string) => void;
 }) {
   const { t } = useI18n();
-  const [mode, setMode] = useState<"form" | "json">("form");
-  // Remounting the field group re-reads the config after the raw editor was
-  // used, so the form never keeps a draft that is no longer what will be saved.
-  const [formEpoch, setFormEpoch] = useState(0);
+  const [rawMode, setRawMode] = useState(false);
   const config = entry.config;
+  const isOverride = config !== null && entry.scope === "project" && isMcpOverride(config);
+  const uncovered = config ? mcpUncoveredFields(config) : [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -98,19 +99,6 @@ export function McpEntryForm({
         </div>
       )}
 
-      <SegmentedControl
-        value={mode}
-        ariaLabel={t("mcp.rawJson")}
-        onChange={(next) => {
-          setMode(next === "json" ? "json" : "form");
-          if (next === "form") setFormEpoch((epoch) => epoch + 1);
-        }}
-        options={[
-          { value: "form", label: t("mcp.formMode") },
-          { value: "json", label: t("mcp.rawJson") },
-        ]}
-      />
-
       {config === null ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontSize: 12, color: "var(--error)", lineHeight: 1.5 }}>
@@ -121,13 +109,31 @@ export function McpEntryForm({
           </div>
           <RawJsonEditor value={entry.rawJson} onChange={onRawJsonChange} />
         </div>
-      ) : mode === "json" ? (
+      ) : rawMode ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <RawJsonEditor value={entry.rawJson} onChange={onRawJsonChange} />
           <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>{t("mcp.rawJsonHint")}</span>
+          <div>
+            <SecondaryButton onClick={() => setRawMode(false)}>{t("mcp.backToForm")}</SecondaryButton>
+          </div>
         </div>
       ) : (
-        <McpFormFields key={formEpoch} config={config} onChange={onConfigChange} />
+        <>
+          {isOverride ? (
+            <OverrideFields config={config} onChange={onConfigChange} />
+          ) : (
+            <McpFormFields config={config} onChange={onConfigChange} />
+          )}
+
+          {uncovered.length > 0 && (
+            <div style={{ fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.5 }}>
+              {t("mcp.uncoveredFields", { count: uncovered.length, keys: uncovered.join(", ") })}
+            </div>
+          )}
+          <div>
+            <SecondaryButton onClick={() => setRawMode(true)}>{t("mcp.editRawJson")}</SecondaryButton>
+          </div>
+        </>
       )}
     </div>
   );
@@ -146,6 +152,44 @@ function RawJsonEditor({ value, onChange }: { value: string; onChange: (text: st
   );
 }
 
+/** The whole editable surface of a transport-less project override. */
+function OverrideFields({
+  config,
+  onChange,
+}: {
+  config: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  const { t } = useI18n();
+  const setKey = (key: string, value: unknown) => {
+    const next: Record<string, unknown> = { ...config };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    onChange(next);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div
+        style={{
+          fontSize: 12,
+          lineHeight: 1.55,
+          color: "var(--text-muted)",
+          background: "var(--bg-panel)",
+          border: "1px solid var(--border)",
+          borderRadius: 6,
+          padding: "8px 10px",
+        }}
+      >
+        {t("mcp.overrideEntryHint")}
+      </div>
+      <Field label={t("mcp.exposure")} hint={t("mcp.exposureHint")}>
+        <Select required value={exposureOf(config)} onChange={(value) => setKey("exposure", value)} options={MCP_EXPOSURES} />
+      </Field>
+    </div>
+  );
+}
+
 function McpFormFields({
   config,
   onChange,
@@ -155,6 +199,7 @@ function McpFormFields({
 }) {
   const { t } = useI18n();
   const transport = transportOf(config) === "http" ? "http" : "stdio";
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [argsText, setArgsText] = useState(() =>
     joinLines(Array.isArray(config.args) ? config.args.filter((arg): arg is string => typeof arg === "string") : []),
   );
@@ -202,97 +247,108 @@ function McpFormFields({
       </Field>
 
       {transport === "stdio" ? (
-        <>
-          <Field label={t("mcp.command")}>
-            <TextInput
-              value={typeof config.command === "string" ? config.command : ""}
-              onChange={(value) => setKeys({ command: value })}
-              mono
-              placeholder="npx"
-            />
-          </Field>
-          <Field label={t("mcp.args")} hint={t("mcp.argsHint")}>
-            <TextArea
-              value={argsText}
-              onChange={(value) => {
-                setArgsText(value);
-                setKeys({ args: splitLines(value) });
-              }}
-              mono
-              style={{ minHeight: 90 }}
-            />
-          </Field>
-          <Field label={t("mcp.env")} hint={t("mcp.envHint")}>
-            <TextArea
-              value={envText}
-              onChange={(value) => {
-                setEnvText(value);
-                setKeys({ env: parseKeyValueLines(value) });
-              }}
-              mono
-              style={{ minHeight: 90 }}
-            />
-          </Field>
-          <Field label={t("mcp.cwd")} hint={t("mcp.cwdHint")}>
-            <TextInput
-              value={cwdText}
-              onChange={(value) => {
-                setCwdText(value);
-                setKeys({ cwd: value.trim().length === 0 ? undefined : value });
-              }}
-              mono
-            />
-          </Field>
-        </>
+        <Field label={t("mcp.command")}>
+          <TextInput
+            value={typeof config.command === "string" ? config.command : ""}
+            onChange={(value) => setKeys({ command: value })}
+            mono
+            placeholder="npx"
+          />
+        </Field>
       ) : (
-        <>
-          <Field label={t("mcp.url")}>
-            <TextInput
-              value={typeof config.url === "string" ? config.url : ""}
-              onChange={(value) => setKeys({ url: value })}
-              mono
-              placeholder="https://example.com/mcp"
-            />
-          </Field>
-          <Field label={t("mcp.headers")} hint={t("mcp.headersHint")}>
-            <TextArea
-              value={headersText}
-              onChange={(value) => {
-                setHeadersText(value);
-                setKeys({ headers: parseKeyValueLines(value) });
-              }}
-              mono
-              style={{ minHeight: 90 }}
-            />
-          </Field>
-        </>
+        <Field label={t("mcp.url")}>
+          <TextInput
+            value={typeof config.url === "string" ? config.url : ""}
+            onChange={(value) => setKeys({ url: value })}
+            mono
+            placeholder="https://example.com/mcp"
+          />
+        </Field>
       )}
 
-      <Field label={t("mcp.timeout")} hint={t("mcp.timeoutHint")}>
-        <TextInput
-          value={timeoutText}
-          onChange={(value) => {
-            setTimeoutText(value);
-            const parsed = parseTimeout(value);
-            if (value.trim().length === 0) setKeys({ timeout: undefined });
-            else if (parsed !== null) setKeys({ timeout: parsed });
-          }}
-          invalid={timeoutText.trim().length > 0 && parseTimeout(timeoutText) === null}
-          placeholder="60"
-        />
-      </Field>
+      <div>
+        <SecondaryButton onClick={() => setAdvancedOpen((open) => !open)}>
+          {advancedOpen ? t("mcp.advancedHide") : t("mcp.advancedShow")}
+        </SecondaryButton>
+      </div>
 
-      <Field label={t("mcp.exposure")} hint={t("mcp.exposureHint")}>
-        <Select required value={exposureOf(config)} onChange={(value) => setKeys({ exposure: value })} options={MCP_EXPOSURES} />
-      </Field>
+      <CollapsiblePanel open={advancedOpen}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingTop: 14 }}>
+          {transport === "stdio" ? (
+            <>
+              <Field label={t("mcp.args")} hint={t("mcp.argsHint")}>
+                <TextArea
+                  value={argsText}
+                  onChange={(value) => {
+                    setArgsText(value);
+                    setKeys({ args: splitLines(value) });
+                  }}
+                  mono
+                  style={{ minHeight: 90 }}
+                />
+              </Field>
+              <Field label={t("mcp.env")} hint={t("mcp.envHint")}>
+                <TextArea
+                  value={envText}
+                  onChange={(value) => {
+                    setEnvText(value);
+                    setKeys({ env: parseKeyValueLines(value) });
+                  }}
+                  mono
+                  style={{ minHeight: 90 }}
+                />
+              </Field>
+              <Field label={t("mcp.cwd")} hint={t("mcp.cwdHint")}>
+                <TextInput
+                  value={cwdText}
+                  onChange={(value) => {
+                    setCwdText(value);
+                    setKeys({ cwd: value.trim().length === 0 ? undefined : value });
+                  }}
+                  mono
+                />
+              </Field>
+            </>
+          ) : (
+            <Field label={t("mcp.headers")} hint={t("mcp.headersHint")}>
+              <TextArea
+                value={headersText}
+                onChange={(value) => {
+                  setHeadersText(value);
+                  setKeys({ headers: parseKeyValueLines(value) });
+                }}
+                mono
+                style={{ minHeight: 90 }}
+              />
+            </Field>
+          )}
 
-      <Field label={t("mcp.enabled")}>
-        <ToggleSwitch
-          on={isEnabled(config)}
-          onChange={(next) => setKeys({ enabled: next })}
-          label={t("mcp.enabled")}
-        />
-      </Field>
+          <Field label={t("mcp.timeout")} hint={t("mcp.timeoutHint")}>
+            <TextInput
+              value={timeoutText}
+              onChange={(value) => {
+                setTimeoutText(value);
+                const parsed = parseTimeout(value);
+                if (value.trim().length === 0) setKeys({ timeout: undefined });
+                else if (parsed !== null) setKeys({ timeout: parsed });
+              }}
+              invalid={timeoutText.trim().length > 0 && parseTimeout(timeoutText) === null}
+              placeholder="60"
+            />
+          </Field>
+
+          <Field label={t("mcp.exposure")} hint={t("mcp.exposureHint")}>
+            <Select required value={exposureOf(config)} onChange={(value) => setKeys({ exposure: value })} options={MCP_EXPOSURES} />
+          </Field>
+
+          <Field label={t("mcp.description")} hint={t("mcp.descriptionHint")}>
+            <TextInput
+              value={typeof config.description === "string" ? config.description : ""}
+              onChange={(value) => setKeys({ description: value.trim().length === 0 ? undefined : value })}
+            />
+          </Field>
+        </div>
+      </CollapsiblePanel>
     </div>
   );
 }

@@ -2,8 +2,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import {
+  isMcpOverride,
   MCP_SCOPES,
   MCP_SERVER_NAME,
+  mcpProjectAuthError,
   pruneMcpDefaults,
   type McpPanelChange,
   type McpPanelData,
@@ -11,7 +13,7 @@ import {
   type McpPanelFile,
   type McpScope,
 } from "@/lib/shared/mcp-panel";
-import { validateMcpServerConfig } from "./mcp-config";
+import { resolveMcpOverride, validateMcpServerConfig } from "./mcp-config";
 
 /**
  * The read/write half of the MCP panel: pi's two `mcp.json` files as data the
@@ -59,14 +61,21 @@ interface LoadedFile {
 }
 
 function loadFile(scope: McpScope, path: string): LoadedFile {
-  const empty: McpPanelFile = { scope, path, exists: false, parseError: null, autoEnableCodemode: null };
+  const empty: McpPanelFile = {
+    scope,
+    path,
+    exists: false,
+    parseError: null,
+    autoEnableError: null,
+    autoEnableCodemode: null,
+  };
   if (!existsSync(path)) {
     return { file: empty, raw: null, parsed: null, servers: null, autoEnableError: null };
   }
 
   const raw = readFileSync(path, "utf8");
   const fail = (parseError: string): LoadedFile => ({
-    file: { scope, path, exists: true, parseError, autoEnableCodemode: null },
+    file: { scope, path, exists: true, parseError, autoEnableError: null, autoEnableCodemode: null },
     raw,
     parsed: null,
     servers: null,
@@ -85,21 +94,32 @@ function loadFile(scope: McpScope, path: string): LoadedFile {
   }
 
   const autoEnableCodemode = typeof parsed.autoEnableCodemode === "boolean" ? parsed.autoEnableCodemode : null;
+  const autoEnableError =
+    parsed.autoEnableCodemode === undefined || typeof parsed.autoEnableCodemode === "boolean"
+      ? null
+      : "autoEnableCodemode must be a boolean";
   return {
-    file: { scope, path, exists: true, parseError: null, autoEnableCodemode },
+    file: { scope, path, exists: true, parseError: null, autoEnableError, autoEnableCodemode },
     raw,
     parsed,
     servers: isRecord(parsed.mcpServers) ? parsed.mcpServers : {},
-    autoEnableError:
-      parsed.autoEnableCodemode === undefined || typeof parsed.autoEnableCodemode === "boolean"
-        ? null
-        : "autoEnableCodemode must be a boolean",
+    autoEnableError,
   };
 }
 
 export interface ReadMcpPanelOptions extends McpFilePaths {
   /** Whether the workspace file is trusted at all (`PiWorkConfig.mcp.project_servers`). */
   projectTrusted: boolean;
+}
+
+/** The global servers pi would accept, by name — the base a project override amends. */
+function validatedGlobalConfigs(servers: Record<string, unknown> | null): Map<string, Record<string, unknown>> {
+  const configs = new Map<string, Record<string, unknown>>();
+  for (const [name, value] of Object.entries(servers ?? {})) {
+    if (!isRecord(value) || isMcpOverride(value)) continue;
+    if (typeof validateMcpServerConfig(name, value) !== "string") configs.set(name, value);
+  }
+  return configs;
 }
 
 /**
@@ -112,18 +132,39 @@ export function readMcpPanelData(options: ReadMcpPanelOptions): McpPanelData {
   const errors: string[] = [];
   const entries: McpPanelEntry[] = [];
 
+  // The validated global servers by name: a project override is validated
+  // against the server it amends, exactly as pi's loader does.
+  const globalConfigs = validatedGlobalConfigs(
+    files.find((loaded) => loaded.file.scope === "global")?.servers ?? null,
+  );
+
   for (const loaded of files) {
     if (loaded.file.parseError) errors.push(`${loaded.file.path}: ${loaded.file.parseError}`);
     if (loaded.autoEnableError) errors.push(`${loaded.file.path}: ${loaded.autoEnableError}`);
     for (const [name, value] of Object.entries(loaded.servers ?? {})) {
-      const validated = validateMcpServerConfig(name, value);
-      const error = typeof validated === "string" ? validated : null;
+      let error: string | null = null;
+      let override = false;
+      if (loaded.file.scope === "project" && isRecord(value) && isMcpOverride(value)) {
+        // A transport-less project entry is an override, not an invalid entry:
+        // it only sets keys on the global server of the same name.
+        override = true;
+        const resolved = resolveMcpOverride(name, value, globalConfigs.get(name));
+        error = typeof resolved === "string" ? resolved : null;
+      } else {
+        const validated = validateMcpServerConfig(name, value);
+        error = typeof validated === "string" ? validated : null;
+        // pi refuses `auth` in a project file (see mcp-config.ts).
+        if (!error && loaded.file.scope === "project" && isRecord(value) && typeof value.url === "string" && value.auth) {
+          error = mcpProjectAuthError(name);
+        }
+      }
       if (error) errors.push(`${loaded.file.path}: ${error}`);
       entries.push({
         name,
         scope: loaded.file.scope,
         rawJson: JSON.stringify(value, null, 2),
         error,
+        override,
         shadowsGlobal: false,
         shadowedByProject: false,
       });
@@ -157,6 +198,31 @@ export interface ApplyMcpPanelChangesOptions extends McpFilePaths {
 }
 
 /**
+ * Validate one upsert. A project entry with no transport is an **override**: its
+ * base is the global server of the same name, and it may only set pi's override
+ * keys. Anything else is validated as a definition, as before.
+ */
+function validateUpsert(
+  scope: McpScope,
+  name: string,
+  config: Record<string, unknown>,
+  globalConfigs: Map<string, Record<string, unknown>>,
+): string[] {
+  if (scope === "project" && isMcpOverride(config)) {
+    const resolved = resolveMcpOverride(name, config, globalConfigs.get(name));
+    return typeof resolved === "string" ? [resolved] : [];
+  }
+  const validated = validateMcpServerConfig(name, config);
+  if (typeof validated === "string") return [validated];
+  // pi refuses `auth` in a project file: the credential's destination is not a
+  // repository's decision. Matches the loader and the panel reader.
+  if (scope === "project" && typeof config.url === "string" && config.auth) {
+    return [mcpProjectAuthError(name)];
+  }
+  return [];
+}
+
+/**
  * Apply the panel's pending changes. Returns the reasons it refused, or an
  * empty list after writing. Nothing is written unless every change validated,
  * so a rejected save can never leave one file updated and the other not.
@@ -165,6 +231,11 @@ export function applyMcpPanelChanges(options: ApplyMcpPanelChangesOptions): stri
   const errors: string[] = [];
   const targets: { path: string; loaded: LoadedFile; change: McpPanelChange }[] = [];
   const seen = new Set<string>();
+
+  // The global servers by name, so a project override can be validated against
+  // the same base the loader uses.
+  const globalLoaded = loadFile("global", mcpFilePath("global", options));
+  const globalConfigs = validatedGlobalConfigs(globalLoaded.servers);
 
   for (const change of options.changes) {
     if (!MCP_SCOPES.includes(change.scope)) {
@@ -188,8 +259,7 @@ export function applyMcpPanelChanges(options: ApplyMcpPanelChangesOptions): stri
         continue;
       }
       if (operation.op === "upsert") {
-        const validated = validateMcpServerConfig(operation.name, operation.config);
-        if (typeof validated === "string") errors.push(validated);
+        errors.push(...validateUpsert(change.scope, operation.name, operation.config, globalConfigs));
       } else if (operation.op !== "remove") {
         errors.push(`unknown operation "${String((operation as { op: unknown }).op)}"`);
       }

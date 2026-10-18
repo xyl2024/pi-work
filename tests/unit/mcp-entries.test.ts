@@ -207,7 +207,7 @@ describe("mcp-entries: writing", () => {
       cwd,
       changes: [
         { scope: "global", operations: [{ op: "upsert", name: "bad name", config: { command: "x" } }] },
-        { scope: "project", operations: [{ op: "upsert", name: "fine", config: {} }] },
+        { scope: "project", operations: [{ op: "upsert", name: "fine", config: { type: "stdio" } }] },
       ],
     });
 
@@ -256,5 +256,126 @@ describe("mcp-entries: writing", () => {
     });
 
     expect(readFileSync(globalPath(agentDir), "utf8")).toBe(text);
+  });
+});
+
+describe("mcp-entries: project overrides", () => {
+  it("marks a transport-less project entry as an override, not an invalid entry", () => {
+    const { agentDir, cwd } = sandbox();
+    write(globalPath(agentDir), { mcpServers: { docs: { url: "https://global.example/mcp" } } });
+    write(projectPath(cwd), { mcpServers: { docs: { enabled: false } } });
+
+    const data = readMcpPanelData({ agentDir, cwd, projectTrusted: true });
+
+    const project = data.entries.find((entry) => entry.scope === "project");
+    expect(project?.override).toBe(true);
+    expect(project?.error).toBeNull();
+    expect(project?.shadowsGlobal).toBe(true);
+    expect(data.errors).toEqual([]);
+  });
+
+  it("reports an override with extra keys using pi's sentence", () => {
+    const { agentDir, cwd } = sandbox();
+    write(globalPath(agentDir), { mcpServers: { docs: { url: "https://global.example/mcp" } } });
+    write(projectPath(cwd), { mcpServers: { docs: { enabled: false, command: "npx" } } });
+
+    const data = readMcpPanelData({ agentDir, cwd, projectTrusted: true });
+
+    // `command` makes it a definition, not an override — so it is valid and does
+    // not shadow on the invalid path; the extra-key case is covered below.
+    expect(data.entries.find((entry) => entry.scope === "project")?.override).toBe(false);
+
+    write(projectPath(cwd), { mcpServers: { docs: { enabled: false, oauth: { clientId: "x" } } } });
+    const withExtra = readMcpPanelData({ agentDir, cwd, projectTrusted: true });
+    expect(withExtra.entries.find((entry) => entry.scope === "project")?.error).toContain(
+      "an override can only set enabled, exposure, toolExposure",
+    );
+  });
+
+  it("reports an override with no global server to attach to", () => {
+    const { agentDir, cwd } = sandbox();
+    write(projectPath(cwd), { mcpServers: { ghost: { enabled: false } } });
+
+    const data = readMcpPanelData({ agentDir, cwd, projectTrusted: true });
+
+    expect(data.entries[0].override).toBe(true);
+    expect(data.entries[0].error).toContain('needs "command" or "url", or a global server to override');
+  });
+
+  it("writes an override's minimal shape without pruning it away", () => {
+    const { agentDir, cwd } = sandbox();
+    write(globalPath(agentDir), { mcpServers: { docs: { url: "https://global.example/mcp" } } });
+    const beforeGlobal = readFileSync(globalPath(agentDir), "utf8");
+
+    const errors = applyMcpPanelChanges({
+      agentDir,
+      cwd,
+      changes: [{ scope: "project", operations: [{ op: "upsert", name: "docs", config: { enabled: true } }] }],
+    });
+
+    expect(errors).toEqual([]);
+    expect(JSON.parse(readFileSync(projectPath(cwd), "utf8"))).toEqual({ mcpServers: { docs: { enabled: true } } });
+    expect(readFileSync(globalPath(agentDir), "utf8")).toBe(beforeGlobal);
+  });
+
+  it("refuses an override with extra keys, and a global entry with no transport", () => {
+    const { agentDir, cwd } = sandbox();
+    write(globalPath(agentDir), { mcpServers: { docs: { url: "https://global.example/mcp" } } });
+
+    const extra = applyMcpPanelChanges({
+      agentDir,
+      cwd,
+      changes: [{ scope: "project", operations: [{ op: "upsert", name: "docs", config: { enabled: false, oauth: {} } }] }],
+    });
+    expect(extra.join("\n")).toContain("an override can only set enabled, exposure, toolExposure");
+    expect(existsSync(projectPath(cwd))).toBe(false);
+
+    const global = applyMcpPanelChanges({
+      agentDir,
+      cwd,
+      changes: [{ scope: "global", operations: [{ op: "upsert", name: "transportless", config: { enabled: false } }] }],
+    });
+    expect(global.join("\n")).toContain('needs either "command" (stdio) or "url"');
+  });
+
+  it("keeps the rest of the project file when adding an override", () => {
+    const { agentDir, cwd } = sandbox();
+    write(globalPath(agentDir), { mcpServers: { docs: { url: "https://global.example/mcp" } } });
+    write(projectPath(cwd), { $schema: "x", mcpServers: { other: { command: "keep" } } });
+
+    applyMcpPanelChanges({
+      agentDir,
+      cwd,
+      changes: [{ scope: "project", operations: [{ op: "upsert", name: "docs", config: { enabled: false } }] }],
+    });
+
+    const written = JSON.parse(readFileSync(projectPath(cwd), "utf8")) as Record<string, unknown>;
+    expect(written.$schema).toBe("x");
+    expect(written.mcpServers).toEqual({ other: { command: "keep" }, docs: { enabled: false } });
+  });
+
+  it("flags a project entry that uses auth, and refuses to write one", () => {
+    const { agentDir, cwd } = sandbox();
+    write(globalPath(agentDir), { mcpServers: { docs: { url: "https://global.example/mcp" } } });
+    write(projectPath(cwd), { mcpServers: { local: { url: "https://project.example/mcp", auth: { provider: "x" } } } });
+
+    const data = readMcpPanelData({ agentDir, cwd, projectTrusted: true });
+    expect(data.entries.find((entry) => entry.name === "local")?.error).toContain(
+      "auth is only allowed in the global mcp.json",
+    );
+
+    const errors = applyMcpPanelChanges({
+      agentDir,
+      cwd,
+      changes: [
+        {
+          scope: "project",
+          operations: [
+            { op: "upsert", name: "local2", config: { url: "https://project.example/mcp", auth: { provider: "x" } } },
+          ],
+        },
+      ],
+    });
+    expect(errors.join("\n")).toContain("auth is only allowed in the global mcp.json");
   });
 });

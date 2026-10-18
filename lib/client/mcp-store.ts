@@ -18,10 +18,11 @@
  * Two policies matter, and ADR-0018 records why they differ from the
  * models-config / skills siblings:
  *
- *   • drafts are bucketed by cwd. Leaving a cwd parks its dirty draft and drops
- *     its clean one; the badge and the close guard both read "any cwd dirty",
- *     because closing the tab releases every bucket.
- *   • a clean panel re-reads disk on every re-open (`selectMcpOpenAction`).
+ *   • drafts and snapshots are bucketed by cwd. Leaving a cwd keeps its bucket;
+ *     the badge and the close guard both read "any cwd dirty", because closing
+ *     the tab releases every bucket.
+ *   • a clean panel re-checks disk on every re-open (`selectMcpOpenAction`), but
+ *     the first frame shows the held snapshot instead of blocking on the read.
  *     `mcp.json` has more than one writer, and every save is a read-modify-write
  *     that never assumes its own snapshot is current.
  */
@@ -31,6 +32,7 @@ import { isContentEqual } from "./shallowEqual";
 import { fetchMcpPanelData, putMcpPanelChanges } from "./mcp-io";
 import {
   addDraftEntry,
+  addOverrideDraftEntry,
   draftFromPanelData,
   isDraftDirty,
   mcpDraftProblem,
@@ -51,10 +53,11 @@ import {
 } from "@/lib/shared/mcp-pages";
 import {
   hasDirtyMcpBucket,
-  parkMcpBucket,
   releaseMcpBuckets,
   selectMcpBucket,
+  shouldApplyMcpSnapshot,
   withMcpBucket,
+  withMcpBucketVerified,
   type McpDraftBucket,
   type McpDraftBuckets,
 } from "@/lib/shared/mcp-drafts";
@@ -140,31 +143,49 @@ function errorMessage(e: unknown): string {
 
 // ── Loading ─────────────────────────────────────────────────────────────
 
-async function load(cwd: string): Promise<void> {
+async function load(cwd: string, background = false): Promise<void> {
   const seq = ++loadSeq;
-  patch({ currentCwd: cwd, loadingCwd: cwd, loadError: null, loadErrorCwd: null });
+  if (background) {
+    // A snapshot is already on screen: show it with a "checking" hint instead of
+    // blanking the panel, and let the reconcile replace it when it lands.
+    patch({
+      loadingCwd: cwd,
+      loadError: null,
+      loadErrorCwd: null,
+      buckets: withMcpBucketVerified(state.buckets, cwd, false),
+    });
+  } else {
+    patch({ currentCwd: cwd, loadingCwd: cwd, loadError: null, loadErrorCwd: null });
+  }
   try {
     const data = await fetchMcpPanelData(cwd);
     if (seq !== loadSeq) return;
+    const held = selectMcpBucket(state.buckets, cwd);
     // The user edited this cwd while the read was in flight (a parked dirty
     // draft came back). Their edits win; the next save / open re-reads.
-    if (selectMcpBucket(state.buckets, cwd)?.dirty) {
-      if (state.loadingCwd === cwd) patch({ loadingCwd: null });
+    if (!shouldApplyMcpSnapshot(held)) {
+      patch({ loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd });
+      if (background) patch({ buckets: withMcpBucketVerified(state.buckets, cwd, true) });
       return;
     }
     const draft = draftFromPanelData(data);
-    const previous = selectMcpBucket(state.buckets, cwd);
     const pages = reconcileMcpPages(
-      previous?.pages ?? createMcpPageStack(),
+      held?.pages ?? createMcpPageStack(),
       draft.entries.map((entry) => entry.uid),
     );
-    const bucket: McpDraftBucket = { cwd, data, draft, pages, dirty: isDraftDirty(draft, data) };
+    const bucket: McpDraftBucket = { cwd, data, draft, pages, dirty: isDraftDirty(draft, data), verified: true };
     patch({
       loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd,
       buckets: withMcpBucket(state.buckets, bucket),
     });
   } catch (e) {
     if (seq !== loadSeq) return;
+    // A reconcile behind a snapshot fails quietly: keeping the last read is
+    // better than replacing it with an error screen.
+    if (background && selectMcpBucket(state.buckets, cwd)) {
+      patch({ loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd, buckets: withMcpBucketVerified(state.buckets, cwd, true) });
+      return;
+    }
     patch({ loadingCwd: state.loadingCwd === cwd ? null : state.loadingCwd, loadError: errorMessage(e), loadErrorCwd: cwd });
   }
 }
@@ -182,18 +203,16 @@ export function ensureMcpLoaded(cwd: string | null): void {
 
   const bucket = selectMcpBucket(state.buckets, cwd);
   const loading = state.loadingCwd === cwd;
-  const action = selectMcpOpenAction({ loading, dirty: bucket?.dirty ?? false });
+  const action = selectMcpOpenAction({ loading, dirty: bucket?.dirty ?? false, hasSnapshot: bucket !== null });
 
   if (state.currentCwd !== cwd) {
-    patch({
-      currentCwd: cwd,
-      buckets: parkMcpBucket(state.buckets, state.currentCwd),
-      loadError: null,
-      loadErrorCwd: null,
-    });
+    // Leaving a cwd keeps its bucket: it is the snapshot the next visit shows,
+    // and only closing the tab releases the map (`releaseMcpState`).
+    patch({ currentCwd: cwd, loadError: null, loadErrorCwd: null });
   }
   if (action === "reuse") return;
-  void load(cwd);
+  // A snapshot is shown immediately; only a cwd we have never read blocks.
+  void load(cwd, action === "show-snapshot");
 }
 
 /** Force a fresh read of the current cwd — the list's retry affordance. */
@@ -312,6 +331,25 @@ export function addMcpServer(scope: McpScope): string | null {
     }),
   });
   return added.uid;
+}
+
+/**
+ * Add a project override that turns a global server off for this working
+ * directory, and open its page so the pending change (and the save button) are
+ * visible. Nothing is written until Save, same as every other edit.
+ */
+export function disableGlobalInProject(name: string): void {
+  const bucket = currentBucket();
+  if (!bucket) return;
+  const added = addOverrideDraftEntry(bucket.draft, name);
+  patch({
+    buckets: withMcpBucket(state.buckets, {
+      ...bucket,
+      draft: added.draft,
+      pages: openMcpEntryPage(added.uid),
+      dirty: isDraftDirty(added.draft, bucket.data),
+    }),
+  });
 }
 
 // ── Navigation ──────────────────────────────────────────────────────────

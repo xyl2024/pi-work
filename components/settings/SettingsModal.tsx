@@ -57,10 +57,13 @@ export function SettingsModal({
   const unsaved = useUnsavedChanges();
   const { markDirty, markSaved, closeConfirmKey, reload: reloadUnsaved } = unsaved;
 
-  // Re-read disk every time the modal opens so the fields show the current
-  // config.yaml, not a snapshot from whenever the store was last written
-  // (another tab, a hand edit). There is exactly one mirror: the settings
-  // store. Re-reading disk also resets the unsaved-changes baseline.
+  // Re-read on every open so the fields show the current config.yaml, not the
+  // snapshot the store last wrote. The server serves that read from its
+  // in-process cache while the file is unchanged (see lib/server/config.ts): a
+  // write from this process is visible immediately, and a hand edit (another
+  // tab, a manual edit) lands as soon as the file's mtime/size moves. There is
+  // exactly one mirror: the settings store. Re-reading also resets the
+  // unsaved-changes baseline.
   useEffect(() => {
     let cancelled = false;
     fetch("/api/settings")

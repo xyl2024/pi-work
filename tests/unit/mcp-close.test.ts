@@ -15,7 +15,7 @@ import { ZH_TRANSLATIONS } from "@/lib/shared/i18n-dict";
  */
 
 function openState(partial: Partial<McpOpenState>): McpOpenState {
-  return { loading: false, dirty: false, ...partial };
+  return { loading: false, dirty: false, hasSnapshot: false, ...partial };
 }
 
 describe("selectMcpCloseConfirm", () => {
@@ -42,17 +42,23 @@ describe("selectMcpCloseConfirm", () => {
 });
 
 describe("selectMcpOpenAction", () => {
-  it("reloads from disk when the panel is clean — mcp.json has other writers", () => {
+  it("reloads from disk when there is no snapshot yet", () => {
     expect(selectMcpOpenAction(openState({}))).toBe("reload");
-    expect(selectMcpOpenAction(openState({ loading: false, dirty: false }))).toBe("reload");
+    expect(selectMcpOpenAction(openState({ loading: false, dirty: false, hasSnapshot: false }))).toBe("reload");
   });
 
-  it("reuses a draft that is still dirty", () => {
+  it("shows the last snapshot first and checks disk in the background", () => {
+    expect(selectMcpOpenAction(openState({ hasSnapshot: true }))).toBe("show-snapshot");
+  });
+
+  it("reuses a draft that is still dirty — never reconciles over the user's edits", () => {
     expect(selectMcpOpenAction(openState({ dirty: true }))).toBe("reuse");
+    expect(selectMcpOpenAction(openState({ dirty: true, hasSnapshot: true }))).toBe("reuse");
   });
 
   it("reuses a read that is already in flight, so two mounts never race", () => {
     expect(selectMcpOpenAction(openState({ loading: true }))).toBe("reuse");
     expect(selectMcpOpenAction(openState({ loading: true, dirty: true }))).toBe("reuse");
+    expect(selectMcpOpenAction(openState({ loading: true, hasSnapshot: true }))).toBe("reuse");
   });
 });

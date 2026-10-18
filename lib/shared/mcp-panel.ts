@@ -45,6 +45,70 @@ export function resolveMcpExposure(value: unknown): McpExposure {
 /** Server names pi accepts — mirrors `SERVER_NAME` in `lib/server/mcp-config.ts`. */
 export const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/;
 
+/**
+ * The only keys a project entry may set when it has no transport of its own.
+ * pi calls such an entry an **override**: it merges these keys into the global
+ * server of the same name instead of defining a server. Mirrors pi's
+ * `OVERRIDE_KEYS` in `extensions/mcp/config.js`.
+ */
+export const MCP_OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"] as const;
+
+/**
+ * Whether an entry overrides a global server instead of defining one: it has no
+ * `command`, `url`, or `type`. pi's `isOverride`, kept in one place so the
+ * loader mirror, the panel reader, and the draft validator cannot drift.
+ */
+export function isMcpOverride(value: Record<string, unknown>): boolean {
+  return value.command === undefined && value.url === undefined && value.type === undefined;
+}
+
+/** The keys an override entry sets that pi does not allow. */
+export function mcpOverrideExtraKeys(value: Record<string, unknown>): string[] {
+  return Object.keys(value).filter((key) => !(MCP_OVERRIDE_KEYS as readonly string[]).includes(key));
+}
+
+/** pi's message for an override with extra keys — kept verbatim so both halves agree. */
+export function mcpOverrideExtraKeysError(name: string): string {
+  return `server "${name}": an override can only set ${MCP_OVERRIDE_KEYS.join(", ")}`;
+}
+
+/** pi's message for an override with no global server of the same name. */
+export function mcpOverrideMissingBaseError(name: string): string {
+  return `server "${name}" needs "command" or "url", or a global server to override`;
+}
+
+/**
+ * pi's message when a project entry tries to use `auth`: a repository must not
+ * pick where the credential goes, so the field only exists in the global file.
+ */
+export function mcpProjectAuthError(name: string): string {
+  return `server "${name}": auth is only allowed in the global mcp.json`;
+}
+
+/**
+ * The keys the entry form models — the required trio (name / transport /
+ * command-or-url) plus everything the advanced section exposes. Used to tell
+ * the user how many fields the form does not cover (story 16).
+ */
+export const MCP_FORM_FIELDS = [
+  "type",
+  "command",
+  "args",
+  "env",
+  "cwd",
+  "url",
+  "headers",
+  "timeout",
+  "exposure",
+  "enabled",
+  "description",
+] as const;
+
+/** The keys present in an entry that the form does not model (`oauth`, `auth`, `toolExposure`, …). */
+export function mcpUncoveredFields(config: Record<string, unknown>): string[] {
+  return Object.keys(config).filter((key) => !(MCP_FORM_FIELDS as readonly string[]).includes(key));
+}
+
 /** One server entry as it sits in a file. */
 export interface McpPanelEntry {
   name: string;
@@ -57,6 +121,12 @@ export interface McpPanelEntry {
   shadowsGlobal: boolean;
   /** A global entry that a project entry replaces. */
   shadowedByProject: boolean;
+  /**
+   * A project entry with no transport of its own: it only merges `enabled` /
+   * `exposure` / `toolExposure` into the global server of the same name, rather
+   * than defining or replacing a server. See `isMcpOverride`.
+   */
+  override: boolean;
 }
 
 /** One `mcp.json`, whether or not it exists yet. */
@@ -66,6 +136,8 @@ export interface McpPanelFile {
   exists: boolean;
   /** File-level failure (JSON syntax, or a top-level shape pi rejects): the panel refuses to save. */
   parseError: string | null;
+  /** `autoEnableCodemode` was present but not a boolean: pi logs it and keeps the servers. */
+  autoEnableError: string | null;
   /** `autoEnableCodemode` as written; null when the key is absent (pi defaults to true). */
   autoEnableCodemode: boolean | null;
 }
@@ -112,6 +184,16 @@ const DROP_WHEN_EMPTY = new Set(["args", "env", "headers", "toolExposure"]);
  * and makes "nothing changed" actually mean nothing is written.
  */
 export function pruneMcpDefaults(config: Record<string, unknown>): Record<string, unknown> {
+  // An override entry's whole point is the key it sets, even at pi's default
+  // value (`enabled: true` re-enables a server the global file disabled), so its
+  // shape is never pruned down to `{}` — pi keeps it too.
+  if (isMcpOverride(config)) {
+    const kept: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(config)) {
+      if (value !== undefined) kept[key] = value;
+    }
+    return kept;
+  }
   const pruned: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
     if (value === undefined) continue;
@@ -148,4 +230,74 @@ export function parseMcpEntryConfig(rawJson: string): Record<string, unknown> | 
   } catch {
     return null;
   }
+}
+
+/**
+ * One problem the list page reports, attributed to the file or the entry it
+ * came from. `level` is the distinction the raw error strings cannot carry:
+ *
+ *   • `file` — the file is unusable and the panel refuses to save it;
+ *   • `entry` — pi skips that server and every other server still connects.
+ */
+export interface McpProblem {
+  scope: McpScope | null;
+  level: "file" | "entry";
+  /** The entry name for entry-level problems, null otherwise. */
+  name: string | null;
+  message: string;
+}
+
+/**
+ * Collapse the panel's three error sources (the loader's `errors[]`, each
+ * file's `parseError` / `autoEnableError`, each entry's `error`) into one
+ * de-duplicated list. A string in `errors[]` that no structured fact already
+ * accounts for still surfaces, so nothing pi said is lost.
+ */
+export function projectMcpProblems(data: McpPanelData): McpProblem[] {
+  const problems: McpProblem[] = [];
+  const seen = new Set<string>();
+  const push = (problem: McpProblem) => {
+    const key = `${problem.scope ?? ""}|${problem.level}|${problem.name ?? ""}|${problem.message}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    problems.push(problem);
+  };
+
+  for (const file of data.files) {
+    if (file.parseError) push({ scope: file.scope, level: "file", name: null, message: file.parseError });
+    if (file.autoEnableError) push({ scope: file.scope, level: "file", name: null, message: file.autoEnableError });
+  }
+  for (const entry of data.entries) {
+    if (entry.error) push({ scope: entry.scope, level: "entry", name: entry.name, message: entry.error });
+  }
+  for (const error of data.errors) {
+    if (problems.some((problem) => error.endsWith(problem.message))) continue;
+    push({ scope: null, level: "file", name: null, message: error });
+  }
+  return problems;
+}
+
+/** The summary line's two numbers: files that cannot be saved, invalid entries. */
+export interface McpProblemSummary {
+  files: number;
+  entries: number;
+}
+
+export function summarizeMcpProblems(problems: McpProblem[]): McpProblemSummary {
+  const files = new Set<McpScope | "">();
+  let entries = 0;
+  for (const problem of problems) {
+    if (problem.level === "file") files.add(problem.scope ?? "");
+    else entries += 1;
+  }
+  return { files: files.size, entries };
+}
+
+/**
+ * Whether the file-level codemode switch can affect anything here. pi only acts
+ * on it for non-`direct` exposure, so a file with only `direct` servers hides
+ * the switch instead of offering a control with no visible effect.
+ */
+export function entryUsesCodemode(config: Record<string, unknown> | null): boolean {
+  return config !== null && resolveMcpExposure(config.exposure) !== "direct";
 }

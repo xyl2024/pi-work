@@ -30,6 +30,8 @@ export async function register(): Promise<void> {
   // user enables it in Settings). Runs before any route module so a request
   // served during boot can never race the first `setGlobalDispatcher` call.
   await safeBootstrap("network-proxy", () => import("@/lib/server/network-proxy"));
+  // Warm the allowed-roots cache off the request path (non-blocking, idempotent).
+  await safeBootstrap("allowed-roots", () => import("@/lib/server/file-access-prewarm"));
   await safeBootstrap("scheduler", () => import("@/lib/server/scheduler/startup"));
   await safeBootstrap("terminal",  () => import("@/lib/server/terminal/startup"));
 }

@@ -14,6 +14,7 @@ import {
   mcpPendingChanges,
   type McpDraftProblem,
 } from "@/lib/shared/mcp-draft";
+import { mcpOverrideExtraKeysError } from "@/lib/shared/mcp-panel";
 import {
   escapeMcp,
   ensureMcpLoaded,
@@ -21,7 +22,7 @@ import {
   saveMcpChanges,
   useMcpStore,
 } from "@/lib/client/mcp-store";
-import { selectMcpBucket } from "@/lib/shared/mcp-drafts";
+import { isMcpBucketVerifying, selectMcpBucket } from "@/lib/shared/mcp-drafts";
 import { McpListPage } from "./mcp/McpListPage";
 import { McpEntryPage } from "./mcp/McpEntryPage";
 
@@ -63,6 +64,8 @@ export function McpPanel({
   }, [cwd, visible]);
 
   const bucket = selectMcpBucket(state.buckets, state.currentCwd);
+  const shownBucket = state.currentCwd === cwd ? bucket : null;
+  const verifying = isMcpBucketVerifying(shownBucket);
   const page = bucket ? currentMcpPage(bucket.pages) : MCP_LIST_PAGE;
   const entry = page.kind === "entry" ? bucket?.draft.entries.find((item) => item.uid === page.uid) ?? null : null;
 
@@ -89,6 +92,9 @@ export function McpPanel({
           return t("mcp.problemInvalidJson", { name: value.name });
         case "missing-transport":
           return t("mcp.problemMissingTransport", { name: value.name });
+        case "override-extra-keys":
+          // pi's own sentence, verbatim: the server would reject the same entry.
+          return mcpOverrideExtraKeysError(value.name);
       }
     },
     [t],
@@ -142,7 +148,30 @@ export function McpPanel({
       tabIndex={-1}
       style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, outline: "none" }}
     >
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+        {verifying && (
+          <div
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 12,
+              zIndex: 2,
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              fontSize: 11,
+              color: "var(--text-dim)",
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              borderRadius: 999,
+              padding: "2px 8px",
+              pointerEvents: "none",
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }} />
+            {t("mcp.verifying")}
+          </div>
+        )}
         {loadError ? (
           <div style={{ padding: "24px 14px", textAlign: "center", color: "var(--error)", fontSize: 12 }}>
             {t("mcp.loadFailed", { error: loadError })}
