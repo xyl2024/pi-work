@@ -9,6 +9,7 @@ import {
   useChannelsStore,
 } from "@/lib/client/channels-store";
 import { ChannelsRootPage } from "./channels/ChannelsRootPage";
+import { ChannelDetailPage } from "./channels/ChannelDetailPage";
 
 /**
  * The 频道 panel view body.
@@ -47,7 +48,14 @@ export function ChannelsPanel({ onCloseTab }: { onCloseTab?: () => void }) {
       tabIndex={-1}
       style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, outline: "none" }}
     >
-      {page.kind === "detail" ? null : <ChannelsRootPage />}
+      {page.kind === "detail" ? (
+        // Remounting on channelId keeps the detail page's own state (rename
+        // input, workspace menu) scoped to the channel actually on screen when
+        // one detail page replaces another.
+        <ChannelDetailPage key={page.channelId} channelId={page.channelId} />
+      ) : (
+        <ChannelsRootPage />
+      )}
     </div>
   );
 }
