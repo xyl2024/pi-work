@@ -3,17 +3,19 @@
  *
  * The panel always shows the working directory of the selected session, but a
  * draft must not vanish just because the user glanced at another session. The
- * compromise (ADR-0018) is to bucket drafts by cwd: leaving a cwd parks its
- * draft, returning to it restores the draft untouched, and a clean bucket is
- * dropped instead (there is nothing to preserve — the next visit re-reads disk).
+ * compromise (ADR-0018) is to bucket drafts by cwd: leaving a cwd keeps its
+ * bucket, returning to it restores the draft untouched, and the next visit
+ * shows that snapshot immediately while a background reconcile checks the disk.
+ * The map survives a cwd switch; only closing the panel tab releases it.
  *
  * This module is the pure half of that rule. `lib/client/mcp-store.ts` holds the
  * bucket map and does the request / subscription wiring; the decisions live here
  * so they can be driven from `tests/unit` without a browser:
  *
- *   • `parkMcpBucket`     — leaving a cwd drops its bucket unless it is dirty.
  *   • `hasDirtyMcpBucket` — the one "any cwd has unsaved changes" predicate the
  *     right-bar badge and the close guard both read (same source of truth).
+ *   • `isMcpBucketVerifying` / `shouldApplyMcpSnapshot` — the background
+ *     reconcile's two questions: show "checking", and may the fresh read land.
  *   • `selectMcpBucket` / `withMcpBucket` / `releaseMcpBuckets` — the rest.
  */
 
@@ -42,18 +44,6 @@ export interface McpDraftBucket {
 
 /** All live buckets, keyed by cwd. */
 export type McpDraftBuckets = Readonly<Record<string, McpDraftBucket>>;
-
-/**
- * The "leaving a cwd" rule: a clean bucket is discarded, a dirty one stays
- * parked so returning to the cwd restores the draft exactly. A no-op when the
- * bucket is missing or dirty (the common "user stayed put" case).
- */
-export function parkMcpBucket(
-  buckets: McpDraftBuckets,
-  cwd: string | null,
-): McpDraftBuckets {
-  return cwd === null || !buckets[cwd] ? buckets : buckets;
-}
 
 /** Put one bucket in place, replacing the cwd's previous entry. */
 export function withMcpBucket(

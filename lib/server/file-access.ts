@@ -5,6 +5,8 @@ declare global {
   var __piAllowedRootsCache: { roots: Set<string>; expiresAt: number } | undefined;
   /** A scan in flight, shared by every concurrent miss (see `getAllowedRoots`). */
   var __piAllowedRootsPromise: Promise<Set<string>> | undefined;
+  /** Bumped by invalidation; a scan that started before it must not fill the cache. */
+  var __piAllowedRootsGeneration: number | undefined;
   var __piCreatedSpaceRoots: Set<string> | undefined;
 }
 
@@ -35,6 +37,9 @@ export function invalidateAllowedRootsCache(): void {
   // Drop an in-flight scan too: after a write that changes the answer, the next
   // caller must not receive the pre-write result the shared promise resolves to.
   globalThis.__piAllowedRootsPromise = undefined;
+  // The dropped scan may still be running; the generation stops it from writing
+  // its (now stale) roots into the cache when it settles.
+  globalThis.__piAllowedRootsGeneration = (globalThis.__piAllowedRootsGeneration ?? 0) + 1;
 }
 
 export async function getAllowedRoots(): Promise<Set<string>> {
@@ -47,11 +52,16 @@ export async function getAllowedRoots(): Promise<Set<string>> {
   // settles, so a later miss still pays for a fresh scan rather than reusing a
   // stale in-flight result.
   if (globalThis.__piAllowedRootsPromise) return globalThis.__piAllowedRootsPromise;
+  const generation = globalThis.__piAllowedRootsGeneration ?? 0;
   const promise = computeAllowedRoots();
   globalThis.__piAllowedRootsPromise = promise;
   try {
     const roots = await promise;
-    globalThis.__piAllowedRootsCache = { roots, expiresAt: Date.now() + ALLOWED_ROOTS_TTL_MS };
+    // If the cache was invalidated while this scan ran, it answered an
+    // out-of-date question — return it to this caller, but do not store it.
+    if ((globalThis.__piAllowedRootsGeneration ?? 0) === generation) {
+      globalThis.__piAllowedRootsCache = { roots, expiresAt: Date.now() + ALLOWED_ROOTS_TTL_MS };
+    }
     return roots;
   } finally {
     if (globalThis.__piAllowedRootsPromise === promise) globalThis.__piAllowedRootsPromise = undefined;

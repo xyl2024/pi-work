@@ -18,10 +18,11 @@
  * Two policies matter, and ADR-0018 records why they differ from the
  * models-config / skills siblings:
  *
- *   • drafts are bucketed by cwd. Leaving a cwd parks its dirty draft and drops
- *     its clean one; the badge and the close guard both read "any cwd dirty",
- *     because closing the tab releases every bucket.
- *   • a clean panel re-reads disk on every re-open (`selectMcpOpenAction`).
+ *   • drafts and snapshots are bucketed by cwd. Leaving a cwd keeps its bucket;
+ *     the badge and the close guard both read "any cwd dirty", because closing
+ *     the tab releases every bucket.
+ *   • a clean panel re-checks disk on every re-open (`selectMcpOpenAction`), but
+ *     the first frame shows the held snapshot instead of blocking on the read.
  *     `mcp.json` has more than one writer, and every save is a read-modify-write
  *     that never assumes its own snapshot is current.
  */
@@ -52,7 +53,6 @@ import {
 } from "@/lib/shared/mcp-pages";
 import {
   hasDirtyMcpBucket,
-  parkMcpBucket,
   releaseMcpBuckets,
   selectMcpBucket,
   shouldApplyMcpSnapshot,
@@ -206,12 +206,9 @@ export function ensureMcpLoaded(cwd: string | null): void {
   const action = selectMcpOpenAction({ loading, dirty: bucket?.dirty ?? false, hasSnapshot: bucket !== null });
 
   if (state.currentCwd !== cwd) {
-    patch({
-      currentCwd: cwd,
-      buckets: parkMcpBucket(state.buckets, state.currentCwd),
-      loadError: null,
-      loadErrorCwd: null,
-    });
+    // Leaving a cwd keeps its bucket: it is the snapshot the next visit shows,
+    // and only closing the tab releases the map (`releaseMcpState`).
+    patch({ currentCwd: cwd, loadError: null, loadErrorCwd: null });
   }
   if (action === "reuse") return;
   // A snapshot is shown immediately; only a cwd we have never read blocks.

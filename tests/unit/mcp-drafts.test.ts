@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   hasDirtyMcpBucket,
   isMcpBucketVerifying,
-  parkMcpBucket,
   releaseMcpBuckets,
   selectMcpBucket,
   shouldApplyMcpSnapshot,
@@ -37,30 +36,11 @@ function bucketsOf(...items: McpDraftBucket[]): McpDraftBuckets {
   return items.reduce<McpDraftBuckets>((acc, item) => withMcpBucket(acc, item), {});
 }
 
-describe("parkMcpBucket", () => {
-  it("keeps a dirty bucket for the cwd it left", () => {
-    const state = bucketsOf(bucket("/a", true), bucket("/b", true));
-    expect(parkMcpBucket(state, "/b")).toEqual(state);
-  });
-
-  it("keeps a clean bucket too — it is the snapshot the next visit shows", () => {
-    const state = bucketsOf(bucket("/a", true), bucket("/b", false));
-    const parked = parkMcpBucket(state, "/b");
-    expect(selectMcpBucket(parked, "/b")).toEqual(bucket("/b", false));
-    expect(selectMcpBucket(parked, "/a")).toEqual(bucket("/a", true));
-  });
-
-  it("is a no-op when there is no bucket for the cwd or no cwd at all", () => {
-    const state = bucketsOf(bucket("/a", true));
-    expect(parkMcpBucket(state, "/missing")).toBe(state);
-    expect(parkMcpBucket(state, null)).toBe(state);
-  });
-});
-
 describe("restore", () => {
-  it("returns the parked draft untouched when the cwd comes back", () => {
-    const parked = parkMcpBucket(bucketsOf(bucket("/a", true), bucket("/b", false)), "/b");
-    expect(selectMcpBucket(parked, "/a")).toEqual(bucket("/a", true));
+  it("returns the parked bucket untouched when the cwd comes back", () => {
+    const state = bucketsOf(bucket("/a", true), bucket("/b", false));
+    expect(selectMcpBucket(state, "/a")).toEqual(bucket("/a", true));
+    expect(selectMcpBucket(state, "/b")).toEqual(bucket("/b", false));
   });
 });
 

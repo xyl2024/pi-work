@@ -5,9 +5,6 @@ import {
   isMcpOverride,
   MCP_SCOPES,
   MCP_SERVER_NAME,
-  mcpOverrideExtraKeys,
-  mcpOverrideExtraKeysError,
-  mcpOverrideMissingBaseError,
   mcpProjectAuthError,
   pruneMcpDefaults,
   type McpPanelChange,
@@ -16,7 +13,7 @@ import {
   type McpPanelFile,
   type McpScope,
 } from "@/lib/shared/mcp-panel";
-import { validateMcpServerConfig } from "./mcp-config";
+import { resolveMcpOverride, validateMcpServerConfig } from "./mcp-config";
 
 /**
  * The read/write half of the MCP panel: pi's two `mcp.json` files as data the
@@ -115,6 +112,16 @@ export interface ReadMcpPanelOptions extends McpFilePaths {
   projectTrusted: boolean;
 }
 
+/** The global servers pi would accept, by name — the base a project override amends. */
+function validatedGlobalConfigs(servers: Record<string, unknown> | null): Map<string, Record<string, unknown>> {
+  const configs = new Map<string, Record<string, unknown>>();
+  for (const [name, value] of Object.entries(servers ?? {})) {
+    if (!isRecord(value) || isMcpOverride(value)) continue;
+    if (typeof validateMcpServerConfig(name, value) !== "string") configs.set(name, value);
+  }
+  return configs;
+}
+
 /**
  * Both files plus the merged view the panel shows. Never throws: a broken file
  * becomes a `parseError` (and stays uneditable), a broken entry an entry-level
@@ -127,12 +134,9 @@ export function readMcpPanelData(options: ReadMcpPanelOptions): McpPanelData {
 
   // The validated global servers by name: a project override is validated
   // against the server it amends, exactly as pi's loader does.
-  const globalConfigs = new Map<string, Record<string, unknown>>();
-  const global = files.find((loaded) => loaded.file.scope === "global");
-  for (const [name, value] of Object.entries(global?.servers ?? {})) {
-    if (!isRecord(value) || isMcpOverride(value)) continue;
-    if (typeof validateMcpServerConfig(name, value) !== "string") globalConfigs.set(name, value);
-  }
+  const globalConfigs = validatedGlobalConfigs(
+    files.find((loaded) => loaded.file.scope === "global")?.servers ?? null,
+  );
 
   for (const loaded of files) {
     if (loaded.file.parseError) errors.push(`${loaded.file.path}: ${loaded.file.parseError}`);
@@ -144,23 +148,13 @@ export function readMcpPanelData(options: ReadMcpPanelOptions): McpPanelData {
         // A transport-less project entry is an override, not an invalid entry:
         // it only sets keys on the global server of the same name.
         override = true;
-        const base = globalConfigs.get(name);
-        if (base === undefined) {
-          error = mcpOverrideMissingBaseError(name);
-        } else {
-          const extra = mcpOverrideExtraKeys(value);
-          if (extra.length > 0) {
-            error = mcpOverrideExtraKeysError(name);
-          } else {
-            const validated = validateMcpServerConfig(name, { ...base, ...value });
-            error = typeof validated === "string" ? validated : null;
-          }
-        }
+        const resolved = resolveMcpOverride(name, value, globalConfigs.get(name));
+        error = typeof resolved === "string" ? resolved : null;
       } else {
         const validated = validateMcpServerConfig(name, value);
         error = typeof validated === "string" ? validated : null;
         // pi refuses `auth` in a project file (see mcp-config.ts).
-        if (!error && loaded.file.scope === "project" && isRecord(value) && typeof value.url === "string" && value.auth !== undefined) {
+        if (!error && loaded.file.scope === "project" && isRecord(value) && typeof value.url === "string" && value.auth) {
           error = mcpProjectAuthError(name);
         }
       }
@@ -215,17 +209,14 @@ function validateUpsert(
   globalConfigs: Map<string, Record<string, unknown>>,
 ): string[] {
   if (scope === "project" && isMcpOverride(config)) {
-    const base = globalConfigs.get(name);
-    if (base === undefined) return [mcpOverrideMissingBaseError(name)];
-    if (mcpOverrideExtraKeys(config).length > 0) return [mcpOverrideExtraKeysError(name)];
-    const validated = validateMcpServerConfig(name, { ...base, ...config });
-    return typeof validated === "string" ? [validated] : [];
+    const resolved = resolveMcpOverride(name, config, globalConfigs.get(name));
+    return typeof resolved === "string" ? [resolved] : [];
   }
   const validated = validateMcpServerConfig(name, config);
   if (typeof validated === "string") return [validated];
   // pi refuses `auth` in a project file: the credential's destination is not a
   // repository's decision. Matches the loader and the panel reader.
-  if (scope === "project" && typeof config.url === "string" && config.auth !== undefined) {
+  if (scope === "project" && typeof config.url === "string" && config.auth) {
     return [mcpProjectAuthError(name)];
   }
   return [];
@@ -244,11 +235,7 @@ export function applyMcpPanelChanges(options: ApplyMcpPanelChangesOptions): stri
   // The global servers by name, so a project override can be validated against
   // the same base the loader uses.
   const globalLoaded = loadFile("global", mcpFilePath("global", options));
-  const globalConfigs = new Map<string, Record<string, unknown>>();
-  for (const [name, value] of Object.entries(globalLoaded.servers ?? {})) {
-    if (!isRecord(value) || isMcpOverride(value)) continue;
-    if (typeof validateMcpServerConfig(name, value) !== "string") globalConfigs.set(name, value);
-  }
+  const globalConfigs = validatedGlobalConfigs(globalLoaded.servers);
 
   for (const change of options.changes) {
     if (!MCP_SCOPES.includes(change.scope)) {

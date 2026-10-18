@@ -148,9 +148,9 @@ export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
                 )}
               </div>
 
-              {file.parseError ? (
-                <McpNotice tone="error">{t("mcp.fileError", { error: file.parseError })}</McpNotice>
-              ) : !file.exists ? (
+              {/* A parse error is already spoken by the summary above; repeating it
+                  here would be the second voice the panel is trying to remove. */}
+              {file.parseError ? null : !file.exists ? (
                 <McpNotice tone="info">{t("mcp.fileMissing")}</McpNotice>
               ) : entries.length === 0 ? (
                 <McpNotice tone="info">{t("mcp.empty")}</McpNotice>

@@ -206,6 +206,22 @@ export function validateMcpServerConfig(name: string, value: unknown): McpServer
   return `server "${name}" needs either "command" (stdio) or "url" (streamable HTTP)`;
 }
 
+/**
+ * Resolve a project override against the global server it amends: the merged
+ * (validated) config, or pi's error string. This is the one place the three
+ * callers — the session loader, the panel reader and the panel write validation
+ * — ask the same question, so their answers cannot drift.
+ */
+export function resolveMcpOverride(
+  name: string,
+  value: Record<string, unknown>,
+  base: Record<string, unknown> | undefined,
+): McpServerConfig | string {
+  if (base === undefined) return mcpOverrideMissingBaseError(name);
+  if (mcpOverrideExtraKeys(value).length > 0) return mcpOverrideExtraKeysError(name);
+  return validateMcpServerConfig(name, { ...base, ...value });
+}
+
 interface LoadState {
   servers: Map<string, McpServerEntry>;
   errors: string[];
@@ -237,15 +253,13 @@ function readConfigFile(path: string, scope: "global" | "project", state: LoadSt
     // alignment with `extensions/mcp/config.js`, not new semantics.
     if (scope === "project" && isRecord(value) && isMcpOverride(value)) {
       const base = state.servers.get(name);
-      if (!base) {
-        state.errors.push(`${path}: ${mcpOverrideMissingBaseError(name)}`);
-      } else if (mcpOverrideExtraKeys(value).length > 0) {
-        state.errors.push(`${path}: ${mcpOverrideExtraKeysError(name)}`);
-      } else {
-        const config = validateMcpServerConfig(name, { ...(base.config as unknown as Record<string, unknown>), ...value });
-        if (typeof config === "string") state.errors.push(`${path}: ${config}`);
-        else state.servers.set(name, { ...base, config, override: path });
-      }
+      const resolved = resolveMcpOverride(
+        name,
+        value,
+        base?.config as unknown as Record<string, unknown> | undefined,
+      );
+      if (typeof resolved === "string") state.errors.push(`${path}: ${resolved}`);
+      else if (base) state.servers.set(name, { ...base, config: resolved, override: path });
       continue;
     }
     const config = validateMcpServerConfig(name, value);
@@ -256,7 +270,7 @@ function readConfigFile(path: string, scope: "global" | "project", state: LoadSt
     // pi refuses `auth` in a project file: a repository must not pick where the
     // credential goes. Mirrored here so a session and the panel agree.
     const definition = config as unknown as Record<string, unknown>;
-    if (scope === "project" && typeof definition.url === "string" && definition.auth !== undefined) {
+    if (scope === "project" && typeof definition.url === "string" && definition.auth) {
       state.errors.push(`${path}: ${mcpProjectAuthError(name)}`);
       continue;
     }

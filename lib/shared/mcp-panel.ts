@@ -91,6 +91,7 @@ export function mcpProjectAuthError(name: string): string {
  * the user how many fields the form does not cover (story 16).
  */
 export const MCP_FORM_FIELDS = [
+  "type",
   "command",
   "args",
   "env",
