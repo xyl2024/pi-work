@@ -95,8 +95,7 @@ interface Props {
    *  plain-Enter sending. */
   enterToSend?: boolean;
   /** Renders only the bordered input box itself: no bottom toolbar, no
-   *  image attachments, no slash menu. While streaming, a stop button
-   *  replaces the send button (the toolbar's abort affordance is hidden). */
+   *  image attachments, no slash menu. */
   hideToolbar?: boolean;
   /** Hard-disable the whole input (no session, not ready, ...). */
   disabled?: boolean;
@@ -444,6 +443,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     },
   }));
 
+  const canSend = !disabled && !sessionBusy && (!!value.trim() || attachedImages.length > 0 || !!selectedSlashResource);
+
   return (
     <div
       style={{
@@ -486,7 +487,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         {/* Image previews */}
         {!hideToolbar && <AttachmentList images={attachedImages} onRemove={removeImage} />}
 
-        {/* Main input — stays visible while the agent is streaming (abort button handles cancel) */}
+        {/* Main input — stays visible while the agent is streaming; the send
+            button turns into the red stop button so cancelling stays in reach. */}
         <CollapsiblePanel open={true}>
         <div
           style={{
@@ -556,10 +558,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             data-hide-v-scrollbar
           />
 
-          {hideToolbar && isStreaming ? (
+          {isStreaming ? (
             <button
               type="button"
               onClick={onAbort}
+              disabled={disabled}
               aria-label={t("Stop")}
               title={t("Stop")}
               style={{
@@ -567,34 +570,38 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 alignSelf: "flex-end",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 34, height: 34, padding: 0,
-                background: "rgba(239,68,68,0.08)",
-                border: "1px solid rgba(239,68,68,0.3)",
+                background: "#ef4444",
+                border: "none",
                 borderRadius: "50%",
-                color: "#ef4444",
-                cursor: "pointer",
-                transition: "background 0.15s",
+                color: "#fff",
+                cursor: disabled ? "not-allowed" : "pointer",
+                opacity: disabled ? 0.6 : 1,
+                boxShadow: "0 1px 3px rgba(239,68,68,0.35)",
+                transition: "background 0.15s, box-shadow 0.15s",
               }}
+              onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = "#dc2626"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#ef4444"; }}
             >
-              <svg width="13" height="13" viewBox="0 0 10 10" fill="none">
+              <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
                 <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
               </svg>
             </button>
-          ) : !isStreaming && (
+          ) : (
             <button
               onClick={handleSend}
-              disabled={disabled || sessionBusy || (!value.trim() && !attachedImages.length && !selectedSlashResource)}
+              disabled={!canSend}
               aria-label={t("Send")}
               style={{
                 flexShrink: 0,
                 alignSelf: "flex-end",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: 34, height: 34, padding: 0,
-                background: (!disabled && !sessionBusy && (value.trim() || attachedImages.length || selectedSlashResource)) ? "var(--accent)" : "var(--bg-panel)",
+                background: canSend ? "var(--accent)" : "var(--bg-panel)",
                 border: "none",
                 borderRadius: "50%",
-                color: (!disabled && !sessionBusy && (value.trim() || attachedImages.length || selectedSlashResource)) ? "#fff" : "var(--text-dim)",
-                cursor: (!disabled && !sessionBusy && (value.trim() || attachedImages.length || selectedSlashResource)) ? "pointer" : "not-allowed",
-                boxShadow: (!disabled && !sessionBusy && (value.trim() || attachedImages.length || selectedSlashResource)) ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
+                color: canSend ? "#fff" : "var(--text-dim)",
+                cursor: canSend ? "pointer" : "not-allowed",
+                boxShadow: canSend ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
                 transition: "background 0.15s, box-shadow 0.15s",
               }}
             >
@@ -684,7 +691,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             showNotifyPicker={showNotifyPicker}
             notifyChannelId={notifyChannelId}
             onNotifyChannelChange={onNotifyChannelChange}
-            onAbort={onAbort}
           />
         )}
       </div>

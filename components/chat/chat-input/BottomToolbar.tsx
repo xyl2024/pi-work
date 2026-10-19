@@ -19,8 +19,8 @@ type ThinkingLevelOption = "off" | "minimal" | "low" | "medium" | "high" | "xhig
 export interface BottomToolbarProps {
   /** i18n function — wired from the parent's `useI18n`. */
   t: (key: string, params?: Record<string, string | number>) => string;
-  /** True while the agent is mid-turn. Gates send/abort, model/cwd pickers,
-   *  upload, and the tools popover (only one of stop / picker renders per side). */
+  /** True while the agent is mid-turn. Gates model/cwd pickers, upload, and
+   *  the thinking/tools affordances (they swap for read-only badges). */
   isStreaming: boolean;
 
   // LEFT side
@@ -75,15 +75,14 @@ export interface BottomToolbarProps {
   showNotifyPicker?: boolean;
   notifyChannelId?: string | null;
   onNotifyChannelChange?: (channelId: string | null) => void;
-
-  // RIGHT - abort
-  onAbort: () => void;
 }
 
 /**
  * Bottom toolbar beneath the textarea: LEFT (new session + upload + model +
- * cwd), MIDDLE (context usage), RIGHT (thinking + tools + notify + more +
- * stop).
+ * cwd), MIDDLE (context usage), RIGHT (thinking + tools + notify + more).
+ *
+ * No abort affordance here: while streaming the send button in the input row
+ * turns into the red stop button.
  *
  * Pure presentational — every state/derivative the JSX needs comes from
  * props. The corresponding state machine (slash menu, history, tools
@@ -105,7 +104,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
     onToolSelectionChange, onEnsureAvailableTools,
     customExpanded, toggleCustomExpanded,
     showNotifyPicker = false, notifyChannelId = null, onNotifyChannelChange,
-    onAbort,
   } = props;
 
   // Model selection now goes through the same `/model` modal as the slash
@@ -337,7 +335,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
         </div>
       )}
 
-      {/* RIGHT: thinking + tools preset | More | Stop (streaming) */}
+      {/* RIGHT: thinking + tools preset | More */}
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2, marginLeft: "auto" }}>
         {/* Streaming: show the chosen thinking level as a read-only
             badge instead of the icon button (the level can't be changed
@@ -424,32 +422,6 @@ export function BottomToolbar(props: BottomToolbarProps) {
           />
         )}
         <MoreMenu />
-
-        {isStreaming && (
-          <button
-            onClick={onAbort}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 14px",
-              height: 32,
-              background: "rgba(239,68,68,0.08)",
-              border: "1px solid rgba(239,68,68,0.3)",
-              borderRadius: 9,
-              color: "#ef4444",
-              cursor: "pointer",
-              fontSize: 12, fontWeight: 600,
-              whiteSpace: "nowrap", letterSpacing: "-0.01em",
-              transition: "background 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
-            </svg>
-            {t("Stop")}
-          </button>
-        )}
       </div>
     </div>
   );
