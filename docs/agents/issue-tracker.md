@@ -1,45 +1,43 @@
-# Issue tracker：GitHub
+# Issue tracker：本地 Markdown
 
-本仓库的 issue 和 spec 以 GitHub issue 形式存在。所有操作使用 `gh` CLI。
+本仓库的 issue 和 spec 以 markdown 文件形式存在 `.scratch/` 下。**不使用 GitHub Issues**，不要调用 `gh issue`。GitHub remote 只用于代码托管和 PR。
 
-## 约定
+## 目录约定
 
-- **新建 issue**：`gh issue create --title "..." --body "..."`。多行 body 用 heredoc。
-- **读取 issue**：`gh issue view <number> --comments`，用 `jq` 过滤评论，同时取 labels。
-- **列出 issue**：`gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`，配合 `--label` 和 `--state` 过滤。
-- **评论**：`gh issue comment <number> --body "..."`
-- **打标签 / 删标签**：`gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **关闭**：`gh issue close <number> --comment "..."`
+- 一个 feature 一个目录：`.scratch/<feature-slug>/`
+- spec 是 `.scratch/<feature-slug>/spec.md`
+- 实现 issue 是每个 ticket 一个文件：`.scratch/<feature-slug>/issues/<NN>-<slug>.md`，从 `01` 开始编号；**永远不要**写成一个合并的 tickets 文件
+- 分诊状态写在每个 issue 文件靠上的 `Status:` 行（值见 `triage-labels.md`）
+- 评论和对话历史追加到文件底部的 `## Comments` 标题下
 
-仓库从 `git remote -v` 推断；在 clone 目录内运行时 `gh` 会自动识别。
+## 操作
+
+- **新建 issue**：在 `.scratch/<feature-slug>/` 下创建文件（必要时先建目录，slug 用小写连字符）。
+- **读取 issue**：直接读引用的路径；用户通常会给路径或 issue 编号。
+- **列出 issue**：`ls .scratch/<feature-slug>/issues/`，再用 `grep -H '^Status:'` 过滤状态。
+- **打标签 / 改状态**：编辑文件里的 `Status:` 行。
+- **评论**：在文件末尾 `## Comments` 下追加。
+- **关闭**：把 `Status:` 行的值改成 `wontfix` 之类，或按需删除文件；不要删除他人未完成的 ticket。
 
 ## PR 作为分诊入口
 
-**PR as a request surface: no。** _（如果本仓库把外部 PR 当作功能请求，改成 `yes`；`/triage` 会读这个标志。）_
-
-设为 `yes` 时，PR 走与 issue 相同的标签和状态，使用对应的 `gh pr` 命令：
-
-- **读取 PR**：`gh pr view <number> --comments`，diff 用 `gh pr diff <number>`。
-- **列出待分诊的外部 PR**：`gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments`，只保留 `authorAssociation` 为 `CONTRIBUTOR`、`FIRST_TIME_CONTRIBUTOR` 或 `NONE` 的（丢弃 `OWNER`/`MEMBER`/`COLLABORATOR`）。
-- **评论 / 打标签 / 关闭**：`gh pr comment`、`gh pr edit --add-label`/`--remove-label`、`gh pr close`。
-
-GitHub 的 issue 和 PR 共用一个编号空间，所以裸的 `#42` 可能是其中之一：先 `gh pr view 42`，失败再回退到 `gh issue view 42`。
+**PR as a request surface: no。** 本地 tracker 不参与 PR 分诊。
 
 ## 当 skill 说「publish to the issue tracker」
 
-创建一个 GitHub issue。
+在 `.scratch/<feature-slug>/` 下新建一个 markdown 文件。
 
 ## 当 skill 说「fetch the relevant ticket」
 
-执行 `gh issue view <number> --comments`。
+读取对应路径的文件。
 
 ## Wayfinding 操作
 
-供 `/wayfinder` 使用。**map** 是一个 issue，**ticket** 是它的子 issue。
+供 `/wayfinder` 使用。**map** 是一个文件，**ticket** 是每个 ticket 一个子文件。
 
-- **Map**：单个带 `wayfinder:map` 标签的 issue，body 承载 Notes / Decisions-so-far / Fog。`gh issue create --label wayfinder:map`。
-- **Child ticket**：通过 GitHub sub-issue 关联到 map 的 issue（`gh api` 调用 sub-issues 端点）。未启用 sub-issue 时，把子 issue 加进 map body 的任务列表，并在子 issue body 顶部写 `Part of #<map>`。标签：`wayfinder:<type>`（`research`/`prototype`/`grilling`/`task`）。被领取后分配给推进的开发者。
-- **Blocking**：使用 GitHub **原生 issue 依赖**，这是规范且 UI 可见的表示。加边：`gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`，其中 `<blocker-db-id>` 是 blocker 的数字**数据库 id**（`gh api repos/<owner>/<repo>/issues/<n> --jq .id`，_不是_ `#number` 也不是 `node_id`）。GitHub 通过 `issue_dependencies_summary.blocked_by` 报告（仅未关闭的 blocker，即实时闸门）。依赖功能不可用时，回退为子 issue body 顶部的 `Blocked by: #<n>, #<n>` 行。所有 blocker 都关闭时 ticket 才算解锁。
-- **Frontier 查询**：列出 map 下所有未关闭子 issue（`gh issue list --state open`，限定在 map 的 sub-issue / 任务列表内），丢弃有未关闭 blocker（`issue_dependencies_summary.blocked_by > 0`，或 `Blocked by` 行里仍有未关闭 issue）或已有 assignee 的；按 map 顺序取第一个。
-- **领取**：`gh issue edit <n> --add-assignee @me`，这是该 session 的第一次写操作。
-- **完成**：`gh issue comment <n> --body "<answer>"`，然后 `gh issue close <n>`，再把上下文指针（要点 + 链接）追加到 map 的 Decisions-so-far。
+- **Map**：`.scratch/<effort>/map.md`，承载 Notes / Decisions-so-far / Fog。
+- **Child ticket**：`.scratch/<effort>/issues/NN-<slug>.md`，从 `01` 编号，body 里写问题。`Type:` 行记录类型（`research`/`prototype`/`grilling`/`task`），`Status:` 行记录 `claimed`/`resolved`。
+- **Blocking**：靠上的 `Blocked by: NN, NN` 行。它列出的每个文件都是 `resolved` 时 ticket 才算解锁。
+- **Frontier 查询**：扫 `.scratch/<effort>/issues/`，找 open、未阻塞、未领取的文件；编号最小的优先。
+- **领取**：把 `Status:` 改成 `claimed` 并保存，这是该 session 的第一次写操作。
+- **完成**：在 `## Answer` 标题下追加答案，`Status:` 改成 `resolved`，再把上下文指针（要点 + 链接）追加到 `map.md` 的 Decisions-so-far。

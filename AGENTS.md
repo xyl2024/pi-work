@@ -124,7 +124,7 @@ pnpm test                           # vitest，需要隔离实例（见 tests/RE
 
 ### Issue tracker
 
-Issue 与 spec 记录在本仓库的 GitHub Issues（`xyl2024/pi-work`），统一用 `gh` CLI 操作。详见 `docs/agents/issue-tracker.md`。
+Issue 与 spec 记录在本地 `.scratch/<feature-slug>/` 下的 markdown 文件，不使用 GitHub Issues。详见 `docs/agents/issue-tracker.md`。
 
 ### Triage labels
 
