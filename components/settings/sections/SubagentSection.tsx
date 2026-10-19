@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { PrimaryButton } from "../controls";
-import { SettingsSection } from "../SettingsSection";
 import { refreshSubagentProfiles } from "@/lib/client/subagent-profiles-store";
 import type { SubagentProfile } from "@/lib/shared/subagent";
 import { SubagentCard } from "../subagent-config/SubagentCard";
@@ -54,9 +53,8 @@ export function SubagentSection() {
   }, [load, t]);
 
   return (
-    <SettingsSection id="subagent" topGap>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <h3 style={{ margin: 0, fontSize: 15, flex: 1 }}>{t("Subagent settings")}</h3>
+    <>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10 }}>
         <PrimaryButton onClick={() => setEditing("new")}>{t("New subagent")}</PrimaryButton>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 6 }}>
@@ -89,6 +87,6 @@ export function SubagentSection() {
           onSaved={handleSaved}
         />
       )}
-    </SettingsSection>
+    </>
   );
 }

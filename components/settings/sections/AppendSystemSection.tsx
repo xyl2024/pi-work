@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
-import { SettingsSection } from "../SettingsSection";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { TextArea } from "../controls";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
@@ -90,18 +89,15 @@ export function AppendSystemSection({
   }, [appendSystem, t, toast, flashAppendSystemSavedOk]);
 
   return (
-    <SettingsSection id="append-system">
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Append System Prompt")}</h3>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <UnsavedHint show={appendSystemDirty} />
-          <SaveButton
-            canSave={appendSystemDirty}
-            saving={appendSystemSaving}
-            saved={appendSystemSavedOk}
-            onClick={handleAppendSystemSave}
-          />
-        </div>
+    <>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginBottom: 4 }}>
+        <UnsavedHint show={appendSystemDirty} />
+        <SaveButton
+          canSave={appendSystemDirty}
+          saving={appendSystemSaving}
+          saved={appendSystemSavedOk}
+          onClick={handleAppendSystemSave}
+        />
       </div>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px 0", lineHeight: 1.5 }}>
         {config.append_system.enabled
@@ -144,6 +140,6 @@ export function AppendSystemSection({
         mono
         style={{ height: 220 }}
       />
-    </SettingsSection>
+    </>
   );
 }

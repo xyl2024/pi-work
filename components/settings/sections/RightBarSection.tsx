@@ -2,7 +2,6 @@
 
 import { useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { SettingsSection } from "../SettingsSection";
 import { Check, SecondaryButton } from "../controls";
 import { RIGHT_BAR_BUTTON_IDS, RIGHT_BAR_DESCRIPTOR_BY_ID } from "@/components/panels/right-bar/desc";
 import {
@@ -128,10 +127,7 @@ export function RightBarSection({
   };
 
   return (
-    <SettingsSection id="right-bar" topGap>
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
-        {t("Right-side buttons")}
-      </h3>
+    <>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
         {t("Choose which buttons appear in the right-side bar. Hidden buttons can still be opened from the command palette. Changes apply immediately.")}
       </p>
@@ -256,6 +252,6 @@ export function RightBarSection({
           })}
         </div>
       </div>
-    </SettingsSection>
+    </>
   );
 }

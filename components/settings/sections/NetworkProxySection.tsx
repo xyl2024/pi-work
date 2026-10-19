@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
-import { SettingsSection } from "../SettingsSection";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { SecondaryButton, TextInput } from "../controls";
 import { ALWAYS_BYPASS_HOSTS, type PiWorkConfig } from "@/lib/shared/config-types";
@@ -123,10 +122,7 @@ export function NetworkProxySection({
   const active = saved.enabled && saved.url.length > 0;
 
   return (
-    <SettingsSection id="network-proxy" topGap>
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px" }}>
-        {t("Network proxy")}
-      </h3>
+    <>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.5 }}>
         {t("Route every outbound server request — model calls, GitHub Trending — through an HTTP proxy. Takes effect immediately, no restart needed.")}
       </p>
@@ -213,6 +209,6 @@ export function NetworkProxySection({
           url: "https://www.google.com/generate_204",
         })}
       </div>
-    </SettingsSection>
+    </>
   );
 }

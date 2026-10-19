@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
-import { SettingsSection } from "../SettingsSection";
 import { SecondaryButton, Select } from "../controls";
 import { SOUND_IDS, playNamedSound } from "@/lib/client/ui-sounds";
 import { DEFAULT_UI_SOUND_EVENTS } from "@/lib/shared/ui-sounds-defaults";
@@ -106,10 +105,7 @@ export function SoundSettingsSection({
   };
 
   return (
-    <SettingsSection id="ui-sounds" topGap>
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
-        {t("UI Sounds")}
-      </h3>
+    <>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
         {t("Pick one of the built-in recipes for each event, or choose None to stay silent. A master volume scales every event.")}
       </p>
@@ -203,6 +199,6 @@ export function SoundSettingsSection({
           ))}
         </div>
       </div>
-    </SettingsSection>
+    </>
   );
 }

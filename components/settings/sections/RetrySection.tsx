@@ -5,7 +5,6 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { RetryNumberRow } from "../rows";
-import { SettingsSection } from "../SettingsSection";
 import { SecondaryButton } from "../controls";
 import {
   DEFAULT_AGENT_RETRY,
@@ -162,9 +161,8 @@ export function RetrySection() {
   }, [t, toast, flashRetryResetOk]);
 
   return (
-    <SettingsSection id="retry" topGap>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: 0 }}>{t("Agent retry")}</h3>
+    <>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 4 }}>
         <SecondaryButton
           onClick={() => void handleRetryReset()}
           disabled={retryResetting || retryResetOk || !retryConfig}
@@ -272,6 +270,6 @@ export function RetrySection() {
           </p>
         </>
       )}
-    </SettingsSection>
+    </>
   );
 }

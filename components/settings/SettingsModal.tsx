@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { setSettings, useSettings } from "@/hooks/settingsStore";
@@ -13,25 +13,20 @@ import {
 } from "./registry";
 import { useSettingsWrite } from "./use-settings-write";
 import { useUnsavedChanges, type DirtyReporter } from "./use-unsaved-changes";
-import { ProfileSection } from "./sections/ProfileSection";
-import { AppendSystemSection } from "./sections/AppendSystemSection";
-import { PiDocumentationSection } from "./sections/PiDocumentationSection";
-import { RightBarSection } from "./sections/RightBarSection";
-import { FilePreviewSection } from "./sections/FilePreviewSection";
-import { RetrySection } from "./sections/RetrySection";
-import { NetworkProxySection } from "./sections/NetworkProxySection";
-import { SubagentSection } from "./sections/SubagentSection";
-import { SoundSettingsSection } from "./sections/SoundSettingsSection";
-import { ToastTestSection } from "./sections/ToastTestSection";
+import { SETTINGS_PAGES } from "./pages";
+import { SettingsSection } from "./SettingsSection";
+
+/** Wide enough for the prompt pages, never wider than the viewport. */
+const MODAL_WIDTH = "min(960px, calc(100vw - 32px))";
 
 /**
- * Settings modal shell. Holds the modal chrome (backdrop, header,
- * sidebar nav, scroll-spy) and mounts one section per registry entry.
+ * Settings modal shell. Holds the modal chrome (backdrop, header, sidebar
+ * navigation) and renders exactly one registry section at a time.
  *
- * Groups and sections come from `./registry` — the sidebar and the body's
- * group headings both derive from it in the same order, so the two cannot
- * drift. A section = one scroll target (`data-settings-section`) = one
- * sidebar entry.
+ * Groups and sections come from `./registry`: the sidebar is the only place
+ * the registry is laid out, and the page map in `./pages` is keyed by section
+ * id, so a section without a page fails type checking. Navigation state is the
+ * section id itself — there is no scroll-anchor layer anymore.
  *
  * The modal owns no second copy of the config: it reads the settings store,
  * re-reads disk once on open, and writes through the single `useSettingsWrite`
@@ -86,51 +81,11 @@ export function SettingsModal({
     else markSaved(key);
   }, [markDirty, markSaved]);
 
-  // ── Sidebar nav: active section + scroll-spy ───────────────────────
-  // Default to the first registry section so the sidebar shows a highlighted
-  // item before the user has scrolled. The IntersectionObserver below updates
-  // this as the user scrolls past each section's top edge into the trigger
-  // zone (top 40% of the scroll container).
-  const firstSectionId = `settings-section-${SETTINGS_SECTION_IDS[0]}`;
-  const [activeSectionId, setActiveSectionId] = useState<string>(firstSectionId);
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-
-  // Depend on `config` so the observer is set up the first time the body div
-  // actually mounts (the loading screen renders before it).
-  useEffect(() => {
-    const root = bodyRef.current;
-    if (!root) return;
-    const targets = Array.from(
-      root.querySelectorAll<HTMLElement>("[data-settings-section]"),
-    );
-    if (targets.length === 0) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // Of the entries that just crossed into the trigger zone, the
-        // topmost one (lowest boundingClientRect.top) wins.
-        const intersecting = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (intersecting.length > 0) {
-          const id = intersecting[0].target.getAttribute("data-settings-section");
-          if (id) setActiveSectionId(id);
-        }
-      },
-      { root, rootMargin: "0px 0px -60% 0px", threshold: 0 },
-    );
-    targets.forEach((t) => observer.observe(t));
-    return () => observer.disconnect();
-  }, [config]);
-
-  const handleNavClick = useCallback((id: string) => {
-    setActiveSectionId(id);
-    const root = bodyRef.current;
-    if (!root) return;
-    const target = root.querySelector<HTMLElement>(
-      `[data-settings-section="${id}"]`,
-    );
-    if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
+  // ── Pagination: the active section is the whole navigation state ───
+  // Default to the first registry section so a fresh open always has a page.
+  const [activeSectionId, setActiveSectionId] = useState<SettingsSectionId>(
+    SETTINGS_SECTION_IDS[0],
+  );
 
   // ── Open/close animation ──────────────────────────────────────────
   // `shouldConfirm` returns a string to gate the close on a confirm prompt,
@@ -149,7 +104,7 @@ export function SettingsModal({
     return (
       <div style={backdropStyle}
         onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-        <div style={{ ...panelStyle, width: 880, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
+        <div style={{ ...panelStyle, width: MODAL_WIDTH, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--text-muted)" }}>
           {t("Loading...")}
         </div>
       </div>
@@ -160,80 +115,57 @@ export function SettingsModal({
     return (
       <div style={backdropStyle}
         onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-        <div style={{ ...panelStyle, width: 880, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--error)" }}>
+        <div style={{ ...panelStyle, width: MODAL_WIDTH, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 40, textAlign: "center", color: "var(--error)" }}>
           {t("Failed to load settings")}
         </div>
       </div>
     );
   }
 
-  /** One registry section → its component (each renders its own wrapper). */
-  const renderSection = (id: SettingsSectionId): ReactNode => {
-    switch (id) {
-      case "profile":
-        return <ProfileSection onProfileSaved={onProfileSaved} onDirtyChange={reportDirty} />;
-      case "right-bar":
-        return <RightBarSection config={config} apply={apply} />;
-      case "ui-sounds":
-        return <SoundSettingsSection config={config} apply={apply} />;
-      case "file-preview":
-        return <FilePreviewSection config={config} apply={apply} />;
-      case "append-system":
-        return <AppendSystemSection config={config} apply={apply} onDirtyChange={reportDirty} />;
-      case "pi-documentation":
-        return <PiDocumentationSection config={config} apply={apply} />;
-      case "subagent":
-        return <SubagentSection />;
-      case "retry":
-        return <RetrySection />;
-      case "network-proxy":
-        return <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />;
-      case "toast-test":
-        return <ToastTestSection />;
-    }
-  };
-
+  const page = SETTINGS_PAGES[activeSectionId]({
+    config,
+    apply,
+    reportDirty,
+    onProfileSaved,
+  });
 
   return (
     <div style={backdropStyle}
       onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <div style={{ ...panelStyle, width: 880, height: "70vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div style={{ ...panelStyle, width: MODAL_WIDTH, height: "70vh", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
 
-        {/* Header */}
+        {/* Header — the only sticky part of the modal. */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", flexShrink: 0 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("Settings")}</span>
           <button onClick={requestClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
         </div>
 
-        {/* Body */}
+        {/* Body: navigation + one page. The page column is keyed by the active
+            section so switching pages starts at the top instead of inheriting
+            the previous page's scroll offset. */}
         <div
-          ref={bodyRef}
-          data-scroll-wide
           style={{
             flex: 1,
-            overflowY: "auto",
+            minHeight: 0,
             display: "grid",
             gridTemplateColumns: "180px 1fr",
             columnGap: 0,
             padding: "18px",
           }}
         >
-          {/* Sidebar nav — sticky so it stays in view while the content
-              column scrolls. Group headings match the body's headings. */}
           <nav
             aria-label={t("Settings sections")}
             style={{
-              position: "sticky",
-              top: 0,
-              alignSelf: "start",
+              minHeight: 0,
+              overflowY: "auto",
               paddingRight: 12,
               marginRight: 12,
               borderRight: "1px solid var(--border)",
-              maxHeight: "calc(100% - 0px)",
             }}
           >
             {SETTINGS_GROUPS.map((group) => (
               <div key={group.id} style={{ marginBottom: 10 }}>
+                {/* Group headings are labels, never navigation. */}
                 <div
                   style={{
                     fontSize: 10,
@@ -246,14 +178,25 @@ export function SettingsModal({
                 >
                   {t(group.labelKey)}
                 </div>
+                {group.descriptionKey && (
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: "var(--text-dim)",
+                      padding: "0 10px 4px",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {t(group.descriptionKey)}
+                  </div>
+                )}
                 {sectionsForGroup(group.id).map((section) => {
-                  const id = `settings-section-${section.id}`;
-                  const active = activeSectionId === id;
+                  const active = activeSectionId === section.id;
                   return (
                     <button
                       key={section.id}
-                      onClick={() => handleNavClick(id)}
-                      aria-current={active ? "true" : undefined}
+                      onClick={() => setActiveSectionId(section.id)}
+                      aria-current={active ? "page" : undefined}
                       style={{
                         display: "block",
                         width: "100%",
@@ -284,42 +227,16 @@ export function SettingsModal({
             ))}
           </nav>
 
-          {/* Content column — group headings and sections, both derived from
-              the registry so the two columns read the same. */}
-          <div>
-            {SETTINGS_GROUPS.map((group, groupIndex) => (
-              <div key={group.id}>
-                <div
-                  style={{
-                    marginTop: groupIndex === 0 ? 0 : 20,
-                    marginBottom: 8,
-                    paddingBottom: 6,
-                    borderBottom: "1px solid var(--border)",
-                  }}
-                >
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: group.developer ? 12 : 13,
-                      fontWeight: 700,
-                      letterSpacing: group.developer ? "0.04em" : undefined,
-                      textTransform: group.developer ? "uppercase" : undefined,
-                      color: group.developer ? "var(--text-dim)" : "var(--text)",
-                    }}
-                  >
-                    {t(group.labelKey)}
-                  </h2>
-                  {group.descriptionKey && (
-                    <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--text-dim)", lineHeight: 1.4 }}>
-                      {t(group.descriptionKey)}
-                    </p>
-                  )}
-                </div>
-                {sectionsForGroup(group.id).map((section) => (
-                  <div key={section.id}>{renderSection(section.id)}</div>
-                ))}
-              </div>
-            ))}
+          <div
+            key={activeSectionId}
+            data-scroll-wide
+            style={{
+              minHeight: 0,
+              overflowY: "auto",
+              paddingRight: 6,
+            }}
+          >
+            <SettingsSection id={activeSectionId}>{page}</SettingsSection>
           </div>
         </div>
       </div>

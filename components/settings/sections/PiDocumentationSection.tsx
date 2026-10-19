@@ -1,7 +1,6 @@
 "use client";
 
 import { useI18n } from "@/hooks/useI18n";
-import { SettingsSection } from "../SettingsSection";
 import { Check } from "../controls";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 
@@ -25,8 +24,7 @@ export function PiDocumentationSection({
   const { t } = useI18n();
 
   return (
-    <SettingsSection id="pi-documentation">
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px" }}>{t("Pi documentation")}</h3>
+    <>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.5 }}>
         {config.load_pi_docs
           ? t("Loaded — new sessions include pi's built-in Pi documentation hints. Takes effect on new sessions.")
@@ -37,6 +35,6 @@ export function PiDocumentationSection({
         checked={config.load_pi_docs}
         onChange={() => void apply((prev) => ({ ...prev, load_pi_docs: !prev.load_pi_docs }))}
       />
-    </SettingsSection>
+    </>
   );
 }

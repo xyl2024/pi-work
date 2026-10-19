@@ -1,54 +1,61 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useI18n } from "@/hooks/useI18n";
+import {
+  SETTINGS_SECTIONS,
+  type SettingsSectionId,
+} from "./registry";
 
 /**
- * Wrapper for a single settings "section" inside `SettingsModal`.
+ * Page shell for one settings section.
  *
- * Centralizes two responsibilities so each section component doesn't
- * re-implement them:
+ * The settings modal renders exactly one of these at a time. The shell owns
+ * the parts every page shares — the page title (from the registry, so the
+ * sidebar and the page can never disagree about its name), an optional
+ * description, and the content column's padding. The title scrolls with the
+ * page; only the modal header is sticky.
  *
- * 1. **`data-settings-section` attribute** — `SettingsModal` walks these
- *    attributes with `IntersectionObserver` to drive the right-rail
- *    nav highlight, and uses them as scroll targets when the user picks
- *    a section from the rail. The convention is
- *    `settings-section-<slug>` (the slug is what shows in the rail).
- *
- * 2. **Vertical spacing** — most sections are separated from their
- *    neighbor by a single 24px gap; sections that follow an open
- *    description block use a 24px top + 24px bottom. `bottomGap`
- *    defaults to `true`; pass `false` to suppress the bottom margin
- *    (useful for a section that sits at the end of the modal and
- *    shouldn't leave trailing whitespace).
- *
- * Usage:
- *   <SettingsSection id="right-bar">
- *     <h3>{t("Right-side buttons")}</h3>
- *     …
- *   </SettingsSection>
+ * Sections render their content directly (no per-section wrapper): this shell
+ * is the only wrapper, applied by the modal's page map.
  */
 export function SettingsSection({
   id,
-  topGap = false,
-  bottomGap = true,
+  description,
   children,
 }: {
-  id: string;
-  /** Add a 24px top margin to separate from the previous section. */
-  topGap?: boolean;
-  /** Add a 24px bottom margin. Default true. */
-  bottomGap?: boolean;
+  id: SettingsSectionId;
+  /** Optional line under the page title. */
+  description?: ReactNode;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
+  const section = SETTINGS_SECTIONS.find((candidate) => candidate.id === id);
+  if (!section) {
+    throw new Error(`settings registry: no section registered for page ${id}`);
+  }
+  const titleId = `settings-page-title-${id}`;
+
   return (
-    <div
-      data-settings-section={`settings-section-${id}`}
-      style={{
-        marginTop: topGap ? 24 : 0,
-        marginBottom: bottomGap ? 24 : 0,
-      }}
-    >
-      {children}
-    </div>
+    <section aria-labelledby={titleId}>
+      <h2
+        id={titleId}
+        style={{
+          margin: 0,
+          fontSize: 16,
+          fontWeight: 700,
+          color: "var(--text)",
+          lineHeight: 1.3,
+        }}
+      >
+        {t(section.labelKey)}
+      </h2>
+      {description && (
+        <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+          {description}
+        </p>
+      )}
+      <div style={{ marginTop: 14 }}>{children}</div>
+    </section>
   );
 }

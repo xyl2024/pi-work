@@ -1,6 +1,3 @@
-import { readdirSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   SETTINGS_GROUPS,
@@ -8,27 +5,8 @@ import {
   SETTINGS_SECTION_IDS,
   groupForSection,
   sectionsForGroup,
-  type SettingsSectionId,
 } from "@/components/settings/registry";
-
-const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-
-/** Every file under components/settings, recursively, with its source. */
-function settingsSources(): Array<{ file: string; source: string }> {
-  const root = path.join(repoRoot, "components/settings");
-  const out: Array<{ file: string; source: string }> = [];
-  const walk = (dir: string) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
-        out.push({ file: path.relative(repoRoot, full), source: readFileSync(full, "utf8") });
-      }
-    }
-  };
-  walk(root);
-  return out;
-}
+import { SETTINGS_PAGES } from "@/components/settings/pages";
 
 describe("settings registry invariants", () => {
   it("has unique group and section ids", () => {
@@ -68,28 +46,15 @@ describe("settings registry invariants", () => {
 });
 
 /**
- * Source guard: the set of sections the modal actually renders must equal the
- * registry. A new section wrapper that is added to the JSX but forgotten in
- * `registry.ts` (or vice versa) fails here instead of silently not appearing.
+ * Page map guard: every registry section has exactly one page, and the map
+ * has no page for a section that is not in the registry.
+ *
+ * The map is typed `Record<SettingsSectionId, …>`, so the compiler already
+ * rejects a missing or extra page; this test pins the keyset explicitly so the
+ * invariant is visible here too.
  */
-describe("settings registry covers every rendered section", () => {
-  const rendered = new Set<string>();
-  for (const { source } of settingsSources()) {
-    for (const match of source.matchAll(/SettingsSection\s+id="([a-z-]+)"/g)) {
-      rendered.add(match[1]);
-    }
-  }
-
-  it("finds a wrapper for every registry section", () => {
-    for (const id of SETTINGS_SECTION_IDS) {
-      expect(rendered.has(id), `no <SettingsSection id="${id}"> found`).toBe(true);
-    }
-  });
-
-  it("registers every rendered wrapper", () => {
-    const registered = new Set<string>(SETTINGS_SECTION_IDS as readonly SettingsSectionId[]);
-    for (const id of rendered) {
-      expect(registered.has(id), `rendered id "${id}" is not in the registry`).toBe(true);
-    }
+describe("settings page map covers exactly the registry", () => {
+  it("keys the page map by the registry's section ids", () => {
+    expect(Object.keys(SETTINGS_PAGES).sort()).toEqual([...SETTINGS_SECTION_IDS].sort());
   });
 });

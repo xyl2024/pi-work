@@ -3,10 +3,10 @@
  * information architecture.
  *
  * Groups and sections are declared together: the sidebar navigation and the
- * body's group headings both derive from this list, in this order, so the two
+ * modal's page map both derive from this list, in this order, so the two
  * cannot drift. A section must belong to a group and a group must not be
- * empty; `tests/unit/settings-registry.test.ts` pins both, plus "every rendered
- * section is registered".
+ * empty; `tests/unit/settings-registry.test.ts` pins both, plus "the page map
+ * covers exactly the registered sections".
  *
  * No React / DOM dependencies: the invariants are driven directly in tests.
  */
@@ -15,7 +15,7 @@ export type SettingsGroupId = "personal" | "appearance" | "agent" | "integration
 
 export interface SettingsGroupSpec {
   id: SettingsGroupId;
-  /** i18n key for the group heading (sidebar and body share it). */
+  /** i18n key for the group heading in the sidebar. */
   labelKey: string;
   /** Optional secondary line under the body group heading. */
   descriptionKey?: string;
@@ -37,12 +37,12 @@ export type SettingsSectionId =
 
 export interface SettingsSectionSpec {
   id: SettingsSectionId;
-  /** i18n key for the sidebar entry and the section heading. */
+  /** i18n key for the sidebar entry and the page title. */
   labelKey: string;
   group: SettingsGroupId;
 }
 
-/** Group render order == sidebar order == body order. */
+/** Group render order == sidebar order. */
 export const SETTINGS_GROUPS: readonly SettingsGroupSpec[] = [
   { id: "personal", labelKey: "Personal" },
   {
@@ -59,7 +59,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroupSpec[] = [
   },
 ];
 
-/** Section render order within (and across) groups. */
+/** Section order within (and across) groups, == sidebar order. */
 export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
   { id: "profile", labelKey: "Profile", group: "personal" },
 
@@ -83,8 +83,8 @@ export function sectionsForGroup(group: SettingsGroupId): SettingsSectionSpec[] 
 }
 
 /**
- * Flat section id list in render order — the order the body renders sections
- * and the sidebar lists them.
+ * Flat section id list in navigation order — the order the sidebar lists
+ * sections and the modal pages through them.
  */
 export const SETTINGS_SECTION_IDS: readonly SettingsSectionId[] =
   SETTINGS_GROUPS.flatMap((group) => sectionsForGroup(group.id).map((section) => section.id));

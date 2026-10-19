@@ -24,7 +24,6 @@ import { useCallback, useMemo, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast, type ToastKind } from "@/components/ui/Toast";
 import { NumberStepper } from "@/components/ui/NumberStepper";
-import { SettingsSection } from "../SettingsSection";
 import { PrimaryButton, SecondaryButton, SegmentedControl, TextArea, TextInput } from "../controls";
 
 const KINDS: readonly ToastKind[] = ["success", "error", "info", "warning"];
@@ -143,10 +142,7 @@ export function ToastTestSection() {
   }, [t, toast]);
 
   return (
-    <SettingsSection id="toast-test" topGap>
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 4px 0" }}>
-        {t("Toast Test")}
-      </h3>
+    <>
       <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0", lineHeight: 1.5 }}>
         {t("Preview each toast kind, custom duration, description, and action button directly without firing any backend request.")}
       </p>
@@ -242,7 +238,7 @@ export function ToastTestSection() {
           {t("Show 5 stacked toasts")}
         </SecondaryButton>
       </div>
-    </SettingsSection>
+    </>
   );
 }
 
