@@ -6,6 +6,7 @@ import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
 import { RefreshIconButton } from "../ui/RefreshIconButton";
 import type { SessionInfo } from "@/lib/shared/types";
+import { sessionDisplayTitle } from "@/lib/shared/session-title";
 
 interface Props {
   favoriteIds: string[];
@@ -144,7 +145,7 @@ function FavoriteRow({
 }) {
   const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
-  const title = session.name || session.firstMessage.slice(0, 60) || session.id.slice(0, 12);
+  const title = sessionDisplayTitle(session, 60);
   const cwdDisplay = session.cwd ? session.cwd.replace(/^\/home\/[^/]+/, "~") : "";
 
   return (

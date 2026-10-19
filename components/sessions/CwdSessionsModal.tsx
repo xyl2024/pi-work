@@ -30,6 +30,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { decideLoadMoreOnScroll } from "@/lib/shared/sidebar-paging";
+import { sessionDisplayTitle } from "@/lib/shared/session-title";
 import type { SessionInfo, SessionSearchPagedResult } from "@/lib/shared/types";
 
 const PAGE_SIZE = 20;
@@ -630,7 +631,7 @@ function SessionRow({
             whiteSpace: "nowrap",
           }}
         >
-          {row.name || row.firstMessage || "(no name)"}
+          {sessionDisplayTitle(row)}
         </span>
         {row.running && (
           <span

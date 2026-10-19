@@ -21,6 +21,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { listSessionNames } from "@/lib/server/session-names";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
+import { cleanFirstMessage } from "@/lib/shared/session-title";
 
 export { getAgentDir };
 
@@ -120,7 +121,7 @@ function toSessionInfo(piSessions: PiSessionInfo[]): SessionInfo[] {
       created: s.created instanceof Date ? s.created.toISOString() : String(s.created),
       modified: s.modified instanceof Date ? s.modified.toISOString() : String(s.modified),
       messageCount: s.messageCount,
-      firstMessage: s.firstMessage || "(no messages)",
+      firstMessage: cleanFirstMessage(s.firstMessage),
       parentSessionId: s.parentSessionPath ? pathToId.get(s.parentSessionPath) : undefined,
       // Read layer has no RPC context; the /api/sessions route enriches from the wrapper registry.
       running: false,
@@ -175,17 +176,20 @@ export function invalidateSessionListCache(): void {
 // `messageCount` / `name` / `firstMessage` / `lastActivityTime`. On a host
 // with 1000+ session files (200+ MB total) that scan is consistently
 // ~1.8-2.1s, regardless of how few rows the caller actually wants. The
-// sidebar's /api/sessions first page (limit=3) only needs header data
-// that fits in the first ~16KB of each file.
+// sidebar's /api/sessions first page (limit=3) only needs header data,
+// which is normally in the first few entries of each file.
 //
 // Trade-offs vs. the full scan:
 //   * `modified`     → file `mtime` (pi rewrites the file on every flush,
 //                      so `mtime` is within microseconds of `lastActivityTime`)
 //   * `name`         → first `session_info.name` we encounter; renames past
-//                      the 16KB window are dropped (sidebar renders
+//                      the scan ceiling are dropped (sidebar renders
 //                      `name || firstMessage.slice(0,50) || id`, so the
-//                      fallback handles the missing-rename case)
-//   * `firstMessage` → first user message we encounter
+//                      fallback handles the missing-rename case, and the
+//                      sidecar name index recovers most of them)
+//   * `firstMessage` → first user message we encounter (chunked scan, see
+//                      HEADER_SCAN_CHUNK_BYTES: the system-prompt entry alone
+//                      can be bigger than one chunk)
 //   * `messageCount` → 0 (callers that need a real count can defer to
 //                      /api/sessions/[id], which loads the full SessionContext)
 //
@@ -193,7 +197,18 @@ export function invalidateSessionListCache(): void {
 // (newest-first by mtime).
 // ============================================================================
 
-const HEADER_SCAN_LIMIT = 16 * 1024; // bytes — header + first few entries
+/**
+ * Bytes per `read(2)`. A single fixed window is not enough: pi writes the
+ * session's system prompt as a `message` entry (role `system`, content `""`,
+ * prompt in `sections`) that is routinely 30KB+, so the first *user* message
+ * can sit well past 16KB. With a fixed window such a session reported no
+ * `firstMessage` and the sidebar fell back to pi's "(no messages)" placeholder
+ * as if it were the title. The scan now keeps pulling chunks until it knows
+ * header + name + first message, with a ceiling so one pathological file can
+ * never make the listing read forever.
+ */
+const HEADER_SCAN_CHUNK_BYTES = 16 * 1024;
+const HEADER_SCAN_MAX_BYTES = 1024 * 1024;
 
 interface HeaderScanResult {
   id: string;
@@ -223,12 +238,13 @@ function extractMessageText(content: unknown): string | undefined {
 }
 
 /**
- * Bounded-scan reader: open + read at most HEADER_SCAN_LIMIT bytes,
- * split on newlines, JSON.parse each line, capture the fields the sidebar
- * needs. Stops as soon as header + name + first user message are populated.
+ * Bounded-scan reader: read the file in fixed chunks, split on newlines,
+ * JSON.parse each line, capture the fields the sidebar needs. Stops as soon as
+ * header + name + first user message are populated (or at the byte ceiling).
  *
- * Lines that fail to parse (typically the trailing fragment at the scan
- * boundary) are skipped silently.
+ * A line is only parsed once its terminating newline arrived, so the huge
+ * system-prompt entry — far bigger than one chunk — is carried across chunks
+ * instead of being cut in half and dropped.
  */
 function readHeaderOnly(filePath: string): HeaderScanResult | null {
   let fd: number;
@@ -239,11 +255,7 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
   }
   try {
     const decoder = new StringDecoder("utf8");
-    const buffer = Buffer.allocUnsafe(HEADER_SCAN_LIMIT);
-    const bytesRead = readSync(fd, buffer, 0, HEADER_SCAN_LIMIT, 0);
-    if (bytesRead === 0) return null;
-    const text = decoder.write(buffer.subarray(0, bytesRead));
-    const lines = text.split("\n");
+    const chunk = Buffer.allocUnsafe(HEADER_SCAN_CHUNK_BYTES);
 
     let id: string | undefined;
     let cwd: string | undefined;
@@ -252,49 +264,76 @@ function readHeaderOnly(filePath: string): HeaderScanResult | null {
     let name: string | undefined;
     let firstMessage: string | undefined;
     let headerSeen = false;
+    // Bytes of the last line that did not fit in the previous chunk (a single
+    // entry can be far larger than one chunk — the system prompt one is).
+    let pending = "";
+    let offset = 0;
+    let eof = false;
 
-    for (const line of lines) {
-      if (!line) continue;
-      let entry: Record<string, unknown>;
+    while (!eof && offset < HEADER_SCAN_MAX_BYTES) {
+      let bytesRead = 0;
       try {
-        entry = JSON.parse(line) as Record<string, unknown>;
+        bytesRead = readSync(fd, chunk, 0, chunk.length, offset);
       } catch {
-        // Trailing partial line at the scan boundary — skip.
-        continue;
+        break;
       }
-      if (!entry || typeof entry !== "object") continue;
+      if (bytesRead === 0) eof = true;
+      offset += bytesRead;
 
-      // First session entry holds the header. We capture here, even if
-      // the next lines run off the end of the scan window.
-      const entryType = (entry as { type?: unknown }).type;
-      if (!headerSeen && entryType === "session" && typeof (entry as { id?: unknown }).id === "string") {
-        id = (entry as { id: string }).id;
-        const cwdVal = (entry as { cwd?: unknown }).cwd;
-        cwd = typeof cwdVal === "string" ? cwdVal : "";
-        const tsVal = (entry as { timestamp?: unknown }).timestamp;
-        created = typeof tsVal === "string" ? tsVal : undefined;
-        const parentVal = (entry as { parentSession?: unknown }).parentSession;
-        parentSessionPath = typeof parentVal === "string" ? parentVal : undefined;
-        headerSeen = true;
-        if (name !== undefined && firstMessage !== undefined) break;
-        continue;
-      }
-      if (!headerSeen) continue; // ignore anything before the header
+      // StringDecoder holds back a split multi-byte character, so lines are
+      // never cut mid-codepoint. On EOF every remaining line is complete; mid
+      // file the last element is the unterminated tail and is carried over.
+      const lines = (pending + decoder.write(chunk.subarray(0, bytesRead))).split("\n");
+      pending = eof ? "" : lines.pop() ?? "";
 
-      if (entryType === "session_info" && typeof (entry as { name?: unknown }).name === "string") {
-        const trimmed = ((entry as { name: string }).name).trim();
-        if (trimmed) name = trimmed;
-      } else if (entryType === "message" && firstMessage === undefined) {
-        const msg = (entry as { message?: { role?: unknown; content?: unknown } }).message;
-        if (msg && (msg.role === "user" || msg.role === "assistant")) {
-          const text_ = extractMessageText(msg.content);
-          if (text_) {
-            firstMessage = text_;
-            if (name !== undefined) break;
+      for (const line of lines) {
+        if (!line) continue;
+        let entry: Record<string, unknown>;
+        try {
+          entry = JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          continue;
+        }
+        if (!entry || typeof entry !== "object") continue;
+
+        // First session entry holds the header.
+        const entryType = (entry as { type?: unknown }).type;
+        if (!headerSeen && entryType === "session" && typeof (entry as { id?: unknown }).id === "string") {
+          id = (entry as { id: string }).id;
+          const cwdVal = (entry as { cwd?: unknown }).cwd;
+          cwd = typeof cwdVal === "string" ? cwdVal : "";
+          const tsVal = (entry as { timestamp?: unknown }).timestamp;
+          created = typeof tsVal === "string" ? tsVal : undefined;
+          const parentVal = (entry as { parentSession?: unknown }).parentSession;
+          parentSessionPath = typeof parentVal === "string" ? parentVal : undefined;
+          headerSeen = true;
+          continue;
+        }
+        if (!headerSeen) continue; // ignore anything before the header
+
+        if (entryType === "session_info" && typeof (entry as { name?: unknown }).name === "string") {
+          const trimmed = ((entry as { name: string }).name).trim();
+          if (trimmed) name = trimmed;
+        } else if (entryType === "message" && firstMessage === undefined) {
+          const msg = (entry as { message?: { role?: unknown; content?: unknown } }).message;
+          if (msg && (msg.role === "user" || msg.role === "assistant")) {
+            const text_ = extractMessageText(msg.content);
+            if (text_) firstMessage = text_;
           }
         }
       }
+
+      // Stop as soon as both are known, or once the first message is known and
+      // the chunk we just read already covers the name window the old fixed
+      // 16KB scan provided — a rename appended deeper in the file is the
+      // sidecar name index's job, not this window's. Cost per file therefore
+      // stays at the usual single chunk for ordinary sessions; only a session
+      // whose first user message sits deeper (big system-prompt entry) pays
+      // for the extra chunks it actually needs.
+      if (name !== undefined && firstMessage !== undefined) break;
+      if (firstMessage !== undefined && offset >= HEADER_SCAN_CHUNK_BYTES) break;
     }
+
     if (!id || !created) return null;
     const result: HeaderScanResult = { id, cwd: cwd ?? "", created };
     if (parentSessionPath !== undefined) result.parentSessionPath = parentSessionPath;
@@ -376,7 +415,7 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
         created: header.created,
         modified: mtime.toISOString(),
         messageCount: 0, // callers needing real counts hit /api/sessions/[id]
-        firstMessage: header.firstMessage ?? "(no messages)",
+        firstMessage: cleanFirstMessage(header.firstMessage),
         parentSessionId: undefined,
         running: false, // enriched by the /api/sessions route from the wrapper registry
       };
@@ -389,8 +428,9 @@ async function listAllSessionsHeaderOnlyUnfiltered(): Promise<SessionInfo[]> {
     // Newest-first by mtime to match SessionManager.listAll's contract.
     out.sort((a, b) => b.modified.localeCompare(a.modified));
 
-    // Merge the sidecar name index in one pass — the header-window scan
-    // can only see the FIRST session_info (16 KB); users who rename a
+    // Merge the sidecar name index in one pass — the chunked scan
+    // stops early (roughly the first 16KB for ordinary sessions) and sees
+    // only the FIRST session_info there; users who rename a
     // session after a long conversation would otherwise see the wrong
     // (or no) name in the sidebar. The sidecar is the canonical
     // authoritative name source; see lib/server/session-names.ts.
@@ -458,8 +498,9 @@ export async function resolveSessionPath(sessionId: string): Promise<string | nu
   if (cached) return cached;
 
   // Cache miss: the header-only listing fills the same id → path cache as the
-  // full scan, but opens each .jsonl for at most 16KB instead of reading every
-  // file to EOF (~30ms vs ~5s on a host with thousands of sessions). Only when
+  // full scan, but stops after the first chunk (16KB) for ordinary sessions
+  // instead of reading every file to EOF (~1s vs ~5s on a host with thousands
+  // of sessions). Only when
   // the bounded reader can't see the id (malformed/short header, delete race)
   // do we pay for the full `SessionManager.listAll()` scan.
   await listAllSessionsHeaderOnly();
@@ -583,7 +624,7 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
  * Parent session id for one session file, without scanning every session.
  *
  * The session header stores `parentSession` as a *path*; the id we hand the UI
- * lives in that parent file's own header, so a single bounded 16KB read is
+ * lives in that parent file's own header, so a single first-chunk read is
  * enough — same mapping the full listing does (`parentSessionPath` → id).
  * Missing/unreadable parents resolve to `undefined`, matching what the full
  * scan produced when the parent wasn't in its path index.
@@ -620,17 +661,13 @@ export async function readSessionDetails(sessionId: string) {
     created: header.timestamp,
     modified,
     messageCount: context.messages.length,
-    firstMessage: context.messages.find((m) => m.role === "user")
-      ? (() => {
-          const msg = context.messages.find((m) => m.role === "user")!;
-          const content = (msg as { content: unknown }).content;
-          return typeof content === "string"
-            ? content
-            : (Array.isArray(content)
-                ? (content.find((block: { type: string }) => block.type === "text") as { text: string } | undefined)?.text ?? ""
-                : "") || "(no messages)";
-        })()
-      : "(no messages)",
+    // Same placeholder rule as the two listing paths: no user text → "", so the
+    // UI falls back to its unnamed-title rule instead of showing "(no messages)".
+    firstMessage: cleanFirstMessage(
+      extractMessageText(
+        (context.messages.find((m) => m.role === "user") as { content?: unknown } | undefined)?.content,
+      ),
+    ),
     parentSessionId,
   } : null;
 

@@ -59,8 +59,9 @@ export async function GET(request: Request) {
   log.debug("list workspaces requested", { limit, hasCursor: !!cursor });
   try {
     // Single 5s-TTL scan shared with /api/sessions (same cache slot via
-    // listAllSessionsHeaderOnly). Reads at most 16KB of each .jsonl file
-    // instead of streaming to EOF — same SessionInfo[] shape, same sort
+    // listAllSessionsHeaderOnly). Reads ~16KB of each .jsonl file (one chunk,
+    // more only when the first user message sits deeper) instead of streaming
+    // to EOF — same SessionInfo[] shape, same sort
     // guarantees. See the header at reader.ts:listAllSessionsHeaderOnly
     // for the field-precision trade-offs vs. the full scan.
     const allSessions = await listAllSessionsHeaderOnly();

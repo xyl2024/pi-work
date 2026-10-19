@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { SessionInfo } from "@/lib/shared/types";
 import { SESSION_ROW_HEIGHT_PX } from "@/lib/shared/sidebar-section";
 import { sessionTimeLabel } from "@/lib/shared/session-today";
+import { sessionDisplayTitle } from "@/lib/shared/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
@@ -132,7 +133,8 @@ export function SessionItem({
 
   useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
 
-  const title = session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
+  // Shared rule (lib/shared/session-title.ts): name → first message → id stub.
+  const title = sessionDisplayTitle(session);
 
   // Hover time badge — relative for the last few days, `MM.DD` beyond that.
   // Computed only while the badge is actually rendered (row hover / menu open)

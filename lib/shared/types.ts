@@ -234,6 +234,13 @@ export interface SessionInfo {
   created: string;
   modified: string;
   messageCount: number;
+  /**
+   * First user message text, or "" when the session has none (image-only first
+   * turn, aborted session, header-only file). Never a placeholder string: the
+   * UI titles rows with `name || firstMessage || id`, so "" is what makes an
+   * unnamed session fall back to its normal title instead of showing
+   * "(no messages)".
+   */
   firstMessage: string;
   parentSessionId?: string; // read-only historical metadata — was set on
   // sessions created via the (now removed) fork feature. Preserved here so

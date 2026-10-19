@@ -1,4 +1,5 @@
 import type { SessionInfo } from "@/lib/shared/types";
+import { sessionDisplayTitle } from "@/lib/shared/session-title";
 
 /** A session tab is either a persisted session or the single client-only draft. */
 export type SessionTabKind = "session" | "draft";
@@ -302,9 +303,9 @@ export function getSessionTab(state: SessionWorkspaceState, sessionId: string): 
   return findSessionTab(state, sessionId) ?? null;
 }
 
-/** Sidebar and session-tab title rule kept in one place. */
+/** Sidebar and session-tab title rule kept in one place (lib/shared/session-title.ts). */
 export function getSessionTabTitle(session: SessionInfo): string {
-  return session.name || session.firstMessage.slice(0, 50) || session.id.slice(0, 12);
+  return sessionDisplayTitle(session);
 }
 
 /** Product name used as the browser tab title suffix and as the no-session fallback. */

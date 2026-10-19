@@ -91,7 +91,7 @@ export async function GET(request: Request) {
   try {
     // Always scan the full set under the hood (cache hit within 5s) so the
     // recentCwds sidecar is accurate regardless of the cwd filter the caller
-    // asked for. The header-only reader only opens each .jsonl up to 16KB
+    // asked for. The header-only reader stops after the first 16KB chunk
     // (vs. full EOF scan via SessionManager.listAll) — much cheaper on hosts
     // with many large sessions. See listAllSessionsHeaderOnly for the
     // field-precision trade-offs vs. the full scan.

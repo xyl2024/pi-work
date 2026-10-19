@@ -174,6 +174,10 @@ _Avoid_: 把它当作分支导航或压缩
 会话在第一条助手回复落地后自动生成并写入名字；也可由用户手动触发，覆盖已有名字前需确认。
 _Avoid_: 与「重命名」混用（那是用户直接改名）；把它当作会话标题的来源
 
+**会话标题（Session title）**：
+侧栏行、会话标签页与浏览器标签页共用的一条规则：名字 → 第一条用户消息（截断）→ id 短桩，对应 `lib/shared/session-title.ts` 的 `sessionDisplayTitle`。没人起名（含自动起名没拿到答案）时走的是同一条规则。
+_Avoid_: 把 pi 列出来的 `firstMessage` 占位串 `(no messages)` 当标题显示——它是数据不是文案，读层已归一成空串
+
 **收藏（Favorite）**：
 用户标记的会话，保存在 `favorites.json` 的 sessionIds 中。
 _Avoid_: 用它指代工作目录

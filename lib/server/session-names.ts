@@ -5,9 +5,9 @@
 // and pi SDK's session_info-driven `getSessionName()` requires a full JSONL
 // scan to find the latest match (because each `setSessionName()` call appends
 // a new `session_info` entry, so the "latest" name can be arbitrarily far
-// into the file). For /api/sessions we only read each file's first 16 KB,
-// which intentionally drops the latest name for sessions where the rename
-// landed past that window — the sidebar then falls back to firstMessage.
+// into the file). For /api/sessions we stop scanning after the first chunk
+// (~16 KB), which intentionally drops the latest name for sessions where the
+// rename landed past that point — the sidebar then falls back to firstMessage.
 //
 // To get 100% name recall without re-introducing the multi-second full scan,
 // every `setSessionName` event also writes a per-session shadow file here:

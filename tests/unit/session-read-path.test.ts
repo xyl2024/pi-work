@@ -18,7 +18,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveParentSessionId, resolveSessionPath } from "@/lib/server/sessions/reader";
+import {
+  listAllSessionsHeaderOnly,
+  readSessionDetails,
+  resolveParentSessionId,
+  resolveSessionPath,
+} from "@/lib/server/sessions/reader";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const read = (file: string) => readFileSync(path.join(repoRoot, file), "utf8");
@@ -139,5 +144,81 @@ describe("readSessionDetails: no global session scan", () => {
     const body = functionSource(READER, "export async function resolveSessionPath");
     expect(body).toContain("listAllSessionsHeaderOnly()");
     expect(body.indexOf("listAllSessionsHeaderOnly()")).toBeLessThan(body.indexOf("listAllSessions()"));
+  });
+});
+
+// pi's listing writes the literal "(no messages)" into `firstMessage` when a
+// session holds no message text. That string is data, never a title: the reader
+// normalizes it to "" so the UI keeps using its unnamed fallback (name →
+// first message → id stub) instead of displaying "(no messages)" — the case the
+// user sees after an auto-name call comes back without an answer.
+describe("firstMessage never carries pi's placeholder", () => {
+  const imageOnlyMessage = JSON.stringify({
+    type: "message",
+    id: "m1",
+    parentId: null,
+    timestamp: "2026-01-02T03:04:06.000Z",
+    message: {
+      role: "user",
+      timestamp: 1,
+      content: [{ type: "image", data: "AAAA", mimeType: "image/png" }],
+    },
+  }) + "\n";
+
+  it("header-only listing reports \"\" for an image-only first turn and for an empty file", async () => {
+    const { agentDir } = sandbox();
+    writeSession(agentDir, "image.jsonl", headerLine("image-1"), imageOnlyMessage);
+    writeSession(agentDir, "header.jsonl", headerLine("header-1"));
+    clearCaches();
+
+    const rows = await listAllSessionsHeaderOnly();
+    const byId = new Map(rows.map((r) => [r.id, r.firstMessage]));
+
+    expect(byId.get("image-1")).toBe("");
+    expect(byId.get("header-1")).toBe("");
+  });
+
+  it("readSessionDetails reports \"\" for an image-only first turn", async () => {
+    const { agentDir } = sandbox();
+    writeSession(agentDir, "image.jsonl", headerLine("image-2"), imageOnlyMessage);
+    clearCaches();
+
+    const details = await readSessionDetails("image-2");
+    expect(details?.info?.firstMessage).toBe("");
+  });
+});
+
+// pi writes the session's system prompt as a `message` entry (role `system`,
+// content "", prompt in `sections`) and it is routinely tens of KB. A scan that
+// only looked at the file's first 16KB therefore never reached the first *user*
+// message and reported none — the sidebar then had nothing to fall back to for
+// an unnamed session.
+describe("the first user message is found past a huge system-prompt entry", () => {
+  it("keeps scanning past an entry larger than one chunk", async () => {
+    const { agentDir } = sandbox();
+    const systemEntry = JSON.stringify({
+      type: "message",
+      id: "s1",
+      parentId: null,
+      timestamp: "2026-01-02T03:04:06.000Z",
+      message: {
+        role: "system",
+        content: "",
+        sections: [{ title: "identity", body: "y".repeat(40 * 1024) }],
+        timestamp: 1,
+      },
+    }) + "\n";
+    const userEntry = JSON.stringify({
+      type: "message",
+      id: "u1",
+      parentId: "s1",
+      timestamp: "2026-01-02T03:04:07.000Z",
+      message: { role: "user", timestamp: 2, content: [{ type: "text", text: "move the language switch" }] },
+    }) + "\n";
+    writeSession(agentDir, "deep.jsonl", headerLine("deep-1"), systemEntry, userEntry);
+    clearCaches();
+
+    const rows = await listAllSessionsHeaderOnly();
+    expect(rows.find((r) => r.id === "deep-1")?.firstMessage).toBe("move the language switch");
   });
 });
