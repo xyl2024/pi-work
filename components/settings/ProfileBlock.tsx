@@ -39,7 +39,7 @@ const itemBaseStyle: React.CSSProperties = {
 };
 
 export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
-  const { t } = useI18n();
+  const { t, locale, toggleLocale } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
   const [avatarAttempted, setAvatarAttempted] = useState(0);
@@ -85,6 +85,10 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
       y: rect.top + rect.height / 2,
     });
   }, [isDark, setPreset]);
+
+  // Tooltip / aria text spells out the destination language: the glyph only
+  // shows where you are, so the label has to say where the click takes you.
+  const nextLocaleLabel = `${t("Switch language")} → ${t(locale === "zh" ? "English" : "Chinese")}`;
 
   useEffect(() => () => cancelClose(), [cancelClose]);
 
@@ -231,6 +235,43 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
           {loading ? "…" : (username ?? t("Guest"))}
         </span>
       </button>
+
+      {/* Language toggle — icon-only, two-state glyph: 「中」 while the UI is
+          Chinese, 「英」 while it is English, so the button always shows the
+          current language and clicking swaps to the other one. Keyed by
+          `locale` so React remounts the glyph and replays the lang-swap-in
+          entrance (same animation as TranslatePanel's target-language
+          toggle). */}
+      <Tooltip content={nextLocaleLabel}>
+        <button
+          onClick={toggleLocale}
+          aria-label={nextLocaleLabel}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 28, height: 28, padding: 0, flexShrink: 0,
+            background: "none",
+            border: "none", borderRadius: 7,
+            color: "var(--text-muted)", cursor: "pointer",
+            transition: "background 0.12s, color 0.12s",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; }}
+        >
+          <span
+            key={locale}
+            aria-hidden="true"
+            style={{
+              display: "inline-block",
+              fontSize: 15,
+              fontWeight: 600,
+              lineHeight: 1,
+              animation: "lang-swap-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)",
+            }}
+          >
+            {locale === "zh" ? "中" : "英"}
+          </span>
+        </button>
+      </Tooltip>
 
       {/* Theme toggle — morphs sun↔moon with morphicons so the icon swap
           animates alongside the global startViewTransition. `active` is the

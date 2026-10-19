@@ -6,15 +6,12 @@ import { SegmentedControl } from "../controls";
 import { useLayoutMode, useSetLayoutMode, LAYOUT_MODES } from "@/hooks/layoutModeStore";
 
 /**
- * Section: Appearance (language + layout mode). Theme switching moved
- * to the sidebar toggle — settings only holds language and the Agentic /
- * Classic layout switcher (moved here from the sidebar top). Language
- * applies immediately via the global useI18n hook; the layout mode
- * applies immediately via layoutModeStore — no `PiWorkConfig` PUT
- * involved for either.
+ * Section: Appearance (layout mode). Language and theme switching live
+ * in the sidebar footer. Layout mode applies immediately via
+ * layoutModeStore — no `PiWorkConfig` PUT involved.
  */
 export function AppearanceSection() {
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const layoutMode = useLayoutMode();
   const setLayoutMode = useSetLayoutMode();
 
@@ -26,22 +23,10 @@ export function AppearanceSection() {
     <SettingsSection id="appearance">
       <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", margin: "0 0 12px 0" }}>{t("Appearance")}</h3>
 
-      {/* Language */}
-      <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px 0" }}>{t("Language")}</div>
-      <SegmentedControl
-        value={locale}
-        onChange={(value) => setLocale(value as "en" | "zh")}
-        ariaLabel={t("Language")}
-        options={[
-          { value: "en", label: t("English") },
-          { value: "zh", label: t("Chinese") },
-        ]}
-      />
-
       {/* Layout mode buttons — Agentic / Classic. The selected mode
           applies immediately; the description below explains what the
           current layout swaps (chat vs. file panel column placement). */}
-      <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "20px 0 10px 0" }}>{t("Layout mode")}</div>
+      <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px 0" }}>{t("Layout mode")}</div>
       <SegmentedControl
         value={layoutMode}
         onChange={(value) => setLayoutMode(value as typeof LAYOUT_MODES[number])}
