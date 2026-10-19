@@ -9,6 +9,20 @@ import { TextArea } from "../controls";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import type { DirtyReporter } from "../use-unsaved-changes";
+import type { AppendSystemFile, SettingsPageDataCache } from "@/lib/client/settings-page-cache";
+import { useSettingsPageData } from "../use-page-data";
+
+/** One read of APPEND_SYSTEM.md; the modal's page-data cache keeps it for the modal's lifetime. */
+async function loadAppendSystem(): Promise<AppendSystemFile> {
+  const response = await fetch("/api/append-system");
+  const data = (await response.json().catch(() => ({}))) as
+    & Partial<AppendSystemFile>
+    & { error?: string };
+  if (!response.ok || data.error || typeof data.content !== "string" || typeof data.path !== "string") {
+    throw new Error(data.error ?? `HTTP ${response.status}`);
+  }
+  return { content: data.content, path: data.path, exists: !!data.exists };
+}
 
 /**
  * Section 3: Append System Prompt (~/.pi/agent/APPEND_SYSTEM.md).
@@ -30,36 +44,33 @@ export function AppendSystemSection({
   config,
   apply,
   onDirtyChange,
+  pageCache,
 }: {
   config: PiWorkConfig;
   apply: (computeNext: (prev: PiWorkConfig) => PiWorkConfig) => Promise<boolean>;
   onDirtyChange?: DirtyReporter;
+  pageCache: SettingsPageDataCache;
 }) {
   const { t } = useI18n();
   const toast = useToast();
-  const [appendSystem, setAppendSystem] = useState<{ content: string; path: string; exists: boolean } | null>(null);
-  const [originalAppendSystem, setOriginalAppendSystem] = useState<string>("");
-  const [appendSystemLoading, setAppendSystemLoading] = useState(true);
+  // The disk content is cached per modal: first entry reads the file, later
+  // entries start from that value instead of flashing "Loading…". The draft is
+  // deliberately *not* cached — leaving the page still discards unsaved edits.
+  // A failed read is not cached either, so the next entry retries; until then
+  // the textarea stays disabled.
+  const {
+    data: appendSystem,
+    loading: appendSystemLoading,
+    mutate: mutateAppendSystem,
+  } = useSettingsPageData(pageCache, "append-system", loadAppendSystem);
+  const [draft, setDraft] = useState<string | null>(null);
   const [appendSystemSaving, setAppendSystemSaving] = useState(false);
   const [appendSystemSavedOk, flashAppendSystemSavedOk] = useTransientFlag();
 
-  // Load ~/.pi/agent/APPEND_SYSTEM.md (independent from main config save flow)
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/append-system")
-      .then((r) => r.json())
-      .then((d: { content?: string; path?: string; exists?: boolean; error?: string }) => {
-        if (cancelled) return;
-        if (d.error || typeof d.content !== "string" || typeof d.path !== "string") return;
-        setAppendSystem({ content: d.content, path: d.path, exists: !!d.exists });
-        setOriginalAppendSystem(d.content);
-      })
-      .catch(() => { /* leave empty: section shows a "not loaded" hint */ })
-      .finally(() => { if (!cancelled) setAppendSystemLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
+  const savedContent = appendSystem?.content ?? "";
+  const content = draft ?? savedContent;
 
-  const appendSystemDirty = !!appendSystem && appendSystem.content !== originalAppendSystem;
+  const appendSystemDirty = appendSystem !== undefined && content !== savedContent;
 
   useEffect(() => {
     onDirtyChange?.("append-system", appendSystemDirty);
@@ -72,14 +83,16 @@ export function AppendSystemSection({
       const res = await fetch("/api/append-system", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: appendSystem.content }),
+        body: JSON.stringify({ content }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
-      setOriginalAppendSystem(appendSystem.content);
-      setAppendSystem((prev) => (prev ? { ...prev, exists: true } : prev));
+      // The saved text becomes the new baseline. Writing it to the page cache
+      // means a later entry into this page shows it without a re-read.
+      mutateAppendSystem({ ...appendSystem, content, exists: true });
+      setDraft(null);
       flashAppendSystemSavedOk();
       toast.show({ kind: "success", message: t("Settings saved") });
     } catch (e) {
@@ -87,7 +100,7 @@ export function AppendSystemSection({
     } finally {
       setAppendSystemSaving(false);
     }
-  }, [appendSystem, t, toast, flashAppendSystemSavedOk]);
+  }, [appendSystem, content, flashAppendSystemSavedOk, mutateAppendSystem, t, toast]);
 
   return (
     <>
@@ -134,8 +147,8 @@ export function AppendSystemSection({
         )}
       </div>
       <TextArea
-        value={appendSystem?.content ?? ""}
-        onChange={(value) => setAppendSystem((prev) => (prev ? { ...prev, content: value } : prev))}
+        value={content}
+        onChange={setDraft}
         disabled={appendSystemLoading || !appendSystem}
         placeholder={appendSystemLoading ? t("Loading...") : t("Markdown content appended after the built-in system prompt.")}
         mono

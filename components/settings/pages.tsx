@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import type { SettingsSectionId } from "./registry";
+import type { SettingsPageDataCache } from "@/lib/client/settings-page-cache";
 import type { SettingsApply } from "./use-settings-write";
 import type { DirtyReporter } from "./use-unsaved-changes";
 import { ProfileSection } from "./sections/ProfileSection";
@@ -21,6 +22,8 @@ export interface SettingsPageContext {
   config: PiWorkConfig;
   apply: SettingsApply;
   reportDirty: DirtyReporter;
+  /** Per-modal cache for pages that load their own data on mount. */
+  pageCache: SettingsPageDataCache;
   onProfileSaved?: () => void;
 }
 
@@ -41,14 +44,19 @@ export const SETTINGS_PAGES = {
   "right-bar": ({ config, apply }) => <RightBarSection config={config} apply={apply} />,
   "ui-sounds": ({ config, apply }) => <SoundSettingsSection config={config} apply={apply} />,
   "file-preview": ({ config, apply }) => <FilePreviewSection config={config} apply={apply} />,
-  "append-system": ({ config, apply, reportDirty }) => (
-    <AppendSystemSection config={config} apply={apply} onDirtyChange={reportDirty} />
+  "append-system": ({ config, apply, reportDirty, pageCache }) => (
+    <AppendSystemSection
+      config={config}
+      apply={apply}
+      onDirtyChange={reportDirty}
+      pageCache={pageCache}
+    />
   ),
   "pi-documentation": ({ config, apply }) => (
     <PiDocumentationSection config={config} apply={apply} />
   ),
-  subagent: () => <SubagentSection />,
-  retry: () => <RetrySection />,
+  subagent: ({ pageCache }) => <SubagentSection pageCache={pageCache} />,
+  retry: ({ pageCache }) => <RetrySection pageCache={pageCache} />,
   "network-proxy": ({ config, apply, reportDirty }) => (
     <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />
   ),

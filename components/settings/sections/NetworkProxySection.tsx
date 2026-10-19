@@ -32,6 +32,11 @@ interface ProbeResult {
  *   the switch in one write. Requiring "Save" first read as a dead control.
  * - "Test connection" always probes the draft, so an address can be verified
  *   before it is written anywhere.
+ *
+ * Unlike the pages that fetch their own data, this page has no mount-time
+ * request: the persisted values come from the config the modal already loaded
+ * once per open. It therefore has no page-data cache entry — switching away and
+ * back changes nothing on screen and sends nothing.
  */
 export function NetworkProxySection({
   config,

@@ -1,56 +1,59 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { PrimaryButton } from "../controls";
 import { refreshSubagentProfiles } from "@/lib/client/subagent-profiles-store";
 import type { SubagentProfile } from "@/lib/shared/subagent";
 import { SubagentCard } from "../subagent-config/SubagentCard";
 import { SubagentEditor } from "../subagent-config/SubagentEditor";
+import type { SettingsPageDataCache } from "@/lib/client/settings-page-cache";
+import { useSettingsPageData } from "../use-page-data";
+
+/** One read of the profile list; the modal's page-data cache keeps it for the modal's lifetime. */
+async function loadSubagentProfiles(): Promise<SubagentProfile[]> {
+  const response = await fetch("/api/subagents", { cache: "no-store" });
+  const data = await response.json().catch(() => ({})) as { profiles?: SubagentProfile[]; error?: string };
+  if (!response.ok) throw new Error(data.error ?? "load failed");
+  return data.profiles ?? [];
+}
 
 /**
  * Subagents settings section — the CRUD list for the profiles `spawn_subagent`
  * can launch. Edits commit immediately through `/api/subagents` (like an avatar
  * upload), so this section does not participate in the settings modal's staged
  * save; it keeps its own list and reloads after a write.
+ *
+ * The list is cached per modal, so switching away and back does not re-request
+ * it. A write (create / edit / delete) reloads anyway, which refreshes both the
+ * page cache and the list on screen — the cache never hides a newer edit.
  */
-export function SubagentSection() {
+export function SubagentSection({ pageCache }: { pageCache: SettingsPageDataCache }) {
   const { t } = useI18n();
-  const [profiles, setProfiles] = useState<SubagentProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, loading, error, reload } = useSettingsPageData(
+    pageCache,
+    "subagent",
+    loadSubagentProfiles,
+  );
+  const profiles = data ?? [];
   const [editing, setEditing] = useState<SubagentProfile | "new" | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const response = await fetch("/api/subagents", { cache: "no-store" });
-      const data = await response.json().catch(() => ({})) as { profiles?: SubagentProfile[]; error?: string };
-      if (!response.ok) throw new Error(data.error ?? "load failed");
-      setProfiles(data.profiles ?? []);
-      setError(null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
 
   const handleSaved = useCallback(async () => {
     setEditing(null);
-    await load();
+    // Re-read instead of reusing the cached list: the editor just wrote a
+    // profile, and the fresh response updates both the cache and this list.
+    await reload();
     await refreshSubagentProfiles();
-  }, [load]);
+  }, [reload]);
 
   const handleDelete = useCallback(async (profile: SubagentProfile) => {
     if (!window.confirm(t("Delete subagent \"{name}\"?", { name: profile.name }))) return;
     const response = await fetch(`/api/subagents?name=${encodeURIComponent(profile.name)}`, { method: "DELETE" });
     if (response.ok) {
-      await load();
+      await reload();
       await refreshSubagentProfiles();
     }
-  }, [load, t]);
+  }, [reload, t]);
 
   return (
     <>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { setSettings, useSettings } from "@/hooks/settingsStore";
@@ -13,6 +13,7 @@ import {
   type SettingsSectionId,
 } from "./registry";
 import { readLastSettingsSection, writeLastSettingsSection } from "@/lib/client/last-settings-section";
+import { createSettingsPageCache } from "@/lib/client/settings-page-cache";
 import { useSettingsWrite } from "./use-settings-write";
 import { useUnsavedChanges, type DirtyReporter } from "./use-unsaved-changes";
 import { SETTINGS_PAGES } from "./pages";
@@ -37,6 +38,11 @@ const MODAL_WIDTH = "min(960px, calc(100vw - 32px))";
  * entry. Staged sections report their dirty-ness to one unsaved-changes
  * registry, which is the only input to both confirms (close and page switch) —
  * same `window.confirm`, same copy.
+ *
+ * Pages that load their own data share one page-data cache created here, so
+ * switching away and back reuses what was already loaded (no second request,
+ * no loading flash) while the page component itself still unmounts. The cache
+ * dies with the modal, so reopening settings fetches again.
  */
 export function SettingsModal({
   onClose,
@@ -48,6 +54,9 @@ export function SettingsModal({
   const { t } = useI18n();
   const config = useSettings();
   const [reloading, setReloading] = useState(true);
+  // Per-modal page-data cache: one entry per page that fetches on mount,
+  // discarded when this modal unmounts (i.e. on close).
+  const pageCache = useMemo(() => createSettingsPageCache(), []);
 
   // ── Unsaved-changes registry ───────────────────────────────────────
   // Every staged setting reports its dirty-ness here. The close-confirm
@@ -158,6 +167,7 @@ export function SettingsModal({
     apply,
     reportDirty,
     onProfileSaved,
+    pageCache,
   });
 
   return (

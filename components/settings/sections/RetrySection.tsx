@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
@@ -12,6 +12,16 @@ import {
   formatBackoffPreview,
   type AgentRetryConfig,
 } from "@/lib/shared/agent-settings-types";
+import type { SettingsPageDataCache } from "@/lib/client/settings-page-cache";
+import { useSettingsPageData } from "../use-page-data";
+
+/** One read of the retry config; the modal's page-data cache keeps it for the modal's lifetime. */
+async function loadRetryConfig(): Promise<AgentRetryConfig> {
+  const response = await fetch("/api/agent-settings/retry");
+  const data = (await response.json().catch(() => ({}))) as AgentRetryConfig & { error?: string };
+  if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+  return data;
+}
 
 /**
  * Section 11: Agent retry (~/.pi/agent/settings.json).
@@ -26,33 +36,25 @@ import {
  * commit we PUT through `pushRetry` which preserves any unset
  * provider fields so a partial update doesn't blank the rest.
  */
-export function RetrySection() {
+export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }) {
   const { t } = useI18n();
   const toast = useToast();
-  const [retryConfig, setRetryConfig] = useState<AgentRetryConfig | null>(null);
-  const [retryLoading, setRetryLoading] = useState(true);
+  // First entry loads; later entries inside the same modal reuse the cached
+  // value, so the page never flashes "Loading…" again. Writes go through
+  // `mutate` so a re-entry sees them instead of the pre-save snapshot.
+  const {
+    data: retryConfig,
+    loading: retryLoading,
+    mutate: mutateRetryConfig,
+  } = useSettingsPageData(pageCache, "retry", loadRetryConfig);
   const [retryResetting, setRetryResetting] = useState(false);
   const [retryResetOk, flashRetryResetOk] = useTransientFlag();
 
-  // Initial load
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/agent-settings/retry")
-      .then((r) => r.json())
-      .then((d: AgentRetryConfig & { error?: string }) => {
-        if (cancelled) return;
-        if (d && typeof d === "object" && !d.error) {
-          setRetryConfig(d);
-        }
-      })
-      .catch(() => { /* leave null: section shows a "not loaded" hint */ })
-      .finally(() => { if (!cancelled) setRetryLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
+  // The initial load lives in `useSettingsPageData` (cached per modal).
 
   // Each RetryNumberRow commits (or rolls back) against `retryConfig`,
   // and the server-side PUT handler enforces the same range rules.
-  // On success we trust the server's response and update local state;
+  // On success we trust the server's response and update the cached value;
   // on failure we keep the previous `retryConfig` so the row's draft
   // rolls back to the last accepted value via its own useEffect.
   const pushRetry = useCallback(async (
@@ -95,12 +97,12 @@ export function RetrySection() {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         return { ok: false, error: data.error ?? `HTTP ${res.status}` };
       }
-      setRetryConfig(merged);
+      mutateRetryConfig(merged);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
-  }, [retryConfig, t]);
+  }, [retryConfig, t, mutateRetryConfig]);
 
   const handleRetryEnabledChange = useCallback(async (next: boolean) => {
     const result = await pushRetry({ enabled: next });
@@ -147,7 +149,7 @@ export function RetrySection() {
       // Reset means "drop the override" — server removes the retry
       // key entirely. Locally we re-fetch defaults so every row's
       // draft snaps to its placeholder.
-      setRetryConfig(DEFAULT_AGENT_RETRY);
+      mutateRetryConfig(DEFAULT_AGENT_RETRY);
       flashRetryResetOk();
       toast.show({ kind: "success", message: t("Reset retry config") });
     } catch (e) {
@@ -158,7 +160,7 @@ export function RetrySection() {
     } finally {
       setRetryResetting(false);
     }
-  }, [t, toast, flashRetryResetOk]);
+  }, [t, toast, flashRetryResetOk, mutateRetryConfig]);
 
   return (
     <>
