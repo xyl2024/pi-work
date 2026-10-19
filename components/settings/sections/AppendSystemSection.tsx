@@ -8,6 +8,7 @@ import { SaveButton, UnsavedHint } from "../staged-save";
 import { TextArea } from "../controls";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
+import type { DirtyReporter } from "../use-unsaved-changes";
 
 /**
  * Section 3: Append System Prompt (~/.pi/agent/APPEND_SYSTEM.md).
@@ -32,7 +33,7 @@ export function AppendSystemSection({
 }: {
   config: PiWorkConfig;
   apply: (computeNext: (prev: PiWorkConfig) => PiWorkConfig) => Promise<boolean>;
-  onDirtyChange?: (key: string, dirty: boolean) => void;
+  onDirtyChange?: DirtyReporter;
 }) {
   const { t } = useI18n();
   const toast = useToast();

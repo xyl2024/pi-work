@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useModalAnimation } from "@/hooks/useModalAnimation";
 import { setSettings, useSettings } from "@/hooks/settingsStore";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
+import { UNSAVED_CHANGES_CONFIRM_KEY, selectIsDirty, selectSectionLeave } from "@/lib/shared/settings-unsaved";
 import {
   SETTINGS_GROUPS,
   SETTINGS_SECTION_IDS,
@@ -31,7 +32,8 @@ const MODAL_WIDTH = "min(960px, calc(100vw - 32px))";
  * The modal owns no second copy of the config: it reads the settings store,
  * re-reads disk once on open, and writes through the single `useSettingsWrite`
  * entry. Staged sections report their dirty-ness to one unsaved-changes
- * registry, which is the only input to the close-confirm prompt.
+ * registry, which is the only input to both confirms (close and page switch) —
+ * same `window.confirm`, same copy.
  */
 export function SettingsModal({
   onClose,
@@ -86,6 +88,24 @@ export function SettingsModal({
   const [activeSectionId, setActiveSectionId] = useState<SettingsSectionId>(
     SETTINGS_SECTION_IDS[0],
   );
+
+  /**
+   * Navigate to a page, honouring staged edits.
+   *
+   * `selectSectionLeave` decides whether the switch needs a confirm; when it
+   * does, the prompt is the *same* `window.confirm` and the same copy as the
+   * close guard. Confirming drops the opened page's dirty flag as part of the
+   * switch, so closing the modal afterwards does not ask a second time about
+   * changes that were already dropped.
+   */
+  const goToSection = useCallback((target: SettingsSectionId) => {
+    const decision = selectSectionLeave(unsaved, activeSectionId, target);
+    if (decision.kind === "confirm" && !window.confirm(t(UNSAVED_CHANGES_CONFIRM_KEY))) {
+      return;
+    }
+    if (decision.kind === "confirm") markSaved(decision.key);
+    setActiveSectionId(target);
+  }, [activeSectionId, markSaved, t, unsaved]);
 
   // ── Open/close animation ──────────────────────────────────────────
   // `shouldConfirm` returns a string to gate the close on a confirm prompt,
@@ -192,13 +212,17 @@ export function SettingsModal({
                 )}
                 {sectionsForGroup(group.id).map((section) => {
                   const active = activeSectionId === section.id;
+                  const dirtyDot = selectIsDirty(unsaved, section.id);
                   return (
                     <button
                       key={section.id}
-                      onClick={() => setActiveSectionId(section.id)}
+                      onClick={() => goToSection(section.id)}
                       aria-current={active ? "page" : undefined}
                       style={{
-                        display: "block",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
                         width: "100%",
                         textAlign: "left",
                         padding: "6px 10px",
@@ -219,7 +243,24 @@ export function SettingsModal({
                         if (!active) e.currentTarget.style.background = "transparent";
                       }}
                     >
-                      {t(section.labelKey)}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t(section.labelKey)}
+                      </span>
+                      {dirtyDot && (
+                        // Staged edits that have not hit disk yet. The dot is
+                        // decoration — the accessible name stays the page name
+                        // — with a title for pointer users.
+                        <span
+                          title={t("Unsaved changes")}
+                          style={{
+                            width: 6,
+                            height: 6,
+                            flexShrink: 0,
+                            borderRadius: "50%",
+                            background: "var(--warning)",
+                          }}
+                        />
+                      )}
                     </button>
                   );
                 })}
