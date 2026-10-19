@@ -59,7 +59,6 @@ import {
   selectTab,
   selectTabByKind,
   type PanelMode,
-  type PanelTabsState,
   type PanelViewKind,
 } from "@/lib/shared/panelTabs";
 import { useEnsureSettings } from "@/hooks/settingsStore";
@@ -93,7 +92,6 @@ import { cancelActiveOAuthLogins, hasActiveOAuthLogin } from "@/lib/client/oauth
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { usePendingPermissions } from "@/hooks/usePendingPermissions";
-import { useLayoutMode, getLayoutModeSync } from "@/hooks/layoutModeStore";
 import {
   APP_TITLE,
   createSessionWorkspaceState,
@@ -464,13 +462,6 @@ export function AppShell() {
   const settings = useEnsureSettings();
   const rightSideBarConfig = settings?.right_side_bar ?? null;
   const { cwds: recentCwds } = useCwdList();
-  // Layout mode (Agentic / Classic) — toggles which column hosts the
-  // chat card vs. the file / panel card. The terminal stays in the
-  // center column in both modes (it's part of the "work area", not the
-  // chat region). See hooks/layoutModeStore.ts for the persistence
-  // semantics.
-  const layoutMode = useLayoutMode();
-
   // ── Panel tab strip ────────────────────────────────────────────────
   // The strip's whole state — the open tabs, the active tab and the panel's
   // open state (closed / normal / expanded) — is owned by the pure
@@ -479,20 +470,11 @@ export function AppShell() {
   // and the tab bar + right-bar column read the state directly.
   const [panelTabsState, dispatchPanelTabs] = useReducer(
     panelTabsReducer,
-    // Classic mode hides the chat card behind the right column being
-    // closed, so the very first commit has to paint with the column open.
-    // The `useReducer` initializer reads the persisted mode synchronously
-    // so the first render is already correct — going through the React
-    // subscription would commit the wrong state first and then flip on the
-    // next tick, producing a visible flash.
-    getLayoutModeSync() === "classic",
-    (classic): PanelTabsState => ({
-      ...createPanelTabsState(),
-      mode: classic ? "normal" : "closed",
-    }),
+    undefined,
+    createPanelTabsState,
   );
   // Read through a ref where a callback must keep a stable identity yet act
-  // on the latest state (the keyboard toggle, the layout-mode switch).
+  // on the latest state (the keyboard toggle, the command palette).
   const panelTabsRef = useRef(panelTabsState);
   panelTabsRef.current = panelTabsState;
   /** Today's name for the panel open state — the right column's width and
@@ -512,24 +494,6 @@ export function AppShell() {
   // Re-open counters carried by the tabs themselves: Git Diff refreshes off
   // these instead of shell-owned request tokens.
   const gitDiffOpenCount = selectOpenCount(panelTabsState, "gitDiff");
-
-  // Classic mode hides the chat card behind the right column being
-  // closed, so the very first commit has to paint with the column
-  // open. The reducer initializer above already handles the
-  // *persisted* case by reading the mode synchronously from
-  // localStorage; this effect covers the *in-session* switch — when the
-  // user flips the Agentic ↔ Classic toggle after the page has
-  // loaded, we re-open the right column so the chat isn't lost behind
-  // a width:0 panel. Only auto-opens; manual close after the switch
-  // is left alone until the next mode change. Reading the mode through
-  // the ref keeps this keyed on layoutMode only — depending on the mode
-  // too would re-fire after the auto-open and try to "re-open" a panel
-  // that's already open.
-  useEffect(() => {
-    if (layoutMode === "classic" && panelTabsRef.current.mode === "closed") {
-      dispatchPanelTabs({ type: "set_mode", mode: "normal" });
-    }
-  }, [layoutMode]);
 
   // Fetch the recent-cwd list exactly once at app start (shared with the
   // CwdPicker, which never refetches on open or remount).
@@ -1425,33 +1389,22 @@ export function AppShell() {
     [commandContext, t],
   );
 
-  // ── Layout-mode building blocks ────────────────────────────────
+  // ── Column building blocks ─────────────────────────────────────
   // The "chat card" (SessionTabBar + the active controller) and the
-  // "panel card" (file/panel tab bar + content body) are each rendered
-  // exactly once per layout. We build them once here so the JSX
-  // returned below stays flat — the center / right columns just pick
-  // which card goes where based on `layoutMode`. Terminal always lives
-  // in the center column, so it stays in the render path that wraps
-  // `chatCard` / `panelCard` at the JSX root.
+  // "panel card" (file/panel tab bar + content body) are each built
+  // once here so the JSX returned below stays flat: the chat card is
+  // the center column, the panel card is the right column. Terminal
+  // always lives in the center column, under the chat card.
   //
-  // Two leading-control buttons live on the *column* position rather
-  // than on the card they decorate, so the layout mode can swap them
-  // without losing the user's muscle memory:
+  // Two leading-control buttons decorate the column, not the card:
   //
-  //   • `sidebarToggleLeading` always sits at the *center column*'s
-  //     top-left corner — it hides/shows the global left sidebar.
-  //     In Agentic mode that column hosts the chat, so the button is
-  //     rendered as the SessionTabBar's `leadingControl`; in Classic
-  //     mode the same button rides the panel card's tab bar instead.
+  //   • `sidebarToggleLeading` sits at the *center column*'s top-left
+  //     corner — it hides/shows the global left sidebar, so it is
+  //     rendered as the SessionTabBar's `leadingControl`.
   //
-  //   • `expandPanelLeading` always sits at the *right column*'s
-  //     top-left corner — it widens/narrows the right column.
-  //     In Agentic mode it lives on the panel card's tab bar; in
-  //     Classic mode it moves to the chat card's SessionTabBar.
-  //
-  // Because each button's column is fixed, swapping the buttons
-  // between the two cards automatically puts them back in the same
-  // physical location the user expects regardless of the mode.
+  //   • `expandPanelLeading` sits at the *right column*'s top-left
+  //     corner — it widens/narrows the right column, so it lives on
+  //     the panel card's tab bar.
   const sidebarToggleLeading = (
     <Tooltip content={sidebarOpen ? t("Hide sidebar") : t("Show sidebar")}>
       <button
@@ -1480,15 +1433,10 @@ export function AppShell() {
     </Tooltip>
   );
 
-  // Visibility for the right-column expand button:
-  //   • Agentic: only when the panel actually has tabs to show — the
-  //     button was originally panel-chrome, so an empty panel keeps
-  //     its leading slot empty.
-  //   • Classic: the button rides the chat card; show it whenever the
-  //     right column is open at all (so the user can collapse/expand
-  //     even if no file tabs are open yet).
-  // The state machine's `selectCanExpand` absorbs both rules.
-  const showExpandPanelLeading = selectCanExpand(panelTabsState, layoutMode);
+  // The expand button is panel chrome: only shown once the panel is
+  // open *and* has tabs to show, so an empty panel keeps its leading
+  // slot empty. The rule lives in the state machine.
+  const showExpandPanelLeading = selectCanExpand(panelTabsState);
 
   const expandPanelLeading = showExpandPanelLeading ? (
     <Tooltip content={rightPanelState === "expanded" ? t("Collapse panel") : t("Expand panel")}>
@@ -1518,17 +1466,9 @@ export function AppShell() {
     </Tooltip>
   ) : null;
 
-  // Which leading control each card should expose. The mapping is the
-  // inverse of the two buttons above: the chat card always rides the
-  // center column, so it gets the sidebar toggle in Agentic mode and
-  // the expand toggle in Classic mode; the panel card is the mirror.
-  const chatLeadingControl = layoutMode === "agentic" ? sidebarToggleLeading : expandPanelLeading;
-  const panelLeadingControl = layoutMode === "agentic" ? expandPanelLeading : sidebarToggleLeading;
-
-  // Terminal fullscreen hides whichever card lives in the *center* column
-  // (chat in Agentic, panel in Classic) so the xterm gets the whole work
-  // area; the right column's card is untouched in both modes.
-  const chatHiddenByTerminalFullscreen = terminalFullscreen && layoutMode === "agentic";
+  // Terminal fullscreen hides the center column's chat card so the xterm
+  // gets the whole work area; the right column's panel card is untouched.
+  const chatHiddenByTerminalFullscreen = terminalFullscreen;
   const chatCard = (
     <div
       style={{
@@ -1544,7 +1484,7 @@ export function AppShell() {
     >
       {showChat && (
         <SessionTabBar
-          leadingControl={chatLeadingControl}
+          leadingControl={sidebarToggleLeading}
           tabs={workspace.tabOrder.map((tabId) => workspace.tabs[tabId]).filter((tab): tab is SessionTab => Boolean(tab))}
           activeTabId={activeTabId}
           onSelectTab={handleActivateSessionTab}
@@ -1596,23 +1536,17 @@ export function AppShell() {
   );
 
   // Panel card — the right-side workspace that hosts file viewers,
-  // tool lists, etc. Built once; the layout mode
-  // decides whether it sits next to (Agentic) or instead of (Classic)
-  // the chat card. The same expand / collapse right-panel state is
-  // used in both modes: expanding still pushes the *other* center
-  // card off-screen so the right column takes the full width.
+  // tool lists, etc. Expanding it pushes the center column (chat +
+  // terminal) off-screen so the right column takes the full width.
   const panelCard = (
     <>
       {/* Right panel tab bar — mirrors the SessionTabBar chrome (one
           leading-control slot on the left, tabs filling the rest). The
-          leading slot is filled by `panelLeadingControl` so the expand
-          toggle in Agentic mode swaps to the sidebar toggle in Classic
-          mode, keeping the right column's top-left corner semantics
-          consistent across modes. */}
+          leading slot holds the right column's expand toggle. */}
       <div style={{ display: "flex", alignItems: "center", flexShrink: 0, background: "transparent", height: 34, borderRadius: "var(--panel-radius) var(--panel-radius) 0 0", overflow: "hidden", padding: "0 6px", gap: 2 }}>
-        {panelLeadingControl && (
+        {expandPanelLeading && (
           <div style={{ flexShrink: 0, display: "flex", alignItems: "stretch" }}>
-            {panelLeadingControl}
+            {expandPanelLeading}
           </div>
         )}
         <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
@@ -1717,29 +1651,13 @@ export function AppShell() {
 
       {/* Drag handle removed — sidebar width is fixed. */}
 
-      {/* Center column: the layout mode decides which card lives up top:
-            - Agentic: chat card + terminal card (original behavior).
-            - Classic: panel card + terminal card (chat moves to the
-                       right column instead).
-          The terminal stays anchored to this column in both modes — it
-          is part of the "work area", not the chat region. flex-grow
-          still animates the squeeze when the right panel goes expanded:
-          center grows 1->0 while the right panel grows 0->1, so the
-          whiteboard takeover slides instead of snapping. */}
+      {/* Center column: chat card + terminal card. The terminal stays
+          anchored to this column — it is part of the "work area", not the
+          chat region. flex-grow still animates the squeeze when the right
+          panel goes expanded: center grows 1->0 while the right panel
+          grows 0->1, so the takeover slides instead of snapping. */}
       <div style={{ flex: rightPanelState === "expanded" ? "0 1 0%" : "1 1 0%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0, gap: terminalOpen && !terminalFullscreen ? "var(--panel-gap-stack)" : 0, transition: "flex-grow 0.18s cubic-bezier(0.32, 0.72, 0, 1), gap 0.18s ease" }}>
-        {layoutMode === "agentic" ? chatCard : (
-          <div
-            style={{
-              display: terminalFullscreen ? "none" : "flex",
-              flex: "1 1 0%",
-              flexDirection: "column",
-              minHeight: 0,
-              overflow: "hidden",
-            }}
-          >
-            {panelCard}
-          </div>
-        )}
+        {chatCard}
 
         {/* Drag handle sitting in the gap between the work card and the
             terminal card. Always mounted so the running pty/WS and layout
@@ -1796,11 +1714,9 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* Right column: in Agentic mode this is the file / panel card,
-          in Classic mode it's the chat card. Width still animates via
-          rightPanelState so expand/collapse semantics are identical in
-          both modes — the user expands whichever card is on the right
-          and the center column shrinks to make room. */}
+      {/* Right column: the file / panel card. Width animates via
+          rightPanelState so expanding it shrinks the center column and
+          makes room. */}
       <div
         className={`right-panel-container right-panel-${rightPanelState}`}
         style={{
@@ -1812,7 +1728,7 @@ export function AppShell() {
           minWidth: rightPanelState === "closed" ? 0 : rightWidth,
         }}
       >
-        {layoutMode === "agentic" ? panelCard : chatCard}
+        {panelCard}
       </div>
 
       </div>

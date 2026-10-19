@@ -69,9 +69,6 @@ export type LabelKeyOf<K extends PanelTabKind> = K extends "file" ? null : strin
 
 /** The panel's own open state. Only `open` upgrades it, `set_mode` can lower it. */
 export type PanelMode = "closed" | "normal" | "expanded";
-/** Mirrors the shell's layout mode (agentic / classic) for expand-button rules. */
-export type PanelLayoutMode = "agentic" | "classic";
-
 export interface PanelTab<K extends PanelTabKind = PanelTabKind> {
   /** Stable strip identity. A panel view reuses its tab id on every open. */
   id: string;
@@ -534,14 +531,9 @@ export function selectHasTabs(state: PanelTabsState): boolean {
   return state.tabs.length > 0;
 }
 
-/**
- * Whether the expand button may be shown, absorbing the two layout rules:
- * Classic shows it whenever the panel is open, Agentic only once the strip
- * has tabs to show.
- */
-export function selectCanExpand(state: PanelTabsState, layoutMode: PanelLayoutMode): boolean {
-  if (!selectIsOpen(state)) return false;
-  return layoutMode === "agentic" ? selectHasTabs(state) : true;
+/** Whether the expand button may be shown: only once the open strip has tabs. */
+export function selectCanExpand(state: PanelTabsState): boolean {
+  return selectIsOpen(state) && selectHasTabs(state);
 }
 
 // ── Kind → right-bar button id ─────────────────────────────────────────

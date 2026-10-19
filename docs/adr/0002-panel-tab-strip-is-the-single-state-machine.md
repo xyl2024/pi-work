@@ -2,7 +2,7 @@
 
 Every rule of the right panel used to live in `AppShell`: a 14-variant tab union, one open handler per panel view, a `toggleRightPanelTab(tabId, opener)` that re-implemented "clicking the active tab collapses the panel", and three separate close fallbacks. The rules had drifted into two copies of the toggle rule and four copies of "which tab becomes active after a close". Tab labels were baked with `t()` at open time, so an already open tab kept the language it was opened in (only three kinds were patched at render time), and the two counters panels needed — git diff's refresh token, BTW's focus request — were private shell state.
 
-We decided that the strip itself is one pure state machine in the shared layer: `lib/shared/panelTabs.ts` holds the identity registry (kind → tab id, label key, default mode, session binding, optional command entry) and a reducer over `{ tabs, activeId, mode }` with the actions `open` / `open_file` / `activate` / `toggle` / `close` / `close_left` / `close_right` / `close_others` / `set_mode`. Selectors expose the active tab and kind, `isOpen`, `hasTabs`, and `canExpand(state, layoutMode)` — the last one absorbing Classic ("open ⇒ visible") vs Agentic ("open and non-empty ⇒ visible"). Labels are stored as keys and resolved at render, so open tabs follow a locale switch. Each tab carries an `openCount` bumped on every open, replacing the per-panel counters that panels observe for refresh/focus.
+We decided that the strip itself is one pure state machine in the shared layer: `lib/shared/panelTabs.ts` holds the identity registry (kind → tab id, label key, default mode, session binding, optional command entry) and a reducer over `{ tabs, activeId, mode }` with the actions `open` / `open_file` / `activate` / `toggle` / `close` / `close_left` / `close_right` / `close_others` / `set_mode`. Selectors expose the active tab and kind, `isOpen`, `hasTabs`, and `canExpand(state)` — "open and non-empty ⇒ visible". Labels are stored as keys and resolved at render, so open tabs follow a locale switch. Each tab carries an `openCount` bumped on every open, replacing the per-panel counters that panels observe for refresh/focus.
 
 Presentation deliberately stays out of the shared layer, in two kind-keyed lookups: the right-bar descriptor declares each panel view's glyph once (the button column, the tab strip via `PANEL_TAB_ICON_BY_KIND`, and the command palette all read it), while `AppShell` owns the `PANEL_BODY_BY_KIND` table that picks the view's body component, since a body reads the shell's live session state. Adding a panel view is therefore a spec plus one descriptor entry and one body entry instead of the eight places it used to take, and file preview tabs share the same strip and the same close rules as panel views. The shell consumes the reducer state directly — there is no adapter layer, and the `RIGHT_BAR_ID_FOR_TAB_KIND` map that used to sit in `lib/shared/types.ts` is derived from the registry (`panelButtonIdForKind`).
 
@@ -14,7 +14,7 @@ Presentation deliberately stays out of the shared layer, in two kind-keyed looku
 
 ## Consequences
 
-- `panelTabs` may not import React, the DOM, the client hooks or anything server-side; the layout mode is passed in as `PanelLayoutMode` instead of read from the client store.
+- `panelTabs` may not import React, the DOM, the client hooks or anything server-side.
 - The registry is keyed by right-bar button id and *is* the id list: `RightBarButtonId` is derived from its keys, and each key must carry its own kind, so a new right-bar button cannot ship without a panel identity and a panel kind cannot appear without a button id. `lib/shared/right-bar.ts` re-exports the type instead of restating the union, and the server's `right_side_bar` defaults read the same keys.
 - The shell keeps no panel state: `AppShell` dispatches actions, reads `selectActiveTab` / `selectOpenCount` directly, and the tab bar renders `PanelTab`s by resolving `labelKey` at render time.
 - A panel view's glyph and body are each looked up by kind exactly once: the tab strip can never carry an icon the button column does not, and the body table is exhaustive by type, so a new kind fails `tsc` until both sides are registered.
@@ -28,3 +28,5 @@ Presentation deliberately stays out of the shared layer, in two kind-keyed looku
 **2026-10-11 更新**：计划面板已被移除，`action: "open"` 与 `openPanel` 也随之下线——这条修订所描述的额外行为不再存在，调色板条目（与右栏按钮、Tab 条一样）一律走 `togglePanel`。
 
 **参见**：ADR-0012「模型配置是面板视图而不是模态框」给这条状态机新增了一个 `modelsConfig` 成员；它只按此处既有的规则接入，不改动状态机本身。
+
+**2026-10-20 更新**：Classic 布局（工作区列在左、会话列在右）被移除，布局模式不再可切换，`hooks/layoutModeStore.ts`、设置里的 Appearance 区块、`PanelLayoutMode` 与 `canExpand` 的双规则一并下线。状态机本身不变，`canExpand(state)` 只剩「面板打开且有标签页」一条规则。

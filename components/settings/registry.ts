@@ -25,7 +25,6 @@ export interface SettingsGroupSpec {
 
 export type SettingsSectionId =
   | "profile"
-  | "appearance"
   | "right-bar"
   | "ui-sounds"
   | "file-preview"
@@ -64,7 +63,6 @@ export const SETTINGS_GROUPS: readonly SettingsGroupSpec[] = [
 export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
   { id: "profile", labelKey: "Profile", group: "personal" },
 
-  { id: "appearance", labelKey: "Appearance", group: "appearance" },
   { id: "right-bar", labelKey: "Right-side buttons", group: "appearance" },
   { id: "ui-sounds", labelKey: "UI Sounds", group: "appearance" },
   { id: "file-preview", labelKey: "File preview limits", group: "appearance" },

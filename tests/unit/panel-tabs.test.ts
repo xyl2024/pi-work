@@ -327,20 +327,14 @@ describe("panelTabs selectors", () => {
     expect(state.mode).toBe("normal");
   });
 
-  it("gates the expand button per layout mode", () => {
+  it("gates the expand button on the open strip having tabs", () => {
     const closed = createPanelTabsState();
     const openNoTabs = { ...createPanelTabsState(), mode: "normal" as const };
     const openWithTabs = reduce(createPanelTabsState(), { type: "open", kind: "llmAudit" });
 
-    // Agentic: only visible once the strip actually has tabs.
-    expect(selectCanExpand(closed, "agentic")).toBe(false);
-    expect(selectCanExpand(openNoTabs, "agentic")).toBe(false);
-    expect(selectCanExpand(openWithTabs, "agentic")).toBe(true);
-
-    // Classic: visible whenever the panel is open.
-    expect(selectCanExpand(closed, "classic")).toBe(false);
-    expect(selectCanExpand(openNoTabs, "classic")).toBe(true);
-    expect(selectCanExpand(openWithTabs, "classic")).toBe(true);
+    expect(selectCanExpand(closed)).toBe(false);
+    expect(selectCanExpand(openNoTabs)).toBe(false);
+    expect(selectCanExpand(openWithTabs)).toBe(true);
   });
 });
 

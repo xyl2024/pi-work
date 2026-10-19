@@ -22,8 +22,8 @@ import type { ReactNode } from "react";
  *    shouldn't leave trailing whitespace).
  *
  * Usage:
- *   <SettingsSection id="appearance">
- *     <h3>{t("Appearance")}</h3>
+ *   <SettingsSection id="right-bar">
+ *     <h3>{t("Right-side buttons")}</h3>
  *     …
  *   </SettingsSection>
  */

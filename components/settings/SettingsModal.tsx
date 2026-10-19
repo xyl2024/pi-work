@@ -13,7 +13,6 @@ import {
 } from "./registry";
 import { useSettingsWrite } from "./use-settings-write";
 import { useUnsavedChanges, type DirtyReporter } from "./use-unsaved-changes";
-import { AppearanceSection } from "./sections/AppearanceSection";
 import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
 import { PiDocumentationSection } from "./sections/PiDocumentationSection";
@@ -173,8 +172,6 @@ export function SettingsModal({
     switch (id) {
       case "profile":
         return <ProfileSection onProfileSaved={onProfileSaved} onDirtyChange={reportDirty} />;
-      case "appearance":
-        return <AppearanceSection />;
       case "right-bar":
         return <RightBarSection config={config} apply={apply} />;
       case "ui-sounds":
