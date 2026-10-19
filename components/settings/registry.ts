@@ -89,6 +89,23 @@ export function sectionsForGroup(group: SettingsGroupId): SettingsSectionSpec[] 
 export const SETTINGS_SECTION_IDS: readonly SettingsSectionId[] =
   SETTINGS_GROUPS.flatMap((group) => sectionsForGroup(group.id).map((section) => section.id));
 
+/**
+ * The section a freshly opened settings modal lands on when nothing has been
+ * remembered yet, or when the remembered value is unusable.
+ */
+export const DEFAULT_SETTINGS_SECTION_ID: SettingsSectionId = "profile";
+
+const SETTINGS_SECTION_ID_SET: ReadonlySet<string> = new Set(SETTINGS_SECTION_IDS);
+
+/**
+ * Runtime guard for section ids that come from outside the app (localStorage,
+ * URLs): checks against the registry, so a removed section never becomes the
+ * modal's active id.
+ */
+export function isSettingsSectionId(value: unknown): value is SettingsSectionId {
+  return typeof value === "string" && SETTINGS_SECTION_ID_SET.has(value);
+}
+
 /** The group a section belongs to. */
 export function groupForSection(id: SettingsSectionId): SettingsGroupSpec {
   const section = SETTINGS_SECTIONS.find((s) => s.id === id);

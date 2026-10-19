@@ -7,11 +7,12 @@ import { setSettings, useSettings } from "@/hooks/settingsStore";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import { UNSAVED_CHANGES_CONFIRM_KEY, selectIsDirty, selectSectionLeave } from "@/lib/shared/settings-unsaved";
 import {
+  DEFAULT_SETTINGS_SECTION_ID,
   SETTINGS_GROUPS,
-  SETTINGS_SECTION_IDS,
   sectionsForGroup,
   type SettingsSectionId,
 } from "./registry";
+import { readLastSettingsSection, writeLastSettingsSection } from "@/lib/client/last-settings-section";
 import { useSettingsWrite } from "./use-settings-write";
 import { useUnsavedChanges, type DirtyReporter } from "./use-unsaved-changes";
 import { SETTINGS_PAGES } from "./pages";
@@ -27,7 +28,9 @@ const MODAL_WIDTH = "min(960px, calc(100vw - 32px))";
  * Groups and sections come from `./registry`: the sidebar is the only place
  * the registry is laid out, and the page map in `./pages` is keyed by section
  * id, so a section without a page fails type checking. Navigation state is the
- * section id itself — there is no scroll-anchor layer anymore.
+ * section id itself — there is no scroll-anchor layer anymore. The id is
+ * remembered in localStorage on every page switch and re-read on open, so the
+ * modal comes back to the page the user left on (default: Profile).
  *
  * The modal owns no second copy of the config: it reads the settings store,
  * re-reads disk once on open, and writes through the single `useSettingsWrite`
@@ -84,9 +87,12 @@ export function SettingsModal({
   }, [markDirty, markSaved]);
 
   // ── Pagination: the active section is the whole navigation state ───
-  // Default to the first registry section so a fresh open always has a page.
+  // Open on the section the user last looked at. `readLastSettingsSection`
+  // validates the stored id against the registry and returns null for a
+  // missing / stale / unreachable-store value, which falls back to Profile.
+  // The read is lazy so it happens once per open, not on every render.
   const [activeSectionId, setActiveSectionId] = useState<SettingsSectionId>(
-    SETTINGS_SECTION_IDS[0],
+    () => readLastSettingsSection() ?? DEFAULT_SETTINGS_SECTION_ID,
   );
 
   /**
@@ -104,7 +110,12 @@ export function SettingsModal({
       return;
     }
     if (decision.kind === "confirm") markSaved(decision.key);
-    setActiveSectionId(target);
+    if (target !== activeSectionId) {
+      // Remember on the switch itself (not on every render), so reopening the
+      // modal lands here. Re-clicking the open page is not a navigation.
+      writeLastSettingsSection(target);
+      setActiveSectionId(target);
+    }
   }, [activeSectionId, markSaved, t, unsaved]);
 
   // ── Open/close animation ──────────────────────────────────────────

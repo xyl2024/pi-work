@@ -12,6 +12,8 @@
 // both directions. Fails silently (no store / private mode / corrupt
 // value) just like the other Pi Work localStorage layers.
 
+import { getLocalStorage } from "./local-storage";
+
 const LAST_USED_MODEL_KEY = "pi-work:last-used-model";
 
 export interface LastUsedModel {
@@ -19,21 +21,10 @@ export interface LastUsedModel {
   modelId: string;
 }
 
-/** Test/storage isolation hook — mirrors other Pi Work storage layers so
- *  tests can override it without touching the public API. */
-export function getStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
 /** Read the last-used model. Returns `null` when localStorage is
  *  unavailable, the key is missing, or the value is corrupt. */
 export function readLastUsedModel(): LastUsedModel | null {
-  const store = getStorage();
+  const store = getLocalStorage();
   if (!store) return null;
   let raw: string | null = null;
   try {
@@ -56,7 +47,7 @@ export function readLastUsedModel(): LastUsedModel | null {
 /** Persist the last-used model. Best-effort — write failures (private
  *  mode, quota) are swallowed and never crash the caller. */
 export function writeLastUsedModel(next: LastUsedModel): void {
-  const store = getStorage();
+  const store = getLocalStorage();
   if (!store) return;
   try {
     store.setItem(LAST_USED_MODEL_KEY, JSON.stringify(next));
