@@ -57,6 +57,9 @@ export function ModelsConfigPanel({ onCloseTab }: { onCloseTab?: () => void }) {
   // the tab's close rule. Focus is kept inside the panel while it is the active
   // surface, so a palette / dialog that has taken focus keeps its own Escape.
   useEffect(() => {
+    // Renaming a provider also updates `page`. Keep an active field focused
+    // instead of moving focus back to the panel after every keystroke.
+    if (containerRef.current?.contains(document.activeElement)) return;
     containerRef.current?.focus({ preventScroll: true });
   }, [page]);
 

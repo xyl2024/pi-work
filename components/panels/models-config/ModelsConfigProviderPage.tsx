@@ -24,7 +24,7 @@ import {
  */
 export function ModelsConfigProviderPage({ name }: { name: string }) {
   const { t } = useI18n();
-  const { config } = useModelsConfigStore();
+  const { config, providerNames } = useModelsConfigStore();
   const provider = config.providers?.[name];
   if (!provider) return null;
   const models = provider.models ?? [];
@@ -55,7 +55,7 @@ export function ModelsConfigProviderPage({ name }: { name: string }) {
       </div>
 
       <ProviderFields
-        name={name}
+        name={providerNames[name] ?? name}
         provider={provider}
         onChange={(next) => updateModelsConfigProvider(name, next)}
         onRename={(nextName) => renameModelsConfigProvider(name, nextName)}

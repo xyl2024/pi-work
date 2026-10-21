@@ -68,6 +68,8 @@ export interface ModelsConfigStoreState {
   /** The last read failed; the panel shows this instead of the list. */
   loadError: string | null;
   config: ModelsJson;
+  /** Name input text, keyed by the provider's unchanged name until Save succeeds. */
+  providerNames: Record<string, string>;
   baseline: ModelsJson;
   pages: ModelsConfigPage[];
   /** The model being edited through the raw-JSON view, if any. */
@@ -86,6 +88,7 @@ const INITIAL: ModelsConfigStoreState = {
   loaded: false,
   loadError: null,
   config: EMPTY_CONFIG,
+  providerNames: {},
   baseline: EMPTY_CONFIG,
   pages: [MODELS_CONFIG_ROOT_PAGE],
   rawEdit: null,
@@ -138,7 +141,8 @@ export function useModelsConfigStore(): ModelsConfigStoreState {
 
 /** The single "unsaved changes" rule, read from one snapshot. */
 export function selectModelsConfigDirty(snapshot: ModelsConfigStoreState): boolean {
-  return isModelsConfigDirty({ config: snapshot.config, baseline: snapshot.baseline });
+  return Object.entries(snapshot.providerNames).some(([name, text]) => text !== name)
+    || isModelsConfigDirty({ config: snapshot.config, baseline: snapshot.baseline });
 }
 
 /** Non-reactive read of the same rule — the close guard asks at confirm time. */
@@ -158,8 +162,17 @@ export function useModelsConfigDirty(): boolean {
 export function selectModelsConfigProblem(
   snapshot: ModelsConfigStoreState,
 ): ModelsConfigProblem | null {
-  if (Object.keys(snapshot.config.providers ?? {}).some((name) => !name.trim())) {
-    return { reason: "provider-name", message: "Provider name cannot be empty" };
+  for (const [name, text] of Object.entries(snapshot.providerNames)) {
+    const nextName = text.trim();
+    if (!nextName) return { reason: "provider-name", message: "Provider name cannot be empty" };
+    if (nextName !== name && Object.hasOwn(snapshot.config.providers ?? {}, nextName)) {
+      return { reason: "provider-name-conflict", message: "Name already exists" };
+    }
+  }
+  const names = Object.entries(snapshot.config.providers ?? {}).map(([name]) =>
+    (snapshot.providerNames[name] ?? name).trim());
+  if (new Set(names).size !== names.length) {
+    return { reason: "provider-name-conflict", message: "Name already exists" };
   }
   return modelsConfigProblem(snapshot.rawEdit?.text);
 }
@@ -231,7 +244,14 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
   if (problem) return { ok: false, error: problem.message };
   // Snapshot what we are about to write: an edit made while the PUT is in
   // flight must stay dirty against this payload, not silently become saved.
-  const payload = state.config;
+  const pendingNames = { ...state.providerNames };
+  const renames = Object.entries(pendingNames)
+    .map(([name, text]) => [name, text.trim()] as const)
+    .filter(([name, nextName]) => name !== nextName);
+  let payload = state.config;
+  for (const [name, nextName] of renames) {
+    payload = withRenamedProvider(payload, name, nextName);
+  }
   patch({ saving: true, savedOk: false, saveError: null });
   try {
     const result = await putModelsConfig(payload);
@@ -240,7 +260,25 @@ export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string 
       patch({ saving: false, saveError: error });
       return { ok: false, error };
     }
-    patch({ saving: false, savedOk: true, saveError: null, baseline: payload });
+    // Commit names only after the write succeeds. Preserve edits made during PUT.
+    let config = state.config;
+    let pages = state.pages;
+    let rawEdit = state.rawEdit;
+    const providerNames = { ...state.providerNames };
+    for (const [name, nextName] of renames) {
+      config = withRenamedProvider(config, name, nextName);
+      pages = renameModelsConfigProviderPage(pages, name, nextName);
+      if (rawEdit?.providerName === name) rawEdit = { ...rawEdit, providerName: nextName };
+      const currentText = providerNames[name];
+      delete providerNames[name];
+      if (currentText !== undefined && currentText !== pendingNames[name]) {
+        providerNames[nextName] = currentText;
+      }
+    }
+    for (const [name, text] of Object.entries(pendingNames)) {
+      if (text.trim() === name && providerNames[name] === text) delete providerNames[name];
+    }
+    patch({ config, pages, rawEdit, providerNames, saving: false, savedOk: true, saveError: null, baseline: payload });
     setTimeout(() => patch({ savedOk: false }), 2000);
     return { ok: true };
   } catch (e) {
@@ -320,20 +358,15 @@ export function updateModelsConfigProvider(name: string, provider: ProviderEntry
 }
 
 export function renameModelsConfigProvider(oldName: string, newName: string): void {
-  if (newName === oldName || Object.hasOwn(state.config.providers ?? {}, newName)) return;
-  patch({
-    config: withRenamedProvider(state.config, oldName, newName),
-    pages: renameModelsConfigProviderPage(state.pages, oldName, newName),
-    rawEdit:
-      state.rawEdit && state.rawEdit.providerName === oldName
-        ? { ...state.rawEdit, providerName: newName }
-        : state.rawEdit,
-  });
+  patch({ providerNames: { ...state.providerNames, [oldName]: newName }, savedOk: false });
 }
 
 /** Delete a provider and draw the panel back to the list. */
 export function deleteModelsConfigProvider(name: string): void {
+  const providerNames = { ...state.providerNames };
+  delete providerNames[name];
   patch({
+    providerNames,
     config: withoutProvider(state.config, name),
     pages: createModelsConfigPageStack(),
     rawEdit: null,

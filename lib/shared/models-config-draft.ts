@@ -39,7 +39,7 @@ export interface ModelsConfigRawEdit {
 
 /** The first thing that must be fixed before saving, or null. */
 export type ModelsConfigProblem = {
-  reason: "syntax" | "not-object" | "provider-name";
+  reason: "syntax" | "not-object" | "provider-name" | "provider-name-conflict";
   message: string;
 };
 
