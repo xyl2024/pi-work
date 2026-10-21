@@ -249,6 +249,17 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
   const displayModel = isNew ? newSessionModel : currentModel;
 
+  // Session hydration and the model catalog load independently. loadSession
+  // can have captured an empty catalog even when its response arrives last;
+  // reconcile whenever either the model, its capabilities, or the level changes.
+  const availableThinkingLevels = displayModel
+    ? modelThinkingLevels[`${displayModel.provider}:${displayModel.modelId}`]
+    : undefined;
+  useEffect(() => {
+    const next = pickClosestAvailableThinkingLevel(runtimeState.thinkingLevel, availableThinkingLevels);
+    if (next !== runtimeState.thinkingLevel) setThinkingLevel(next);
+  }, [availableThinkingLevels, runtimeState.thinkingLevel, setThinkingLevel]);
+
   // Input history for the chat input box. Backed by `messages` (which is
   // already populated from the backend .jsonl via loadSession, then kept
   // up to date by setMessages in handleSend + SSE events), so it always
