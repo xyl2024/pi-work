@@ -44,6 +44,10 @@ export const sessions = {
   "Emoji": "表情",
   "No icons match": "没有匹配的图标",
 
+  // Per-cwd default tools
+  "Set default tools": "设置默认工具",
+  "Default tools for this project": "此项目的默认工具",
+
   // Per-cwd display alias
   "Set project alias": "设置项目别名",
   "Leave empty to clear the alias": "留空则清除别名",
