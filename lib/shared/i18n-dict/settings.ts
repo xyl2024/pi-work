@@ -88,7 +88,6 @@ export const settings = {
 
   // File preview size limits (Settings modal + file viewer 413)
   "File preview limits": "文件预览大小",
-  "Maximum file size the preview pane will load. Audio and video are streamed with no size limit.": "文件预览面板能加载的最大文件大小。音频和视频是流式播放，不设上限。",
   "Max size for text / code files": "文本 / 代码文件最大大小",
   "Max size for image files": "图片文件最大大小",
   "Max size for PDF files": "PDF 文件最大大小",
@@ -123,7 +122,6 @@ export const settings = {
 
   // UI sounds
   "UI Sounds": "界面音效",
-  "Pick one of the built-in recipes for each event, or choose None to stay silent. A master volume scales every event.": "为每个事件选择一种内置音效，或选择 None 静音。主音量调节影响所有事件。",
   "Restore sound defaults": "恢复音效默认",
   "Sound defaults restored": "音效默认已恢复",
   "Master volume": "主音量",

@@ -106,10 +106,6 @@ export function SoundSettingsSection({
 
   return (
     <>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
-        {t("Pick one of the built-in recipes for each event, or choose None to stay silent. A master volume scales every event.")}
-      </p>
-
       <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 16 }}>
         {/* Master toggle */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

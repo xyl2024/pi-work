@@ -58,9 +58,6 @@ export function FilePreviewSection({
 
   return (
     <>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px 0", lineHeight: 1.5 }}>
-        {t("Maximum file size the preview pane will load. Audio and video are streamed with no size limit.")}
-      </p>
       {FILE_VIEWER_UI.map(({ kind, labelKey }) => {
         const { min, max } = FILE_VIEWER_LIMITS[kind];
         return (
