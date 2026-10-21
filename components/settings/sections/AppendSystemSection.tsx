@@ -25,10 +25,10 @@ async function loadAppendSystem(): Promise<AppendSystemFile> {
 }
 
 /**
- * Section 3: Append System Prompt (~/.pi/agent/APPEND_SYSTEM.md).
+ * Section 3: System Prompt — two sub-blocks, each with its own loader
+ * toggle:
  *
- * Two independent controls share this section:
- *
+ * **Append System Prompt** (APPEND_SYSTEM.md):
  * 1. **Loader toggle** (immediate-apply via the `apply` prop) — flips
  *    `PiWorkConfig.append_system.enabled`. Changes only take effect on
  *    sessions started AFTER the PUT (rpc-manager reads the flag once
@@ -39,6 +39,11 @@ async function loadAppendSystem(): Promise<AppendSystemFile> {
  *    the content edit are conceptually separate (you can edit the
  *    file while the loader is off; the change just won't take effect
  *    until you turn it back on).
+ *
+ * **Pi documentation**: a loader toggle that flips
+ * `PiWorkConfig.load_pi_docs` (also immediate-apply; rpc-manager strips
+ * pi's built-in documentation block for sessions started after it is
+ * switched off).
  */
 export function AppendSystemSection({
   config,
@@ -104,20 +109,20 @@ export function AppendSystemSection({
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, marginBottom: 4 }}>
-        <UnsavedHint show={appendSystemDirty} />
-        <SaveButton
-          canSave={appendSystemDirty}
-          saving={appendSystemSaving}
-          saved={appendSystemSavedOk}
-          onClick={handleAppendSystemSave}
-        />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: 0 }}>
+          {t("Append System Prompt")}
+        </h4>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <UnsavedHint show={appendSystemDirty} />
+          <SaveButton
+            canSave={appendSystemDirty}
+            saving={appendSystemSaving}
+            saved={appendSystemSavedOk}
+            onClick={handleAppendSystemSave}
+          />
+        </div>
       </div>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 10px 0", lineHeight: 1.5 }}>
-        {config.append_system.enabled
-          ? t("Appended to every new pi session's system prompt. Takes effect on new sessions.")
-          : t("Disabled — new sessions will NOT load this file. Edit and save above to keep the content for when you re-enable it.")}
-      </p>
       {/* APPEND_SYSTEM.md loader toggle — immediate-apply. Independent
           from the Save button above (which only writes file content). */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -154,6 +159,22 @@ export function AppendSystemSection({
         mono
         style={{ height: 220 }}
       />
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+        <h4 style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", margin: "0 0 10px" }}>
+          {t("Pi documentation")}
+        </h4>
+        {/* Pi documentation loader toggle — immediate-apply. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 13, color: "var(--text)" }}>
+            {config.load_pi_docs ? t("Loading on") : t("Loading off")}
+          </span>
+          <ToggleSwitch
+            on={config.load_pi_docs}
+            onChange={(next) => void apply((prev) => ({ ...prev, load_pi_docs: next }))}
+            label={t("Pi documentation")}
+          />
+        </div>
+      </div>
     </>
   );
 }

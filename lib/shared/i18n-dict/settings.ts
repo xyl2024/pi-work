@@ -48,10 +48,9 @@ export const settings = {
   "search": "搜索字符串",
   "replace": "替换为",
 
-  // Append system prompt (~/.pi/agent/APPEND_SYSTEM.md)
+  // System prompt: append file (~/.pi/agent/APPEND_SYSTEM.md) + loader toggles
+  "System Prompt": "系统提示词",
   "Append System Prompt": "追加系统提示词",
-  "Appended to every new pi session's system prompt. Takes effect on new sessions.": "追加到每个新 pi 会话系统提示词的末尾。对新建会话生效。",
-  "Disabled — new sessions will NOT load this file. Edit and save above to keep the content for when you re-enable it.": "已禁用 — 新会话不会加载此文件。仍可在上方编辑保存，以便重新启用时立即生效。",
   "Loading on": "已启用加载",
   "Loading off": "已停用加载",
   "file does not exist yet — saving will create it": "文件尚不存在，保存后将自动创建",
@@ -61,9 +60,6 @@ export const settings = {
 
   // Pi documentation loader toggle (~/.pi-work/config.yaml → load_pi_docs)
   "Pi documentation": "Pi 文档",
-  "Load Pi documentation": "加载 Pi 文档",
-  "Loaded — new sessions include pi's built-in Pi documentation hints. Takes effect on new sessions.": "已启用 — 新建会话会包含 pi 内置的 Pi 文档提示。仅对之后新建的会话生效。",
-  "Disabled — new sessions will not include pi's built-in Pi documentation hints. Takes effect on new sessions.": "已禁用 — 新建会话将不包含 pi 内置的 Pi 文档提示。仅对之后新建的会话生效。",
 
   // Right-side button bar: visibility + order share one list
   "Right-side buttons": "右侧按钮",

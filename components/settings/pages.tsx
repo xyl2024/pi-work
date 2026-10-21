@@ -8,7 +8,6 @@ import type { SettingsApply } from "./use-settings-write";
 import type { DirtyReporter } from "./use-unsaved-changes";
 import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
-import { PiDocumentationSection } from "./sections/PiDocumentationSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
@@ -51,9 +50,6 @@ export const SETTINGS_PAGES = {
       onDirtyChange={reportDirty}
       pageCache={pageCache}
     />
-  ),
-  "pi-documentation": ({ config, apply }) => (
-    <PiDocumentationSection config={config} apply={apply} />
   ),
   subagent: ({ pageCache }) => <SubagentSection pageCache={pageCache} />,
   retry: ({ pageCache }) => <RetrySection pageCache={pageCache} />,
