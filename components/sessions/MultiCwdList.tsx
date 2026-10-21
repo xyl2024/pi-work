@@ -41,8 +41,9 @@ interface MultiCwdListProps {
    *  a fetch is in flight and once every group is loaded. */
   showFallbackLoadMore: boolean;
   workspaceLoadError: string | null;
-  /** cwd → expanded (true) / collapsed (false). Caller owns persistence. */
-  expandedCwds: Record<string, boolean>;
+  /** The single expanded cwd group. Everything else renders folded — the
+   *  accordion keeps the sidebar scannable. Null = all groups folded. */
+  expandedCwd: string | null;
   /** cwd → session loader state */
   perCwdSessions: Record<string, CwdSessionsState>;
   favoriteIds: string[];
@@ -82,7 +83,7 @@ export function MultiCwdList({
   hasMoreWorkspaces,
   showFallbackLoadMore,
   workspaceLoadError,
-  expandedCwds,
+  expandedCwd,
   perCwdSessions,
   favoriteIds,
   selectedSessionId,
@@ -125,9 +126,9 @@ export function MultiCwdList({
       )}
 
       {workspaces.map((ws) => {
-        // Default: every cwd is expanded on first load. localStorage retains
-        // any prior collapsed state — first-writer-wins per cwd.
-        const expanded = expandedCwds[ws.cwd] ?? true;
+        // Accordion: only the active project is expanded by default; every
+        // other cwd stays folded. Clicking a header moves the open slot.
+        const expanded = expandedCwd === ws.cwd;
         const group = perCwdSessions[ws.cwd];
         // 选中的会话若不在 group 已加载页面里，插到第 SESSION_PAGE_SIZE_GROUPED
         // 条之后（页尾），让用户既能看到原本的首屏会话，又能直接定位到选中项。
@@ -456,6 +457,7 @@ function CwdGroup({
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpand(); } }}
+        aria-expanded={expanded}
         style={{
           display: "flex",
           alignItems: "center",

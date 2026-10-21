@@ -145,8 +145,6 @@ function PiAgentTitle() {
   );
 }
 
-const EXPANDED_CWDS_KEY = "pi-work.expandedCwds";
-
 export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, initialSessionId, onInitialRestoreDone, refreshKey, onSessionDeleted, onSessionRenamed, onNewSession, selectedCwd: selectedCwdProp, onOpenFile, explorerRefreshKey, onAtMention, onOpenSearch, onFileDeleted, favoriteIds = [], onToggleFavorite, onOpenSettings, onLogout, profileRefreshKey }: Props) {
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
@@ -191,9 +189,14 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const [loadingMoreWorkspaces, setLoadingMoreWorkspaces] = useState(false);
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [perCwdSessions, setPerCwdSessions] = useState<Record<string, CwdSessionsState>>({});
-  // Expand state for non-active cwds; the active cwd defaults to expanded
-  // when present. Persisted to localStorage.
-  const [expandedCwds, setExpandedCwds] = useState<Record<string, boolean>>({});
+  // Accordion state: at most one cwd group is open. It follows the active
+  // cwd (the one the current session belongs to); every other cwd stays
+  // folded so the sidebar does not turn into a wall of session rows.
+  const [expandedCwd, setExpandedCwd] = useState<string | null>(null);
+  // The project the current chat context points at. `selectedCwd` already
+  // folds in the in-flight new-session cwd, so this covers "no session
+  // picked yet" too.
+  const activeCwd = selectedSession?.cwd ?? selectedCwdProp ?? null;
   const cwdHeaderRefs = useRef<Record<string, HTMLDivElement | null>>({});
   // Ref to the Sessions section's scroll container (owned by SidebarSection).
   // The list pages in on its scroll events. `sessionsScrollEl` mirrors it in
@@ -263,29 +266,13 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     perCwdSessionsRef.current = perCwdSessions;
   }, [perCwdSessions]);
 
-  // Persist expand state to localStorage. Stored as a flat object
-  // { [cwd]: boolean } — last-writer-wins on the cwd key.
+  // Follow the active cwd: switching session / project opens that group and
+  // folds whatever was open before. Runs only when the active cwd changes,
+  // so a manual fold of the active group is not undone.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(EXPANDED_CWDS_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      const cleaned: Record<string, boolean> = {};
-      for (const [k, v] of Object.entries(parsed)) {
-        if (typeof v === "boolean") cleaned[k] = v;
-      }
-      setExpandedCwds(cleaned);
-    } catch {
-      // ignore corrupted entries
-    }
-  }, []);
-  useEffect(() => {
-    try {
-      localStorage.setItem(EXPANDED_CWDS_KEY, JSON.stringify(expandedCwds));
-    } catch {
-      // ignore (private mode / quota)
-    }
-  }, [expandedCwds]);
+    if (!activeCwd) return;
+    setExpandedCwd((prev) => (prev === activeCwd ? prev : activeCwd));
+  }, [activeCwd]);
 
   // Fetch one page of workspaces. Pass `mode: "reset"` to start over
   // (cursor=null, replace list), `mode: "append"` to extend. Aborts any
@@ -347,8 +334,8 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   }, [toast, today]);
 
   // Per-cwd session loader. Used both for the lazy first-page fetch
-  // (mode: "reset") and the "Load more" button (mode: "append"). Reads
-  // `expandedCwds` from state; merged into the existing entry for the cwd.
+  // (mode: "reset") and the "Load more" button (mode: "append"). Merges
+  // into the existing accumulator entry for the cwd.
   const fetchCwdSessions = useCallback(async (
     cwd: string,
     cursor: string | null,
@@ -451,7 +438,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     const cwd = selectedSession?.cwd;
     if (!cwd) return;
 
-    setExpandedCwds((prev) => prev[cwd] === true ? prev : { ...prev, [cwd]: true });
+    setExpandedCwd((prev) => (prev === cwd ? prev : cwd));
     void fetchCwdSessions(cwd, null, "reset");
 
     const frame = requestAnimationFrame(() => {
@@ -518,22 +505,20 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     refreshAll();
   }, [refreshKey, refreshAll]);
 
-  // Auto-load: any cwd that enters the workspaces list AND is currently
-  // expanded (default true) needs its first session page fetched. Tracking
-  // via a ref avoids re-firing on every perCwdSessions tick — the effect
-  // only does real work the first time a cwd appears or its expanded state
-  // flips from false → true.
+  // Auto-load: the one open cwd group needs its first session page fetched.
+  // Tracking via a ref avoids re-firing on every perCwdSessions tick — the
+  // effect only does real work the first time a cwd appears or it becomes
+  // the expanded group.
   useEffect(() => {
     for (const ws of workspaces) {
       if (initializedCwdsRef.current.has(ws.cwd)) continue;
-      const expanded = expandedCwds[ws.cwd] ?? true;
-      if (!expanded) continue;
+      if (expandedCwd !== ws.cwd) continue;
       const state = perCwdSessions[ws.cwd];
       if (state && (state.sessions.length > 0 || state.loading)) continue;
       initializedCwdsRef.current.add(ws.cwd);
       void fetchCwdSessions(ws.cwd, null, "reset");
     }
-  }, [workspaces, expandedCwds, perCwdSessions, fetchCwdSessions]);
+  }, [workspaces, expandedCwd, perCwdSessions, fetchCwdSessions]);
 
   // Merge the shared running-session snapshot into the visible rows. The
   // singleton store owns the only /api/sessions/running poller.
@@ -597,7 +582,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   // Keep the active cwd at the top. Historical-session jumps can target a
   // cwd outside the currently loaded workspace page, so synthesize its row
   // from the selected session until pagination reaches the real aggregate.
-  const activeWorkspace = selectedCwdProp
+  const activeWorkspace = useMemo(() => (selectedCwdProp
     ? workspaces.find((workspace) => workspace.cwd === selectedCwdProp)
       ?? (selectedSession?.cwd === selectedCwdProp
         ? {
@@ -609,10 +594,13 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             latestSessionName: selectedSession.name,
           }
         : null)
-    : null;
-  const orderedWorkspaces = activeWorkspace
-    ? [activeWorkspace, ...workspaces.filter((workspace) => workspace.cwd !== activeWorkspace.cwd)]
-    : workspaces;
+    : null), [selectedCwdProp, workspaces, selectedSession]);
+  const orderedWorkspaces = useMemo(
+    () => (activeWorkspace
+      ? [activeWorkspace, ...workspaces.filter((workspace) => workspace.cwd !== activeWorkspace.cwd)]
+      : workspaces),
+    [activeWorkspace, workspaces],
+  );
 
   // The normal paged list stays intact while today uses a complete snapshot.
   const todayView = useMemo(() => {
@@ -654,18 +642,16 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   }, [todaySessions, today, runningById, selectedCwdProp]);
 
   const toggleExpandCwd = useCallback((cwd: string) => {
-    setExpandedCwds((prev) => {
-      // Every cwd defaults to expanded; if absent in state, treat current
-      // as true then flip.
-      const current = prev[cwd] ?? true;
-      return { ...prev, [cwd]: !current };
-    });
+    // Accordion: opening a group folds the previously open one. Clicking the
+    // open group folds it back, so the sidebar can be reduced to plain
+    // project headers.
+    setExpandedCwd((prev) => (prev === cwd ? null : cwd));
   }, []);
 
   const handleToggleExpand = useCallback((cwd: string) => {
     toggleExpandCwd(cwd);
     // Session loading is handled by the auto-load useEffect above, which
-    // fires whenever expandedCwds changes. No need to trigger here.
+    // fires whenever expandedCwd changes. No need to trigger here.
   }, [toggleExpandCwd]);
 
   const loadMoreCwdSessions = useCallback((cwd: string) => {
@@ -778,7 +764,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     hasMoreWorkspaces,
     // Collapsing every group can make the list unscrollable without a fetch;
     // re-measure then too so the fallback still surfaces.
-    expandedCwds,
+    expandedCwd,
     evaluateChainLoad,
   ]);
 
@@ -970,7 +956,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         hasMoreWorkspaces={!todayOnly && hasMoreWorkspaces}
         showFallbackLoadMore={!todayOnly && showFallbackLoadMore}
         workspaceLoadError={workspaceLoadError}
-        expandedCwds={expandedCwds}
+        expandedCwd={expandedCwd}
         perCwdSessions={todayOnly ? todayView.groups : perCwdSessions}
         favoriteIds={favoriteIds}
         selectedSessionId={selectedSessionId}
