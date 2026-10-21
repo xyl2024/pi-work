@@ -14,8 +14,6 @@ import { CHECK, CHEVRONS_UP } from "@/lib/client/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
 import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "../ui/SidebarSection";
-import { GrokBotStage } from "../grokbot/GrokBotStage";
-import { GrokBotLab } from "../grokbot/GrokBotLab";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { appendSessionDateRange, localSessionDay, matchesSessionDate } from "@/lib/shared/session-date-filter";
 import {
@@ -149,7 +147,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const { byId: runningById } = useRunningSessions();
   const { t } = useI18n();
   const toast = useToast();
-  const [labOpen, setLabOpen] = useState(false);
   const [todayOnly, setTodayOnly] = useState(false);
   const [today, setToday] = useState(() => localSessionDay(new Date()));
   const [todaySessions, setTodaySessions] = useState<SessionInfo[] | null>(null);
@@ -901,10 +898,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         </div>
         </div>
 
-      {/* GrokBot companion — always-on living bot at the top of the sidebar.
-          Click the bot (or the gear) to open the full lab modal. */}
-      <GrokBotStage onOpenLab={() => setLabOpen(true)} />
-
       {/* Sessions section — cwd groups + their sessions. Collapsible via the
           shared SidebarSection (same flex-grow animation as Explorer). */}
       <SidebarSection
@@ -1035,8 +1028,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           refreshKey={profileRefreshKey}
         />
       )}
-
-      {labOpen && <GrokBotLab onClose={() => setLabOpen(false)} />}
 
       {cwdSessionsModalCwd && (
         <CwdSessionsModal
