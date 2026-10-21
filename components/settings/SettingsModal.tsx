@@ -246,7 +246,9 @@ export function SettingsModal({
                         gap: 8,
                         width: "100%",
                         textAlign: "left",
-                        padding: "6px 10px",
+                        // Menu items sit one step in from the group label and
+                        // description, which stay flush with the nav edge.
+                        padding: "6px 10px 6px 18px",
                         marginBottom: 2,
                         background: active ? "var(--bg-selected)" : "transparent",
                         border: "none",
