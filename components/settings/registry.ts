@@ -17,8 +17,6 @@ export interface SettingsGroupSpec {
   id: SettingsGroupId;
   /** i18n key for the group heading in the sidebar. */
   labelKey: string;
-  /** Optional secondary line under the body group heading. */
-  descriptionKey?: string;
   /** Developer/debug group: rendered with secondary visual emphasis. */
   developer?: boolean;
 }
@@ -53,7 +51,6 @@ export const SETTINGS_GROUPS: readonly SettingsGroupSpec[] = [
   {
     id: "developer",
     labelKey: "Developer",
-    descriptionKey: "Debugging helpers. Not needed for normal use.",
     developer: true,
   },
 ];

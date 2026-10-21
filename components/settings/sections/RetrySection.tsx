@@ -6,6 +6,7 @@ import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useToast } from "@/components/ui/Toast";
 import { RetryNumberRow } from "../rows";
 import { SecondaryButton } from "../controls";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import {
   DEFAULT_AGENT_RETRY,
   RETRY_LIMITS,
@@ -29,8 +30,7 @@ async function loadRetryConfig(): Promise<AgentRetryConfig> {
  * Independent state machine — the retry config lives in the pi SDK's
  * settings.json, NOT in ~/.pi-work/config.yaml. Reads/writes go
  * through /api/agent-settings/retry, and the SDK picks up the change
- * only at session start (so the section's help text reminds the user
- * "applies to new sessions only").
+ * only at session start.
  *
  * Each RetryNumberRow owns its own draft + range validation; on
  * commit we PUT through `pushRetry` which preserves any unset
@@ -178,10 +178,6 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
           <span>{retryResetOk ? t("Saved") : t("Reset to defaults")}</span>
         </SecondaryButton>
       </div>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0", lineHeight: 1.5 }}>
-        {t("Auto-retry on transient LLM errors (overloaded, rate limit, 5xx, stream breaks). Takes effect on new sessions only.")}
-      </p>
-
       {retryLoading ? (
         <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("Loading...")}</div>
       ) : !retryConfig ? (
@@ -189,15 +185,14 @@ export function RetrySection({ pageCache }: { pageCache: SettingsPageDataCache }
       ) : (
         <>
           {/* Master toggle */}
-          <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={retryConfig.enabled}
-              onChange={(e) => void handleRetryEnabledChange(e.target.checked)}
-              style={{ width: 16, height: 16, cursor: "pointer" }}
-            />
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
             <span style={{ fontSize: 13, color: "var(--text)" }}>{t("Enable retry")}</span>
-          </label>
+            <ToggleSwitch
+              on={retryConfig.enabled}
+              onChange={(next) => void handleRetryEnabledChange(next)}
+              label={t("Enable retry")}
+            />
+          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 12 }}>
             <RetryNumberRow

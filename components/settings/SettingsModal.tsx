@@ -219,18 +219,6 @@ export function SettingsModal({
                 >
                   {t(group.labelKey)}
                 </div>
-                {group.descriptionKey && (
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: "var(--text-dim)",
-                      padding: "0 10px 4px",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {t(group.descriptionKey)}
-                  </div>
-                )}
                 {sectionsForGroup(group.id).map((section) => {
                   const active = activeSectionId === section.id;
                   const dirtyDot = selectIsDirty(unsaved, section.id);

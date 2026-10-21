@@ -11,7 +11,6 @@ export const settings = {
   "Agent": "Agent",
   "Integrations & network": "集成与网络",
   "Developer": "开发者",
-  "Debugging helpers. Not needed for normal use.": "调试辅助工具，日常使用不需要。",
   "System Prompt Replacements": "系统提示词替换",
   "Replace literal strings in the system prompt. Changes take effect on new sessions. Existing sessions are unaffected.": "替换系统提示词中的字面量字符串。对新建会话生效，已有会话不受影响。",
   "Enable replacements": "启用替换",
@@ -102,8 +101,6 @@ export const settings = {
   // button label untouched.
   "Agent retry": "异常重试",
   "Enable retry": "启用重试",
-  "Auto-retry on transient LLM errors (overloaded, rate limit, 5xx, stream breaks). Takes effect on new sessions only.":
-    "对临时性 LLM 错误（过载、限流、5xx、流中断）自动重试。只对新会话生效。",
   "Max retries": "最大重试次数",
   "Base delay (ms)": "退避基数（毫秒）",
   "Provider retry settings (advanced)": "Provider 层重试（高级）",
@@ -143,8 +140,6 @@ export const settings = {
 
   // Network proxy (~/.pi-work/config.yaml → network_proxy)
   "Network proxy": "网络代理",
-  "Route every outbound server request — model calls, GitHub Trending — through an HTTP proxy. Takes effect immediately, no restart needed.":
-    "服务端所有对外请求（模型调用、GitHub Trending 等）都走这个 HTTP 代理。保存后立即生效，无需重启。",
   "Use proxy": "启用代理",
   "Enter a proxy address first — it is required to enable or test the proxy.":
     "请先填写代理地址 —— 启用和测试都需要它。",

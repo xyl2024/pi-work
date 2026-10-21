@@ -11,8 +11,6 @@ export const toast = {
   "Toast Test": "通知测试",
 
   // Settings → Toast Test section
-  "Preview each toast kind, custom duration, description, and action button directly without firing any backend request.":
-    "直接预览每种通知样式、自定义时长、描述和操作按钮，无需后端接口。",
   "Kind": "类型",
   "success": "成功",
   "error": "失败",

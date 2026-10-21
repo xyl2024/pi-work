@@ -5,6 +5,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { SecondaryButton, TextInput } from "../controls";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { ALWAYS_BYPASS_HOSTS, type PiWorkConfig } from "@/lib/shared/config-types";
 import type { DirtyReporter } from "../use-unsaved-changes";
 
@@ -27,7 +28,7 @@ interface ProbeResult {
  * - The address field comes *first*: everything else is unusable without it,
  *   and a wall of disabled controls with no visible cause is worse than an
  *   empty field with an explicit hint.
- * - The enable checkbox is clickable as soon as an address exists *anywhere*
+ * - The enable switch is usable as soon as an address exists *anywhere*
  *   (saved or still in the draft) — pressing it persists the draft and flips
  *   the switch in one write. Requiring "Save" first read as a dead control.
  * - "Test connection" always probes the draft, so an address can be verified
@@ -128,10 +129,6 @@ export function NetworkProxySection({
 
   return (
     <>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 12px", lineHeight: 1.5 }}>
-        {t("Route every outbound server request — model calls, GitHub Trending — through an HTTP proxy. Takes effect immediately, no restart needed.")}
-      </p>
-
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <label htmlFor="network-proxy-url" style={{ fontSize: 12, color: "var(--text-muted)" }}>
           {t("Proxy address")}
@@ -166,15 +163,15 @@ export function NetworkProxySection({
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 14, flexWrap: "wrap" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text)" }}>
-          <input
-            type="checkbox"
-            checked={saved.enabled}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "var(--text)" }}>
+          <span>{t("Use proxy")}</span>
+          <ToggleSwitch
+            on={saved.enabled}
             disabled={!canUseProxy}
             onChange={() => persist(!saved.enabled)}
+            label={t("Use proxy")}
           />
-          {t("Use proxy")}
-        </label>
+        </div>
 
         <SaveButton
           canSave={dirty}

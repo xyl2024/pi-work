@@ -143,10 +143,6 @@ export function ToastTestSection() {
 
   return (
     <>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 14px 0", lineHeight: 1.5 }}>
-        {t("Preview each toast kind, custom duration, description, and action button directly without firing any backend request.")}
-      </p>
-
       {/* ── Kind selector ─────────────────────────────────────────── */}
       <div style={{ fontSize: 12, color: "var(--text-muted)", margin: "0 0 6px 0" }}>
         {t("Kind")}
