@@ -1,14 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SessionTreeNode } from "@/lib/shared/types";
 import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
 import { ConversationTreeCard } from "./ConversationTreeCard";
 import { BranchMessageViewer } from "./BranchMessageViewer";
+import { IconButton } from "../ui/IconButton";
+import { MaximizeIcon as FitIcon, MinusIcon, PlusIcon } from "../ui/icons";
 import { buildConversationTree } from "@/lib/shared/buildConversationTree";
 import { layoutConversationTree } from "@/lib/shared/conversationTreeLayout";
 import type { LayoutCard } from "@/lib/shared/conversationTreeLayout";
+import {
+  clampCanvasScale,
+  computeZoomAnchor,
+  DEFAULT_CANVAS_SCALE,
+  fitCanvasScale,
+  MAX_CANVAS_SCALE,
+  MIN_CANVAS_SCALE,
+  scrollForAnchor,
+  type ZoomAnchor,
+} from "@/lib/shared/canvasZoom";
 import {
   hashString,
   roughPolyline,
@@ -21,7 +33,11 @@ const CARD_W = 200;
 const CARD_H = 64;
 const COL_GAP = 72;
 const ROW_GAP = 54;
-const SCALE = 0.85;
+
+/** Canvas padding around the tree, in unscaled pixels. */
+const PAD = 24;
+/** Multiplier per zoom button click. */
+const ZOOM_STEP = 1.2;
 
 function formatRoundLabel(
   stats: { thinking: number; toolCalls: number },
@@ -100,9 +116,140 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
   }, [layout.cards]);
   const hoveredRef = useRef<LayoutCard | null>(null);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const colPitch = CARD_W + COL_GAP;
+  const rowPitch = CARD_H + ROW_GAP;
+  const totalWidth = layout.widthCols * colPitch - COL_GAP;
+  const totalHeight = layout.heightRows * rowPitch - ROW_GAP;
+  // Canvas size in unscaled pixels, padding included.
+  const canvasW = totalWidth + PAD * 2;
+  const canvasH = totalHeight + PAD * 2;
+
+  // ---- Canvas zoom ---------------------------------------------------
+  // `scale` is the live zoom. `scaleRef` mirrors it so native wheel
+  // handlers and burst events (several wheel ticks before React commits)
+  // always read the latest value.
+  const [scale, setScale] = useState(DEFAULT_CANVAS_SCALE);
+  const scaleRef = useRef(scale);
+  // Set right before a scale change; applied in useLayoutEffect once the
+  // scaled canvas has its new size, so the point under the cursor stays put.
+  const pendingAnchor = useRef<ZoomAnchor | null>(null);
+
+  const applyScale = useCallback((next: number, pointer?: { x: number; y: number }) => {
+    const clamped = clampCanvasScale(next);
+    const prev = scaleRef.current;
+    if (Math.abs(clamped - prev) < 0.0001) return;
+    const el = scrollRef.current;
+    if (!el) {
+      scaleRef.current = clamped;
+      setScale(clamped);
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    pendingAnchor.current = computeZoomAnchor({
+      currentScale: prev,
+      scroll: { left: el.scrollLeft, top: el.scrollTop },
+      viewport: { width: el.clientWidth, height: el.clientHeight },
+      pointer: pointer ? { x: pointer.x - rect.left, y: pointer.y - rect.top } : undefined,
+      pending: pendingAnchor.current,
+    });
+    scaleRef.current = clamped;
+    setScale(clamped);
+  }, []);
+
+  useLayoutEffect(() => {
+    const anchor = pendingAnchor.current;
+    const el = scrollRef.current;
+    if (!anchor || !el) return;
+    pendingAnchor.current = null;
+    const scroll = scrollForAnchor(anchor, scale);
+    el.scrollLeft = scroll.left;
+    el.scrollTop = scroll.top;
+  }, [scale]);
+
+  /** Zoom the whole canvas so it fits the viewport, then reset the scroll. */
+  const fitToView = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const next = fitCanvasScale(
+      { width: canvasW, height: canvasH },
+      { width: el.clientWidth, height: el.clientHeight },
+    );
+    if (Math.abs(next - scaleRef.current) < 0.0001) {
+      el.scrollTo({ left: 0, top: 0 });
+      return;
+    }
+    scaleRef.current = next;
+    // Anchor at the canvas origin so the fitted view starts at the top-left.
+    pendingAnchor.current = { contentX: 0, contentY: 0, mx: 0, my: 0 };
+    setScale(next);
+  }, [canvasW, canvasH]);
+
+  // Ctrl/Cmd + wheel zooms toward the pointer. Registered natively because
+  // React's `onWheel` is passive at the root, so preventDefault() (needed to
+  // stop the browser's page zoom) would be ignored.
+  const cardCount = layout.cards.length;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      // deltaMode: 0 = pixels, 1 = lines, 2 = pages.
+      const unit =
+        event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? el.clientHeight : 1;
+      const factor = Math.exp(-event.deltaY * unit * 0.0015);
+      applyScale(scaleRef.current * factor, { x: event.clientX, y: event.clientY });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [applyScale, cardCount]);
+
+  // Drag anywhere on the canvas background to pan (cards keep their own
+  // click behavior). Pointer capture keeps the drag alive outside the panel.
+  const panRef = useRef<{
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null>(null);
+  const [panning, setPanning] = useState(false);
+
+  const handlePanStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    // Leave touch scrolling to the browser.
+    if (event.pointerType === "touch") return;
+    const el = scrollRef.current;
+    if (!el) return;
+    // Let cards handle their own pointer events.
+    if ((event.target as HTMLElement).closest("[data-card-id]")) return;
+    panRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: el.scrollLeft,
+      scrollTop: el.scrollTop,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setPanning(true);
+  };
+  const handlePanMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    const el = scrollRef.current;
+    if (!pan || !el) return;
+    el.scrollLeft = pan.scrollLeft - (event.clientX - pan.startX);
+    el.scrollTop = pan.scrollTop - (event.clientY - pan.startY);
+  };
+  const handlePanEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    panRef.current = null;
+    setPanning(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
   // Auto-follow: scroll the panel to keep the latest active card visible
   // while streaming, and only when the active leaf is the deepest one.
-  const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!isStreaming) return;
     if (!branchActiveLeafId) return;
@@ -153,38 +300,46 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
     );
   }
 
-  const colPitch = CARD_W + COL_GAP;
-  const rowPitch = CARD_H + ROW_GAP;
-  const totalWidth = layout.widthCols * colPitch - COL_GAP;
-  const totalHeight = layout.heightRows * rowPitch - ROW_GAP;
-
   // Build the SVG path for each edge.
   return (
-    <div
-      ref={scrollRef}
-      style={{
-        height: "100%",
-        overflow: "auto",
-        position: "relative",
-        // Faint dot grid — the sketch pad the tree is drawn on.
-        backgroundColor: "var(--bg)",
-        backgroundImage:
-          "radial-gradient(color-mix(in srgb, var(--text-dim) 22%, transparent) 0.7px, transparent 0.8px)",
-        backgroundSize: "18px 18px",
-      }}
-    >
+    <div style={{ height: "100%", position: "relative", overflow: "hidden" }}>
       <div
+        ref={scrollRef}
+        onPointerDown={handlePanStart}
+        onPointerMove={handlePanMove}
+        onPointerUp={handlePanEnd}
+        onPointerCancel={handlePanEnd}
         style={{
-          // The transformed inner container — origin top-left so the
-          // page-level header (if any wraps this panel) doesn't get
-          // scaled with the tree.
-          transform: `scale(${SCALE})`,
-          transformOrigin: "top left",
-          width: totalWidth,
-          height: totalHeight,
-          padding: "24px 24px 48px 24px",
+          height: "100%",
+          overflow: "auto",
+          position: "relative",
+          cursor: panning ? "grabbing" : "grab",
+          userSelect: panning ? "none" : undefined,
+          // Faint dot grid — the sketch pad the tree is drawn on.
+          backgroundColor: "var(--bg)",
+          backgroundImage:
+            "radial-gradient(color-mix(in srgb, var(--text-dim) 22%, transparent) 0.7px, transparent 0.8px)",
+          backgroundSize: "18px 18px",
         }}
       >
+        {/* In-flow spacer: gives the scroll container the *scaled* canvas
+            footprint so the scrollbars track the zoom level. */}
+        <div aria-hidden style={{ width: canvasW * scale, height: canvasH * scale }} />
+        {/* Canvas layer: unscaled size, visually zoomed by the transform.
+            Out of flow so the spacer above alone decides the scroll extent. */}
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+            width: canvasW,
+            height: canvasH,
+            padding: PAD,
+            boxSizing: "border-box",
+          }}
+        >
         <div
           style={{
             position: "relative",
@@ -359,6 +514,68 @@ export function ConversationTreePanel({ isStreaming, agentRunning, onCardClick }
             );
           })}
         </div>
+        </div>
+      </div>
+      {/* Zoom controls, pinned to the panel (not the scrolling canvas). */}
+      <div
+        style={{
+          position: "absolute",
+          right: 10,
+          bottom: 10,
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          padding: 3,
+          borderRadius: 999,
+          background: "color-mix(in srgb, var(--bg-panel) 92%, transparent)",
+          border: "1px solid var(--border)",
+          boxShadow: "0 2px 10px color-mix(in srgb, #000 16%, transparent)",
+          backdropFilter: "blur(6px)",
+          zIndex: 4,
+        }}
+      >
+        <IconButton
+          label={t("Zoom out")}
+          size="xs"
+          disabled={scale <= MIN_CANVAS_SCALE + 1e-6}
+          onClick={() => applyScale(scaleRef.current / ZOOM_STEP)}
+        >
+          <MinusIcon />
+        </IconButton>
+        <button
+          type="button"
+          onClick={() => applyScale(1)}
+          title={t("Reset zoom to 100%")}
+          style={{
+            minWidth: 40,
+            padding: "2px 4px",
+            background: "transparent",
+            border: "none",
+            borderRadius: 4,
+            color: "var(--text-muted)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            lineHeight: 1,
+            cursor: "pointer",
+          }}
+        >
+          {Math.round(scale * 100)}%
+        </button>
+        <IconButton
+          label={t("Zoom in")}
+          size="xs"
+          disabled={scale >= MAX_CANVAS_SCALE - 1e-6}
+          onClick={() => applyScale(scaleRef.current * ZOOM_STEP)}
+        >
+          <PlusIcon />
+        </IconButton>
+        <span
+          aria-hidden
+          style={{ width: 1, height: 14, background: "var(--border)", margin: "0 2px" }}
+        />
+        <IconButton label={t("Fit to view")} size="xs" onClick={fitToView}>
+          <FitIcon />
+        </IconButton>
       </div>
       {zoomEntryId && (
         <BranchMessageViewer
