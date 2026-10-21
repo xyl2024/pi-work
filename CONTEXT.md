@@ -178,10 +178,6 @@ _Avoid_: 把 pi 列出来的 `firstMessage` 占位串 `(no messages)` 当标题�
 用户标记的会话，保存在 `favorites.json` 的 sessionIds 中。
 _Avoid_: 用它指代工作目录
 
-**今日会话（Today's sessions）**：
-侧栏里把「最后活动时间落在本地当日」的会话扁平列出的一个视图，与「会话」区的 cwd 分组重复呈现。
-_Avoid_: 把它当作新实体、新分组或「今天创建」的会话（口径是最后活动时间，不是创建时间）
-
 ### 子代理
 
 **子代理（Subagent）**：

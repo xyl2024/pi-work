@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { SessionInfo } from "@/lib/shared/types";
 import { SESSION_ROW_HEIGHT_PX } from "@/lib/shared/sidebar-section";
-import { sessionTimeLabel } from "@/lib/shared/session-today";
+import { sessionTimeLabel } from "@/lib/shared/session-time";
 import { sessionDisplayTitle } from "@/lib/shared/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
@@ -202,10 +202,8 @@ export function SessionItem({
   }, []);
 
   // Fixed-height outer wrapper — content swaps in place so the list never reflows.
-  // The height comes from the shared sidebar-section module so the "N rows"
-  // cap in TodaySessionsList and the real row height cannot drift apart; the
-  // 24px "..." trigger and 28px delete/rename controls still fit and stay
-  // vertically centered.
+  // The shared row height fits the 24px "..." trigger and 28px delete/rename
+  // controls while keeping them vertically centered.
   const ITEM_HEIGHT = SESSION_ROW_HEIGHT_PX;
 
   // Selected / hover visual is now purely a background tint — no border ring,

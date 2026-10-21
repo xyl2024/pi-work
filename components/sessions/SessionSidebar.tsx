@@ -12,7 +12,6 @@ import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { RefreshIconButton } from "../ui/RefreshIconButton";
 import { CHECK, CHEVRONS_UP } from "@/lib/client/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
-import { TodaySessionsList } from "./TodaySessionsList";
 import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "../ui/SidebarSection";
 import { GrokBotStage } from "../grokbot/GrokBotStage";
@@ -28,11 +27,6 @@ import {
   refreshLimit,
   showChainFallback,
 } from "@/lib/shared/sidebar-paging";
-import {
-  TODAY_MIN_ROWS,
-  TODAY_VISIBLE_ROWS,
-  sidebarListHeightPx,
-} from "@/lib/shared/sidebar-section";
 
 interface Props {
   selectedSession?: SessionInfo | null;
@@ -200,12 +194,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const workspaceFetchInFlightRef = useRef(false);
 
   const [sessionsOpen, setSessionsOpen] = useState(true);
-  const [todayOpen, setTodayOpen] = useState(true);
-  const [todayRefreshSignal, setTodayRefreshSignal] = useState(0);
-  // Today's session count, reported by TodaySessionsList for the section
-  // header. null until the first successful load, so the header shows no
-  // count rather than a misleading (0).
-  const [todayCount, setTodayCount] = useState<number | null>(null);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [explorerKey, setExplorerKey] = useState(0);
   const [explorerCollapseKey, setExplorerCollapseKey] = useState(0);
@@ -832,43 +820,6 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       {/* GrokBot companion — always-on living bot at the top of the sidebar.
           Click the bot (or the gear) to open the full lab modal. */}
       <GrokBotStage onOpenLab={() => setLabOpen(true)} />
-
-      {/* Today's sessions — a flat, time-windowed view over the same rows
-          the grouped Sessions section below renders. Intrinsically sized
-          (grow: 0), capped by visible rows (not a viewport percentage) so a
-          light day doesn't reserve blank space and a heavy day scrolls inside
-          its cap. It is also the first section to give up height when the
-          column runs short: minHeight keeps it from collapsing below one row
-          while the Sessions list and Explorer keep their space. keepMounted
-          keeps the list (and its already-loaded rows) alive across toggles so
-          collapsing / expanding never replays the fetch. */}
-      <SidebarSection
-        title={todayCount === null ? t("Today's Sessions") : `${t("Today's Sessions")} (${todayCount})`}
-        open={todayOpen}
-        onToggle={() => setTodayOpen((v) => !v)}
-        grow={0}
-        maxHeight={sidebarListHeightPx(TODAY_VISIBLE_ROWS)}
-        minHeight={sidebarListHeightPx(TODAY_MIN_ROWS)}
-        keepMounted
-        actions={
-          <RefreshIconButton
-            onClick={() => setTodayRefreshSignal((n) => n + 1)}
-            label={t("Refresh today's sessions")}
-          />
-        }
-      >
-        <TodaySessionsList
-          selectedSessionId={selectedSessionId}
-          onSelectSession={onSelectSession}
-          favoriteIds={favoriteIds}
-          onToggleFavorite={onToggleFavorite}
-          onSessionRenamed={handleSessionRenamed}
-          onSessionDeleted={handleSessionDeleted}
-          refreshKey={refreshKey}
-          refreshSignal={todayRefreshSignal}
-          onCountChange={setTodayCount}
-        />
-      </SidebarSection>
 
       {/* Sessions section — cwd groups + their sessions. Collapsible via the
           shared SidebarSection (same flex-grow animation as Explorer). */}
