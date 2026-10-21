@@ -528,6 +528,32 @@ summary::-webkit-details-marker {
   color: var(--text);
 }
 
+/* Expand-by-page controls live on the summary row and only surface while the
+   row is hovered or keyboard-focused. Hidden controls neither take clicks nor
+   swallow the row toggle; they keep their layout space so the summary text
+   never shifts. Touch devices have no hover, so they are always shown there. */
+.process-fold-actions {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+.process-summary:hover .process-fold-actions,
+.process-summary:focus-within .process-fold-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .process-fold-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .process-fold-actions {
+    transition: none;
+  }
+}
+
 /* File viewer markdown preview — larger headings */
 .markdown-file-preview h1 { font-size: 1.8em; }
 .markdown-file-preview h2 { font-size: 1.4em; }

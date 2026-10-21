@@ -284,6 +284,12 @@ export const chat = {
   "Subagent running": "子代理运行中",
   "Waiting for subagent session…": "等待子会话启动…",
   "{n} messages": "{n} 条消息",
+  // Turn process fold: the summary row's expand-by-page controls. The page
+  // size is a constant (`PROCESS_FOLD_PAGE`), so only the count is in the copy.
+  "{n} / {total} messages": "{n} / {total} 条消息",
+  "Expand last {n}": "展开最后 {n} 条",
+  "Expand next {n}": "再展开 {n} 条",
+  "Expand remaining {n}": "展开剩余 {n} 条",
   "{n} files read": "已读 {n} 个文件",
   "Model {m}": "模型 {m}",
   "Elapsed {t}": "已运行 {t}",

@@ -1094,32 +1094,39 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                   streamingTurnDiffStats = turnDiffStats;
                 }
 
-                const processChildren = (
+                // Each process row travels with its own tool-call tally, so
+                // the fold group can both slice the rows by page and summarise
+                // only the window it currently shows. While the turn is still
+                // streaming the rows render inline instead (no fold group).
+                const renderProcessNode = (i: number) => (
                   <Fragment>
-                    {visibleProcessIndices.map((i) => (
-                      <Fragment key={`proc-${i}`}>
-                        {maybeDivider(i)}
-                        {renderOne(i, {
-                          keySuffix: "process",
-                          inStreamingViewport: isCurrentTurnInProgress,
-                        })}
-                      </Fragment>
-                    ))}
+                    {maybeDivider(i)}
+                    {renderOne(i, {
+                      keySuffix: "process",
+                      inStreamingViewport: isCurrentTurnInProgress,
+                    })}
                   </Fragment>
                 );
 
                 if (processCount > 0) {
                   if (isCurrentTurnInProgress) {
-                    streamingRendered.push(<Fragment key={`process-${userIdx}`}>{processChildren}</Fragment>);
+                    streamingRendered.push(
+                      <Fragment key={`process-${userIdx}`}>
+                        {visibleProcessIndices.map((i) => (
+                          <Fragment key={`proc-${i}`}>{renderProcessNode(i)}</Fragment>
+                        ))}
+                      </Fragment>,
+                    );
                   } else {
                     rendered.push(
                       <ProcessDetailsGroup
                         key={`process-${userIdx}`}
-                        messageCount={processCount}
-                        toolCallCounts={countToolCallsByName(renderMessages, visibleProcessIndices, [])}
-                      >
-                        {processChildren}
-                      </ProcessDetailsGroup>,
+                        items={visibleProcessIndices.map((i) => ({
+                          key: `proc-${i}`,
+                          toolCalls: countToolCallsByName(renderMessages, [i], []),
+                          node: renderProcessNode(i),
+                        }))}
+                      />,
                     );
                   }
                 }
