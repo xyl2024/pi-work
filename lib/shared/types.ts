@@ -435,6 +435,10 @@ export interface Workspace {
 
 export interface WorkspacesResponse {
   workspaces: Workspace[];
+  /** Matching visible sessions across all workspaces, before pagination. */
+  totalSessions?: number;
+  /** Full browser-local today snapshot, included when day boundaries are requested. */
+  todaySessions?: SessionInfo[];
   /** base64url({lastUsed, cwd}) — opaque cursor; null means "no more" */
   nextCursor: string | null;
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { matchesSessionDate, parseSessionDateRange } from "@/lib/shared/session-date-filter";
 import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { listRunningRpcSessions } from "@/lib/server/rpc-manager";
 import { listSubagentChildSessionIds } from "@/lib/server/subagent-store";
@@ -39,7 +40,11 @@ function decodeCursor(raw: string): Cursor | null {
  *              The next page starts strictly AFTER this point (both fields
  *              must be strictly less, ordered by lastUsed desc then cwd asc).
  *
- * Response: { workspaces: Workspace[], nextCursor: string | null }
+ *   - `todayFrom` / `todayBefore`: optional browser-local day boundaries.
+ *     Adds all matching visible `todaySessions` alongside the normal page,
+ *     so toggling the sidebar filter needs no additional requests.
+ *
+ * Response: { workspaces: Workspace[], nextCursor: string | null, todaySessions? }
  *
  * Sort order: lastUsed desc — i.e. cwd whose newest session was touched
  * most recently comes first. The active-cwd pin is applied by the client.
@@ -47,6 +52,11 @@ function decodeCursor(raw: string): Cursor | null {
 export async function GET(request: Request) {
   const startedAt = Date.now();
   const url = new URL(request.url);
+  const dateRange = parseSessionDateRange(url.searchParams);
+  const todayRange = parseSessionDateRange(url.searchParams, "today");
+  if (dateRange === undefined || todayRange === undefined) {
+    return NextResponse.json({ error: "Invalid session date range" }, { status: 400 });
+  }
   const limitRaw = url.searchParams.get("limit");
   const cursorRaw = url.searchParams.get("cursor");
   const limit = limitRaw === "all"
@@ -66,7 +76,8 @@ export async function GET(request: Request) {
     // for the field-precision trade-offs vs. the full scan.
     const allSessions = await listAllSessionsHeaderOnly();
     const subagentIds = new Set(listSubagentChildSessionIds());
-    const all = allSessions.filter((session) => !subagentIds.has(session.id));
+    const all = allSessions.filter((session) =>
+      !!session.cwd && !subagentIds.has(session.id) && matchesSessionDate(session.modified, dateRange));
 
     // Group by cwd, picking the most-recently-modified session as the
     // aggregate "lastUsed" + tooltip source. Empty cwd strings are skipped
@@ -88,8 +99,10 @@ export async function GET(request: Request) {
     const cwdBySessionId = new Map<string, string>();
     for (const s of all) if (s.cwd) cwdBySessionId.set(s.id, s.cwd);
     const runningByCwd = new Map<string, number>();
+    const runningIds = new Set<string>();
     for (const { id, running } of listRunningRpcSessions()) {
       if (!running) continue;
+      runningIds.add(id);
       const cwd = cwdBySessionId.get(id);
       if (!cwd) continue;
       runningByCwd.set(cwd, (runningByCwd.get(cwd) ?? 0) + 1);
@@ -139,6 +152,12 @@ export async function GET(request: Request) {
     const response: WorkspacesResponse = {
       workspaces: page,
       nextCursor,
+      totalSessions: all.length,
+      ...(todayRange ? {
+        todaySessions: all
+          .filter((session) => matchesSessionDate(session.modified, todayRange))
+          .map((session) => ({ ...session, running: runningIds.has(session.id) })),
+      } : {}),
     };
 
     log.info("list workspaces completed", {

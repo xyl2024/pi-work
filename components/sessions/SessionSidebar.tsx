@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import type { SessionInfo, Workspace, WorkspacesResponse } from "@/lib/shared/types";
 import { FileExplorer } from "../files/FileExplorer";
 import { notifyMutated } from "@/lib/client/git-status-store";
@@ -17,6 +17,7 @@ import { SidebarSection } from "../ui/SidebarSection";
 import { GrokBotStage } from "../grokbot/GrokBotStage";
 import { GrokBotLab } from "../grokbot/GrokBotLab";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
+import { appendSessionDateRange, localSessionDay, matchesSessionDate } from "@/lib/shared/session-date-filter";
 import {
   SESSION_PAGE_SIZE_GROUPED,
   SIDEBAR_LOAD_MORE_THRESHOLD_PX,
@@ -151,6 +152,31 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   const { t } = useI18n();
   const toast = useToast();
   const [labOpen, setLabOpen] = useState(false);
+  const [todayOnly, setTodayOnly] = useState(false);
+  const [today, setToday] = useState(() => localSessionDay(new Date()));
+  const [todaySessions, setTodaySessions] = useState<SessionInfo[] | null>(null);
+  const dateRange = todayOnly ? today : null;
+  const cwdAbortRefs = useRef(new Map<string, AbortController>());
+  const initializedCwdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const update = () => {
+      const now = new Date();
+      const next = localSessionDay(now);
+      setToday((prev) => prev.from === next.from && prev.before === next.before ? prev : next);
+      clearTimeout(timer);
+      timer = setTimeout(update, Math.max(1, next.before - now.getTime()));
+    };
+    update();
+    window.addEventListener("focus", update);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("focus", update);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, []);
   // Cwd whose paged-search modal is currently open. Null when no modal
   // is showing. The "View more sessions" affordance on each cwd group
   // header sets this; the modal closes by setting it back to null.
@@ -283,11 +309,14 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     try {
       const params = new URLSearchParams();
       params.set("limit", String(limitOverride ?? WORKSPACE_PAGE_SIZE));
+      // Cache the complete today subset alongside a normal workspace page.
+      if (mode === "reset") appendSessionDateRange(params, today, "today");
       if (cursor) params.set("cursor", cursor);
       const res = await fetch(`/api/workspaces?${params.toString()}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as WorkspacesResponse;
       if (controller.signal.aborted) return;
+      if (data.todaySessions) setTodaySessions(data.todaySessions);
       if (mode === "reset") {
         setWorkspaces(data.workspaces);
       } else {
@@ -315,7 +344,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         else setLoadingMoreWorkspaces(false);
       }
     }
-  }, [toast]);
+  }, [toast, today]);
 
   // Per-cwd session loader. Used both for the lazy first-page fetch
   // (mode: "reset") and the "Load more" button (mode: "append"). Reads
@@ -326,6 +355,9 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     mode: "reset" | "append",
     limitOverride?: number,
   ) => {
+    cwdAbortRefs.current.get(cwd)?.abort();
+    const controller = new AbortController();
+    cwdAbortRefs.current.set(cwd, controller);
     setPerCwdSessions((prev) => {
       const existing = prev[cwd];
       const base: CwdSessionsState = existing ?? {
@@ -357,9 +389,10 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       params.set("cwd", cwd);
       params.set("limit", String(limitOverride ?? SESSION_PAGE_SIZE_GROUPED));
       if (cursor) params.set("cursor", cursor);
-      const res = await fetch(`/api/sessions?${params.toString()}`);
+      const res = await fetch(`/api/sessions?${params.toString()}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = (await res.json()) as { sessions: SessionInfo[]; nextCursor: string | null };
+      if (controller.signal.aborted) return;
       setPerCwdSessions((prev) => {
         const existing = prev[cwd];
         const base: CwdSessionsState = existing ?? {
@@ -386,6 +419,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         };
       });
     } catch (e) {
+      if (controller.signal.aborted) return;
       const msg = e instanceof Error ? e.message : String(e);
       setPerCwdSessions((prev) => {
         const existing = prev[cwd];
@@ -395,7 +429,18 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
           [cwd]: { ...existing, loading: false, loadingMore: false, loadError: msg },
         };
       });
+    } finally {
+      if (cwdAbortRefs.current.get(cwd) === controller) cwdAbortRefs.current.delete(cwd);
     }
+  }, []);
+
+  useEffect(() => {
+    const controllers = cwdAbortRefs.current;
+    return () => {
+      workspaceAbortRef.current?.abort();
+      for (const controller of controllers.values()) controller.abort();
+      controllers.clear();
+    };
   }, []);
 
   // Synchronize historical-session selection with the sidebar: reveal the
@@ -478,15 +523,14 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   // via a ref avoids re-firing on every perCwdSessions tick — the effect
   // only does real work the first time a cwd appears or its expanded state
   // flips from false → true.
-  const initializedCwdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     for (const ws of workspaces) {
       if (initializedCwdsRef.current.has(ws.cwd)) continue;
-      initializedCwdsRef.current.add(ws.cwd);
       const expanded = expandedCwds[ws.cwd] ?? true;
       if (!expanded) continue;
       const state = perCwdSessions[ws.cwd];
       if (state && (state.sessions.length > 0 || state.loading)) continue;
+      initializedCwdsRef.current.add(ws.cwd);
       void fetchCwdSessions(ws.cwd, null, "reset");
     }
   }, [workspaces, expandedCwds, perCwdSessions, fetchCwdSessions]);
@@ -570,6 +614,45 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     ? [activeWorkspace, ...workspaces.filter((workspace) => workspace.cwd !== activeWorkspace.cwd)]
     : workspaces;
 
+  // The normal paged list stays intact while today uses a complete snapshot.
+  const todayView = useMemo(() => {
+    const groups: Record<string, CwdSessionsState> = {};
+    const byCwd = new Map<string, Workspace>();
+    let count = 0;
+    const sessions = (todaySessions ?? [])
+      .filter((session) => matchesSessionDate(session.modified, today))
+      .sort((a, b) => b.modified.localeCompare(a.modified));
+    for (const cached of sessions) {
+      const session = runningById.has(cached.id)
+        ? { ...cached, running: runningById.get(cached.id)! }
+        : cached;
+      const cwd = session.cwd;
+      count += 1;
+      const workspace = byCwd.get(cwd);
+      if (workspace) {
+        workspace.totalSessions += 1;
+        workspace.runningCount += session.running ? 1 : 0;
+      } else {
+        byCwd.set(cwd, {
+          cwd, lastUsed: session.modified, totalSessions: 1,
+          runningCount: session.running ? 1 : 0,
+          firstMessage: session.firstMessage, latestSessionName: session.name,
+        });
+        groups[cwd] = {
+          sessions: [], cursor: null, hasMore: false,
+          loading: false, loadingMore: false, loadError: null,
+        };
+      }
+      groups[cwd].sessions.push(session);
+    }
+    const rows = [...byCwd.values()].sort((a, b) => {
+      if (a.cwd === selectedCwdProp) return -1;
+      if (b.cwd === selectedCwdProp) return 1;
+      return b.lastUsed.localeCompare(a.lastUsed) || a.cwd.localeCompare(b.cwd);
+    });
+    return { workspaces: rows, groups, count };
+  }, [todaySessions, today, runningById, selectedCwdProp]);
+
   const toggleExpandCwd = useCallback((cwd: string) => {
     setExpandedCwds((prev) => {
       // Every cwd defaults to expanded; if absent in state, treat current
@@ -612,10 +695,15 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     void fetchWorkspaces(nextWorkspaceCursor, "append");
   }, [hasMoreWorkspaces, nextWorkspaceCursor, fetchWorkspaces]);
 
+  // Switching views can resize the list and emit a synthetic scroll.
+  // Resume scroll paging only after the user interacts with the list.
+  const pagingInteractionRef = useRef(true);
   useEffect(() => {
     const el = sessionsScrollEl;
-    if (!el || !sessionsOpen) return;
+    if (!el || !sessionsOpen || todayOnly) return;
+    const onInteract = () => { pagingInteractionRef.current = true; };
     const onScroll = () => {
+      if (!pagingInteractionRef.current) return;
       // The user is scrolling, so the container can scroll: the chain-load
       // fallback is not needed and its counter resets.
       chainLoadCountRef.current = 0;
@@ -630,10 +718,16 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       }
     };
     el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
+    const interactions = ["wheel", "touchmove", "pointerdown", "keydown"] as const;
+    for (const event of interactions) el.addEventListener(event, onInteract, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      for (const event of interactions) el.removeEventListener(event, onInteract);
+    };
   }, [
     sessionsScrollEl,
     sessionsOpen,
+    todayOnly,
     hasMoreWorkspaces,
     loadingWorkspaces,
     loadingMoreWorkspaces,
@@ -666,12 +760,16 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     setShowFallbackLoadMore(showChainFallback({ metrics, hasMore: hasMoreWorkspaces }));
   }, [hasMoreWorkspaces, loadMoreWorkspaces, readSessionsMetrics]);
 
+  const previousViewRef = useRef(todayOnly);
   useEffect(() => {
-    if (!sessionsOpen) return;
+    const switchedView = previousViewRef.current !== todayOnly;
+    previousViewRef.current = todayOnly;
+    if (todayOnly || switchedView || !sessionsOpen) return;
     if (loadingWorkspaces || loadingMoreWorkspaces) return;
     const id = requestAnimationFrame(evaluateChainLoad);
     return () => cancelAnimationFrame(id);
   }, [
+    todayOnly,
     sessionsOpen,
     sessionsScrollEl,
     loadingWorkspaces,
@@ -824,29 +922,59 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
       {/* Sessions section — cwd groups + their sessions. Collapsible via the
           shared SidebarSection (same flex-grow animation as Explorer). */}
       <SidebarSection
-        title={t("Sessions")}
+        title={todayOnly ? `${t("Sessions")} (${todayView.count})` : t("Sessions")}
         open={sessionsOpen}
         onToggle={() => setSessionsOpen((v) => !v)}
         scrollRef={attachSessionsScroll}
         actions={
+          <>
+          <Tooltip content={t("Only today's sessions")}>
+            <button
+              type="button"
+              aria-label={t("Only today's sessions")}
+              aria-pressed={todayOnly}
+              disabled={todaySessions === null}
+              onClick={() => {
+                pagingInteractionRef.current = false;
+                setTodayOnly((value) => !value);
+              }}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 26, height: 26, padding: 0, marginRight: 4,
+                border: "none", borderRadius: 5,
+                cursor: todaySessions === null ? "default" : "pointer",
+                opacity: todaySessions === null ? 0.45 : 1,
+                color: todayOnly ? "var(--accent)" : "var(--text-dim)",
+                background: todayOnly ? "var(--bg-selected)" : "none",
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="16" rx="2" />
+                <path d="M16 3v4M8 3v4M3 11h18" />
+                <circle cx="12" cy="16" r="1" fill="currentColor" />
+              </svg>
+            </button>
+          </Tooltip>
           <RefreshIconButton
             onClick={() => { void loadSessions(); }}
             label={t("Refresh sessions")}
           />
+          </>
         }
       >
       <MultiCwdList
-        workspaces={orderedWorkspaces}
-        loadingWorkspaces={loadingWorkspaces}
-        loadingMoreWorkspaces={loadingMoreWorkspaces}
-        hasMoreWorkspaces={hasMoreWorkspaces}
-        showFallbackLoadMore={showFallbackLoadMore}
+        workspaces={todayOnly ? todayView.workspaces : orderedWorkspaces}
+        emptyMessage={todayOnly ? t("No sessions today") : undefined}
+        loadingWorkspaces={!todayOnly && loadingWorkspaces}
+        loadingMoreWorkspaces={!todayOnly && loadingMoreWorkspaces}
+        hasMoreWorkspaces={!todayOnly && hasMoreWorkspaces}
+        showFallbackLoadMore={!todayOnly && showFallbackLoadMore}
         workspaceLoadError={workspaceLoadError}
         expandedCwds={expandedCwds}
-        perCwdSessions={perCwdSessions}
+        perCwdSessions={todayOnly ? todayView.groups : perCwdSessions}
         favoriteIds={favoriteIds}
         selectedSessionId={selectedSessionId}
-        activeSession={selectedSession}
+        activeSession={selectedSession && matchesSessionDate(selectedSession.modified, dateRange) ? selectedSession : null}
 
         onCwdHeaderRef={(cwd, el) => { cwdHeaderRefs.current[cwd] = el; }}
         onToggleExpand={handleToggleExpand}

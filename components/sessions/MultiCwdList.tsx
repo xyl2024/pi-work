@@ -32,6 +32,7 @@ export interface CwdSessionsState {
 interface MultiCwdListProps {
   /** Ordered list — active cwd first, then by lastUsed desc */
   workspaces: Workspace[];
+  emptyMessage?: string;
   loadingWorkspaces: boolean;
   loadingMoreWorkspaces: boolean;
   hasMoreWorkspaces: boolean;
@@ -75,6 +76,7 @@ interface MultiCwdListProps {
  */
 export function MultiCwdList({
   workspaces,
+  emptyMessage,
   loadingWorkspaces,
   loadingMoreWorkspaces,
   hasMoreWorkspaces,
@@ -118,7 +120,7 @@ export function MultiCwdList({
       )}
       {!loadingWorkspaces && !workspaceLoadError && workspaces.length === 0 && (
         <div style={{ padding: "16px 8px 6px", color: "var(--text-muted)", fontSize: 12 }}>
-          {t("No projects yet")}
+          {emptyMessage ?? t("No projects yet")}
         </div>
       )}
 

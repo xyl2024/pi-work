@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { matchesSessionDate, parseSessionDateRange } from "@/lib/shared/session-date-filter";
 import {
   listAllSessionsHeaderOnly,
   searchSessionsPaged,
@@ -66,6 +67,10 @@ function recentCwds(sessions: SessionInfo[], topN: number): string[] {
 export async function GET(request: Request) {
   const startedAt = Date.now();
   const url = new URL(request.url);
+  const dateRange = parseSessionDateRange(url.searchParams);
+  if (dateRange === undefined) {
+    return NextResponse.json({ error: "Invalid session date range" }, { status: 400 });
+  }
   const cwd = url.searchParams.get("cwd") || undefined;
   const limitRaw = url.searchParams.get("limit");
   const cursorRaw = url.searchParams.get("cursor");
@@ -134,7 +139,7 @@ export async function GET(request: Request) {
     }
 
     // Filter the workspace subset the caller asked for, then enrich with running.
-    const filtered = cwd ? all.filter((s) => s.cwd === cwd) : all;
+    const filtered = all.filter((s) => (!cwd || s.cwd === cwd) && matchesSessionDate(s.modified, dateRange));
 
     let page = filtered;
     let nextCursor: string | null = null;
