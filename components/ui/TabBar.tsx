@@ -107,7 +107,6 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
                 fontSize: 12,
                 color: isActive ? "var(--text)" : "var(--text-muted)",
                 whiteSpace: "nowrap",
-                position: "relative",
                 maxWidth: 200,
                 flexShrink: 0,
                 userSelect: "none",
@@ -145,9 +144,8 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
                 onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  position: "absolute", right: 4, top: 4,
-                  width: 20, height: 16,
-                  background: isActive ? "var(--bg-selected)" : "var(--bg)",
+                  width: 16, height: 16,
+                  background: "transparent",
                   border: "none",
                   borderRadius: 3,
                   color: "var(--text-muted)",
