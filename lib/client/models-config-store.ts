@@ -158,6 +158,9 @@ export function useModelsConfigDirty(): boolean {
 export function selectModelsConfigProblem(
   snapshot: ModelsConfigStoreState,
 ): ModelsConfigProblem | null {
+  if (Object.keys(snapshot.config.providers ?? {}).some((name) => !name.trim())) {
+    return { reason: "provider-name", message: "Provider name cannot be empty" };
+  }
   return modelsConfigProblem(snapshot.rawEdit?.text);
 }
 
@@ -224,7 +227,7 @@ export function releaseModelsConfigDraft(): void {
 export async function saveModelsConfig(): Promise<{ ok: boolean; error?: string }> {
   // An in-flight raw edit that does not parse is not part of the draft; saving
   // around it would drop it silently.
-  const problem = modelsConfigProblem(state.rawEdit?.text);
+  const problem = selectModelsConfigProblem(state);
   if (problem) return { ok: false, error: problem.message };
   // Snapshot what we are about to write: an edit made while the PUT is in
   // flight must stay dirty against this payload, not silently become saved.
@@ -317,7 +320,7 @@ export function updateModelsConfigProvider(name: string, provider: ProviderEntry
 }
 
 export function renameModelsConfigProvider(oldName: string, newName: string): void {
-  if (!newName || newName === oldName) return;
+  if (newName === oldName || Object.hasOwn(state.config.providers ?? {}, newName)) return;
   patch({
     config: withRenamedProvider(state.config, oldName, newName),
     pages: renameModelsConfigProviderPage(state.pages, oldName, newName),

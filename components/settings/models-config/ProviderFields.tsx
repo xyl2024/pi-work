@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { API_OPTIONS } from "./constants";
 import type { ProviderEntry } from "./types";
 import { Field, TextInput, SecretTextInput, Select, IconField } from "./form-fields";
 
 /**
- * The editable provider fields — name (with rename), icon, Base URL, API Key
+ * The editable provider fields — name, icon, Base URL, API Key
  * and API protocol. Used by the panel's provider page.
  */
 export function ProviderFields({
@@ -22,8 +22,6 @@ export function ProviderFields({
   onRename: (n: string) => void;
 }) {
   const { t } = useI18n();
-  const [editingName, setEditingName] = useState(name);
-  useEffect(() => setEditingName(name), [name]);
   const set = <K extends keyof ProviderEntry>(k: K, v: ProviderEntry[K]) =>
     onChange({ ...provider, [k]: v });
 
@@ -34,16 +32,8 @@ export function ProviderFields({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Field label="Provider name">
-        <TextInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
-        {editingName !== name && editingName.trim() && (
-          <button
-            onClick={() => onRename(editingName.trim())}
-            style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "#fff", cursor: "pointer", fontSize: 11, alignSelf: "flex-start" }}
-          >
-            {t("Rename")}
-          </button>
-        )}
+      <Field label={t("Provider name")}>
+        <TextInput value={name} onChange={onRename} placeholder="provider-name" mono />
       </Field>
 
       <IconField value={provider.icon} onChange={(v) => set("icon", v)} />

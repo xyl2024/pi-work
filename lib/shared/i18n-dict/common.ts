@@ -6,6 +6,8 @@ export const common = {
   "Name": "名称",
   "Description": "描述",
   "Name already exists": "名称已存在",
+  "Provider name": "提供商名称",
+  "Provider name cannot be empty": "提供商名称不能为空",
 
   // General actions
   "Cancel": "取消",
