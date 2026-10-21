@@ -85,6 +85,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
           return (
             <div
               key={tab.id}
+              className="group/tab"
               data-tab-id={tab.id}
               onClick={() => onSelectTab(tab.id)}
               onDoubleClick={(e) => {
@@ -106,6 +107,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
                 fontSize: 12,
                 color: isActive ? "var(--text)" : "var(--text-muted)",
                 whiteSpace: "nowrap",
+                position: "relative",
                 maxWidth: 200,
                 flexShrink: 0,
                 userSelect: "none",
@@ -137,11 +139,15 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onContextMe
               </Tooltip>
               <Tooltip content={t("Close")}>
               <button
+                type="button"
+                aria-label={`${t("Close")} ${displayLabel}`}
+                className="pointer-events-none opacity-0 transition-opacity group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
                 onClick={(e) => { e.stopPropagation(); onCloseTab(tab.id); }}
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 16, height: 16,
-                  background: "transparent",
+                  position: "absolute", right: 4, top: 4,
+                  width: 20, height: 16,
+                  background: isActive ? "var(--bg-selected)" : "var(--bg)",
                   border: "none",
                   borderRadius: 3,
                   color: "var(--text-muted)",

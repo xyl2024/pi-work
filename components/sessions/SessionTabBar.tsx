@@ -128,6 +128,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
         return (
           <div
             key={tab.tabId}
+            className="group/tab"
             data-session-tab-id={tab.tabId}
             onClick={() => onSelectTab(tab.tabId)}
             onDoubleClick={(event) => {
@@ -157,6 +158,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               fontSize: 12,
               color: active ? "var(--text)" : "var(--text-muted)",
               whiteSpace: "nowrap",
+              position: "relative",
               maxWidth: 200,
               flexShrink: 0,
               userSelect: "none",
@@ -191,6 +193,7 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
               <button
                 type="button"
                 aria-label={`${t("Close tab")} ${title}`}
+                className="pointer-events-none opacity-0 transition-opacity group-hover/tab:pointer-events-auto group-hover/tab:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
                 onClick={(event) => {
                   event.stopPropagation();
                   onCloseTab(tab.tabId);
@@ -199,12 +202,15 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  width: 16,
+                  position: "absolute",
+                  right: 4,
+                  top: 4,
+                  width: 20,
                   height: 16,
                   padding: 0,
                   flexShrink: 0,
                   border: "none",
-                  background: "transparent",
+                  background: active ? "var(--bg-selected)" : "var(--bg)",
                   borderRadius: 3,
                   color: "var(--text-muted)",
                   cursor: "pointer",
