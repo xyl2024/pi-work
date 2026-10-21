@@ -120,7 +120,7 @@ function ScopePicker({
             role="radio"
             aria-checked={active}
             disabled={disabled}
-            title={disabled ? t("mcp.untrusted") : undefined}
+            title={disabled ? t("mcp.projectDisabled") : undefined}
             onClick={() => onChange(scope)}
             style={{
               flex: 1,

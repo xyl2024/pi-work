@@ -78,7 +78,9 @@ export function McpListPage({ bucket }: { bucket: McpDraftBucket }) {
       </div>
 
       <div data-scroll-side style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "0 14px 16px" }}>
-        {!data.projectTrusted && <McpNotice tone="warn">{t("mcp.untrusted")}</McpNotice>}
+        {!data.projectTrusted && (
+          <McpNotice tone="warn">{t("mcp.projectDisabled")}</McpNotice>
+        )}
 
         {problems.length > 0 && (
           <McpNotice tone="error">

@@ -137,9 +137,9 @@ export function McpPanel({
     const text = problemText(problem);
     if (text) return { tone: "error" as const, text };
     if (state.savedOnce) {
-      return { tone: "muted" as const, text: dirty ? t("mcp.applyHint") : t("mcp.savedHint") };
+      return { tone: "muted" as const, text: dirty ? null : t("mcp.savedHint") };
     }
-    return { tone: "muted" as const, text: t("mcp.applyHint") };
+    return { tone: "muted" as const, text: null };
   }, [dirty, problem, problemText, state.saveError, state.savedOnce, t]);
 
   return (

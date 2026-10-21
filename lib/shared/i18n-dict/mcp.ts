@@ -20,8 +20,7 @@ export const mcp = {
   "mcp.empty": "这个文件里还没有服务器",
   "mcp.global": "全局",
   "mcp.project": "本工作目录",
-  "mcp.untrusted":
-    "会话不会读取本工作目录的 mcp.json，除非 ~/.pi-work/config.yaml 里打开 mcp.project_servers。下面的条目会保留，但当前被忽略。",
+  "mcp.projectDisabled": "本工作目录的 MCP 服务器当前未启用。",
   "mcp.autoEnableCodemode": "省上下文的工具调用",
   "mcp.autoEnableCodemodeHint": "打开后，本文件里非 direct 暴露的服务器会通过代码方式调用，模型不必为每个工具留一条定义。",
   "mcp.fileMissing": "文件还不存在，保存时会创建。",
@@ -29,8 +28,7 @@ export const mcp = {
   "mcp.confirmRemove": "将从文件里删除：{names}",
   "mcp.confirmSpawn": "下个会话会以你的权限执行这些命令：\n{commands}",
   "mcp.saveFailed": "保存失败：{error}",
-  "mcp.applyHint": "服务器在会话启动时才连接。",
-  "mcp.savedHint": "已保存 · 服务器在会话启动时才连接。",
+  "mcp.savedHint": "已保存",
   "mcp.newSession": "新建会话",
 
   "mcp.invalid": "无效",
