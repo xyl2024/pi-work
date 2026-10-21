@@ -65,17 +65,20 @@ export const settings = {
   "Loaded — new sessions include pi's built-in Pi documentation hints. Takes effect on new sessions.": "已启用 — 新建会话会包含 pi 内置的 Pi 文档提示。仅对之后新建的会话生效。",
   "Disabled — new sessions will not include pi's built-in Pi documentation hints. Takes effect on new sessions.": "已禁用 — 新建会话将不包含 pi 内置的 Pi 文档提示。仅对之后新建的会话生效。",
 
-  // Right-side button bar visibility
+  // Right-side button bar: visibility + order share one list
   "Right-side buttons": "右侧按钮",
-  "Choose which buttons appear in the right-side bar. Hidden buttons can still be opened from the command palette. Changes apply immediately.": "选择在右侧按钮栏显示的按钮。隐藏的按钮仍可通过命令面板打开，修改会立即生效。",
   "Button order": "按钮顺序",
-  "Reorder the buttons shown in the right-side bar. Up / Down buttons swap adjacent entries; the result is saved immediately.":
-    "重新排列右侧按钮的显示顺序。上下按钮交换相邻条目，结果立即保存。",
+  "Enable button": "启用",
+  "Disable button": "关闭",
+  // Order-list groups (the column stacks session-bound and other buttons)
+  "All buttons": "全部按钮",
+  "Session-bound buttons": "会话绑定按钮",
+  "Other buttons": "其他按钮",
+  "top section": "上方",
+  "bottom section": "下方",
 
   // Session-bound button vertical alignment
   "Session-bound button alignment": "会话绑定按钮对齐",
-  "Where session-bound buttons sit in the right-side bar. Session-bound buttons (Context, Tool Calls, Conversation Tree, Git Diff, LLM API audit, Skills) read from the active session and become empty on the new-session page.":
-    "设置会话绑定按钮在右侧按钮列中的纵向对齐方式。会话绑定按钮（Context、Tool Calls、Conversation Tree、Git Diff、LLM API audit、Skills）依赖当前会话的数据，在新建会话页面会变成空状态。",
   "Align session-bound buttons to the top": "会话绑定按钮顶部对齐",
   "Align session-bound buttons to the bottom (default)": "会话绑定按钮底部对齐（默认）",
   "Inline with button order (legacy)": "按顺序混排（保留旧行为）",
