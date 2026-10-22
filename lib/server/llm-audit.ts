@@ -26,6 +26,7 @@ import { insertProviderCall } from "./llm-audit-db";
 import { wrapModelCallMetrics, type ModelCallContext } from "./model-call-metrics";
 import type { LlmAuditSource } from "../shared/llm-audit-types";
 import { isCallSource } from "../shared/model-call-metrics";
+import { summarizationPurpose } from "../shared/model-call-purpose";
 import type { CallPurpose } from "../shared/token-audit-types";
 
 const log = createLogger("llm-audit");
@@ -34,7 +35,7 @@ const log = createLogger("llm-audit");
 export interface LlmAuditContext {
   sessionId: string | null;
   source: LlmAuditSource | null;
-  /** What the call is for (chat by default; compaction/translation et al. set their own). */
+  /** What the call is for (chat by default; direct callers set their own; compaction/branch summaries are detected from the SDK request). */
   purpose?: CallPurpose;
   /** Session cwd at command time. */
   cwd: string | null;
@@ -86,17 +87,26 @@ export function runWithLlmAuditContext<T>(ctx: Omit<LlmAuditContext, "model" | "
 
 /**
  * Read the model-call context (session/source/purpose) for the call starting
- * now. Returns null outside any audited command: the call is still recorded,
- * just without a session association and with `unknown` source/purpose.
+ * now. Outside an audited command there is no session/source to attach, but a
+ * request that identifies an SDK summarization call still keeps its purpose;
+ * otherwise the call is recorded with `unknown` source/purpose.
  */
-export function resolveModelCallContext(): ModelCallContext | null {
+export function resolveModelCallContext(context?: unknown): ModelCallContext | null {
+  const detectedPurpose = summarizationPurpose(context);
   const store = getLlmAuditAls().getStore();
-  if (!store) return null;
+  if (!store) {
+    // Outside an audited command we still know what the SDK asked for (e.g. a
+    // compaction started by a process-level routine), so keep that purpose
+    // instead of discarding it with the missing session association.
+    return detectedPurpose
+      ? { sessionId: null, source: "unknown", purpose: detectedPurpose }
+      : null;
+  }
   const source = isCallSource(store.source) ? store.source : "unknown";
   return {
     sessionId: store.sessionId,
     source,
-    purpose: store.purpose ?? "chat",
+    purpose: detectedPurpose ?? store.purpose ?? "chat",
   };
 }
 

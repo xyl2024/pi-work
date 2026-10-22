@@ -35,7 +35,12 @@ export interface ModelCallContext {
   purpose: CallPurpose;
 }
 
-export type ModelCallContextResolver = () => ModelCallContext | null;
+/**
+ * The normalized provider request context (system prompt + messages). It lets
+ * the resolver tell a user chat from an SDK-internal compaction/branch-summary
+ * call running inside the same command scope.
+ */
+export type ModelCallContextResolver = (context: unknown) => ModelCallContext | null;
 
 /** Monotonic clock for intervals; wall clock only for the start date/sorting. */
 export interface ModelCallClock {
@@ -365,10 +370,12 @@ function observeStream(
 
 function callArgs(args: unknown[]): {
   model: ModelLike | undefined;
+  context: unknown;
   options: StreamOptionsLike | undefined;
 } {
   return {
     model: args[0] as ModelLike | undefined,
+    context: args[1],
     options: args[2] as StreamOptionsLike | undefined,
   };
 }
@@ -398,8 +405,8 @@ export function wrapModelCallMetrics(
     // context resolver or the stream shape is unexpected, run unobserved.
     let state: CallState | null = null;
     try {
-      const { model, options: callOptions } = callArgs(args);
-      state = createState(model, resolveContext(), clock, createCallId, callOptions);
+      const { model, context, options: callOptions } = callArgs(args);
+      state = createState(model, resolveContext(context), clock, createCallId, callOptions);
     } catch (error) {
       log.warn("model-call metrics setup failed", { error: String(error) });
     }
