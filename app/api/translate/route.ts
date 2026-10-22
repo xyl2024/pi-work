@@ -147,7 +147,13 @@ export async function POST(req: Request) {
         });
 
         await runWithLlmAuditContext(
-          { sessionId: null, source: "direct", cwd: null, sessionName: null },
+          {
+            sessionId: null,
+            source: "direct",
+            purpose: "translation",
+            cwd: null,
+            sessionName: null,
+          },
           () => created.prompt(trimmed),
         );
       } catch (error) {

@@ -154,7 +154,13 @@ export async function POST(
       // ALS chain and was logged as an orphaned unknown call, invisible when
       // filtering the panel by session).
       raw = await runWithLlmAuditContext(
-        { sessionId: id, source: "direct", cwd: null, sessionName: null },
+        {
+          sessionId: id,
+          source: "direct",
+          purpose: "auto-name",
+          cwd: null,
+          sessionName: null,
+        },
         () =>
           directPrompt(promptText, {
             systemPrompt: AUTO_NAME_SYSTEM_PROMPT,

@@ -17,6 +17,7 @@ import {
   type AgentSession,
   type ResourceLoader,
 } from "@earendil-works/pi-coding-agent";
+import { getAuditModelRuntime } from "./llm-audit";
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -65,9 +66,21 @@ function buildEmptyResourceLoader(systemPrompt: string): ResourceLoader {
  * Throws with a descriptive message on failure so callers can surface it
  * directly to the user.
  */
+async function getDirectRuntime(): Promise<ModelRuntime> {
+  // Direct calls (translate / auto-name) go through the same audited wrapper as
+  // the chat runtime so their logical calls reach the per-call audit API. The
+  // wrapper is observation-only: it never adds a request or consumes the
+  // caller's stream. When the process already has the shared wrapper,
+  // `getAuditModelRuntime` returns it and the catalog built here is dropped.
+  return getAuditModelRuntime(await ModelRuntime.create());
+}
+
 export async function resolveDirectModel(opts?: { provider?: string; modelId?: string }): Promise<ResolvedModel> {
   const agentDir = getAgentDir();
   const cwd = process.cwd();
+  // Model resolution is not a model call, so it stays on a fresh catalog (the
+  // caller's current settings/models.json) and is not tied to the shared,
+  // long-lived audited runtime.
   const runtime = await ModelRuntime.create();
 
   if (opts?.provider && opts?.modelId) {
@@ -101,7 +114,7 @@ export async function createDirectLlmSession(
   systemPrompt: string,
   thinkingLevel: ThinkingLevel = "off",
 ): Promise<AgentSession> {
-  const runtime = await ModelRuntime.create();
+  const runtime = await getDirectRuntime();
   const model = runtime.getModel(provider, modelId);
   if (!model) throw new Error(`Model not available: ${provider}/${modelId}`);
 
@@ -109,6 +122,7 @@ export async function createDirectLlmSession(
     sessionManager: SessionManager.inMemory(),
     settingsManager: SettingsManager.inMemory({}),
     resourceLoader: buildEmptyResourceLoader(systemPrompt),
+    modelRuntime: runtime,
     model,
     thinkingLevel,
     noTools: "all",
