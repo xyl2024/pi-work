@@ -522,6 +522,37 @@ describe("billing compatibility and query contract", () => {
     expect(second.rows[0].purpose).toBe("translation");
   });
 
+  it("applies the default 7-day range while keeping old rows queryable with range=all", async () => {
+    const now = Date.now();
+    for (const [callId, startedAt] of [
+      ["old", now - 8 * 86_400_000],
+      ["recent", now - 1000],
+    ] as const) {
+      recordModelCall({
+        callId,
+        startedAt,
+        sessionId: null,
+        messageId: null,
+        source: "unknown",
+        purpose: "unknown",
+        provider: "p",
+        modelId: "m",
+        api: null,
+        status: "unknown",
+        ttftMs: null,
+        generationDurationMs: null,
+        durationMs: null,
+        outputTokens: null,
+        error: null,
+      });
+    }
+    const defaulted = await queryCalls("");
+    expect(defaulted.total).toBe(1);
+    expect(defaulted.rows[0].callId).toBe("recent");
+    const all = await queryCalls("range=all");
+    expect(all.total).toBe(2);
+  });
+
   it("filters by session, includes session-less calls otherwise, and paginates with a matching total", async () => {
     const rows = [
       { callId: "a", startedAt: 3000, sessionId: "s1" },

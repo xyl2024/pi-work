@@ -25,7 +25,8 @@ import { createLogger } from "./logger";
 import { insertProviderCall } from "./llm-audit-db";
 import { wrapModelCallMetrics, type ModelCallContext } from "./model-call-metrics";
 import type { LlmAuditSource } from "../shared/llm-audit-types";
-import type { CallPurpose, CallSource } from "../shared/token-audit-types";
+import { isCallSource } from "../shared/model-call-metrics";
+import type { CallPurpose } from "../shared/token-audit-types";
 
 const log = createLogger("llm-audit");
 
@@ -83,8 +84,6 @@ export function runWithLlmAuditContext<T>(ctx: Omit<LlmAuditContext, "model" | "
   return getAls().run({ ...ctx, model: null, attempt: 0 }, fn);
 }
 
-const CALL_SOURCES = new Set<CallSource>(["user", "scheduled", "subagent", "direct", "btw", "unknown"]);
-
 /**
  * Read the model-call context (session/source/purpose) for the call starting
  * now. Returns null outside any audited command: the call is still recorded,
@@ -93,9 +92,7 @@ const CALL_SOURCES = new Set<CallSource>(["user", "scheduled", "subagent", "dire
 export function resolveModelCallContext(): ModelCallContext | null {
   const store = getLlmAuditAls().getStore();
   if (!store) return null;
-  const source = store.source && CALL_SOURCES.has(store.source as CallSource)
-    ? (store.source as CallSource)
-    : "unknown";
+  const source = isCallSource(store.source) ? store.source : "unknown";
   return {
     sessionId: store.sessionId,
     source,

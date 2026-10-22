@@ -49,9 +49,6 @@ export interface WrapModelCallMetricsOptions {
   resolveContext?: ModelCallContextResolver;
   clock?: ModelCallClock;
   record?: (input: ModelCallInsert) => void;
-  createCallId?: () => string;
-  /** Wall-clock start; exposed for tests that need a deterministic date. */
-  wallNow?: () => number;
 }
 
 const defaultClock: ModelCallClock = {
@@ -150,7 +147,7 @@ function observeEvent(state: CallState, event: ObservedEvent, clock: ModelCallCl
  * claiming a real zero. Providers that report a reasoning breakdown are
  * considered reporting even when the counters are zero.
  */
-export function readReportedOutputTokens(message: AssistantMessage | undefined): number | null {
+function readReportedOutputTokens(message: AssistantMessage | undefined): number | null {
   const usage = message?.usage;
   if (!usage) return null;
   const counters = [usage.input, usage.output, usage.cacheRead, usage.cacheWrite, usage.totalTokens];
@@ -330,13 +327,10 @@ export function wrapModelCallMetrics(
   runtime: ModelRuntime,
   options: WrapModelCallMetricsOptions = {},
 ): ModelRuntime {
-  const clock: ModelCallClock = options.clock ?? {
-    now: defaultClock.now,
-    wallNow: options.wallNow ?? defaultClock.wallNow,
-  };
+  const clock: ModelCallClock = options.clock ?? defaultClock;
   const resolveContext = options.resolveContext ?? (() => null);
   const record = options.record ?? recordModelCall;
-  const createCallId = options.createCallId ?? (() => randomUUID());
+  const createCallId = (): string => randomUUID();
 
   const wrapStreamCall = (
     target: ModelRuntime,

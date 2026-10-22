@@ -7,7 +7,21 @@
  * here at read time so storage and API can never disagree about the formula.
  */
 
-import type { CallStatus } from "./token-audit-types";
+import type { CallSource, CallStatus } from "./token-audit-types";
+
+const CALL_SOURCES = new Set<CallSource>([
+  "user",
+  "scheduled",
+  "subagent",
+  "direct",
+  "btw",
+  "unknown",
+]);
+
+/** Runtime guard for values coming from the database or an audit context. */
+export function isCallSource(value: string | null | undefined): value is CallSource {
+  return typeof value === "string" && CALL_SOURCES.has(value as CallSource);
+}
 
 export interface CallMetricFacts {
   status: CallStatus;

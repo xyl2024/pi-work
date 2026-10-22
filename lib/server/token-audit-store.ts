@@ -18,7 +18,7 @@
 import { getTokenAuditDb } from "./token-audit-db";
 import { createLogger } from "./logger";
 import { parseLocalHourKey } from "./hour-series";
-import { deriveCallThroughput } from "../shared/model-call-metrics";
+import { deriveCallThroughput, isCallSource } from "../shared/model-call-metrics";
 import type {
   CallPurpose,
   CallSource,
@@ -40,7 +40,6 @@ const log = createLogger("token-audit-store");
 // Re-export types so existing server-side callers don't have to change.
 export type { CallPurpose, CallSource, CallStatus, HourBucket, Range, GroupBy, ModelCallInsert, Source, SummaryBucket, SummarizeResult, TokenCall, TokenCallInsert, ListCallsParams };
 
-const CALL_SOURCES = new Set<CallSource>(["user", "scheduled", "subagent", "direct", "btw", "unknown"]);
 const CALL_PURPOSES = new Set<CallPurpose>([
   "chat",
   "channel",
@@ -53,7 +52,7 @@ const CALL_PURPOSES = new Set<CallPurpose>([
 const CALL_STATUSES = new Set<CallStatus>(["completed", "failed", "cancelled", "unknown"]);
 
 function mapSource(value: string | null): CallSource {
-  return value && CALL_SOURCES.has(value as CallSource) ? (value as CallSource) : "unknown";
+  return isCallSource(value) ? value : "unknown";
 }
 
 function mapPurpose(value: string | null): CallPurpose {
