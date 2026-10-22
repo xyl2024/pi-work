@@ -62,6 +62,36 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_token_calls_ts             ON token_calls(ts DESC);
   CREATE INDEX IF NOT EXISTS idx_token_calls_session_ts    ON token_calls(session_id, ts DESC);
   CREATE INDEX IF NOT EXISTS idx_token_calls_provider_model ON token_calls(provider, model_id);
+
+  -- One row per logical model call: the timing/usage facts behind TTFT and
+  -- the two TPS values. Kept beside token_calls rather than inside it so
+  -- the existing billing rows (and the cost summary that queries them) keep
+  -- their semantics: no billing column is forced to zero for a call whose
+  -- usage is unknown, and a failure never looks like a zero-cost success.
+  -- message_id is the joining key to the billing row when one exists.
+  -- output_tokens is nullable on purpose: NULL = not reported, 0 = a
+  -- provider-reported zero. TPS is derived at read time, never stored.
+  CREATE TABLE IF NOT EXISTS model_calls (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    call_id                TEXT    NOT NULL UNIQUE,
+    started_at             INTEGER NOT NULL,
+    session_id             TEXT,
+    message_id             TEXT,
+    source                 TEXT    NOT NULL DEFAULT 'unknown',
+    purpose                TEXT    NOT NULL DEFAULT 'unknown',
+    provider               TEXT    NOT NULL DEFAULT 'unknown',
+    model_id               TEXT    NOT NULL DEFAULT 'unknown',
+    api                    TEXT,
+    status                 TEXT    NOT NULL DEFAULT 'unknown',
+    ttft_ms                INTEGER,
+    generation_duration_ms INTEGER,
+    duration_ms            INTEGER,
+    output_tokens          INTEGER,
+    error                  TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_model_calls_started_at ON model_calls(started_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_model_calls_session    ON model_calls(session_id, started_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_model_calls_message    ON model_calls(session_id, message_id);
 `;
 
 export function getTokenAuditDb(): Database.Database {

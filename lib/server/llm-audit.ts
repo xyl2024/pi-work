@@ -23,7 +23,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { createLogger } from "./logger";
 import { insertProviderCall } from "./llm-audit-db";
+import { wrapModelCallMetrics, type ModelCallContext } from "./model-call-metrics";
 import type { LlmAuditSource } from "../shared/llm-audit-types";
+import type { CallPurpose, CallSource } from "../shared/token-audit-types";
 
 const log = createLogger("llm-audit");
 
@@ -31,6 +33,8 @@ const log = createLogger("llm-audit");
 export interface LlmAuditContext {
   sessionId: string | null;
   source: LlmAuditSource | null;
+  /** What the call is for (chat by default; compaction/translation et al. set their own). */
+  purpose?: CallPurpose;
   /** Session cwd at command time. */
   cwd: string | null;
   /** Session display name at command time, if any. */
@@ -77,6 +81,26 @@ export function getLlmAuditAls(): AsyncLocalStorage<LlmAuditContext> {
 /** Run a function (typically `wrapper.send(...)`) inside an audit context. */
 export function runWithLlmAuditContext<T>(ctx: Omit<LlmAuditContext, "model" | "attempt">, fn: () => Promise<T>): Promise<T> {
   return getAls().run({ ...ctx, model: null, attempt: 0 }, fn);
+}
+
+const CALL_SOURCES = new Set<CallSource>(["user", "scheduled", "subagent", "direct", "btw", "unknown"]);
+
+/**
+ * Read the model-call context (session/source/purpose) for the call starting
+ * now. Returns null outside any audited command: the call is still recorded,
+ * just without a session association and with `unknown` source/purpose.
+ */
+export function resolveModelCallContext(): ModelCallContext | null {
+  const store = getLlmAuditAls().getStore();
+  if (!store) return null;
+  const source = store.source && CALL_SOURCES.has(store.source as CallSource)
+    ? (store.source as CallSource)
+    : "unknown";
+  return {
+    sessionId: store.sessionId,
+    source,
+    purpose: store.purpose ?? "chat",
+  };
 }
 
 // ── Provider host allowlist ────────────────────────────────────────────────
@@ -264,7 +288,12 @@ export function wrapModelRuntime(runtime: ModelRuntime): ModelRuntime {
 /** Get (and lazily create) the process-wide shared wrapped ModelRuntime. */
 export function getAuditModelRuntime(runtime: ModelRuntime): ModelRuntime {
   if (!globalThis.__piLlmAuditModelRuntime) {
-    globalThis.__piLlmAuditModelRuntime = wrapModelRuntime(runtime);
+    // Outer layer: logical call metrics (TTFT/generation window/usage).
+    // Inner layer: the API audit wrapper that stamps provider/model/attempt
+    // into the context before the provider request is issued.
+    globalThis.__piLlmAuditModelRuntime = wrapModelCallMetrics(wrapModelRuntime(runtime), {
+      resolveContext: resolveModelCallContext,
+    });
   }
   return globalThis.__piLlmAuditModelRuntime;
 }

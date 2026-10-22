@@ -40,6 +40,9 @@
   `scripts/dev-isolated.mjs`，等待就绪后跑测试，结束时自动停掉。
 - **纯单元测试**不访问实例，但 `vitest.config.ts` 的 `globalSetup` 对所有
   `tests/unit/**` 生效，所以 `pnpm test` 仍会先确保隔离实例可用（不会跳过）。
+  只跑进程内服务端模块测试时，用 `PI_WORK_TEST_SKIP_INSTANCE=1` 显式跳过这步
+  （例如 `PI_WORK_TEST_SKIP_INSTANCE=1 node_modules/.bin/vitest run tests/unit/<file>.test.ts`），
+  避免为了不碰网络的测试启动服务。
 - 端口/地址冲突时可用 `PI_WORK_TEST_BASE_URL` 覆盖。
 - **不测试生产环境**：不存在生产形态的测试路径，`tests/global-setup.ts` 只以
   `next dev` 启动隔离实例，没有 `next build` / `next start`，也没有

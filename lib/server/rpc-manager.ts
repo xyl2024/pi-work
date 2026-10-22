@@ -1168,16 +1168,18 @@ export async function startRpcSession(
         // UNIQUE(session_id, message_id) so retries / SSE reconnects / compaction
         // replays never inflate the audit log.
         //
-        // duration_ms = (Date.now() at hook time) − msg.timestamp. `msg.timestamp`
-        // is when the LLM finalized the message internally; `Date.now()` is when
-        // our hook fires immediately after — gap is just RPC event dispatch
-        // (~few ms), so this is a tight upper bound on real call latency.
+        // duration_ms = (Date.now() at hook time) − msg.timestamp. In the SDK,
+        // `msg.timestamp` is the request start (Unix ms), NOT the moment the
+        // message completed. So the gap below spans the whole model request
+        // including streaming, up to our `message_end` hook (a few ms of RPC
+        // dispatch on top). It is legacy billing duration semantics; the
+        // logical-call TTFT/TPS facts live in `model_calls` (see
+        // lib/server/model-call-metrics.ts), not in this column.
         //
         // We deliberately do NOT use `before_provider_request` for the start
         // stamp: in observed runs, that event can fire *after* `msg.timestamp`
         // by a few ms (likely pi-internal preflight + a second dispatch), which
-        // produces negative durations after clamping. Computing duration from
-        // `msg.timestamp` + hook time is strictly non-negative and accurate.
+        // produces negative durations after clamping.
         (pi) => {
           pi.on("message_end", (event) => {
             const ev = event as { message?: { role?: string; provider?: string; model?: string; api?: string; usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; totalTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; total?: number } }; timestamp?: number; stopReason?: string; errorMessage?: string } };
@@ -1212,8 +1214,9 @@ export async function startRpcSession(
                 modelId: msg.model ?? "unknown",
                 api: msg.api ?? null,
                 // Store `finalizedAt` as `ts` for sorting/filtering. It is the
-                // moment the LLM produced its final message — close enough to
-                // "when this call happened" for human-scale audit purposes.
+                // request start (SDK message timestamps mark when the request
+                // began), which is the right "when this call happened" anchor
+                // for human-scale audit purposes.
                 ts: finalizedAt,
                 inputTokens: input,
                 outputTokens: output,

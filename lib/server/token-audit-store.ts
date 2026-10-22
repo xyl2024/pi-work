@@ -18,10 +18,15 @@
 import { getTokenAuditDb } from "./token-audit-db";
 import { createLogger } from "./logger";
 import { parseLocalHourKey } from "./hour-series";
+import { deriveCallThroughput } from "../shared/model-call-metrics";
 import type {
+  CallPurpose,
+  CallSource,
+  CallStatus,
   HourBucket,
   Range,
   GroupBy,
+  ModelCallInsert,
   SummarizeResult,
   SummaryBucket,
   Source,
@@ -33,37 +38,77 @@ import type {
 const log = createLogger("token-audit-store");
 
 // Re-export types so existing server-side callers don't have to change.
-export type { HourBucket, Range, GroupBy, Source, SummaryBucket, SummarizeResult, TokenCall, TokenCallInsert, ListCallsParams };
+export type { CallPurpose, CallSource, CallStatus, HourBucket, Range, GroupBy, ModelCallInsert, Source, SummaryBucket, SummarizeResult, TokenCall, TokenCallInsert, ListCallsParams };
 
+const CALL_SOURCES = new Set<CallSource>(["user", "scheduled", "subagent", "direct", "btw", "unknown"]);
+const CALL_PURPOSES = new Set<CallPurpose>([
+  "chat",
+  "channel",
+  "compaction",
+  "branch-summary",
+  "translation",
+  "auto-name",
+  "unknown",
+]);
+const CALL_STATUSES = new Set<CallStatus>(["completed", "failed", "cancelled", "unknown"]);
+
+function mapSource(value: string | null): CallSource {
+  return value && CALL_SOURCES.has(value as CallSource) ? (value as CallSource) : "unknown";
+}
+
+function mapPurpose(value: string | null): CallPurpose {
+  return value && CALL_PURPOSES.has(value as CallPurpose) ? (value as CallPurpose) : "unknown";
+}
+
+function mapStatus(value: string | null): CallStatus {
+  return value && CALL_STATUSES.has(value as CallStatus) ? (value as CallStatus) : "unknown";
+}
+
+/** One unified row: a billing row, a model-call row, or both joined. */
 interface Row {
   id: number;
-  ts: number;
-  session_id: string;
-  message_id: string;
+  call_id: string;
+  started_at: number;
+  session_id: string | null;
+  message_id: string | null;
   source: string;
+  purpose: string;
+  status: string;
   provider: string;
   model_id: string;
   api: string | null;
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_tokens: number;
-  cache_write_tokens: number;
-  cost_input: number;
-  cost_output: number;
-  cost_read: number;
-  cost_write: number;
-  cost_total: number;
-  duration_ms: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_read_tokens: number | null;
+  cache_write_tokens: number | null;
+  cost_input: number | null;
+  cost_output: number | null;
+  cost_read: number | null;
+  cost_write: number | null;
+  cost_total: number | null;
+  duration_ms: number | null;
   error: string | null;
+  ttft_ms: number | null;
+  generation_duration_ms: number | null;
 }
 
 function rowToCall(r: Row): TokenCall {
+  const status = mapStatus(r.status);
+  const { generationTps, endToEndTps } = deriveCallThroughput({
+    status,
+    outputTokens: r.output_tokens,
+    generationDurationMs: r.generation_duration_ms,
+    durationMs: r.duration_ms,
+  });
   return {
     id: r.id,
-    ts: r.ts,
+    callId: r.call_id,
+    ts: r.started_at,
     sessionId: r.session_id,
     messageId: r.message_id,
-    source: (r.source === "scheduled" || r.source === "subagent" ? r.source : "user") as Source,
+    source: mapSource(r.source),
+    purpose: mapPurpose(r.purpose),
+    status,
     provider: r.provider,
     modelId: r.model_id,
     api: r.api,
@@ -78,6 +123,10 @@ function rowToCall(r: Row): TokenCall {
     costTotal: r.cost_total,
     durationMs: r.duration_ms,
     error: r.error,
+    ttftMs: r.ttft_ms,
+    generationDurationMs: r.generation_duration_ms,
+    generationTps,
+    endToEndTps,
   };
 }
 
@@ -112,27 +161,147 @@ export function recordCall(input: TokenCallInsert): void {
   db.prepare(INSERT_SQL).run(input);
 }
 
+const INSERT_MODEL_CALL_SQL = `
+  INSERT OR IGNORE INTO model_calls
+    (call_id, started_at, session_id, message_id, source, purpose,
+     provider, model_id, api, status,
+     ttft_ms, generation_duration_ms, duration_ms, output_tokens, error)
+  VALUES
+    (@callId, @startedAt, @sessionId, @messageId, @source, @purpose,
+     @provider, @modelId, @api, @status,
+     @ttftMs, @generationDurationMs, @durationMs, @outputTokens, @error)
+`;
+
+/**
+ * Persist the timing/usage facts of one logical model call. Throwing is
+ * intentional: the caller (the runtime wrapper) treats a storage failure as
+ * log-and-continue so the model call itself never fails because of metrics.
+ */
+export function recordModelCall(input: ModelCallInsert): void {
+  getTokenAuditDb().prepare(INSERT_MODEL_CALL_SQL).run(input);
+}
+
+/**
+ * Unified per-call query: one row per real call.
+ *
+ * - A billing row with no matching model-call row is exposed as a historical
+ *   call (`status = 'unknown'`, nullable metrics NULL), never retrofitted.
+ * - A model-call row is exposed once and enriched with its billing row's
+ *   usage/cost when one exists (matched by session + message timestamp).
+ * - A model-call row whose billing row has not been written yet (or never
+ *   will be, e.g. failure) still appears on its own.
+ */
+function unifiedCallsQuery(range: Range, sessionId?: string | null): { sql: string; args: unknown[] } {
+  const cutoff = rangeCutoff(range);
+
+  const legacyWhere: string[] = [];
+  const legacyArgs: unknown[] = [];
+  if (cutoff !== null) {
+    legacyWhere.push("t.ts >= ?");
+    legacyArgs.push(cutoff);
+  }
+  if (sessionId) {
+    legacyWhere.push("t.session_id = ?");
+    legacyArgs.push(sessionId);
+  }
+  const legacyWhereSql = legacyWhere.length ? `AND ${legacyWhere.join(" AND ")}` : "";
+
+  const callWhere: string[] = [];
+  const callArgs: unknown[] = [];
+  if (cutoff !== null) {
+    callWhere.push("m.started_at >= ?");
+    callArgs.push(cutoff);
+  }
+  if (sessionId) {
+    callWhere.push("m.session_id = ?");
+    callArgs.push(sessionId);
+  }
+  const callWhereSql = callWhere.length ? `WHERE ${callWhere.join(" AND ")}` : "";
+
+  const legacySql = `
+    SELECT
+      t.id AS id,
+      'token:' || t.id AS call_id,
+      t.ts AS started_at,
+      t.session_id AS session_id,
+      t.message_id AS message_id,
+      t.source AS source,
+      'unknown' AS purpose,
+      CASE WHEN t.error IS NOT NULL THEN 'failed' ELSE 'unknown' END AS status,
+      t.provider AS provider,
+      t.model_id AS model_id,
+      t.api AS api,
+      t.input_tokens AS input_tokens,
+      t.output_tokens AS output_tokens,
+      t.cache_read_tokens AS cache_read_tokens,
+      t.cache_write_tokens AS cache_write_tokens,
+      t.cost_input AS cost_input,
+      t.cost_output AS cost_output,
+      t.cost_read AS cost_read,
+      t.cost_write AS cost_write,
+      t.cost_total AS cost_total,
+      t.duration_ms AS duration_ms,
+      t.error AS error,
+      NULL AS ttft_ms,
+      NULL AS generation_duration_ms
+    FROM token_calls t
+    WHERE NOT EXISTS (
+      SELECT 1 FROM model_calls m
+      WHERE m.message_id IS NOT NULL
+        AND m.session_id = t.session_id
+        AND m.message_id = t.message_id
+    )
+    ${legacyWhereSql}
+  `;
+
+  const callsSql = `
+    SELECT
+      m.id AS id,
+      m.call_id AS call_id,
+      m.started_at AS started_at,
+      m.session_id AS session_id,
+      m.message_id AS message_id,
+      m.source AS source,
+      m.purpose AS purpose,
+      m.status AS status,
+      m.provider AS provider,
+      m.model_id AS model_id,
+      m.api AS api,
+      t.input_tokens AS input_tokens,
+      COALESCE(m.output_tokens, t.output_tokens) AS output_tokens,
+      t.cache_read_tokens AS cache_read_tokens,
+      t.cache_write_tokens AS cache_write_tokens,
+      t.cost_input AS cost_input,
+      t.cost_output AS cost_output,
+      t.cost_read AS cost_read,
+      t.cost_write AS cost_write,
+      t.cost_total AS cost_total,
+      COALESCE(m.duration_ms, t.duration_ms) AS duration_ms,
+      COALESCE(m.error, t.error) AS error,
+      m.ttft_ms AS ttft_ms,
+      m.generation_duration_ms AS generation_duration_ms
+    FROM model_calls m
+    LEFT JOIN token_calls t
+      ON m.message_id IS NOT NULL
+     AND t.session_id = m.session_id
+     AND t.message_id = m.message_id
+    ${callWhereSql}
+  `;
+
+  return { sql: `${legacySql} UNION ALL ${callsSql}`, args: [...legacyArgs, ...callArgs] };
+}
+
 export function listCalls(p: ListCallsParams): { rows: TokenCall[]; total: number } {
   const db = getTokenAuditDb();
-  const cutoff = rangeCutoff(p.range);
-  const whereParts: string[] = [];
-  const args: unknown[] = [];
-  if (cutoff !== null) {
-    whereParts.push("ts >= ?");
-    args.push(cutoff);
-  }
-  if (p.sessionId) {
-    whereParts.push("session_id = ?");
-    args.push(p.sessionId);
-  }
-  const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
+  const { sql, args } = unifiedCallsQuery(p.range, p.sessionId);
 
   const totalRow = db
-    .prepare(`SELECT COUNT(*) AS n FROM token_calls ${where}`)
+    .prepare(`SELECT COUNT(*) AS n FROM (${sql})`)
     .get(...args) as { n: number };
+  // Same start time is ordered by the stable call id so pages never reorder.
   const rows = db
     .prepare(
-      `SELECT * FROM token_calls ${where} ORDER BY ts DESC LIMIT ? OFFSET ?`,
+      `SELECT * FROM (${sql}) ORDER BY started_at DESC, call_id DESC LIMIT ? OFFSET ?`,
     )
     .all(...args, p.limit, p.offset) as Row[];
 
@@ -309,8 +478,11 @@ export function summarize(range: Range, groupBy: GroupBy, sessionIds?: string[])
 
 export function clearAllData(): { ok: true; deleted: number } {
   const db = getTokenAuditDb();
-  const before = (db.prepare("SELECT COUNT(*) AS n FROM token_calls").get() as { n: number }).n;
+  const billing = (db.prepare("SELECT COUNT(*) AS n FROM token_calls").get() as { n: number }).n;
+  const calls = (db.prepare("SELECT COUNT(*) AS n FROM model_calls").get() as { n: number }).n;
   db.exec("DELETE FROM token_calls");
-  log.info("token-audit cleared", { deleted: before });
-  return { ok: true, deleted: before };
+  db.exec("DELETE FROM model_calls");
+  const deleted = billing + calls;
+  log.info("token-audit cleared", { deleted, billing, calls });
+  return { ok: true, deleted };
 }
