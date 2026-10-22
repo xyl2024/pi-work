@@ -21,6 +21,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # pnpm version comes from package.json "packageManager" (fetched on first use).
+# COREPACK_HOME is only overridden for base images that keep the corepack cache
+# outside the default /root/.cache/node/corepack (docker-base-images/ pins it to
+# /usr/local/corepack). Not exported as ENV, so the image's own HOME stays in charge.
+ARG COREPACK_HOME=/root/.cache/node/corepack
 RUN corepack enable
 
 # public/ and scripts/ must exist before install: the root postinstall
@@ -32,7 +36,9 @@ COPY scripts/    ./scripts
 # The published pnpm tarball ships node-gyp's gyp_main.py as 0644; make then
 # fails with "Permission denied" whenever it regenerates the build Makefile.
 RUN corepack pnpm --version >/dev/null \
- && find /root/.cache/node/corepack -path '*node-gyp/gyp/gyp_main.py' -exec chmod +x {} + \
+ && for d in /root/.cache/node/corepack "${COREPACK_HOME}"; do \
+      if [ -d "$d" ]; then find "$d" -path '*node-gyp/gyp/gyp_main.py' -exec chmod +x {} +; fi; \
+    done \
  && pnpm install --frozen-lockfile
 
 # proxy.ts is compiled into .next (next 16 middleware) so it must be here.
@@ -61,6 +67,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
 
+# Same override as the builder stage: pass --build-arg COREPACK_HOME=/usr/local/corepack
+# when BASE_IMAGE comes from docker-base-images/.
+ARG COREPACK_HOME=/root/.cache/node/corepack
+
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
@@ -69,7 +79,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 # every native postinstall, then we rebuild only the two modules needed at
 # runtime: node-pty has no Linux prebuilds, better-sqlite3 must match the ABI.
 RUN corepack pnpm --version >/dev/null \
- && find /root/.cache/node/corepack -path '*node-gyp/gyp/gyp_main.py' -exec chmod +x {} + \
+ && for d in /root/.cache/node/corepack "${COREPACK_HOME}"; do \
+      if [ -d "$d" ]; then find "$d" -path '*node-gyp/gyp/gyp_main.py' -exec chmod +x {} +; fi; \
+    done \
  && pnpm install --prod --ignore-scripts \
  && pnpm rebuild better-sqlite3 node-pty \
  && rm -rf /root/.npm /root/.cache /root/.local /tmp/*
