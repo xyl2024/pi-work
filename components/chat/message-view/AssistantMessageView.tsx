@@ -16,6 +16,7 @@ import { COPY, CHECK, THUMBS_UP, HEART } from "@/lib/client/icon-paths";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
 import { BlockView } from "./blocks";
 import { formatTime, TurnDuration, UsageIcons } from "./utils";
+import { useMessageCallMetrics } from "./context";
 import { countContentChars, extractMessageText } from "@/lib/shared/message-content";
 import type { AssistantMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared/types";
 
@@ -58,6 +59,11 @@ function AssistantMessageViewInner({
   const { t } = useI18n();
   const toast = useToast();
   const time = showTimestamp ? formatTime(message.timestamp) : null;
+  // TTFT / TPS come from the model-call metrics DB (not the session JSONL),
+  // joined on the message id the recorder stamped — `String(message.timestamp)`.
+  // They are independent of `usage`, and `null` for messages whose call was
+  // never recorded (older history, metrics DB disabled, failed-before-output).
+  const callMetrics = useMessageCallMetrics(message.timestamp);
   const blocks = useMemo(() => message.content ?? [], [message.content]);
   const gallery = useMemo<ImageItem[]>(() => {
     const out: ImageItem[] = [];
@@ -355,7 +361,7 @@ function AssistantMessageViewInner({
         {((readFiles && readFiles.length > 0) || turnDiffStats) && onOpenFile && (
           <ReadFileChips files={readFiles ?? []} diffStats={turnDiffStats} onOpenFile={onOpenFile} />
         )}
-        {!isStreaming && (message.usage || time) && (
+        {!isStreaming && (message.usage || callMetrics || time) && (
           <span style={{
             marginLeft: "auto",
             display: "flex",
@@ -365,7 +371,7 @@ function AssistantMessageViewInner({
             pointerEvents: hovered ? "auto" : "none",
             transition: "opacity 0.12s",
           }}>
-            {message.usage && <UsageIcons usage={message.usage} />}
+            <UsageIcons usage={message.usage} metrics={callMetrics} />
             {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
           </span>
         )}

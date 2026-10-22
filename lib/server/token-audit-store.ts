@@ -26,6 +26,7 @@ import type {
   HourBucket,
   Range,
   GroupBy,
+  MessageCallMetrics,
   ModelCallInsert,
   SummarizeResult,
   SummaryBucket,
@@ -38,7 +39,7 @@ import type {
 const log = createLogger("token-audit-store");
 
 // Re-export types so existing server-side callers don't have to change.
-export type { CallPurpose, CallSource, CallStatus, HourBucket, Range, GroupBy, ModelCallInsert, Source, SummaryBucket, SummarizeResult, TokenCall, TokenCallInsert, ListCallsParams };
+export type { CallPurpose, CallSource, CallStatus, HourBucket, Range, GroupBy, MessageCallMetrics, ModelCallInsert, Source, SummaryBucket, SummarizeResult, TokenCall, TokenCallInsert, ListCallsParams };
 
 const CALL_PURPOSES = new Set<CallPurpose>([
   "chat",
@@ -308,6 +309,57 @@ export function listCalls(p: ListCallsParams): { rows: TokenCall[]; total: numbe
     .all(...args, p.limit, p.offset) as Row[];
 
   return { rows: rows.map(rowToCall), total: totalRow.n };
+}
+
+interface MessageMetricRow {
+  message_id: string;
+  status: string;
+  output_tokens: number | null;
+  duration_ms: number | null;
+  ttft_ms: number | null;
+  generation_duration_ms: number | null;
+}
+
+/**
+ * Per-assistant-message timing facts for one session.
+ *
+ * The chat footer joins these by `String(message.timestamp)` — the same key
+ * `recordModelCall` stores — so no extra id has to travel through the session
+ * JSONL. Rows without a message id (failed-before-first-message calls) are
+ * skipped: they have no bubble to decorate. A message id never repeats inside
+ * one session (`UNIQUE(session_id, message_id)`), but the map keeps the last
+ * row per id so a future schema change can't produce duplicate keys.
+ */
+export function listMessageCallMetrics(sessionId: string): MessageCallMetrics[] {
+  const rows = getTokenAuditDb()
+    .prepare(
+      `SELECT message_id, status, output_tokens, duration_ms, ttft_ms, generation_duration_ms
+         FROM model_calls
+        WHERE session_id = ? AND message_id IS NOT NULL
+        ORDER BY id ASC`,
+    )
+    .all(sessionId) as MessageMetricRow[];
+
+  const byMessage = new Map<string, MessageCallMetrics>();
+  for (const r of rows) {
+    if (!r.message_id) continue;
+    const status = mapStatus(r.status);
+    const { generationTps } = deriveCallThroughput({
+      status,
+      outputTokens: r.output_tokens,
+      generationDurationMs: r.generation_duration_ms,
+      durationMs: r.duration_ms,
+    });
+    byMessage.set(r.message_id, {
+      messageId: r.message_id,
+      status,
+      ttftMs: r.ttft_ms,
+      generationDurationMs: r.generation_duration_ms,
+      generationTps,
+      outputTokens: r.output_tokens,
+    });
+  }
+  return [...byMessage.values()];
 }
 
 const AGG_COLS = `

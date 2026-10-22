@@ -9,6 +9,7 @@ import { SvgBlock } from "@/components/renderers/SvgBlock";
 import { CodeBlock } from "@/components/renderers/CodeBlock";
 import { MarkdownImage } from "@/components/renderers/ImageLightbox";
 import { resolveFileLink } from "@/lib/shared/file-link";
+import type { MessageCallMetrics } from "@/lib/shared/token-audit-types";
 import { useFileLinkHandler } from "./context";
 
 export function formatTime(ts?: number): string | null {
@@ -226,15 +227,42 @@ export function getToolPreview(block: { input?: unknown; toolName?: string }): s
     .slice(0, PREVIEW_TOTAL_LIMIT);
 }
 
-export function UsageIcons({ usage }: { usage: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } }) {
+export interface UsageIconsProps {
+  usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } | null;
+  /**
+   * Recorded TTFT / throughput for the call that produced this message. Comes
+   * from the model-call metrics DB (not from the session JSONL), so it can be
+   * missing for calls recorded before metrics existed or whose row failed to
+   * land — the footer then simply shows the token/cost items as before.
+   */
+  metrics?: MessageCallMetrics | null;
+}
+
+/** First-token latency: sub-second reads better in ms, later in seconds. */
+function formatTtft(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = ms / 1000;
+  return `${seconds.toFixed(seconds < 10 ? 2 : 1)}s`;
+}
+
+/** Generation speed: keep one decimal, drop it once it stops mattering. */
+function formatTps(tps: number): string {
+  return tps >= 100 ? tps.toFixed(0) : tps.toFixed(1);
+}
+
+export function UsageIcons({ usage, metrics }: UsageIconsProps) {
   const { formatCost, currency } = useFormatCurrency();
-  const inputDenom = usage.input + usage.cacheRead;
-  const cacheHitRate = inputDenom > 0 ? (usage.cacheRead / inputDenom) * 100 : 0;
-  const items: Array<{ key: string; label: string; icon: React.ReactNode }> = [];
-  if (usage.input) {
+  const inputDenom = usage ? usage.input + usage.cacheRead : 0;
+  const cacheHitRate = inputDenom > 0 ? ((usage?.cacheRead ?? 0) / inputDenom) * 100 : 0;
+  // Each item carries its tooltip and its compact footer text: the two differ
+  // (a tooltip spells out what a bare number means) and deriving both from one
+  // place keeps them from drifting apart.
+  const items: Array<{ key: string; label: string; compact: string; icon: React.ReactNode }> = [];
+  if (usage?.input) {
     items.push({
       key: "in",
       label: `${usage.input.toLocaleString()} in · ${cacheHitRate.toFixed(1)}% cached`,
+      compact: usage.input.toLocaleString(),
       icon: (
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M6 9.5v-7" /><polyline points="3 6 6 2.5 9 6" />
@@ -242,10 +270,11 @@ export function UsageIcons({ usage }: { usage: { input: number; output: number; 
       ),
     });
   }
-  if (usage.output) {
+  if (usage?.output) {
     items.push({
       key: "out",
       label: `${usage.output.toLocaleString()} out`,
+      compact: usage.output.toLocaleString(),
       icon: (
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M6 2.5v7" /><polyline points="3 6 6 9.5 9 6" />
@@ -253,10 +282,11 @@ export function UsageIcons({ usage }: { usage: { input: number; output: number; 
       ),
     });
   }
-  if (usage.cacheRead || usage.cacheWrite) {
+  if (usage && (usage.cacheRead || usage.cacheWrite)) {
     items.push({
       key: "cache",
       label: `${cacheHitRate.toFixed(1)}% cache hit`,
+      compact: `${cacheHitRate.toFixed(0)}%`,
       icon: (
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <ellipse cx="6" cy="3.5" rx="3.5" ry="1.4" /><path d="M2.5 3.5v2.6c0 .77 1.57 1.4 3.5 1.4s3.5-.63 3.5-1.4V3.5" /><path d="M2.5 6.1v2.6c0 .77 1.57 1.4 3.5 1.4s3.5-.63 3.5-1.4V6.1" />
@@ -264,7 +294,7 @@ export function UsageIcons({ usage }: { usage: { input: number; output: number; 
       ),
     });
   }
-  if (typeof usage.cost?.total === "number" && usage.cost.total > 0) {
+  if (typeof usage?.cost?.total === "number" && usage.cost.total > 0) {
     const usd = usage.cost.total;
     const formatted = formatCost(usd);
     const tooltipLabel = currency === "CNY"
@@ -273,6 +303,7 @@ export function UsageIcons({ usage }: { usage: { input: number; output: number; 
     items.push({
       key: "cost",
       label: tooltipLabel,
+      compact: formatCost(usd),
       icon: (
         <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M6 1.5v9" /><path d="M8 3.2c-.5-.9-2.2-1.2-3-.6-.8.6-.7 1.7.2 2.2l1.9.9c1 .5 1 1.7.1 2.3-.9.7-2.7.3-3.2-.7" />
@@ -280,23 +311,42 @@ export function UsageIcons({ usage }: { usage: { input: number; output: number; 
       ),
     });
   }
+  const ttft = metrics?.ttftMs;
+  if (typeof ttft === "number" && Number.isFinite(ttft) && ttft >= 0) {
+    const text = formatTtft(ttft);
+    items.push({
+      key: "ttft",
+      label: `TTFT ${text}`,
+      compact: `TTFT ${text}`,
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6.6 1.5 3.2 6.6h2.3l-.5 3.9 3.6-5.4H6.2z" />
+        </svg>
+      ),
+    });
+  }
+  const tps = metrics?.generationTps;
+  if (typeof tps === "number" && Number.isFinite(tps) && tps > 0) {
+    const text = formatTps(tps);
+    items.push({
+      key: "tps",
+      label: `${text} tok/s`,
+      compact: `TPS ${text}`,
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M2 8.7a4 4 0 1 1 8 0" /><path d="M6 8.7 8.4 5.6" />
+        </svg>
+      ),
+    });
+  }
   if (items.length === 0) return null;
-  const compact = (item: typeof items[number]): string => {
-    if (item.key === "in") return usage.input.toLocaleString();
-    if (item.key === "out") return usage.output.toLocaleString();
-    if (item.key === "cache") return `${cacheHitRate.toFixed(0)}%`;
-    if (item.key === "cost") {
-      return formatCost(usage.cost.total);
-    }
-    return "";
-  };
   return (
     <>
       {items.map((item) => (
         <Tooltip key={item.key} content={item.label}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--text-dim)", fontSize: 11 }}>
             {item.icon}
-            <span>{compact(item)}</span>
+            <span>{item.compact}</span>
           </span>
         </Tooltip>
       ))}

@@ -12,6 +12,8 @@ import { buildChatTimeline, indexToolResults, isVisibleChatMessage } from "@/lib
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
+import { MessageCallMetricsProvider } from "./message-view/context";
+import { useSessionCallMetrics } from "@/hooks/useSessionCallMetrics";
 import { ReadFileChips } from "./ReadFileChips";
 import { StreamingBubble } from "./StreamingBubble";
 import { StreamingMessageViewport } from "./StreamingMessageViewport";
@@ -679,6 +681,15 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
   const slashResourceKey = sessionId ?? (newSessionCwd ? `new:${newSessionCwd}` : "none");
 
+  // Per-message TTFT/TPS live in the model-call metrics DB, joined to a bubble
+  // by its message id. A call's row lands when its generation finishes, so the
+  // refresh key tracks the turn boundary and the message count: one fetch when
+  // a turn starts, another (debounced) once it ends and the rows exist.
+  const messageCallMetrics = useSessionCallMetrics(
+    currentSessionId,
+    `${agentRunning ? "run" : "idle"}:${messages.length}`,
+  );
+
   useEffect(() => {
     const controller = new AbortController();
     const params = sessionId
@@ -886,6 +897,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         />
       )}
       <CollapseNonceProvider value={collapseNonce}>
+      <MessageCallMetricsProvider value={messageCallMetrics}>
       <div className="relative flex flex-1 overflow-hidden">
         <div ref={scrollContainerRef} data-scroll-wide data-streaming-hide-scroll={liveTurnActive || undefined} onScroll={scrollFollow.handleScroll} onWheel={scrollFollow.handleWheel} onTouchMove={scrollFollow.handleTouchMove} className="relative flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-20">
           <div className="mx-auto max-w-[820px]">
@@ -1360,6 +1372,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         {/* Tool call stats are rendered as a right-panel tab by AppShell.
             We just publish the snapshot + scroll callback to the module store. */}
       </div>
+      </MessageCallMetricsProvider>
       </CollapseNonceProvider>
 
       <div className="relative">

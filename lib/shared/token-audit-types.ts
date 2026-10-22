@@ -153,6 +153,24 @@ export interface ListCallsParams {
   sessionId?: string | null;
 }
 
+/**
+ * Timing facts for the assistant message one logical call produced, keyed by
+ * the message timestamp the recorder stored (`String(message.timestamp)`).
+ *
+ * Compact by design: the chat footer asks for a whole session at once, so the
+ * payload carries only what it renders. Throughput is derived at read time by
+ * `deriveCallThroughput`, exactly like `TokenCall`.
+ */
+export interface MessageCallMetrics {
+  messageId: string;
+  status: CallStatus;
+  ttftMs: number | null;
+  generationDurationMs: number | null;
+  /** Derived at read time; `null` for anything but a completed call. */
+  generationTps: number | null;
+  outputTokens: number | null;
+}
+
 export interface SummarizeResult {
   buckets: SummaryBucket[];
   totals: SummaryBucket;
