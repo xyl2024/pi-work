@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // running app out of itself until the shell restarts.
 export async function POST() {
   if (!isLoginEnabled()) {
-    return NextResponse.json({ error: "logout is disabled in desktop mode" }, { status: 403 });
+    return NextResponse.json({ error: "logout is disabled in this deployment mode" }, { status: 403 });
   }
   const res = NextResponse.json({ success: true });
   for (const c of authClearCookieHeaders()) res.headers.append("Set-Cookie", c);

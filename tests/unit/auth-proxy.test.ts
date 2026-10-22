@@ -12,7 +12,7 @@ import { NextRequest } from "next/server";
 import authProxy from "@/proxy";
 import { AUTH_COOKIE_NAME, createSessionToken } from "@/lib/server/auth";
 
-const TRACKED_ENV = ["PI_WORK_DESKTOP", "PI_WORK_DESKTOP_SECRET"];
+const TRACKED_ENV = ["PI_WORK_DESKTOP", "PI_WORK_DESKTOP_SECRET", "PI_WORK_AUTH_DISABLED", "PI_WORK_AUTH_USERNAME", "PI_WORK_AUTH_PASSWORD"];
 let saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -81,6 +81,34 @@ describe("server track (unchanged behaviour)", () => {
     const res = authProxy(request("/login", createSessionToken()));
 
     expect(redirectTarget(res)).toBe("/");
+  });
+});
+
+describe("explicit unauthenticated deployment", () => {
+  beforeEach(() => { process.env.PI_WORK_AUTH_DISABLED = "true"; });
+
+  it.each(["/", "/api", "/api/sessions", "/api/terminal"])("allows %s without a cookie", (path) => {
+    const res = authProxy(request(path));
+    expect(res.status).toBe(200);
+    expect(redirectTarget(res)).toBeNull();
+  });
+
+  it("ignores stale cookies and redirects the login page to the app", () => {
+    expect(authProxy(request("/api/sessions", "stale")).status).toBe(200);
+    expect(redirectTarget(authProxy(request("/login")))).toBe("/");
+  });
+
+  it("cannot bypass desktop authentication, including without a secret", () => {
+    process.env.PI_WORK_DESKTOP = "1";
+    expect(authProxy(request("/api/terminal")).status).toBe(401);
+    process.env.PI_WORK_DESKTOP_SECRET = "launch";
+    expect(authProxy(request("/api/sessions")).status).toBe(401);
+  });
+
+  it("restores authentication when the switch is turned off", () => {
+    process.env.PI_WORK_AUTH_DISABLED = "false";
+    expect(authProxy(request("/api/sessions")).status).toBe(401);
+    expect(redirectTarget(authProxy(request("/")))).toBe("/login");
   });
 });
 

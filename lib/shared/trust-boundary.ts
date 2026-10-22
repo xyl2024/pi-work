@@ -42,7 +42,14 @@ export function desktopModeRequested(env: Record<string, string | undefined>): b
   return !FALSY_FLAGS.has(value);
 }
 
+/** Disable server authentication only for an explicit opt-in; typos fail closed. */
+export function authDisabledRequested(env: Record<string, string | undefined>): boolean {
+  return ["1", "true", "yes", "on"].includes(env.PI_WORK_AUTH_DISABLED?.trim().toLowerCase() ?? "");
+}
+
 export interface TrustBoundaryInput {
+  /** Explicit trusted-network opt-in; ignored on the desktop track. */
+  authDisabled?: boolean;
   /** Whether the desktop track is in effect (see `desktopModeRequested`). */
   desktop: boolean;
   /** `PI_WORK_DESKTOP_SECRET`: the shell's random value for this launch. */
@@ -53,6 +60,7 @@ export interface TrustBoundaryInput {
 
 export interface TrustBoundary {
   desktop: boolean;
+  authDisabled: boolean;
   /** Whether the login page (and the credential login endpoint) exists at all. */
   loginEnabled: boolean;
   /** What the session HMAC key is derived from; `null` = nothing can be signed. */
@@ -64,17 +72,20 @@ export function trustBoundary({
   desktop,
   desktopSecret,
   credentials,
+  authDisabled = false,
 }: TrustBoundaryInput): TrustBoundary {
   if (!desktop) {
     return {
       desktop: false,
-      loginEnabled: true,
-      sessionKeyMaterial: `pi-work-auth:${credentials.username}:${credentials.password}`,
+      authDisabled,
+      loginEnabled: !authDisabled,
+      sessionKeyMaterial: authDisabled ? null : `pi-work-auth:${credentials.username}:${credentials.password}`,
     };
   }
   const secret = desktopSecret?.trim();
   return {
     desktop: true,
+    authDisabled: false,
     loginEnabled: false,
     // Desktop mode without a secret signs nothing. The shell always passes one;
     // falling back to the credentials here would put the built-in admin/admin

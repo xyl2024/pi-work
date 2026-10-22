@@ -22,6 +22,7 @@ import {
 const TRACKED_ENV = [
   "PI_WORK_DESKTOP",
   "PI_WORK_DESKTOP_SECRET",
+  "PI_WORK_AUTH_DISABLED",
   "PI_WORK_AUTH_USERNAME",
   "PI_WORK_AUTH_PASSWORD",
 ];
@@ -108,6 +109,37 @@ describe("desktop track (PI_WORK_DESKTOP)", () => {
     expect(isLoginEnabled()).toBe(false);
     expect(() => createSessionToken()).toThrow(/PI_WORK_DESKTOP_SECRET/);
     expect(verifySessionToken("9999999999999.deadbeef")).toBe(false);
+  });
+});
+
+describe("unauthenticated deployment", () => {
+  beforeEach(() => { process.env.PI_WORK_AUTH_DISABLED = "1"; });
+
+  it("reports access without a cookie or a fabricated username", async () => {
+    const res = await statusRoute(statusRequest());
+    expect(await res.json()).toMatchObject({
+      authenticated: true, desktop: false, authDisabled: true,
+      loginEnabled: false, username: null, usingDefaultCredentials: false,
+    });
+    expect(isLoginEnabled()).toBe(false);
+    expect(isUsingDefaultCredentials()).toBe(false);
+    expect(() => createSessionToken()).toThrow(/no session signer/);
+  });
+
+  it("does not mint or clear a login session", async () => {
+    const login = await loginRoute(loginRequest({ username: "admin", password: "admin" }));
+    const logout = await logoutRoute();
+    for (const res of [login, logout]) {
+      expect(res.status).toBe(403);
+      expect(res.headers.get("set-cookie")).toBeNull();
+    }
+  });
+
+  it("does not override the desktop shell", async () => {
+    enterDesktopMode();
+    expect(await (await statusRoute(statusRequest())).json()).toMatchObject({
+      authenticated: false, desktop: true, authDisabled: false, loginEnabled: false,
+    });
   });
 });
 

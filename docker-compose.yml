@@ -17,6 +17,8 @@ services:
     environment:
       HOME: /root
       NODE_ENV: production
+      # Trusted networks only: grants full access without a password.
+      PI_WORK_AUTH_DISABLED: ${PI_WORK_AUTH_DISABLED:-false}
       # host networking: keep the terminal WS off 30142 so a local dev
       # instance on the same host can run side by side
       PI_WORK_TERMINAL_PORT: 30145

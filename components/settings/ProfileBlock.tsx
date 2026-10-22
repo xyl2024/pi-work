@@ -42,11 +42,21 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
   const { t, locale, toggleLocale } = useI18n();
   const { isDark, setPreset } = useTheme();
   const [username, setUsername] = useState<string | null>(null);
+  const [loginEnabled, setLoginEnabled] = useState(false);
   const [avatarAttempted, setAvatarAttempted] = useState(0);
   const [avatarOk, setAvatarOk] = useState(false);
   const [loading, setLoading] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/session/status")
+      .then((res) => res.json() as Promise<{ loginEnabled?: boolean }>)
+      .then((data) => { if (!cancelled) setLoginEnabled(data.loginEnabled === true); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   // Hover-driven open: hovering the avatar (or the popup itself) opens
   // the menu; leaving both triggers a delayed close so the cursor has time
@@ -136,7 +146,7 @@ export function ProfileBlock({ onOpenSettings, refreshKey, onLogout }: Props) {
   const showImg = avatarOk;
   const showPlaceholder = !avatarOk;
 
-  const hasAnyEntry = Boolean(onLogout);
+  const hasAnyEntry = loginEnabled && Boolean(onLogout);
 
   return (
     <div

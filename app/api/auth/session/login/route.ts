@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 // injects it into the window, so there is nothing to log in to here.
 export async function POST(req: Request) {
   if (!isLoginEnabled()) {
-    return NextResponse.json({ error: "login is disabled in desktop mode" }, { status: 403 });
+    return NextResponse.json({ error: "login is disabled in this deployment mode" }, { status: 403 });
   }
   let body: { username?: unknown; password?: unknown };
   try {

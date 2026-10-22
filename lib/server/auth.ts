@@ -25,7 +25,7 @@
 
 import { createHmac, createHash, timingSafeEqual } from "crypto";
 import { isDesktopMode } from "@/lib/server/trust-boundary";
-import { trustBoundary } from "@/lib/shared/trust-boundary";
+import { authDisabledRequested, trustBoundary } from "@/lib/shared/trust-boundary";
 
 export const AUTH_COOKIE_NAME = "pi-work-auth";
 /** Session lifetime: 7 days, matching the cookie Max-Age. */
@@ -49,8 +49,8 @@ export function getAuthPassword(): string {
 
 /** True when the operator hasn't overridden the built-in admin/admin pair. */
 export function isUsingDefaultCredentials(): boolean {
-  // Desktop mode has no credential pair at all; nothing to warn about.
-  if (isDesktopMode()) return false;
+  // Modes without a login have no credential pair to warn about.
+  if (!isLoginEnabled()) return false;
   return !process.env.PI_WORK_AUTH_PASSWORD?.trim() && !process.env.PI_WORK_AUTH_USERNAME?.trim();
 }
 
@@ -58,9 +58,15 @@ export function isUsingDefaultCredentials(): boolean {
 function currentTrustBoundary() {
   return trustBoundary({
     desktop: isDesktopMode(),
+    authDisabled: authDisabledRequested(process.env),
     desktopSecret: process.env.PI_WORK_DESKTOP_SECRET,
     credentials: { username: getAuthUsername(), password: getAuthPassword() },
   });
+}
+
+/** Whether server authentication was explicitly disabled (never on desktop). */
+export function isAuthDisabled(): boolean {
+  return currentTrustBoundary().authDisabled;
 }
 
 /** Whether the login page and the credential login endpoint exist at all. */
@@ -101,7 +107,7 @@ export function createSessionToken(now = Date.now()): string {
     // Desktop mode without PI_WORK_DESKTOP_SECRET: the shell mints the cookie,
     // this process has nothing to sign with.
     throw new Error(
-      "no session signer: PI_WORK_DESKTOP is set but PI_WORK_DESKTOP_SECRET is empty",
+      "no session signer: authentication is disabled or PI_WORK_DESKTOP_SECRET is empty",
     );
   }
   const expiresAtMs = now + AUTH_SESSION_TTL_MS;
@@ -143,7 +149,7 @@ export function readAuthToken(req: { headers: { get(name: string): string | null
 
 /** Whether this request carries a valid signed auth session. */
 export function isRequestAuthenticated(req: Request): boolean {
-  return verifySessionToken(readAuthToken(req));
+  return isAuthDisabled() || verifySessionToken(readAuthToken(req));
 }
 
 /** Set-Cookie header values for a fresh login session. */

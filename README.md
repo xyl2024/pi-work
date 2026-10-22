@@ -29,6 +29,31 @@ pi-work -p 8080 -H 127.0.0.1     # 组合使用
 PORT=8080 pi-work                 # 也支持 PORT 环境变量
 ```
 
+### 登录与内网免认证部署
+
+默认需要登录，初始账号 / 密码为 `admin` / `admin`。建议通过 `PI_WORK_AUTH_USERNAME` 和 `PI_WORK_AUTH_PASSWORD` 设置自己的凭据。
+
+如果部署在**完全可信的内网**，可以显式关闭 Web 登录认证：
+
+```bash
+PI_WORK_AUTH_DISABLED=true pi-work --hostname 0.0.0.0
+# 源码部署同样生效
+PI_WORK_AUTH_DISABLED=true pnpm start
+```
+
+- 支持 `1`、`true`、`yes`、`on`（不区分大小写）；不设置、设为 `false` 或其他值时仍要求认证。
+- 开启后无需密码或 Cookie，直接进入应用；登录页会跳回首页，退出登录入口隐藏。
+- **能访问服务的人都可使用完整功能，包括文件读写、Agent、配置和终端，可能接触服务器上的凭据及数据。不要暴露到公网；请用防火墙 / VPN / 反向代理限制访问。** 文件访问校验、危险命令确认和终端 WebSocket 随机 token 仍保留，但不是用户身份认证的替代品。
+- 终端默认只监听 loopback；确需让内网客户端连接时，另设 `PI_WORK_TERMINAL_HOST` 并限制相应端口的访问。
+- 此开关只作用于服务器部署，不能关闭 Electron 桌面版的随机密钥认证。
+- 环境变量修改后需重启服务；移除开关或设为 `false` 即恢复登录认证。
+
+使用仓库的 Docker Compose 部署时：
+
+```bash
+PI_WORK_AUTH_DISABLED=true docker compose up -d
+```
+
 ## 主要功能
 
 - 按工作目录浏览和搜索 pi 会话

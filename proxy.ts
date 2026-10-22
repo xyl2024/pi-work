@@ -17,7 +17,7 @@
 // redirect would loop with the one below. Every /api call is still 401
 // without a valid cookie.
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_COOKIE_NAME, verifySessionToken } from "@/lib/server/auth";
+import { AUTH_COOKIE_NAME, isAuthDisabled, verifySessionToken } from "@/lib/server/auth";
 import { isDesktopMode } from "@/lib/server/trust-boundary";
 
 const LOGIN_PATH = "/login";
@@ -45,6 +45,13 @@ function clearSessionCookie(res: NextResponse): NextResponse {
 export default function authProxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const desktop = isDesktopMode();
+
+  // Explicit trusted-network deployment: no cookie is needed, even if an old
+  // cookie is still present. Desktop mode can never take this bypass.
+  if (isAuthDisabled()) {
+    if (pathname === LOGIN_PATH) return NextResponse.redirect(new URL("/", req.url));
+    return NextResponse.next();
+  }
 
   // Desktop mode has no login page. Bounce it before anything else so the
   // login form is never rendered there, cookie or no cookie.

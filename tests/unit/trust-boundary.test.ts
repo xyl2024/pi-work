@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   LOOPBACK_HOST,
+  authDisabledRequested,
   desktopModeRequested,
   resolveTerminalHost,
   trustBoundary,
@@ -22,6 +23,17 @@ describe("desktopModeRequested", () => {
   it("is off for the explicit falsy flags", () => {
     for (const value of ["0", "false", "no", "off", "FALSE"]) {
       expect(desktopModeRequested({ PI_WORK_DESKTOP: value })).toBe(false);
+    }
+  });
+});
+
+describe("authDisabledRequested", () => {
+  it("only accepts explicit truthy values, ignoring whitespace and case", () => {
+    for (const value of ["1", "true", "YES", " on "]) {
+      expect(authDisabledRequested({ PI_WORK_AUTH_DISABLED: value })).toBe(true);
+    }
+    for (const value of [undefined, "", " ", "0", "false", "off", "no", "typo"]) {
+      expect(authDisabledRequested({ PI_WORK_AUTH_DISABLED: value })).toBe(false);
     }
   });
 });
@@ -52,6 +64,18 @@ describe("trustBoundary", () => {
 
     expect(noSecret.sessionKeyMaterial).toBeNull();
     expect(blankSecret.sessionKeyMaterial).toBeNull();
+  });
+
+  it("closes login and signs nothing when server auth is explicitly disabled", () => {
+    expect(trustBoundary({ desktop: false, desktopSecret: undefined, credentials, authDisabled: true }))
+      .toMatchObject({ authDisabled: true, loginEnabled: false, sessionKeyMaterial: null });
+  });
+
+  it("ignores the auth bypass on desktop, with or without a secret", () => {
+    for (const desktopSecret of [undefined, "launch"]) {
+      expect(trustBoundary({ desktop: true, desktopSecret, credentials, authDisabled: true }))
+        .toMatchObject({ desktop: true, authDisabled: false, loginEnabled: false });
+    }
   });
 
   it("gives every launch its own key material", () => {
