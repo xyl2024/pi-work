@@ -22,6 +22,10 @@ interface Props {
    *  intrinsically-sized sections like the GrokBot stage — they only claim
    *  the height of their own header + content. */
   grow?: number;
+  /** Preferred scroll viewport height in pixels. When set, the section
+   *  reserves this height plus its header and leaves remaining space to
+   *  sibling sections. It can still shrink in a short sidebar. */
+  contentHeight?: number;
   /** Optional ref forwarded to the internal scroll container (the element
    *  that actually scrolls, not the section wrapper). Callers that watch
    *  scrolling (the Sessions infinite scroll) read its metrics and attach
@@ -60,6 +64,7 @@ export function SidebarSection({
   children,
   durationMs = 180,
   grow = 1,
+  contentHeight,
   scrollRef,
 }: Props) {
   // Keep the content mounted through the collapse animation (it must be in
@@ -83,15 +88,15 @@ export function SidebarSection({
   // (flex 0 0 auto) instead of the flex-basis-0 + flex-grow trick that
   // grow=1 sections use to absorb free space. A flex-basis-0 wrapper would
   // collapse to 0 height and clip the content away.
-  const isFixedHeight = grow === 0;
+  const isFixedHeight = grow === 0 && contentHeight === undefined;
 
   return (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        flexGrow: open ? grow : 0,
-        flexShrink: open && grow > 0 ? 1 : 0,
+        flexGrow: open && contentHeight === undefined ? grow : 0,
+        flexShrink: open && (grow > 0 || contentHeight !== undefined) ? 1 : 0,
         flexBasis: "auto",
         minHeight: 0,
         overflow: "hidden",
@@ -170,7 +175,15 @@ export function SidebarSection({
             </div>
           </div>
         ) : (
-          <div style={{ flex: "1 1 0", minHeight: 0, overflow: "hidden" }}>
+          <div
+            style={{
+              flex: contentHeight === undefined ? "1 1 0" : "1 1 auto",
+              height: contentHeight === undefined ? undefined : open ? contentHeight : 0,
+              minHeight: 0,
+              overflow: "hidden",
+              transition: `height ${durationMs}ms ${ease}`,
+            }}
+          >
             <div
               ref={scrollRef}
               data-scroll-side

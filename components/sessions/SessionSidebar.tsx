@@ -14,6 +14,7 @@ import { CHECK, CHEVRONS_UP } from "@/lib/client/icon-paths";
 import { MultiCwdList, type CwdSessionsState } from "./MultiCwdList";
 import { CwdSessionsModal } from "./CwdSessionsModal";
 import { SidebarSection } from "../ui/SidebarSection";
+import { SESSION_ROW_HEIGHT_PX } from "@/lib/shared/sidebar-section";
 import { useRunningSessions } from "@/hooks/runningSessionsStore";
 import { appendSessionDateRange, localSessionDay, matchesSessionDate } from "@/lib/shared/session-date-filter";
 import {
@@ -52,6 +53,10 @@ interface Props {
   onLogout?: () => void;
   profileRefreshKey?: number;
 }
+
+// Two cwd headers (22px icon + 12px padding), six session rows,
+// five session gaps, one cwd gap, expanded-body top padding and list padding.
+const SESSIONS_CONTENT_HEIGHT_PX = 2 * 34 + 6 * SESSION_ROW_HEIGHT_PX + 5 * 6 + 8 + 4 + 12;
 
 const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
 
@@ -898,13 +903,13 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
         </div>
         </div>
 
-      {/* Sessions section — cwd groups + their sessions. Collapsible via the
-          shared SidebarSection (same flex-grow animation as Explorer). */}
+      {/* Reserve two cwd headers and six session rows; Explorer fills the rest. */}
       <SidebarSection
         title={todayOnly ? `${t("Sessions")} (${todayView.count})` : t("Sessions")}
         open={sessionsOpen}
         onToggle={() => setSessionsOpen((v) => !v)}
         scrollRef={attachSessionsScroll}
+        contentHeight={SESSIONS_CONTENT_HEIGHT_PX}
         actions={
           <>
           <Tooltip content={t("Only today's sessions")}>
