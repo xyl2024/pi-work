@@ -267,7 +267,10 @@ function unifiedCallsQuery(range: Range, sessionId?: string | null): { sql: stri
       m.model_id AS model_id,
       m.api AS api,
       t.input_tokens AS input_tokens,
-      COALESCE(m.output_tokens, t.output_tokens) AS output_tokens,
+      -- Metric facts are authoritative when a metrics row exists: falling back
+      -- to the billing row would turn "usage not reported" (NULL) into the
+      -- billing placeholder 0 and fabricate a zero TPS.
+      m.output_tokens AS output_tokens,
       t.cache_read_tokens AS cache_read_tokens,
       t.cache_write_tokens AS cache_write_tokens,
       t.cost_input AS cost_input,
@@ -275,7 +278,7 @@ function unifiedCallsQuery(range: Range, sessionId?: string | null): { sql: stri
       t.cost_read AS cost_read,
       t.cost_write AS cost_write,
       t.cost_total AS cost_total,
-      COALESCE(m.duration_ms, t.duration_ms) AS duration_ms,
+      m.duration_ms AS duration_ms,
       COALESCE(m.error, t.error) AS error,
       m.ttft_ms AS ttft_ms,
       m.generation_duration_ms AS generation_duration_ms

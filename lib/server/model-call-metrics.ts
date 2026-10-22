@@ -84,6 +84,8 @@ interface CallState {
   firstOutputAt: number | null;
   lastOutputAt: number | null;
   finalized: boolean;
+  /** Restores the stream's patched `push` once the call is terminal. */
+  cleanup: (() => void) | null;
 }
 
 type ObservedEvent = {
@@ -117,6 +119,7 @@ function createState(
     firstOutputAt: null,
     lastOutputAt: null,
     finalized: false,
+    cleanup: null,
   };
 }
 
@@ -140,12 +143,20 @@ function observeEvent(state: CallState, event: ObservedEvent, clock: ModelCallCl
 /**
  * Provider-reported output usage, or `null` when the provider never reported.
  *
- * SDK adapters initialise `usage` with zero placeholders and only replace it
- * when the provider sends usage metadata. A final object that is still all
- * zeros is therefore indistinguishable from "not reported" (a genuine
- * all-zero report looks identical) — we treat it as missing instead of
- * claiming a real zero. Providers that report a reasoning breakdown are
- * considered reporting even when the counters are zero.
+ * SDK capability boundary (verified against pi-ai 1.2.0 adapters):
+ * - Every adapter initialises `usage` with an all-zero object and no
+ *   `reasoning` key, so an all-zero usage with `reasoning === undefined` may
+ *   be "never reported" or a genuine all-zero report.
+ * - openai-completions, openai-responses and google-generative-ai/vertex write
+ *   `reasoning` (possibly 0) whenever usage is reported.
+ * - anthropic writes `reasoning` only when the provider sends a thinking
+ *   breakdown; other reported usages leave it undefined.
+ * - bedrock-converse and mistral-conversations report usage without ever
+ *   writing `reasoning`, so a genuine all-zero report from those two adapters
+ *   is conservatively treated as missing (`null`) rather than fabricated as 0.
+ *
+ * Because `usage.reasoning` is a subset of `usage.output`, it is only used as
+ * a "usage was reported" signal — never added to output.
  */
 function readReportedOutputTokens(message: AssistantMessage | undefined): number | null {
   const usage = message?.usage;
@@ -157,10 +168,30 @@ function readReportedOutputTokens(message: AssistantMessage | undefined): number
   return isValidTokenCount(usage.output) ? usage.output : null;
 }
 
-function terminalStatus(reason: string | undefined): CallStatus {
+const SUCCESS_REASONS = new Set(["stop", "length", "toolUse", "tool_use", "deferred", "completed"]);
+
+/**
+ * Terminal status from a stream reason. Unknown reasons must never be assumed
+ * successful, and an `error` event on an aborted signal is a cancellation.
+ */
+function terminalStatus(
+  state: CallState,
+  reason: string | undefined,
+  signalMeansCancel = true,
+): CallStatus {
   if (reason === "aborted") return "cancelled";
-  if (reason === "error") return "failed";
+  if (signalMeansCancel && state.signal?.aborted) return "cancelled";
+  if (reason === "error" || (reason !== undefined && !SUCCESS_REASONS.has(reason))) return "failed";
   return "completed";
+}
+
+/**
+ * Valid stored duration fact (0 is a real instantaneous measurement). Unlike
+ * the shared TPS denominator rule this must not reject 0, so it is kept
+ * separate from `isValidDurationMs`.
+ */
+function nonNegativeDurationMs(value: number): number | null {
+  return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 function statusFromError(state: CallState): CallStatus {
@@ -185,11 +216,14 @@ function finish(
   if (state.finalized) return;
   state.finalized = true;
 
-  const durationMs = terminal.at - state.startMonotonic;
+  const durationMs = nonNegativeDurationMs(terminal.at - state.startMonotonic);
   const hasOutput = state.firstOutputAt !== null && state.lastOutputAt !== null;
-  const ttftMs = state.firstOutputAt !== null ? state.firstOutputAt - state.startMonotonic : null;
+  const ttftMs =
+    state.firstOutputAt !== null
+      ? nonNegativeDurationMs(state.firstOutputAt - state.startMonotonic)
+      : null;
   const generationDurationMs = hasOutput
-    ? (state.lastOutputAt as number) - (state.firstOutputAt as number)
+    ? nonNegativeDurationMs((state.lastOutputAt as number) - (state.firstOutputAt as number))
     : null;
 
   const insert: ModelCallInsert = {
@@ -203,9 +237,9 @@ function finish(
     modelId: state.modelId,
     api: state.api,
     status: terminal.status,
-    ttftMs: Number.isFinite(ttftMs) ? (ttftMs as number) : null,
-    generationDurationMs: Number.isFinite(generationDurationMs) ? (generationDurationMs as number) : null,
-    durationMs: Number.isFinite(durationMs) ? durationMs : null,
+    ttftMs,
+    generationDurationMs,
+    durationMs,
     outputTokens: readReportedOutputTokens(terminal.message),
     error: terminal.status === "completed" ? null : errorText(terminal.error, terminal.message),
   };
@@ -219,6 +253,15 @@ function finish(
       sessionId: state.context.sessionId,
       error: String(error),
     });
+  } finally {
+    // Drop the observation hook even when recording fails; a terminal call
+    // must not keep a subscription (or its timing state) alive.
+    try {
+      state.cleanup?.();
+    } catch {
+      // Cleanup must never affect the business call either.
+    }
+    state.cleanup = null;
   }
 }
 
@@ -231,7 +274,7 @@ function finishCompleted(
   finish(
     state,
     {
-      status: terminalStatus(message?.stopReason),
+      status: terminalStatus(state, message?.stopReason, false),
       at: clock.now(),
       message,
       error: message,
@@ -268,14 +311,20 @@ function observeStream(
     push: (event: ObservedEvent) => void;
     result: () => Promise<AssistantMessage>;
   };
-  const originalPush = target.push.bind(target);
-  target.push = (event: ObservedEvent) => {
+  const originalPushValue = target.push;
+  const originalPush = originalPushValue.bind(target);
+  const hadOwnPush = Object.prototype.hasOwnProperty.call(target, "push");
+  const patchedPush = (event: ObservedEvent) => {
     try {
       observeEvent(state, event, clock);
       if (event.type === "done") {
         finish(
           state,
-          { status: "completed", at: clock.now(), message: asMessage(event.message) },
+          {
+            status: terminalStatus(state, event.reason, false),
+            at: clock.now(),
+            message: asMessage(event.message),
+          },
           clock,
           record,
         );
@@ -283,7 +332,7 @@ function observeStream(
         finish(
           state,
           {
-            status: terminalStatus(event.reason),
+            status: terminalStatus(state, event.reason),
             at: clock.now(),
             message: asMessage(event.error),
             error: event.error,
@@ -296,6 +345,14 @@ function observeStream(
       // Observation must never interfere with the provider stream.
     }
     originalPush(event);
+  };
+  target.push = patchedPush;
+  state.cleanup = () => {
+    // Only undo our own patch; deleting an own property restores the
+    // prototype method, while a natively own `push` is put back as bound.
+    if (target.push !== patchedPush) return;
+    if (hadOwnPush) target.push = originalPushValue;
+    else delete (target as { push?: unknown }).push;
   };
 
   // Fallback for streams that end without a done/error event reaching push
@@ -337,15 +394,38 @@ export function wrapModelCallMetrics(
     method: "stream" | "streamSimple",
     args: unknown[],
   ): unknown => {
-    const { model, options: callOptions } = callArgs(args);
-    const state = createState(model, resolveContext(), clock, createCallId, callOptions);
+    // Observation setup itself must never change the business call: if the
+    // context resolver or the stream shape is unexpected, run unobserved.
+    let state: CallState | null = null;
+    try {
+      const { model, options: callOptions } = callArgs(args);
+      state = createState(model, resolveContext(), clock, createCallId, callOptions);
+    } catch (error) {
+      log.warn("model-call metrics setup failed", { error: String(error) });
+    }
     const fn = Reflect.get(target, method, target) as (...a: unknown[]) => unknown;
     try {
       const stream = fn.apply(target, args);
-      observeStream(stream, state, clock, record);
+      if (state) {
+        try {
+          observeStream(stream, state, clock, record);
+        } catch (error) {
+          // Undo a partial patch and stay out of the caller's way.
+          try {
+            state.cleanup?.();
+          } catch {
+            // ignore
+          }
+          state.cleanup = null;
+          log.warn("model-call metrics observation failed", {
+            callId: state.callId,
+            error: String(error),
+          });
+        }
+      }
       return stream;
     } catch (error) {
-      finishThrown(state, error, clock, record);
+      if (state) finishThrown(state, error, clock, record);
       throw error;
     }
   };

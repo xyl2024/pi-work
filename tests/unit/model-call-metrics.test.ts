@@ -16,14 +16,20 @@ import { recordCall, recordModelCall, summarize } from "@/lib/server/token-audit
 import { GET } from "@/app/api/token-audit/calls/route";
 
 /**
- * Acceptance boundary for issue 01: a controlled model runtime drives the
+ * Acceptance boundary for issues 01/02: a controlled model runtime drives the
  * real wrapper, facts land in a real temporary SQLite database, and the real
  * per-call route handler returns them. No provider, key or user directory is
- * touched; the isolated dev instance is not started for this file.
+ * touched. The file is process-internal, so it can run with
+ * `PI_WORK_TEST_SKIP_INSTANCE=1` (the shared global setup otherwise starts the
+ * isolated instance for every `tests/unit/**` file).
  */
 
 let dir: string;
 let dbCounter = 0;
+
+// Keep server logs out of the real `~/.pi-work/logs` directory.
+const originalLogFile = process.env.PI_WORK_LOG_FILE;
+process.env.PI_WORK_LOG_FILE = "off";
 
 function resetDbGlobals(): void {
   const g = globalThis as { __piTokenAuditDb?: { close: () => void } };
@@ -49,6 +55,8 @@ beforeEach(() => {
 afterAll(() => {
   resetDbGlobals();
   delete process.env.PI_WORK_TOKEN_AUDIT_DB;
+  if (originalLogFile === undefined) delete process.env.PI_WORK_LOG_FILE;
+  else process.env.PI_WORK_LOG_FILE = originalLogFile;
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -397,6 +405,488 @@ describe("audited runtime composition", () => {
   });
 });
 
+// ── lifecycle edge cases (issue 02) ────────────────────────────────────────
+
+function rowByUsage(rows: TokenCallBody[], outputTokens: number | null): TokenCallBody {
+  const row = rows.find((r) => r.outputTokens === outputTokens);
+  expect(row).toBeDefined();
+  return row as TokenCallBody;
+}
+
+describe("call lifecycle edge cases", () => {
+  it("records a failure before the first output with null TTFT and no throughput", async () => {
+    const c = fakeClock();
+    const { runtime } = metricsRuntime(c.clock);
+    await runWithLlmAuditContext(USER_CONTEXT, async () => {
+      const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+      c.advance(1500);
+      stream.push(
+        errored(assistantMessage({ stopReason: "error", errorMessage: "upstream 500", usage: usage(0, 0) })),
+      );
+      await stream.result();
+    });
+    const { rows } = await queryCalls();
+    expect(rows[0]).toMatchObject({
+      status: "failed",
+      ttftMs: null,
+      generationDurationMs: null,
+      generationTps: null,
+      endToEndTps: null,
+      outputTokens: null,
+      durationMs: 1500,
+      error: "upstream 500",
+    });
+  });
+
+  it("keeps TTFT and known usage on failure after output, but no throughput", async () => {
+    const c = fakeClock();
+    const { runtime } = metricsRuntime(c.clock);
+    await runWithLlmAuditContext(USER_CONTEXT, async () => {
+      const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+      c.advance(1000);
+      stream.push(delta("text_delta", "partial"));
+      c.advance(1000);
+      stream.push(
+        errored(assistantMessage({ stopReason: "error", errorMessage: "mid-stream", usage: usage(40, 10) })),
+      );
+      await stream.result();
+    });
+    const { rows } = await queryCalls();
+    expect(rows[0]).toMatchObject({
+      status: "failed",
+      ttftMs: 1000,
+      generationDurationMs: 0,
+      outputTokens: 40,
+      durationMs: 2000,
+      generationTps: null,
+      endToEndTps: null,
+      error: "mid-stream",
+    });
+  });
+
+  it("keeps TTFT and partial usage after cancellation, but no throughput", async () => {
+    const c = fakeClock();
+    const { runtime } = metricsRuntime(c.clock);
+    await runWithLlmAuditContext(USER_CONTEXT, async () => {
+      const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+      c.advance(800);
+      stream.push(delta("text_delta", "a"));
+      c.advance(400);
+      stream.push(delta("text_delta", "b"));
+      c.advance(800);
+      stream.push(
+        errored(assistantMessage({ stopReason: "aborted", usage: usage(25, 10) }), "aborted"),
+      );
+      await stream.result();
+    });
+    const { rows } = await queryCalls();
+    expect(rows[0]).toMatchObject({
+      status: "cancelled",
+      ttftMs: 800,
+      generationDurationMs: 400,
+      outputTokens: 25,
+      durationMs: 2000,
+      generationTps: null,
+      endToEndTps: null,
+    });
+  });
+
+  it("records a call that rejects without a final assistant message and preserves the error", async () => {
+    const c = fakeClock();
+    const failing = {
+      stream: () => ({
+        push: () => {},
+        result: () => Promise.reject(new Error("stream ended without a final message")),
+      }),
+      streamSimple: () => ({
+        push: () => {},
+        result: () => Promise.reject(new Error("stream ended without a final message")),
+      }),
+      getProviders: () => [],
+    } as unknown as ModelRuntime;
+    const runtime = wrapModelCallMetrics(failing, {
+      clock: c.clock,
+      resolveContext: resolveModelCallContext,
+      record: recordModelCall,
+    });
+
+    await runWithLlmAuditContext(USER_CONTEXT, async () => {
+      const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+      await expect(stream.result()).rejects.toThrow("stream ended without a final message");
+    });
+
+    const { rows, total } = await queryCalls();
+    expect(total).toBe(1);
+    expect(rows[0]).toMatchObject({
+      status: "failed",
+      ttftMs: null,
+      generationDurationMs: null,
+      generationTps: null,
+      endToEndTps: null,
+      error: "stream ended without a final message",
+    });
+  });
+
+  it("records a synchronous setup failure and rethrows the original error", async () => {
+    const c = fakeClock();
+    const throwing = {
+      stream: () => {
+        throw new Error("setup exploded");
+      },
+      streamSimple: () => {
+        throw new Error("setup exploded");
+      },
+      getProviders: () => [],
+    } as unknown as ModelRuntime;
+    const runtime = wrapModelCallMetrics(throwing, {
+      clock: c.clock,
+      resolveContext: resolveModelCallContext,
+      record: recordModelCall,
+    });
+
+    await runWithLlmAuditContext(USER_CONTEXT, async () => {
+      expect(() => runtime.streamSimple(MODEL as never, { messages: [] }, {})).toThrow("setup exploded");
+    });
+
+    const { rows } = await queryCalls();
+    expect(rows[0]).toMatchObject({
+      status: "failed",
+      ttftMs: null,
+      endToEndTps: null,
+      error: "setup exploded",
+    });
+    expect(rows[0].durationMs).toBe(0);
+  });
+
+  it("keeps the original error when metrics storage fails", async () => {
+    const c = fakeClock();
+    const manual = manualRuntime();
+    const runtime = wrapModelCallMetrics(manual.runtime, {
+      clock: c.clock,
+      resolveContext: () => ({ sessionId: "s1", source: "user", purpose: "chat" }),
+      record: () => {
+        throw new Error("audit db is down");
+      },
+    });
+
+    const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {}) as AssistantMessageEventStream;
+    stream.push(errored(assistantMessage({ stopReason: "error", errorMessage: "provider failed" })));
+    await expect(stream.result()).resolves.toMatchObject({
+      stopReason: "error",
+      errorMessage: "provider failed",
+    });
+
+    const throwing = {
+      stream: () => {
+        throw new Error("setup exploded");
+      },
+      streamSimple: () => {
+        throw new Error("setup exploded");
+      },
+      getProviders: () => [],
+    } as unknown as ModelRuntime;
+    const throwingRuntime = wrapModelCallMetrics(throwing, {
+      clock: c.clock,
+      resolveContext: () => null,
+      record: () => {
+        throw new Error("audit db is down");
+      },
+    });
+    expect(() => throwingRuntime.streamSimple(MODEL as never, { messages: [] }, {})).toThrow(
+      "setup exploded",
+    );
+  });
+
+  it("treats missing, negative or non-finite output usage as unknown instead of zero", async () => {
+    for (const bad of [-5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      switchToTempDb();
+      const c = fakeClock();
+      const { runtime } = metricsRuntime(c.clock);
+      await runWithLlmAuditContext(USER_CONTEXT, async () => {
+        const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+        stream.push(delta("text_delta", "x"));
+        c.advance(1000);
+        stream.push(done(assistantMessage({ usage: usage(bad, 10) })));
+        await stream.result();
+      });
+      const { rows } = await queryCalls();
+      expect(rows[0].outputTokens).toBeNull();
+      expect(rows[0].generationTps).toBeNull();
+      expect(rows[0].endToEndTps).toBeNull();
+    }
+    {
+      // No usage object at all: also "not reported", never zero.
+      switchToTempDb();
+      const c = fakeClock();
+      const { runtime } = metricsRuntime(c.clock);
+      await runWithLlmAuditContext(USER_CONTEXT, async () => {
+        const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+        stream.push(delta("text_delta", "x"));
+        c.advance(1000);
+        stream.push(done(assistantMessage({ usage: undefined as never })));
+        await stream.result();
+      });
+      const { rows } = await queryCalls();
+      expect(rows[0].outputTokens).toBeNull();
+      expect(rows[0].generationTps).toBeNull();
+      expect(rows[0].endToEndTps).toBeNull();
+    }
+  });
+
+  it("never fabricates TPS from zero-length or invalid time facts", async () => {
+    {
+      const c = fakeClock();
+      const { runtime } = metricsRuntime(c.clock);
+      await runWithLlmAuditContext(USER_CONTEXT, async () => {
+        const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+        stream.push(done(assistantMessage()));
+        await stream.result();
+      });
+      const { rows } = await queryCalls();
+      expect(rows[0]).toMatchObject({
+        status: "completed",
+        durationMs: 0,
+        ttftMs: null,
+        generationDurationMs: null,
+        generationTps: null,
+        endToEndTps: null,
+        outputTokens: 120,
+      });
+    }
+    {
+      switchToTempDb();
+      let mono = 1000;
+      const clock = { now: () => mono, wallNow: () => 1_700_000_000_000 };
+      const { runtime } = metricsRuntime(clock);
+      await runWithLlmAuditContext(USER_CONTEXT, async () => {
+        const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+        mono = 1500;
+        stream.push(delta("text_delta", "a"));
+        mono = 1400; // clock moves backwards: invalid interval, never faked
+        stream.push(delta("text_delta", "b"));
+        stream.push(done(assistantMessage()));
+        await stream.result();
+      });
+      const { rows } = await queryCalls();
+      expect(rows[0].ttftMs).toBe(500);
+      expect(rows[0].generationDurationMs).toBeNull();
+      expect(rows[0].generationTps).toBeNull();
+      expect(rows[0].durationMs).toBe(400);
+      expect(rows[0].endToEndTps).toBe(300);
+    }
+    {
+      // A negative whole-call duration is an invalid fact, not a TPS input.
+      switchToTempDb();
+      let mono = 1000;
+      const clock = { now: () => mono, wallNow: () => 1_700_000_000_000 };
+      const { runtime } = metricsRuntime(clock);
+      await runWithLlmAuditContext(USER_CONTEXT, async () => {
+        const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+        mono = 500;
+        stream.push(delta("text_delta", "a"));
+        stream.push(done(assistantMessage()));
+        await stream.result();
+      });
+      const { rows } = await queryCalls();
+      expect(rows[0].ttftMs).toBeNull();
+      expect(rows[0].generationDurationMs).toBe(0);
+      expect(rows[0].generationTps).toBeNull();
+      expect(rows[0].durationMs).toBeNull();
+      expect(rows[0].endToEndTps).toBeNull();
+    }
+  });
+
+  it("keeps SDK-internal retries inside one call and opens a new record after the operation ends", async () => {
+    const c = fakeClock();
+    const { runtime, streams } = metricsRuntime(c.clock);
+    await runWithLlmAuditContext(USER_CONTEXT, async () => {
+      const first = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+      // pi-ai retries a failed provider request with backoff *before* pushing
+      // any event, so this wait is part of the same logical call: one record,
+      // with TTFT including the retry/backoff time.
+      c.advance(1200);
+      first.push(delta("text_delta", "ok"));
+      c.advance(2000);
+      first.push(delta("text_delta", " ok"));
+      c.advance(1800);
+      first.push(done(assistantMessage({ usage: usage(50) })));
+      await first.result();
+
+      // A later generation (e.g. after a tool or an agent-level retry) is a
+      // brand-new logical call with its own clock and id.
+      const second = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+      second.push(delta("text_delta", "second"));
+      c.advance(1000);
+      second.push(done(assistantMessage({ usage: usage(10) })));
+      await second.result();
+    });
+
+    expect(streams).toHaveLength(2);
+    const { rows, total } = await queryCalls();
+    expect(total).toBe(2);
+    const first = rowByUsage(rows, 50);
+    expect(first).toMatchObject({
+      status: "completed",
+      ttftMs: 1200,
+      generationDurationMs: 2000,
+      durationMs: 5000,
+      generationTps: 25,
+      endToEndTps: 10,
+    });
+    expect(first.callId).not.toBe(rowByUsage(rows, 10).callId);
+  });
+
+  it("keeps concurrent calls isolated when they start in the same millisecond and finish in reverse order", async () => {
+    const c = fakeClock();
+    const { runtime } = metricsRuntime(c.clock);
+    // Same session, provider, model and start timestamp: only per-call state
+    // and the generated callId can keep these two records apart.
+    const model = { provider: "provider-a", id: "model-a", api: "api-a" } as const;
+    const ctxA = { sessionId: "session-shared", source: "user" as const, cwd: "/tmp", sessionName: null, purpose: "chat" as const };
+    const ctxB = { sessionId: "session-shared", source: "subagent" as const, cwd: "/tmp", sessionName: null, purpose: "compaction" as const };
+
+    let streamA!: AssistantMessageEventStream;
+    let streamB!: AssistantMessageEventStream;
+    await runWithLlmAuditContext(ctxA, async () => {
+      streamA = runtime.streamSimple(model as never, { messages: [] }, {}) as AssistantMessageEventStream;
+    });
+    await runWithLlmAuditContext(ctxB, async () => {
+      streamB = runtime.streamSimple(model as never, { messages: [] }, {}) as AssistantMessageEventStream;
+    });
+
+    c.advance(200);
+    streamA.push(delta("text_delta", "a1"));
+    c.advance(100);
+    streamB.push(delta("text_delta", "b1"));
+    c.advance(100);
+    streamB.push(delta("text_delta", "b2"));
+    c.advance(100);
+    streamB.push(done(assistantMessage({ usage: usage(40) })));
+    await streamB.result();
+    c.advance(200);
+    streamA.push(delta("text_delta", "a2"));
+    c.advance(800);
+    streamA.push(done(assistantMessage({ usage: usage(120) })));
+    await streamA.result();
+
+    const { rows, total } = await queryCalls();
+    expect(total).toBe(2);
+    const a = rows.find((r) => r.purpose === "chat") as TokenCallBody;
+    const b = rows.find((r) => r.purpose === "compaction") as TokenCallBody;
+    expect(a.callId).not.toBe(b.callId);
+    expect(a).toMatchObject({
+      sessionId: "session-shared",
+      source: "user",
+      provider: "provider-a",
+      modelId: "model-a",
+      outputTokens: 120,
+      ttftMs: 200,
+      generationDurationMs: 500,
+      durationMs: 1500,
+      generationTps: 240,
+      endToEndTps: 80,
+    });
+    expect(b).toMatchObject({
+      sessionId: "session-shared",
+      source: "subagent",
+      provider: "provider-a",
+      modelId: "model-a",
+      outputTokens: 40,
+      ttftMs: 300,
+      generationDurationMs: 100,
+      durationMs: 500,
+      generationTps: 400,
+      endToEndTps: 80,
+    });
+  });
+
+  it("preserves content/order and cancellation behaviour while observing", async () => {
+    const c = fakeClock();
+    const manual = manualRuntime();
+    const receivedSignals: (AbortSignal | undefined)[] = [];
+    const capturing = {
+      stream: (...args: unknown[]) => {
+        receivedSignals.push((args[2] as { signal?: AbortSignal } | undefined)?.signal);
+        return (manual.runtime.stream as (...a: unknown[]) => unknown)(...args);
+      },
+      streamSimple: (...args: unknown[]) => {
+        receivedSignals.push((args[2] as { signal?: AbortSignal } | undefined)?.signal);
+        return (manual.runtime.streamSimple as (...a: unknown[]) => unknown)(...args);
+      },
+      getProviders: () => [],
+    } as unknown as ModelRuntime;
+    const runtime = wrapModelCallMetrics(capturing, {
+      clock: c.clock,
+      resolveContext: resolveModelCallContext,
+      record: recordModelCall,
+    });
+    await runWithLlmAuditContext(USER_CONTEXT, async () => {
+      const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {}) as AssistantMessageEventStream;
+      stream.push(delta("text_delta", "a"));
+      stream.push(delta("text_delta", "b"));
+      stream.push(done(assistantMessage()));
+      const deltas: string[] = [];
+      for await (const event of stream) {
+        if (event.type === "text_delta") deltas.push(event.delta);
+      }
+      expect(deltas).toEqual(["a", "b"]);
+
+      const controller = new AbortController();
+      const cancelled = runtime.streamSimple(
+        MODEL as never,
+        { messages: [] },
+        { signal: controller.signal },
+      ) as AssistantMessageEventStream;
+      controller.abort();
+      cancelled.push(errored(assistantMessage({ stopReason: "aborted" }), "aborted"));
+      await expect(cancelled.result()).resolves.toMatchObject({ stopReason: "aborted" });
+      // The wrapper passes the caller's signal through untouched.
+      expect(controller.signal.aborted).toBe(true);
+      expect(receivedSignals[0]).toBeUndefined();
+      expect(receivedSignals[1]).toBe(controller.signal);
+    });
+
+    const { rows } = await queryCalls();
+    expect(rows.map((r) => r.status).sort()).toEqual(["cancelled", "completed"]);
+  });
+
+  it("removes the observation hook once a call is terminal", async () => {
+    const c = fakeClock();
+    const { runtime } = metricsRuntime(c.clock);
+    const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {}) as AssistantMessageEventStream;
+    expect(Object.prototype.hasOwnProperty.call(stream, "push")).toBe(true);
+    stream.push(done(assistantMessage()));
+    expect(Object.prototype.hasOwnProperty.call(stream, "push")).toBe(false);
+    // A replayed terminal event cannot add a record either.
+    stream.push(done(assistantMessage()));
+    expect((await queryCalls()).total).toBe(1);
+  });
+
+  it("exposes only finite numbers or null (never strings/NaN/Infinity) through the API", async () => {
+    const c = fakeClock();
+    const { runtime } = metricsRuntime(c.clock);
+    await runWithLlmAuditContext(USER_CONTEXT, async () => {
+      const stream = runtime.streamSimple(MODEL as never, { messages: [] }, {});
+      stream.push(delta("text_delta", "x"));
+      c.advance(3000);
+      stream.push(delta("text_delta", "y"));
+      c.advance(4000);
+      stream.push(done(assistantMessage()));
+      await stream.result();
+    });
+    const { rows } = await queryCalls();
+    const row = rows[0];
+    for (const key of ["ttftMs", "generationDurationMs", "generationTps", "endToEndTps"] as const) {
+      const value = row[key];
+      expect(value === null || (typeof value === "number" && Number.isFinite(value))).toBe(true);
+    }
+    // No display truncation: 120 tokens over a 3,000 ms generation window
+    // and a 7,000 ms end-to-end call.
+    expect(row.generationTps).toBe(40);
+    expect(row.endToEndTps).toBeCloseTo(120 / 7, 10);
+  });
+});
+
 // ── billing compatibility, migration and query contract ───────────────────
 
 describe("billing compatibility and query contract", () => {
@@ -439,6 +929,58 @@ describe("billing compatibility and query contract", () => {
     expect(rows[0].costTotal).toBe(0.3);
     expect(rows[0].ttftMs).toBe(0);
     expect(summarize("all", "none").totals).toMatchObject({ calls: 1, costTotal: 0.3 });
+  });
+
+  it("keeps an unreported metric null instead of the billing row's placeholder zero", async () => {
+    recordModelCall({
+      callId: "no-usage-call",
+      startedAt: 1_700_000_000_000,
+      sessionId: "s1",
+      messageId: "m-1",
+      source: "user",
+      purpose: "chat",
+      provider: "p",
+      modelId: "m",
+      api: null,
+      status: "completed",
+      ttftMs: null,
+      generationDurationMs: null,
+      durationMs: null,
+      outputTokens: null,
+      error: null,
+    });
+    // The billing hook always writes NOT NULL zeros when usage was missing.
+    recordCall({
+      sessionId: "s1",
+      messageId: "m-1",
+      source: "user",
+      provider: "p",
+      modelId: "m",
+      api: null,
+      ts: 1_700_000_000_000,
+      inputTokens: 10,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costInput: 0,
+      costOutput: 0,
+      costRead: 0,
+      costWrite: 0,
+      costTotal: 0.01,
+      durationMs: 0,
+      error: null,
+    });
+
+    const { rows, total } = await queryCalls();
+    expect(total).toBe(1);
+    expect(rows[0]).toMatchObject({
+      callId: "no-usage-call",
+      outputTokens: null,
+      durationMs: null,
+      generationTps: null,
+      endToEndTps: null,
+      costTotal: 0.01,
+    });
   });
 
   it("upgrades an old schema in place, keeps old rows, and stays repeatable", async () => {
