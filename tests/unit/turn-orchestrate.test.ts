@@ -6,6 +6,7 @@ import {
   type RunTurnSpec,
   type TurnEvent,
   type TurnSessionFactory,
+  type TurnSendOptions,
   type TurnSession,
   type TurnSessionPolicy,
 } from "@/lib/server/turn";
@@ -29,6 +30,7 @@ const settledAssistant = (text: string) => ({
 
 class FakeTurnSession implements TurnSession {
   readonly sent: Record<string, unknown>[] = [];
+  readonly sentOptions: (TurnSendOptions | undefined)[] = [];
   private readonly eventListeners = new Set<(event: TurnEvent) => void>();
   private readonly destroyCallbacks = new Set<() => void>();
   destroyed = 0;
@@ -47,8 +49,9 @@ class FakeTurnSession implements TurnSession {
     return () => this.destroyCallbacks.delete(cb);
   }
 
-  async send(command: Record<string, unknown>): Promise<unknown> {
+  async send(command: Record<string, unknown>, options?: TurnSendOptions): Promise<unknown> {
     this.sent.push(command);
+    this.sentOptions.push(options);
     if (command.type === "prompt" && this.settleOnPrompt) {
       this.emit({ type: "agent_end", willRetry: false, messages: [settledAssistant("quick")] });
       this.emit({ type: "agent_settled" });
@@ -125,6 +128,19 @@ describe("runTurn — one call runs the whole turn", () => {
     expect(session.sent[0]).toEqual({ type: "set_model", provider: "anthropic", modelId: "claude-x" });
     expect(session.sent[1]).toEqual({ type: "set_thinking_level", level: "high" });
     expect(session.sent[2]).toEqual({ type: "prompt", message: "do the thing" });
+  });
+
+  it("forwards the turn purpose on the prompt command (not on setup commands)", async () => {
+    const session = new FakeTurnSession("real-1");
+    session.settleOnPrompt = true;
+
+    await runTurn(
+      baseSpec({ purpose: "channel", model: { provider: "anthropic", modelId: "claude-x" } }),
+      makeFactory([session], []),
+    );
+
+    expect(session.sent.map((command) => command.type)).toEqual(["set_model", "prompt"]);
+    expect(session.sentOptions).toEqual([undefined, { purpose: "channel" }]);
   });
 
   it("has the terminal listener in place the moment the prompt is delivered", async () => {

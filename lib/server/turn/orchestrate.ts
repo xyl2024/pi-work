@@ -28,6 +28,10 @@ import {
 } from "./outcome";
 import type { ToolSelection } from "../../shared/types";
 import type { LlmAuditSource } from "../../shared/llm-audit-types";
+import type { CallPurpose, ModelCallCommandOptions } from "../../shared/token-audit-types";
+
+/** Optional per-command attribution for the session's model calls. */
+export type TurnSendOptions = ModelCallCommandOptions;
 
 /** Minimal live-session surface the orchestration drives. The real
  *  AgentSessionWrapper satisfies this structurally; tests substitute fakes. */
@@ -39,7 +43,7 @@ export interface TurnSession {
   /** Callback fired when the wrapper is destroyed (session lost). */
   onDestroy(cb: () => void): () => void;
   /** Dispatch an RPC command (`set_model`, `set_thinking_level`, `prompt`, …). */
-  send(command: Record<string, unknown>): Promise<unknown>;
+  send(command: Record<string, unknown>, options?: TurnSendOptions): Promise<unknown>;
   /** Force-destroy the wrapper (timeout cleanup). */
   destroy(): void;
 }
@@ -102,6 +106,12 @@ export interface RunTurnSpec {
   toolNames?: ToolSelection;
   /** Who is running this turn (LLM-audit attribution). Defaults to "user". */
   source?: LlmAuditSource;
+  /**
+   * What this turn's model calls are for (LLM-audit attribution). Omitted lets
+   * the session's own default stand (chat) — a channel message names `channel`
+   * while keeping its user source.
+   */
+  purpose?: CallPurpose;
   /**
    * Session strategy. Defaults to `{ kind: "fresh" }`: a new session in `cwd`.
    * `{ kind: "reuse", sessionId }` continues that session — the factory hands
@@ -332,7 +342,10 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
   }
 
   try {
-    await session.send({ type: "prompt", message: spec.prompt });
+    await session.send(
+      { type: "prompt", message: spec.prompt },
+      spec.purpose ? { purpose: spec.purpose } : undefined,
+    );
   } catch (error) {
     // The dispatch failed before pi even started — nothing will settle the
     // watcher on its own. Destroy the dead session now (releasing the slot

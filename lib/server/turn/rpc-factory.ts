@@ -47,6 +47,7 @@ export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResul
       ...(spec.thinkingLevel !== undefined ? { thinkingLevel: spec.thinkingLevel } : {}),
       ...(spec.toolNames !== undefined ? { toolNames: spec.toolNames } : {}),
       ...(spec.source ? { source: spec.source } : {}),
+      ...(spec.purpose ? { purpose: spec.purpose } : {}),
       ...(spec.session ? { session: spec.session } : {}),
       ...(spec.abortSources ? { abortSources: spec.abortSources } : {}),
       ...(spec.onSession ? { onSession: spec.onSession } : {}),

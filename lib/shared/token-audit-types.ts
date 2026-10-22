@@ -31,6 +31,15 @@ export type CallPurpose =
   | "unknown";
 
 /**
+ * Optional attribution for one command dispatched to a session. The call source
+ * lives on the session; the purpose describes what this command's model calls
+ * are for (a channel message, a compaction, …).
+ */
+export interface ModelCallCommandOptions {
+  purpose?: CallPurpose;
+}
+
+/**
  * Terminal state of one logical call. `unknown` exists for historical billing
  * rows that predate call-metric collection — it is never treated as success.
  */

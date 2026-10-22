@@ -17,6 +17,7 @@ import path from "node:path";
 import { recordCall } from "./token-audit-store";
 import { getAuditModelRuntime, installLlmFetchAudit, runWithLlmAuditContext } from "./llm-audit";
 import type { LlmAuditSource } from "../shared/llm-audit-types";
+import type { ModelCallCommandOptions } from "../shared/token-audit-types";
 import { writeSessionName, deleteSessionName } from "./session-names";
 import {
   readSessionToolSelection,
@@ -67,6 +68,9 @@ export type AskUserQuestionsRequestEvent = Extract<SessionEvent, { type: "ask_us
 // ============================================================================
 
 type EventListener = (event: SessionEvent) => void;
+
+/** Per-command audit attribution (see `AgentSessionWrapper.send`). */
+export type SendOptions = ModelCallCommandOptions;
 
 // ============================================================================
 // AgentSessionWrapper
@@ -494,12 +498,14 @@ export class AgentSessionWrapper {
     return this.gates.snapshot();
   }
 
-  async send(command: Record<string, unknown>): Promise<unknown> {
+  async send(command: Record<string, unknown>, options: SendOptions = {}): Promise<unknown> {
     // Every command runs inside an LLM-audit context so the fetch patch can
     // attribute each provider call to this session (AsyncLocalStorage
     // propagates through the whole prompt → agent-loop → stream → fetch chain,
     // including fire-and-forget prompts and pi-internal auto-compaction calls).
     // cwd + sessionName are snapshotted at command time for audit attribution.
+    // `options.purpose` lets a caller describe what this command's model calls
+    // are for (e.g. a channel message) without changing the session's source.
     // Re-install the fetch patch defensively: after an HMR reload of llm-audit.ts
     // the running session's wrapper may still be old-code, so we make sure the
     // active patch is the newest incarnation before dispatching.
@@ -508,6 +514,7 @@ export class AgentSessionWrapper {
       {
         sessionId: this.sessionId,
         source: this.source,
+        ...(options.purpose ? { purpose: options.purpose } : {}),
         cwd: this.cwd,
         sessionName: this.inner.sessionManager.getSessionName() ?? null,
       },

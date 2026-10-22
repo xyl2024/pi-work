@@ -189,6 +189,9 @@ async function processMessage(
       // recorded (the pre-seam split between `coldStart` and `sendPrompt`).
       ...(coldStart ? { toolNames: "all" as const } : {}),
       source: "user",
+      // A channel message keeps the user source (the sender drove it) but is
+      // attributable as channel usage rather than an ordinary chat call.
+      purpose: "channel",
       session: sessionId ? { kind: "reuse", sessionId } : { kind: "fresh" },
       timeoutMs: AGENT_END_TIMEOUT_MS,
       // Runs the moment the session is acquired — before any setup command and

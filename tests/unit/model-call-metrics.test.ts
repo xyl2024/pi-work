@@ -12,6 +12,17 @@ import {
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { wrapModelCallMetrics } from "@/lib/server/model-call-metrics";
 import { getAuditModelRuntime, resolveModelCallContext, runWithLlmAuditContext } from "@/lib/server/llm-audit";
+import { AgentSessionWrapper, runTurnRpcSession, type SendOptions } from "@/lib/server/rpc-manager";
+import { getRegistry } from "@/lib/server/session-registry";
+import {
+  runTurn,
+  type TurnEvent,
+  type TurnSendOptions,
+  type TurnSession,
+  type TurnSessionFactory,
+} from "@/lib/server/turn";
+import type { CallPurpose } from "@/lib/shared/token-audit-types";
+import type { SessionEvent } from "@/lib/shared/session-events";
 import { recordCall, recordModelCall, summarize } from "@/lib/server/token-audit-store";
 import { GET } from "@/app/api/token-audit/calls/route";
 
@@ -1135,5 +1146,373 @@ describe("billing compatibility and query contract", () => {
     const noSession = await queryCalls("range=all&sessionId=nope");
     expect(noSession.total).toBe(0);
     expect(noSession.rows).toEqual([]);
+  });
+});
+
+// ── background call sources (issue 03) ────────────────────────────────────
+//
+// The highest feasible server-side factory: the real turn module drives a real
+// AgentSessionWrapper over a controlled inner session. That covers the wiring
+// production uses (source on the wrapper, purpose on the prompt command) while
+// the SDK stays scripted. Background entries — scheduler, subagent and channel
+// inbound — all reach this same seam; their adapters only choose source/purpose.
+
+interface BackgroundScriptContext {
+  stream: () => AssistantMessageEventStream;
+  advance: (ms: number) => void;
+}
+
+let backgroundSessionCounter = 0;
+
+class BackgroundTurnSession implements TurnSession {
+  private readonly listeners = new Set<(event: TurnEvent) => void>();
+
+  constructor(
+    private readonly wrapper: AgentSessionWrapper,
+    readonly sessionId: string,
+    private readonly promptDone: () => Promise<void>,
+  ) {}
+
+  onEvent(listener: (event: TurnEvent) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  onDestroy(cb: () => void): () => void {
+    return this.wrapper.onDestroy(cb);
+  }
+
+  async send(command: Record<string, unknown>, options?: TurnSendOptions): Promise<unknown> {
+    const result = await this.wrapper.send(command, options);
+    if (command.type === "prompt") {
+      // The wrapper's dispatch is fire-and-forget; the scripted model work has
+      // to finish before the turn can settle.
+      await this.promptDone();
+      for (const listener of [...this.listeners]) listener({ type: "agent_settled" });
+    }
+    return result;
+  }
+
+  destroy(): void {
+    this.wrapper.destroy();
+  }
+}
+
+/** A controlled runtime + clock for one background session. */
+function backgroundRuntime(): BackgroundScriptContext & { runtime: ModelRuntime } {
+  const c = fakeClock();
+  const manual = manualRuntime();
+  const runtime = wrapModelCallMetrics(manual.runtime, {
+    clock: c.clock,
+    resolveContext: resolveModelCallContext,
+    record: recordModelCall,
+  });
+  return {
+    runtime,
+    advance: c.advance,
+    stream: () => runtime.streamSimple(MODEL as never, { messages: [] }, {}) as AssistantMessageEventStream,
+  };
+}
+
+async function runBackgroundTurn(options: {
+  source: "user" | "scheduled" | "subagent";
+  purpose?: CallPurpose;
+  script: (ctx: BackgroundScriptContext) => Promise<void>;
+}): Promise<{ sessionId: string }> {
+  const controlled = backgroundRuntime();
+  const sessionId = `background-${++backgroundSessionCounter}`;
+  let promptDone: Promise<void> = Promise.resolve();
+  const inner = {
+    sessionId,
+    sessionFile: undefined,
+    isStreaming: false,
+    isCompacting: false,
+    sessionManager: { getSessionName: () => null },
+    prompt: () => {
+      promptDone = options.script(controlled);
+      return promptDone;
+    },
+  };
+  const wrapper = new AgentSessionWrapper(inner as never, options.source, "/tmp/project");
+  const session = new BackgroundTurnSession(wrapper, sessionId, () => promptDone);
+  const factory: TurnSessionFactory = async () => ({
+    session,
+    sessionId: `key-${sessionId}`,
+    realSessionId: sessionId,
+  });
+  try {
+    const result = await runTurn(
+      {
+        cwd: "/tmp/project",
+        prompt: "background prompt",
+        timeoutMs: 5_000,
+        source: options.source,
+        ...(options.purpose ? { purpose: options.purpose } : {}),
+      },
+      factory,
+    );
+    expect(result.status).toBe("completed");
+  } finally {
+    wrapper.destroy();
+  }
+  return { sessionId };
+}
+
+/**
+ * A real wrapper whose event stream is the test's own: it lets the production
+ * `runTurnRpcSession` reuse path drive it without booting pi. `send` keeps the
+ * real audit-context behaviour; only terminal-event delivery is substituted.
+ */
+class SettlingAgentSessionWrapper extends AgentSessionWrapper {
+  private readonly ownListeners = new Set<(event: SessionEvent) => void>();
+  private promptDone: Promise<void> = Promise.resolve();
+  private script: () => Promise<void> = async () => {};
+
+  onEvent(listener: (event: SessionEvent) => void): () => void {
+    this.ownListeners.add(listener);
+    return () => this.ownListeners.delete(listener);
+  }
+
+  setScript(script: () => Promise<void>): void {
+    this.script = script;
+  }
+
+  runPrompt(): Promise<void> {
+    this.promptDone = this.script();
+    return this.promptDone;
+  }
+
+  async send(command: Record<string, unknown>, options?: SendOptions): Promise<unknown> {
+    const result = await super.send(command, options);
+    if (command.type === "prompt") {
+      await this.promptDone;
+      for (const listener of [...this.ownListeners]) listener({ type: "agent_settled" });
+    }
+    return result;
+  }
+}
+
+describe("background call sources", () => {
+  it.each([
+    { label: "scheduled task", source: "scheduled" as const, purpose: undefined, expectedPurpose: "chat" },
+    { label: "subagent", source: "subagent" as const, purpose: undefined, expectedPurpose: "chat" },
+    { label: "channel message", source: "user" as const, purpose: "channel" as const, expectedPurpose: "channel" },
+  ])("records a $label call with its own source and purpose", async (row) => {
+    switchToTempDb();
+    const { sessionId } = await runBackgroundTurn({
+      source: row.source,
+      purpose: row.purpose,
+      script: async ({ stream, advance }) => {
+        const s = stream();
+        advance(2000);
+        s.push(delta("text_delta", "hello"));
+        advance(4000);
+        s.push(delta("text_delta", " world"));
+        advance(1000);
+        s.push(done(assistantMessage()));
+        await s.result();
+      },
+    });
+
+    const { rows, total } = await queryCalls("range=all");
+    expect(total).toBe(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      sessionId,
+      source: row.source,
+      purpose: row.expectedPurpose,
+      provider: "test-provider",
+      modelId: "test-model",
+      status: "completed",
+      outputTokens: 120,
+      ttftMs: 2000,
+      generationDurationMs: 4000,
+      durationMs: 7000,
+      generationTps: 30,
+    });
+    expect(rows[0].endToEndTps).toBeCloseTo(120 / 7, 10);
+
+    const filtered = await queryCalls(`range=all&sessionId=${sessionId}`);
+    expect(filtered.total).toBe(1);
+    expect(filtered.rows[0].callId).toBe(rows[0].callId);
+  });
+
+  it("splits the calls before and after a tool and excludes tool time", async () => {
+    switchToTempDb();
+    const { sessionId } = await runBackgroundTurn({
+      source: "scheduled",
+      script: async ({ stream, advance }) => {
+        const before = stream();
+        before.push(delta("toolcall_delta", '{"path":'));
+        advance(500);
+        before.push(delta("toolcall_delta", '"a"}'));
+        advance(500);
+        before.push(done(assistantMessage({ usage: usage(20), stopReason: "toolUse" })));
+        await before.result();
+
+        // Simulated tool execution: neither model call may absorb this wait.
+        advance(3000);
+
+        const after = stream();
+        advance(700);
+        after.push(delta("text_delta", "done"));
+        advance(300);
+        after.push(done(assistantMessage({ usage: usage(10) })));
+        await after.result();
+      },
+    });
+
+    const { rows, total } = await queryCalls("range=all");
+    expect(total).toBe(2);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.callId)).size).toBe(2);
+
+    // Ordered by call start desc: the post-tool call is the newer one.
+    const [afterCall, beforeCall] = rows;
+    expect(afterCall).toMatchObject({
+      sessionId,
+      source: "scheduled",
+      purpose: "chat",
+      status: "completed",
+      outputTokens: 10,
+      ttftMs: 700,
+      generationDurationMs: 0,
+      durationMs: 1000,
+      generationTps: null,
+    });
+    expect(afterCall.endToEndTps).toBe(10);
+    expect(beforeCall).toMatchObject({
+      sessionId,
+      source: "scheduled",
+      status: "completed",
+      outputTokens: 20,
+      ttftMs: 0,
+      generationDurationMs: 500,
+      durationMs: 1000,
+      generationTps: 40,
+    });
+    expect(beforeCall.endToEndTps).toBe(20);
+  });
+
+  it("keeps a main chat call and two background calls separate when they overlap", async () => {
+    switchToTempDb();
+    const chat = backgroundRuntime();
+    const chatRun = runWithLlmAuditContext(USER_CONTEXT, async () => {
+      const s = chat.stream();
+      chat.advance(300);
+      s.push(delta("text_delta", "main"));
+      chat.advance(700);
+      s.push(done(assistantMessage({ usage: usage(15) })));
+      await s.result();
+    });
+    const [scheduled, subagent] = await Promise.all([
+      runBackgroundTurn({
+        source: "scheduled",
+        script: async ({ stream, advance }) => {
+          const s = stream();
+          s.push(delta("text_delta", "a"));
+          advance(1000);
+          s.push(done(assistantMessage({ usage: usage(10) })));
+          await s.result();
+        },
+      }),
+      runBackgroundTurn({
+        source: "subagent",
+        script: async ({ stream, advance }) => {
+          const s = stream();
+          advance(200);
+          s.push(delta("text_delta", "b"));
+          advance(800);
+          s.push(done(assistantMessage({ usage: usage(20) })));
+          await s.result();
+        },
+      }),
+      chatRun,
+    ]);
+
+    // Unfiltered queries include the main call and both background calls;
+    // total counts the same filter the page used.
+    const pages = await Promise.all([
+      queryCalls("range=all&limit=1&offset=0"),
+      queryCalls("range=all&limit=1&offset=1"),
+      queryCalls("range=all&limit=1&offset=2"),
+    ]);
+    for (const page of pages) {
+      expect(page.total).toBe(3);
+      expect(page.rows).toHaveLength(1);
+    }
+
+    const chatRows = await queryCalls(`range=all&sessionId=${USER_CONTEXT.sessionId}`);
+    expect(chatRows.total).toBe(1);
+    expect(chatRows.rows[0]).toMatchObject({ source: "user", purpose: "chat", outputTokens: 15 });
+
+    const scheduledRows = await queryCalls(`range=all&sessionId=${scheduled.sessionId}`);
+    expect(scheduledRows.total).toBe(1);
+    expect(scheduledRows.rows[0]).toMatchObject({ source: "scheduled", outputTokens: 10 });
+
+    const subagentRows = await queryCalls(`range=all&sessionId=${subagent.sessionId}`);
+    expect(subagentRows.total).toBe(1);
+    expect(subagentRows.rows[0]).toMatchObject({ source: "subagent", outputTokens: 20 });
+
+    // Performance records are not billing rows: the existing summary still
+    // counts only the legacy token_calls table.
+    expect(summarize("all", "none").totals.calls).toBe(0);
+  });
+
+  it("forwards the channel purpose through the production runTurnRpcSession reuse path", async () => {
+    switchToTempDb();
+    const channel = backgroundRuntime();
+    const sessionId = "channel-inbound-session";
+    // Forward reference: the fake inner's prompt is only invoked after the
+    // wrapper exists.
+    const holder: { wrapper?: SettlingAgentSessionWrapper } = {};
+    const inner = {
+      sessionId,
+      sessionFile: undefined,
+      isStreaming: false,
+      isCompacting: false,
+      sessionManager: { getSessionName: () => null },
+      prompt: () => holder.wrapper!.runPrompt(),
+    };
+    const wrapper = new SettlingAgentSessionWrapper(inner as never, "user", "/tmp/project");
+    holder.wrapper = wrapper;
+    wrapper.setScript(async () => {
+      const s = channel.stream();
+      channel.advance(800);
+      s.push(delta("text_delta", "channel reply"));
+      channel.advance(1200);
+      s.push(done(assistantMessage({ usage: usage(30) })));
+      await s.result();
+    });
+    getRegistry().set(sessionId, wrapper);
+    try {
+      const result = await runTurnRpcSession({
+        cwd: "/tmp/project",
+        prompt: "wechat message",
+        source: "user",
+        purpose: "channel",
+        session: { kind: "reuse", sessionId },
+        timeoutMs: 5_000,
+      });
+      expect(result.status).toBe("completed");
+    } finally {
+      getRegistry().delete(sessionId);
+      wrapper.destroy();
+    }
+
+    const { rows, total } = await queryCalls("range=all");
+    expect(total).toBe(1);
+    expect(rows[0]).toMatchObject({
+      sessionId,
+      source: "user",
+      purpose: "channel",
+      status: "completed",
+      outputTokens: 30,
+      ttftMs: 800,
+      generationDurationMs: 0,
+      durationMs: 2000,
+      generationTps: null,
+    });
+    expect(rows[0].endToEndTps).toBe(15);
   });
 });
