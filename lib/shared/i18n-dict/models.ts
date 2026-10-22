@@ -5,6 +5,14 @@ export const models = {
   // Panel view label (tab strip). The right-bar tooltip and palette entry
   // reuse the longer "Open models config" wording from the commands dict.
   "Models config": "模型配置",
+  "Test connection": "测试连接",
+  "Testing connection...": "正在测试连接…",
+  "Connection successful": "连接成功",
+  "Connection failed": "连接失败",
+  "Connection diagnostics": "连接诊断详情",
+  "Diagnostics truncated": "诊断内容过长，已截断",
+  "Save configuration before testing.": "请先保存配置，再测试连接。",
+  "Tests saved configuration with a short request. May incur API charges. Diagnostics are redacted; review before sharing.": "使用已保存的配置发送简短请求，可能产生 API 费用。诊断信息已脱敏，分享前仍请检查。",
 
   // About / sources
   "About model catalog sources": "关于模型目录来源",

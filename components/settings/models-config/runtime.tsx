@@ -7,6 +7,7 @@ import { ProviderIcon, ProviderGearIcon } from "../../ui/ProviderIcon";
 import { SectionTitle, SecretTextInput, Field, inputStyle } from "./form-fields";
 import { filterCatalogModels, type CatalogModelEntry } from "./catalog-search";
 import { ModelCard } from "./ModelCard";
+import { ModelConnectionTest } from "./ModelConnectionTest";
 import type { ApiKeyProvider, OAuthProvider, RuntimeCatalog, RuntimeCatalogProvider, RuntimeModelInfo } from "./types";
 
 /**
@@ -453,17 +454,19 @@ export function RuntimeModelList({ providerId, configured }: { providerId: strin
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12 }}>
           {models.map((model) => (
-            <ModelCard
-              key={model.id}
-              model={model}
-              expanded={expanded.has(model.id)}
-              onToggle={() => setExpanded((prev) => {
-                const next = new Set(prev);
-                if (next.has(model.id)) next.delete(model.id);
-                else next.add(model.id);
-                return next;
-              })}
-            />
+            <div key={model.id} style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <ModelCard
+                model={model}
+                expanded={expanded.has(model.id)}
+                onToggle={() => setExpanded((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(model.id)) next.delete(model.id);
+                  else next.add(model.id);
+                  return next;
+                })}
+              />
+              <ModelConnectionTest provider={providerId} modelId={model.id} />
+            </div>
           ))}
         </div>
       )}

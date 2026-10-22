@@ -3,6 +3,7 @@
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { copyText } from "@/lib/client/clipboard";
+import { ModelConnectionTest } from "@/components/settings/models-config/ModelConnectionTest";
 import { ModelFields } from "@/components/settings/models-config/ModelFields";
 import { ModelRawSection } from "@/components/settings/models-config/ModelRawSection";
 import {
@@ -13,6 +14,7 @@ import {
   openModelsConfigFillModel,
   removeModelsConfigModel,
   selectModelsConfigProblem,
+  selectModelsConfigDirty,
   updateModelsConfigModel,
   updateModelsConfigRawEdit,
   useModelsConfigStore,
@@ -86,6 +88,8 @@ export function ModelsConfigModelPage({ providerName, index }: { providerName: s
           {t("Delete")}
         </button>
       </div>
+
+      <ModelConnectionTest provider={providerName} modelId={model.id} disabled={selectModelsConfigDirty(state) || state.saving || !!state.rawEdit} />
 
       <ModelFields
         model={model}

@@ -2,10 +2,12 @@
 
 import { useI18n } from "@/hooks/useI18n";
 import { ProviderFields } from "@/components/settings/models-config/ProviderFields";
+import { ModelConnectionTest } from "@/components/settings/models-config/ModelConnectionTest";
 import { ModelEntryCard } from "@/components/settings/models-config/ModelEntryCard";
 import { SectionTitle } from "@/components/settings/models-config/form-fields";
 import {
   deleteModelsConfigProvider,
+  selectModelsConfigDirty,
   modelsConfigBack,
   openModelsConfigAddModelName,
   openModelsConfigModel,
@@ -24,7 +26,8 @@ import {
  */
 export function ModelsConfigProviderPage({ name }: { name: string }) {
   const { t } = useI18n();
-  const { config, providerNames } = useModelsConfigStore();
+  const state = useModelsConfigStore();
+  const { config, providerNames } = state;
   const provider = config.providers?.[name];
   if (!provider) return null;
   const models = provider.models ?? [];
@@ -77,12 +80,14 @@ export function ModelsConfigProviderPage({ name }: { name: string }) {
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
             {models.map((model, index) => (
-              <ModelEntryCard
-                key={index}
-                model={model}
-                providerIcon={provider.icon}
-                onOpen={() => openModelsConfigModel(name, index)}
-              />
+              <div key={index} style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+                <ModelEntryCard
+                  model={model}
+                  providerIcon={provider.icon}
+                  onOpen={() => openModelsConfigModel(name, index)}
+                />
+                <ModelConnectionTest provider={name} modelId={model.id} disabled={selectModelsConfigDirty(state) || state.saving || !!state.rawEdit} />
+              </div>
             ))}
           </div>
         )}
