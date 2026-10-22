@@ -54,9 +54,9 @@ interface Props {
   profileRefreshKey?: number;
 }
 
-// Two cwd headers (22px icon + 12px padding), six session rows,
-// five session gaps, one cwd gap, expanded-body top padding and list padding.
-const SESSIONS_CONTENT_HEIGHT_PX = 2 * 34 + 6 * SESSION_ROW_HEIGHT_PX + 5 * 6 + 8 + 4 + 12;
+// One cwd header (22px icon + 12px padding), six session rows,
+// five session gaps, expanded-body top padding and list padding.
+const SESSIONS_CONTENT_HEIGHT_PX = 1 * 34 + 6 * SESSION_ROW_HEIGHT_PX + 5 * 6 + 4 + 12;
 
 const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
 
