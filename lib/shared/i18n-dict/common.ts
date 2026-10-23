@@ -62,7 +62,6 @@ export const common = {
   "Next month": "下个月",
   "Today": "今天",
   "Yesterday": "昨天",
-  "just now": "刚刚",
   "{n} minutes ago": "{n} 分钟前",
   "{n} hours ago": "{n} 小时前",
   "{n} days ago": "{n} 天前",
