@@ -30,7 +30,8 @@ export type SettingsSectionId =
   | "subagent"
   | "retry"
   | "network-proxy"
-  | "toast-test";
+  | "toast-test"
+  | "about";
 
 export interface SettingsSectionSpec {
   id: SettingsSectionId;
@@ -70,6 +71,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
   { id: "network-proxy", labelKey: "Network proxy", group: "integrations" },
 
   { id: "toast-test", labelKey: "Toast Test", group: "developer" },
+  { id: "about", labelKey: "About Pi Work", group: "developer" },
 ];
 
 /** Sections of one group, in registry order. */

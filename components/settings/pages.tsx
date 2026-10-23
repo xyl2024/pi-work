@@ -15,6 +15,7 @@ import { NetworkProxySection } from "./sections/NetworkProxySection";
 import { SubagentSection } from "./sections/SubagentSection";
 import { SoundSettingsSection } from "./sections/SoundSettingsSection";
 import { ToastTestSection } from "./sections/ToastTestSection";
+import { AboutSection } from "./sections/AboutSection";
 
 /** Everything the modal hands to the one page it is currently rendering. */
 export interface SettingsPageContext {
@@ -57,4 +58,5 @@ export const SETTINGS_PAGES = {
     <NetworkProxySection config={config} apply={apply} onDirtyChange={reportDirty} />
   ),
   "toast-test": () => <ToastTestSection />,
+  about: () => <AboutSection />,
 } satisfies Record<SettingsSectionId, SettingsPageRenderer>;
