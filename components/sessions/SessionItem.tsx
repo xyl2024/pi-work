@@ -144,9 +144,15 @@ export function SessionItem({
   const timeLabel = showActions ? sessionTimeLabel(session.modified, new Date()) : null;
   const timeText = timeLabel === null
     ? null
-    : timeLabel.kind === "date"
-      ? timeLabel.text
-      : timeLabel.days === 0
+    : timeLabel.kind === "just-now"
+      ? t("just now")
+      : timeLabel.kind === "minutes"
+        ? t("{n} minutes ago", { n: timeLabel.minutes })
+      : timeLabel.kind === "hours"
+        ? t("{n} hours ago", { n: timeLabel.hours })
+      : timeLabel.kind === "date"
+        ? timeLabel.text
+        : timeLabel.days === 0
         ? t("Today")
         : timeLabel.days === 1
           ? t("Yesterday")
