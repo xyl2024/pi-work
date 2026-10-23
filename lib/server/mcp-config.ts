@@ -232,7 +232,8 @@ function readConfigFile(path: string, scope: "global" | "project", state: LoadSt
   if (!existsSync(path)) return;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
+    const contents = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
+    parsed = JSON.parse(contents);
   } catch (error) {
     state.errors.push(`${path}: ${error instanceof Error ? error.message : String(error)}`);
     return;

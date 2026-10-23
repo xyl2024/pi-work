@@ -52,6 +52,20 @@ describe("mcp-config: file selection", () => {
     expect(loaded.servers[0].config).toMatchObject({ command: "npx" });
   });
 
+  it("reads mcp.json files with a UTF-8 BOM", () => {
+    const { agentDir, cwd } = sandbox();
+    writeFileSync(
+      join(agentDir, "mcp.json"),
+      `\uFEFF${JSON.stringify({ mcpServers: { filesystem: { command: "npx" } } })}`,
+      "utf8",
+    );
+
+    const loaded = loadMcpConfigForPiWork({ agentDir, cwd, projectTrusted: false });
+
+    expect(loaded.errors).toEqual([]);
+    expect(loaded.servers.map((entry) => entry.name)).toEqual(["filesystem"]);
+  });
+
   it("ignores the project file unless it is trusted", () => {
     const { agentDir, cwd } = sandbox();
     writeProject(cwd, { mcpServers: { project: { command: "run-me" } } });
