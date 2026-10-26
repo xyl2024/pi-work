@@ -543,7 +543,7 @@ export function AppShell() {
   const rightPanelRef = useRef<HTMLDivElement | null>(null);
   const rightPanelSelection = useTextSelection(rightPanelRef);
   const confirm = useConfirm();
-  const { setActiveSessionId: setActivePermissionSession } = usePendingPermissions();
+  const { setActiveSessionId: setActivePermissionSession, removeSessionRequests: removeSessionPermissionRequests } = usePendingPermissions();
 
   // ── Models-config panel lifecycle ──
   // The draft lives in a module store (the panel body unmounts on a tab
@@ -861,8 +861,11 @@ export function AppShell() {
   const handleSessionDeleted = useCallback((sessionId: string) => {
     setRefreshKey((k) => k + 1);
     dispatchWorkspace({ type: "close_session", sessionId });
+    // The session is gone from disk: its pending confirmation can no longer be
+    // answered, so its sidebar dot must go with it.
+    removeSessionPermissionRequests(sessionId);
     closeTopPanel();
-  }, [closeTopPanel]);
+  }, [closeTopPanel, removeSessionPermissionRequests]);
 
   const handleDraftChange = useCallback((tabId: string, draft: { dirty: boolean }) => {
     dispatchWorkspace({ type: "set_dirty", tabId, dirty: draft.dirty });

@@ -33,6 +33,8 @@ type PermissionRef = {
       command: string;
       sessionId: string;
     }) => void;
+    /** Turn-end / deleted-session cleanup: a gate cannot outlive its turn. */
+    removeSessionRequests: (sessionId: string) => void;
   } | null;
 };
 
@@ -283,6 +285,12 @@ function performEffect(
       })();
       return;
     case "notify_agent_end":
+      // A pending confirmation blocks a tool inside the turn, so a closed turn
+      // means every gate of this session has settled. Dropping the session's
+      // queue entries here is what keeps the sidebar dot from staying lit
+      // after a gate expired server-side (the client is never told about a
+      // timeout) and after the dialog was answered in another tab.
+      if (sid) permissionsRef.current?.removeSessionRequests(sid);
       onAgentEnd?.();
       return;
     case "close_events":

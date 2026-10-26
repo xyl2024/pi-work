@@ -11,6 +11,12 @@ export const permissions = {
   "Deny": "拒绝",
   "Permission denied": "已拒绝",
   "Permission timed out": "确认超时,已拒绝",
+  // Sidebar row dot (SessionItem): a session is blocked on a command
+  // confirmation the user has not answered yet. The dot is the only cue once
+  // the user switches to another tab, because the dialog only renders for the
+  // focused session.
+  "Awaiting command approval": "等待确认命令执行",
+  "Failed to send the permission decision": "权限决定发送失败",
 
   // Session-level permission mode (ADR-0021). These live here rather than in
   // the chat dictionary because this is the same permission semantics the
