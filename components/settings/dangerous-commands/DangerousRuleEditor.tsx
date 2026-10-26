@@ -1,16 +1,21 @@
 "use client";
 
 /**
- * DangerousRuleEditor — add one dangerous-command rule to the page's draft.
+ * DangerousRuleEditor — edit one dangerous-command rule in the page's draft.
  *
  * A portal modal, deliberately the same shape as the subagent editor: a rule
  * carries a name, a regex, a case-sensitivity flag and its own inline error, so
- * editing it inside the list would collide with the list's own controls (04
- * adds move / delete).
+ * editing it inside the list would collide with the list's own controls (move /
+ * delete).
  *
  * Nothing is written here. The editor only hands a complete rule back to the
  * page, which keeps it in the draft until the page-level Save writes the whole
- * list. That is why the footer says "Add", not "Save".
+ * list. That is why the footer says "Add rule" / "Save", not "Save settings".
+ *
+ * `initial` switches the same form between "new" and "edit": when present the
+ * fields start prefilled and the caller replaces that row; when absent a new
+ * row is appended. The component is mounted per opening, so `useState` can seed
+ * from `initial` without an effect.
  */
 
 import { useEffect, useState } from "react";
@@ -25,17 +30,21 @@ import { Field, PrimaryButton, SecondaryButton, TextInput } from "../controls";
 import { dangerousRuleProblemText } from "@/lib/client/dangerous-commands-problem-text";
 
 export function DangerousRuleEditor({
+  initial,
   onClose,
-  onAdd,
+  onSubmit,
 }: {
+  /** The rule being edited; absent when creating a new one. */
+  initial?: DangerousPatternRule;
   onClose: () => void;
-  /** Hand a complete rule to the page's draft. */
-  onAdd: (rule: DangerousPatternRule) => void;
+  /** Hand the complete rule to the page's draft (append or replace). */
+  onSubmit: (rule: DangerousPatternRule) => void;
 }) {
   const { t } = useI18n();
-  const [name, setName] = useState("");
-  const [pattern, setPattern] = useState("");
-  const [ignoreCase, setIgnoreCase] = useState(false);
+  const editing = initial !== undefined;
+  const [name, setName] = useState(initial?.name ?? "");
+  const [pattern, setPattern] = useState(initial?.pattern ?? "");
+  const [ignoreCase, setIgnoreCase] = useState(initial?.ignoreCase === true);
   // Do not shout "name is required" at an empty form the user just opened;
   // after the first keystroke the inline error is what they need.
   const [touched, setTouched] = useState(false);
@@ -57,9 +66,9 @@ export function DangerousRuleEditor({
   });
   const error = problem && touched ? dangerousRuleProblemText(problem, t, t("This rule")) : null;
 
-  const add = () => {
+  const submit = () => {
     if (problem) return;
-    onAdd({ name, pattern, ...(ignoreCase ? { ignoreCase: true } : {}) });
+    onSubmit({ name, pattern, ...(ignoreCase ? { ignoreCase: true } : {}) });
   };
 
   if (!isVisible || !portalEl) return null;
@@ -68,7 +77,7 @@ export function DangerousRuleEditor({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={t("New rule")}
+      aria-label={editing ? t("Edit rule") : t("New rule")}
       style={backdropStyle}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) requestClose();
@@ -89,7 +98,9 @@ export function DangerousRuleEditor({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{t("New rule")}</span>
+          <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>
+            {editing ? t("Edit rule") : t("New rule")}
+          </span>
           <button
             type="button"
             onClick={requestClose}
@@ -150,7 +161,9 @@ export function DangerousRuleEditor({
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 16px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
           <SecondaryButton onClick={requestClose}>{t("Cancel")}</SecondaryButton>
-          <PrimaryButton onClick={add} disabled={problem !== null}>{t("Add rule")}</PrimaryButton>
+          <PrimaryButton onClick={submit} disabled={problem !== null}>
+            {editing ? t("Save") : t("Add rule")}
+          </PrimaryButton>
         </div>
       </div>
     </div>,

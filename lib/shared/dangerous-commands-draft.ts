@@ -87,6 +87,16 @@ function draftEntry(rule: DangerousPatternRule, index: number): DangerousRuleDra
   };
 }
 
+/** An editor result as a row. Names are labels, so they are trimmed once, here. */
+function entryFromRule(uid: string, rule: DangerousPatternRule): DangerousRuleDraftEntry {
+  return {
+    uid,
+    name: rule.name.trim(),
+    pattern: rule.pattern,
+    ignoreCase: rule.ignoreCase === true,
+  };
+}
+
 /** A uid no row in `rules` uses, so a re-added row cannot collide with a kept one. */
 function nextNewRuleUid(rules: readonly DangerousRuleDraftEntry[]): string {
   const used = new Set(rules.map((entry) => entry.uid));
@@ -113,16 +123,58 @@ export function addDangerousRule(
       ...draft,
       rules: [
         ...draft.rules,
-        {
-          uid,
-          name: initial?.name.trim() ?? "",
-          pattern: initial?.pattern ?? "",
-          ignoreCase: initial?.ignoreCase === true,
-        },
+        initial ? entryFromRule(uid, initial) : { uid, name: "", pattern: "", ignoreCase: false },
       ],
     },
     uid,
   };
+}
+
+/**
+ * Replace the row `uid` with the editor's result. The row keeps its uid and its
+ * position — editing must not reorder the list behind the user's back — and a
+ * name is trimmed like {@link addDangerousRule} trims it. An unknown uid is a
+ * no-op (and hands back the same draft), so a stale editor cannot append a row
+ * to a list that has moved on.
+ */
+export function updateDangerousRule(
+  draft: DangerousRulesDraft,
+  uid: string,
+  rule: DangerousPatternRule,
+): DangerousRulesDraft {
+  const index = draft.rules.findIndex((entry) => entry.uid === uid);
+  if (index === -1) return draft;
+  return {
+    ...draft,
+    rules: draft.rules.map((entry, at) => (at === index ? entryFromRule(uid, rule) : entry)),
+  };
+}
+
+/** Drop the row `uid`; the others keep their order and uids. Unknown uid → no change. */
+export function removeDangerousRule(draft: DangerousRulesDraft, uid: string): DangerousRulesDraft {
+  const rules = draft.rules.filter((entry) => entry.uid !== uid);
+  if (rules.length === draft.rules.length) return draft;
+  return { ...draft, rules };
+}
+
+/**
+ * Move the row `uid` one step. This is not decoration: the matcher walks the
+ * list in order and the first match wins, so order decides which rule's name a
+ * confirmation shows (and therefore which name "always allow" remembers).
+ * Moving past either end is a no-op, which is what makes the first row's up
+ * button and the last row's down button disabled states rather than errors.
+ */
+export function moveDangerousRule(
+  draft: DangerousRulesDraft,
+  uid: string,
+  direction: "up" | "down",
+): DangerousRulesDraft {
+  const index = draft.rules.findIndex((entry) => entry.uid === uid);
+  const target = direction === "up" ? index - 1 : index + 1;
+  if (index === -1 || target < 0 || target >= draft.rules.length) return draft;
+  const rules = [...draft.rules];
+  [rules[index], rules[target]] = [rules[target], rules[index]];
+  return { ...draft, rules };
 }
 
 /** Compile one pattern; returns the compiler's reason, or null when it compiles. */

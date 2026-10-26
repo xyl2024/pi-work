@@ -5,6 +5,9 @@ import {
   dangerousRulesDraftProblem,
   dangerousRulesRequestBody,
   isDangerousRulesDraftDirty,
+  moveDangerousRule,
+  removeDangerousRule,
+  updateDangerousRule,
   validateDangerousRulesWrite,
 } from "@/lib/shared/dangerous-commands-draft";
 import type { DangerousPatternRule } from "@/lib/shared/config-types";
@@ -139,6 +142,125 @@ describe("dangerousRulesDraftProblem", () => {
       ),
     };
     expect(dangerousRulesDraftProblem(draft)).toEqual({ kind: "empty-name", index: 1 });
+  });
+});
+
+describe("updateDangerousRule", () => {
+  it("replaces the matching row in place and keeps its uid", () => {
+    const before = dangerousRulesDraft(
+      [rule("first", "one"), rule("second", "two"), rule("third", "three")],
+      TIMEOUT,
+    );
+    const target = before.rules[1];
+
+    const after = updateDangerousRule(before, target.uid, {
+      name: "  edited  ",
+      pattern: "  two-or-more  ",
+      ignoreCase: true,
+    });
+
+    // Order and identity are untouched: only the row's content changed, so
+    // the row does not jump and the editor's marker stays on it.
+    expect(after.rules.map((entry) => entry.uid)).toEqual(before.rules.map((entry) => entry.uid));
+    expect(after.rules[1]).toEqual({
+      uid: target.uid,
+      name: "edited",
+      pattern: "  two-or-more  ",
+      ignoreCase: true,
+    });
+    expect(after.rules[0]).toEqual(before.rules[0]);
+    expect(after.rules[2]).toEqual(before.rules[2]);
+    expect(after.timeoutMs).toBe(TIMEOUT);
+  });
+
+  it("does nothing when the uid is gone (a stale editor must not corrupt the list)", () => {
+    const before = dangerousRulesDraft([rule("mine", "rm -rf")], TIMEOUT);
+
+    expect(updateDangerousRule(before, "no-such-uid", rule("other", "x"))).toBe(before);
+  });
+
+  it("makes the draft dirty", () => {
+    const saved = [rule("mine", "rm -rf")];
+    const before = dangerousRulesDraft(saved, TIMEOUT);
+    const after = updateDangerousRule(before, before.rules[0].uid, rule("mine", "rm -fr"));
+
+    expect(isDangerousRulesDraftDirty(after, saved, TIMEOUT)).toBe(true);
+  });
+});
+
+describe("removeDangerousRule", () => {
+  it("drops the matching row and keeps the others in order", () => {
+    const before = dangerousRulesDraft(
+      [rule("first", "one"), rule("second", "two"), rule("third", "three")],
+      TIMEOUT,
+    );
+
+    const after = removeDangerousRule(before, before.rules[1].uid);
+
+    expect(after.rules).toEqual([before.rules[0], before.rules[2]]);
+    expect(after.timeoutMs).toBe(TIMEOUT);
+  });
+
+  it("does nothing when the uid is gone", () => {
+    const before = dangerousRulesDraft([rule("mine", "rm -rf")], TIMEOUT);
+
+    expect(removeDangerousRule(before, "no-such-uid")).toBe(before);
+  });
+
+  it("makes the draft dirty", () => {
+    const saved = [rule("mine", "rm -rf")];
+    const before = dangerousRulesDraft(saved, TIMEOUT);
+    const removed = removeDangerousRule(before, before.rules[0].uid);
+
+    expect(removed.rules).toEqual([]);
+    expect(isDangerousRulesDraftDirty(removed, saved, TIMEOUT)).toBe(true);
+  });
+});
+
+describe("moveDangerousRule", () => {
+  const three = () =>
+    dangerousRulesDraft([rule("first", "one"), rule("second", "two"), rule("third", "three")], TIMEOUT);
+
+  it("swaps a row up with its neighbour", () => {
+    const before = three();
+    const after = moveDangerousRule(before, before.rules[1].uid, "up");
+
+    expect(after.rules.map((entry) => entry.name)).toEqual(["second", "first", "third"]);
+    // Only the two neighbours move: the row keeps its uid, and the untouched
+    // row keeps its place at the end.
+    expect(after.rules[0]).toEqual(before.rules[1]);
+    expect(after.rules[1]).toEqual(before.rules[0]);
+    expect(after.rules[2]).toEqual(before.rules[2]);
+  });
+
+  it("swaps a row down with its neighbour", () => {
+    const before = three();
+    const after = moveDangerousRule(before, before.rules[1].uid, "down");
+
+    expect(after.rules.map((entry) => entry.name)).toEqual(["first", "third", "second"]);
+    expect(after.rules[2]).toEqual(before.rules[1]);
+  });
+
+  it("cannot move the first row up, nor the last row down", () => {
+    const before = three();
+
+    expect(moveDangerousRule(before, before.rules[0].uid, "up")).toBe(before);
+    expect(moveDangerousRule(before, before.rules[2].uid, "down")).toBe(before);
+  });
+
+  it("does nothing for a single row or an unknown uid", () => {
+    const single = dangerousRulesDraft([rule("only", "one")], TIMEOUT);
+    expect(moveDangerousRule(single, single.rules[0].uid, "up")).toBe(single);
+    expect(moveDangerousRule(single, single.rules[0].uid, "down")).toBe(single);
+    expect(moveDangerousRule(single, "no-such-uid", "up")).toBe(single);
+  });
+
+  it("makes the draft dirty even though the set of rows is unchanged", () => {
+    const saved = [rule("first", "one"), rule("second", "two")];
+    const before = dangerousRulesDraft(saved, TIMEOUT);
+    const after = moveDangerousRule(before, before.rules[1].uid, "up");
+
+    expect(isDangerousRulesDraftDirty(after, saved, TIMEOUT)).toBe(true);
   });
 });
 

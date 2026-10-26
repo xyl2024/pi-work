@@ -110,6 +110,53 @@ describe("PUT /api/dangerous-commands", () => {
     expect(test.body).toMatchObject({ kind: "matched", ruleName, source: "user" });
   });
 
+  it("edits a rule in place through the same write face", async () => {
+    const keep = { name: uniqueId("user-rule"), pattern: "keep-me" };
+    const edited = { name: uniqueId("user-rule"), pattern: "before-edit" };
+    expect((await writeRules([keep, edited], original.timeout_ms)).status).toBe(200);
+
+    const after = { ...edited, pattern: "after-edit", ignoreCase: true };
+    const put = await writeRules([keep, after], original.timeout_ms);
+    expect(put.status).toBe(200);
+
+    // Disk holds the edited list in place: same order, other rule untouched.
+    expect((await readRules()).rules).toEqual([keep, after]);
+
+    // And the gate now matches the edited pattern under the same rule name.
+    const test = await api("/api/dangerous-commands/test", {
+      method: "POST",
+      body: JSON.stringify({ command: "AFTER-EDIT" }),
+    });
+    expect(test.body).toMatchObject({ kind: "matched", ruleName: after.name, source: "user" });
+  });
+
+  it("deletes one rule through the same write face, leaving the rest in order", async () => {
+    const first = { name: uniqueId("user-rule"), pattern: "first-rule" };
+    const doomed = { name: uniqueId("user-rule"), pattern: "doomed-rule" };
+    const last = { name: uniqueId("user-rule"), pattern: "last-rule" };
+    expect((await writeRules([first, doomed, last], original.timeout_ms)).status).toBe(200);
+
+    // The rule is live before the delete, so "gone afterwards" is not just a
+    // pattern that never matched anything.
+    const before = await api("/api/dangerous-commands/test", {
+      method: "POST",
+      body: JSON.stringify({ command: "doomed-rule" }),
+    });
+    expect(before.body).toMatchObject({ kind: "matched", ruleName: doomed.name, source: "user" });
+
+    const put = await writeRules([first, last], original.timeout_ms);
+    expect(put.status).toBe(200);
+    expect((await readRules()).rules).toEqual([first, last]);
+
+    // The deleted rule is gone from the effective set, so its pattern no
+    // longer asks for confirmation.
+    const test = await api("/api/dangerous-commands/test", {
+      method: "POST",
+      body: JSON.stringify({ command: "doomed-rule" }),
+    });
+    expect(test.body).toEqual({ kind: "none" });
+  });
+
   it("rejects a rule whose pattern does not compile with 400 and leaves disk alone", async () => {
     const name = uniqueId("broken-rule");
     const before = await readRules();

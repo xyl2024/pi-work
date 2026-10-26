@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
@@ -10,13 +10,16 @@ import type {
   DangerousCommandVerdict,
   DangerousRuleSetSnapshot,
 } from "@/lib/shared/dangerous-commands";
-import type { DangerousPatternRule, PiWorkConfig } from "@/lib/shared/config-types";
+import type { PiWorkConfig } from "@/lib/shared/config-types";
 import {
   addDangerousRule,
   dangerousRulesDraft,
   dangerousRulesDraftProblem,
   dangerousRulesRequestBody,
   isDangerousRulesDraftDirty,
+  moveDangerousRule,
+  removeDangerousRule,
+  updateDangerousRule,
   type DangerousRulesDraft,
 } from "@/lib/shared/dangerous-commands-draft";
 import { PrimaryButton, SETTINGS_RADIUS, inputStyle } from "../controls";
@@ -24,6 +27,7 @@ import { SaveButton, UnsavedHint } from "../staged-save";
 import { useSettingsPageData } from "../use-page-data";
 import type { DirtyReporter } from "../use-unsaved-changes";
 import { DangerousRuleEditor } from "../dangerous-commands/DangerousRuleEditor";
+import { RuleList, RuleRow } from "../dangerous-commands/DangerousRuleList";
 import { dangerousRuleProblemText } from "@/lib/client/dangerous-commands-problem-text";
 
 /** One read of the effective set; the modal's page-data cache keeps it for the modal's lifetime. */
@@ -50,103 +54,6 @@ async function testCommand(command: string): Promise<DangerousCommandVerdict> {
     throw new Error(data.error ?? `HTTP ${response.status}`);
   }
   return data;
-}
-
-const ROW_STYLE = {
-  display: "flex",
-  alignItems: "baseline",
-  gap: 10,
-  padding: "7px 10px",
-} as const;
-
-/**
- * One rule: the name the confirmation dialog shows, the pattern as written
- * (monospace, truncated — a long regex must not widen the modal) and whether it
- * ignores case. Shared by the user's list and the built-in list so the two
- * cannot describe a rule differently.
- *
- * `error` is the draft blocker for this row: the rule that stops Save is marked
- * in place, with the compiler's reason underneath.
- */
-function RuleRow({
-  rule,
-  first,
-  error,
-}: {
-  rule: DangerousPatternRule;
-  first: boolean;
-  error?: { message: string; detail?: string } | null;
-}) {
-  const { t } = useI18n();
-  return (
-    <div
-      style={{
-        borderTop: first ? "none" : "1px solid var(--border)",
-        background: error ? "color-mix(in srgb, var(--error) 7%, transparent)" : undefined,
-      }}
-    >
-      <div style={ROW_STYLE}>
-        <span
-          title={rule.name}
-          style={{
-            flexShrink: 0,
-            maxWidth: 180,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontSize: 12,
-            color: "var(--text)",
-          }}
-        >
-          {rule.name}
-        </span>
-        <code
-          title={rule.pattern}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontFamily: "var(--font-mono)",
-            fontSize: 11,
-            color: "var(--text-muted)",
-          }}
-        >
-          {rule.pattern}
-        </code>
-        <span style={{ flexShrink: 0, fontSize: 10, color: "var(--text-dim)" }}>
-          {rule.ignoreCase ? t("Ignore case") : t("Case-sensitive")}
-        </span>
-      </div>
-      {error && (
-        <div style={{ padding: "0 10px 7px 10px", fontSize: 11, color: "var(--error)", lineHeight: 1.5 }}>
-          <div>{error.message}</div>
-          {error.detail && (
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-dim)", wordBreak: "break-word" }}>
-              {error.detail}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The bordered list wrapper both rule lists use. */
-function RuleList({ children }: { children: ReactNode }) {
-  return (
-    <div
-      style={{
-        border: "1px solid var(--border)",
-        borderRadius: SETTINGS_RADIUS,
-        overflow: "hidden",
-        background: "var(--bg)",
-      }}
-    >
-      {children}
-    </div>
-  );
 }
 
 /**
@@ -384,11 +291,16 @@ export function DangerousCommandsSection({
   // The draft is deliberately not cached across page entries: leaving the page
   // drops unsaved edits, the same as the other staged pages.
   const [draft, setDraft] = useState<DangerousRulesDraft | null>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
+  const [editor, setEditor] = useState<null | { mode: "new" } | { mode: "edit"; uid: string }>(null);
   const [saving, setSaving] = useState(false);
   const [savedOk, flashSavedOk] = useTransientFlag();
 
   const current = draft ?? dangerousRulesDraft(savedRules, savedTimeoutMs);
+  // The row the editor is prefilling. Absent for a new rule; also absent if a
+  // row vanished while the modal was open, in which case the modal is not
+  // rendered at all (see below) rather than silently discarding the form.
+  const editingRule =
+    editor?.mode === "edit" ? current.rules.find((entry) => entry.uid === editor.uid) : undefined;
   const dirty = isDangerousRulesDraftDirty(current, savedRules, savedTimeoutMs);
   const problem = dangerousRulesDraftProblem(current);
   const problemText = problem
@@ -446,8 +358,16 @@ export function DangerousCommandsSection({
           <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
             {t("Your rules")}
           </h3>
-          <PrimaryButton onClick={() => setEditorOpen(true)}>{t("New rule")}</PrimaryButton>
+          <PrimaryButton onClick={() => setEditor({ mode: "new" })}>{t("New rule")}</PrimaryButton>
         </div>
+
+        {current.rules.length > 0 && (
+          <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+            {t(
+              "Order only affects which rule name is shown and remembered when several rules match the same command — it never changes whether a confirmation appears.",
+            )}
+          </p>
+        )}
 
         <div style={{ marginTop: 8 }}>
           {current.rules.length === 0 ? (
@@ -471,6 +391,14 @@ export function DangerousCommandsSection({
                   rule={entry}
                   first={index === 0}
                   error={problem?.index === index ? problemText : null}
+                  actions={{
+                    onEdit: () => setEditor({ mode: "edit", uid: entry.uid }),
+                    onMoveUp: () => setDraft(moveDangerousRule(current, entry.uid, "up")),
+                    onMoveDown: () => setDraft(moveDangerousRule(current, entry.uid, "down")),
+                    onDelete: () => setDraft(removeDangerousRule(current, entry.uid)),
+                    canMoveUp: index > 0,
+                    canMoveDown: index < current.rules.length - 1,
+                  }}
                 />
               ))}
             </RuleList>
@@ -528,12 +456,17 @@ export function DangerousCommandsSection({
         />
       </div>
 
-      {editorOpen && (
+      {editor && (editor.mode === "new" || editingRule) && (
         <DangerousRuleEditor
-          onClose={() => setEditorOpen(false)}
-          onAdd={(rule) => {
-            setDraft(addDangerousRule(current, rule).draft);
-            setEditorOpen(false);
+          initial={editingRule}
+          onClose={() => setEditor(null)}
+          onSubmit={(rule) => {
+            setDraft(
+              editingRule
+                ? updateDangerousRule(current, editingRule.uid, rule)
+                : addDangerousRule(current, rule).draft,
+            );
+            setEditor(null);
           }}
         />
       )}

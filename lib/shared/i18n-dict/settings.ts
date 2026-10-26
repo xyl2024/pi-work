@@ -29,6 +29,8 @@ export const settings = {
   "Built-in rule": "内置规则",
   "Your rules": "你的规则",
   "New rule": "新建规则",
+  "Edit rule": "编辑规则",
+  "Order only affects which rule name is shown and remembered when several rules match the same command — it never changes whether a confirmation appears.": "顺序只影响同一命令命中多条规则时显示并记住哪条规则的名字，不影响是否弹出确认。",
   "Add rule": "添加规则",
   "No custom rules yet. The built-in rules below still apply.": "还没有自定义规则。下面的内置规则仍然生效。",
   "Rule name": "规则名",
