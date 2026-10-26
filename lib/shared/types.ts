@@ -1,6 +1,7 @@
 // Types mirrored from pi-mono coding-agent session-manager
 
 import type { ToolDiffStats } from "./tool-diff-stats";
+import type { PermissionMode } from "./permission-mode";
 
 interface SessionEntryBase {
   type: string;
@@ -250,6 +251,13 @@ export interface SessionInfo {
   // Set by the read layer to false; the /api/sessions route enriches from the
   // wrapper registry.
   running: boolean;
+  /**
+   * The session's permission mode (ADR-0021), set only when it is NOT the
+   * default: the session-list routes read the sidecar index and report the
+   * sessions that opted into full access, so a sidebar row can wear its shield
+   * before the session is ever opened. Absent means `confirm`.
+   */
+  permissionMode?: PermissionMode;
 }
 
 /**

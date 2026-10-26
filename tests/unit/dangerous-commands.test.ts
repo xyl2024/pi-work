@@ -347,6 +347,29 @@ describe("the gate's wiring", () => {
   });
 
   it("sends the gate through the evaluation the settings tester also calls", () => {
-    expect(gate).toContain("evaluateDangerousCommand(command)");
+    // The gate passes this session's permission mode (ADR-0021) and nothing
+    // else: the mode's meaning is decided inside the evaluator, not here.
+    expect(gate).toMatch(/evaluateDangerousCommand\(\s*command,/);
+    expect(gate).toContain("wrapperRef.current?.permissionMode");
+  });
+
+  it("hands the agent the plain reason self-protection blocked the command", () => {
+    // "The command was blocked" is not an answer to a user asking why their
+    // `pkill node` did nothing. Self-protection is the one block full access
+    // does not lift (ADR-0021), so it is the one whose reason must travel.
+    expect(gate).toContain("blocked by self-protection: ${verdict.reason}");
+  });
+
+  it("keeps the mode out of every agent-reachable path", () => {
+    // The mode is a human-only switch (ADR-0021): no slash command, no agent
+    // tool, no system-prompt line. Channel messages are externally controlled
+    // content, so an agent-reachable toggle would be the way a stranger opens
+    // the gate. The only entries are the palette command and the toolbar.
+    const palette = readFileSync(join(process.cwd(), "lib/client/commands.tsx"), "utf8");
+    expect(palette).toContain('id: "session.permission_mode"');
+    expect(readFileSync(join(process.cwd(), "lib/shared/slash-commands.ts"), "utf8"))
+      .not.toContain("permission_mode");
+    expect(readFileSync(join(process.cwd(), "lib/server/self-tools/pi-work-call.ts"), "utf8"))
+      .not.toContain("permission_mode");
   });
 });

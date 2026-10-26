@@ -11,6 +11,7 @@ import { countToolCallsByName } from "@/lib/shared/message-display";
 import { buildChatTimeline, indexToolResults, isVisibleChatMessage } from "@/lib/shared/chat-timeline";
 import { summarizeTurn } from "@/lib/shared/tool-call-display";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
+import { flippedPermissionMode, type PermissionMode } from "@/lib/shared/permission-mode";
 import { MessageView, CollapseNonceProvider } from "./MessageView";
 import { MessageCallMetricsProvider } from "./message-view/context";
 import { useSessionCallMetrics } from "@/hooks/useSessionCallMetrics";
@@ -136,7 +137,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   const {
     data, loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, streamState,
     agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps,
-    toolSelection, availableTools, toolsLoading, toolsError, thinkingLevel,
+    toolSelection, availableTools, toolsLoading, toolsError, thinkingLevel, permissionMode,
     retryInfo,
     displayModel: displayModelValue,
     agentPhase,
@@ -146,6 +147,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     lastUserMsgRef, pendingScrollToUserRef,
     handleSend, handleAbort, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
+    handlePermissionModeChange,
     handleCompact,
     userMessageHistory,
     activeLeafId, currentSessionId,
@@ -262,11 +264,17 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     setAgentControls({
       abortStreaming: handleAbort,
       isStreaming: agentRunning,
+      permissionMode,
+      // No session, no handler: the palette entry hides itself on a draft
+      // instead of offering a switch that has nothing to switch.
+      ...(currentSessionId
+        ? { setPermissionMode: (mode: PermissionMode) => handlePermissionModeChange(mode) }
+        : {}),
     }, tabId);
     return () => setAgentControls(null, tabId);
     // Handlers come from useAgentSession (stable useCallback refs); only
     // re-register when the bits that drive `when()` predicates change.
-  }, [isActive, agentRunning, tabId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, agentRunning, permissionMode, currentSessionId, tabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── AskUserQuestions: when the panel is pending for the active session
   //    we hide the bottom-right button stack — otherwise the row of
@@ -763,6 +771,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         onEnsureAvailableTools={ensureAvailableTools}
         thinkingLevel={thinkingLevel}
         onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
+        permissionMode={permissionMode}
+        // A draft has no session to authorize, so the shield is not offered;
+        // the border is inert too because a draft is always `confirm`.
+        onPermissionModeToggle={session
+          ? () => { void handlePermissionModeChange(flippedPermissionMode(permissionMode)); }
+          : undefined}
         availableThinkingLevels={availableThinkingLevels}
         thinkingLevelMap={currentThinkingLevelMap}
         retryInfo={retryInfo}

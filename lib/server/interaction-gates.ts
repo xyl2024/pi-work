@@ -293,6 +293,24 @@ export class InteractionGates {
     this.allowedRules.clear();
   }
 
+  /**
+   * Forget every "allow similar for this session" the user granted.
+   *
+   * Called when the session leaves full access (ADR-0021): the memo and full
+   * access are the same layer — "what this session is authorized to do" — so
+   * revoking the second revokes the first. Otherwise switching back to
+   * `confirm` would leave some rules silently unasked.
+   *
+   * Open gates are deliberately untouched: a command that was already waiting
+   * for an answer keeps waiting, because a mode switch must neither approve nor
+   * deny something the user has not looked at yet.
+   */
+  clearSessionMemo(): void {
+    if (this.allowedRules.size === 0) return;
+    this.allowedRules.clear();
+    log.info("session permission memo cleared");
+  }
+
   /** Open a gate on the shared table and wait for its decision. */
   private openGate<Decision>(params: OpenGateParams<Decision>): Promise<Decision> {
     const existing = this.pending.get(params.toolCallId);

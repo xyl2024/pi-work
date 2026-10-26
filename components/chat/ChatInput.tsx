@@ -17,6 +17,8 @@ import { useSlashMenu } from "./chat-input/hooks/useSlashMenu";
 import { useFileMentionMenu } from "./chat-input/hooks/useFileMentionMenu";
 import { BottomToolbar } from "./chat-input/BottomToolbar";
 import { THINKING_BORDER_COLOR } from "./chat-input/constants";
+import { FULL_ACCESS_BORDER_COLOR } from "../ui/permission-mode-colors";
+import type { PermissionMode } from "@/lib/shared/permission-mode";
 import { THINKING_LEVEL_ORDER, type ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
 
 export type { SlashResource } from "@/lib/shared/slash-commands";
@@ -65,6 +67,13 @@ interface Props {
   onThinkingLevelChange?: (level: "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max") => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
+  /** This session's permission mode (ADR-0021). `full_access` turns the input
+   *  container's border red — the only permanent reminder that the next
+   *  dangerous command will not ask. */
+  permissionMode?: PermissionMode;
+  /** Flip between the two modes. Absent on screens that have no session yet
+   *  (a draft is always `confirm`), which also hides the toolbar button. */
+  onPermissionModeToggle?: () => void;
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   slashResources?: SlashResource[];
   slashResourceKey?: string;
@@ -120,6 +129,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   toolSelection = "all", onToolSelectionChange,
   availableTools = [], toolsLoading = false, toolsError = null, onEnsureAvailableTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
+  permissionMode = "confirm", onPermissionModeToggle,
   retryInfo,
   slashResources = [], slashResourceKey,
   onSlashAction,
@@ -496,7 +506,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             gap: 8,
             alignItems: "center",
             background: "var(--bg)",
-            border: `1.5px solid ${THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
+            // Full access wins over the thinking-level colour: this border is
+            // the standing "the next dangerous command will not ask" signal.
+            border: `1.5px solid ${permissionMode === "full_access" ? FULL_ACCESS_BORDER_COLOR : THINKING_BORDER_COLOR[thinkingLevel ?? "off"]}`,
             borderRadius: 14,
             padding: "10px 10px 10px 14px",
             boxShadow: "none",
@@ -673,6 +685,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             contextUsage={contextUsage}
             sessionStats={sessionStats}
             contextComposition={contextComposition}
+            permissionMode={permissionMode}
+            onPermissionModeToggle={onPermissionModeToggle}
             thinkingLevel={thinkingLevel}
             onThinkingLevelChange={onThinkingLevelChange}
             availableThinkingLevels={availableThinkingLevels}

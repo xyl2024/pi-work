@@ -58,6 +58,31 @@ describe("client snapshot input", () => {
     expect(next.state.contextComposition).toBeNull();
   });
 
+  it("adopts the session's permission mode from the snapshot", () => {
+    // A remount has to learn the mode without waiting for the next
+    // `permission_mode_changed`: that event is live, never replayed (ADR-0021).
+    const next = snapshot(createSessionRuntimeState(), {
+      type: "client_snapshot",
+      snapshot: { running: false, state: { permissionMode: "full_access" } },
+    });
+    expect(next.state.permissionMode).toBe("full_access");
+  });
+
+  it("never reads a malformed permission mode as full access", () => {
+    const confirm = snapshot(createSessionRuntimeState(), {
+      type: "client_snapshot",
+      snapshot: { running: false, state: { permissionMode: "yolo" as never } },
+    });
+    expect(confirm.state.permissionMode).toBe("confirm");
+
+    // An older server simply omits the field; the client keeps its belief.
+    const kept = snapshot(
+      patchSessionRuntimeState(createSessionRuntimeState(), "permissionMode", "full_access"),
+      { type: "client_snapshot", snapshot: { running: false, state: {} } },
+    );
+    expect(kept.state.permissionMode).toBe("full_access");
+  });
+
   it("returns the system prompt and tool selection as effects, not state", () => {
     const next = snapshot(createSessionRuntimeState(), {
       type: "client_snapshot",

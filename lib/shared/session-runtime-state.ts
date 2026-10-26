@@ -28,6 +28,7 @@
 import type { AgentMessage, SessionTreeNode, ToolInfo, ToolSelection, ToolResultMessage } from "./types";
 import type { ContextComposition } from "./context-composition";
 import type { ThinkingLevelOption } from "./thinking-level-utils";
+import { DEFAULT_PERMISSION_MODE, type PermissionMode } from "./permission-mode";
 
 /** Same shape as React's `SetStateAction` — declared locally so the shared
  *  layer stays free of React imports. */
@@ -68,6 +69,10 @@ export interface SessionSnapshotPayload {
     contextComposition?: ContextComposition | null;
     systemPrompt?: string;
     thinkingLevel?: string;
+    /** The session's permission mode (ADR-0021). Absent on older servers, and
+     *  absent means "say nothing", not "confirm": the client keeps whatever
+     *  it already had. */
+    permissionMode?: PermissionMode;
     /** Raw tool selection the live agent is using ("all" | string[], patterns
      *  included). Absent on older servers; drives the tools button label. */
     toolNames?: ToolSelection;
@@ -143,6 +148,10 @@ export interface SessionRuntimeState {
   /** Bumped to ask the subagent panel to refresh. */
   subagentRefreshKey: number;
   thinkingLevel: ThinkingLevelOption;
+  /** Which permission mode this session is in (ADR-0021). Only
+   *  `full_access` changes behaviour; it is carried here so the button, the
+   *  input border and the badges all read one fact. */
+  permissionMode: PermissionMode;
   retryInfo: RetryInfo | null;
   contextUsage: ContextUsage | null;
   contextComposition: ContextComposition | null;
@@ -194,6 +203,7 @@ export function createSessionRuntimeState(
     inFlightTools: new Map(),
     subagentRefreshKey: 0,
     thinkingLevel: "off",
+    permissionMode: DEFAULT_PERMISSION_MODE,
     retryInfo: null,
     contextUsage: null,
     contextComposition: null,

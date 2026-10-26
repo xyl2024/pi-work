@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { getRpcSession } from "@/lib/server/rpc-manager";
+import { permissionModeField, readSessionPermissionModes } from "@/lib/server/session-permission-mode";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 const log = createLogger("api/sessions/[id]/info");
@@ -38,7 +39,13 @@ export async function GET(
       durationMs: elapsedMs(startedAt),
     });
     return NextResponse.json({
-      session: { ...info, running: getRpcSession(info.id)?.isRunning() ?? false },
+      session: {
+        ...info,
+        running: getRpcSession(info.id)?.isRunning() ?? false,
+        // Same projection as the two list routes: a session restored from a URL
+        // must wear its shield without being opened first (ADR-0021).
+        ...permissionModeField(readSessionPermissionModes(), info.id),
+      },
     });
   } catch (error) {
     log.error("session info failed", { id, error, durationMs: elapsedMs(startedAt) });

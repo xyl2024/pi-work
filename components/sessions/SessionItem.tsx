@@ -9,6 +9,7 @@ import { sessionDisplayTitle } from "@/lib/shared/session-title";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
+import { PermissionModeBadge } from "../ui/PermissionModeBadge";
 
 interface SessionItemProps {
   session: SessionInfo;
@@ -365,6 +366,7 @@ export function SessionItem({
                 />
               </Tooltip>
             )}
+            <PermissionModeBadge sessionId={session.id} fallback={session.permissionMode ?? "confirm"} />
             <Tooltip content={title}>
             <div
               style={{

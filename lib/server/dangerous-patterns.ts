@@ -16,6 +16,7 @@ import {
   type DangerousRuleSetSnapshot,
   type SourcedDangerousCommandMatch,
 } from "../shared/dangerous-commands";
+import { DEFAULT_PERMISSION_MODE, isPermissionMode, type PermissionMode } from "../shared/permission-mode";
 import { readConfig, writeConfig } from "./config";
 import { createLogger } from "./logger";
 import { matchSelfKillCommand } from "./self-protection";
@@ -63,9 +64,11 @@ export function matchDangerousPattern(command: string): SourcedDangerousCommandM
 
 /**
  * The full answer to "what happens if this command runs?": the self-protection
- * hard block first, then the promptable rule match.
+ * hard block first, then the promptable rule match filtered by the session's
+ * permission mode.
  *
- * This is the one place that order is decided. The `tool_call` gate in
+ * This is the one place that order is decided — and, since ADR-0021, the one
+ * place the permission mode forks anything. The `tool_call` gate in
  * `lib/server/rpc-manager.ts` and the settings page's command tester both call
  * it, so "the box said it would ask" and "it asked" cannot diverge, and the
  * tester cannot claim a command is fine while the gate hard-blocks it. The
@@ -75,9 +78,21 @@ export function matchDangerousPattern(command: string): SourcedDangerousCommandM
  * Self-protection wins on purpose: its process-kill patterns are POSIX-shaped
  * (`pkill`, `fuser`, `$PPID`) and never match PowerShell syntax, while its
  * system-down ones (`shutdown`, `reboot`) apply to both agent shells — so the
- * check belongs before the match, not inside a per-shell branch.
+ * check belongs before the match, not inside a per-shell branch. `full_access`
+ * changes nothing about that: a session-level exemption from *asking* is not a
+ * licence to kill the process that hosts every session, terminal and background
+ * loop (ADR-0021). All it does is turn a rule match into `none`.
+ *
+ * An unknown / missing mode falls back to `confirm` — the failure direction is
+ * "keep asking", never "stop asking". The settings tester omits the argument
+ * because it answers "what does the rule set say", not "what does my session
+ * say".
  */
-export function evaluateDangerousCommand(command: string): DangerousCommandVerdict {
+export function evaluateDangerousCommand(
+  command: string,
+  mode: PermissionMode = DEFAULT_PERMISSION_MODE,
+): DangerousCommandVerdict {
+  const effectiveMode = isPermissionMode(mode) ? mode : DEFAULT_PERMISSION_MODE;
   // Nothing to match: an empty command cannot be a dangerous command. (An
   // empty *pattern*, by contrast, compiles and matches everything — which is
   // why the write path refuses one.) The page also skips the request for an
@@ -86,6 +101,10 @@ export function evaluateDangerousCommand(command: string): DangerousCommandVerdi
 
   const selfKill = matchSelfKillCommand(command);
   if (selfKill) return { kind: "self_protected", reason: selfKill.reason };
+
+  // Full access: the command runs without asking. Not "skip the whole
+  // function" — self-protection above has already had its say.
+  if (effectiveMode === "full_access") return { kind: "none" };
 
   const match = matchDangerousPattern(command);
   if (!match) return { kind: "none" };

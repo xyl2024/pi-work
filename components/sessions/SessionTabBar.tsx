@@ -8,6 +8,7 @@ import {
   type SessionTabStatus,
 } from "@/hooks/sessionWorkspaceStore";
 import { Tooltip } from "../ui/Tooltip";
+import { PermissionModeBadge } from "../ui/PermissionModeBadge";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { InlineLoader } from "generative-loaders";
 
@@ -166,6 +167,10 @@ export function SessionTabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNe
             }}
           >
             <StatusMark status={tab.status} />
+            <PermissionModeBadge
+              sessionId={tab.kind === "session" ? tab.session?.id ?? null : null}
+              fallback={tab.session?.permissionMode ?? "confirm"}
+            />
             {tab.dirty && (
               <Tooltip content={t("Unsaved draft")}>
                 <span

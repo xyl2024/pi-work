@@ -8,6 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
 import { setSessionUiState, setLeafChangeHandler } from "../sessionUiStore";
+import { setSessionPermissionMode } from "../permissionModeStore";
 import { getPendingAskUserQuestions } from "../askUserQuestionsStore";
 import { pickClosestAvailableThinkingLevel } from "@/lib/shared/thinking-level-utils";
 import {
@@ -27,6 +28,7 @@ import {
 import { useAgentSessionTransport } from "./transport";
 import { useAgentSessionData } from "./data";
 import type { SessionEvent, SessionRuntimeInput } from "@/lib/shared/session-events";
+import type { PermissionMode } from "@/lib/shared/permission-mode";
 import type {
   AgentPhase,
   AgentRuntimeState,
@@ -490,6 +492,11 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
         // not find the session. The event reducer clears this on the first
         // assistant `message_end` and asks the host to refresh exactly once.
         patchRuntime("awaitingFirstAssistant", true);
+        // This mount started life as a draft and is now a real session. Its
+        // permission mode is known without a hydration round trip: a brand-new
+        // session is always `confirm` (the sidecar has nothing for it yet), so
+        // the mirror effect may start reporting this controller's belief.
+        permissionModeKnownRef.current = true;
         onSessionCreated?.({
           id: realId,
           path: "",
@@ -634,6 +641,26 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     }
   }, [isNew, newSessionModel, currentModel, modelThinkingLevels, setThinkingLevel, showToast, t]);
 
+  // Flip this session's permission mode (ADR-0021). The ONE path both entry
+  // points take: the toolbar shield (through ChatInput) and the command palette
+  // (through the AgentControls bridge, which calls this same handler).
+  const handlePermissionModeChange = useCallback(async (mode: PermissionMode) => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    try {
+      await sendAgentCommand(sid, { type: "set_permission_mode", mode });
+      // The `permission_mode_changed` event carries the same fact to every
+      // listener, but an idle session may hold no SSE subscription at all, so
+      // the caller's optimistic belief is also written here. Both write the
+      // value the server just acknowledged, so they cannot disagree.
+      patchRuntime("permissionMode", mode);
+      setSessionPermissionMode(sid, mode);
+    } catch (e) {
+      console.error("Failed to set permission mode:", e);
+      showToast({ kind: "error", message: e instanceof Error && e.message ? e.message : t("Failed to change permission mode") });
+    }
+  }, [patchRuntime, showToast, t]);
+
   // Apply a new tool selection. For existing sessions, the change is sent
   // straight to the agent (`set_tools`); for new sessions we only update
   // local state — the new selection is serialised into `toolNames` at
@@ -733,9 +760,15 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     t,
   ]);
 
+  // Whether the REST snapshot has been folded into the runtime state yet. The
+  // permission-mode mirror below reads it: before hydration, "confirm" is the
+  // absence of a belief rather than the answer.
+  const permissionModeKnownRef = useRef(false);
+
   // Load session on mount
   useEffect(() => {
     disposedRef.current = false;
+    permissionModeKnownRef.current = false;
     // A fresh mount means a fresh belief about the session: drop the dedupe
     // ledgers. The ledgers live in the runtime state object, so this is the
     // only place they need clearing (it used to clear three refs).
@@ -751,6 +784,9 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
       sessionIdRef.current = session.id;
       loadSession(session.id, true, true).then(async (agentState) => {
         if (disposedRef.current) return;
+        // Set before the reducer runs: its re-render is what lets the mirror
+        // effect observe the hydrated mode.
+        permissionModeKnownRef.current = true;
         // The REST snapshot is one more input to the one reducer.
         applyRuntimeInputRef.current({ type: "client_snapshot", snapshot: agentState });
         // Backstop for a wrapper that wasn't alive at includeState time (e.g.
@@ -834,6 +870,23 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     // `setSessionUiState` then suppresses identity-only churn.
   }, [runtimeState, systemPrompt, sessionStats, streamState.isStreaming, data?.tree, toolSelection, availableTools, isNew, newSessionModel, currentModel, isActive]);
 
+  // Keep the cross-session permission-mode index in step with this controller's
+  // belief. Unlike the publish projection above this is NOT active-only: a
+  // background tab that is in full access still has to wear its badge in the
+  // tab strip, and the sidebar row has to agree with it.
+  //
+  // Both directions are mirrored (so a mode changed from another tab lands too);
+  // what this effect will not do is guess before the snapshot arrives.
+  useEffect(() => {
+    if (!currentSessionId) return;
+    // Nothing is known until the REST snapshot has been folded in: the state's
+    // initial `confirm` is "no belief yet", not a fact, and echoing it here would
+    // blink the shield off on the mount of any full-access session whose list
+    // row already says so.
+    if (!permissionModeKnownRef.current) return;
+    setSessionPermissionMode(currentSessionId, runtimeState.permissionMode);
+  }, [currentSessionId, runtimeState.permissionMode]);
+
   // Keep the store's leaf-change handler owned by the active controller only.
   // Background controllers remain fully live, but must never redirect a branch
   // click from the visible session into their own conversation.
@@ -910,6 +963,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel,
     toolSelection, availableTools, toolsLoading, toolsError,
     thinkingLevel: runtimeState.thinkingLevel,
+    permissionMode: runtimeState.permissionMode,
     systemPrompt,
     currentModel, displayModel, sessionStats,
     isNew,
@@ -921,6 +975,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     // Actions
     handleSend, handleAbort, handleNavigate, handleModelChange,
     handleToolSelectionChange, ensureAvailableTools, handleThinkingLevelChange,
+    handlePermissionModeChange,
     handleCompact,
   };
 }

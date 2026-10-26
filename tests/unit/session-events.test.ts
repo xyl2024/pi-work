@@ -982,11 +982,41 @@ describe("session event reducer: turn and phase", () => {
     expect(reduction.effects).toEqual([]);
   });
 
+  it("mirrors the session's permission mode", () => {
+    const reduction = reduceSessionEvent(createSessionRuntimeState(), {
+      type: "permission_mode_changed",
+      mode: "full_access",
+    });
+
+    expect(reduction.state.permissionMode).toBe("full_access");
+    expect(reduction.effects).toEqual([]);
+  });
+
+  it("leaves the permission mode alone when the wire value is not a mode", () => {
+    // The protocol types the field, but a frame from a mismatched server must
+    // not be able to move the indicator to something nothing understands — the
+    // failure direction is "keep asking", never "stop asking" (ADR-0021).
+    const fullAccess = createSessionRuntimeState({ permissionMode: "full_access" });
+    const reduction = reduceSessionEvent(fullAccess, {
+      type: "permission_mode_changed",
+      mode: "yolo" as never,
+    });
+
+    expect(reduction.state).toBe(fullAccess);
+    expect(reduction.state.permissionMode).toBe("full_access");
+
+    const missing = reduceSessionEvent(createSessionRuntimeState(), {
+      type: "permission_mode_changed",
+    } as never);
+    expect(missing.state.permissionMode).toBe("confirm");
+  });
+
   it("counts the turn and phase events among the reduced events", () => {
     expect(isReducedSessionEvent(agentStart)).toBe(true);
     expect(isReducedSessionEvent(agentEnd())).toBe(true);
     expect(isReducedSessionEvent(compactionEnd())).toBe(true);
     expect(isReducedSessionEvent({ type: "thinking_level_changed", level: "off" })).toBe(true);
+    expect(isReducedSessionEvent({ type: "permission_mode_changed", mode: "confirm" })).toBe(true);
   });
 });
 
@@ -1102,6 +1132,11 @@ describe("session event reducer: replay idempotency", () => {
         event: compactionEnd(),
       },
       { name: "thinking_level_changed", state: midTurn(), event: { type: "thinking_level_changed", level: "high" } },
+      {
+        name: "permission_mode_changed",
+        state: midTurn(),
+        event: { type: "permission_mode_changed", mode: "full_access" },
+      },
     ];
 
     // One row per reduced type: a new reduced event has to bring its own row, so

@@ -13,6 +13,7 @@ import {
 } from "@/lib/server/session-names";
 import { deleteSessionNotify } from "@/lib/server/session-notify";
 import { deleteSessionToolSelection } from "@/lib/server/session-tools-config";
+import { deleteSessionPermissionMode } from "@/lib/server/session-permission-mode";
 import {
   invalidateSessionListCache,
   invalidateSessionPathCache,
@@ -164,6 +165,7 @@ export async function deleteSession(
   deleteSessionName(sessionId);
   deleteSessionToolSelection(sessionId);
   deleteSessionNotify(sessionId);
+  deleteSessionPermissionMode(sessionId);
 
   return { filePath, reparentedChildren };
 }

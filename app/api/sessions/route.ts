@@ -6,6 +6,7 @@ import {
 } from "@/lib/server/session-reader";
 import { getRpcSession } from "@/lib/server/rpc-manager";
 import { listSubagentChildSessionIds } from "@/lib/server/subagent-store";
+import { permissionModeField, readSessionPermissionModes } from "@/lib/server/session-permission-mode";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import type { SessionInfo } from "@/lib/shared/types";
 
@@ -96,6 +97,14 @@ export async function GET(request: Request) {
     // The child_session_id relation is the authoritative marker. Do this
     // before pagination so hidden subagents never consume a visible slot.
     const subagentIds = new Set(listSubagentChildSessionIds());
+    // One directory read for the whole list, not one per session: only the
+    // sessions that opted into full access (ADR-0021) appear in it, and the
+    // sidebar badge needs to know about them even before they are opened.
+    const permissionModes = readSessionPermissionModes();
+    const withPermissionMode = <T extends { id: string }>(row: T): T => ({
+      ...row,
+      ...permissionModeField(permissionModes, row.id),
+    });
     const all = allSessions.filter((session) => !subagentIds.has(session.id));
     const recent = recentCwds(all, 5);
 
@@ -112,7 +121,7 @@ export async function GET(request: Request) {
       }
       const cursorId = cursor?.id ?? null;
       const search = await searchSessionsPaged(cwd, q, limit, cursorId);
-      const enriched = search.results.map((s) => ({
+      const enriched = search.results.map((s) => withPermissionMode({
         ...s,
         running: getRpcSession(s.id)?.isRunning() ?? false,
       }));
@@ -168,7 +177,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const enriched = page.map((s) => ({
+    const enriched = page.map((s) => withPermissionMode({
       ...s,
       running: getRpcSession(s.id)?.isRunning() ?? false,
     }));

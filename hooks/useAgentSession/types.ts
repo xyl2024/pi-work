@@ -8,6 +8,7 @@ import type {
   SessionStats,
 } from "@/lib/shared/session-runtime-state";
 import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
+import type { PermissionMode } from "@/lib/shared/permission-mode";
 // The session-event protocol is declared once, in the shared layer, and used by
 // both the client and the server — see lib/shared/session-events.ts.
 import type { SessionEvent } from "@/lib/shared/session-events";
@@ -180,6 +181,9 @@ export interface UseAgentSessionResult {
   toolsLoading: boolean;
   toolsError: string | null;
   thinkingLevel: ThinkingLevelOption;
+  /** The session's permission mode (ADR-0021). Drives the toolbar shield, the
+   *  red input border, the badges and the palette entry. */
+  permissionMode: PermissionMode;
   systemPrompt: string | null;
   currentModel: { provider: string; modelId: string } | null;
   displayModel: { provider: string; modelId: string } | null;
@@ -203,5 +207,6 @@ export interface UseAgentSessionResult {
   handleToolSelectionChange: (selection: ToolSelection) => Promise<void>;
   ensureAvailableTools: () => Promise<void>;
   handleThinkingLevelChange: (level: ThinkingLevelOption) => Promise<void>;
+  handlePermissionModeChange: (mode: PermissionMode) => Promise<void>;
   handleCompact: () => Promise<void>;
 }

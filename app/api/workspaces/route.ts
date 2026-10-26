@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { matchesSessionDate, parseSessionDateRange } from "@/lib/shared/session-date-filter";
 import { listAllSessionsHeaderOnly } from "@/lib/server/session-reader";
 import { listRunningRpcSessions } from "@/lib/server/rpc-manager";
+import { permissionModeField, readSessionPermissionModes } from "@/lib/server/session-permission-mode";
 import { listSubagentChildSessionIds } from "@/lib/server/subagent-store";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import type { WorkspacesResponse, Workspace } from "@/lib/shared/types";
@@ -100,6 +101,10 @@ export async function GET(request: Request) {
     for (const s of all) if (s.cwd) cwdBySessionId.set(s.id, s.cwd);
     const runningByCwd = new Map<string, number>();
     const runningIds = new Set<string>();
+    // Only the sessions that opted into full access (ADR-0021) — one directory
+    // read for the whole response, so a row in the today list can wear its
+    // shield without the session being opened.
+    const permissionModes = readSessionPermissionModes();
     for (const { id, running } of listRunningRpcSessions()) {
       if (!running) continue;
       runningIds.add(id);
@@ -156,7 +161,11 @@ export async function GET(request: Request) {
       ...(todayRange ? {
         todaySessions: all
           .filter((session) => matchesSessionDate(session.modified, todayRange))
-          .map((session) => ({ ...session, running: runningIds.has(session.id) })),
+          .map((session) => ({
+            ...session,
+            running: runningIds.has(session.id),
+            ...permissionModeField(permissionModes, session.id),
+          })),
       } : {}),
     };
 

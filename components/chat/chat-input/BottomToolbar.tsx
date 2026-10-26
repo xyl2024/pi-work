@@ -9,8 +9,11 @@ import { ModelPickerModal } from "../ModelPickerModal";
 import { ToolsPickerModal } from "../ToolsPickerModal";
 import { ThinkingPicker, THINKING_LEVEL_COLOR, type ThinkingLevel } from "../ThinkingPicker";
 import { MoreMenu } from "../MoreMenu";
+import { ICONS } from "../../ui/icons";
+import { FULL_ACCESS_RED } from "../../ui/permission-mode-colors";
 import { NewSessionNotifyPicker } from "../chat-window/NewSessionNotifyPicker";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
+import type { PermissionMode } from "@/lib/shared/permission-mode";
 import type { ContextUsage, SessionStats } from "@/hooks/sessionUiStore";
 import type { ContextComposition } from "@/lib/shared/context-composition";
 
@@ -44,6 +47,11 @@ export interface BottomToolbarProps {
   contextUsage: ContextUsage | null;
   contextComposition: ContextComposition | null;
   sessionStats: SessionStats;
+
+  // RIGHT - permission mode (ADR-0021). The button is only offered when the
+  // handler exists — a draft has no session, and a draft is always `confirm`.
+  permissionMode?: PermissionMode;
+  onPermissionModeToggle?: () => void;
 
   // RIGHT - thinking
   thinkingLevel?: ThinkingLevelOption;
@@ -98,6 +106,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
     model, modelNames, modelIcons, modelList, onModelChange,
     cwd, onCwdChange,
     contextUsage, sessionStats, contextComposition,
+    permissionMode = "confirm",
+    onPermissionModeToggle,
     thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
     toolSelection, availableTools, toolsLoading, toolsError,
     toolDropdownRef,
@@ -176,6 +186,11 @@ export function BottomToolbar(props: BottomToolbarProps) {
   // `onToolSelectionChange` is optional on Props (older call sites), so an
   // explicit no-op keeps the inline toggle callback total.
   const handleToolSelectionChangeLocal = onToolSelectionChange ?? (() => {});
+
+  // The shield button's two states. `confirm` is the default and must not look
+  // "on" — an inactive-looking control plus a red one makes the current mode
+  // readable without reading the tooltip.
+  const permissionFullAccess = permissionMode === "full_access";
 
   return (
     <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
@@ -414,6 +429,58 @@ export function BottomToolbar(props: BottomToolbarProps) {
               onClose={() => setToolsPickerOpen(false)}
             />
           </div>
+        )}
+        {onPermissionModeToggle && (
+          // The tooltip is the whole explanation: the label alone would not say
+          // what full access lets through, and "it stopped asking" is exactly
+          // the impression that needs the boundary spelled out.
+          <Tooltip
+            content={
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, maxWidth: 240 }}>
+                <span style={{ fontWeight: 600 }}>
+                  {permissionFullAccess ? t("Allow full access") : t("Confirm dangerous commands")}
+                </span>
+                <span>
+                  {permissionFullAccess
+                    ? t("Dangerous commands in this session run without asking. Self-protection still blocks commands that would kill the Pi Work server.")
+                    : t("Dangerous commands in this session ask for confirmation before they run.")}
+                </span>
+              </div>
+            }
+          >
+            <button
+              type="button"
+              onClick={onPermissionModeToggle}
+              aria-label={permissionFullAccess ? t("Allow full access") : t("Confirm dangerous commands")}
+              aria-pressed={permissionFullAccess}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 32, height: 32, padding: 0, flexShrink: 0,
+                background: permissionFullAccess
+                  ? `color-mix(in srgb, ${FULL_ACCESS_RED} 16%, transparent)`
+                  : "none",
+                border: "none",
+                borderRadius: "50%",
+                color: permissionFullAccess ? FULL_ACCESS_RED : "var(--text-muted)",
+                cursor: "pointer",
+                transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = permissionFullAccess
+                  ? `color-mix(in srgb, ${FULL_ACCESS_RED} 24%, transparent)`
+                  : "var(--bg-hover)";
+                e.currentTarget.style.color = permissionFullAccess ? FULL_ACCESS_RED : "var(--text)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = permissionFullAccess
+                  ? `color-mix(in srgb, ${FULL_ACCESS_RED} 16%, transparent)`
+                  : "none";
+                e.currentTarget.style.color = permissionFullAccess ? FULL_ACCESS_RED : "var(--text-muted)";
+              }}
+            >
+              <ICONS.shield size={15} strokeWidth={1.9} />
+            </button>
+          </Tooltip>
         )}
         {showNotifyPicker && onNotifyChannelChange && (
           <NewSessionNotifyPicker

@@ -31,6 +31,8 @@ import { piWorkCallTool } from "./self-tools/pi-work-call";
 import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
 import { evaluateDangerousCommand, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
+import { DEFAULT_PERMISSION_MODE, isPermissionMode, type PermissionMode } from "../shared/permission-mode";
+import { readSessionPermissionMode, writeSessionPermissionMode } from "./session-permission-mode";
 import { createPiWorkBashTool, createPiWorkPowerShellTool } from "./pi-shell-tools";
 import { agentToolDenylist } from "./agent-tool-denylist";
 import { notify } from "./notifications";
@@ -104,6 +106,11 @@ export class AgentSessionWrapper {
   // selection it needs to label the tools button: the expanded active-tool list
   // (getActiveToolNames) can't be mapped back to a named preset.
   private _toolSelection: ToolSelection = "all";
+  // This session's permission mode (ADR-0021). Per wrapper, never global: the
+  // user's authorization covers one session at a time. Restored from the
+  // sidecar at start, changed only through `set_permission_mode` (a human
+  // clicking a button or the palette — there is no agent-reachable path).
+  private _permissionMode: PermissionMode = DEFAULT_PERMISSION_MODE;
   // Local context-composition estimate (ADR-0005), rendered by `get_state` and
   // refreshed on `message_end` — never computed on a read path. See
   // `scheduleContextCompositionRefresh`.
@@ -128,7 +135,11 @@ export class AgentSessionWrapper {
     public readonly inner: AgentSessionLike,
     public readonly source: LlmAuditSource = "user",
     public readonly cwd: string | null = null,
+    /** The mode to start in. Session start passes the persisted value; only
+     *  `set_permission_mode` changes it afterwards. */
+    permissionMode: PermissionMode = DEFAULT_PERMISSION_MODE,
   ) {
+    this._permissionMode = permissionMode;
     this.gates = new InteractionGates({
       source,
       emit: (event) => this.emit(event),
@@ -167,6 +178,11 @@ export class AgentSessionWrapper {
     else if (Array.isArray(selection) && selection.every((name) => typeof name === "string")) {
       this._toolSelection = [...(selection as string[])];
     }
+  }
+
+  /** This session's permission mode (ADR-0021). Read by the `tool_call` gate. */
+  get permissionMode(): PermissionMode {
+    return this._permissionMode;
   }
 
   isAlive(): boolean {
@@ -643,6 +659,10 @@ export class AgentSessionWrapper {
           contextComposition: this.contextComposition,
           systemPrompt: this.inner.systemPrompt ?? "",
           thinkingLevel: this.inner.agent.state?.thinkingLevel ?? "off",
+          // The session's permission mode. Without it a remounted client would
+          // have to wait for the next `permission_mode_changed`, and that event
+          // is live, not replayed (ADR-0021).
+          permissionMode: this.permissionMode,
           // Raw selection (patterns included) — lets the UI render the active
           // preset label instead of re-deriving it from the expanded tool list.
           toolNames: this.toolSelection,
@@ -739,6 +759,33 @@ export class AgentSessionWrapper {
           log.warn("failed to persist session tool selection", { sessionId: this.sessionId });
         }
         return null;
+      }
+
+      case "set_permission_mode": {
+        // An explicit enumeration, not a cast: an unknown value must be
+        // rejected, never treated as `full_access` (ADR-0008's "unknown
+        // decision means allow" trap, deliberately not repeated here).
+        const mode = command.mode;
+        if (!isPermissionMode(mode)) {
+          throw new Error(`Unknown permission mode: ${String(mode)}`);
+        }
+        this._permissionMode = mode;
+        // Leaving full access also revokes the "allow similar for this
+        // session" memo: both are "what this session is authorized to do".
+        if (mode === "confirm") this.gates.clearSessionMemo();
+        // Best-effort persistence: a failed write means "back to confirm after
+        // a restart", which must never fail the switch that is happening now.
+        if (!writeSessionPermissionMode(this.sessionId, mode)) {
+          log.warn("failed to persist session permission mode", {
+            sessionId: this.sessionId,
+            mode,
+          });
+        }
+        // Pending gates are deliberately untouched in both directions: a mode
+        // switch approves nothing and denies nothing.
+        this.emit({ type: "permission_mode_changed", mode });
+        log.info("permission mode changed", { sessionId: this.sessionId, mode });
+        return { mode };
       }
 
       case "permission_decision": {
@@ -1139,12 +1186,23 @@ export async function startRpcSession(
             // unconditionally — no permission prompt, no per-session
             // allowance, not user-configurable. The rest go to the
             // confirmation gate.
-            const verdict = evaluateDangerousCommand(command);
+            // The mode is this session's, read off the live wrapper. Full
+            // access turns a rule match into "no match" inside the evaluator;
+            // self-protection is decided before the mode is even consulted.
+            const verdict = evaluateDangerousCommand(
+              command,
+              wrapperRef.current?.permissionMode ?? DEFAULT_PERMISSION_MODE,
+            );
             if (verdict.kind === "self_protected") {
               log.warn("self-protection blocked shell command", { command, reason: verdict.reason });
+              // The plain reason travels with the refusal: after a blocked
+              // `pkill node` the user's question is "why", and "it was blocked"
+              // is not an answer. Self-protection is the one block full access
+              // does not lift (ADR-0021), so it is also the one whose reason the
+              // agent must be able to relay.
               return {
                 block: true,
-                reason: "The command was blocked. Don't try it again and tell the user what you want to do.",
+                reason: `The command was blocked by self-protection: ${verdict.reason}. Don't try it again and tell the user what you want to do.`,
               };
             }
             if (verdict.kind !== "matched") return;
@@ -1382,7 +1440,15 @@ export async function startRpcSession(
       // (it forces an empty system prompt while `selectedTools` is empty).
     }
 
-    const wrapper = new AgentSessionWrapper(inner, source, cwd);
+    // The persisted permission mode comes with the construction (ADR-0021): a
+    // missing / unreadable sidecar reads as `confirm`, so an upgrade changes
+    // nothing for sessions that never opted in.
+    const wrapper = new AgentSessionWrapper(
+      inner,
+      source,
+      cwd,
+      readSessionPermissionMode(inner.sessionId),
+    );
     // Remember the raw selection this session started with so `get_state` can
     // report it (restored-from-sidecar selection included) — the UI labels the
     // tools button from it.

@@ -7,13 +7,14 @@
  * and the disposition lists (what the client does with it) are the two faces
  * of the same interface:
  *
- *   • `SessionEvent` — the vocabulary. 28 event types: 23 forwarded verbatim
- *     from the pi SDK session, 4 synthesised by `AgentSessionWrapper`
+ *   • `SessionEvent` — the vocabulary. 29 event types: 23 forwarded verbatim
+ *     from the pi SDK session, 5 synthesised by `AgentSessionWrapper`
  *     (`session_tree_update`, `permission_request`,
- *     `ask_user_questions_request`, `prompt_failed`) and 1 the SSE route
- *     reports itself (`connected`). The pi SDK's own `AgentSessionEvent` is
- *     deliberately NOT reused: it lacks our 5, and an SDK upgrade would then
- *     silently rewrite this project's protocol. The server-side binding to it
+ *     `ask_user_questions_request`, `prompt_failed`,
+ *     `permission_mode_changed`) and 1 the SSE route reports itself
+ *     (`connected`). The pi SDK's own `AgentSessionEvent` is deliberately NOT
+ *     reused: it lacks our 6, and an SDK upgrade would then silently rewrite
+ *     this project's protocol. The server-side binding to it
  *     is a static assertion in `lib/server/pi-types.ts`.
  *   • `REDUCED_SESSION_EVENTS` / `IGNORED_SESSION_EVENTS` — every event has to
  *     appear in exactly one of them. The pair is complete *by construction*:
@@ -49,6 +50,7 @@ import {
 } from "./session-runtime-state";
 import type { AgentMessage, AssistantMessage, SessionTreeNode, ToolSelection } from "./types";
 import type { ContextComposition } from "./context-composition";
+import { isPermissionMode, type PermissionMode } from "./permission-mode";
 
 /** Why pi decided to compact the context. */
 export type SessionCompactionReason = "manual" | "threshold" | "overflow";
@@ -130,6 +132,13 @@ export type SessionEvent =
   | { type: "session_info_changed"; name: string | undefined }
   | { type: "thinking_level_changed"; level: string }
   | {
+      /** The session's permission mode changed (ADR-0021). One of the two
+       *  modes only; the client validates rather than coercing, and an
+       *  unrecognised value leaves the mode where it was. */
+      type: "permission_mode_changed";
+      mode: PermissionMode;
+    }
+  | {
       type: "auto_retry_start";
       attempt: number;
       maxAttempts: number;
@@ -168,7 +177,7 @@ export type SessionEvent =
   // ── Reported by the SSE route itself ──────────────────────────────────
   | { type: "connected"; sessionId: string };
 
-/** The discriminant of the protocol: the set of all 28 event type names. */
+/** The discriminant of the protocol: the set of all 29 event type names. */
 export type SessionEventType = SessionEvent["type"];
 
 /**
@@ -195,7 +204,8 @@ export type ReducedSessionEventType =
   | "ask_user_questions_request"
   | "compaction_start"
   | "compaction_end"
-  | "thinking_level_changed";
+  | "thinking_level_changed"
+  | "permission_mode_changed";
 
 /**
  * Events the client knows about and deliberately does not act on.
@@ -228,6 +238,8 @@ export const REDUCED_SESSION_EVENTS: Record<ReducedSessionEventType, string> = {
   compaction_start: "Marks the session as compacting.",
   compaction_end: "Leaves compaction, honouring the willRetry branch, and reloads the session.",
   thinking_level_changed: "Mirrors the model's thinking level.",
+  permission_mode_changed:
+    "Mirrors the session's permission mode — what drives the toolbar button, the input border, the badges and the palette entry.",
 };
 
 /**
@@ -272,6 +284,7 @@ export const SESSION_EVENT_TYPES = [
   "entry_appended",
   "session_info_changed",
   "thinking_level_changed",
+  "permission_mode_changed",
   "auto_retry_start",
   "auto_retry_end",
   "summarization_retry_scheduled",
@@ -769,6 +782,13 @@ function reduceClientSessionInput(
       if (live?.contextComposition !== undefined) {
         next = patchSessionRuntimeState(next, "contextComposition", live.contextComposition ?? null);
       }
+      // The permission mode rides the snapshot so a remount does not have to
+      // wait for the next `permission_mode_changed` (the event is live, not
+      // replayed). An absent or unrecognised value leaves the current mode
+      // alone; it can never be read as "full access".
+      if (isPermissionMode(live?.permissionMode)) {
+        next = patchSessionRuntimeState(next, "permissionMode", live.permissionMode);
+      }
       const effects: SessionEventEffect[] = [];
       if (live?.systemPrompt !== undefined) {
         effects.push({ kind: "adopt_system_prompt", value: live.systemPrompt ?? null });
@@ -1145,5 +1165,14 @@ function reduceReducedSessionEvent(
         ),
         effects: [],
       };
+    case "permission_mode_changed":
+      // Validated rather than cast: the protocol says `PermissionMode`, but a
+      // frame from a newer/older server must never be able to move the gate's
+      // indicator to a value nothing understands. An unknown mode leaves the
+      // state exactly as it was (ADR-0021 — the failure direction is "keep
+      // asking", never "stop asking").
+      return isPermissionMode(event.mode)
+        ? { state: patchSessionRuntimeState(state, "permissionMode", event.mode), effects: [] }
+        : { state, effects: [] };
   }
 }

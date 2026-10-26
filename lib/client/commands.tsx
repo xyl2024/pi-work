@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { ThemePreset } from "@/hooks/useTheme";
 import { PRESETS } from "@/hooks/useTheme";
 import type { Locale } from "@/hooks/useI18n";
+import { flippedPermissionMode, type PermissionMode } from "@/lib/shared/permission-mode";
 import { ICONS } from "@/components/ui/icons";
 import { PANEL_TAB_SPECS, type PanelViewKind } from "@/lib/shared/panelTabs";
 import {
@@ -22,6 +23,12 @@ import {
 export interface AgentControls {
   abortStreaming: () => void | Promise<void>;
   isStreaming: boolean;
+  /** The active session's permission mode (ADR-0021). Absent when no session
+   *  exists yet — a draft is always `confirm`, and a palette entry that cannot
+   *  do anything is worse than no entry. */
+  permissionMode?: PermissionMode;
+  /** Flip it. Same handler the toolbar shield calls, not a second path. */
+  setPermissionMode?: (mode: PermissionMode) => void | Promise<void>;
 }
 
 // ── Icons ────────────────────────────────────────────────────────────────
@@ -34,6 +41,7 @@ const SunIcon = ICONS.sun;
 const MoonIcon = ICONS.moon;
 const SidebarIcon = ICONS.sidebar;
 const GearIcon = ICONS.gear;
+const ShieldIcon = ICONS.shield;
 
 // Keep the right-panel toggle command icon identical to the right-bar
 // descriptor's.
@@ -157,6 +165,29 @@ export function buildCommands(
     keywords: ["cwd", "project", "directory", "folder", "switch", "切换", "项目", "目录", "工作目录"],
     icon: <CwdPickerIcon />,
     run: () => ctx.openCwdPicker(),
+  });
+
+  cmds.push({
+    id: "session.permission_mode",
+    // The title states what the click will DO, so it flips with the state.
+    title: ctx.agentControls?.permissionMode === "full_access"
+      ? t("Switch to confirm dangerous commands")
+      : t("Switch to allow full access"),
+    group: "Session",
+    keywords: [
+      "permission", "permissions", "dangerous", "command", "confirm", "full", "access", "shield", "yolo",
+      "权限", "完全访问", "确认", "危险命令",
+    ],
+    icon: <ShieldIcon />,
+    // Only offered once a session exists: `setPermissionMode` is registered by
+    // the active ChatWindow only for a real session.
+    when: (c) => !!c.agentControls?.setPermissionMode,
+    // Closes over `ctx` like every other command: the palette calls `run()` with
+    // no argument (each handler captures the context at build time), so reading
+    // the context off the parameter would throw on click.
+    run: () => ctx.agentControls?.setPermissionMode?.(
+      flippedPermissionMode(ctx.agentControls?.permissionMode ?? "confirm"),
+    ),
   });
 
   cmds.push({
