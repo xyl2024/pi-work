@@ -92,17 +92,21 @@ export function selectCloseConfirmKey<K extends string>(
 export type SectionLeaveDecision<Key extends string> =
   /** Go straight there. */
   | { kind: "leave" }
-  /** Ask first; `key` is the staged key that will be dropped if the user agrees. */
+  /** Ask first; `key` is the staged key whose draft would be dropped by leaving. */
   | { kind: "confirm"; key: Key };
 
 /**
  * Whether the modal may switch from `from` to `to` without asking.
  *
- * Paging renders only one page at a time, so a page that staged edits loses
- * its draft when it unmounts; the dirty flag survives in this registry.
- * Asking is tied to the *target* page: opening a page that still has unsaved
- * changes is the moment to confirm dropping them. Re-clicking the page that is
- * already open is not navigation, so it never asks.
+ * `to` is only read to tell navigation from a re-click; the answer is about
+ * `from`, the page whose draft this switch unmounts. Paging renders only one
+ * page at a time, so the page being left loses its draft the moment it
+ * unmounts (the dirty flag survives here), and asking about the target instead
+ * prompted for an edit that had already been discarded while letting the page
+ * actually at risk go quietly.
+ *
+ * Re-clicking the page that is already open is not navigation, so it never
+ * asks, even while that page is dirty.
  *
  * The key type is the caller's: the settings modal keys its registry by
  * section id, so the returned key can be handed straight back to a `saved`
@@ -114,5 +118,5 @@ export function selectSectionLeave<K extends string>(
   to: K,
 ): SectionLeaveDecision<K> {
   if (from === to) return { kind: "leave" };
-  return selectIsDirty(state, to) ? { kind: "confirm", key: to } : { kind: "leave" };
+  return selectIsDirty(state, from) ? { kind: "confirm", key: from } : { kind: "leave" };
 }

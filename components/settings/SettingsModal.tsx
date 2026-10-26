@@ -109,8 +109,9 @@ export function SettingsModal({
    *
    * `selectSectionLeave` decides whether the switch needs a confirm; when it
    * does, the prompt is the *same* `window.confirm` and the same copy as the
-   * close guard. Confirming drops the opened page's dirty flag as part of the
-   * switch, so closing the modal afterwards does not ask a second time about
+   * close guard. The page being left is the one that loses its draft on
+   * unmount, so confirming drops that page's dirty flag as part of the switch;
+   * closing the modal afterwards therefore does not ask a second time about
    * changes that were already dropped.
    */
   const goToSection = useCallback((target: SettingsSectionId) => {

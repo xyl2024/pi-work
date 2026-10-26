@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { SettingsSectionId } from "@/components/settings/registry";
 import {
   INITIAL_UNSAVED_CHANGES,
   UNSAVED_CHANGES_CONFIRM_KEY,
@@ -7,11 +8,15 @@ import {
   selectIsDirty,
   selectSectionLeave,
   unsavedChangesReducer,
+  type SectionLeaveDecision,
   type UnsavedChangesAction,
   type UnsavedChangesState,
 } from "@/lib/shared/settings-unsaved";
 
-function reduce(state: UnsavedChangesState, ...actions: UnsavedChangesAction[]): UnsavedChangesState {
+function reduce<K extends string>(
+  state: UnsavedChangesState<K>,
+  ...actions: UnsavedChangesAction<K>[]
+): UnsavedChangesState<K> {
   return actions.reduce(unsavedChangesReducer, state);
 }
 
@@ -102,8 +107,21 @@ describe("selectIsDirty", () => {
 });
 
 describe("selectSectionLeave", () => {
-  const dirtyState = (...keys: string[]) =>
+  const dirtyState = (...keys: SettingsSectionId[]) =>
     reduce(INITIAL_UNSAVED_CHANGES, ...keys.map((key) => ({ type: "dirty" as const, key })));
+
+  /** The confirm decision, narrowed, or a failed assertion. */
+  function expectConfirm<K extends string>(
+    decision: SectionLeaveDecision<K>,
+  ): Extract<SectionLeaveDecision<K>, { kind: "confirm" }> {
+    expect(decision.kind).toBe("confirm");
+    if (decision.kind !== "confirm") throw new Error("expected a confirm decision");
+    return decision;
+  }
+
+  /** Grant the confirm and apply the discard it was asked about. */
+  const discardOnLeave = (state: UnsavedChangesState<SettingsSectionId>, from: SettingsSectionId, to: SettingsSectionId) =>
+    reduce(state, { type: "saved", key: expectConfirm(selectSectionLeave(state, from, to)).key });
 
   it("lets the user leave when nothing is dirty", () => {
     expect(selectSectionLeave(INITIAL_UNSAVED_CHANGES, "profile", "ui-sounds")).toEqual({
@@ -111,9 +129,10 @@ describe("selectSectionLeave", () => {
     });
   });
 
-  it("lets the user leave when only a third page is dirty", () => {
+  it("does not ask about some other page's dirty flag when leaving a clean page", () => {
     const state = dirtyState("network-proxy");
     expect(selectSectionLeave(state, "profile", "ui-sounds")).toEqual({ kind: "leave" });
+    expect(selectSectionLeave(state, "profile", "network-proxy")).toEqual({ kind: "leave" });
   });
 
   it("lets the user re-click the page that is already open, even while it is dirty", () => {
@@ -121,30 +140,30 @@ describe("selectSectionLeave", () => {
     expect(selectSectionLeave(state, "profile", "profile")).toEqual({ kind: "leave" });
   });
 
-  it("asks before opening a dirty page and names the dirty key", () => {
+  it("asks before leaving a dirty page and names the page that will be dropped", () => {
     const state = dirtyState("append-system");
-    expect(selectSectionLeave(state, "profile", "append-system")).toEqual({
+    expect(selectSectionLeave(state, "append-system", "profile")).toEqual({
       kind: "confirm",
       key: "append-system",
     });
   });
 
-  it("only asks about the clicked page when several pages are dirty", () => {
+  it("asks only about the page being left when several pages are dirty", () => {
     const state = dirtyState("profile", "network-proxy");
-    expect(selectSectionLeave(state, "profile", "network-proxy")).toEqual({
+    expect(selectSectionLeave(state, "profile", "ui-sounds")).toEqual({
       kind: "confirm",
-      key: "network-proxy",
+      key: "profile",
     });
-    expect(selectSectionLeave(state, "profile", "ui-sounds")).toEqual({ kind: "leave" });
   });
 
-  it("leaves the other pages' dirty flags alone when one key is discarded", () => {
-    const state = dirtyState("profile", "network-proxy");
-    const decision = selectSectionLeave(state, "profile", "network-proxy");
-    expect(decision.kind).toBe("confirm");
-    if (decision.kind !== "confirm") return;
-    const afterDiscard = reduce(state, { type: "saved", key: decision.key });
-    expect(afterDiscard.dirty).toEqual(["profile"]);
+  it("leaves the other pages' dirty flags alone when the left page is discarded", () => {
+    const afterDiscard = discardOnLeave(dirtyState("profile", "network-proxy"), "profile", "ui-sounds");
+    expect(afterDiscard.dirty).toEqual(["network-proxy"]);
     expect(selectCloseConfirmKey(afterDiscard)).toBe(UNSAVED_CHANGES_CONFIRM_KEY);
+  });
+
+  it("stops asking on close once the left page was discarded", () => {
+    const afterDiscard = discardOnLeave(dirtyState("dangerous-commands"), "dangerous-commands", "profile");
+    expect(selectCloseConfirmKey(afterDiscard)).toBeNull();
   });
 });
