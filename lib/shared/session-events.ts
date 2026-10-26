@@ -233,7 +233,7 @@ export const REDUCED_SESSION_EVENTS: Record<ReducedSessionEventType, string> = {
   auto_retry_start: "Shows the auto-retry counter.",
   auto_retry_end: "Clears the retry counter, or surfaces the final error.",
   prompt_failed: "Closes the turn with an error and drops the event stream.",
-  permission_request: "Hands the dangerous-command confirmation to the permission queue.",
+  permission_request: "Hands the dangerous-command confirmation to the permission queue, once per tool call id, and rings.",
   ask_user_questions_request: "Opens the question card (once per tool call id) and rings.",
   compaction_start: "Marks the session as compacting.",
   compaction_end: "Leaves compaction, honouring the willRetry branch, and reloads the session.",
@@ -867,18 +867,27 @@ function reduceReducedSessionEvent(
   event: ReducedSessionEvent,
 ): SessionEventReduction {
   switch (event.type) {
-    case "permission_request":
-      // No state: the confirmation queue lives in the adapter and is already
-      // keyed by toolCallId, so a reconnect replay is a no-op there too.
+    case "permission_request": {
+      // The confirmation queue lives in the adapter and is already keyed by
+      // toolCallId, so a reconnect replay is a no-op there. The sound is
+      // user-visible, so it needs the same guarantee here: claiming the id is
+      // what keeps a replayed pending request from ringing a second time.
+      if (!state.seenPermissionRequestToolCallIds.claim(event.toolCallId)) {
+        return { state, effects: [] };
+      }
       return {
         state,
-        effects: [{
-          kind: "enqueue_permission_request",
-          toolCallId: event.toolCallId,
-          ruleName: event.ruleName,
-          command: event.command,
-        }],
+        effects: [
+          {
+            kind: "enqueue_permission_request",
+            toolCallId: event.toolCallId,
+            ruleName: event.ruleName,
+            command: event.command,
+          },
+          { kind: "play_ui_sound", sound: "permission_request" },
+        ],
       };
+    }
     case "tool_execution_start": {
       const { toolCallId, toolName, args } = event;
       const argsRecord = asArgumentRecord(args);

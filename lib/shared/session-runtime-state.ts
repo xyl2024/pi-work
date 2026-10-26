@@ -177,6 +177,11 @@ export interface SessionRuntimeState {
    *  re-opens the card. Seeded from the module store on mount so a remount
    *  while a question is pending does not ring again either. */
   seenAskUserQuestionsToolCallIds: SeenLedger;
+  /** The dangerous-command confirmations already announced. A pending
+   *  `permission_request` is re-delivered on SSE reconnect, and the
+   *  confirmation dialog is already keyed by tool-call id there; the ledger
+   *  keeps the second delivery from ringing again. */
+  seenPermissionRequestToolCallIds: SeenLedger;
   /** A brand-new session is waiting for its first assistant message: the
    *  sidebar can only be refreshed once that message is persisted, and the
    *  callback must fire exactly once even if a replayed `message_end`
@@ -214,6 +219,7 @@ export function createSessionRuntimeState(
     seenSubagentToolEndIds: createSeenLedger(),
     seenCelebrateToolEndIds: createSeenLedger(),
     seenAskUserQuestionsToolCallIds: createSeenLedger(),
+    seenPermissionRequestToolCallIds: createSeenLedger(),
     awaitingFirstAssistant: false,
     ...overrides,
   };

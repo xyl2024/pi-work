@@ -108,18 +108,46 @@ const malformedAskEvent = {
 } as unknown as SessionEvent;
 
 describe("session event reducer", () => {
-  it("reduces a permission request into an effect and leaves state untouched", () => {
+  it("reduces a permission request into its effects and claims the id", () => {
     const state = createSessionRuntimeState();
 
     const reduction = reduceSessionEvent(state, permissionEvent);
 
+    // Claiming the id mutates the ledger in place, so the state object is
+    // unchanged while the ledger now remembers the request.
     expect(reduction.state).toBe(state);
-    expect(reduction.effects).toEqual([{
-      kind: "enqueue_permission_request",
-      toolCallId: "call-1",
-      ruleName: "rm",
-      command: "rm -rf /tmp/x",
-    }]);
+    expect(state.seenPermissionRequestToolCallIds.has("call-1")).toBe(true);
+    expect(reduction.effects).toEqual([
+      {
+        kind: "enqueue_permission_request",
+        toolCallId: "call-1",
+        ruleName: "rm",
+        command: "rm -rf /tmp/x",
+      },
+      { kind: "play_ui_sound", sound: "permission_request" },
+    ]);
+  });
+
+  it("does not ring twice when the server replays a pending permission request", () => {
+    const first = reduceSessionEvent(createSessionRuntimeState(), permissionEvent);
+
+    // A reconnect re-delivers every pending confirmation; the reducer must
+    // neither re-enqueue nor re-ring for an id it already announced.
+    const replay = reduceSessionEvent(first.state, permissionEvent);
+
+    expect(replay.state).toBe(first.state);
+    expect(replay.effects).toEqual([]);
+  });
+
+  it("isolates the permission-request ledger per session", () => {
+    const a = createSessionRuntimeState();
+    const b = createSessionRuntimeState();
+    reduceSessionEvent(a, permissionEvent);
+
+    const inB = reduceSessionEvent(b, permissionEvent);
+
+    expect(inB.effects.map((effect) => effect.kind))
+      .toEqual(["enqueue_permission_request", "play_ui_sound"]);
   });
 
   it("records an ask-user-questions request and returns its effects", () => {
@@ -1088,7 +1116,14 @@ describe("session event reducer: replay idempotency", () => {
      *  effect at all, because re-asking would be user-visible twice; every other
      *  type re-asks for the same (idempotent) observations. */
     const cases: { name: string; state: SessionRuntimeState; event: SessionEvent; replay?: "silent" }[] = [
-      { name: "permission_request", state: createSessionRuntimeState(), event: permissionEvent },
+      {
+        name: "permission_request",
+        state: createSessionRuntimeState(),
+        event: permissionEvent,
+        // A pending confirmation is re-delivered on reconnect; re-emitting
+        // `enqueue_permission_request` + `play_ui_sound` would ring twice.
+        replay: "silent",
+      },
       {
         name: "ask_user_questions_request",
         state: createSessionRuntimeState(),

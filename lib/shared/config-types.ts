@@ -107,6 +107,7 @@ export const UI_SOUND_EVENT_IDS = [
   "agent_success",
   "agent_failure",
   "ask_user_questions",
+  "permission_request",
   "celebrate",
 ] as const;
 

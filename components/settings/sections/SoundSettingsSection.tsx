@@ -36,6 +36,7 @@ const EVENT_LABEL_KEYS: Record<UiSoundEventId, string> = {
   agent_success: "Event: agent success",
   agent_failure: "Event: agent failure",
   ask_user_questions: "Event: ask user questions",
+  permission_request: "Event: permission request",
   celebrate: "Event: celebration",
 };
 

@@ -171,6 +171,7 @@ export const settings = {
   "Event: agent success": "事件：Agent 正常完成",
   "Event: agent failure": "事件：Agent 最终失败",
   "Event: ask user questions": "事件：向用户提问",
+  "Event: permission request": "事件：向用户征求权限",
   "Event: celebration": "事件：庆祝动画",
   "morning-light": "晨曦",
   "lonely-shadow": "孤影",
