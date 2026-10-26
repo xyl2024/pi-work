@@ -15,6 +15,19 @@
 // drag-and-drop), and nothing here ever introduces horizontal scrolling or
 // wrapping.
 //
+// Sacrifice order (first to go → last to go), decided with the product owner:
+//   1. the context readout (ring stays, numbers move to the tooltip)
+//   2. the tools label
+//   3. the thinking-level label (+ the row's gaps tighten)
+//   4. thinking + tools fold into the More menu
+//   5. the model name 220 → 160 → 120 → provider icon
+//   6. the cwd (working directory) name → icon only
+//   7. the cwd control folds into the More menu
+//
+// Identity labels (which model, which cwd) outlive the secondary labels on
+// purpose: the user can always answer "what am I talking to" without hovering,
+// and the More menu carries the tool/thinking affordances instead.
+//
 // This module is the single definition of "width → what the toolbar looks
 // like". It is a pure function on purpose: the mapping is the only part of the
 // feature that can be verified outside a browser.
@@ -22,7 +35,7 @@
 /** Items that can be folded into the More menu when the row gets very narrow. */
 export type CollapsedToolbarItem = "thinking" | "tools" | "cwd";
 
-export type ToolbarTier = 0 | 1 | 2 | 3 | 4 | 5;
+export type ToolbarTier = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 export interface ToolbarLayout {
   tier: ToolbarTier;
@@ -46,17 +59,17 @@ export interface ToolbarLayout {
  * panels, so a viewport breakpoint cannot see the real constraint).
  *
  * Index is the tier: `TOOLBAR_TIER_THRESHOLDS[0] = 700` is the lower bound of
- * tier 0, and so on down to `[4] = 400` for tier 4. Tier 5 has no lower bound.
+ * tier 0, and so on down to `[7] = 220` for tier 7. Tier 8 has no lower bound.
  *
- * The numbers are measured, not derived: model 220 / cwd 160 / context bar
- * ≈75 / thinking and tools ≈31 / round buttons 32, with the "everything is an
- * icon" floor at ≈340–360px. Tier 5 exists because that floor is still wider
- * than the real dual-panel case.
+ * The numbers are re-measured against the sacrifice order above: model
+ * 220/160/120 / cwd ≈120 (icon 32) / context readout ≈45 (ring ≈30) / tools
+ * label ≈70 (icon 31) / thinking label ≈90 (icon 31) / round buttons 32, with
+ * ~15px of slack per tier and room for the wider Chinese labels.
  *
  * If a tier triggers too early or too late while dragging, change the numbers
  * here — not the structure (priority order, hysteresis, floors).
  */
-export const TOOLBAR_TIER_THRESHOLDS = [700, 620, 540, 470, 400] as const;
+export const TOOLBAR_TIER_THRESHOLDS = [700, 660, 560, 490, 430, 390, 305, 220] as const;
 
 /**
  * Hysteresis buffer for widening. Narrowing applies immediately (`width < T`
@@ -80,49 +93,78 @@ const TIER_SPECS: Record<ToolbarTier, TierSpec> = {
     buttonGap: 6,
     collapsed: [],
   },
-  // Model name is the first thing to go — it is the only truncatable label.
+  // 1. The context readout goes first — the ring alone still answers "how full".
   1: {
-    modelLabelWidth: 160,
+    modelLabelWidth: 220,
     cwdLabelVisible: true,
-    contextBarCompact: false,
-    toolsLabelVisible: true,
-    thinkingLabelVisible: true,
-    buttonGap: 6,
-    collapsed: [],
-  },
-  // Model name shrinks again; the cwd name falls back to its icon.
-  2: {
-    modelLabelWidth: 120,
-    cwdLabelVisible: false,
-    contextBarCompact: false,
-    toolsLabelVisible: true,
-    thinkingLabelVisible: true,
-    buttonGap: 6,
-    collapsed: [],
-  },
-  // Model becomes an icon; the context bar keeps the ring only.
-  3: {
-    modelLabelWidth: null,
-    cwdLabelVisible: false,
     contextBarCompact: true,
     toolsLabelVisible: true,
     thinkingLabelVisible: true,
     buttonGap: 6,
     collapsed: [],
   },
-  // Text labels on tools / thinking drop; the row tightens its gaps.
-  4: {
-    modelLabelWidth: null,
-    cwdLabelVisible: false,
+  // 2 + 3. Tools / thinking labels drop to icons, and the row tightens its gaps.
+  2: {
+    modelLabelWidth: 220,
+    cwdLabelVisible: true,
     contextBarCompact: true,
     toolsLabelVisible: false,
     thinkingLabelVisible: false,
     buttonGap: 2,
     collapsed: [],
   },
-  // Below the all-icon floor: the three affordances that still open a surface
-  // move into the More menu rather than overflowing.
+  // 4. Those two affordances move into the More menu; the model name and the
+  //    cwd name are still worth their width.
+  3: {
+    modelLabelWidth: 220,
+    cwdLabelVisible: true,
+    contextBarCompact: true,
+    toolsLabelVisible: false,
+    thinkingLabelVisible: false,
+    buttonGap: 2,
+    collapsed: ["thinking", "tools"],
+  },
+  // 5. Only now does the model name start shrinking: 220 → 160 → 120 → icon.
+  4: {
+    modelLabelWidth: 160,
+    cwdLabelVisible: true,
+    contextBarCompact: true,
+    toolsLabelVisible: false,
+    thinkingLabelVisible: false,
+    buttonGap: 2,
+    collapsed: ["thinking", "tools"],
+  },
   5: {
+    modelLabelWidth: 120,
+    cwdLabelVisible: true,
+    contextBarCompact: true,
+    toolsLabelVisible: false,
+    thinkingLabelVisible: false,
+    buttonGap: 2,
+    collapsed: ["thinking", "tools"],
+  },
+  6: {
+    modelLabelWidth: null,
+    cwdLabelVisible: true,
+    contextBarCompact: true,
+    toolsLabelVisible: false,
+    thinkingLabelVisible: false,
+    buttonGap: 2,
+    collapsed: ["thinking", "tools"],
+  },
+  // 6. The cwd name is the last label standing; the full path stays in the tooltip.
+  7: {
+    modelLabelWidth: null,
+    cwdLabelVisible: false,
+    contextBarCompact: true,
+    toolsLabelVisible: false,
+    thinkingLabelVisible: false,
+    buttonGap: 2,
+    collapsed: ["thinking", "tools"],
+  },
+  // 7. Last resort: the cwd control joins them in the menu. Below this the row
+  //    is icon-only (new / upload / model / context ring / shield / more).
+  8: {
     modelLabelWidth: null,
     cwdLabelVisible: false,
     contextBarCompact: true,
@@ -137,7 +179,7 @@ function tierForWidth(width: number): ToolbarTier {
   for (let tier = 0; tier < TOOLBAR_TIER_THRESHOLDS.length; tier++) {
     if (width >= TOOLBAR_TIER_THRESHOLDS[tier]) return tier as ToolbarTier;
   }
-  return 5;
+  return 8;
 }
 
 function layoutForTier(tier: ToolbarTier): ToolbarLayout {

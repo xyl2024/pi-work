@@ -27,7 +27,7 @@ function walk(widths: number[]): ToolbarLayout[] {
   return out;
 }
 
-describe("resolveToolbarLayout — tiers", () => {
+describe("resolveToolbarLayout — tiers (sacrifice order)", () => {
   it("keeps the fully expanded layout at and above 700px", () => {
     expect(layoutAt(980)).toEqual({
       tier: 0,
@@ -41,37 +41,11 @@ describe("resolveToolbarLayout — tiers", () => {
     });
   });
 
-  it("shortens the model name first (620–700)", () => {
-    expect(layoutAt(660)).toEqual({
+  it("drops the context readout first, keeping the ring (660–700)", () => {
+    expect(layoutAt(680)).toEqual({
       tier: 1,
-      modelLabelWidth: 160,
+      modelLabelWidth: 220,
       cwdLabelVisible: true,
-      contextBarCompact: false,
-      toolsLabelVisible: true,
-      thinkingLabelVisible: true,
-      buttonGap: 6,
-      collapsed: [],
-    });
-  });
-
-  it("shrinks the model name again and drops the project name (540–620)", () => {
-    expect(layoutAt(580)).toEqual({
-      tier: 2,
-      modelLabelWidth: 120,
-      cwdLabelVisible: false,
-      contextBarCompact: false,
-      toolsLabelVisible: true,
-      thinkingLabelVisible: true,
-      buttonGap: 6,
-      collapsed: [],
-    });
-  });
-
-  it("reduces the model to its icon and the context bar to its ring (470–540)", () => {
-    expect(layoutAt(505)).toEqual({
-      tier: 3,
-      modelLabelWidth: null,
-      cwdLabelVisible: false,
       contextBarCompact: true,
       toolsLabelVisible: true,
       thinkingLabelVisible: true,
@@ -80,11 +54,11 @@ describe("resolveToolbarLayout — tiers", () => {
     });
   });
 
-  it("drops the tools and thinking labels and tightens the gaps (400–470)", () => {
-    expect(layoutAt(435)).toEqual({
-      tier: 4,
-      modelLabelWidth: null,
-      cwdLabelVisible: false,
+  it("turns the tools and thinking labels into icons and tightens gaps (560–660)", () => {
+    expect(layoutAt(610)).toEqual({
+      tier: 2,
+      modelLabelWidth: 220,
+      cwdLabelVisible: true,
       contextBarCompact: true,
       toolsLabelVisible: false,
       thinkingLabelVisible: false,
@@ -93,9 +67,74 @@ describe("resolveToolbarLayout — tiers", () => {
     });
   });
 
-  it("folds thinking, tools and project into the More menu below 400px", () => {
-    expect(layoutAt(350)).toEqual({
+  it("folds thinking and tools into the More menu (490–560)", () => {
+    expect(layoutAt(525)).toEqual({
+      tier: 3,
+      modelLabelWidth: 220,
+      cwdLabelVisible: true,
+      contextBarCompact: true,
+      toolsLabelVisible: false,
+      thinkingLabelVisible: false,
+      buttonGap: 2,
+      collapsed: ["thinking", "tools"],
+    });
+  });
+
+  it("shortens the model name to 160 only after that (430–490)", () => {
+    expect(layoutAt(460)).toEqual({
+      tier: 4,
+      modelLabelWidth: 160,
+      cwdLabelVisible: true,
+      contextBarCompact: true,
+      toolsLabelVisible: false,
+      thinkingLabelVisible: false,
+      buttonGap: 2,
+      collapsed: ["thinking", "tools"],
+    });
+  });
+
+  it("shortens the model name to 120 next (390–430)", () => {
+    expect(layoutAt(410)).toEqual({
       tier: 5,
+      modelLabelWidth: 120,
+      cwdLabelVisible: true,
+      contextBarCompact: true,
+      toolsLabelVisible: false,
+      thinkingLabelVisible: false,
+      buttonGap: 2,
+      collapsed: ["thinking", "tools"],
+    });
+  });
+
+  it("reduces the model to its provider icon (305–390)", () => {
+    expect(layoutAt(347)).toEqual({
+      tier: 6,
+      modelLabelWidth: null,
+      cwdLabelVisible: true,
+      contextBarCompact: true,
+      toolsLabelVisible: false,
+      thinkingLabelVisible: false,
+      buttonGap: 2,
+      collapsed: ["thinking", "tools"],
+    });
+  });
+
+  it("turns the cwd name into an icon, its path into the tooltip (220–305)", () => {
+    expect(layoutAt(262)).toEqual({
+      tier: 7,
+      modelLabelWidth: null,
+      cwdLabelVisible: false,
+      contextBarCompact: true,
+      toolsLabelVisible: false,
+      thinkingLabelVisible: false,
+      buttonGap: 2,
+      collapsed: ["thinking", "tools"],
+    });
+  });
+
+  it("folds the cwd control into the More menu last (< 220)", () => {
+    expect(layoutAt(150)).toEqual({
+      tier: 8,
       modelLabelWidth: null,
       cwdLabelVisible: false,
       contextBarCompact: true,
@@ -105,27 +144,46 @@ describe("resolveToolbarLayout — tiers", () => {
       collapsed: ["thinking", "tools", "cwd"],
     });
   });
+
+  it("never sacrifices the model name before the secondary labels are gone", () => {
+    // The product decision this table encodes: identity labels shrink last.
+    for (const width of [680, 610, 525]) {
+      expect(layoutAt(width).modelLabelWidth).toBe(220);
+      expect(layoutAt(width).cwdLabelVisible).toBe(true);
+    }
+    // …and only once they are icon-only does the cwd control leave the row.
+    expect(layoutAt(262).collapsed).toEqual(["thinking", "tools"]);
+  });
 });
 
 describe("resolveToolbarLayout — tier boundaries", () => {
   it.each([
-    // Both sides of every boundary: exact lower bound, one pixel under it and
-    // one pixel above it.
+    // Both sides of every boundary: exact lower bound, one pixel above it and
+    // one pixel below it.
     [701, 0],
     [700, 0],
     [699, 1],
-    [621, 1],
-    [620, 1],
-    [619, 2],
-    [541, 2],
-    [540, 2],
-    [539, 3],
-    [471, 3],
-    [470, 3],
-    [469, 4],
-    [401, 4],
-    [400, 4],
-    [399, 5],
+    [661, 1],
+    [660, 1],
+    [659, 2],
+    [561, 2],
+    [560, 2],
+    [559, 3],
+    [491, 3],
+    [490, 3],
+    [489, 4],
+    [431, 4],
+    [430, 4],
+    [429, 5],
+    [391, 5],
+    [390, 5],
+    [389, 6],
+    [306, 6],
+    [305, 6],
+    [304, 7],
+    [221, 7],
+    [220, 7],
+    [219, 8],
   ])("resolves %ipx to tier %i", (width, tier) => {
     expect(layoutAt(width).tier).toBe(tier);
   });
@@ -155,37 +213,37 @@ describe("resolveToolbarLayout — hysteresis", () => {
   });
 
   it("only crosses boundaries whose own buffer is cleared", () => {
-    // Widening out of the narrowest tier: every boundary needs its own +24,
-    // so a single jump cannot land back on tier 0.
+    // Widening out of tier 6: every boundary needs its own +24.
     const narrow = layoutAt(380);
-    expect(narrow.tier).toBe(5);
+    expect(narrow.tier).toBe(6);
 
     const first = layoutAt(500, narrow);
-    expect(first.tier).toBe(3); // 470 + 24 = 494 ≤ 500, but 540 + 24 = 564 > 500
+    expect(first.tier).toBe(4); // 430 + 24 = 454 ≤ 500, but 490 + 24 = 514 > 500
 
     const again = layoutAt(500, first);
-    expect(again.tier).toBe(3); // stable: still short of the next boundary
+    expect(again.tier).toBe(4); // stable: still short of the next boundary
 
     const widened = layoutAt(570, again);
-    expect(widened.tier).toBe(2); // 540 cleared, 620 not (644)
+    expect(widened.tier).toBe(3); // 490 cleared, 560 + 24 = 584 not
   });
 
   it("expands fully once every buffer is cleared", () => {
-    const narrow = layoutAt(320);
+    const narrow = layoutAt(150);
+    expect(narrow.tier).toBe(8);
     expect(layoutAt(900, narrow).tier).toBe(0);
   });
 });
 
 describe("resolveToolbarLayout — no-`prev` path", () => {
   it("is a fixed point when its own result is fed back in", () => {
-    for (let width = 300; width <= 900; width += 7) {
+    for (let width = 150; width <= 900; width += 7) {
       const resolved = layoutAt(width);
       expect(layoutAt(width, resolved)).toEqual(resolved);
     }
   });
 
   it("matches the `prev`-based path when the layout already agrees with the width", () => {
-    expect(layoutAt(580, layoutAt(580))).toEqual(layoutAt(580));
+    expect(layoutAt(460, layoutAt(460))).toEqual(layoutAt(460));
   });
 });
 
@@ -204,17 +262,17 @@ describe("resolveToolbarLayout — hard floors", () => {
   it("offers no way to hide the context ring or the upload button at any width", () => {
     // The invariant is structural: the layout plan has no flag that could
     // hide the ring or the upload button, so no width can produce one.
-    for (const width of [1200, 700, 619, 470, 399, 240, 0]) {
+    for (const width of [1200, 700, 659, 489, 389, 219, 120, 0]) {
       expect(Object.keys(layoutAt(width)).sort()).toEqual(LAYOUT_KEYS);
     }
   });
 
-  it("keeps the context ring present in every tier (compact still shows the ring)", () => {
+  it("keeps the context ring in every tier (compact still shows the ring)", () => {
     // `contextBarCompact` only drops the token readout — the ring stays in
     // every tier, so the flag is the only thing that may vary.
-    const widths = [800, 660, 580, 505, 435, 350];
+    const widths = [800, 680, 610, 525, 460, 410, 347, 262, 150];
     const compactFlags = widths.map((w) => layoutAt(w).contextBarCompact);
-    expect(compactFlags).toEqual([false, false, false, true, true, true]);
+    expect(compactFlags).toEqual([false, true, true, true, true, true, true, true, true]);
   });
 
   it("exposes the fully expanded layout as the pre-measurement default", () => {
@@ -223,7 +281,7 @@ describe("resolveToolbarLayout — hard floors", () => {
   });
 
   it("never collapses the model into the menu", () => {
-    for (const width of [400, 399, 300, 200, 0]) {
+    for (const width of [400, 300, 220, 200, 0]) {
       expect(layoutAt(width).collapsed).not.toContain("model");
     }
   });
