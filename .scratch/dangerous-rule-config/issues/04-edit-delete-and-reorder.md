@@ -8,11 +8,40 @@
 
 **Blocked by:** 03（写——新增一条规则，保存即生效）
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] 点一行打开预填当前值的编辑器，保存后列表与磁盘一致
-- [ ] 删除一条规则后列表与磁盘一致
-- [ ] 上移/下移可用，第一行不能上移、最后一行不能下移（边界由纯模块测）
-- [ ] 列表顶部有关于顺序语义的那行说明
-- [ ] 规则行以等宽字体显示正则原文，超长截断
-- [ ] 编辑与删除各有一条接口往返测试
+- [x] 点一行打开预填当前值的编辑器，保存后列表与磁盘一致
+- [x] 删除一条规则后列表与磁盘一致
+- [x] 上移/下移可用，第一行不能上移、最后一行不能下移（边界由纯模块测）
+- [x] 列表顶部有关于顺序语义的那行说明
+- [x] 规则行以等宽字体显示正则原文，超长截断
+- [x] 编辑与删除各有一条接口往返测试
+
+## Comments
+
+- 共享模块（`lib/shared/dangerous-commands-draft.ts`）新增三个纯函数，编辑器、列表按钮和页面都只读它们：
+  - `updateDangerousRule(draft, uid, rule)`：原位替换，保留 uid 和顺序；名字 trim，正则原样；uid 不存在时返回同一个
+    draft（迟到的编辑器不能往已经变化过的列表里塞一行）。
+  - `removeDangerousRule(draft, uid)`：按 uid 删除，其余行保持顺序与 uid；uid 不存在时返回同一个 draft。
+  - `moveDangerousRule(draft, uid, "up" | "down")`：与相邻行交换；第一行上移、最后一行下移、单行、未知 uid 都是原样返回。
+    边界做成 no-op 而不是抛错，页面的按钮禁用态和纯模块的边界语义因此是同一件事。
+  - dirty 判定无需改动：`isDangerousRulesDraftDirty()` 比较的是有序请求体，编辑、删除、换序都会被识别为未保存。
+- 编辑器（`DangerousRuleEditor.tsx`）新增可选 `initial`：同一个组件在「新建」和「编辑」间切换，字段预填，标题与页尾动作
+  从「New rule / Add rule」变成「Edit rule / Save」。它仍然只把完整规则交回页面草稿，不写磁盘；磁盘由页尾的
+  三态 Save 一次写整组列表（03 的写通路）。
+- 列表行：用户名/正则/大小写区域本身是一个按钮（点它打开预填编辑器），上移、下移、删除是行内独立的小按钮，
+  避免在按钮里再嵌按钮；内置规则行没有这些动作。第一行的上移与最后一行的下移为禁用态。删除直接改草稿、不弹二次确认——
+  真正的提交点是页尾 Save，且 06 的未保存提醒会在关窗/切页时兜住误删。
+  行组件拆到 `components/settings/dangerous-commands/DangerousRuleList.tsx`：行本身不是带边框的表单控件，而
+  上移/下移/删除复用 `controls.tsx` 的共享按钮，只覆盖密集列表需要的尺寸（`tests/unit/settings-controls.test.ts`
+  对 `sections/` 的表单控件内联皮肤守卫因此仍然成立）。
+- 顺序说明只在有用户规则时显示（空列表已有「内置规则仍然生效」的说明）；文案进设置字典，中文界面无英文残留。
+- 编辑器状态用 `{ mode: "new" } | { mode: "edit"; uid }` 表示，`editingRule` 是预填来源；编辑中的行若已不在草稿里，
+  弹层不渲染，避免出现「标题是新建、提交却走原位替换」的静默丢弃。行的可访问名称保留名字/正则/大小写原文，
+  `title` 另给「编辑规则」提示。
+- 测试：`tests/unit/dangerous-commands-draft.test.ts` 新增 11 例覆盖编辑（原位、保留 uid、未知 uid、dirty）、删除
+  （保持其余顺序、未知 uid、dirty）、换序（上/下、两端边界、单行/未知 uid、dirty）；`tests/unit/dangerous-commands-api.test.ts`
+  新增编辑与删除各一条真实 HTTP 往返：写前读快照 → PUT 整组 → 断言磁盘顺序与内容 → 用 `POST /test` 断言生效集随之变化 →
+  `afterEach` 恢复原状。
+- 未做（下一刀）：05 的重名 / 撞内置名 / 超时越界校验；06 的人工 smoke 与未保存提醒验收。编辑/删除本身沿用 03 的
+  「保存即生效」，没有新增缓存或会话级快照。
