@@ -195,6 +195,26 @@ ${catalog}
 `;
 }
 
+/**
+ * How a child session's system prompt is built. An inheriting profile gets the
+ * parent's rendered prompt verbatim; any other profile gets its own prompt with
+ * the child's working directory appended. Inherit with no parent prompt is an
+ * explicit failure — silently falling back would run the child under a prompt
+ * the user did not choose.
+ */
+export function resolveSubagentSystemPrompt(
+  profile: Pick<SubagentProfile, "inheritSystemPrompt" | "systemPrompt">,
+  parentSystemPrompt: string | null | undefined,
+  cwd: string,
+): { systemPromptOverride: string } | { systemPromptPrefix: string } {
+  if (profile.inheritSystemPrompt) {
+    const inherited = parentSystemPrompt?.trim() ?? "";
+    if (!inherited) throw new Error("The parent session has no system prompt to inherit");
+    return { systemPromptOverride: inherited };
+  }
+  return { systemPromptPrefix: `${profile.systemPrompt}\n\nYour current working directory is ${cwd}` };
+}
+
 export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSubagentDetails>({
   name: SPAWN_SUBAGENT_TOOL_NAME,
   label: "Spawn Subagent",
@@ -260,13 +280,19 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
     try {
       const { getRpcSession, startRpcSession } = await import("./rpc-manager");
       const parent = getRpcSession(parentSessionId);
-      if (parent && !parent.isAlive()) {
+      if (!parent) {
+        throw new Error("Parent session is not running");
+      }
+      if (!parent.isAlive()) {
         throw new Error("Parent session has already stopped");
       }
-      const parentModel = parent?.inner.model;
+      const parentModel = parent.inner.model;
       if (!parentModel) {
         throw new Error("The main agent has no active model to inherit");
       }
+      // Resolved before the child starts so a missing parent prompt fails the
+      // spawn instead of silently choosing a different prompt.
+      const parentSystemPrompt = profile.inheritSystemPrompt ? parent.inner.systemPrompt : null;
       // Stop the child whenever the parent wrapper is destroyed.
       offParentDestroy = parent?.onDestroy(() => parentStop.abort());
 
@@ -345,7 +371,7 @@ export const spawnSubagentTool = defineTool<typeof SpawnSubagentParams, SpawnSub
               },
               thinkingLevel: profile.thinkingLevel,
               allowedToolNames: tools,
-              systemPromptPrefix: `${profile.systemPrompt}\n\nYour current working directory is ${cwd}`,
+              ...resolveSubagentSystemPrompt(profile, parentSystemPrompt, cwd),
               stripDefaultSystemPromptSections: true,
               parentSessionId,
             },

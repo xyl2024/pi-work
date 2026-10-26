@@ -53,6 +53,7 @@ const SCHEMA = `
     name           TEXT PRIMARY KEY,
     description    TEXT NOT NULL,
     system_prompt  TEXT NOT NULL,
+    inherit_system_prompt INTEGER NOT NULL DEFAULT 0,
     tools          TEXT NOT NULL,
     model_provider TEXT,
     model_id       TEXT,
@@ -80,6 +81,19 @@ function migrateTaskColumns(db: Database.Database): void {
   }
 }
 
+/**
+ * Add `inherit_system_prompt` to profile tables created before the flag
+ * existed. The NOT NULL column can be added by ALTER because it has a default;
+ * the existing prompts stay in place as the fallback text.
+ */
+function migrateProfileColumns(db: Database.Database): void {
+  const columns = (db.prepare("PRAGMA table_info(subagent_profiles)").all() as Array<{ name: string }>)
+    .map((column) => column.name);
+  if (!columns.includes("inherit_system_prompt")) {
+    db.exec("ALTER TABLE subagent_profiles ADD COLUMN inherit_system_prompt INTEGER NOT NULL DEFAULT 0");
+  }
+}
+
 export function getSubagentDb(): Database.Database {
   if (globalThis.__piSubagentsDb) return globalThis.__piSubagentsDb;
   const dbPath = resolveDbPath();
@@ -90,6 +104,7 @@ export function getSubagentDb(): Database.Database {
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
   migrateTaskColumns(db);
+  migrateProfileColumns(db);
   globalThis.__piSubagentsDb = db;
   return db;
 }

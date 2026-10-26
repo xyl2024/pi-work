@@ -28,7 +28,7 @@ import {
   type SubagentProfile,
   type SubagentThinkingLevel,
 } from "@/lib/shared/subagent";
-import { PrimaryButton, SecondaryButton, TextArea, TextInput, Field, GroupedSelect, Select, NumInput } from "../controls";
+import { Check, PrimaryButton, SecondaryButton, TextArea, TextInput, Field, GroupedSelect, Select, NumInput } from "../controls";
 import { BotAppearancePicker } from "./BotAppearancePicker";
 import { SubagentToolPicker } from "./SubagentToolPicker";
 
@@ -42,6 +42,7 @@ interface Draft {
   name: string;
   description: string;
   systemPrompt: string;
+  inheritSystemPrompt: boolean;
   tools: string[];
   model: { provider: string; modelId: string } | null;
   thinkingLevel: SubagentThinkingLevel;
@@ -55,6 +56,7 @@ function draftFromProfile(profile: SubagentProfile | null): Draft {
       name: "",
       description: "",
       systemPrompt: "",
+      inheritSystemPrompt: false,
       tools: [...SUBAGENT_DEFAULT_TOOL_IDS, "bash", "powershell"],
       model: null,
       thinkingLevel: "off",
@@ -66,6 +68,7 @@ function draftFromProfile(profile: SubagentProfile | null): Draft {
     name: profile.name,
     description: profile.description,
     systemPrompt: profile.systemPrompt,
+    inheritSystemPrompt: profile.inheritSystemPrompt,
     tools: [...profile.tools],
     model: profile.model ? { ...profile.model } : null,
     thinkingLevel: profile.thinkingLevel,
@@ -135,7 +138,7 @@ export function SubagentEditor({
       setError(t("Description is required."));
       return;
     }
-    if (!draft.systemPrompt.trim()) {
+    if (!draft.inheritSystemPrompt && !draft.systemPrompt.trim()) {
       setError(t("System prompt is required."));
       return;
     }
@@ -155,6 +158,7 @@ export function SubagentEditor({
         name: draft.name.trim(),
         description: draft.description.trim(),
         systemPrompt: draft.systemPrompt,
+        inheritSystemPrompt: draft.inheritSystemPrompt,
         tools: draft.tools,
         model: draft.model,
         thinkingLevel: draft.thinkingLevel,
@@ -273,16 +277,24 @@ export function SubagentEditor({
           </div>
 
           <Field label={t("System prompt")}>
+            <Check
+              label={t("Inherit parent system prompt")}
+              checked={draft.inheritSystemPrompt}
+              onChange={(checked) => patch({ inheritSystemPrompt: checked })}
+            />
             <TextArea
               value={draft.systemPrompt}
               onChange={(value) => patch({ systemPrompt: value })}
+              disabled={draft.inheritSystemPrompt}
               mono
               style={{ minHeight: 160, fontSize: 12 }}
               placeholder={t("You are now in …")}
             />
           </Field>
           <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: -8 }}>
-            {t("The child's working directory is appended automatically at run time.")}
+            {draft.inheritSystemPrompt
+              ? t("The child starts with a verbatim copy of the parent's current system prompt. The text above is kept as the fallback.")
+              : t("The child's working directory is appended automatically at run time.")}
           </div>
 
           <div>

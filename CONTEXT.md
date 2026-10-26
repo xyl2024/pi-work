@@ -193,7 +193,7 @@ _Avoid_: 把“是否需要你”的判断写进 `SessionItem`；把点当作「
 _Avoid_: 用「子 agent」指代它；把它当作会话标签页里的普通会话
 
 **子代理档案（Subagent profile）**：
-一条用户可编辑的子代理定义，存于 `subagents.db` 的 `subagent_profiles` 表：名称（`spawn_subagent` 的 `subagent_name` 取值）、描述、系统提示词、工具集、模型与推理强度、Pi Bot 形象与运行超时。两个内置档案 `codebase_explorer`（只读探索与报告）与 `code_reviewer`（审查代码或 diff）在首次初始化时写入表中，之后同样可改可删。
+一条用户可编辑的子代理定义，存于 `subagents.db` 的 `subagent_profiles` 表：名称（`spawn_subagent` 的 `subagent_name` 取值）、描述、系统提示词、工具集、模型与推理强度、Pi Bot 形象与运行超时。三个内置档案 `codebase_explorer`（只读探索与报告）、`code_reviewer`（审查代码或 diff）与 `implementer`（小任务实现）在首次初始化时写入表中，之后同样可改可删；`implementer` 默认原样继承父会话的系统提示词，工具为 read/edit/write/bash/codemode。
 _Avoid_: 把「子代理档案」说成「子代理类型」；把它与某次调用（子代理任务）混为一谈
 
 **子代理任务（Subagent task）**：

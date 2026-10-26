@@ -35,18 +35,76 @@ afterAll(() => {
 });
 
 describe("subagent profile store", () => {
-  it("seeds the two built-ins into an empty database", async () => {
+  it("seeds the built-ins into an empty database", async () => {
     resetStoreGlobals();
     const { listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
     const profiles = listSubagentProfiles();
-    expect(profiles.map((profile) => profile.name).sort()).toEqual(["code_reviewer", "codebase_explorer"]);
+    expect(profiles.map((profile) => profile.name).sort()).toEqual([
+      "code_reviewer", "codebase_explorer", "implementer",
+    ]);
     for (const profile of profiles) {
       expect(profile.builtin).toBe(true);
-      expect(profile.systemPrompt.length).toBeGreaterThan(0);
+      if (!profile.inheritSystemPrompt) expect(profile.systemPrompt.length).toBeGreaterThan(0);
       expect(profile.tools).toContain("read");
       expect(profile.bot.shapeId).toBeTruthy();
       expect(profile.timeoutMs).toBeGreaterThanOrEqual(10_000);
     }
+
+    const implementer = profiles.find((profile) => profile.name === "implementer");
+    expect(implementer).toMatchObject({
+      inheritSystemPrompt: true,
+      systemPrompt: "",
+      tools: ["read", "edit", "write", "bash", "codemode"],
+      model: null,
+      thinkingLevel: "off",
+      timeoutMs: 30 * 60 * 1000,
+    });
+  });
+
+  it("adds the implementer built-in when upgrading a pre-versioned database", async () => {
+    const upgradePath = join(dir, "upgrade.db");
+    const legacy = new Database(upgradePath);
+    legacy.exec(`
+      CREATE TABLE subagent_profiles (
+        name           TEXT PRIMARY KEY,
+        description    TEXT NOT NULL,
+        system_prompt  TEXT NOT NULL,
+        tools          TEXT NOT NULL,
+        model_provider TEXT,
+        model_id       TEXT,
+        thinking_level TEXT NOT NULL,
+        bot            TEXT NOT NULL,
+        timeout_ms     INTEGER NOT NULL,
+        builtin        INTEGER NOT NULL DEFAULT 0,
+        created_at     INTEGER NOT NULL,
+        updated_at     INTEGER NOT NULL
+      );
+    `);
+    legacy.prepare(`
+      INSERT INTO subagent_profiles
+        (name, description, system_prompt, tools, thinking_level, bot, timeout_ms, builtin, created_at, updated_at)
+      VALUES ('codebase_explorer', 'old', 'old prompt', '["read"]', 'off', '{}', 10000, 1, 1, 1)
+    `).run();
+    legacy.close();
+
+    process.env.PI_WORK_SUBAGENTS_DB = upgradePath;
+    resetStoreGlobals();
+    const { deleteSubagentProfile, listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
+
+    const upgraded = listSubagentProfiles();
+    expect(upgraded.map((profile) => profile.name).sort()).toEqual(["codebase_explorer", "implementer"]);
+    const implementer = upgraded.find((profile) => profile.name === "implementer");
+    expect(implementer?.inheritSystemPrompt).toBe(true);
+    expect(implementer?.tools).toEqual(["read", "edit", "write", "bash", "codemode"]);
+
+    // The upgrade runs once: a deleted built-in must not come back on restart.
+    expect(deleteSubagentProfile("implementer")).toBe(true);
+    resetStoreGlobals();
+    const reloaded = (await import("@/lib/server/subagent-profiles")).listSubagentProfiles();
+    expect(reloaded.map((profile) => profile.name)).not.toContain("implementer");
+
+    process.env.PI_WORK_SUBAGENTS_DB = dbPath;
+    resetStoreGlobals();
   });
 
   it("creates, updates and deletes a custom profile", async () => {
@@ -145,6 +203,21 @@ describe("normalizeSubagentProfileInput", () => {
       .toThrow(SubagentProfileError);
   });
 
+  it("allows an empty prompt only when it inherits the parent prompt", async () => {
+    const { normalizeSubagentProfileInput, SubagentProfileError } = await import("@/lib/server/subagent-profiles");
+    expect(() => normalizeSubagentProfileInput({
+      name: "inherits", description: "d", systemPrompt: "", tools: ["read"], inheritSystemPrompt: true,
+    })).not.toThrow();
+    expect(() => normalizeSubagentProfileInput({
+      name: "inherits", description: "d", systemPrompt: "", tools: ["read"], inheritSystemPrompt: false,
+    })).toThrow(SubagentProfileError);
+
+    const inherited = normalizeSubagentProfileInput({
+      name: "inherits", description: "d", systemPrompt: "fallback", tools: ["read"], inheritSystemPrompt: true,
+    });
+    expect(inherited.inheritSystemPrompt).toBe(true);
+  });
+
   it("defaults and normalizes optional fields", async () => {
     const { normalizeSubagentProfileInput } = await import("@/lib/server/subagent-profiles");
     const input = normalizeSubagentProfileInput({
@@ -157,6 +230,7 @@ describe("normalizeSubagentProfileInput", () => {
     expect(input.systemPrompt).toBe("do things");
     expect(input.tools).toEqual(["read"]);
     expect(input.model).toBeNull();
+    expect(input.inheritSystemPrompt).toBe(false);
     expect(input.thinkingLevel).toBe("off");
     expect(input.timeoutMs).toBeGreaterThan(0);
     expect(input.bot.shapeId).toBeTruthy();

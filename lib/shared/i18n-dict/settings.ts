@@ -67,6 +67,8 @@ export const settings = {
   "Discard unsaved changes?": "放弃未保存的更改？",
   "Subagent settings": "子代理设置",
   "Inherit parent model": "继承父会话模型",
+  "Inherit parent system prompt": "继承父会话系统提示词",
+  "The child starts with a verbatim copy of the parent's current system prompt. The text above is kept as the fallback.": "子代理会原样复制父会话当前的系统提示词，上方文本将作为取消继承时的回退内容。",
   "Subagent thinking level": "子代理推理强度",
   "New subagent": "新建子代理",
   "Edit subagent": "编辑子代理",

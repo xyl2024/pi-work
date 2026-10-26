@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { subagentTools } from "@/lib/server/subagent-tool";
+import { resolveSubagentSystemPrompt, subagentTools } from "@/lib/server/subagent-tool";
 
 /**
  * Guards docs/adr/0001-subagent-toolsets-must-not-need-a-permission-prompt.md:
@@ -37,5 +37,35 @@ describe("subagent profiles", () => {
         expect(subagentTools(platform)).not.toContain(removed);
       }
     }
+  });
+});
+
+describe("subagent system prompt", () => {
+  it("copies the parent prompt verbatim when the profile inherits it", () => {
+    const resolved = resolveSubagentSystemPrompt(
+      { inheritSystemPrompt: true, systemPrompt: "fallback prompt" },
+      "PARENT PROMPT",
+      "/work",
+    );
+    expect(resolved).toEqual({ systemPromptOverride: "PARENT PROMPT" });
+  });
+
+  it("prefixes a custom prompt with the child's working directory", () => {
+    const resolved = resolveSubagentSystemPrompt(
+      { inheritSystemPrompt: false, systemPrompt: "Do the task." },
+      "PARENT PROMPT",
+      "/work",
+    );
+    expect(resolved).toEqual({
+      systemPromptPrefix: "Do the task.\n\nYour current working directory is /work",
+    });
+  });
+
+  it("fails instead of falling back when the parent prompt is unavailable", () => {
+    expect(() => resolveSubagentSystemPrompt(
+      { inheritSystemPrompt: true, systemPrompt: "fallback prompt" },
+      "   ",
+      "/work",
+    )).toThrow(/no system prompt/i);
   });
 });

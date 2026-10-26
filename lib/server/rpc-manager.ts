@@ -907,6 +907,12 @@ export interface StartRpcSessionOptions {
   allowedToolNames?: string[];
   /** Prefix the generated system prompt for specialized sessions. */
   systemPromptPrefix?: string;
+  /**
+   * Replace the system prompt verbatim, skipping the generated one entirely.
+   * Used by subagent profiles that inherit the parent's prompt exactly; the
+   * normal append/skills/MCP contributions are suppressed for this session.
+   */
+  systemPromptOverride?: string;
   /** Remove Pi's generic documentation / harness sections from the prompt. */
   stripDefaultSystemPromptSections?: boolean;
   /** Persist the parent session id in a newly-created session header. */
@@ -1048,7 +1054,7 @@ export async function startRpcSession(
       mcpProjectServers = cfg.mcp.project_servers;
       mcpStartupWaitMs = cfg.mcp.startup_wait_ms;
       // Specialized subagents intentionally do not inherit APPEND_SYSTEM.md.
-      if (options.systemPromptPrefix || !cfg.append_system.enabled) {
+      if (options.systemPromptPrefix || options.systemPromptOverride || !cfg.append_system.enabled) {
         appendSystemPromptLoaderOption = [];
       }
     } catch {
@@ -1060,7 +1066,8 @@ export async function startRpcSession(
     //    unattended and are narrowed by allowedToolNames anyway;
     //  - the ephemeral tool-catalog probe passes `mcp: false` explicitly.
     // A caller can still force it on or off through options.mcp.
-    const mcpEnabled = options.mcp ?? (source === "user" && !options.systemPromptPrefix);
+    const mcpEnabled = options.mcp
+      ?? (source === "user" && !options.systemPromptPrefix && !options.systemPromptOverride);
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
@@ -1077,7 +1084,7 @@ export async function startRpcSession(
       // prompt), but live in code instead of a configurable file. Gated here
       // once per session so a mid-session toggle doesn't change the prompt.
       appendSystemPromptOverride: (baseAppend) => {
-        if (options.systemPromptPrefix) return [];
+        if (options.systemPromptPrefix || options.systemPromptOverride) return [];
         // Whole-block system-prompt contributions from the agent-side custom
         // tools. Gate each block on the session's actual tool selection: if a
         // tool is excluded from this session (per-session tool picker, cwd
@@ -1100,10 +1107,10 @@ export async function startRpcSession(
       },
       // Codebase explorers receive no Skills section. Other sessions retain
       // the existing per-cwd disabled-skill filtering behavior.
-      noSkills: Boolean(options.systemPromptPrefix),
+      noSkills: Boolean(options.systemPromptPrefix || options.systemPromptOverride),
       skillsOverride: (base) => ({
         ...base,
-        skills: options.systemPromptPrefix
+        skills: options.systemPromptPrefix || options.systemPromptOverride
           ? []
           : [
               ...base.skills.filter((skill) => !disabledSkillPaths.has(skill.filePath)),
@@ -1156,11 +1163,18 @@ export async function startRpcSession(
               });
             }]
           : []),
+        // Verbatim override: the profile inherits the parent's system prompt
+        // exactly, so every generated or appended contribution is discarded.
+        ...(options.systemPromptOverride
+          ? [(pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
+              pi.on("before_agent_start", () => ({ systemPrompt: options.systemPromptOverride! }));
+            }]
+          : []),
         // PiWorkConfig.load_pi_docs toggle: when disabled, strip pi's built-in
         // "Pi documentation" section from freshly-generated system prompts for
-        // normal (non-subagent) sessions. Prefix sessions are excluded — the
-        // subagent path already handles section removal itself.
-        ...(options.systemPromptPrefix || loadPiDocs
+        // normal (non-subagent) sessions. Prefix/override sessions are excluded
+        // — the subagent path already handles the prompt itself.
+        ...(options.systemPromptPrefix || options.systemPromptOverride || loadPiDocs
           ? []
           : [
               (pi: { on: (event: "before_agent_start", handler: (event: { systemPrompt: string }) => { systemPrompt: string }) => void }) => {
