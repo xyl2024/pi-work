@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { defaultDangerousRuleNames } from "@/lib/shared/dangerous-commands";
 import { validateDangerousRulesWrite } from "@/lib/shared/dangerous-commands-draft";
 import {
   getEffectiveDangerousRuleSet,
@@ -57,12 +58,18 @@ export async function GET() {
  * else on disk is carried over untouched. Every pattern is compiled before the
  * write — a rejected request leaves `config.yaml` exactly as it was (ADR-0020:
  * with a UI, a rule that silently never matches is worse than a refused save).
+ *
+ * Names are checked against this platform's built-in set as well: a user rule
+ * may not shadow one, because the name keys a session's "always allow" and two
+ * rules behind one key means one click allows both.
  */
 export async function PUT(req: Request) {
   const startedAt = Date.now();
   try {
     const raw = await req.json().catch(() => undefined);
-    const parsed = validateDangerousRulesWrite(raw);
+    const parsed = validateDangerousRulesWrite(raw, {
+      builtinNames: defaultDangerousRuleNames(process.platform),
+    });
     if (!parsed.ok) {
       log.warn("dangerous command rules rejected", {
         error: parsed.error,

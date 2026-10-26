@@ -1,4 +1,8 @@
-import type { DangerousRuleProblem } from "@/lib/shared/dangerous-commands-draft";
+import {
+  DANGEROUS_RULE_TIMEOUT_MAX_MS,
+  DANGEROUS_RULE_TIMEOUT_MIN_MS,
+  type DangerousRuleProblem,
+} from "@/lib/shared/dangerous-commands-draft";
 
 type Translate = (key: string, params?: Record<string, string | number>) => string;
 
@@ -18,10 +22,44 @@ export function dangerousRuleProblemText(
   t: Translate,
   label?: string,
 ): { message: string; detail?: string } {
+  // The page-level blocker has no row, so it is answered before the row label
+  // is worked out.
+  if (problem.kind === "timeout") {
+    return {
+      message: t("Confirmation timeout must be a number between {min} and {max} ms.", {
+        min: DANGEROUS_RULE_TIMEOUT_MIN_MS,
+        max: DANGEROUS_RULE_TIMEOUT_MAX_MS,
+      }),
+    };
+  }
+
   const rule = label ?? t("Rule {n}", { n: problem.index + 1 });
   switch (problem.kind) {
     case "empty-name":
       return { message: t("{rule}: name is required.", { rule }) };
+    case "duplicate-name":
+      // Name the conflicting rule when the draft knows it: "already used" is
+      // only actionable if the user can find the other one.
+      return {
+        message:
+          problem.conflictIndex === undefined
+            ? t('{rule}: the name "{name}" is already used by another rule.', {
+                rule,
+                name: problem.name ?? "",
+              })
+            : t('{rule}: the name "{name}" is already used by rule {n}.', {
+                rule,
+                name: problem.name ?? "",
+                n: problem.conflictIndex + 1,
+              }),
+      };
+    case "builtin-name":
+      return {
+        message: t('{rule}: the name "{name}" is used by a built-in rule.', {
+          rule,
+          name: problem.name ?? "",
+        }),
+      };
     case "empty-pattern":
       return {
         message: t("{rule}: the pattern is required — an empty pattern matches every command.", {

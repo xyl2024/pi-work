@@ -3,6 +3,10 @@ import {
   DEFAULT_BASH_DANGEROUS_RULES,
   defaultDangerousRules,
 } from "@/lib/shared/dangerous-commands";
+import {
+  DANGEROUS_RULE_TIMEOUT_MAX_MS,
+  DANGEROUS_RULE_TIMEOUT_MIN_MS,
+} from "@/lib/shared/dangerous-commands-draft";
 import type { DangerousPatternRule, DangerousPatternsConfig } from "@/lib/shared/config-types";
 import { api, uniqueId, type Json } from "./helpers";
 
@@ -155,6 +159,61 @@ describe("PUT /api/dangerous-commands", () => {
       body: JSON.stringify({ command: "doomed-rule" }),
     });
     expect(test.body).toEqual({ kind: "none" });
+  });
+
+  it("rejects a duplicate name with 400 and leaves disk alone", async () => {
+    const before = await readRules();
+    const name = uniqueId("twin-rule");
+
+    const put = await writeRules(
+      [
+        { name, pattern: "one" },
+        { name, pattern: "two" },
+      ],
+      before.timeout_ms,
+    );
+
+    expect(put.status).toBe(400);
+    // The message names both the clashing rule and the row already using it.
+    expect(String(put.body.error)).toContain(name);
+    expect(String(put.body.error)).toContain("rule 1");
+    expect((await readRules()).rules).toEqual(before.rules);
+  });
+
+  it("rejects a name the platform's built-in set reserves, with 400", async () => {
+    const before = await readRules();
+    // Whatever this platform enforces: shadowing it would make one "always
+    // allow" cover two rules, so it is refused rather than renamed.
+    const builtinName = defaultDangerousRules(process.platform)[0].name;
+
+    const put = await writeRules([{ name: builtinName, pattern: "x" }], before.timeout_ms);
+
+    expect(put.status).toBe(400);
+    expect(String(put.body.error)).toContain(builtinName);
+    expect((await readRules()).rules).toEqual(before.rules);
+  });
+
+  it("writes a new confirmation timeout and rejects one outside the bounds", async () => {
+    const before = await readRules();
+    const next = DANGEROUS_RULE_TIMEOUT_MIN_MS + 30_000;
+
+    const saved = await writeRules(before.rules, next);
+    expect(saved.status).toBe(200);
+    expect((await readRules()).timeout_ms).toBe(next);
+
+    for (const timeoutMs of [
+      0,
+      -1,
+      DANGEROUS_RULE_TIMEOUT_MIN_MS - 1,
+      DANGEROUS_RULE_TIMEOUT_MAX_MS + 1,
+    ]) {
+      const put = await writeRules(before.rules, timeoutMs);
+      expect(put.status).toBe(400);
+    }
+
+    // A refused timeout is not a silent fallback: disk still holds the value
+    // that was just written.
+    expect((await readRules()).timeout_ms).toBe(next);
   });
 
   it("rejects a rule whose pattern does not compile with 400 and leaves disk alone", async () => {

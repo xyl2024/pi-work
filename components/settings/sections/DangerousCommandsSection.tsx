@@ -12,6 +12,8 @@ import type {
 } from "@/lib/shared/dangerous-commands";
 import type { PiWorkConfig } from "@/lib/shared/config-types";
 import {
+  DANGEROUS_RULE_TIMEOUT_MAX_MS,
+  DANGEROUS_RULE_TIMEOUT_MIN_MS,
   addDangerousRule,
   dangerousRulesDraft,
   dangerousRulesDraftProblem,
@@ -22,7 +24,7 @@ import {
   updateDangerousRule,
   type DangerousRulesDraft,
 } from "@/lib/shared/dangerous-commands-draft";
-import { PrimaryButton, SETTINGS_RADIUS, inputStyle } from "../controls";
+import { Field, PrimaryButton, SETTINGS_RADIUS, TextInput, inputStyle } from "../controls";
 import { SaveButton, UnsavedHint } from "../staged-save";
 import { useSettingsPageData } from "../use-page-data";
 import type { DirtyReporter } from "../use-unsaved-changes";
@@ -259,6 +261,9 @@ function CommandTester() {
  *   • **Saving is immediate.** Matching reads the config on every tool call, so
  *     a rule lands on the next command without a restart or a new session. The
  *     page never hints otherwise.
+ *   • **The timeout is part of the same save**, and an unusable value is a
+ *     blocker rather than a silent fallback to the default (ADR-0020: with a
+ *     UI, guessing for the user is worse than refusing the save).
  *
  * Self-protection (the code-level hard block in `lib/server/self-protection.ts`)
  * deliberately does not appear as a list: anything listed on a settings page
@@ -291,6 +296,11 @@ export function DangerousCommandsSection({
   // The draft is deliberately not cached across page entries: leaving the page
   // drops unsaved edits, the same as the other staged pages.
   const [draft, setDraft] = useState<DangerousRulesDraft | null>(null);
+  // The timeout field is free text on purpose. Round-tripping it through a
+  // number would turn "abc" into a silently empty box; keeping the raw text
+  // lets the blocker say what is wrong while the user still sees what they
+  // typed. The draft carries the parsed value (NaN when it does not parse).
+  const [timeoutText, setTimeoutText] = useState(() => String(savedTimeoutMs));
   const [editor, setEditor] = useState<null | { mode: "new" } | { mode: "edit"; uid: string }>(null);
   const [saving, setSaving] = useState(false);
   const [savedOk, flashSavedOk] = useTransientFlag();
@@ -301,11 +311,39 @@ export function DangerousCommandsSection({
   // rendered at all (see below) rather than silently discarding the form.
   const editingRule =
     editor?.mode === "edit" ? current.rules.find((entry) => entry.uid === editor.uid) : undefined;
+  /** Position of the row being edited, so its own name does not count as taken. */
+  const editingRowIndex =
+    editor?.mode === "edit" ? current.rules.findIndex((entry) => entry.uid === editor.uid) : -1;
+  // The names a user rule may not reuse. The built-ins come from the same
+  // effective set the page lists (not a client-side copy of the rule set), so
+  // "reserved" and "listed below" cannot drift; until that read lands the
+  // write route still refuses a shadowing name.
+  const builtinNames = (data?.builtins ?? []).map((rule) => rule.name);
   const dirty = isDangerousRulesDraftDirty(current, savedRules, savedTimeoutMs);
-  const problem = dangerousRulesDraftProblem(current);
-  const problemText = problem
-    ? dangerousRuleProblemText(problem, t, t("Rule {n}", { n: problem.index + 1 }))
+  const problem = dangerousRulesDraftProblem(current, { builtinNames });
+  // The timeout blocker belongs to a page-level field, not to a row.
+  const timeoutProblem = problem?.kind === "timeout" ? problem : null;
+  const rowProblem = problem && problem.kind !== "timeout" ? problem : null;
+  const problemText = rowProblem
+    ? dangerousRuleProblemText(rowProblem, t, t("Rule {n}", { n: rowProblem.index + 1 }))
     : null;
+
+  /**
+   * Move the timeout field into the draft. An empty or unparseable box becomes
+   * NaN, which the shared module reports as a blocker — deliberately not
+   * "keep the old value": that silent fallback is the hand-edited-YAML habit
+   * a UI has to stop.
+   */
+  const changeTimeout = (value: string) => {
+    setTimeoutText(value);
+    setDraft({ ...current, timeoutMs: value.trim() === "" ? Number.NaN : Number(value) });
+  };
+
+  // With no draft the field mirrors what is on disk, so a config change from
+  // elsewhere cannot leave a stale number beside a fresh baseline.
+  useEffect(() => {
+    if (draft === null) setTimeoutText(String(savedTimeoutMs));
+  }, [draft, savedTimeoutMs]);
 
   // Staged page: the modal's close/leave guard reads this registry, so an
   // unsaved rule prompts before it is dropped (ADR-0019).
@@ -390,7 +428,7 @@ export function DangerousCommandsSection({
                   key={entry.uid}
                   rule={entry}
                   first={index === 0}
-                  error={problem?.index === index ? problemText : null}
+                  error={rowProblem?.index === index ? problemText : null}
                   actions={{
                     onEdit: () => setEditor({ mode: "edit", uid: entry.uid }),
                     onMoveUp: () => setDraft(moveDangerousRule(current, entry.uid, "up")),
@@ -402,6 +440,35 @@ export function DangerousCommandsSection({
                 />
               ))}
             </RuleList>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+            {t("Confirmation timeout")}
+          </h3>
+          <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+            {t(
+              "How long a confirmation waits for your answer before the request times out. Between {min} and {max} ms.",
+              { min: DANGEROUS_RULE_TIMEOUT_MIN_MS, max: DANGEROUS_RULE_TIMEOUT_MAX_MS },
+            )}
+          </p>
+        </div>
+
+        <div style={{ marginTop: 8, maxWidth: 220 }}>
+          <Field label={t("Confirmation timeout (ms)")}>
+            <TextInput
+              value={timeoutText}
+              onChange={changeTimeout}
+              invalid={timeoutProblem !== null}
+            />
+          </Field>
+          {timeoutProblem && (
+            <div style={{ marginTop: 6, fontSize: 11, color: "var(--error)", lineHeight: 1.5 }}>
+              {dangerousRuleProblemText(timeoutProblem, t).message}
+            </div>
           )}
         </div>
       </section>
@@ -459,6 +526,10 @@ export function DangerousCommandsSection({
       {editor && (editor.mode === "new" || editingRule) && (
         <DangerousRuleEditor
           initial={editingRule}
+          builtinNames={builtinNames}
+          takenRules={current.rules
+            .map((entry, index) => ({ name: entry.name, index }))
+            .filter((entry) => entry.index !== editingRowIndex)}
           onClose={() => setEditor(null)}
           onSubmit={(rule) => {
             setDraft(

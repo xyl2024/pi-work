@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  DANGEROUS_RULE_TIMEOUT_MAX_MS,
+  DANGEROUS_RULE_TIMEOUT_MIN_MS,
   addDangerousRule,
   dangerousRulesDraft,
   dangerousRulesDraftProblem,
@@ -142,6 +144,107 @@ describe("dangerousRulesDraftProblem", () => {
       ),
     };
     expect(dangerousRulesDraftProblem(draft)).toEqual({ kind: "empty-name", index: 1 });
+  });
+
+  it("rejects a duplicate name and names the earlier row that already uses it", () => {
+    // A name is the key a session's "always allow" remembers, so two rules
+    // behind one name would be allowed by a single click (ADR-0020).
+    const draft = dangerousRulesDraft([rule("rm", "one"), rule("  rm  ", "two")], TIMEOUT);
+
+    expect(dangerousRulesDraftProblem(draft)).toEqual({
+      kind: "duplicate-name",
+      index: 1,
+      name: "rm",
+      conflictIndex: 0,
+    });
+  });
+
+  it("rejects a name the platform's built-in set reserves", () => {
+    const draft = dangerousRulesDraft([rule("mkfs", "x")], TIMEOUT);
+
+    expect(dangerousRulesDraftProblem(draft, { builtinNames: ["rm -rf", "mkfs"] })).toEqual({
+      kind: "builtin-name",
+      index: 0,
+      name: "mkfs",
+    });
+  });
+
+  it("checks names the row does not hold, because the editor owns one row of a longer list", () => {
+    // What the rule editor passes: its own row plus the other rows and their
+    // positions, so a duplicate is caught — and located — before the row is
+    // even appended.
+    const draft = dangerousRulesDraft([rule("taken", "x")], TIMEOUT);
+
+    expect(dangerousRulesDraftProblem(draft, { takenRules: [{ name: "taken", index: 2 }] })).toEqual(
+      {
+        kind: "duplicate-name",
+        index: 0,
+        name: "taken",
+        conflictIndex: 2,
+      },
+    );
+    expect(dangerousRulesDraftProblem(draft, { takenRules: [{ name: "free", index: 0 }] })).toBeNull();
+  });
+
+  it("reports one problem in the fixed order across all criteria", () => {
+    const builtins = ["builtin"];
+    const cases: Array<{
+      rules: DangerousPatternRule[];
+      timeoutMs?: number;
+      expected: string;
+    }> = [
+      // empty name wins over everything behind it
+      { rules: [rule("", "("), rule("x", "y")], expected: "empty-name" },
+      // …including over a duplicate and a built-in collision
+      { rules: [rule("", "y"), rule("", "y")], expected: "empty-name" },
+      // a duplicate wins over a missing pattern/bad regex further down
+      { rules: [rule("dup", "("), rule("dup", " ")], expected: "duplicate-name" },
+      // …and over a name that also shadows a built-in
+      { rules: [rule("builtin", "a"), rule("builtin", "b")], expected: "duplicate-name" },
+      // a built-in collision wins over an empty pattern
+      { rules: [rule("builtin", " ")], expected: "builtin-name" },
+      // an empty pattern wins over a compile failure that comes earlier
+      { rules: [rule("broken", "("), rule("blank", " ")], expected: "empty-pattern" },
+      // a broken regex wins over the timeout field
+      { rules: [rule("broken", "(")], expected: "invalid-pattern" },
+      // the timeout is the last criterion
+      { rules: [rule("fine", "x")], timeoutMs: 0, expected: "timeout" },
+    ];
+
+    for (const { rules, timeoutMs, expected } of cases) {
+      const draft = dangerousRulesDraft(rules, timeoutMs ?? TIMEOUT);
+      expect(dangerousRulesDraftProblem(draft, { builtinNames: builtins })?.kind).toBe(expected);
+    }
+  });
+
+  it("accepts the timeout bounds exactly and refuses everything outside them", () => {
+    const at = (timeoutMs: number) =>
+      dangerousRulesDraftProblem(dangerousRulesDraft([], timeoutMs))?.kind ?? null;
+
+    expect(at(DANGEROUS_RULE_TIMEOUT_MIN_MS)).toBeNull();
+    expect(at(DANGEROUS_RULE_TIMEOUT_MAX_MS)).toBeNull();
+    expect(at(TIMEOUT)).toBeNull();
+    // Fractions are pointless but harmless; only the range is enforced.
+    expect(at(1_500.5)).toBeNull();
+    for (const bad of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      0,
+      -1,
+      DANGEROUS_RULE_TIMEOUT_MIN_MS - 1,
+      DANGEROUS_RULE_TIMEOUT_MAX_MS + 1,
+      Number.NEGATIVE_INFINITY,
+    ]) {
+      expect(at(bad)).toBe("timeout");
+    }
+  });
+
+  it("skips the timeout criterion when the caller owns no timeout field", () => {
+    // The editor checks one row; it must not have to invent a timeout value.
+    expect(dangerousRulesDraftProblem({ rules: [] })).toBeNull();
+    expect(
+      dangerousRulesDraftProblem({ rules: [{ uid: "row", name: "mine", pattern: "x", ignoreCase: false }] }),
+    ).toBeNull();
   });
 });
 
@@ -363,10 +466,48 @@ describe("validateDangerousRulesWrite", () => {
     expect(broken.ok === false && broken.error).toContain("x");
   });
 
-  it("rejects a timeout that is not a finite positive number", () => {
-    for (const timeoutMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, "300000"]) {
+  it("rejects a timeout outside the bounds instead of falling back to the default", () => {
+    for (const timeoutMs of [
+      0,
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      DANGEROUS_RULE_TIMEOUT_MIN_MS - 1,
+      DANGEROUS_RULE_TIMEOUT_MAX_MS + 1,
+      "300000",
+    ]) {
       const result = validateDangerousRulesWrite({ rules: [], timeoutMs });
       expect(result.ok).toBe(false);
     }
+    // The bounds themselves are allowed values.
+    for (const timeoutMs of [DANGEROUS_RULE_TIMEOUT_MIN_MS, DANGEROUS_RULE_TIMEOUT_MAX_MS]) {
+      expect(validateDangerousRulesWrite({ rules: [], timeoutMs }).ok).toBe(true);
+    }
+  });
+
+  it("rejects a duplicate name and names the rule that already uses it", () => {
+    const result = validateDangerousRulesWrite({
+      rules: [
+        { name: "twin", pattern: "one" },
+        { name: "twin", pattern: "two" },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toContain("twin");
+    expect(result.ok === false && result.error).toContain("rule 1");
+  });
+
+  it("rejects a name the platform's built-in set reserves", () => {
+    const result = validateDangerousRulesWrite(
+      { rules: [{ name: "mkfs", pattern: "x" }] },
+      { builtinNames: ["rm -rf", "mkfs"] },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toContain("mkfs");
+    expect(result.ok === false && result.error).toContain("built-in");
+    // Without the platform's names there is nothing to collide with.
+    expect(validateDangerousRulesWrite({ rules: [{ name: "mkfs", pattern: "x" }] }).ok).toBe(true);
   });
 });

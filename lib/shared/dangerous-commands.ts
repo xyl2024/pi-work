@@ -100,14 +100,23 @@ export const DEFAULT_POWERSHELL_DANGEROUS_RULES: readonly DangerousPatternRule[]
   builtinRule("Stop-Computer", /\b(?:stop-computer|restart-computer)\b/i),
 ];
 
-/**
- * The built-in rules `platform` enforces: the bash set everywhere, plus the
+/** The built-in rules `platform` enforces: the bash set everywhere, plus the
  * PowerShell set on the one platform that has the tool.
  */
 export function defaultDangerousRules(platform: string): readonly DangerousPatternRule[] {
   return platform === "win32"
     ? [...DEFAULT_BASH_DANGEROUS_RULES, ...DEFAULT_POWERSHELL_DANGEROUS_RULES]
     : [...DEFAULT_BASH_DANGEROUS_RULES];
+}
+
+/**
+ * The names `platform`'s built-in set reserves. A user rule may not reuse one
+ * (ADR-0020): the name is what a session's "always allow" remembers, so a
+ * shadowed name would make a single allow cover two rules — and the
+ * confirmation dialog would show a name that does not say which one fired.
+ */
+export function defaultDangerousRuleNames(platform: string): string[] {
+  return defaultDangerousRules(platform).map((rule) => rule.name);
 }
 
 /**

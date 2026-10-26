@@ -31,11 +31,21 @@ import { dangerousRuleProblemText } from "@/lib/client/dangerous-commands-proble
 
 export function DangerousRuleEditor({
   initial,
+  builtinNames,
+  takenRules,
   onClose,
   onSubmit,
 }: {
   /** The rule being edited; absent when creating a new one. */
   initial?: DangerousPatternRule;
+  /** The platform's built-in rule names, which a user rule may not reuse. */
+  builtinNames?: readonly string[];
+  /**
+   * The other rows of the page's draft and their positions. Passed in because
+   * the editor owns one row, not the list: a duplicate is caught here — by name
+   * and by position — instead of only after the row has been appended.
+   */
+  takenRules?: readonly { name: string; index: number }[];
   onClose: () => void;
   /** Hand the complete rule to the page's draft (append or replace). */
   onSubmit: (rule: DangerousPatternRule) => void;
@@ -60,10 +70,17 @@ export function DangerousRuleEditor({
   });
   useBodyScrollLock(isVisible);
 
-  // The same gate the page's Save button uses, run on this one row.
-  const problem = dangerousRulesDraftProblem({
-    rules: [{ uid: "new", name, pattern, ignoreCase }],
-  });
+  // The same gate the page's Save button uses, run on this one row. The timeout
+  // is deliberately left out: this form does not own that field.
+  const problem = dangerousRulesDraftProblem(
+    { rules: [{ uid: "new", name, pattern, ignoreCase }] },
+    { builtinNames, takenRules },
+  );
+  const nameProblem =
+    problem !== null &&
+    (problem.kind === "empty-name" ||
+      problem.kind === "duplicate-name" ||
+      problem.kind === "builtin-name");
   const error = problem && touched ? dangerousRuleProblemText(problem, t, t("This rule")) : null;
 
   const submit = () => {
@@ -123,6 +140,7 @@ export function DangerousRuleEditor({
                 setName(value);
               }}
               placeholder="rm -rf"
+              invalid={touched && nameProblem}
             />
           </Field>
 
