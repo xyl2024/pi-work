@@ -6,7 +6,7 @@
  * policy all live in the pure shared module; this file only supplies the
  * config, the platform, and one log line for a broken pattern.
  */
-import type { DangerousPatternsConfig } from "../shared/config-types";
+import type { DangerousPatternRule, DangerousPatternsConfig } from "../shared/config-types";
 import {
   assembleDangerousRules,
   buildDangerousRuleSetSnapshot,
@@ -16,7 +16,7 @@ import {
   type DangerousRuleSetSnapshot,
   type SourcedDangerousCommandMatch,
 } from "../shared/dangerous-commands";
-import { readConfig } from "./config";
+import { readConfig, writeConfig } from "./config";
 import { createLogger } from "./logger";
 import { matchSelfKillCommand } from "./self-protection";
 
@@ -107,4 +107,28 @@ export function getEffectiveDangerousRuleSet(): DangerousRuleSetSnapshot {
  */
 export function getDangerousPatternTimeoutMs(): number {
   return readConfig().dangerous_patterns.timeout_ms;
+}
+
+/**
+ * Write the user's rules — the settings page's save.
+ *
+ * Read-modify-write of the whole config file: only `dangerous_patterns` is
+ * replaced, everything else on disk is carried over as it was. Callers must
+ * have compiled the rules already (the shared draft module does); this function
+ * does not validate, because the route is the one place that decides whether a
+ * payload may land. `timeoutMs: null` means the write is about rules only, so
+ * the timeout already on disk is kept instead of being reset to the default.
+ */
+export function writeDangerousRules(
+  rules: readonly DangerousPatternRule[],
+  timeoutMs: number | null,
+): void {
+  const onDisk = readConfig();
+  writeConfig({
+    ...onDisk,
+    dangerous_patterns: {
+      rules: [...rules],
+      timeout_ms: timeoutMs ?? onDisk.dangerous_patterns.timeout_ms,
+    },
+  });
 }

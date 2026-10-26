@@ -53,8 +53,12 @@ export const SETTINGS_PAGES = {
       pageCache={pageCache}
     />
   ),
-  "dangerous-commands": ({ pageCache }) => (
-    <DangerousCommandsSection pageCache={pageCache} />
+  "dangerous-commands": ({ config, pageCache, reportDirty }) => (
+    <DangerousCommandsSection
+      config={config}
+      pageCache={pageCache}
+      onDirtyChange={reportDirty}
+    />
   ),
   subagent: ({ pageCache }) => <SubagentSection pageCache={pageCache} />,
   retry: ({ pageCache }) => <RetrySection pageCache={pageCache} />,

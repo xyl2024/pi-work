@@ -20,7 +20,7 @@ import type { SettingsSectionId } from "./registry";
  */
 export type StagedSettingsKey = Extract<
   SettingsSectionId,
-  "profile" | "append-system" | "network-proxy"
+  "profile" | "append-system" | "network-proxy" | "dangerous-commands"
 >;
 
 /**

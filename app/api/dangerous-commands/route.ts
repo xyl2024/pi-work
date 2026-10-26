@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getEffectiveDangerousRuleSet } from "@/lib/server/dangerous-patterns";
+import { validateDangerousRulesWrite } from "@/lib/shared/dangerous-commands-draft";
+import {
+  getEffectiveDangerousRuleSet,
+  writeDangerousRules,
+} from "@/lib/server/dangerous-patterns";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +22,6 @@ const log = createLogger("api/dangerous-commands");
  *     has to show that the rule is not in effect instead of implying it is.
  *
  * The user rules themselves (and `timeout_ms`) come with `GET /api/settings`.
- * Write paths live in their own route for the same reason the read does: this
- * settings item is served as an effective set, not as a config patch.
  */
 export async function GET() {
   const startedAt = Date.now();
@@ -34,6 +36,52 @@ export async function GET() {
     return NextResponse.json(snapshot);
   } catch (error) {
     log.error("dangerous command rule set read failed", {
+      error,
+      durationMs: elapsedMs(startedAt),
+    });
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
+}
+
+/**
+ * `PUT /api/dangerous-commands` — write the user's rules (and the timeout) as
+ * one config item.
+ *
+ * This is deliberately **not** part of `PUT /api/settings`: that route's owned
+ * keys mean "the client holds the whole config and sends the top-level keys
+ * that changed", while this page's subject is the *effective set* the server
+ * assembles (platform split, compile results). Same reason `/api/append-system`
+ * and `/api/subagents` have their own write faces.
+ *
+ * Read-modify-write: the body replaces `dangerous_patterns` only, everything
+ * else on disk is carried over untouched. Every pattern is compiled before the
+ * write — a rejected request leaves `config.yaml` exactly as it was (ADR-0020:
+ * with a UI, a rule that silently never matches is worse than a refused save).
+ */
+export async function PUT(req: Request) {
+  const startedAt = Date.now();
+  try {
+    const raw = await req.json().catch(() => undefined);
+    const parsed = validateDangerousRulesWrite(raw);
+    if (!parsed.ok) {
+      log.warn("dangerous command rules rejected", {
+        error: parsed.error,
+        durationMs: elapsedMs(startedAt),
+      });
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+
+    // The route only validates and logs; the read-modify-write of
+    // `config.yaml` belongs to the server module that owns this config item.
+    writeDangerousRules(parsed.rules, parsed.timeoutMs);
+    log.info("dangerous command rules written", {
+      rules: parsed.rules.length,
+      timeoutMs: parsed.timeoutMs,
+      durationMs: elapsedMs(startedAt),
+    });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    log.error("dangerous command rules write failed", {
       error,
       durationMs: elapsedMs(startedAt),
     });

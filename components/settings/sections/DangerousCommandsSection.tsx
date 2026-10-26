@@ -1,15 +1,30 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useToast } from "@/components/ui/Toast";
+import { useTransientFlag } from "@/hooks/useTransientFlag";
+import { setSettings } from "@/hooks/settingsStore";
 import type { SettingsPageDataCache } from "@/lib/client/settings-page-cache";
 import type {
   DangerousCommandVerdict,
   DangerousRuleSetSnapshot,
 } from "@/lib/shared/dangerous-commands";
-import type { DangerousPatternRule } from "@/lib/shared/config-types";
+import type { DangerousPatternRule, PiWorkConfig } from "@/lib/shared/config-types";
+import {
+  addDangerousRule,
+  dangerousRulesDraft,
+  dangerousRulesDraftProblem,
+  dangerousRulesRequestBody,
+  isDangerousRulesDraftDirty,
+  type DangerousRulesDraft,
+} from "@/lib/shared/dangerous-commands-draft";
 import { PrimaryButton, SETTINGS_RADIUS, inputStyle } from "../controls";
+import { SaveButton, UnsavedHint } from "../staged-save";
 import { useSettingsPageData } from "../use-page-data";
+import type { DirtyReporter } from "../use-unsaved-changes";
+import { DangerousRuleEditor } from "../dangerous-commands/DangerousRuleEditor";
+import { dangerousRuleProblemText } from "@/lib/client/dangerous-commands-problem-text";
 
 /** One read of the effective set; the modal's page-data cache keeps it for the modal's lifetime. */
 async function loadRuleSet(): Promise<DangerousRuleSetSnapshot> {
@@ -42,50 +57,94 @@ const ROW_STYLE = {
   alignItems: "baseline",
   gap: 10,
   padding: "7px 10px",
-  borderTop: "1px solid var(--border)",
 } as const;
 
 /**
- * One built-in rule, read-only: the name the confirmation dialog shows, the
- * pattern as written (monospace, truncated — a long regex must not widen the
- * modal) and whether it ignores case.
+ * One rule: the name the confirmation dialog shows, the pattern as written
+ * (monospace, truncated — a long regex must not widen the modal) and whether it
+ * ignores case. Shared by the user's list and the built-in list so the two
+ * cannot describe a rule differently.
+ *
+ * `error` is the draft blocker for this row: the rule that stops Save is marked
+ * in place, with the compiler's reason underneath.
  */
-function RuleRow({ rule, first }: { rule: DangerousPatternRule; first: boolean }) {
+function RuleRow({
+  rule,
+  first,
+  error,
+}: {
+  rule: DangerousPatternRule;
+  first: boolean;
+  error?: { message: string; detail?: string } | null;
+}) {
   const { t } = useI18n();
   return (
-    <div style={first ? { ...ROW_STYLE, borderTop: "none" } : ROW_STYLE}>
-      <span
-        title={rule.name}
-        style={{
-          flexShrink: 0,
-          maxWidth: 180,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          fontSize: 12,
-          color: "var(--text)",
-        }}
-      >
-        {rule.name}
-      </span>
-      <code
-        title={rule.pattern}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          color: "var(--text-muted)",
-        }}
-      >
-        {rule.pattern}
-      </code>
-      <span style={{ flexShrink: 0, fontSize: 10, color: "var(--text-dim)" }}>
-        {rule.ignoreCase ? t("Ignore case") : t("Case-sensitive")}
-      </span>
+    <div
+      style={{
+        borderTop: first ? "none" : "1px solid var(--border)",
+        background: error ? "color-mix(in srgb, var(--error) 7%, transparent)" : undefined,
+      }}
+    >
+      <div style={ROW_STYLE}>
+        <span
+          title={rule.name}
+          style={{
+            flexShrink: 0,
+            maxWidth: 180,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontSize: 12,
+            color: "var(--text)",
+          }}
+        >
+          {rule.name}
+        </span>
+        <code
+          title={rule.pattern}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "var(--text-muted)",
+          }}
+        >
+          {rule.pattern}
+        </code>
+        <span style={{ flexShrink: 0, fontSize: 10, color: "var(--text-dim)" }}>
+          {rule.ignoreCase ? t("Ignore case") : t("Case-sensitive")}
+        </span>
+      </div>
+      {error && (
+        <div style={{ padding: "0 10px 7px 10px", fontSize: 11, color: "var(--error)", lineHeight: 1.5 }}>
+          <div>{error.message}</div>
+          {error.detail && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-dim)", wordBreak: "break-word" }}>
+              {error.detail}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The bordered list wrapper both rule lists use. */
+function RuleList({ children }: { children: ReactNode }) {
+  return (
+    <div
+      style={{
+        border: "1px solid var(--border)",
+        borderRadius: SETTINGS_RADIUS,
+        overflow: "hidden",
+        background: "var(--bg)",
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -281,32 +340,145 @@ function CommandTester() {
 /**
  * Settings → Agent → Dangerous commands (ADR-0020).
  *
- * The page makes the confirmation gate visible without turning it into a
- * switch. What it lists is the platform's **built-in** floor, read from
- * `/api/dangerous-commands` — the same effective set the gate assembles, not a
- * client-side copy — so the Windows-only PowerShell rules appear on Windows
- * and stay out of the way everywhere else.
+ * Three facts this page has to keep straight:
  *
- * Two boundaries the page must state, because both are easy to misread:
- * clearing the user's own rules does not turn the built-ins off, and a match is
- * a confirmation prompt, not a block.
+ *   • **The built-in floor is read-only and always on.** What it lists is the
+ *     platform's built-ins, read from `/api/dangerous-commands` — the same
+ *     effective set the gate assembles, not a client-side copy — so the
+ *     Windows-only PowerShell rules appear on Windows and stay out of the way
+ *     everywhere else.
+ *   • **Clearing your own rules does not turn the built-ins off**, and a match
+ *     asks for confirmation instead of blocking the command.
+ *   • **Saving is immediate.** Matching reads the config on every tool call, so
+ *     a rule lands on the next command without a restart or a new session. The
+ *     page never hints otherwise.
  *
  * Self-protection (the code-level hard block in `lib/server/self-protection.ts`)
  * deliberately does not appear as a list: anything listed on a settings page
  * reads as configurable, and that one is not. It surfaces only in the command
  * tester's result, where it is the answer to "why was this stopped?".
+ *
+ * The draft model (`lib/shared/dangerous-commands-draft.ts`) owns every "can
+ * this be saved?" decision, and the write route re-runs the same validation
+ * before touching disk. The page only reads those answers.
  */
-export function DangerousCommandsSection({ pageCache }: { pageCache: SettingsPageDataCache }) {
+export function DangerousCommandsSection({
+  config,
+  pageCache,
+  onDirtyChange,
+}: {
+  config: PiWorkConfig;
+  pageCache: SettingsPageDataCache;
+  onDirtyChange?: DirtyReporter;
+}) {
   const { t } = useI18n();
-  const { data, loading, error } = useSettingsPageData(
+  const toast = useToast();
+  const { data, loading, error, mutate } = useSettingsPageData(
     pageCache,
     "dangerous-commands",
     loadRuleSet,
   );
 
+  const savedRules = config.dangerous_patterns.rules;
+  const savedTimeoutMs = config.dangerous_patterns.timeout_ms;
+  // The draft is deliberately not cached across page entries: leaving the page
+  // drops unsaved edits, the same as the other staged pages.
+  const [draft, setDraft] = useState<DangerousRulesDraft | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedOk, flashSavedOk] = useTransientFlag();
+
+  const current = draft ?? dangerousRulesDraft(savedRules, savedTimeoutMs);
+  const dirty = isDangerousRulesDraftDirty(current, savedRules, savedTimeoutMs);
+  const problem = dangerousRulesDraftProblem(current);
+  const problemText = problem
+    ? dangerousRuleProblemText(problem, t, t("Rule {n}", { n: problem.index + 1 }))
+    : null;
+
+  // Staged page: the modal's close/leave guard reads this registry, so an
+  // unsaved rule prompts before it is dropped (ADR-0019).
+  useEffect(() => {
+    onDirtyChange?.("dangerous-commands", dirty);
+  }, [dirty, onDirtyChange]);
+
+  const save = async () => {
+    if (saving || problem) return;
+    const body = dangerousRulesRequestBody(current);
+    setSaving(true);
+    try {
+      const response = await fetch("/api/dangerous-commands", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? `HTTP ${response.status}`);
+      }
+      // The settings store is the client's mirror of config.yaml: moving it
+      // here keeps the draft baseline and a later entry into this page in sync
+      // without a second read.
+      setSettings({
+        ...config,
+        dangerous_patterns: { rules: body.rules, timeout_ms: body.timeoutMs },
+      });
+      // Everything that was just written compiles (the route checked), so the
+      // cached "these user rules are broken" report is stale.
+      if (data) mutate({ ...data, invalidUserRules: [] });
+      setDraft(null);
+      flashSavedOk();
+      toast.show({ kind: "success", message: t("Settings saved") });
+    } catch (e) {
+      // The draft stays exactly as it was: a failed write must not lose edits.
+      toast.show({
+        kind: "error",
+        message: e instanceof Error && e.message ? e.message : t("Failed to save settings"),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 720 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <section>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+            {t("Your rules")}
+          </h3>
+          <PrimaryButton onClick={() => setEditorOpen(true)}>{t("New rule")}</PrimaryButton>
+        </div>
+
+        <div style={{ marginTop: 8 }}>
+          {current.rules.length === 0 ? (
+            <div
+              style={{
+                border: "1px dashed var(--border)",
+                borderRadius: SETTINGS_RADIUS,
+                padding: "12px 10px",
+                fontSize: 11,
+                color: "var(--text-dim)",
+                lineHeight: 1.5,
+              }}
+            >
+              {t("No custom rules yet. The built-in rules below still apply.")}
+            </div>
+          ) : (
+            <RuleList>
+              {current.rules.map((entry, index) => (
+                <RuleRow
+                  key={entry.uid}
+                  rule={entry}
+                  first={index === 0}
+                  error={problem?.index === index ? problemText : null}
+                />
+              ))}
+            </RuleList>
+          )}
+        </div>
+      </section>
+
+      <section>
         <div>
           <h3 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
             {t("Built-in rules")}
@@ -318,29 +490,53 @@ export function DangerousCommandsSection({ pageCache }: { pageCache: SettingsPag
           </p>
         </div>
 
-        {loading ? (
-          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{t("Loading...")}</div>
-        ) : error ? (
-          <div style={{ fontSize: 11, color: "var(--error)" }}>{error}</div>
-        ) : (
-          <div
-            style={{
-              border: "1px solid var(--border)",
-              borderRadius: SETTINGS_RADIUS,
-              overflow: "hidden",
-              background: "var(--bg)",
-            }}
-          >
-            {(data?.builtins ?? []).map((rule, index) => (
-              <RuleRow key={`${rule.name}-${index}`} rule={rule} first={index === 0} />
-            ))}
-          </div>
-        )}
-      </div>
+        <div style={{ marginTop: 8 }}>
+          {loading ? (
+            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{t("Loading...")}</div>
+          ) : error ? (
+            <div style={{ fontSize: 11, color: "var(--error)" }}>{error}</div>
+          ) : (
+            <RuleList>
+              {(data?.builtins ?? []).map((rule, index) => (
+                <RuleRow key={`${rule.name}-${index}`} rule={rule} first={index === 0} />
+              ))}
+            </RuleList>
+          )}
+        </div>
+      </section>
 
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14 }}>
         <CommandTester />
       </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: 8,
+          paddingTop: 14,
+          borderTop: "1px solid var(--border)",
+        }}
+      >
+        <UnsavedHint show={dirty} />
+        <SaveButton
+          canSave={dirty && problem === null}
+          saving={saving}
+          saved={savedOk}
+          onClick={() => void save()}
+        />
+      </div>
+
+      {editorOpen && (
+        <DangerousRuleEditor
+          onClose={() => setEditorOpen(false)}
+          onAdd={(rule) => {
+            setDraft(addDangerousRule(current, rule).draft);
+            setEditorOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
