@@ -1,14 +1,23 @@
 "use client";
 
-import { useState, type RefObject } from "react";
+import { useMemo, useState, type RefObject } from "react";
 import { Tooltip } from "../../ui/Tooltip";
 import { ContextUsageBar } from "../ContextUsageBar";
 import { CwdPicker } from "../../sessions/CwdPicker";
+import { CwdProjectIcon } from "../../files/CwdProjectIcon";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
 import { ModelPickerModal } from "../ModelPickerModal";
 import { ToolsPickerModal } from "../ToolsPickerModal";
-import { ThinkingPicker, THINKING_LEVEL_COLOR, type ThinkingLevel } from "../ThinkingPicker";
-import { MoreMenu } from "../MoreMenu";
+import {
+  ThinkingPicker,
+  THINKING_LEVEL_COLOR,
+  ThinkingIcon,
+  availableThinkingLevelsOf,
+  nextThinkingLevel,
+  type ThinkingLevel,
+} from "../ThinkingPicker";
+import { MoreMenu, type CollapsedMenuEntry } from "../MoreMenu";
+import { useToolbarLayout } from "./hooks/useToolbarLayout";
 import { ICONS } from "../../ui/icons";
 import { FULL_ACCESS_RED } from "../../ui/permission-mode-colors";
 import { NewSessionNotifyPicker } from "../chat-window/NewSessionNotifyPicker";
@@ -192,8 +201,90 @@ export function BottomToolbar(props: BottomToolbarProps) {
   // readable without reading the tooltip.
   const permissionFullAccess = permissionMode === "full_access";
 
+  // ── Narrow-container adaptation ──────────────────────────────────────
+  // The row never wraps and never scrolls: it trades information density for
+  // width instead. `useToolbarLayout` measures the row itself (a viewport
+  // breakpoint cannot see a chat column squeezed by both side panels) and
+  // resolves the tier plan defined in `lib/shared/toolbarLayout`.
+  const { containerRef, layout, width } = useToolbarLayout();
+
+  // Self-explaining locals rather than `layout.tier >= 2` sprinkled through
+  // the JSX — each one names the decision it represents.
+  const showModelName = layout.modelLabelWidth !== null;
+  const showCwdName = layout.cwdLabelVisible;
+  const compactContext = layout.contextBarCompact;
+  const showToolsLabel = layout.toolsLabelVisible;
+  const showThinkingLabel = layout.thinkingLabelVisible;
+  const thinkingCollapsed = layout.collapsed.includes("thinking");
+  const toolsCollapsed = layout.collapsed.includes("tools");
+  const cwdCollapsed = layout.collapsed.includes("cwd");
+
+  // The model's metadata tooltip used to be hard-capped at 420px. In a ~400px
+  // column that is wider than the screen, so clamp it to the measured row and
+  // leave the `Tooltip` component itself alone (it is used everywhere).
+  const modelTooltipMaxWidth = width === null
+    ? 420
+    : Math.max(200, Math.min(420, width - 24));
+
+  // Opening the project picker from the More menu: the trigger is gone in that
+  // tier, so the modal is opened through its programmatic signal instead.
+  const [collapsedCwdOpen, setCollapsedCwdOpen] = useState(false);
+
+  const availableLevels = useMemo(
+    () => availableThinkingLevelsOf(availableThinkingLevels),
+    [availableThinkingLevels],
+  );
+
+  // Only the controls that were actually folded out of the row are listed in
+  // the More menu. A wide toolbar passes `[]`, which renders exactly the menu
+  // it rendered before this feature existed.
+  const collapsedEntries = useMemo<CollapsedMenuEntry[]>(() => {
+    const entries: CollapsedMenuEntry[] = [];
+    if (thinkingCollapsed && onThinkingLevelChange) {
+      entries.push({
+        key: "thinking",
+        // Reuses the picker's own labels; the level name is the value, the
+        // colour is preserved so the menu still encodes the tier.
+        label: `${t("Thinking level")} · ${currentThinkingDisplay}`,
+        icon: (
+          <span style={{ display: "flex", color: THINKING_LEVEL_COLOR[currentThinkingLevel] }}>
+            <ThinkingIcon size={14} />
+          </span>
+        ),
+        onClick: () => {
+          const next = nextThinkingLevel(currentThinkingLevel, availableLevels);
+          if (next) onThinkingLevelChange(next);
+        },
+      });
+    }
+    if (toolsCollapsed && !isStreaming) {
+      entries.push({
+        key: "tools",
+        label: t("Tools"),
+        icon: <ToolsIcon size={14} />,
+        onClick: () => setToolsPickerOpen(true),
+      });
+    }
+    if (cwdCollapsed && onCwdChange) {
+      entries.push({
+        key: "cwd",
+        label: t("Change project"),
+        icon: <CwdProjectIcon cwd={cwd ?? null} size={14} />,
+        onClick: () => setCollapsedCwdOpen(true),
+      });
+    }
+    return entries;
+  }, [
+    thinkingCollapsed, toolsCollapsed, cwdCollapsed,
+    onThinkingLevelChange, onCwdChange, isStreaming,
+    t, currentThinkingDisplay, currentThinkingLevel, availableLevels, cwd,
+  ]);
+
   return (
-    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6 }}>
+    <div
+      ref={containerRef}
+      style={{ marginTop: 8, display: "flex", alignItems: "center", gap: layout.buttonGap }}
+    >
       {/* LEFT: attach + model selector */}
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2 }}>
         {/* New session — circular icon button. Same action as the /new
@@ -272,19 +363,22 @@ export function BottomToolbar(props: BottomToolbarProps) {
           <Tooltip
             content={modelMetaTooltip}
             interactive
-            maxWidth={420}
+            maxWidth={modelTooltipMaxWidth}
           >
-          <span style={{ display: "inline-flex", alignItems: "center" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
           <button
             type="button"
             onClick={() => setModelPickerOpen(true)}
             disabled={isStreaming}
-            aria-label={t("Switch model")}
+            aria-label={showModelName ? t("Switch model") : `${t("Switch model")}: ${currentModelName}`}
             style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 12px",
+              display: "flex", alignItems: "center", justifyContent: showModelName ? "flex-start" : "center",
+              gap: 6,
+              padding: showModelName ? "8px 12px" : 0,
               height: 32,
-              maxWidth: 220, overflow: "hidden",
+              width: showModelName ? undefined : 32,
+              maxWidth: layout.modelLabelWidth ?? 32,
+              flexShrink: 0, overflow: "hidden",
               background: "none",
               border: "none",
               borderRadius: 9,
@@ -309,7 +403,9 @@ export function BottomToolbar(props: BottomToolbarProps) {
               size={12}
               fallback={<ProviderGearIcon size={11} />}
             />
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentModelName}</span>
+            {showModelName && (
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{currentModelName}</span>
+            )}
           </button>
           </span>
           </Tooltip>
@@ -334,6 +430,10 @@ export function BottomToolbar(props: BottomToolbarProps) {
             onCwdChange={onCwdChange}
             disabled={isStreaming}
             dropdownDirection="up"
+            iconOnly={!showCwdName}
+            hideTrigger={cwdCollapsed}
+            openSignal={cwdCollapsed && collapsedCwdOpen}
+            onOpenSignalHandled={() => setCollapsedCwdOpen(false)}
           />
         )}
       </div>
@@ -346,7 +446,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
           {/* Cumulative token stats (input / output / cache hit rate / cost)
               are surfaced in the context bar's hover tooltip. The previous
               inline strip was removed so the input row stays compact. */}
-          <ContextUsageBar contextUsage={contextUsage} sessionStats={sessionStats} contextComposition={contextComposition} />
+          <ContextUsageBar contextUsage={contextUsage} sessionStats={sessionStats} contextComposition={contextComposition} compact={compactContext} />
         </div>
       )}
 
@@ -354,43 +454,45 @@ export function BottomToolbar(props: BottomToolbarProps) {
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 2, marginLeft: "auto" }}>
         {/* Streaming: show the chosen thinking level as a read-only
             badge instead of the icon button (the level can't be changed
-            while the agent is running). */}
+            while the agent is running). The badge follows the same label
+            rule as the picker, so streaming does not introduce a third
+            layout. */}
         {isStreaming && (
           <span
             style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              height: 32, padding: "0 10px",
+              display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              height: 32, padding: showThinkingLabel ? "0 10px" : 0,
+              width: showThinkingLabel ? undefined : 32, flexShrink: 0,
               fontSize: 12, color: THINKING_LEVEL_COLOR[currentThinkingLevel],
               background: "none", border: "none", borderRadius: 9,
               whiteSpace: "nowrap",
               fontFamily: "var(--font-mono)",
             }}
+            aria-label={t("Thinking level: {level}. Click or scroll to cycle.", { level: currentThinkingDisplay })}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
-              <line x1="7" y1="18" x2="12" y2="18" />
-              <line x1="8" y1="21" x2="11" y2="21" />
-            </svg>
-            {currentThinkingDisplay}
+            <ThinkingIcon />
+            {showThinkingLabel && currentThinkingDisplay}
           </span>
         )}
-        {!isStreaming && onThinkingLevelChange && (
+        {!isStreaming && onThinkingLevelChange && !thinkingCollapsed && (
           <ThinkingPicker
             thinkingLevel={thinkingLevel}
             onThinkingLevelChange={onThinkingLevelChange}
             availableThinkingLevels={availableThinkingLevels}
             thinkingLevelMap={thinkingLevelMap}
+            labelVisible={showThinkingLabel}
           />
         )}
-        {!isStreaming && (
+        {!isStreaming && !toolsCollapsed && (
           <div ref={toolDropdownRef}>
             <button
               type="button"
               onClick={() => setToolsPickerOpen(true)}
               aria-label={t("Tools")}
               style={{
-                display: "flex", alignItems: "center", gap: 6,
-                padding: "0 10px", height: 32,
+                display: "flex", alignItems: "center", justifyContent: showToolsLabel ? "flex-start" : "center", gap: 6,
+                padding: showToolsLabel ? "0 10px" : 0, height: 32,
+                width: showToolsLabel ? undefined : 32, flexShrink: 0,
                 overflow: "hidden",
                 background: toolsPickerOpen ? "var(--bg-hover)" : "none",
                 border: "none", borderRadius: 9,
@@ -409,26 +511,30 @@ export function BottomToolbar(props: BottomToolbarProps) {
                 e.currentTarget.style.color = "var(--text-muted)";
               }}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                <path d="M14.7 6a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-              </svg>
-              <span style={{ whiteSpace: "nowrap" }}>
-                {t("Tools")}
-              </span>
+              <ToolsIcon />
+              {showToolsLabel && (
+                <span style={{ whiteSpace: "nowrap" }}>
+                  {t("Tools")}
+                </span>
+              )}
             </button>
-            <ToolsPickerModal
-              open={toolsPickerOpen}
-              toolSelection={toolSelection}
-              availableTools={availableTools}
-              toolsLoading={toolsLoading}
-              toolsError={toolsError}
-              customExpanded={customExpanded}
-              onToggleTool={handleToolSelectionChangeLocal}
-              onRetryEnsureTools={onEnsureAvailableTools}
-              onToggleCustomExpanded={toggleCustomExpanded}
-              onClose={() => setToolsPickerOpen(false)}
-            />
           </div>
+        )}
+        {/* Rendered outside the trigger block: the picker can also be opened
+            from the More menu, where the trigger button is gone. */}
+        {!isStreaming && (
+          <ToolsPickerModal
+            open={toolsPickerOpen}
+            toolSelection={toolSelection}
+            availableTools={availableTools}
+            toolsLoading={toolsLoading}
+            toolsError={toolsError}
+            customExpanded={customExpanded}
+            onToggleTool={handleToolSelectionChangeLocal}
+            onRetryEnsureTools={onEnsureAvailableTools}
+            onToggleCustomExpanded={toggleCustomExpanded}
+            onClose={() => setToolsPickerOpen(false)}
+          />
         )}
         {onPermissionModeToggle && (
           // The tooltip is the whole explanation: the label alone would not say
@@ -488,8 +594,17 @@ export function BottomToolbar(props: BottomToolbarProps) {
             onChange={onNotifyChannelChange}
           />
         )}
-        <MoreMenu />
+        <MoreMenu collapsed={collapsedEntries} />
       </div>
     </div>
+  );
+}
+/** The tools picker's wrench, shared by the toolbar button and the More menu's
+ *  collapsed entry so the control keeps its glyph after it is folded away. */
+function ToolsIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M14.7 6a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+    </svg>
   );
 }

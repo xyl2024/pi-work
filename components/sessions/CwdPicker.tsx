@@ -24,6 +24,12 @@ interface CwdPickerProps {
   onOpenSignalHandled?: () => void;
   /** Render only the modal (no trigger button) — for purely programmatic use. */
   hideTrigger?: boolean;
+  /**
+   * Render the trigger as its project icon only, with no name. The label is
+   * the first thing the bottom toolbar gives up when the chat column gets
+   * narrow; the full path moves into the tooltip so nothing is lost.
+   */
+  iconOnly?: boolean;
   dropdownDirection?: "up" | "down";
 }
 
@@ -33,7 +39,7 @@ function basenameOf(cwd: string): string {
   return parts[parts.length - 1] ?? cwd;
 }
 
-export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, fill = false, openSignal, onOpenSignalHandled, hideTrigger = false }: CwdPickerProps) {
+export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, fill = false, openSignal, onOpenSignalHandled, hideTrigger = false, iconOnly = false }: CwdPickerProps) {
   const { t } = useI18n();
   const { cwds } = useCwdList();
   const { map: aliasMap } = useCwdAliases();
@@ -73,12 +79,15 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
   // Show the user-set alias when present; fall back to the basename.
   const buttonLabel = cwd ? (cwdAlias ?? basenameOf(cwd)) : t("Select project...");
   // Hovering an aliased cwd reveals its absolute path; unaliased cwds keep
-  // the generic action hint.
+  // the generic action hint. An icon-only trigger always reveals the path —
+  // the icon is all that is left on screen, so the hover must not be thinner
+  // than the full-label variant it replaced.
   const buttonTitle = cwd ? (cwdAlias ? cwd : t("Change project")) : t("Pick a project");
+  const triggerTooltip = iconOnly && cwd ? cwd : buttonTitle;
 
   return (
     <>
-      {!hideTrigger && <Tooltip content={buttonTitle}>
+      {!hideTrigger && <Tooltip content={triggerTooltip}>
         <button
           type="button"
           onClick={() => { if (!disabled) setOpen(true); }}
@@ -86,12 +95,12 @@ export function CwdPicker({ cwd, onCwdChange, disabled = false, maxWidth = 160, 
           aria-label={buttonTitle}
           aria-haspopup="dialog"
           aria-expanded={open}
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", height: 32, width: fill ? "100%" : undefined, maxWidth: fill ? "none" : maxWidth, boxSizing: "border-box", overflow: "hidden", background: open ? "var(--bg-hover)" : "none", border: "none", borderRadius: 9, color: cwd ? "var(--text)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", fontSize: 12, opacity: disabled ? 0.5 : 1, transition: "background 0.12s, color 0.12s" }}
+          style={{ display: "flex", alignItems: "center", justifyContent: iconOnly ? "center" : undefined, gap: 6, padding: iconOnly ? 0 : "8px 12px", height: 32, width: iconOnly ? 32 : fill ? "100%" : undefined, flexShrink: 0, maxWidth: iconOnly || fill ? "none" : maxWidth, boxSizing: "border-box", overflow: "hidden", background: open ? "var(--bg-hover)" : "none", border: "none", borderRadius: 9, color: cwd ? "var(--text)" : "var(--text-muted)", cursor: disabled ? "not-allowed" : "pointer", fontSize: 12, opacity: disabled ? 0.5 : 1, transition: "background 0.12s, color 0.12s" }}
           onMouseEnter={(e) => { if (!disabled) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
           onMouseLeave={(e) => { if (!disabled) { e.currentTarget.style.background = open ? "var(--bg-hover)" : "none"; e.currentTarget.style.color = cwd ? "var(--text)" : "var(--text-muted)"; } }}
         >
           <span style={{ display: "flex", flexShrink: 0, color: "var(--accent)" }}><CwdProjectIcon cwd={cwd} size={14} /></span>
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, fontFamily: "var(--font-mono)" }}>{buttonLabel}</span>
+          {!iconOnly && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0, fontFamily: "var(--font-mono)" }}>{buttonLabel}</span>}
         </button>
       </Tooltip>}
       {open && <CwdPickerModal

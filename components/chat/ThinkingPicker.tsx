@@ -33,6 +33,55 @@ export const THINKING_LEVEL_COLOR: Record<ThinkingLevel, string> = {
 const WHEEL_THROTTLE_MS = 150;
 
 /**
+ * The thinking level's icon, shared by the toolbar button and the More menu's
+ * collapsed entry so a level that moved into the menu still looks like the
+ * level it sets. Colour is inherited (`currentColor`) — the level colour is
+ * what encodes the tier when the label is gone.
+ */
+export function ThinkingIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+      <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
+      <line x1="7" y1="18" x2="12" y2="18" />
+      <line x1="8" y1="21" x2="11" y2="21" />
+    </svg>
+  );
+}
+
+/**
+ * The level a click / wheel tick moves to: one step through the levels the
+ * current model actually supports, wrapping around. `idx === -1` covers the
+ * transient state right after switching to a model that does not support the
+ * previous pick — fall through to the first available level so the control
+ * still reflects something real.
+ *
+ * Exported because the narrow-toolbar layout folds the picker into the More
+ * menu, where the entry has to cycle the same way the button does.
+ */
+export function nextThinkingLevel(
+  current: ThinkingLevel,
+  available: readonly ThinkingLevel[],
+  direction: 1 | -1 = 1,
+): ThinkingLevel | null {
+  if (available.length === 0) return null;
+  const idx = available.indexOf(current);
+  const nextIdx = ((idx + direction) % available.length + available.length) % available.length;
+  const next = available[nextIdx];
+  return next === current ? null : next;
+}
+
+/**
+ * The levels the current model actually supports, in display order. One
+ * definition shared by the picker button and the More menu entry, so the two
+ * cannot drift apart on which levels are reachable.
+ */
+export function availableThinkingLevelsOf(
+  available: readonly string[] | null | undefined,
+): ThinkingLevel[] {
+  return THINKING_LEVELS.filter((lvl) => (available ? available.includes(lvl) : true));
+}
+
+/**
  * Thinking-level cycling button. Click or scroll-wheel cycles through
  * the levels the current model actually supports, looping seamlessly.
  * Replaces the previous click-to-open popover design — that surface
@@ -49,11 +98,15 @@ export function ThinkingPicker({
   onThinkingLevelChange,
   availableThinkingLevels,
   thinkingLevelMap,
+  labelVisible = true,
 }: {
   thinkingLevel: ThinkingLevel | undefined;
   onThinkingLevelChange: (level: ThinkingLevel) => void;
   availableThinkingLevels?: string[] | null;
   thinkingLevelMap?: Record<string, string | null> | null;
+  /** False = icon only. Used by the narrow-toolbar layout; the level colour
+   *  still encodes the tier and the tooltip/aria-label still name it. */
+  labelVisible?: boolean;
 }) {
   const { t } = useI18n();
 
@@ -68,22 +121,13 @@ export function ThinkingPicker({
   // level the backend ends up on after `pickClosestAvailableThinkingLevel`
   // (lib/shared/thinking-level-utils.ts).
   const availableLevels = useMemo<readonly ThinkingLevel[]>(
-    () => THINKING_LEVELS.filter((lvl) =>
-      availableThinkingLevels ? availableThinkingLevels.includes(lvl) : true
-    ),
+    () => availableThinkingLevelsOf(availableThinkingLevels),
     [availableThinkingLevels],
   );
 
   const cycleTo = (direction: 1 | -1) => {
-    if (availableLevels.length === 0) return;
-    const idx = availableLevels.indexOf(currentLevel);
-    // `idx === -1` covers the transient state right after the user
-    // switched to a model that doesn't support the previous pick —
-    // fall through to the first available level so the button still
-    // reflects something real.
-    const nextIdx = ((idx + direction) % availableLevels.length + availableLevels.length) % availableLevels.length;
-    const nextLevel = availableLevels[nextIdx];
-    if (nextLevel !== currentLevel) onThinkingLevelChange(nextLevel);
+    const next = nextThinkingLevel(currentLevel, availableLevels, direction);
+    if (next) onThinkingLevelChange(next);
   };
 
   // Wheel throttle — see WHEEL_THROTTLE_MS for the rationale. We
@@ -120,8 +164,9 @@ export function ThinkingPicker({
       onWheel={handleWheel}
       aria-label={t("Thinking level: {level}. Click or scroll to cycle.", { level: currentDisplay })}
       style={{
-        display: "inline-flex", alignItems: "center", gap: 6,
-        height: 32, padding: "0 10px",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+        height: 32, padding: labelVisible ? "0 10px" : 0, flexShrink: 0,
+        width: labelVisible ? undefined : 32,
         background: "none",
         border: "none", borderRadius: 9,
         color: THINKING_LEVEL_COLOR[currentLevel],
@@ -133,14 +178,12 @@ export function ThinkingPicker({
       onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
     >
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9.5 2A5.5 5.5 0 0 0 4 7.5c0 1.7.78 3.21 2 4.21V14a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-2.29c1.22-1 2-2.51 2-4.21A5.5 5.5 0 0 0 9.5 2z" />
-        <line x1="7" y1="18" x2="12" y2="18" />
-        <line x1="8" y1="21" x2="11" y2="21" />
-      </svg>
-      <span key={animKey} className="thinking-picker-label">
-        {currentDisplay}
-      </span>
+      <ThinkingIcon />
+      {labelVisible && (
+        <span key={animKey} className="thinking-picker-label">
+          {currentDisplay}
+        </span>
+      )}
     </button>
   );
 }

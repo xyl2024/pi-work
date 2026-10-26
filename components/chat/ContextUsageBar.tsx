@@ -42,6 +42,13 @@ interface Props {
    * tokenizer), and the `≈` is the only thing that tells the two apart.
    */
   contextComposition?: ContextComposition | null;
+  /**
+   * Narrow-toolbar mode: keep the ring, drop the token readout. The ring is
+   * the only always-visible "context is filling up" signal, so it is the one
+   * part that never goes away; the numbers stay reachable through the same
+   * hover tooltip as before.
+   */
+  compact?: boolean;
 }
 
 /**
@@ -74,7 +81,7 @@ interface Props {
  * read-only JSONL fallback path) render the plain indicator: no trigger, no
  * empty hover target.
  */
-export function ContextUsageBar({ contextUsage, sessionStats, contextComposition }: Props) {
+export function ContextUsageBar({ contextUsage, sessionStats, contextComposition, compact = false }: Props) {
   const { t } = useI18n();
   const { formatCost } = useFormatCurrency();
 
@@ -190,8 +197,8 @@ export function ContextUsageBar({ contextUsage, sessionStats, contextComposition
     flexShrink: 0,
     display: "flex",
     alignItems: "center",
-    gap: 6,
-    padding: "6px 10px 4px",
+    gap: compact ? 0 : 6,
+    padding: compact ? "6px 4px 4px" : "6px 10px 4px",
     color: "var(--text)",
     fontSize: 12,
     fontVariantNumeric: "tabular-nums",
@@ -236,7 +243,7 @@ export function ContextUsageBar({ contextUsage, sessionStats, contextComposition
         />
       </svg>
       <span style={{ fontWeight: 600, color: ring.color }}>{ring.tokensFmt}</span>
-      <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/ {ring.ctxWindowFmt}</span>
+      {!compact && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/ {ring.ctxWindowFmt}</span>}
     </>
   );
 

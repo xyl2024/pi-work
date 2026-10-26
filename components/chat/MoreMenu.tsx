@@ -9,14 +9,20 @@ import type { ChannelRecord } from "@/lib/shared/channels/types";
 /**
  * The `…` button and its upward menu, surfaced in the bottom-right of
  * the chat input. The button is conditionally rendered: if no ChatHeader
- * actions are visible (no session, or every action is gated off), the
- * whole component returns `null`.
+ * actions are visible (no session, or every action is gated off) and
+ * nothing was folded in from the toolbar, the whole component returns
+ * `null`.
  *
  * The menu opens only on click of the trigger (no hover, no tooltip);
  * it toggles off on a second click of the trigger, on a click outside
  * the container, or on selecting an item. "Notification channel" opens
  * an in-menu submenu listing the messaging channels (WeChat) for the
  * current session's reply notifications.
+ *
+ * A third view ("collapsed") hosts the controls the bottom toolbar gave up
+ * when the chat column got too narrow to hold them. Callers pass them as
+ * fully-formed entries (`collapsed` prop); when nothing is passed the menu is
+ * byte-for-byte the menu it was before that feature existed.
  */
 
 import {
@@ -27,6 +33,9 @@ import {
   RefreshIcon,
 } from "@/components/ui/icons";
 
+type SubmenuView = "channels" | "collapsed";
+type View = "main" | SubmenuView;
+
 type Item = {
   key: string;
   label: string;
@@ -34,17 +43,37 @@ type Item = {
   icon: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  /** True for submenu entries — clicking switches views instead of closing. */
-  openSubmenu?: boolean;
+  /** Set for entries that switch views instead of closing the menu. */
+  submenu?: SubmenuView;
 };
 
-export function MoreMenu() {
+/** An affordance the bottom toolbar folded into this menu to avoid overflow. */
+export interface CollapsedMenuEntry {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
+export interface MoreMenuProps {
+  /**
+   * Controls the toolbar could not fit, in the order they should be listed.
+   * Omitted/empty (`undefined`, `[]`) keeps the pre-existing behaviour: no
+   * entry point, no extra view.
+   */
+  collapsed?: CollapsedMenuEntry[];
+}
+
+export function MoreMenu({ collapsed }: MoreMenuProps = {}) {
   const { t } = useI18n();
   const headerActions = useChatHeaderActions();
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<"main" | "channels">("main");
+  const [view, setView] = useState<View>("main");
   const [channels, setChannels] = useState<ChannelRecord[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const collapsedEntries = collapsed ?? [];
 
   // Reset to the main menu every time the menu reopens.
   useEffect(() => {
@@ -73,9 +102,12 @@ export function MoreMenu() {
       ? channels.find((c) => c.id === headerActions.currentNotifyChannelId)?.name ?? null
       : null;
 
+  // The "collapsed controls" entry is part of `items` on purpose: it keeps the
+  // "menu with nothing in it closes itself" logic below working unchanged.
+  const hasCollapsed = collapsedEntries.length > 0;
+
   const items = useMemo<Item[]>(() => {
-    if (!headerActions) return [];
-    return [
+    const actionItems: (Item | null)[] = !headerActions ? [] : [
       headerActions.replayVisible ? {
         key: "replay",
         label: t("Replay"),
@@ -110,10 +142,28 @@ export function MoreMenu() {
           : t("Notification channel"),
         icon: <NotificationIcon size={14} />,
         onClick: () => setView("channels"),
-        openSubmenu: true,
+        submenu: "channels",
       } : null,
-    ].filter(Boolean) as Item[];
-  }, [headerActions, t, currentBinding]);
+    ];
+
+    if (hasCollapsed) {
+      actionItems.push({
+        key: "collapsed-controls",
+        label: t("More actions"),
+        icon: (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="5" cy="12" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="19" cy="12" r="1.5" />
+          </svg>
+        ),
+        onClick: () => setView("collapsed"),
+        submenu: "collapsed",
+      });
+    }
+
+    return actionItems.filter(Boolean) as Item[];
+  }, [headerActions, t, currentBinding, hasCollapsed]);
 
   const selectChannel = (channelId: string | null) => {
     if (!headerActions) return;
@@ -124,7 +174,8 @@ export function MoreMenu() {
 
   // Close the menu if the action list drops to zero (e.g. session
   // switched away mid-open). Without this, the open button would
-  // outlive its trigger.
+  // outlive its trigger. Folded controls are part of `items`, so a menu
+  // that only hosts them stays open.
   useEffect(() => {
     if (items.length === 0) setOpen(false);
   }, [items.length]);
@@ -142,7 +193,44 @@ export function MoreMenu() {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  // The toolbar can win its controls back while the menu is open (the window
+  // got wider). The collapsed view has nothing left to show then, so fall back
+  // to the main list instead of an empty submenu.
+  useEffect(() => {
+    if (view === "collapsed" && !hasCollapsed) setView("main");
+  }, [view, hasCollapsed]);
+
   if (items.length === 0) return null;
+
+  const renderSubmenuHeader = (title: string) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px 6px" }}>
+      <button
+        type="button"
+        aria-label={t("Back")}
+        onClick={() => setView("main")}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 24,
+          height: 24,
+          padding: 0,
+          border: "none",
+          borderRadius: 6,
+          background: "none",
+          color: "var(--text-muted)",
+          cursor: "pointer",
+          fontSize: 14,
+          lineHeight: 1,
+        }}
+      >
+        ←
+      </button>
+      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
+        {title}
+      </span>
+    </div>
+  );
 
   return (
     <div
@@ -204,33 +292,7 @@ export function MoreMenu() {
         {view === "channels" ? (
           <div style={{ display: "flex", flexDirection: "column", padding: "4px" }}>
             {/* Submenu header: back + title */}
-            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 4px 6px" }}>
-              <button
-                type="button"
-                aria-label={t("Back")}
-                onClick={() => setView("main")}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 24,
-                  height: 24,
-                  padding: 0,
-                  border: "none",
-                  borderRadius: 6,
-                  background: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                  fontSize: 14,
-                  lineHeight: 1,
-                }}
-              >
-                ←
-              </button>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
-                {t("Notification channel")}
-              </span>
-            </div>
+            {renderSubmenuHeader(t("Notification channel"))}
 
             {/* No notification */}
             <button
@@ -308,52 +370,86 @@ export function MoreMenu() {
               })
             )}
           </div>
+        ) : view === "collapsed" ? (
+          <div style={{ display: "flex", flexDirection: "column", padding: "4px" }}>
+            {renderSubmenuHeader(t("More actions"))}
+            {collapsedEntries.map((entry) => (
+              <MenuRow
+                key={entry.key}
+                icon={entry.icon}
+                label={entry.label}
+                disabled={entry.disabled}
+                onClick={() => {
+                  setOpen(false);
+                  entry.onClick();
+                }}
+              />
+            ))}
+          </div>
         ) : (
           items.map((item) => (
-            <button
+            <MenuRow
               key={item.key}
-              type="button"
+              icon={item.icon}
+              label={item.label}
+              disabled={item.disabled}
               onClick={() => {
-                if (item.openSubmenu) {
-                  setView("channels");
+                if (item.submenu) {
+                  setView(item.submenu);
                   return;
                 }
                 setOpen(false);
                 item.onClick();
               }}
-              disabled={item.disabled}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-                lineHeight: 1,
-                width: "100%",
-                padding: "8px 12px",
-                border: "none",
-                background: "none",
-                color: item.disabled ? "var(--text-dim)" : "var(--text-muted)",
-                cursor: item.disabled ? "not-allowed" : "pointer",
-                fontSize: 12,
-                textAlign: "left",
-                whiteSpace: "nowrap",
-              }}
-              onMouseEnter={(e) => {
-                if (item.disabled) return;
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = "var(--text)";
-              }}
-              onMouseLeave={(e) => {
-                if (item.disabled) return;
-                e.currentTarget.style.background = "none";
-                e.currentTarget.style.color = "var(--text-muted)";
-              }}
-            >
-              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{item.icon}</span>
-              {item.label}
-            </button>
+            />
           ))
         )}
       </AnimatedPopover>
     </div>
+  );
+}
+
+/** One clickable row of the menu. Shared by the main list, the collapsed list
+ *  and (visually) the channel list so the three views stay consistent. */
+function MenuRow({ icon, label, disabled = false, onClick }: {
+  icon: React.ReactNode;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 9,
+        lineHeight: 1,
+        width: "100%",
+        padding: "8px 12px",
+        border: "none",
+        background: "none",
+        color: disabled ? "var(--text-dim)" : "var(--text-muted)",
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontSize: 12,
+        textAlign: "left",
+        whiteSpace: "nowrap",
+      }}
+      onMouseEnter={(e) => {
+        if (disabled) return;
+        e.currentTarget.style.background = "var(--bg-hover)";
+        e.currentTarget.style.color = "var(--text)";
+      }}
+      onMouseLeave={(e) => {
+        if (disabled) return;
+        e.currentTarget.style.background = "none";
+        e.currentTarget.style.color = "var(--text-muted)";
+      }}
+    >
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{icon}</span>
+      {label}
+    </button>
   );
 }
