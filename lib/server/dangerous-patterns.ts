@@ -8,10 +8,12 @@
  */
 import type { DangerousPatternsConfig } from "../shared/config-types";
 import {
-  compileDangerousRules,
+  assembleDangerousRules,
+  buildDangerousRuleSetSnapshot,
   matchDangerousCommand,
-  resolveDangerousRules,
   type CompiledDangerousRule,
+  type DangerousCommandMatch,
+  type DangerousRuleSetSnapshot,
 } from "../shared/dangerous-commands";
 import { readConfig } from "./config";
 import { createLogger } from "./logger";
@@ -34,8 +36,13 @@ function effectiveRules(): CompiledDangerousRule[] {
   const key = `${process.platform}\u0000${JSON.stringify(cfg.rules)}`;
   if (key === cachedKey) return cachedRules;
 
-  const { compiled, invalid } = compileDangerousRules(resolveDangerousRules(process.platform, cfg.rules));
-  for (const rule of invalid) {
+  // One assembly for both consumers: the gate matches `compiled`, and the
+  // settings page lists the same set (built-ins + layer + invalid rules).
+  const { compiled, invalidUserRules } = assembleDangerousRules(
+    process.platform,
+    cfg.rules,
+  );
+  for (const rule of invalidUserRules) {
     log.warn("invalid dangerous pattern, skipping", { ...rule });
   }
   cachedKey = key;
@@ -45,10 +52,21 @@ function effectiveRules(): CompiledDangerousRule[] {
 
 /**
  * Match a command against the dangerous-command rules in force. Returns the
- * rule name of the first match, or null if no rule matched.
+ * rule name of the first match (plus the layer it came from), or null if no
+ * rule matched.
  */
-export function matchDangerousPattern(command: string): { ruleName: string } | null {
+export function matchDangerousPattern(command: string): DangerousCommandMatch | null {
   return matchDangerousCommand(command, effectiveRules());
+}
+
+/**
+ * The effective set as the settings page reads it: this platform's built-in
+ * rules and the user rules that do not compile. Read fresh from `config.yaml`,
+ * so a hand edit shows up as soon as the file changes (the read cache is
+ * mtime + size keyed — no session restart).
+ */
+export function getEffectiveDangerousRuleSet(): DangerousRuleSetSnapshot {
+  return buildDangerousRuleSetSnapshot(process.platform, readConfig().dangerous_patterns.rules);
 }
 
 /**

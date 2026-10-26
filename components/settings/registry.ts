@@ -27,6 +27,7 @@ export type SettingsSectionId =
   | "ui-sounds"
   | "file-preview"
   | "append-system"
+  | "dangerous-commands"
   | "subagent"
   | "retry"
   | "network-proxy"
@@ -65,6 +66,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionSpec[] = [
   { id: "file-preview", labelKey: "File preview limits", group: "appearance" },
 
   { id: "append-system", labelKey: "System Prompt", group: "agent" },
+  { id: "dangerous-commands", labelKey: "Dangerous commands", group: "agent" },
   { id: "subagent", labelKey: "Subagent settings", group: "agent" },
   { id: "retry", labelKey: "Agent retry", group: "agent" },
 

@@ -8,6 +8,7 @@ import type { SettingsApply } from "./use-settings-write";
 import type { DirtyReporter } from "./use-unsaved-changes";
 import { ProfileSection } from "./sections/ProfileSection";
 import { AppendSystemSection } from "./sections/AppendSystemSection";
+import { DangerousCommandsSection } from "./sections/DangerousCommandsSection";
 import { RightBarSection } from "./sections/RightBarSection";
 import { FilePreviewSection } from "./sections/FilePreviewSection";
 import { RetrySection } from "./sections/RetrySection";
@@ -51,6 +52,9 @@ export const SETTINGS_PAGES = {
       onDirtyChange={reportDirty}
       pageCache={pageCache}
     />
+  ),
+  "dangerous-commands": ({ pageCache }) => (
+    <DangerousCommandsSection pageCache={pageCache} />
   ),
   subagent: ({ pageCache }) => <SubagentSection pageCache={pageCache} />,
   retry: ({ pageCache }) => <RetrySection pageCache={pageCache} />,

@@ -22,6 +22,7 @@
 
 import type { SettingsSectionId } from "@/components/settings/registry";
 import type { AgentRetryConfig } from "@/lib/shared/agent-settings-types";
+import type { DangerousRuleSetSnapshot } from "@/lib/shared/dangerous-commands";
 import type { SubagentProfile } from "@/lib/shared/subagent";
 
 /** The disk state of `~/.pi/agent/APPEND_SYSTEM.md`, as `/api/append-system` returns it. */
@@ -42,6 +43,7 @@ export interface AppendSystemFile {
  */
 export const SETTINGS_PAGE_DATA_KEYS = [
   "append-system",
+  "dangerous-commands",
   "subagent",
   "retry",
 ] as const satisfies readonly SettingsSectionId[];
@@ -50,6 +52,7 @@ export type SettingsPageDataKey = (typeof SETTINGS_PAGE_DATA_KEYS)[number];
 
 export interface SettingsPageDataMap {
   "append-system": AppendSystemFile;
+  "dangerous-commands": DangerousRuleSetSnapshot;
   subagent: SubagentProfile[];
   retry: AgentRetryConfig;
 }

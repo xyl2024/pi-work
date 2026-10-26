@@ -111,6 +111,24 @@ export function defaultDangerousRules(platform: string): readonly DangerousPatte
 }
 
 /**
+ * The two layers a rule can come from: the user's `config.yaml` list, or the
+ * built-in floor underneath it (`lib/shared/dangerous-commands.ts` keeps that
+ * floor). The "try a command" result reports which layer fired so the settings
+ * page can point at the right list.
+ */
+export type DangerousRuleSource = "user" | "builtin";
+
+/** A rule together with the layer it came from. */
+export interface SourcedDangerousRule extends DangerousPatternRule {
+  source: DangerousRuleSource;
+}
+
+/** A rule that may or may not remember the layer it came from. */
+export type MaybeSourcedDangerousRule = DangerousPatternRule & {
+  source?: DangerousRuleSource;
+};
+
+/**
  * The rules actually in force: the user's own rules first, then `platform`'s
  * built-in set. Empty `userRules` (the default config) is not "no gate" — the
  * built-ins are still enforced.
@@ -122,10 +140,34 @@ export function resolveDangerousRules(
   return [...userRules, ...defaultDangerousRules(platform)];
 }
 
+/**
+ * {@link resolveDangerousRules}, but every entry remembers which layer it came
+ * from. Same content and order — it *is* the same merge, annotated — so the
+ * gate and the settings page cannot drift about what is in force. The layer is
+ * what the page's "try a command" answer reports ("your rule" vs "built-in
+ * rule").
+ */
+export function resolveDangerousRulesWithSource(
+  platform: string,
+  userRules: readonly DangerousPatternRule[],
+): SourcedDangerousRule[] {
+  return resolveDangerousRules(platform, userRules).map((rule, index) => ({
+    ...rule,
+    source: index < userRules.length ? ("user" as const) : ("builtin" as const),
+  }));
+}
+
+/** Drop the provenance, leaving the config-shaped rule. */
+function withoutSource({ name, pattern, ignoreCase }: SourcedDangerousRule): DangerousPatternRule {
+  return { name, pattern, ...(ignoreCase ? { ignoreCase } : {}) };
+}
+
 /** A rule whose pattern has been compiled once, ready to match commands. */
 export interface CompiledDangerousRule {
   name: string;
   regex: RegExp;
+  /** Set when the rule came from {@link resolveDangerousRulesWithSource}. */
+  source?: DangerousRuleSource;
 }
 
 /** A rule that could not be compiled — reported, never thrown. */
@@ -135,13 +177,21 @@ export interface InvalidDangerousRule {
   error: string;
 }
 
+/** A compiled rule that matched, plus the layer it came from when known. */
+export interface DangerousCommandMatch {
+  ruleName: string;
+  source?: DangerousRuleSource;
+}
+
 /**
  * Compile `rules` for matching. A pattern that does not compile is handed back
  * in `invalid` instead of throwing: a hand-edited `config.yaml` typo must not
  * take the gate — or the turn — down. The caller decides what to do with the
  * report; an invalid rule simply never reaches the matcher.
  */
-export function compileDangerousRules(rules: readonly DangerousPatternRule[]): {
+export function compileDangerousRules(
+  rules: readonly MaybeSourcedDangerousRule[],
+): {
   compiled: CompiledDangerousRule[];
   invalid: InvalidDangerousRule[];
 } {
@@ -149,7 +199,11 @@ export function compileDangerousRules(rules: readonly DangerousPatternRule[]): {
   const invalid: InvalidDangerousRule[] = [];
   for (const rule of rules) {
     try {
-      compiled.push({ name: rule.name, regex: new RegExp(rule.pattern, rule.ignoreCase ? "i" : "") });
+      compiled.push({
+        name: rule.name,
+        regex: new RegExp(rule.pattern, rule.ignoreCase ? "i" : ""),
+        ...(rule.source ? { source: rule.source } : {}),
+      });
     } catch (err) {
       invalid.push({ name: rule.name, pattern: rule.pattern, error: String(err) });
     }
@@ -159,14 +213,73 @@ export function compileDangerousRules(rules: readonly DangerousPatternRule[]): {
 
 /**
  * Match a command against compiled `rules`; the first match wins. Pure: no
- * config, no I/O, no logging.
+ * config, no I/O, no logging. `source` is only present when the rules were
+ * assembled with provenance (the settings page's view of the effective set).
  */
 export function matchDangerousCommand(
   command: string,
   compiled: readonly CompiledDangerousRule[],
-): { ruleName: string } | null {
+): DangerousCommandMatch | null {
   for (const rule of compiled) {
-    if (rule.regex.test(command)) return { ruleName: rule.name };
+    if (rule.regex.test(command)) {
+      return { ruleName: rule.name, ...(rule.source ? { source: rule.source } : {}) };
+    }
   }
   return null;
+}
+
+/**
+ * The effective rule set, resolved and compiled once:
+ *
+ *   • `rules` — user rules first, then the platform's built-ins, each tagged
+ *     with its layer;
+ *   • `compiled` — the matcher's input (invalid patterns are absent);
+ *   • `invalidUserRules` — the user rules that failed to compile.
+ *
+ * The gate and the settings page both read the set through this one function,
+ * so "what the page lists" and "what the gate matches" cannot be two answers.
+ */
+export interface EffectiveDangerousRules {
+  rules: SourcedDangerousRule[];
+  compiled: CompiledDangerousRule[];
+  invalidUserRules: InvalidDangerousRule[];
+}
+
+export function assembleDangerousRules(
+  platform: string,
+  userRules: readonly DangerousPatternRule[],
+): EffectiveDangerousRules {
+  const rules = resolveDangerousRulesWithSource(platform, userRules);
+  const { compiled, invalid } = compileDangerousRules(rules);
+  return { rules, compiled, invalidUserRules: invalid };
+}
+
+/**
+ * The read side of the dangerous-command config, as the settings page shows it:
+ * the platform's built-in floor and the user rules that do not compile.
+ *
+ * A broken user rule is reported here instead of being dropped at match time:
+ * a hand edit used to leave nothing but a server log line, which read as "the
+ * rule is active" while it never matched anything.
+ */
+export interface DangerousRuleSetSnapshot {
+  platform: string;
+  /** The built-in floor, in matching order. Read-only in the page. */
+  builtins: DangerousPatternRule[];
+  /** User rules that failed to compile, in config order. */
+  invalidUserRules: { name: string; error: string }[];
+}
+
+export function buildDangerousRuleSetSnapshot(
+  platform: string,
+  userRules: readonly DangerousPatternRule[],
+): DangerousRuleSetSnapshot {
+  const { rules, invalidUserRules } = assembleDangerousRules(platform, userRules);
+  return {
+    platform,
+    // Exactly the built-in layer of the set the gate matches — not a second
+    // call to `defaultDangerousRules` that could drift from it.
+    builtins: rules.filter((rule) => rule.source === "builtin").map(withoutSource),
+    invalidUserRules: invalidUserRules.map(({ name, error }) => ({ name, error })),
+  };
 }

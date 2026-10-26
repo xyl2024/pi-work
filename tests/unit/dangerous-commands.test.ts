@@ -4,10 +4,12 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BASH_DANGEROUS_RULES,
   DEFAULT_POWERSHELL_DANGEROUS_RULES,
+  buildDangerousRuleSetSnapshot,
   compileDangerousRules,
   defaultDangerousRules,
   matchDangerousCommand,
   resolveDangerousRules,
+  resolveDangerousRulesWithSource,
   type CompiledDangerousRule,
 } from "@/lib/shared/dangerous-commands";
 import type { DangerousPatternRule } from "@/lib/shared/config-types";
@@ -199,6 +201,85 @@ describe("resolveDangerousRules", () => {
     const rules = resolveDangerousRules("linux", [shouty]);
 
     blocked(withUserRules(rules), "echo DANGER", "shouty");
+  });
+});
+
+// ── Which layer a match came from ─────────────────────────────────────────
+//
+// The settings page marks a match "your rule" or "built-in rule", so the
+// effective set has to remember where each entry came from. The matching
+// order itself is unchanged: user rules first, built-ins after, first match
+// wins.
+
+describe("resolveDangerousRulesWithSource", () => {
+  const compiledWithSource = (platform: string, userRules: readonly DangerousPatternRule[]) =>
+    compiled(resolveDangerousRulesWithSource(platform, userRules));
+
+  it("reports a user-rule hit as the user's, and still lets their name win a tie", () => {
+    const rules = compiledWithSource("linux", [{ name: "my-rm", pattern: "rm -rf" }]);
+
+    expect(matchDangerousCommand("rm -rf /", rules)).toEqual({
+      ruleName: "my-rm",
+      source: "user",
+    });
+  });
+
+  it("reports a built-in hit as built-in, including the Windows-only set", () => {
+    const rules = compiledWithSource("win32", []);
+
+    expect(matchDangerousCommand("Remove-Item -Recurse -Force C:\\x", rules)).toEqual({
+      ruleName: "Remove-Item -Recurse -Force",
+      source: "builtin",
+    });
+    expect(matchDangerousCommand("git status", rules)).toBeNull();
+  });
+
+  it("keeps the same rule content and order as the unsourced assembly", () => {
+    const userRules: DangerousPatternRule[] = [{ name: "custom", pattern: "custom" }];
+
+    expect(resolveDangerousRulesWithSource("darwin", userRules)).toEqual(
+      resolveDangerousRules("darwin", userRules).map((rule, index) => ({
+        ...rule,
+        source: index === 0 ? "user" : "builtin",
+      })),
+    );
+  });
+
+  it("marks the platform's built-ins without leaking the Windows set elsewhere", () => {
+    const linuxBuiltins = resolveDangerousRulesWithSource("linux", []).filter(
+      (rule) => rule.source === "builtin",
+    );
+
+    expect(linuxBuiltins.map((rule) => rule.name)).toEqual(
+      DEFAULT_BASH_DANGEROUS_RULES.map((rule) => rule.name),
+    );
+  });
+});
+
+// ── The read side of the config ───────────────────────────────────────────
+
+describe("buildDangerousRuleSetSnapshot", () => {
+  it("returns the platform's built-in set and the user rules that do not compile", () => {
+    const snapshot = buildDangerousRuleSetSnapshot("win32", [
+      { name: "broken", pattern: "(" },
+      { name: "fine", pattern: "fine" },
+    ]);
+
+    expect(snapshot.platform).toBe("win32");
+    expect(snapshot.builtins).toEqual([...defaultDangerousRules("win32")]);
+    // Reported, not silently dropped: the page needs to mark the rule.
+    expect(snapshot.invalidUserRules).toEqual([
+      { name: "broken", error: expect.any(String) },
+    ]);
+  });
+
+  it("leaves the PowerShell set out on platforms that do not have it", () => {
+    const snapshot = buildDangerousRuleSetSnapshot("linux", []);
+
+    expect(snapshot.builtins.map((rule) => rule.name)).not.toContain(
+      DEFAULT_POWERSHELL_DANGEROUS_RULES[0].name,
+    );
+    expect(snapshot.invalidUserRules).toEqual([]);
   });
 });
 
