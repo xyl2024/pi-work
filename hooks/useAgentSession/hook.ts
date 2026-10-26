@@ -28,7 +28,7 @@ import {
 import { useAgentSessionTransport } from "./transport";
 import { useAgentSessionData } from "./data";
 import type { SessionEvent, SessionRuntimeInput } from "@/lib/shared/session-events";
-import type { PermissionMode } from "@/lib/shared/permission-mode";
+import { DEFAULT_PERMISSION_MODE, type PermissionMode } from "@/lib/shared/permission-mode";
 import type {
   AgentPhase,
   AgentRuntimeState,
@@ -158,6 +158,13 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
   const [newSessionModel, setNewSessionModelState] = useState<{ provider: string; modelId: string } | null>(null);
+  // The permission mode a not-yet-created session will start in (ADR-0021).
+  // A draft has no session id, so the shield's click has nowhere to be sent
+  // yet: it is remembered here and handed to POST /api/agent/new, which applies
+  // it before the first prompt. Every fresh draft starts at the default — there
+  // is deliberately no per-cwd or global memory to inherit from.
+  const [newSessionPermissionMode, setNewSessionPermissionMode] =
+    useState<PermissionMode>(DEFAULT_PERMISSION_MODE);
   // The user's tool selection state. `[]` ≡ Off, `"all"` ≡ High (every
   // registered tool — sentinel so newly-added tools auto-include), a partial
   // string[] ≡ Custom. New sessions seed it from the cwd preset; existing
@@ -250,6 +257,12 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
 
   const currentModel = currentModelOverride ?? data?.context.model ?? pendingModel ?? null;
   const displayModel = isNew ? newSessionModel : currentModel;
+  // One read for both screens: a draft reports the pick it would hand to the
+  // session it is about to create, a live session reports its hydration / SSE
+  // / optimistic-patch belief.
+  const permissionMode: PermissionMode = isNew
+    ? newSessionPermissionMode
+    : runtimeState.permissionMode;
 
   // Session hydration and the model catalog load independently. loadSession
   // can have captured an empty catalog even when its response arrives last;
@@ -475,6 +488,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
             ...(piImages?.length ? { images: piImages } : {}),
             ...(selectedModel ? { provider: selectedModel.provider, modelId: selectedModel.modelId } : {}),
             thinkingLevel: runtimeState.thinkingLevel,
+            permissionMode: newSessionPermissionMode,
           }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -492,10 +506,15 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
         // not find the session. The event reducer clears this on the first
         // assistant `message_end` and asks the host to refresh exactly once.
         patchRuntime("awaitingFirstAssistant", true);
-        // This mount started life as a draft and is now a real session. Its
-        // permission mode is known without a hydration round trip: a brand-new
-        // session is always `confirm` (the sidecar has nothing for it yet), so
-        // the mirror effect may start reporting this controller's belief.
+        // Carry the draft's mode into the live session. The server applied it
+        // before the first prompt, so no `permission_mode_changed` event will
+        // reach this client (it fired before the SSE stream was connected);
+        // this is the only delivery, and it also feeds the badge mirror below.
+        patchRuntime("permissionMode", newSessionPermissionMode);
+        // This mount started life as a draft and is now a real session. Nothing
+        // was hydrated for it, so the belief patched just above (the draft's pick)
+        // is final: the mirror effect may start reporting this controller's mode
+        // to the cross-session badge store without a REST round trip.
         permissionModeKnownRef.current = true;
         onSessionCreated?.({
           id: realId,
@@ -507,6 +526,11 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
           messageCount: 1,
           firstMessage: message,
           running: false,
+          // Keep the tab strip's fallback badge in step before the mirror effect
+          // has published the mode to the store.
+          ...(newSessionPermissionMode !== DEFAULT_PERMISSION_MODE
+            ? { permissionMode: newSessionPermissionMode }
+            : {}),
         });
       } else if (session) {
         await ensureEventsConnected(session.id);
@@ -528,7 +552,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
       endStreamingStore(streamingKey);
       closeEvents();
     }
-  }, [isNew, newSessionCwd, newSessionModel, currentModel, toolSelection, runtimeState.thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, onSessionCreated, patchRuntime, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
+  }, [isNew, newSessionCwd, newSessionModel, newSessionPermissionMode, currentModel, toolSelection, runtimeState.thinkingLevel, session, closeEvents, connectEvents, ensureEventsConnected, isAgentRunning, onSessionCreated, patchRuntime, refreshSystemPrompt, setAgentPhase, setAgentRunningSync, setCompactingSync, setMessages, setRuntimeError, showToast, streamingKey, t]);
 
   const handleAbort = useCallback(async () => {
     const sid = sessionIdRef.current;
@@ -646,7 +670,13 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   // (through the AgentControls bridge, which calls this same handler).
   const handlePermissionModeChange = useCallback(async (mode: PermissionMode) => {
     const sid = sessionIdRef.current;
-    if (!sid) return;
+    if (!sid) {
+      // Draft: there is nothing to authorize yet, so the choice is carried into
+      // session creation (`handleSend` sends it to /api/agent/new, which applies
+      // it before the first prompt).
+      setNewSessionPermissionMode(mode);
+      return;
+    }
     try {
       await sendAgentCommand(sid, { type: "set_permission_mode", mode });
       // The `permission_mode_changed` event carries the same fact to every
@@ -963,7 +993,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel,
     toolSelection, availableTools, toolsLoading, toolsError,
     thinkingLevel: runtimeState.thinkingLevel,
-    permissionMode: runtimeState.permissionMode,
+    permissionMode,
     systemPrompt,
     currentModel, displayModel, sessionStats,
     isNew,

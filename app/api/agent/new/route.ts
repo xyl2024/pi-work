@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { existsSync } from "fs";
 import { startRpcSession } from "@/lib/server/rpc-manager";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { DEFAULT_PERMISSION_MODE, isPermissionMode } from "@/lib/shared/permission-mode";
 
 const log = createLogger("api/agent/new");
 
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
       modelId: typeof command.modelId === "string" ? command.modelId : undefined,
       toolCount: command.toolNames === "all" ? "all" : Array.isArray(command.toolNames) ? command.toolNames.length : undefined,
       thinkingLevel: typeof command.thinkingLevel === "string" ? command.thinkingLevel : undefined,
+      permissionMode: typeof command.permissionMode === "string" ? command.permissionMode : undefined,
     });
 
     if (!cwd || typeof cwd !== "string") {
@@ -31,9 +33,17 @@ export async function POST(req: Request) {
       log.warn("new agent session rejected", { cwd, reason: "cwd not found", durationMs: elapsedMs(startedAt) });
       return NextResponse.json({ error: `Directory does not exist: ${cwd}` }, { status: 400 });
     }
+    // The new-session screen may hand over the mode the human picked before
+    // there was a session. Validate it here (same explicit enumeration as the
+    // RPC: an unknown value is rejected, never coerced to full access —
+    // ADR-0008) and before creating anything, so a bad payload creates nothing.
+    if (body.permissionMode !== undefined && !isPermissionMode(body.permissionMode)) {
+      log.warn("new agent session rejected", { cwd, reason: "unknown permission mode", durationMs: elapsedMs(startedAt) });
+      return NextResponse.json({ error: `Unknown permission mode: ${String(body.permissionMode)}` }, { status: 400 });
+    }
 
     // Use a one-time key so startRpcSession's lock doesn't conflict with real session ids
-    const { provider, modelId, toolNames, thinkingLevel, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[] | "all"; thinkingLevel?: string; [key: string]: unknown };
+    const { provider, modelId, toolNames, thinkingLevel, permissionMode, ...promptCommand } = command as { provider?: string; modelId?: string; toolNames?: string[] | "all"; thinkingLevel?: string; permissionMode?: unknown; [key: string]: unknown };
 
     const tempKey = `__new__${Date.now()}`;
     const { session, realSessionId } = await startRpcSession(tempKey, "", cwd, toolNames);
@@ -51,6 +61,14 @@ export async function POST(req: Request) {
     // Apply pre-selected thinking level before sending the prompt
     if (thinkingLevel) {
       await session.send({ type: "set_thinking_level", level: thinkingLevel });
+    }
+
+    // Apply the mode picked on the new-session screen before the prompt, so the
+    // very first dangerous command already sees it. `confirm` is the default a
+    // session with no sidecar reads as, so writing it would only create a file
+    // that says nothing.
+    if (isPermissionMode(permissionMode) && permissionMode !== DEFAULT_PERMISSION_MODE) {
+      await session.send({ type: "set_permission_mode", mode: permissionMode });
     }
 
     const result = await session.send(promptCommand);

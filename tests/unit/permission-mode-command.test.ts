@@ -57,9 +57,10 @@ describe("the permission-mode palette entry", () => {
     expect(permissionCommand(ctx)?.title).toBe("Switch to confirm dangerous commands");
   });
 
-  it("is absent when no session exists", () => {
-    // A draft has no `setPermissionMode` registered by its ChatWindow: an entry
-    // that cannot do anything is worse than no entry.
+  it("is absent when the active ChatWindow registered no handler", () => {
+    // Defense for the `when()` gate itself: a controller that cannot switch
+    // the mode must not offer an entry that does nothing. (A draft registers
+    // the handler — it picks the mode the session is created with.)
     const ctx = { ...makeContext().ctx, agentControls: { abortStreaming: () => {}, isStreaming: false } } as unknown as CommandContext;
 
     expect(permissionCommand(ctx)).toBeUndefined();

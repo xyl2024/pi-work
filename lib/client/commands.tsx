@@ -179,8 +179,9 @@ export function buildCommands(
       "权限", "完全访问", "确认", "危险命令",
     ],
     icon: <ShieldIcon />,
-    // Only offered once a session exists: `setPermissionMode` is registered by
-    // the active ChatWindow only for a real session.
+    // Offered whenever the active ChatWindow registered a handler — a live
+    // session switches its sidecar-backed mode, the new-session screen picks
+    // the mode the session will be created with.
     when: (c) => !!c.agentControls?.setPermissionMode,
     // Closes over `ctx` like every other command: the palette calls `run()` with
     // no argument (each handler captures the context at build time), so reading

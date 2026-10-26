@@ -265,16 +265,15 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
       abortStreaming: handleAbort,
       isStreaming: agentRunning,
       permissionMode,
-      // No session, no handler: the palette entry hides itself on a draft
-      // instead of offering a switch that has nothing to switch.
-      ...(currentSessionId
-        ? { setPermissionMode: (mode: PermissionMode) => handlePermissionModeChange(mode) }
-        : {}),
+      // Registered for drafts too: on the new-session screen the switch picks
+      // the mode the session is created with (ADR-0021), so the palette entry
+      // has something real to do before a session id exists.
+      setPermissionMode: (mode: PermissionMode) => handlePermissionModeChange(mode),
     }, tabId);
     return () => setAgentControls(null, tabId);
     // Handlers come from useAgentSession (stable useCallback refs); only
     // re-register when the bits that drive `when()` predicates change.
-  }, [isActive, agentRunning, permissionMode, currentSessionId, tabId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isActive, agentRunning, permissionMode, tabId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── AskUserQuestions: when the panel is pending for the active session
   //    we hide the bottom-right button stack — otherwise the row of
@@ -772,11 +771,12 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         thinkingLevel={thinkingLevel}
         onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
         permissionMode={permissionMode}
-        // A draft has no session to authorize, so the shield is not offered;
-        // the border is inert too because a draft is always `confirm`.
-        onPermissionModeToggle={session
-          ? () => { void handlePermissionModeChange(flippedPermissionMode(permissionMode)); }
-          : undefined}
+        // Offered on the new-session screen too: there is no session to
+        // authorize yet, so the pick is carried into creation and applied
+        // before the first prompt (see `handleSend`).
+        onPermissionModeToggle={() => {
+          void handlePermissionModeChange(flippedPermissionMode(permissionMode));
+        }}
         availableThinkingLevels={availableThinkingLevels}
         thinkingLevelMap={currentThinkingLevelMap}
         retryInfo={retryInfo}
