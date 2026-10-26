@@ -255,6 +255,23 @@ export function assembleDangerousRules(
 }
 
 /**
+ * What would happen to a command if it ran now — the answer the settings
+ * page's "try a command" box shows. Three cases, because the gate has three:
+ *
+ *   • `self_protected` — the code-level hard block in
+ *     `lib/server/self-protection.ts` would refuse the command outright. Not
+ *     configurable, and it wins over a rule match exactly as it does in the
+ *     `tool_call` gate (`evaluateDangerousCommand` runs the same check first);
+ *   • `matched` — a rule in force would ask the user for confirmation. `source`
+ *     says which layer fired, so the page can point at the right list;
+ *   • `none` — neither, so the command would run.
+ */
+export type DangerousCommandVerdict =
+  | { kind: "self_protected"; reason: string }
+  | { kind: "matched"; ruleName: string; source: DangerousRuleSource }
+  | { kind: "none" };
+
+/**
  * The read side of the dangerous-command config, as the settings page shows it:
  * the platform's built-in floor and the user rules that do not compile.
  *

@@ -318,16 +318,26 @@ describe("matchDangerousCommand", () => {
  */
 describe("the gate dispatches both agent shells", () => {
   const source = readFileSync(join(process.cwd(), "lib/server/rpc-manager.ts"), "utf8");
+  const evaluator = readFileSync(
+    join(process.cwd(), "lib/server/dangerous-patterns.ts"),
+    "utf8",
+  );
 
   it("matches powershell tool calls, not just bash", () => {
     expect(source).toContain('isToolCallEventType("powershell"');
   });
 
   it("runs the unconditional self-protection block before the promptable rule match", () => {
-    const selfProtection = source.indexOf("matchSelfKillCommand(command)");
-    const dangerousMatch = source.indexOf("matchDangerousPattern(command)");
+    const selfProtection = evaluator.indexOf("matchSelfKillCommand(command)");
+    const dangerousMatch = evaluator.indexOf("matchDangerousPattern(command)");
 
     expect(selfProtection).toBeGreaterThan(-1);
     expect(selfProtection).toBeLessThan(dangerousMatch);
+  });
+
+  it("sends the gate through the evaluation the settings tester also calls", () => {
+    // One evaluator means "the box said it would ask" and "it asked" cannot
+    // drift apart — the settings tester and the tool_call gate share it.
+    expect(source).toContain("evaluateDangerousCommand(command)");
   });
 });

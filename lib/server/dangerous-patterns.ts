@@ -13,10 +13,12 @@ import {
   matchDangerousCommand,
   type CompiledDangerousRule,
   type DangerousCommandMatch,
+  type DangerousCommandVerdict,
   type DangerousRuleSetSnapshot,
 } from "../shared/dangerous-commands";
 import { readConfig } from "./config";
 import { createLogger } from "./logger";
+import { matchSelfKillCommand } from "./self-protection";
 
 const log = createLogger("dangerous-patterns");
 
@@ -57,6 +59,33 @@ function effectiveRules(): CompiledDangerousRule[] {
  */
 export function matchDangerousPattern(command: string): DangerousCommandMatch | null {
   return matchDangerousCommand(command, effectiveRules());
+}
+
+/**
+ * The full answer to "what happens if this command runs?": the self-protection
+ * hard block first, then the promptable rule match.
+ *
+ * This is the one place that order is decided. The `tool_call` gate in
+ * `lib/server/rpc-manager.ts` and the settings page's command tester both call
+ * it, so "the box said it would ask" and "it asked" cannot diverge, and the
+ * tester cannot claim a command is fine while the gate hard-blocks it. The
+ * self-protection half needs this process's pid and listening port, which is
+ * why the verdict is computed here rather than in the browser.
+ */
+export function evaluateDangerousCommand(command: string): DangerousCommandVerdict {
+  const selfKill = matchSelfKillCommand(command);
+  if (selfKill) return { kind: "self_protected", reason: selfKill.reason };
+
+  const match = matchDangerousPattern(command);
+  if (!match) return { kind: "none" };
+  return {
+    kind: "matched",
+    ruleName: match.ruleName,
+    // `effectiveRules()` assembles the set with provenance, so a match always
+    // knows its layer. The floor is the built-in set, which is what a rule
+    // without a layer would have to be.
+    source: match.source ?? "builtin",
+  };
 }
 
 /**

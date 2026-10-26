@@ -30,8 +30,7 @@ import { getRegistry } from "./session-registry";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
 import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
-import { matchDangerousPattern, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
-import { matchSelfKillCommand } from "./self-protection";
+import { evaluateDangerousCommand, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { createPiWorkBashTool, createPiWorkPowerShellTool } from "./pi-shell-tools";
 import { agentToolDenylist } from "./agent-tool-denylist";
 import { notify } from "./notifications";
@@ -1136,30 +1135,26 @@ export async function startRpcSession(
               isToolCallEventType("bash", event) || isToolCallEventType("powershell", event);
             if (!isShellCall) return;
             const command = event.input.command;
-            // Self-protection (hard, code-level): commands that would kill
-            // this very server are blocked unconditionally — no permission
-            // prompt, no per-session allowance, not user-configurable. Its
-            // process-kill patterns are POSIX-shaped (`pkill`, `fuser`,
-            // `$PPID`) and never match PowerShell syntax; its system-down ones
-            // (`shutdown`, `reboot`) apply to both shells, which is why this
-            // runs before the per-shell branches rather than inside one.
-            const selfKill = matchSelfKillCommand(command);
-            if (selfKill) {
-              log.warn("self-protection blocked shell command", { command, reason: selfKill.reason });
+            // Commands that would kill this very server are blocked
+            // unconditionally — no permission prompt, no per-session
+            // allowance, not user-configurable. The rest go to the
+            // confirmation gate.
+            const verdict = evaluateDangerousCommand(command);
+            if (verdict.kind === "self_protected") {
+              log.warn("self-protection blocked shell command", { command, reason: verdict.reason });
               return {
                 block: true,
                 reason: "The command was blocked. Don't try it again and tell the user what you want to do.",
               };
             }
-            const match = matchDangerousPattern(command);
-            if (!match) return;
+            if (verdict.kind !== "matched") return;
             const w = wrapperRef.current;
             if (!w) return;
             const outcome = await w.gates.runPermissionGate({
               toolCallId: event.toolCallId,
-              rule: match.ruleName,
+              rule: verdict.ruleName,
               command,
-              what: `the dangerous-command rule "${match.ruleName}"`,
+              what: `the dangerous-command rule "${verdict.ruleName}"`,
               timeoutMs: getDangerousPatternTimeoutMs(),
             });
             if (outcome.decision === "deny") {
