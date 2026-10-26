@@ -25,7 +25,7 @@ interface CwdPickerProps {
   /** Render only the modal (no trigger button) — for purely programmatic use. */
   hideTrigger?: boolean;
   /**
-   * Render the trigger as its project icon only, with no name. The label is
+   * Render the trigger as its cwd icon only, with no name. The label is
    * the first thing the bottom toolbar gives up when the chat column gets
    * narrow; the full path moves into the tooltip so nothing is lost.
    */

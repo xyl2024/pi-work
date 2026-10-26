@@ -53,7 +53,6 @@ export interface CollapsedMenuEntry {
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
-  disabled?: boolean;
 }
 
 export interface MoreMenuProps {
@@ -62,10 +61,10 @@ export interface MoreMenuProps {
    * Omitted/empty (`undefined`, `[]`) keeps the pre-existing behaviour: no
    * entry point, no extra view.
    */
-  collapsed?: CollapsedMenuEntry[];
+  collapsedItems?: CollapsedMenuEntry[];
 }
 
-export function MoreMenu({ collapsed }: MoreMenuProps = {}) {
+export function MoreMenu({ collapsedItems }: MoreMenuProps) {
   const { t } = useI18n();
   const headerActions = useChatHeaderActions();
   const [open, setOpen] = useState(false);
@@ -73,7 +72,7 @@ export function MoreMenu({ collapsed }: MoreMenuProps = {}) {
   const [channels, setChannels] = useState<ChannelRecord[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const collapsedEntries = collapsed ?? [];
+  const collapsedEntries = collapsedItems ?? [];
 
   // Reset to the main menu every time the menu reopens.
   useEffect(() => {
@@ -378,7 +377,6 @@ export function MoreMenu({ collapsed }: MoreMenuProps = {}) {
                 key={entry.key}
                 icon={entry.icon}
                 label={entry.label}
-                disabled={entry.disabled}
                 onClick={() => {
                   setOpen(false);
                   entry.onClick();
@@ -409,8 +407,8 @@ export function MoreMenu({ collapsed }: MoreMenuProps = {}) {
   );
 }
 
-/** One clickable row of the menu. Shared by the main list, the collapsed list
- *  and (visually) the channel list so the three views stay consistent. */
+/** One clickable row of the menu. Shared by the main list and the collapsed
+ *  list so the two stay consistent. */
 function MenuRow({ icon, label, disabled = false, onClick }: {
   icon: React.ReactNode;
   label: string;

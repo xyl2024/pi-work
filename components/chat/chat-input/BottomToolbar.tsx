@@ -224,9 +224,9 @@ export function BottomToolbar(props: BottomToolbarProps) {
   // leave the `Tooltip` component itself alone (it is used everywhere).
   const modelTooltipMaxWidth = width === null
     ? 420
-    : Math.max(200, Math.min(420, width - 24));
+    : Math.max(0, Math.min(420, width - 24));
 
-  // Opening the project picker from the More menu: the trigger is gone in that
+  // Opening the cwd picker from the More menu: the trigger is gone in that
   // tier, so the modal is opened through its programmatic signal instead.
   const [collapsedCwdOpen, setCollapsedCwdOpen] = useState(false);
 
@@ -236,8 +236,8 @@ export function BottomToolbar(props: BottomToolbarProps) {
   );
 
   // Only the controls that were actually folded out of the row are listed in
-  // the More menu. A wide toolbar passes `[]`, which renders exactly the menu
-  // it rendered before this feature existed.
+  // the More menu. A wide toolbar resolves to no collapsed items, which renders
+  // exactly the menu it rendered before this feature existed.
   const collapsedEntries = useMemo<CollapsedMenuEntry[]>(() => {
     const entries: CollapsedMenuEntry[] = [];
     if (thinkingCollapsed && onThinkingLevelChange) {
@@ -468,7 +468,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
               whiteSpace: "nowrap",
               fontFamily: "var(--font-mono)",
             }}
-            aria-label={t("Thinking level: {level}. Click or scroll to cycle.", { level: currentThinkingDisplay })}
+            aria-label={`${t("Thinking level")}: ${currentThinkingDisplay}`}
           >
             <ThinkingIcon />
             {showThinkingLabel && currentThinkingDisplay}
@@ -594,7 +594,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
             onChange={onNotifyChannelChange}
           />
         )}
-        <MoreMenu collapsed={collapsedEntries} />
+        <MoreMenu collapsedItems={collapsedEntries} />
       </div>
     </div>
   );

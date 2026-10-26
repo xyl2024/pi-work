@@ -28,7 +28,7 @@ export interface ToolbarLayout {
   tier: ToolbarTier;
   /** maxWidth of the model button's name; `null` = keep only the provider icon. */
   modelLabelWidth: number | null;
-  /** False = the project picker shows its icon only (full cwd goes to the tooltip). */
+  /** False = the cwd picker shows its icon only (full path goes to the tooltip). */
   cwdLabelVisible: boolean;
   /** True = the context indicator keeps the ring but drops its token readout. */
   contextBarCompact: boolean;
@@ -48,7 +48,7 @@ export interface ToolbarLayout {
  * Index is the tier: `TOOLBAR_TIER_THRESHOLDS[0] = 700` is the lower bound of
  * tier 0, and so on down to `[4] = 400` for tier 4. Tier 5 has no lower bound.
  *
- * The numbers are measured, not derived: model 220 / project 160 / context bar
+ * The numbers are measured, not derived: model 220 / cwd 160 / context bar
  * ≈75 / thinking and tools ≈31 / round buttons 32, with the "everything is an
  * icon" floor at ≈340–360px. Tier 5 exists because that floor is still wider
  * than the real dual-panel case.
@@ -90,7 +90,7 @@ const TIER_SPECS: Record<ToolbarTier, TierSpec> = {
     buttonGap: 6,
     collapsed: [],
   },
-  // Model name shrinks again; the project name falls back to its icon.
+  // Model name shrinks again; the cwd name falls back to its icon.
   2: {
     modelLabelWidth: 120,
     cwdLabelVisible: false,
@@ -159,8 +159,6 @@ export function resolveToolbarLayout(
   width: number,
   prev: ToolbarLayout | null = null,
 ): ToolbarLayout {
-  if (Number.isNaN(width)) return prev ?? layoutForTier(0);
-
   const natural = tierForWidth(width);
   // Same tier, or narrower than before: degrade immediately.
   if (!prev || natural >= prev.tier) return layoutForTier(natural);
@@ -179,6 +177,9 @@ export function resolveToolbarLayout(
  * The layout used before the first measurement lands (and the SSR default):
  * fully expanded, i.e. the toolbar exactly as it renders today. Starting wide
  * rather than narrow means the first measured frame can only tighten, never
- * flash an empty icon row.
+ * flash a row of bare icons.
+ *
+ * Frozen because it is shared by every toolbar instance; a consumer that
+ * wanted a different plan has to resolve a fresh one, not mutate the default.
  */
-export const INITIAL_TOOLBAR_LAYOUT: ToolbarLayout = layoutForTier(0);
+export const INITIAL_TOOLBAR_LAYOUT: ToolbarLayout = Object.freeze(layoutForTier(0));

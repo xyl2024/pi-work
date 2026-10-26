@@ -109,14 +109,21 @@ describe("resolveToolbarLayout — tiers", () => {
 
 describe("resolveToolbarLayout — tier boundaries", () => {
   it.each([
+    // Both sides of every boundary: exact lower bound, one pixel under it and
+    // one pixel above it.
+    [701, 0],
     [700, 0],
     [699, 1],
+    [621, 1],
     [620, 1],
     [619, 2],
+    [541, 2],
     [540, 2],
     [539, 3],
+    [471, 3],
     [470, 3],
     [469, 4],
+    [401, 4],
     [400, 4],
     [399, 5],
   ])("resolves %ipx to tier %i", (width, tier) => {

@@ -242,8 +242,12 @@ export function ContextUsageBar({ contextUsage, sessionStats, contextComposition
           style={{ transition: "stroke-dashoffset 0.25s ease, stroke 0.2s ease" }}
         />
       </svg>
-      <span style={{ fontWeight: 600, color: ring.color }}>{ring.tokensFmt}</span>
-      {!compact && <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/ {ring.ctxWindowFmt}</span>}
+      {!compact && (
+        <>
+          <span style={{ fontWeight: 600, color: ring.color }}>{ring.tokensFmt}</span>
+          <span style={{ color: "var(--text-dim)", fontSize: 11 }}>/ {ring.ctxWindowFmt}</span>
+        </>
+      )}
     </>
   );
 
