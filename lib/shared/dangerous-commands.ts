@@ -170,6 +170,15 @@ export interface CompiledDangerousRule {
   source?: DangerousRuleSource;
 }
 
+/**
+ * A compiled rule that knows its layer: what the effective set contains, and
+ * what the gate matches. The layer is never optional here, so a verdict can
+ * name the list the rule came from instead of guessing one.
+ */
+export interface CompiledSourcedDangerousRule extends CompiledDangerousRule {
+  source: DangerousRuleSource;
+}
+
 /** A rule that could not be compiled — reported, never thrown. */
 export interface InvalidDangerousRule {
   name: string;
@@ -181,6 +190,11 @@ export interface InvalidDangerousRule {
 export interface DangerousCommandMatch {
   ruleName: string;
   source?: DangerousRuleSource;
+}
+
+/** A match that knows its layer — what a match against the effective set gives. */
+export interface SourcedDangerousCommandMatch extends DangerousCommandMatch {
+  source: DangerousRuleSource;
 }
 
 /**
@@ -215,7 +229,19 @@ export function compileDangerousRules(
  * Match a command against compiled `rules`; the first match wins. Pure: no
  * config, no I/O, no logging. `source` is only present when the rules were
  * assembled with provenance (the settings page's view of the effective set).
+ *
+ * The overload keeps that provenance in the type: matching the effective set
+ * (`CompiledSourcedDangerousRule[]`) yields a match whose layer is known, while
+ * matching a bare rule list keeps the layer optional.
  */
+export function matchDangerousCommand(
+  command: string,
+  compiled: readonly CompiledSourcedDangerousRule[],
+): SourcedDangerousCommandMatch | null;
+export function matchDangerousCommand(
+  command: string,
+  compiled: readonly CompiledDangerousRule[],
+): DangerousCommandMatch | null;
 export function matchDangerousCommand(
   command: string,
   compiled: readonly CompiledDangerousRule[],
@@ -241,7 +267,7 @@ export function matchDangerousCommand(
  */
 export interface EffectiveDangerousRules {
   rules: SourcedDangerousRule[];
-  compiled: CompiledDangerousRule[];
+  compiled: CompiledSourcedDangerousRule[];
   invalidUserRules: InvalidDangerousRule[];
 }
 
@@ -251,7 +277,18 @@ export function assembleDangerousRules(
 ): EffectiveDangerousRules {
   const rules = resolveDangerousRulesWithSource(platform, userRules);
   const { compiled, invalid } = compileDangerousRules(rules);
-  return { rules, compiled, invalidUserRules: invalid };
+  return {
+    rules,
+    // Narrow the shared compiler's optional layer: every rule here came from
+    // `resolveDangerousRulesWithSource`, so its layer is always known. Checked
+    // rather than asserted — a future unsourced path fails here, once, instead
+    // of putting a guessed layer in front of the user.
+    compiled: compiled.map((rule) => {
+      if (!rule.source) throw new Error(`compiled rule "${rule.name}" lost its layer`);
+      return { name: rule.name, regex: rule.regex, source: rule.source };
+    }),
+    invalidUserRules: invalid,
+  };
 }
 
 /**

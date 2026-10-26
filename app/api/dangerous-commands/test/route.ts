@@ -28,12 +28,9 @@ export async function POST(req: Request) {
   if (typeof command !== "string") {
     return NextResponse.json({ error: "command must be a string" }, { status: 400 });
   }
+  const verdict = evaluateDangerousCommand(command);
 
   try {
-    // Nothing to match is the honest answer for an empty command; the page
-    // already short-circuits it without a request.
-    const verdict =
-      command.trim() === "" ? ({ kind: "none" } as const) : evaluateDangerousCommand(command);
     log.info("dangerous command tested", {
       kind: verdict.kind,
       ...(verdict.kind === "matched" ? { ruleName: verdict.ruleName, source: verdict.source } : {}),

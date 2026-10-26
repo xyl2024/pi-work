@@ -11,10 +11,10 @@ import {
   assembleDangerousRules,
   buildDangerousRuleSetSnapshot,
   matchDangerousCommand,
-  type CompiledDangerousRule,
-  type DangerousCommandMatch,
+  type CompiledSourcedDangerousRule,
   type DangerousCommandVerdict,
   type DangerousRuleSetSnapshot,
+  type SourcedDangerousCommandMatch,
 } from "../shared/dangerous-commands";
 import { readConfig } from "./config";
 import { createLogger } from "./logger";
@@ -31,9 +31,9 @@ const log = createLogger("dangerous-patterns");
  * matched command.
  */
 let cachedKey: string | null = null;
-let cachedRules: CompiledDangerousRule[] = [];
+let cachedRules: CompiledSourcedDangerousRule[] = [];
 
-function effectiveRules(): CompiledDangerousRule[] {
+function effectiveRules(): CompiledSourcedDangerousRule[] {
   const cfg: DangerousPatternsConfig = readConfig().dangerous_patterns;
   const key = `${process.platform}\u0000${JSON.stringify(cfg.rules)}`;
   if (key === cachedKey) return cachedRules;
@@ -54,10 +54,10 @@ function effectiveRules(): CompiledDangerousRule[] {
 
 /**
  * Match a command against the dangerous-command rules in force. Returns the
- * rule name of the first match (plus the layer it came from), or null if no
- * rule matched.
+ * rule name of the first match plus the layer it came from, or null if no rule
+ * matched.
  */
-export function matchDangerousPattern(command: string): DangerousCommandMatch | null {
+export function matchDangerousPattern(command: string): SourcedDangerousCommandMatch | null {
   return matchDangerousCommand(command, effectiveRules());
 }
 
@@ -71,21 +71,25 @@ export function matchDangerousPattern(command: string): DangerousCommandMatch | 
  * tester cannot claim a command is fine while the gate hard-blocks it. The
  * self-protection half needs this process's pid and listening port, which is
  * why the verdict is computed here rather than in the browser.
+ *
+ * Self-protection wins on purpose: its process-kill patterns are POSIX-shaped
+ * (`pkill`, `fuser`, `$PPID`) and never match PowerShell syntax, while its
+ * system-down ones (`shutdown`, `reboot`) apply to both agent shells — so the
+ * check belongs before the match, not inside a per-shell branch.
  */
 export function evaluateDangerousCommand(command: string): DangerousCommandVerdict {
+  // Nothing to match: an empty command cannot be a dangerous command. (An
+  // empty *pattern*, by contrast, compiles and matches everything — which is
+  // why the write path refuses one.) The page also skips the request for an
+  // empty box; the rule itself lives here so both answers are the same.
+  if (command.trim() === "") return { kind: "none" };
+
   const selfKill = matchSelfKillCommand(command);
   if (selfKill) return { kind: "self_protected", reason: selfKill.reason };
 
   const match = matchDangerousPattern(command);
   if (!match) return { kind: "none" };
-  return {
-    kind: "matched",
-    ruleName: match.ruleName,
-    // `effectiveRules()` assembles the set with provenance, so a match always
-    // knows its layer. The floor is the built-in set, which is what a rule
-    // without a layer would have to be.
-    source: match.source ?? "builtin",
-  };
+  return { kind: "matched", ruleName: match.ruleName, source: match.source };
 }
 
 /**

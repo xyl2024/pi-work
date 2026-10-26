@@ -9,8 +9,9 @@ import { api } from "./helpers";
  * The three-outcome detail (including a user-rule match, which needs a rule in
  * `config.yaml`) is driven at the route level in
  * `dangerous-commands-test-route.test.ts`; the read/write faces of this
- * endpoint's route live in `dangerous-commands-api.test.ts`. This file only
- * pins that the endpoint is reachable and answers with the contract shape.
+ * endpoint's route live in `dangerous-commands-api.test.ts`. This file pins the
+ * part only real HTTP can show: the verdict survives auth, JSON and the
+ * server-side evaluator, in the contract's shape.
  */
 describe("dangerous command test api", () => {
   it("reports a command self-protection would hard-block", async () => {
@@ -32,14 +33,5 @@ describe("dangerous command test api", () => {
 
     expect(status).toBe(200);
     expect(body).toEqual({ kind: "none" });
-  });
-
-  it("rejects a body without a command string", async () => {
-    const { status } = await api("/api/dangerous-commands/test", {
-      method: "POST",
-      body: JSON.stringify({ command: 42 }),
-    });
-
-    expect(status).toBe(400);
   });
 });

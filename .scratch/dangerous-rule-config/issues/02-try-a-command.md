@@ -29,7 +29,12 @@
 - 契约偏差（相对 spec 里的 `matched.selfProtectionReason?`）：自保护先判且必胜，两个同时成立时
   返回的 `kind` 就是 `self_protected`（自带 `reason`），`matched` 永远拿不到这个字段。为了让契约
   不留下一个永远为空的字段，`DangerousCommandVerdict` 的 `matched` 只有 `ruleName` + `source`；
-  「测试结果与真实行为不分叉」由「同一条判定路径 + 自保护优先」保证，而不是靠一个多余字段。
+  spec 里那句话已同步改写（「测试结果与真实行为不分叉」由同一条判定路径保证）。
+- 来源不再靠猜：生效集的 `compiled` 类型改成 `CompiledSourcedDangerousRule`（`source` 必填），
+  由 `assembleDangerousRules` 逐条校验后产出（丢层就抛，而不是回落到 builtin）；`matchDangerousCommand`
+  加了一条重载，让「匹配生效集」返回带 `source` 的 match。页面拿到的来源就是规则自己的来源。
+- 「空命令＝不命中」只有一条规则，在 `evaluateDangerousCommand` 里；路由只做形状校验，页面只是在
+  空输入时不发请求（不另立第二份「什么叫命中」）。
 - 页面：`components/settings/sections/DangerousCommandsSection.tsx` 底部新增「试一条命令」，输入框 +
   测试按钮（回车同效），空输入不出请求。三档用不同形态：硬拦截红框 + 说明「这一页改不了」+ 服务端给
   的理由；命中为普通卡片 + 规则名等宽 + 「你的规则 / 内置规则」标签 + 「会等你选择，不是拦截」；
@@ -37,7 +42,8 @@
 - i18n：新增词条都在 `lib/shared/i18n-dict/settings.ts`。
 - 测试：`tests/unit/dangerous-commands-test-route.test.ts` 走路由 + 临时数据根，覆盖硬拦截、用户规则
   命中（`source: "user"`）、内置规则命中（`source: "builtin"`）、不命中、自保护压过同串用户规则、
-  空命令、非字符串 400；`tests/unit/dangerous-commands-api.test.ts` 用真实 HTTP 验证硬拦截与不命中。
+  空命令、非字符串 400；`tests/unit/dangerous-commands-test-api.test.ts` 用真实 HTTP 验证硬拦截与
+  不命中（`dangerous-commands-api.test.ts` 是同一路由的 GET/PUT 面，归 03）。
   全量 `pnpm test` 107 文件 / 1337 用例通过；`tsc --noEmit` 与 eslint 干净。
 - 人工 smoke（未做，交给完整功能后统一过）：本页输入 `pkill node` 应落在「硬拦截」而非「不命中」。
 - 未做：03–06（写路由与保存、编辑排序、名字/超时约束、未保存提醒）。

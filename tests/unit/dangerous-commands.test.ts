@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BASH_DANGEROUS_RULES,
   DEFAULT_POWERSHELL_DANGEROUS_RULES,
+  assembleDangerousRules,
   buildDangerousRuleSetSnapshot,
   compileDangerousRules,
   defaultDangerousRules,
@@ -254,6 +255,17 @@ describe("resolveDangerousRulesWithSource", () => {
       DEFAULT_BASH_DANGEROUS_RULES.map((rule) => rule.name),
     );
   });
+
+  it("gives every compiled rule in the effective set a layer", () => {
+    // The settings verdict names the layer instead of guessing one, which is
+    // only honest if the set it matches cannot contain an untagged rule.
+    const { rules, compiled: matcherInput } = assembleDangerousRules("win32", [
+      { name: "mine", pattern: "mine" },
+    ]);
+
+    expect(matcherInput.map((rule) => rule.source)).toEqual(rules.map((rule) => rule.source));
+    expect(matcherInput.map((rule) => rule.name)).toEqual(rules.map((rule) => rule.name));
+  });
 });
 
 // ── The read side of the config ───────────────────────────────────────────
@@ -312,22 +324,21 @@ describe("matchDangerousCommand", () => {
  * The acceptance criterion this file cannot express as a function call is
  * "a destructive PowerShell command actually reaches the gate". The gate is an
  * inline `tool_call` hook in `lib/server/rpc-manager.ts`, which cannot be
- * imported here without dragging in the pi SDK and SQLite, so the dispatch is
+ * imported here without dragging in the pi SDK and SQLite, so its wiring is
  * pinned at the source level — the same approach `interactive-shell.test.ts`
  * takes for its two consumers.
  */
-describe("the gate dispatches both agent shells", () => {
-  const source = readFileSync(join(process.cwd(), "lib/server/rpc-manager.ts"), "utf8");
-  const evaluator = readFileSync(
-    join(process.cwd(), "lib/server/dangerous-patterns.ts"),
-    "utf8",
-  );
+describe("the gate's wiring", () => {
+  const gate = readFileSync(join(process.cwd(), "lib/server/rpc-manager.ts"), "utf8");
+  const evaluator = readFileSync(join(process.cwd(), "lib/server/dangerous-patterns.ts"), "utf8");
 
   it("matches powershell tool calls, not just bash", () => {
-    expect(source).toContain('isToolCallEventType("powershell"');
+    expect(gate).toContain('isToolCallEventType("powershell"');
   });
 
   it("runs the unconditional self-protection block before the promptable rule match", () => {
+    // The order lives in the evaluator now, so the gate and the settings
+    // tester cannot disagree about which of the two wins.
     const selfProtection = evaluator.indexOf("matchSelfKillCommand(command)");
     const dangerousMatch = evaluator.indexOf("matchDangerousPattern(command)");
 
@@ -336,8 +347,6 @@ describe("the gate dispatches both agent shells", () => {
   });
 
   it("sends the gate through the evaluation the settings tester also calls", () => {
-    // One evaluator means "the box said it would ask" and "it asked" cannot
-    // drift apart — the settings tester and the tool_call gate share it.
-    expect(source).toContain("evaluateDangerousCommand(command)");
+    expect(gate).toContain("evaluateDangerousCommand(command)");
   });
 });
