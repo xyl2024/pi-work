@@ -789,8 +789,12 @@ span.linenumber {
   0%, 100% { transform: scale(1); opacity: 1; }
   50%      { transform: scale(1.35); opacity: 0.7; }
 }
+/* Pending-confirmation dot (SessionItem) reuses the keyframe above but carries
+   its own class: the two dots differ in colour/meaning and must stay
+   independently addressable. */
 @media (prefers-reduced-motion: reduce) {
-  .ask-sidebar-pulse, [aria-label="Awaiting your answer"] {
+  .ask-sidebar-pulse, [aria-label="Awaiting your answer"],
+  .permission-sidebar-pulse {
     animation: none !important;
   }
 }

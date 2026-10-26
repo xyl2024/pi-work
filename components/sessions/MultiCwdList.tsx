@@ -14,6 +14,8 @@ import { CwdAliasDialog } from "./CwdAliasDialog";
 import { useCwdIcon, setCwdIcon, initCwdIcons } from "@/hooks/cwdIconStore";
 import { useCwdAlias, setCwdAlias, initCwdAliases } from "@/hooks/cwdAliasStore";
 import { useAllPendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
+import { usePendingPermissionSessionIds } from "@/hooks/usePendingPermissions";
+import { sessionAttentionById, type SessionAttention } from "@/lib/shared/session-attention";
 import { SESSION_PAGE_SIZE_GROUPED, insertActiveSession } from "@/lib/shared/sidebar-paging";
 
 /**
@@ -101,11 +103,16 @@ export function MultiCwdList({
 }: MultiCwdListProps) {
   const { t } = useI18n();
 
-  // Set of sessionIds that currently have an unanswered `ask_user_questions`
-  // request. Read from the module-scoped store so we re-render whenever a
-  // question appears or resolves in any session, not just the visible one.
+  // Which sessions need the user: an unanswered `ask_user_questions` card or a
+  // pending dangerous-command confirmation. Both stores are read here so one
+  // re-render covers every group, and the merge (confirmation outranks
+  // question, one dot per row) is the pure `sessionAttentionById`.
   const pendingQuestions = useAllPendingAskUserQuestions();
-  const pendingQuestionSessionIds = new Set(pendingQuestions.map((p) => p.sessionId));
+  const pendingPermissionSessionIds = usePendingPermissionSessionIds();
+  const attentionBySessionId = sessionAttentionById(
+    pendingQuestions.map((pending) => pending.sessionId),
+    pendingPermissionSessionIds,
+  );
 
   return (
     <div style={{ padding: "4px 8px 8px", minHeight: 80, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -164,7 +171,7 @@ export function MultiCwdList({
             group={displayGroup}
             favoriteIds={favoriteIds}
             selectedSessionId={selectedSessionId}
-            pendingQuestionSessionIds={pendingQuestionSessionIds}
+            attentionBySessionId={attentionBySessionId}
             onHeaderRef={(el) => onCwdHeaderRef(ws.cwd, el)}
             onToggleExpand={() => onToggleExpand(ws.cwd)}
             onSelectSession={onSelectSession}
@@ -216,10 +223,10 @@ interface CwdGroupProps {
   group: CwdSessionsState | undefined;
   favoriteIds: string[];
   selectedSessionId: string | null;
-  /** Set of sessionIds with an unanswered `ask_user_questions` request.
-   *  Owned by the parent so the whole sidebar re-renders in sync when the
-   *  store changes, not just the group that contains the affected session. */
-  pendingQuestionSessionIds: Set<string>;
+  /** Session id → the one attention dot its row shows. Owned by the parent so
+   *  the whole sidebar re-renders in sync when either store changes, not just
+   *  the group that contains the affected session. */
+  attentionBySessionId: ReadonlyMap<string, SessionAttention>;
 
   onHeaderRef: (el: HTMLDivElement | null) => void;
   onToggleExpand: () => void;
@@ -240,7 +247,7 @@ function CwdGroup({
   group,
   favoriteIds,
   selectedSessionId,
-  pendingQuestionSessionIds,
+  attentionBySessionId,
   onHeaderRef,
   onToggleExpand,
   onSelectSession,
@@ -346,7 +353,7 @@ function CwdGroup({
       onDeleted={(id) => onSessionDeleted(id)}
       isFavorited={favoriteIds.includes(s.id)}
       onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(s.id) : undefined}
-      hasPendingQuestion={pendingQuestionSessionIds.has(s.id)}
+      attention={attentionBySessionId.get(s.id)}
     />
   );
 

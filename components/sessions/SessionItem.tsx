@@ -7,6 +7,7 @@ import { SESSION_ROW_HEIGHT_PX } from "@/lib/shared/sidebar-section";
 import { sessionTimeLabel } from "@/lib/shared/session-time";
 import { sessionDisplayTitle } from "@/lib/shared/session-title";
 import { useI18n } from "@/hooks/useI18n";
+import type { SessionAttention } from "@/lib/shared/session-attention";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
 import { PermissionModeBadge } from "../ui/PermissionModeBadge";
@@ -20,13 +21,12 @@ interface SessionItemProps {
   isFavorited?: boolean;
   onToggleFavorite?: () => void;
   /**
-   * True when this session has an unanswered `ask_user_questions` request
-   * in the module store. Renders a small accent dot next to the title so
-   * the user notices pending questions even when they switched tabs. The
-   * sticky panel inside the chat window is the primary surface; this dot
-   * is purely an indicator for sessions not currently focused.
+   * Which "somebody needs you" dot this row shows, if any. The precedence
+   * (a pending command confirmation outranks a pending question) is resolved
+   * before the row renders — see `lib/shared/session-attention.ts` — so this
+   * component only paints the answer.
    */
-  hasPendingQuestion?: boolean;
+  attention?: SessionAttention;
 }
 
 export function SessionItem({
@@ -37,7 +37,7 @@ export function SessionItem({
   onDeleted,
   isFavorited = false,
   onToggleFavorite,
-  hasPendingQuestion = false,
+  attention,
 }: SessionItemProps) {
   const { t } = useI18n();
   const toast = useToast();
@@ -345,7 +345,29 @@ export function SessionItem({
               while the agent is between agent_start and agent_end (replaces
               the old pulsing dot; see pi-running-title-breathe keyframes) */}
           <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }} aria-label={session.running ? `${title} (${t("running")})` : title}>
-            {hasPendingQuestion && (
+            {attention === "permission" && (
+              // Pending-confirmation dot: red rather than the question dot's
+              // amber, because the two ask different things ("approve this
+              // command" vs "answer me"). Same pulse keyframe, its own class
+              // so the reduced-motion rule can target it.
+              <Tooltip content={t("Awaiting command approval")}>
+                <span
+                  aria-label={t("Awaiting command approval")}
+                  className="permission-sidebar-pulse"
+                  style={{
+                    flexShrink: 0,
+                    display: "inline-block",
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    background: "#ef4444",
+                    boxShadow: "0 0 0 2px color-mix(in srgb, #ef4444 20%, transparent)",
+                    animation: "ask-sidebar-pulse 1.6s ease-in-out infinite",
+                  }}
+                />
+              </Tooltip>
+            )}
+            {attention === "question" && (
               // Pending-question dot: distinct color (amber) from the
               // running indicator so users can tell "agent is busy" from
               // "agent is asking me something". Tooltip names it so

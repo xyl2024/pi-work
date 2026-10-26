@@ -182,6 +182,10 @@ _Avoid_: 把 pi 列出来的 `firstMessage` 占位串 `(no messages)` 当标题�
 用户标记的会话，保存在 `favorites.json` 的 sessionIds 中。
 _Avoid_: 用它指代工作目录
 
+**会话行注意指示（Session row attention）**：
+侧栏会话行上一次只显示一个的“需要你”圆点，由 `lib/shared/session-attention.ts` 从两个来源合并：待回答的 `ask_user_questions`（`askUserQuestionsStore`，琥珀色）与待确认的命令执行（`usePendingPermissions` 的队列，红色）。命令确认优先于提问；同一会话的多条请求收敛成一个点。
+_Avoid_: 把“是否需要你”的判断写进 `SessionItem`；把点当作「未读」或「运行中」（运行中看标题呼吸）
+
 ### 子代理
 
 **子代理（Subagent）**：
