@@ -265,7 +265,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           borderRadius: 7,
           overflow: "hidden",
           fontSize: 12,
-          border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
+          border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid transparent",
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
@@ -285,7 +285,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
           borderRadius: 7,
           overflow: "hidden",
           fontSize: 12,
-          border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
+          border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid transparent",
           background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
         }}
       >
