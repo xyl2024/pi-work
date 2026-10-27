@@ -51,6 +51,7 @@ function insert(db: DbModule, ts: number, id = ts): void {
     api: "openai-completions",
     url: "https://api.deepseek.com/v1/chat/completions",
     attempt: 1,
+    callId: null,
     requestBody: `{"id":${id}}`,
     requestHeaders: null,
     status: 200,

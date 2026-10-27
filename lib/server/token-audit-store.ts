@@ -362,6 +362,22 @@ export function listMessageCallMetrics(sessionId: string): MessageCallMetrics[] 
   return [...byMessage.values()];
 }
 
+/**
+ * Logical call ids that produced one assistant message, oldest first. The chat
+ * uses it to reach the captured HTTP request behind a message: `message_id` is
+ * `String(message.timestamp)`, the same key the metrics wrapper stores.
+ */
+export function listMessageCallIds(sessionId: string, messageId: string): string[] {
+  const rows = getTokenAuditDb()
+    .prepare(
+      `SELECT call_id FROM model_calls
+        WHERE session_id = ? AND message_id = ?
+        ORDER BY started_at ASC, id ASC`,
+    )
+    .all(sessionId, messageId) as { call_id: string }[];
+  return rows.map((r) => r.call_id);
+}
+
 const AGG_COLS = `
   COUNT(*)                     AS calls,
   SUM(input_tokens)            AS inputTokens,

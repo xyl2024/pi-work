@@ -45,6 +45,12 @@ export interface LlmAuditContext {
   model: { provider: string; modelId: string; api: string | null } | null;
   /** Retry ordinal, incremented by the wrapper on each provider attempt. */
   attempt: number;
+  /**
+   * Logical model call currently in flight (from the metrics wrapper). Stamped
+   * on every captured request so it can be traced back to the assistant
+   * message that call produced; `null` between calls.
+   */
+  callId: string | null;
 }
 
 // ── Cross-module state ────────────────────────────────────────────────────
@@ -81,8 +87,11 @@ export function getLlmAuditAls(): AsyncLocalStorage<LlmAuditContext> {
 }
 
 /** Run a function (typically `wrapper.send(...)`) inside an audit context. */
-export function runWithLlmAuditContext<T>(ctx: Omit<LlmAuditContext, "model" | "attempt">, fn: () => Promise<T>): Promise<T> {
-  return getAls().run({ ...ctx, model: null, attempt: 0 }, fn);
+export function runWithLlmAuditContext<T>(
+  ctx: Omit<LlmAuditContext, "model" | "attempt" | "callId">,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return getAls().run({ ...ctx, model: null, attempt: 0, callId: null }, fn);
 }
 
 /**
@@ -300,6 +309,12 @@ export function getAuditModelRuntime(runtime: ModelRuntime): ModelRuntime {
     // into the context before the provider request is issued.
     globalThis.__piLlmAuditModelRuntime = wrapModelCallMetrics(wrapModelRuntime(runtime), {
       resolveContext: resolveModelCallContext,
+      // The metrics layer owns the call id; the audit context is what the fetch
+      // patch reads, so publish it here while the call is in flight.
+      bindCallId: (callId) => {
+        const store = getLlmAuditAls().getStore();
+        if (store) store.callId = callId;
+      },
     });
   }
   return globalThis.__piLlmAuditModelRuntime;
@@ -439,6 +454,7 @@ export function installLlmFetchAudit(): void {
     const sessionId = store?.sessionId ?? null;
     const source = store?.source ?? null;
     const attempt = store?.attempt ?? 1;
+    const callId = store?.callId ?? null;
     const cwd = store?.cwd ?? null;
     const sessionName = store?.sessionName ?? null;
     const provider = store?.model?.provider ?? inferProviderFromUrl(url);
@@ -471,6 +487,7 @@ export function installLlmFetchAudit(): void {
           api,
           url: urlString,
           attempt,
+          callId,
           requestBody,
           requestHeaders,
           status,
@@ -499,6 +516,7 @@ export function installLlmFetchAudit(): void {
           api,
           url: urlString,
           attempt,
+          callId,
           requestBody,
           requestHeaders,
           status: null,

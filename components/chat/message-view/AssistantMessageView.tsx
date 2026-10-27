@@ -7,12 +7,13 @@ import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { useToast } from "../../ui/Toast";
 import { exportMessageAsPng, MESSAGE_ACTION_ROW_CLASS } from "@/lib/client/export-message-card";
 import { copyText } from "@/lib/client/clipboard";
+import { downloadMessageRequestBody } from "@/lib/client/request-body-download";
 import { Tooltip } from "../../ui/Tooltip";
 import { MorphToggleIcon } from "../../ui/MorphToggleIcon";
 import { extractImageGallery, type ImageItem } from "@/components/renderers/ImageLightbox";
 import type { ToolDiffStats } from "@/lib/shared/tool-diff-stats";
 import { ReadFileChips } from "../ReadFileChips";
-import { COPY, CHECK, THUMBS_UP, HEART } from "@/lib/client/icon-paths";
+import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
 import { BlockView } from "./blocks";
 import { formatTime, TurnDuration, UsageIcons } from "./utils";
@@ -36,7 +37,8 @@ interface AssistantMessageViewProps {
   turnDiffStats?: ToolDiffStats | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
   cwd?: string | null;
-  sessionId?: string;
+  /** Session id used to resolve the captured request body (null = unknown). */
+  sessionId?: string | null;
   entryId?: string;
 }
 
@@ -55,6 +57,7 @@ function AssistantMessageViewInner({
   turnDiffStats,
   onOpenFile,
   cwd,
+  sessionId,
 }: AssistantMessageViewProps) {
   const { t } = useI18n();
   const toast = useToast();
@@ -80,9 +83,7 @@ function AssistantMessageViewInner({
   const lightbox = useImageLightbox(gallery);
   const [hovered, setHovered] = useState(false);
   const [copied, flashCopied] = useTransientFlag();
-  const [liked, setLiked] = useState(false);
-  const [heartShown, setHeartShown] = useState(false);
-  const heartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const messageRef = useRef<HTMLDivElement>(null);
   const streamStartRef = useRef<number | null>(null);
@@ -121,27 +122,26 @@ function AssistantMessageViewInner({
       });
   };
 
-  const toggleLike = () => {
-    if (liked) {
-      if (heartTimerRef.current) {
-        clearTimeout(heartTimerRef.current);
-        heartTimerRef.current = null;
+  // Download the provider request body that produced this message (captured by
+  // the LLM API audit). "Not recorded" is a normal state for older history, so
+  // it is reported as information rather than as a failure.
+  const downloadRequestBody = async () => {
+    if (!sessionId || downloading) return;
+    setDownloading(true);
+    try {
+      const result = await downloadMessageRequestBody({
+        sessionId,
+        messageId: String(message.timestamp),
+      });
+      if (result === "not-recorded") {
+        toast.show({ kind: "info", message: t("No request body was captured for this message") });
+      } else if (result === "failed") {
+        toast.show({ kind: "error", message: t("Failed to download request body") });
       }
-      setLiked(false);
-      setHeartShown(false);
-    } else {
-      setLiked(true);
-      setHeartShown(true);
-      heartTimerRef.current = setTimeout(() => {
-        setHeartShown(false);
-        heartTimerRef.current = null;
-      }, 700);
+    } finally {
+      setDownloading(false);
     }
   };
-
-  useEffect(() => () => {
-    if (heartTimerRef.current) clearTimeout(heartTimerRef.current);
-  }, []);
 
   const handleExport = async () => {
     const element = messageRef.current;
@@ -314,24 +314,25 @@ function AssistantMessageViewInner({
               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
             >
               {exporting ? (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ flexShrink: 0, animation: "spin 0.8s linear infinite" }} aria-hidden="true">
                   <path d="M12 2a10 10 0 0 1 10 10" />
                 </svg>
               ) : (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                  <polyline points="16 6 12 2 8 6" />
-                  <line x1="12" y1="2" x2="12" y2="15" />
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
               )}
             </button>
           </Tooltip>
         )}
-        {!isStreaming && (
-          <Tooltip content={liked ? t("Unlike") : t("Like")}>
+        {!isStreaming && sessionId && (
+          <Tooltip content={t("Download request body")}>
             <button
-              onClick={toggleLike}
-              aria-label={liked ? t("Unlike") : t("Like")}
+              onClick={downloadRequestBody}
+              disabled={downloading}
+              aria-label={t("Download request body")}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -342,14 +343,24 @@ function AssistantMessageViewInner({
                 background: "none",
                 border: "none",
                 borderRadius: 5,
-                color: liked ? "#f472b6" : "var(--text-dim)",
-                cursor: "pointer",
+                color: "var(--text-dim)",
+                cursor: downloading ? "wait" : "pointer",
                 transition: "color 0.12s",
               }}
-              onMouseEnter={(e) => { if (!liked) e.currentTarget.style.color = "var(--accent)"; }}
-              onMouseLeave={(e) => { if (!liked) e.currentTarget.style.color = "var(--text-dim)"; }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
             >
-              <MorphToggleIcon from={THUMBS_UP} to={HEART} active={heartShown} size={11} strokeWidth={1.8} />
+              {downloading ? (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ flexShrink: 0, animation: "spin 0.8s linear infinite" }} aria-hidden="true">
+                  <path d="M12 2a10 10 0 0 1 10 10" />
+                </svg>
+              ) : (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              )}
             </button>
           </Tooltip>
         )}

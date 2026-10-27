@@ -25,6 +25,8 @@ export interface ProviderCall {
   url: string;
   /** Retry ordinal within a session turn (1-based). */
   attempt: number;
+  /** Logical model call that issued this request (links back to `model_calls`). */
+  callId: string | null;
   /** Full raw request body (JSON), as actually sent. */
   requestBody: string | null;
   /** Request headers as JSON, with sensitive values masked. */
@@ -52,6 +54,7 @@ export interface ProviderCallInsert {
   api: string | null;
   url: string;
   attempt: number;
+  callId: string | null;
   requestBody: string | null;
   requestHeaders: string | null;
   status: number | null;

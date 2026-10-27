@@ -988,6 +988,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     turnDiffStats={opts.turnDiffStats}
                     onOpenFile={opts.onOpenFile}
                     cwd={session?.cwd ?? cwd}
+                    sessionId={session?.id ?? null}
                   />
                 );
                 if (currentRefIdx === -1) return view;
@@ -1274,6 +1275,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 modelIcons={modelIcons}
                 cwd={session?.cwd ?? cwd}
                 onOpenFile={handleOpenFile}
+                sessionId={session?.id ?? null}
               />
             )}
 

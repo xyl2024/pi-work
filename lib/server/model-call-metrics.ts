@@ -54,6 +54,13 @@ export interface WrapModelCallMetricsOptions {
   resolveContext?: ModelCallContextResolver;
   clock?: ModelCallClock;
   record?: (input: ModelCallInsert) => void;
+  /**
+   * Called with the id of the logical call that is now in flight, and with
+   * `null` once it reaches a terminal state. The LLM-API audit layer uses this
+   * to stamp captured HTTP requests with the call id, which is the only link
+   * between a provider request and the assistant message it produced.
+   */
+  bindCallId?: (callId: string | null) => void;
 }
 
 const defaultClock: ModelCallClock = {
@@ -91,6 +98,8 @@ interface CallState {
   finalized: boolean;
   /** Restores the stream's patched `push` once the call is terminal. */
   cleanup: (() => void) | null;
+  /** Unbinds this call id from whatever published it; runs once, at the end. */
+  releaseBinding: (() => void) | null;
 }
 
 type ObservedEvent = {
@@ -125,6 +134,7 @@ function createState(
     lastOutputAt: null,
     finalized: false,
     cleanup: null,
+    releaseBinding: null,
   };
 }
 
@@ -267,6 +277,12 @@ function finish(
       // Cleanup must never affect the business call either.
     }
     state.cleanup = null;
+    try {
+      state.releaseBinding?.();
+    } catch {
+      // Unbinding must never affect the business call either.
+    }
+    state.releaseBinding = null;
   }
 }
 
@@ -394,6 +410,7 @@ export function wrapModelCallMetrics(
   const clock: ModelCallClock = options.clock ?? defaultClock;
   const resolveContext = options.resolveContext ?? (() => null);
   const record = options.record ?? recordModelCall;
+  const bindCallId = options.bindCallId;
   const createCallId = (): string => randomUUID();
 
   const wrapStreamCall = (
@@ -409,6 +426,18 @@ export function wrapModelCallMetrics(
       state = createState(model, resolveContext(context), clock, createCallId, callOptions);
     } catch (error) {
       log.warn("model-call metrics setup failed", { error: String(error) });
+    }
+    if (state && bindCallId) {
+      const boundCallId = state.callId;
+      try {
+        bindCallId(boundCallId);
+        state.releaseBinding = () => bindCallId(null);
+      } catch (error) {
+        log.warn("model-call metrics call id binding failed", {
+          callId: boundCallId,
+          error: String(error),
+        });
+      }
     }
     const fn = Reflect.get(target, method, target) as (...a: unknown[]) => unknown;
     try {

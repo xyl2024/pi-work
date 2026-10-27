@@ -20,9 +20,10 @@ interface Props {
   toolResults?: Map<string, ToolResultMessage>;
   cwd?: string | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
+  sessionId?: string | null;
 }
 
-function StreamingBubbleInner({ tabId, modelNames, modelIcons, toolResults, cwd, onOpenFile }: Props) {
+function StreamingBubbleInner({ tabId, modelNames, modelIcons, toolResults, cwd, onOpenFile, sessionId }: Props) {
   const { isStreaming, streamingMessage } = useStreamingMessage(tabId);
   if (!isStreaming || !streamingMessage) return null;
   return (
@@ -35,6 +36,7 @@ function StreamingBubbleInner({ tabId, modelNames, modelIcons, toolResults, cwd,
         modelIcons={modelIcons}
         cwd={cwd}
         onOpenFile={onOpenFile}
+        sessionId={sessionId}
       />
     </div>
   );

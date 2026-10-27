@@ -56,6 +56,7 @@ const SCHEMA = `
     api               TEXT,
     url               TEXT    NOT NULL,
     attempt           INTEGER NOT NULL DEFAULT 1,
+    call_id           TEXT,
     request_body      TEXT,
     request_headers   TEXT,
     status            INTEGER,
@@ -71,10 +72,25 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_provider_calls_status   ON provider_calls(status);
 `;
 
-/** Backfill columns added after the initial schema for pre-existing DBs. */
+/**
+ * Indexes on columns that older databases only get through `MIGRATIONS`, so
+ * they must be created AFTER the backfill (a `CREATE INDEX` on a missing column
+ * aborts the whole schema step).
+ */
+const POST_MIGRATION_INDEXES: string[] = [
+  "CREATE INDEX IF NOT EXISTS idx_provider_calls_call ON provider_calls(call_id)",
+];
+
+/**
+ * Backfill columns added after the initial schema for pre-existing DBs.
+ * `call_id` links a captured request to the logical model call (and through it
+ * to the assistant message); rows written before the column existed keep NULL
+ * and are simply not downloadable.
+ */
 const MIGRATIONS: string[] = [
   "ALTER TABLE provider_calls ADD COLUMN cwd TEXT",
   "ALTER TABLE provider_calls ADD COLUMN session_name TEXT",
+  "ALTER TABLE provider_calls ADD COLUMN call_id TEXT",
 ];
 
 /**
@@ -96,6 +112,13 @@ function ensureSchema(db: Database.Database): void {
       } catch (e) {
         log.warn("llm-audit migration failed", { migration, error: String(e) });
       }
+    }
+  }
+  for (const index of POST_MIGRATION_INDEXES) {
+    try {
+      db.exec(index);
+    } catch (e) {
+      log.warn("llm-audit index creation failed", { index, error: String(e) });
     }
   }
 }
@@ -205,6 +228,7 @@ interface Row {
   api: string | null;
   url: string;
   attempt: number;
+  call_id: string | null;
   request_body: string | null;
   request_headers: string | null;
   status: number | null;
@@ -227,6 +251,7 @@ function rowToCall(r: Row): ProviderCall {
     api: r.api,
     url: r.url,
     attempt: r.attempt,
+    callId: r.call_id,
     requestBody: r.request_body,
     requestHeaders: r.request_headers,
     status: r.status,
@@ -244,11 +269,11 @@ function normalizeSource(s: string | null): LlmAuditSource {
 
 const INSERT_SQL = `
   INSERT INTO provider_calls
-    (ts, session_id, source, provider, model_id, api, url, attempt,
+    (ts, session_id, source, provider, model_id, api, url, attempt, call_id,
      request_body, request_headers, status, response_headers, response_body,
      error, duration_ms, cwd, session_name)
   VALUES
-    (@ts, @sessionId, @source, @provider, @modelId, @api, @url, @attempt,
+    (@ts, @sessionId, @source, @provider, @modelId, @api, @url, @attempt, @callId,
      @requestBody, @requestHeaders, @status, @responseHeaders, @responseBody,
      @error, @durationMs, @cwd, @sessionName)
 `;
@@ -305,6 +330,21 @@ export function getProviderCall(id: number): ProviderCall | null {
   const db = getLlmAuditDb();
   const row = db.prepare("SELECT * FROM provider_calls WHERE id = ?").get(id) as Row | undefined;
   return row ? rowToCall(row) : null;
+}
+
+/**
+ * Every captured request belonging to the given logical model calls, oldest
+ * first (send order). Used by the chat's "download request body" action, which
+ * resolves the call ids from the token-audit log first.
+ */
+export function listProviderCallsByCallIds(callIds: readonly string[]): ProviderCall[] {
+  if (callIds.length === 0) return [];
+  const db = getLlmAuditDb();
+  const placeholders = callIds.map(() => "?").join(",");
+  const rows = db
+    .prepare(`SELECT * FROM provider_calls WHERE call_id IN (${placeholders}) ORDER BY ts ASC, id ASC`)
+    .all(...callIds) as Row[];
+  return rows.map(rowToCall);
 }
 
 /** Distinct model ids seen in the log (for the panel's model filter). */
