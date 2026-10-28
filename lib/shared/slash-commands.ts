@@ -42,6 +42,56 @@ export function getSlashQuery(value: string, cursor: number): { start: number; q
 }
 
 /**
+ * Ranks slash resources against a typed query so the menu favors items whose
+ * command / name matches before falling back to description-only matches.
+ * Lower scores are better; ties keep the caller's order (with shorter
+ * commands first, so `/skill:implement` beats `/skill:implement-spec` when
+ * both share a prefix). An empty query keeps the input order intact.
+ */
+export function rankSlashResources(resources: readonly SlashResource[], query: string): SlashResource[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...resources];
+
+  const ranked: { item: SlashResource; score: number; order: number }[] = [];
+  resources.forEach((item, order) => {
+    const score = slashMatchScore(item, q);
+    if (score !== null) ranked.push({ item, score, order });
+  });
+
+  ranked.sort(
+    (a, b) =>
+      a.score - b.score ||
+      a.item.command.length - b.item.command.length ||
+      a.order - b.order,
+  );
+  return ranked.map((entry) => entry.item);
+}
+
+/**
+ * 0: command starts with the query (e.g. `/spec` → `spec-report`)
+ * 1: name starts with the query
+ * 2: command matches at a word boundary (`implement-spec` for `spec`)
+ * 3: command / name contains the query anywhere else
+ * 4: only the description contains the query
+ * `null` means the resource doesn't match at all.
+ */
+function slashMatchScore(item: SlashResource, q: string): number | null {
+  const command = item.command.toLowerCase();
+  const name = item.name.toLowerCase();
+  const commandIndex = command.indexOf(q);
+
+  if (commandIndex === 0) return 0;
+  if (name.startsWith(q)) return 1;
+  if (commandIndex > 0) {
+    const separator = command[commandIndex - 1];
+    return /[^a-z0-9]/.test(separator) ? 2 : 3;
+  }
+  if (name.includes(q)) return 3;
+  if (item.description.toLowerCase().includes(q)) return 4;
+  return null;
+}
+
+/**
  * Builds the message body sent to the agent for a slash command:
  *   - `skill` → the native `/skill:<name>` command with trailing args.
  *     pi's AgentSession (prompt / steer / followUp) expands it server-side

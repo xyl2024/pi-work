@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent, RefObject } from "react";
-import { getSlashQuery, type SlashResource } from "@/lib/shared/slash-commands";
+import { getSlashQuery, rankSlashResources, type SlashResource } from "@/lib/shared/slash-commands";
 import { BUILTIN_SLASH_ACTIONS, SLASH_PAGE_SIZE } from "../constants";
 
 export interface UseSlashMenuOptions {
@@ -88,18 +88,8 @@ export function useSlashMenu({
   const filteredSlashResources = useMemo(() => {
     if (!slashMenuOpen || !slashQuery) return [];
     const q = slashQuery.query.toLowerCase();
-    const builtinMatches = BUILTIN_SLASH_ACTIONS.filter(
-      (item) =>
-        item.command.toLowerCase().includes(q) ||
-        item.name.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q),
-    );
-    const matches = slashResources.filter(
-      (item) =>
-        item.command.toLowerCase().includes(q) ||
-        item.name.toLowerCase().includes(q) ||
-        item.description.toLowerCase().includes(q),
-    );
+    const builtinMatches = rankSlashResources(BUILTIN_SLASH_ACTIONS, q);
+    const matches = rankSlashResources(slashResources, q);
     return builtinMatches.length > 0 ? [...builtinMatches, ...matches] : matches;
   }, [slashMenuOpen, slashQuery, slashResources]);
 
