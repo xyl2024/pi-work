@@ -149,29 +149,58 @@ describe("消息来源读取回环", () => {
     expect((ctx.messages[0] as { origin?: unknown }).origin).toBeUndefined();
   });
 
+  it("entry 挂在被压缩掻掉的分支上时，读取结果不带 origin", () => {
+    // 真实压缩语义（pi appendCompaction + reader 的切点规则）：compaction
+    // entry 挂在当前叶后，firstKeptEntryId 指向被保留的第一条 entry；切点
+    // 之前的区域是已被摘要吞掉的部分，其间的 origin entry 随之脱落，后续
+    // 消息不会被错挂。
+    const ctx = load([
+      headerLine("s-1"),
+      userEntry("u1", null, "被压缩的一句"),
+      originEntry("e1", "u1", entry("u1", "u1", CHANNEL_ORIGIN)),
+      assistantEntry("a1", "e1"),
+      JSON.stringify({
+        type: "compaction",
+        id: "c1",
+        parentId: "a1",
+        timestamp: new Date(1700000002000).toISOString(),
+        summary: "摘要",
+        firstKeptEntryId: "a1",
+        tokensBefore: 100,
+      }) + "\n",
+      JSON.stringify({
+        type: "message",
+        id: "u2",
+        parentId: "c1",
+        timestamp: new Date(1700000003000).toISOString(),
+        message: { role: "user", content: [{ type: "text", text: "压缩后" }], timestamp: 1700000003000 },
+      }) + "\n",
+    ])();
+
+    for (const m of ctx.messages) {
+      expect((m as { origin?: unknown }).origin).toBeUndefined();
+    }
+  });
+
   it("别的 customType 不参与归属", () => {
-    const root = sandbox();
-    const dir = path.join(root, "sessions", "--tmp-project--");
-    mkdirSync(dir, { recursive: true });
-    const filePath = path.join(dir, "s.jsonl");
-    const other = JSON.stringify({
+    // 别的 customType entry 真正写进 JSONL（挂在 u1 之后，携带同形状的
+    // origin 数据）：reader 只认 MESSAGE_ORIGIN_ENTRY_TYPE，它不得影响归属。
+    const otherEntry = JSON.stringify({
       type: "custom",
       id: "e0",
-      parentId: null,
+      parentId: "u1",
       timestamp: new Date(1700000000050).toISOString(),
       customType: "some_other_type",
       data: entry("u1", "u1", CHANNEL_ORIGIN),
     }) + "\n";
-    writeFileSync(filePath, [
+    const ctx = load([
       headerLine("s-1"),
       userEntry("u1", null, "第一句"),
-      originEntry("e1", "u1", entry("u1", "u1", CHANNEL_ORIGIN)),
-      assistantEntry("a1", "e1"),
-    ].join(""), "utf8");
-    void other;
-    const sm = SessionManager.open(filePath);
-    const ctx = buildSessionContext(sm.getEntries() as never, sm.getLeafId());
-    const user = ctx.messages[0] as { origin?: unknown };
-    expect(normalizeMessageOrigin(user.origin)).toEqual(CHANNEL_ORIGIN);
+      otherEntry,
+      assistantEntry("a1", "e0"),
+    ])();
+
+    expect(ctx.messages).toHaveLength(2);
+    expect((ctx.messages[0] as { origin?: unknown }).origin).toBeUndefined();
   });
 });

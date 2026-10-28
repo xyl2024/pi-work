@@ -11,6 +11,6 @@ pi SDK 的 `UserMessage` 只有 `role`/`content`/`timestamp`，没有任何可�
 ## Consequences
 
 - 写入点收敛在 `rpc-manager` 的 `dispatch("prompt")`：RPC 命令增加可选 `origin` 字段，由频道 inbound、定时任务 runner、subagent 手动输入路径填好；网页端不传。只有非 web 来源才写 entry，避免 JSONL 膨胀。
-- 会话内 turn 串行，「最近前一条」归属不会竞争；极小概率 prompt 失败导致 origin 错挂到上一条消息，只影响显示层，不影响对话数据。entry 内记录的毫秒时间戳与文本前 80 字符仅作诊断，不参与归属判定。
+- 会话内 turn 串行，「最近前一条」归属不会竞争；极小概率 prompt 失败导致 origin 错挂到上一条消息，只影响显示层，不影响对话数据。entry 内记录的毫秒时间戳仅作诊断；文本前 80 字符除诊断外，还在实时路径被 pending 归属匹配兼用作前缀比对（`rpc-manager` 的 `consumePromptOrigin` 用 `text.startsWith(p.messagePrefix)` 找回排队中的 origin）——历史归属始终只靠消息树位置，这个前缀比对不参与读取回环的判定。
 - origin 随 custom entry 走消息树：分支时自然脱落、压缩时随旧分支消失，与消息生命周期一致。
 - `UserMessage` 上为传输/展示加的可选 `origin?` 字段只存在于 API/SSE 边界，永远不会写回 JSONL 消息体。若上游 pi SDK 将来给 `UserMessage` 增加元数据字段，本决策可重估。

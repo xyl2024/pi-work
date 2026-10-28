@@ -325,7 +325,11 @@ export class AgentSessionWrapper {
     (event as { origin?: MessageOrigin }).origin = consumed.origin;
     void Promise.resolve().then(() => {
       try {
-        if (!this._alive || !this.unsubscribe) return;
+        // 只要会话还活着就补写 entry（appendCustomEntry 走既有 persist 路
+        // 径）：不用 unsubscribe 判断放弃——未 start（如还没人订阅 SSE）
+        // 不代表会话文件写不了，此时放弃会让 origin 永久丢失。persist 通
+        // 道真死了（会话已释放）才会走到 _alive 检查之外，由 catch 兕底。
+        if (!this._alive) return;
         this.inner.sessionManager.appendCustomEntry(MESSAGE_ORIGIN_ENTRY_TYPE, consumed);
       } catch (err) {
         log.warn("failed to append message origin entry", { sessionId: this.sessionId, error: String(err) });

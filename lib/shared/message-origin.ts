@@ -10,13 +10,15 @@
 /** JSONL 里非网页来源用户消息身后那条 custom entry 的 customType（wire 值，钉住）。 */
 export const MESSAGE_ORIGIN_ENTRY_TYPE = "pi_work_message_origin";
 
-/** 每条自定义 entry 的 data 形状：来源本体 + 毫秒时间戳 + 消息文本前 80 字符
- * （后两者仅诊断用，不参与归属判定）。 */
+/** 每条自定义 entry 的 data 形状：来源本体 + 毫秒时间戳 + 消息文本前 80 字符。 */
 export interface MessageOriginEntryData {
   origin: MessageOrigin;
-  /** entry 写入时刻的毫秒时间戳。 */
+  /** entry 写入时刻的毫秒时间戳。仅诊断用，不参与归属判定。 */
   timestamp: number;
-  /** 应写入时刻消息文本的前 80 个码点；仅诊断用。 */
+  /** 应写入时刻消息文本的前 80 个码点。历史归属只靠消息树位置（reader 取
+   * 树序最近的前一条 user message），此字段仅诊断用；但实时 pending 归属
+   * 匹配兼用它做前缀比对（rpc-manager `consumePromptOrigin` 的
+   * `text.startsWith(p.messagePrefix)`），见 ADR-0023。 */
   messagePrefix: string;
 }
 
@@ -88,7 +90,8 @@ export function isMessageOriginEntryData(value: unknown): value is MessageOrigin
   );
 }
 
-/** 「prompt + origin → 待写 entry 数据」：毫秒时间戳 + 文本前 80 字符（仅诊断）。 */
+/** 「prompt + origin → 待写 entry 数据」：毫秒时间戳（仅诊断）+ 文本前 80 字符
+ * （诊断 + 实时 pending 匹配的前缀）。 */
 export function buildMessageOriginEntryData(
   prompt: string,
   origin: MessageOrigin,

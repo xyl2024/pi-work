@@ -1032,6 +1032,21 @@ function reduceReducedSessionEvent(
             ? previous
             : [...previous, normalized]);
       }
+      // 消息来源（ADR-0023）：user message_end 上附带的 origin 合并进本地
+      // 最后一条 user message，形状与 reader 合并后一致（{ ...message, origin }）。
+      // 幂等：已带 origin 的消息不再改写，重放的 message_end（SSE 重连/压缩
+      // 重放）不再生效；本地没有 user message（如频道/定时任务来源、历史已
+      // 重读）时不补建，展示仍靠 reader 重读兜底。
+      if (completed?.role === "user" && event.origin) {
+        next = patchSessionRuntimeState(next, "messages", (previous) => {
+          const idx = previous.findLastIndex((m) => m.role === "user");
+          if (idx === -1) return previous;
+          const existing = previous[idx];
+          if ((existing as { origin?: unknown }).origin !== undefined) return previous;
+          const merged = { ...existing, origin: event.origin } as AgentMessage;
+          return [...previous.slice(0, idx), merged, ...previous.slice(idx + 1)];
+        });
+      }
       if (isAssistant && state.awaitingFirstAssistant) {
         // One shot: clearing the flag here is what makes a replay silent.
         next = patchSessionRuntimeState(next, "awaitingFirstAssistant", false);
