@@ -21,6 +21,7 @@
 
 import { existsSync } from "fs";
 import { runTurnRpcSession, type RunTurnRpcSpec } from "@/lib/server/rpc-manager";
+import type { MessageOrigin } from "@/lib/shared/message-origin";
 import { runSerial } from "@/lib/server/serial-chain";
 import { recordRunEnd, type ScheduledTask } from "./store";
 import { toRunEnd } from "./run-end";
@@ -103,6 +104,14 @@ async function executeRun(task: ScheduledTask, runId: string): Promise<void> {
       // The scheduler always states an explicit selection: the task's own
       // subset, or "all" when it has none. Never "unspecified".
       toolNames: task.toolNames ?? "all",
+      // 消息来源（ADR-0023）：任务触发的 prompt 标记为定时任务来源。id 与名称
+      // 都取自发送时刻的任务记录（快照）：之后改名/删除只影响新消息，历史消息
+      // 保留发送时的名称。prompt 文本本身逐字节不变。
+      origin: {
+        kind: "scheduled-task",
+        taskId: task.id,
+        name: task.name,
+      } satisfies MessageOrigin,
       source: "scheduled",
       timeoutMs: maxLifetimeMs,
       onSession: ({ realSessionId }) => {
