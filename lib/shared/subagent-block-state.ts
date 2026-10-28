@@ -52,6 +52,12 @@ export interface SubagentBlockState {
    * still unfinished: the task is alive in the background.
    */
   waitExpired: boolean;
+  /**
+   * True when the call delegated in the background (`spawn` with `wait_ms: 0`):
+   * the block shows only the tool's result text, never the live panel, because
+   * the caller explicitly asked not to watch the task.
+   */
+  backgrounded: boolean;
 }
 
 export interface SubagentBlockStateInput {
@@ -59,6 +65,8 @@ export interface SubagentBlockStateInput {
   result: ToolResultMessage | undefined;
   /** Whether the tool call itself failed (a tool-level error, not a task status). */
   isError: boolean;
+  /** The call's own input; only the `wait_ms` of a `spawn` is read. */
+  input?: Record<string, unknown>;
 }
 
 /** Details payload the `subagent` tool puts on its result (see `lib/server/subagent-tool.ts`). */
@@ -71,12 +79,16 @@ interface SubagentResultDetails {
   waitExpired?: unknown;
 }
 
-export function deriveSubagentBlockState({ result, isError }: SubagentBlockStateInput): SubagentBlockState {
+export function deriveSubagentBlockState({ result, isError, input }: SubagentBlockStateInput): SubagentBlockState {
   const details = (result?.details ?? null) as SubagentResultDetails | null;
   const status = isSubagentTaskStatus(details?.status) ? details.status : null;
   const hasResultText = !!result && result.content.some((item) => item.type === "text" && item.text.trim().length > 0);
   const terminal = isError || (status !== null && isSubagentTerminalStatus(status));
   const waitExpired = details?.waitExpired === true;
+  // A spawn that asked for `wait_ms: 0` returned at once on purpose: the parent
+  // delegated in the background, so the block shows the tool's result text and
+  // nothing live. A default (or long) wait still shows the panel.
+  const backgrounded = input?.action === "spawn" && input.wait_ms === 0;
   return {
     // A run is only ever inferred from a result object we actually hold: the
     // in-flight partial pi streams while the tool executes, or the final
@@ -87,10 +99,11 @@ export function deriveSubagentBlockState({ result, isError }: SubagentBlockState
     // none. Reading absence as "still running" made a finished subagent show
     // "Subagent running / Waiting for subagent session…" until its slowest
     // sibling finished.
-    running: !!result && !terminal && (waitExpired || !hasResultText),
+    running: !!result && !terminal && !backgrounded && (waitExpired || !hasResultText),
     status,
     childSessionId: details?.childSessionId ?? details?.sessionId ?? null,
     subagentName: details?.subagentName ?? null,
     waitExpired,
+    backgrounded,
   };
 }

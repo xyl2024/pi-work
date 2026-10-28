@@ -20,7 +20,32 @@ describe("deriveSubagentBlockState", () => {
       result: result({ details: { status: "running", childSessionId: "child-1" } }),
       isError: false,
     });
-    expect(state).toMatchObject({ running: true, status: "running", childSessionId: "child-1", subagentName: null, waitExpired: false });
+    expect(state).toMatchObject({ running: true, status: "running", childSessionId: "child-1", subagentName: null, waitExpired: false, backgrounded: false });
+  });
+
+  it("shows only the tool result for a background spawn (wait_ms = 0)", () => {
+    const state = deriveSubagentBlockState({
+      result: result({ details: { status: "running", childSessionId: "child-1", waitExpired: true } }),
+      isError: false,
+      input: { action: "spawn", wait_ms: 0 },
+    });
+    // No live panel: the caller asked not to watch the task it started.
+    expect(state).toMatchObject({ running: false, status: "running", backgrounded: true });
+  });
+
+  it("does not mark a spawn that waits, or another action, as backgrounded", () => {
+    for (const input of [
+      { action: "spawn", wait_ms: 500 },
+      { action: "wait", task_id: "0001", wait_ms: 0 },
+    ]) {
+      const state = deriveSubagentBlockState({
+        result: result({ details: { status: "running", childSessionId: "child-1" } }),
+        isError: false,
+        input,
+      });
+      expect(state.backgrounded).toBe(false);
+      expect(state.running).toBe(true);
+    }
   });
 
   it("shows the waiting state before the child session exists (queued task)", () => {

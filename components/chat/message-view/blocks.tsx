@@ -200,7 +200,7 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   // activity panel (details arrive via in-flight tool_execution_update
   // partials, and via the final result when the caller's wait expired first).
   // Once the task reaches a terminal status the result replaces the panel.
-  const subagentState = isSubagent ? deriveSubagentBlockState({ result, isError }) : null;
+  const subagentState = isSubagent ? deriveSubagentBlockState({ result, isError, input: block.input }) : null;
   const isSubagentRunning = subagentState?.running ?? false;
 
   const header = (
