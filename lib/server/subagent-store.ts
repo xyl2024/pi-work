@@ -76,6 +76,12 @@ const SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_subagent_tasks_child
     ON subagent_tasks(child_session_id);
 
+  -- Task ids are short increasing numbers (see allocateSubagentTaskId);
+  -- this table keeps the high-water mark so an id is never handed out twice.
+  CREATE TABLE IF NOT EXISTS subagent_task_seq (
+    id INTEGER PRIMARY KEY AUTOINCREMENT
+  );
+
   CREATE TABLE IF NOT EXISTS subagent_profiles (
     name           TEXT PRIMARY KEY,
     description    TEXT NOT NULL,
@@ -211,8 +217,22 @@ function mapRow(row: Record<string, unknown>): SubagentTask {
   };
 }
 
+/**
+ * Allocate the next task id: `1`, `2`, `3` …
+ *
+ * A parent session only ever delegates a handful of subagents, so a short
+ * increasing number is enough to address a task and keeps every tool output and
+ * UI label readable (no uuid to copy around). The sequence table is only ever
+ * inserted into, so a pruned task can never hand its id to a different one.
+ */
+function allocateSubagentTaskId(db: Database.Database): string {
+  const info = db.prepare("INSERT INTO subagent_task_seq DEFAULT VALUES").run();
+  return String(info.lastInsertRowid);
+}
+
 export function createSubagentTask(input: {
-  taskId: string;
+  /** Fixed id; omit to allocate the next numeric id. */
+  taskId?: string;
   parentSessionId: string;
   subagentName: string;
   description: string;
@@ -227,12 +247,14 @@ export function createSubagentTask(input: {
   origin?: SubagentTaskOrigin;
 }): SubagentTask {
   const now = Date.now();
-  getSubagentDb().prepare(`
+  const db = getSubagentDb();
+  const taskId = input.taskId ?? allocateSubagentTaskId(db);
+  db.prepare(`
     INSERT INTO subagent_tasks
       (task_id, parent_session_id, child_session_id, subagent_name, description, prompt, status, origin, request_id, config_snapshot, created_at)
     VALUES (@taskId, @parentSessionId, @childSessionId, @subagentName, @description, @prompt, @status, @origin, @requestId, @configSnapshot, @now)
   `).run({
-    taskId: input.taskId,
+    taskId,
     parentSessionId: input.parentSessionId,
     childSessionId: input.childSessionId ?? null,
     subagentName: input.subagentName,
@@ -246,7 +268,7 @@ export function createSubagentTask(input: {
     configSnapshot: input.configSnapshot ?? null,
     now,
   });
-  return getSubagentTask(input.taskId)!;
+  return getSubagentTask(taskId)!;
 }
 
 /** Move a task to a non-terminal status (`creating`, `stopping`, …). */

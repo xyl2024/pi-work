@@ -98,7 +98,7 @@ describe("spawn: stable id, snapshot and independent wait", () => {
     const manager = makeManager({ runTurn: runner.runTurn });
     const progress = manager.spawn({ parentSessionId: "parent-1", description: "explore", prompt: "look around", config: configFor() });
 
-    expect(progress.taskId).toMatch(/^subagent:/);
+    expect(progress.taskId).toMatch(/^[1-9]\d*$/);
     // A free slot admits it at once, so it is already `creating` when spawn
     // returns; the id exists and is persisted either way (queueing is covered
     // by the scheduling tests).
@@ -121,6 +121,22 @@ describe("spawn: stable id, snapshot and independent wait", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await runner.turns[0].settle();
     await manager.idle();
+  });
+
+  it("hands out short numeric ids that keep increasing", () => {
+    const seed = {
+      parentSessionId: "parent-ids",
+      subagentName: "codebase_explorer",
+      description: "explore",
+      prompt: "look around",
+    };
+    const first = createSubagentTask(seed);
+    const second = createSubagentTask(seed);
+
+    // A parent only delegates a handful of subagents, so a counter reads far
+    // better than a uuid in tool output and in copy-pasted task ids.
+    expect(first.taskId).toMatch(/^[1-9]\d*$/);
+    expect(Number(second.taskId)).toBe(Number(first.taskId) + 1);
   });
 
   it("defaults the wait to 15 minutes and does not cancel when it expires", async () => {

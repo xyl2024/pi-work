@@ -17,7 +17,6 @@
  * a requested stop is only reported once the session confirmed it
  * (`confirmStop`).
  */
-import { randomUUID } from "node:crypto";
 import {
   DEFAULT_SUBAGENT_TIMEOUT_MS,
   DEFAULT_SUBAGENT_WAIT_MS,
@@ -824,10 +823,9 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       if (existing) return progressOfRow(existing);
     }
 
-    const taskId = `subagent:${randomUUID()}`;
+    let taskId: string;
     try {
-      createSubagentTask({
-        taskId,
+      taskId = createSubagentTask({
         parentSessionId: input.parentSessionId,
         childSessionId: input.childSessionId,
         subagentName: input.subagentName,
@@ -836,7 +834,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
         origin: input.origin ?? "tool",
         requestId,
         configSnapshot: input.config ? JSON.stringify(input.config) : null,
-      });
+      }).taskId;
     } catch (error) {
       // A concurrent retry can win the unique index between the check above
       // and this insert; return that task instead of failing the retry. Any
