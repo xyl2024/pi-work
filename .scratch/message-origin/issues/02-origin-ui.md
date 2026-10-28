@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 消息头部渲染完全由共享层的来源映射纯函数驱动，组件内无来源判定逻辑
 - [ ] 无 origin 的消息渲染与改动前逐像素一致（头像、昵称、回退昵称「You」、i18n）

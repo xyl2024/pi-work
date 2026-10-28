@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 任务触发的用户消息带定时任务来源
 - [ ] 任务 prompt 与改动前逐字节一致

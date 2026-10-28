@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 共享层四个纯函数各有单元测试（Seam A）：无标记回退到网页端；entry 构造的时间戳与前缀截断规则；映射对四种来源各返回正确的图标/名称/文案；非法数据不抛错、按缺省处理
 - [ ] reader 回环测试（Seam B）：沙箱会话文件里 user message + 紧跟的 origin entry，读取结果 origin 挂在树序最近的前一条 user message 上；无标记消息不带 origin；分支场景下 entry 随消息树脱落

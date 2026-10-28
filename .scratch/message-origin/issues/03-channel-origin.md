@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 频道冷启动与复用会话两条路径的入站消息都带频道来源
 - [ ] `/new` 频道重置命令不受影响，仍按现有机制处理

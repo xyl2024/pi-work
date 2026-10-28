@@ -4,7 +4,7 @@
 
 **Blocked by:** 01, 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 补输入的用户消息带子代理会话来源（父会话 id + 标题快照 + 子会话 id）
 - [ ] 父会话标题是发送时刻快照：之后重命名父会话不影响已有消息的显示
