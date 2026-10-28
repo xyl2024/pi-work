@@ -299,4 +299,9 @@ export const chat = {
   "Model {m}": "模型 {m}",
   "Elapsed {t}": "已运行 {t}",
   "No activity yet": "暂无活动",
+
+  // 消息来源（Message origin）：悬停完整说明。键即映射产物里的 hover.key。
+  "Message from channel {channel}": "来自频道 {channel}",
+  "Message from scheduled task {task}": "来自定时任务 {task}",
+  "Message from session {session}": "来自会话 {session}",
 } as const;

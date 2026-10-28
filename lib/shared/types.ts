@@ -2,6 +2,7 @@
 
 import type { ToolDiffStats } from "./tool-diff-stats";
 import type { PermissionMode } from "./permission-mode";
+import type { MessageOrigin } from "./message-origin";
 
 interface SessionEntryBase {
   type: string;
@@ -55,6 +56,9 @@ export interface UserMessage {
   role: "user";
   content: string | (TextContent | ImageContent)[];
   timestamp?: number;
+  /** 消息来源（缺省 ≡ 网页端）。只活在 API/SSE 边界，永远不写回 JSONL 消息
+   *  体（ADR-0023）；历史消息由 reader 从 custom entry 合并进来。 */
+  origin?: MessageOrigin;
 }
 
 export interface AssistantMessage {

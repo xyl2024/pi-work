@@ -195,4 +195,9 @@ export const EN_TRANSLATIONS = {
   "mcp.problemNotAnObject": "{name} is not a JSON object.",
   "mcp.problemInvalidJson": "{name} is not valid JSON.",
   "mcp.problemMissingTransport": "{name} needs a command or a URL.",
+
+  // Message origin (see lib/shared/message-origin.ts): full hover copy.
+  "Message from channel {channel}": "From channel {channel}",
+  "Message from scheduled task {task}": "From scheduled task {task}",
+  "Message from session {session}": "From session {session}",
 } as const;
