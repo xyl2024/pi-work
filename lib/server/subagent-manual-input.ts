@@ -17,6 +17,8 @@
  * the recorded task row and confirmation of a stop.
  */
 import type { SubagentTaskOrigin, SubagentTaskStatus } from "../shared/types";
+import type { MessageOrigin } from "../shared/message-origin";
+import { readSessionName } from "./session-names";
 import {
   getSubagentTaskByChildSessionId,
   getSubagentTaskByRequestId,
@@ -152,6 +154,17 @@ export function submitSubagentManualPrompt(
   }
   const { parentSessionId } = owner;
 
+  // The message origin is built HERE, at submission time: the parent's title
+  // is the snapshot of the moment the user sent this input, so a later rename
+  // of the parent never rewrites an existing message. An unnamed parent falls
+  // back to its id so the origin stays valid for the shared type guard.
+  const messageOrigin: MessageOrigin = {
+    kind: "subagent-session",
+    parentSessionId,
+    parentSessionTitle: readSessionName(parentSessionId)?.name ?? parentSessionId,
+    childSessionId: input.childSessionId,
+  };
+
   if (input.hasImages) {
     throw new SubagentManualInputError(
       "invalid",
@@ -208,6 +221,7 @@ export function submitSubagentManualPrompt(
       description: manualTaskDescription(message),
       prompt: message,
       origin: "manual",
+      messageOrigin,
       ...(requestId ? { requestId } : {}),
     });
   } catch (error) {

@@ -27,6 +27,7 @@ import {
   type TurnSnapshot,
 } from "./outcome";
 import type { ToolSelection } from "../../shared/types";
+import type { MessageOrigin } from "../../shared/message-origin";
 import type { LlmAuditSource } from "../../shared/llm-audit-types";
 import type { CallPurpose, ModelCallCommandOptions } from "../../shared/token-audit-types";
 
@@ -106,6 +107,13 @@ export interface RunTurnSpec {
   toolNames?: ToolSelection;
   /** Who is running this turn (LLM-audit attribution). Defaults to "user". */
   source?: LlmAuditSource;
+  /**
+   * Optional message origin (ADR-0023) attached to the prompt command: the
+   * session's RPC layer writes the corresponding custom entry and tags the
+   * SSE message_end. Omitted (web) writes nothing — the default for every
+   * caller that does not opt in.
+   */
+  origin?: MessageOrigin;
   /**
    * What this turn's model calls are for (LLM-audit attribution). Omitted lets
    * the session's own default stand (chat) — a channel message names `channel`
@@ -407,7 +415,11 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
 
   try {
     await session.send(
-      { type: "prompt", message: spec.prompt },
+      {
+        type: "prompt",
+        message: spec.prompt,
+        ...(spec.origin ? { origin: spec.origin } : {}),
+      },
       spec.purpose ? { purpose: spec.purpose } : undefined,
     );
   } catch (error) {
