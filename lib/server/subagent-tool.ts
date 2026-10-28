@@ -240,7 +240,7 @@ export const SubagentParams = Type.Object({
   result_limit: Type.Optional(Type.Integer({
     minimum: 1,
     maximum: SUBAGENT_RESULT_WINDOW_MAX,
-    description: `get only: characters of result to return, 1-${SUBAGENT_RESULT_WINDOW_MAX} (default 4000).`,
+    description: `get only: characters of result to return, 1-${SUBAGENT_RESULT_WINDOW_MAX} (default ${SUBAGENT_RESULT_WINDOW_DEFAULT}).`,
   })),
   transcript_offset: Type.Optional(Type.Integer({
     minimum: 0,

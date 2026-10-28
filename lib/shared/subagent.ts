@@ -186,10 +186,14 @@ export const SUBAGENT_LIST_DEFAULT_LIMIT = 10;
 /** Hard cap on one page; larger requests are clamped, not rejected. */
 export const SUBAGENT_LIST_MAX_LIMIT = 50;
 
-/** Default character window for a task result in `get`. */
-export const SUBAGENT_RESULT_WINDOW_DEFAULT = 4_000;
+/**
+ * Default character window for a task result. It also bounds what spawn/wait/
+ * continue hand back, so it is deliberately as large as the hard cap: a normal
+ * subagent report arrives whole instead of truncated at the first page.
+ */
+export const SUBAGENT_RESULT_WINDOW_DEFAULT = 30_000;
 /** Hard cap on one result window; larger requests are clamped. */
-export const SUBAGENT_RESULT_WINDOW_MAX = 20_000;
+export const SUBAGENT_RESULT_WINDOW_MAX = 30_000;
 
 /** Default number of recent tool calls `get` reports. */
 export const SUBAGENT_ACTIVITY_DEFAULT_LIMIT = 20;

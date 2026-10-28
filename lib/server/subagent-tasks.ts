@@ -21,6 +21,7 @@ import { randomUUID } from "node:crypto";
 import {
   DEFAULT_SUBAGENT_TIMEOUT_MS,
   DEFAULT_SUBAGENT_WAIT_MS,
+  SUBAGENT_RESULT_WINDOW_MAX,
   type SubagentProfile,
   type SubagentTaskConfigSnapshot,
 } from "../shared/subagent";
@@ -69,7 +70,11 @@ import {
   type SubagentTaskStatus,
 } from "./subagent-store";
 
-const MAX_RESULT_LENGTH = 20_000;
+/**
+ * A stored result always fills at least one read window, so raising the window
+ * can never expose a cap the window itself cannot serve.
+ */
+const MAX_RESULT_LENGTH = SUBAGENT_RESULT_WINDOW_MAX;
 const SUBAGENT_CUSTOM_ENTRY = "pi_work_subagent";
 
 const log = createLogger("subagent/tasks");
