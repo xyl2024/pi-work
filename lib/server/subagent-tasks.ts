@@ -43,6 +43,7 @@ import {
   failSubagentTask,
   getSubagentTask,
   isSubagentTerminalStatus,
+  listSubagentTasks,
   markSubagentRunning,
   markSubagentStatus,
   reconcileInterruptedSubagentTasks,
@@ -62,6 +63,12 @@ export const SUBAGENT_CANCELLED = "Subagent cancelled";
 
 /** Session-closed wording (kept verbatim from the pre-lifecycle tool). */
 export const SUBAGENT_SESSION_CLOSED_ERROR = "Subagent stopped because the subagent session was closed";
+
+/** Reason recorded when the user's stop-all (or the parent turn's stop) cascades. */
+export const SUBAGENT_PARENT_STOPPED = "Subagent stopped because the parent session was stopped";
+
+/** Reason recorded when deleting the parent session cancels its unfinished tasks. */
+export const SUBAGENT_PARENT_DELETED = "Subagent stopped because the parent session was deleted";
 
 /**
  * How a child session's system prompt is built. An inheriting profile gets the
@@ -144,9 +151,8 @@ export interface WaitSubagentTaskOptions {
   /**
    * Stop the task if this fires while the caller is still waiting. A caller
    * that already returned owns no stop. Session-level entry points (the user's
-   * stop-all, session deletion) call `stop()` directly; they are being wired in
-   * the cancel/stop-all issue, so today this is the only stop the tool path
-   * contributes.
+   * stop-all, session deletion) call `stopAll()` directly; this option stays
+   * the tool path's own contribution for a spawn whose wait was abandoned.
    */
   stopOnAbort?: { signal: AbortSignal; reason: string };
   /**
@@ -155,6 +161,12 @@ export interface WaitSubagentTaskOptions {
    * return promptly, but the task keeps running and holds its slot.
    */
   observeAbort?: AbortSignal;
+}
+
+/** What a session-level stop reached, and whether its window is still open. */
+export interface StopAllSubagentResult {
+  stopped: number;
+  stopping: boolean;
 }
 
 export interface SubagentTaskManager {
@@ -167,6 +179,14 @@ export interface SubagentTaskManager {
    * overwrite a finished result); a queued task is cancelled without starting.
    */
   stop(taskId: string, reason?: string): void;
+  /**
+   * Stop every unfinished task of one parent (running and queued) and refuse
+   * new spawns for that parent until the last stop is confirmed. Used by the
+   * user's parent-session stop and by parent-session deletion.
+   */
+  stopAll(parentSessionId: string, reason?: string): StopAllSubagentResult;
+  /** True while a stop-all for this parent still has tasks to confirm. */
+  isStopping(parentSessionId: string): boolean;
   /** The persisted row, or null. */
   get(taskId: string): SubagentTask | null;
   /**
@@ -327,6 +347,13 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
   /** FIFO of task ids waiting for a slot. */
   const queue: string[] = [];
   let active = 0;
+  /**
+   * Parents whose stop-all is still waiting for confirmations. A spawn or a
+   * continue during this window is refused: the user asked for everything to
+   * stop, so starting (or joining) a task now would silently defeat the stop.
+   * Cleared as soon as the parent has no unfinished managed task left.
+   */
+  const stoppingParents = new Set<string>();
 
   const progressOf = (task: RunningTask): SubagentTaskProgress => ({
     taskId: task.taskId,
@@ -365,7 +392,17 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     running.delete(task.taskId);
     task.resolveDone();
     emit(task);
+    releaseParentStopIfIdle(task.parentSessionId);
     pump();
+  };
+
+  /** A stop-all ends when its last task reached a terminal state. */
+  const releaseParentStopIfIdle = (parentSessionId: string) => {
+    if (!stoppingParents.has(parentSessionId)) return;
+    for (const task of running.values()) {
+      if (task.parentSessionId === parentSessionId && !task.finished) return;
+    }
+    stoppingParents.delete(parentSessionId);
   };
 
   const finishTerminal = (task: RunningTask, status: SubagentTaskStatus, error?: string) => {
@@ -505,6 +542,11 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
   };
 
   const spawn = (input: SpawnSubagentTaskInput): SubagentTaskProgress => {
+    if (stoppingParents.has(input.parentSessionId)) {
+      throw new Error(
+        "The parent session is stopping all subagent tasks; wait for the stop to finish before spawning a new one.",
+      );
+    }
     const taskId = `subagent:${randomUUID()}`;
     createSubagentTask({
       taskId,
@@ -628,6 +670,28 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     }
   };
 
+  const stopAll = (parentSessionId: string, reason = SUBAGENT_PARENT_STOPPED): StopAllSubagentResult => {
+    // Enter the stopping window before touching any row: a spawn racing this
+    // call (after an await in the tool path) must be refused, not queued up
+    // behind a stop the user already asked for.
+    stoppingParents.add(parentSessionId);
+    let stopped = 0;
+    try {
+      // Rows are the authority: they also cover a non-terminal row this process
+      // does not manage (a stale row is settled honestly as cancelled).
+      for (const row of listSubagentTasks(parentSessionId)) {
+        if (isSubagentTerminalStatus(row.status)) continue;
+        stop(row.taskId, reason);
+        stopped += 1;
+      }
+    } finally {
+      // Never leave the parent wedged in a stopping window after the call: if
+      // tasks remain unfinished the window stays (honestly), otherwise it ends.
+      releaseParentStopIfIdle(parentSessionId);
+    }
+    return { stopped, stopping: stoppingParents.has(parentSessionId) };
+  };
+
   const idle = async () => {
     while (running.size > 0) {
       await Promise.all([...running.values()].map((task) => task.done));
@@ -638,6 +702,8 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     spawn,
     wait,
     stop,
+    stopAll,
+    isStopping: (parentSessionId) => stoppingParents.has(parentSessionId),
     get: (taskId) => getSubagentTask(taskId),
     liveStatus: (taskId) => running.get(taskId)?.status ?? null,
     idle,
@@ -657,6 +723,30 @@ export function getSubagentTaskManager(): SubagentTaskManager {
     });
   }
   return globalThis.__piSubagentTaskManager;
+}
+
+/**
+ * The already-created manager, or null. Session entry points that merely need
+ * to cascade a stop (parent abort, parent deletion) use this so they never
+ * create a manager — and never trigger startup reconciliation — as a side
+ * effect of stopping. With no manager there are no live tasks to stop.
+ */
+export function getExistingSubagentTaskManager(): SubagentTaskManager | null {
+  return globalThis.__piSubagentTaskManager ?? null;
+}
+
+/**
+ * Stop every unfinished task of a parent, if this process manages any. This is
+ * the one session-level stop used by the parent's abort command and by parent
+ * deletion, so both reach the same rules as the tool's `cancel` action.
+ */
+export function stopAllSubagentTasksForParent(
+  parentSessionId: string,
+  reason = SUBAGENT_PARENT_STOPPED,
+): StopAllSubagentResult {
+  const manager = getExistingSubagentTaskManager();
+  if (!manager) return { stopped: 0, stopping: false };
+  return manager.stopAll(parentSessionId, reason);
 }
 
 /** Test seam: replace / clear the process-wide manager. */

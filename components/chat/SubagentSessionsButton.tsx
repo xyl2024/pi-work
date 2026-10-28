@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
+import { useToast } from "@/components/ui/Toast";
 import type { SubagentTaskStatus, SubagentTaskSummary } from "@/lib/shared/types";
 import { GrokBot } from "@/components/grokbot/GrokBot";
 import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-profiles-store";
@@ -12,6 +13,14 @@ interface Props {
   /** Incremented by the parent session's subagent tool event stream. */
   refreshKey: number;
   onOpenSession: (sessionId: string) => void;
+  /**
+   * True while the parent turn is running. In that window the input's stop
+   * button is the total stop (it stops the parent turn and cascades), so the
+   * popover does not offer a second, redundant entry. Once the parent turn has
+   * ended and background tasks remain, the popover owns the independent
+   * stop-all entry instead of occupying the send button.
+   */
+  parentIsStreaming?: boolean;
 }
 
 const STATUS_KEYS: Record<SubagentTaskStatus, string> = {
@@ -36,13 +45,15 @@ const STATUS_COLORS: Record<SubagentTaskStatus, string> = {
   interrupted: "#f59e0b",
 };
 
-export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSession }: Props) {
+export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSession, parentIsStreaming = false }: Props) {
   const { t } = useI18n();
+  const { show: showToast } = useToast();
   const profiles = useSubagentProfiles();
   const [open, setOpen] = useState(false);
   const [tasks, setTasks] = useState<SubagentTaskSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [stoppingAll, setStoppingAll] = useState(false);
   const loadedRef = useRef(false);
   const lastRefreshKeyRef = useRef(refreshKey);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -138,6 +149,26 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
     onOpenSession(sessionId);
   };
 
+  // The same task manager rule the parent's abort command reaches: a stop-all
+  // request is not a claim that the tasks already stopped. The list reload
+  // shows `stopping` until each child session confirms, then `cancelled`.
+  const handleStopAll = useCallback(async () => {
+    if (!parentSessionId || stoppingAll) return;
+    setStoppingAll(true);
+    try {
+      const response = await fetch(
+        `/api/sessions/${encodeURIComponent(parentSessionId)}/subagents/stop-all`,
+        { method: "POST" },
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await loadTasks();
+    } catch {
+      showToast({ kind: "error", message: t("Failed to stop subagent tasks") });
+    } finally {
+      setStoppingAll(false);
+    }
+  }, [loadTasks, parentSessionId, showToast, stoppingAll, t]);
+
   const label = t("SubAgent");
   const disabled = !parentSessionId;
 
@@ -219,8 +250,33 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
             zIndex: 20,
           }}
         >
-          <div style={{ padding: "5px 8px 7px", fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>
-            {t("Subagent sessions")}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "5px 8px 7px" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)" }}>
+              {t("Subagent sessions")}
+            </span>
+            {hasActiveTask && !parentIsStreaming && (
+              <button
+                type="button"
+                onClick={() => void handleStopAll()}
+                disabled={stoppingAll}
+                title={t("Stop all subagent tasks")}
+                style={{
+                  flexShrink: 0,
+                  padding: "2px 8px",
+                  border: "1px solid rgba(239,68,68,0.35)",
+                  borderRadius: 4,
+                  background: "transparent",
+                  color: stoppingAll ? "var(--text-dim)" : "#ef4444",
+                  font: "inherit",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  lineHeight: 1.6,
+                  cursor: stoppingAll ? "default" : "pointer",
+                }}
+              >
+                {stoppingAll ? t("Stopping") : t("Stop all")}
+              </button>
+            )}
           </div>
           {loading ? (
             <div style={{ padding: "12px 8px", color: "var(--text-dim)", fontSize: 11 }}>

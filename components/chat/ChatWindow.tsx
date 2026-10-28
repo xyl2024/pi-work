@@ -1337,6 +1337,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
             parentSessionId={session?.id ?? currentSessionId}
             refreshKey={subagentRefreshKey}
             onOpenSession={onOpenSession}
+            parentIsStreaming={agentRunning}
           />
           <Tooltip content={t("Collapse all")}>
             <button

@@ -29,6 +29,7 @@ import { celebrateTool } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
 import { subagentTool, buildSubagentSystemPromptBlock } from "./subagent-tool";
+import { stopAllSubagentTasksForParent, SUBAGENT_PARENT_STOPPED } from "./subagent-tasks";
 import { SUBAGENT_TOOL_NAME, LEGACY_SPAWN_SUBAGENT_TOOL_NAME } from "../shared/subagent";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
 import { evaluateDangerousCommand, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
@@ -566,6 +567,16 @@ export class AgentSessionWrapper {
       }
 
       case "abort":
+        // The user's stop covers the whole delegation: the parent turn and
+        // every unfinished child task (running and queued). Stopping the tasks
+        // first also closes the spawn window before the parent turn unwinds,
+        // so a tool call racing the stop cannot start new child work. A child
+        // session's own abort (a single task's cancel, or its runtime limit)
+        // must not be mistaken for a parent-session stop, and it cannot own
+        // subagent tasks anyway (recursion is disabled).
+        if (this.source !== "subagent") {
+          stopAllSubagentTasksForParent(this.sessionId, SUBAGENT_PARENT_STOPPED);
+        }
         await this.inner.abort();
         return null;
 

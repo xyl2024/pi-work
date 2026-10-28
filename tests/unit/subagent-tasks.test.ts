@@ -2,14 +2,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { RunTurnSpec, TurnResult, TurnSessionFactory } from "@/lib/server/turn";
+import {
+  createChildSessionFactory,
+  createFakeTimers,
+  createScriptedRunner,
+} from "./support/subagent-runtime";
 import {
   createSubagentTaskManager,
   resolveSubagentTaskConfig,
-  type SubagentChildSession,
   type SubagentTaskManager,
   type SubagentTaskManagerDeps,
-  type SubagentTaskTimers,
 } from "@/lib/server/subagent-tasks";
 import type { SubagentProfile, SubagentTaskConfigSnapshot } from "@/lib/shared/subagent";
 import { DEFAULT_SUBAGENT_WAIT_MS } from "@/lib/shared/subagent";
@@ -80,96 +82,6 @@ function configFor(overrides: Partial<SubagentTaskConfigSnapshot> = {}): Subagen
 }
 
 /** A scripted turn: one deferred per started turn, completed by the test. */
-interface ScriptedTurn {
-  spec: RunTurnSpec;
-  settle(result?: Partial<TurnResult>): Promise<void>;
-  /** Simulate the child session being acquired (runs the factory). */
-  acquire(): Promise<void>;
-  result: Promise<TurnResult>;
-}
-
-function createScriptedRunner() {
-  const turns: ScriptedTurn[] = [];
-  const completedResult = (): TurnResult => ({
-    status: "completed",
-    text: "done",
-    hasReply: true,
-    error: null,
-    stopReason: "end_turn",
-    sessionId: "child-key",
-    realSessionId: `child-${turns.length}`,
-  });
-
-  const runTurn = async (spec: RunTurnSpec, createSession: TurnSessionFactory): Promise<TurnResult> => {
-    let resolveTurn: (result: TurnResult) => void = () => {};
-    const result = new Promise<TurnResult>((resolve) => {
-      resolveTurn = resolve;
-    });
-    const turn: ScriptedTurn = {
-      spec,
-      result,
-      acquire: async () => {
-        await createSession(spec.cwd, undefined, "subagent", { kind: "fresh" });
-      },
-      settle: async (overrides: Partial<TurnResult> = {}) => {
-        resolveTurn({ ...completedResult(), ...overrides, realSessionId: `child-${turns.length}` });
-        await result;
-      },
-    };
-    turns.push(turn);
-    return await result;
-  };
-
-  return { turns, runTurn };
-}
-
-function fakeChildSession(realSessionId: string): SubagentChildSession {
-  const manager = {
-    appendSessionInfo: () => undefined,
-    appendCustomEntry: () => undefined,
-  };
-  return {
-    sessionId: realSessionId,
-    inner: { sessionManager: manager },
-    onEvent: () => () => {},
-    onDestroy: () => () => {},
-    send: async () => null,
-    destroy: () => {},
-  };
-}
-
-function createChildSessionFactory() {
-  const created: string[] = [];
-  const factory = async (input: { taskId: string }) => {
-    const realSessionId = `child-${input.taskId.slice(-4)}`;
-    created.push(realSessionId);
-    return { session: fakeChildSession(realSessionId), sessionId: realSessionId, realSessionId };
-  };
-  return { created, factory };
-}
-
-/** Timer stub: records every deadline, fires only when the test says so. */
-interface ScheduledTimer {
-  ms: number;
-  cancelled: boolean;
-  fire: () => void;
-}
-
-function createFakeTimers() {
-  const scheduled: ScheduledTimer[] = [];
-  const timers: SubagentTaskTimers = {
-    setTimeout: (callback, ms) => {
-      const record: ScheduledTimer = { ms, cancelled: false, fire: callback };
-      scheduled.push(record);
-      return record;
-    },
-    clearTimeout: (handle) => {
-      (handle as ScheduledTimer).cancelled = true;
-    },
-  };
-  return { scheduled, timers };
-}
-
 function makeManager(
   overrides: Partial<SubagentTaskManagerDeps> & { runTurn: SubagentTaskManagerDeps["runTurn"] },
 ): SubagentTaskManager {

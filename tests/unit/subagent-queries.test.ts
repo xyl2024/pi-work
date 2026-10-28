@@ -89,6 +89,12 @@ beforeEach(() => {
       throw new Error("wait is not used by the query tests");
     },
     stop() {},
+    stopAll() {
+      return { stopped: 0, stopping: false };
+    },
+    isStopping() {
+      return false;
+    },
     get: (taskId) => getSubagentTask(taskId),
     liveStatus: (taskId) => live.get(taskId) ?? null,
     async idle() {},

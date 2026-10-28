@@ -48,9 +48,12 @@ describe("tool name", () => {
     // `wait` observes an existing task: task_id plus the same bounded wait.
     expect(Value.Check(SubagentParams, { action: "wait", task_id: "subagent:x" })).toBe(true);
     expect(Value.Check(SubagentParams, { action: "wait", task_id: "subagent:x", wait_ms: 0 })).toBe(true);
+    // `cancel` addresses exactly one task by id (the per-action allowlist is
+    // enforced by parseSubagentParams; the flat schema only knows the fields).
+    expect(Value.Check(SubagentParams, { action: "cancel", task_id: "subagent:x" })).toBe(true);
     // Unknown action, missing action, negative wait and stray properties are
     // all refused before any task is created.
-    expect(Value.Check(SubagentParams, { action: "cancel", ...base })).toBe(false);
+    expect(Value.Check(SubagentParams, { action: "frobnicate", ...base })).toBe(false);
     expect(Value.Check(SubagentParams, base)).toBe(false);
     expect(Value.Check(SubagentParams, { action: "spawn", ...base, wait_ms: -1 })).toBe(false);
     expect(Value.Check(SubagentParams, { action: "spawn", ...base, extra: 1 })).toBe(false);

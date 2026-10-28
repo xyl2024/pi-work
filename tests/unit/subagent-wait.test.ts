@@ -8,11 +8,14 @@ import {
   type SubagentParentContext,
 } from "@/lib/server/subagent-tool";
 import {
+  createChildSessionFactory,
+  createFakeTimers,
+  createScriptedRunner,
+} from "./support/subagent-runtime";
+import {
   createSubagentTaskManager,
   setSubagentTaskManagerForTests,
-  type SubagentChildSession,
   type SubagentTaskManager,
-  type SubagentTaskTimers,
 } from "@/lib/server/subagent-tasks";
 import {
   completeSubagentTask,
@@ -21,7 +24,6 @@ import {
   markSubagentRunning,
   setSubagentTaskPartialOutput,
 } from "@/lib/server/subagent-store";
-import type { RunTurnSpec, TurnResult, TurnSessionFactory } from "@/lib/server/turn";
 import { DEFAULT_SUBAGENT_TIMEOUT_MS, DEFAULT_SUBAGENT_WAIT_MS } from "@/lib/shared/subagent";
 
 /**
@@ -97,100 +99,16 @@ function textOf(result: { content: Array<{ type: string; text?: string }> }): st
 }
 
 // ---------------------------------------------------------------------------
-// Scripted turn + child session + timer seams (the same shape the lifecycle
-// tests use; nothing here reaches a real model or the real user data root).
+// Scripted turn + child session + timer seams (shared support module: no real
+// model, no real user data root)
 // ---------------------------------------------------------------------------
-
-interface ScriptedTurn {
-  spec: RunTurnSpec;
-  settle(result?: Partial<TurnResult>): Promise<void>;
-  acquire(): Promise<void>;
-}
-
-function createScriptedRunner() {
-  const turns: ScriptedTurn[] = [];
-  const completedResult = (): TurnResult => ({
-    status: "completed",
-    text: "done",
-    hasReply: true,
-    error: null,
-    stopReason: "end_turn",
-    sessionId: "child-key",
-    realSessionId: `child-${turns.length}`,
-  });
-
-  const runTurn = async (spec: RunTurnSpec, createSession: TurnSessionFactory): Promise<TurnResult> => {
-    let resolveTurn: (result: TurnResult) => void = () => {};
-    const result = new Promise<TurnResult>((resolve) => {
-      resolveTurn = resolve;
-    });
-    const turn: ScriptedTurn = {
-      spec,
-      acquire: async () => {
-        await createSession(spec.cwd, undefined, "subagent", { kind: "fresh" });
-      },
-      settle: async (overrides: Partial<TurnResult> = {}) => {
-        resolveTurn({ ...completedResult(), ...overrides, realSessionId: `child-${turns.length}` });
-        await result;
-      },
-    };
-    turns.push(turn);
-    return await result;
-  };
-
-  return { turns, runTurn };
-}
-
-function fakeChildSession(realSessionId: string): SubagentChildSession {
-  const manager = {
-    appendSessionInfo: () => undefined,
-    appendCustomEntry: () => undefined,
-  };
-  return {
-    sessionId: realSessionId,
-    inner: { sessionManager: manager },
-    onEvent: () => () => {},
-    onDestroy: () => () => {},
-    send: async () => null,
-    destroy: () => {},
-  };
-}
-
-function createChildSessionFactory() {
-  const factory = async (input: { taskId: string }) => {
-    const realSessionId = `child-${input.taskId.slice(-4)}`;
-    return { session: fakeChildSession(realSessionId), sessionId: realSessionId, realSessionId };
-  };
-  return factory;
-}
-
-interface ScheduledTimer {
-  ms: number;
-  cancelled: boolean;
-  fire: () => void;
-}
-
-function createFakeTimers() {
-  const scheduled: ScheduledTimer[] = [];
-  const timers: SubagentTaskTimers = {
-    setTimeout: (callback, ms) => {
-      const record: ScheduledTimer = { ms, cancelled: false, fire: callback };
-      scheduled.push(record);
-      return record;
-    },
-    clearTimeout: (handle) => {
-      (handle as ScheduledTimer).cancelled = true;
-    },
-  };
-  return { scheduled, timers };
-}
 
 function setup(parentSessionId: string) {
   const runner = createScriptedRunner();
   const timers = createFakeTimers();
   const manager: SubagentTaskManager = createSubagentTaskManager({
     runTurn: runner.runTurn,
-    createChildSession: createChildSessionFactory(),
+    createChildSession: createChildSessionFactory().factory,
     timers: timers.timers,
   });
   setSubagentTaskManagerForTests(manager);

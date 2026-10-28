@@ -92,6 +92,12 @@ function fakeManager(waitResult: SubagentTaskWaitResult): { manager: SubagentTas
       return waitResult;
     },
     stop() {},
+    stopAll() {
+      return { stopped: 0, stopping: false };
+    },
+    isStopping() {
+      return false;
+    },
     get() {
       return null;
     },

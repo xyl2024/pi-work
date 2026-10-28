@@ -159,6 +159,14 @@ export async function deleteSession(
   }
 
   await destroyRunningSession(sessionId);
+  // Deleting the parent ends its delegation too: unfinished child tasks would
+  // otherwise outlive the session that owns them with no place to report back.
+  // This is intentionally deletion-only — closing the tab or reaping an idle
+  // wrapper must leave background tasks running.
+  const { stopAllSubagentTasksForParent, SUBAGENT_PARENT_DELETED } = await import(
+    "@/lib/server/subagent-tasks"
+  );
+  stopAllSubagentTasksForParent(sessionId, SUBAGENT_PARENT_DELETED);
   unlinkSync(filePath);
   invalidateSessionPathCache(sessionId);
   invalidateSessionListCache();
