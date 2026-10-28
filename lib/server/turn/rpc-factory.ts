@@ -14,6 +14,7 @@ import { acquireReusedSession } from "./reuse";
 import { getRpcSession, startRpcSession } from "../rpc-manager";
 import { resolveSessionPath } from "../session-reader";
 import type { ToolSelection } from "../../shared/types";
+import type { MessageOrigin } from "../../shared/message-origin";
 
 /** The audit sources `startRpcSession` accepts for a session. */
 type RpcSessionSource = "scheduled" | "user" | "subagent";
@@ -28,6 +29,8 @@ export type RunTurnRpcSpec = Omit<Parameters<typeof runTurn>[0], "source" | "too
   source?: RpcSessionSource;
   toolNames?: ToolSelection;
   thinkingLevel?: RpcThinkingLevel;
+  /** 消息来源（ADR-0023），由非网页发送方填写并转发给收口点。 */
+  origin?: MessageOrigin;
 };
 
 /**
@@ -48,6 +51,7 @@ export async function runTurnRpcSession(spec: RunTurnRpcSpec): Promise<TurnResul
       ...(spec.toolNames !== undefined ? { toolNames: spec.toolNames } : {}),
       ...(spec.source ? { source: spec.source } : {}),
       ...(spec.purpose ? { purpose: spec.purpose } : {}),
+      ...(spec.origin ? { origin: spec.origin } : {}),
       ...(spec.session ? { session: spec.session } : {}),
       ...(spec.abortSources ? { abortSources: spec.abortSources } : {}),
       ...(spec.confirmStop ? { confirmStop: true } : {}),

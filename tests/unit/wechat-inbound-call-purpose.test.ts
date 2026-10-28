@@ -76,10 +76,12 @@ afterAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getChannel.mockReturnValue({
+    id: "ch-1",
+    provider: "wechat",
     status: "connected",
     workspaceId: dir,
     currentSessionId: null,
-    name: "channel",
+    name: "测试频道",
   });
   mocks.loadChannelAccount.mockReturnValue({ baseUrl: "http://localhost", token: "token" });
   mocks.claimMessage.mockReturnValue("accepted");
@@ -107,7 +109,11 @@ describe("wechat inbound call attribution", () => {
       purpose: "channel",
       session: { kind: "fresh" },
       toolNames: "all",
+      // 消息来源：频道入站消息必须带上频道 origin（id + provider + 名称快照）。
+      origin: { kind: "channel", channelId: "ch-1", provider: "wechat", name: "测试频道" },
     });
+    // prompt 文本逐字节不变——origin 是独立字段，不掺进消息文本。
+    expect(spec.prompt).toBe("hello");
     expect(mocks.sendTextMessage).toHaveBeenCalledWith(
       expect.objectContaining({ text: "channel reply", to: "u-1" }),
     );
@@ -115,10 +121,12 @@ describe("wechat inbound call attribution", () => {
 
   it("keeps user source and channel purpose when continuing the channel's session", async () => {
     mocks.getChannel.mockReturnValue({
+      id: "ch-1",
+      provider: "wechat",
       status: "connected",
       workspaceId: dir,
       currentSessionId: "existing-session",
-      name: "channel",
+      name: "测试频道",
     });
 
     await handleInbound({ channelId: "ch-1", fromUserId: "u-1", text: "follow up" });
@@ -128,6 +136,7 @@ describe("wechat inbound call attribution", () => {
       source: "user",
       purpose: "channel",
       session: { kind: "reuse", sessionId: "existing-session" },
+      origin: { kind: "channel", channelId: "ch-1", provider: "wechat", name: "测试频道" },
     });
     // A reuse turn must not overwrite the session's recorded tool selection.
     expect(spec.toolNames).toBeUndefined();

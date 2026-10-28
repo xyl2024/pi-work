@@ -35,6 +35,7 @@
  */
 
 import type { AskUserQuestion, AskUserQuestionsRequestPayload } from "./ask-user-questions-tool-types";
+import type { MessageOrigin } from "./message-origin";
 import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./subagent";
 import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "./celebrate-tool-types";
 import type { UiSoundEventId } from "./config-types";
@@ -95,7 +96,13 @@ export type SessionEvent =
        *  untyped rather than mirroring pi's event union. */
       assistantMessageEvent?: unknown;
     }
-  | { type: "message_end"; message: SessionEventMessage }
+  | {
+      type: "message_end";
+      message: SessionEventMessage;
+      /** 消息来源（ADR-0023）：仅 user 角色且来源非网页时有值，由 RPC 会话层
+       *  在刚收到该事件时附加。绝不写回 JSONL 消息体。 */
+      origin?: MessageOrigin;
+    }
   | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
   | {
       type: "tool_execution_update";
@@ -1024,6 +1031,21 @@ function reduceReducedSessionEvent(
           previous.some((existing) => sameCompletedMessage(existing, normalized))
             ? previous
             : [...previous, normalized]);
+      }
+      // 消息来源（ADR-0023）：user message_end 上附带的 origin 合并进本地
+      // 最后一条 user message，形状与 reader 合并后一致（{ ...message, origin }）。
+      // 幂等：已带 origin 的消息不再改写，重放的 message_end（SSE 重连/压缩
+      // 重放）不再生效；本地没有 user message（如频道/定时任务来源、历史已
+      // 重读）时不补建，展示仍靠 reader 重读兜底。
+      if (completed?.role === "user" && event.origin) {
+        next = patchSessionRuntimeState(next, "messages", (previous) => {
+          const idx = previous.findLastIndex((m) => m.role === "user");
+          if (idx === -1) return previous;
+          const existing = previous[idx];
+          if ((existing as { origin?: unknown }).origin !== undefined) return previous;
+          const merged = { ...existing, origin: event.origin } as AgentMessage;
+          return [...previous.slice(0, idx), merged, ...previous.slice(idx + 1)];
+        });
       }
       if (isAssistant && state.awaitingFirstAssistant) {
         // One shot: clearing the flag here is what makes a replay silent.

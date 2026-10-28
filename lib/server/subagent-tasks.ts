@@ -39,6 +39,7 @@ import { toSubagentEnd } from "./subagent-run-end";
 import type { AgentSessionWrapper } from "./rpc-manager";
 import { readSessionDetails, resolveSessionPath } from "./session-reader";
 import { writeSessionName } from "./session-names";
+import type { MessageOrigin } from "../shared/message-origin";
 import { createLogger } from "./logger";
 import { reconcileLeftoverSubagentTasksOnce } from "./subagent-startup";
 import {
@@ -188,6 +189,13 @@ export interface ContinueSubagentTaskInput {
   requestId?: string | null;
   /** Who supplied the input; absent means the parent agent (`tool`). */
   origin?: SubagentTaskOrigin;
+  /**
+   * Message origin carried by a manual input (ticket 05): built by the caller
+   * at submission time — the parent title must be the snapshot of the moment
+   * the user sent the input, not when a queued turn later starts. The manager
+   * stores it verbatim and attaches it to the turn's prompt command.
+   */
+  messageOrigin?: MessageOrigin;
   onProgress?: (progress: SubagentTaskProgress) => void;
 }
 
@@ -314,6 +322,8 @@ interface RunningTask {
   description: string;
   prompt: string;
   origin: SubagentTaskOrigin;
+  /** Message origin of a manual input, attached to the turn's prompt command. */
+  messageOrigin: MessageOrigin | null;
   /** Queued tasks have no turn yet, so a stop can settle them directly. */
   started: boolean;
   finished: boolean;
@@ -751,6 +761,12 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
           cwd: config.cwd,
           prompt: task.prompt,
           source: "subagent",
+          // Manual follow-up (ticket 05) carries the subagent-session origin
+          // built when the user submitted the input (parent id + parent title
+          // snapshot + child id); the RPC layer writes the
+          // `pi_work_message_origin` custom entry. Tool-originated tasks pass
+          // no origin — only manual input is a user message.
+          ...(task.messageOrigin ? { origin: task.messageOrigin } : {}),
           // A continued task runs its next turn in the existing child session;
           // the frozen config below still supplies model, thinking, tools and
           // runtime limit for this turn. A live wrapper must be asked for the
@@ -827,6 +843,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     reusedSessionId: string | null;
     requestId?: string | null;
     origin?: SubagentTaskOrigin;
+    messageOrigin?: MessageOrigin;
     onProgress?: (progress: SubagentTaskProgress) => void;
   }): SubagentTaskProgress => {
     const requestId = normalizeRequestId(input.requestId);
@@ -873,6 +890,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       description: input.description,
       prompt: input.prompt,
       origin: input.origin ?? "tool",
+      messageOrigin: input.messageOrigin ?? null,
       started: false,
       finished: false,
       stop: new AbortController(),
@@ -978,6 +996,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       reusedSessionId: input.childSessionId,
       requestId,
       origin: input.origin ?? "tool",
+      ...(input.messageOrigin ? { messageOrigin: input.messageOrigin } : {}),
       ...(input.onProgress ? { onProgress: input.onProgress } : {}),
     });
   };

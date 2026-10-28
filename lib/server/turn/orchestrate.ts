@@ -29,6 +29,7 @@ import {
 import type { ToolSelection } from "../../shared/types";
 import type { LlmAuditSource } from "../../shared/llm-audit-types";
 import type { CallPurpose, ModelCallCommandOptions } from "../../shared/token-audit-types";
+import type { MessageOrigin } from "../../shared/message-origin";
 
 /** Optional per-command attribution for the session's model calls. */
 export type TurnSendOptions = ModelCallCommandOptions;
@@ -106,6 +107,14 @@ export interface RunTurnSpec {
   toolNames?: ToolSelection;
   /** Who is running this turn (LLM-audit attribution). Defaults to "user". */
   source?: LlmAuditSource;
+  /**
+   * 消息来源（ADR-0023）：由非网页发送方（定时任务、频道、子代理补输入）填
+   * 好、随 prompt 命令原样转发给收口点；session 的 RPC 层写对应的 custom
+   * entry 并给 SSE message_end 打标签；prompt 文本本身永远不因它改变。
+   * Omitted (web) writes nothing — the byte-identical default for every
+   * caller that does not opt in.
+   */
+  origin?: MessageOrigin;
   /**
    * What this turn's model calls are for (LLM-audit attribution). Omitted lets
    * the session's own default stand (chat) — a channel message names `channel`
@@ -407,7 +416,7 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
 
   try {
     await session.send(
-      { type: "prompt", message: spec.prompt },
+      { type: "prompt", message: spec.prompt, ...(spec.origin ? { origin: spec.origin } : {}) },
       spec.purpose ? { purpose: spec.purpose } : undefined,
     );
   } catch (error) {

@@ -150,6 +150,60 @@ describe("runTurn — one call runs the whole turn", () => {
     expect(session.sentOptions).toEqual([undefined, { purpose: "channel" }]);
   });
 
+  it("forwards the message origin on the prompt command, leaving the prompt byte-identical", async () => {
+    // 消息来源（ADR-0023）：非网页发送方（如定时任务）把 origin 放在 prompt
+    // 命令上交给收口点；prompt 文本本身不因 origin 有任何包装或改变，缺省
+    // （网页端）不传时命令保持原样（见上例 sent[0] 的对比）。
+    const session = new FakeTurnSession("real-1");
+    session.settleOnPrompt = true;
+
+    await runTurn(
+      baseSpec({
+        origin: { kind: "scheduled-task", taskId: "task-1", name: "Nightly" },
+      }),
+      makeFactory([session], []),
+    );
+
+    expect(session.sent[0]).toEqual({
+      type: "prompt",
+      message: "do the thing",
+      origin: { kind: "scheduled-task", taskId: "task-1", name: "Nightly" },
+    });
+  });
+
+  it("carries the message origin on the prompt command only when one is set", async () => {
+    // 非网页来源（ticket 05）：origin 随 prompt 命令到达会话层，写 entry 与 SSE
+    // 附加都由收口完成；缺省（网页端）不传 origin，行为与改动前一致。
+    const withoutOrigin = new FakeTurnSession("real-1");
+    withoutOrigin.settleOnPrompt = true;
+    await runTurn(baseSpec(), makeFactory([withoutOrigin], []));
+    expect(withoutOrigin.sent.at(-1)).toEqual({ type: "prompt", message: "do the thing" });
+
+    const withOrigin = new FakeTurnSession("real-2");
+    withOrigin.settleOnPrompt = true;
+    await runTurn(
+      baseSpec({
+        origin: {
+          kind: "subagent-session",
+          parentSessionId: "parent-1",
+          parentSessionTitle: "Refactor the parser",
+          childSessionId: "child-1",
+        },
+      }),
+      makeFactory([withOrigin], []),
+    );
+    expect(withOrigin.sent.at(-1)).toEqual({
+      type: "prompt",
+      message: "do the thing",
+      origin: {
+        kind: "subagent-session",
+        parentSessionId: "parent-1",
+        parentSessionTitle: "Refactor the parser",
+        childSessionId: "child-1",
+      },
+    });
+  });
+
   it("has the terminal listener in place the moment the prompt is delivered", async () => {
     // settleOnPrompt settles the turn synchronously inside send(): if the
     // listener were installed after the prompt (the old wechat drift), the

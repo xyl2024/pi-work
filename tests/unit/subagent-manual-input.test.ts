@@ -30,6 +30,7 @@ import {
   SubagentManualInputError,
   submitSubagentManualPrompt,
 } from "@/lib/server/subagent-manual-input";
+import { writeSessionName } from "@/lib/server/session-names";
 import { setSubagentParentResolverForTests, subagentTool } from "@/lib/server/subagent-tool";
 import { buildAskUserQuestionsTool } from "@/lib/server/ask-user-questions-tool";
 import type { SubagentTaskConfigSnapshot } from "@/lib/shared/subagent";
@@ -235,6 +236,30 @@ describe("manual follow-up enters task management", () => {
     const text = read.content.map((item) => (item.type === "text" ? item.text ?? "" : "")).join("\n");
     expect(text).toContain(submitted.taskId);
     expect(text).toContain("manual");
+  });
+
+  it("tags a manual input's turn with the subagent-session origin (parent id + title snapshot + child id)", async () => {
+    const { runner, manager } = setup();
+    const parent = uniqueId("parent");
+    const { child } = seedChildSession({ parent });
+    // The title is the snapshot of the submission moment: the parent's name at
+    // the time the user sent the input is frozen into the message, so a later
+    // rename of the parent never rewrites what an existing message shows.
+    writeSessionName(parent, "Title at submission");
+
+    submitSubagentManualPrompt({ childSessionId: child, message: "Follow up on the diff." });
+    writeSessionName(parent, "Renamed after submission");
+
+    await runner.turns[0].acquire();
+    expect(runner.turns[0].spec.origin).toEqual({
+      kind: "subagent-session",
+      parentSessionId: parent,
+      parentSessionTitle: "Title at submission",
+      childSessionId: child,
+    });
+
+    await settle(runner.turns[0], child);
+    await manager.idle();
   });
 
   it("refuses a manual input while the child already has an unfinished task", async () => {
