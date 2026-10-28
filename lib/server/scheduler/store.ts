@@ -11,6 +11,7 @@
  */
 
 import { Cron } from "croner";
+import { migrateToolName } from "../../shared/subagent";
 import { existsSync } from "fs";
 import { getSchedulerDb } from "./db";
 import { sanitizeNotification } from "@/lib/server/notifications";
@@ -281,7 +282,12 @@ function parseToolNames(raw: string | null): string[] | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : null;
+    if (!Array.isArray(parsed)) return null;
+    // Stored selections predate the subagent tool rename; migrate on load so a
+    // scheduled task keeps the tool it was configured with.
+    return parsed
+      .filter((name): name is string => typeof name === "string")
+      .map(migrateToolName);
   } catch {
     return null;
   }

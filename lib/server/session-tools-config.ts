@@ -35,6 +35,7 @@ import {
 import { join } from "node:path";
 import { dataPath } from "./data-dir";
 import type { ToolSelection } from "../shared/types";
+import { migrateToolNames } from "../shared/subagent";
 
 const SIDE_CAR_DIR_NAME = "session-tools";
 // Same safety rule as session-names.ts: pi session ids look like
@@ -60,7 +61,7 @@ function safeIdOrNull(sessionId: string): string | null {
 function normalizeSelection(value: unknown): ToolSelection | null {
   if (value === "all") return "all";
   if (!Array.isArray(value) || !value.every((name) => typeof name === "string")) return null;
-  return Array.from(new Set(value as string[]));
+  return migrateToolNames(value as string[]);
 }
 
 /** Persist the tool selection that is live for a session. Best-effort. */

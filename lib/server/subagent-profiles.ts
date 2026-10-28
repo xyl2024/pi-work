@@ -11,6 +11,7 @@ import {
   SUBAGENT_SYSTEM_PROMPT_MAX,
   SUBAGENT_THINKING_LEVELS,
   isValidSubagentName,
+  migrateToolNames,
   type NormalizedSubagentProfileInput,
   type SubagentBotAppearance,
   type SubagentProfile,
@@ -19,7 +20,7 @@ import {
 } from "../shared/subagent";
 
 /**
- * Subagent profiles: the user-defined agents `spawn_subagent` can launch.
+ * Subagent profiles: the user-defined agents the `subagent` tool can launch.
  * One row per profile in `subagents.db`; the built-in explorer/reviewer pair is
  * seeded on first use.
  *
@@ -131,7 +132,9 @@ function parseTools(raw: string): string[] {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((tool): tool is string => typeof tool === "string");
+    // Old rows may name the pre-rename subagent tool. Migrate on load; the
+    // child session still never registers it (recursion stays blocked).
+    return migrateToolNames(parsed.filter((tool): tool is string => typeof tool === "string"));
   } catch {
     return [];
   }

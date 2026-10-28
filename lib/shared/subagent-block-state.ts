@@ -1,9 +1,9 @@
 // ============================================================================
-// spawn_subagent ToolCallBlock state (pure)
+// subagent ToolCallBlock state (pure)
 //
 // The block renders one of three things: the live child-activity panel (while
-// the child run is in flight), the tool's final result, or — in the window
-// where neither exists yet — just the call's own input.
+// the task is unfinished), the tool's final result, or — in the window where
+// neither exists yet — just the call's own input.
 //
 // Which one it is comes from the result object the block was handed, which is
 // either the tool's final `ToolResultMessage` (persisted by pi, or streamed
@@ -11,46 +11,72 @@
 // `tool_execution_update` (created on `tool_execution_start`, dropped on
 // `tool_execution_end`). See `hooks/useAgentSession/events.ts`.
 //
+// A task can outlive the tool call that started it: when the caller's wait
+// expires, the tool returns a normal result that says so (`waitExpired`) while
+// the task keeps running. The panel must keep showing that truth, which is why
+// "running" is derived from the task status, not from "the tool has not
+// returned yet".
+//
 // Like `chat-timeline` / `scroll-follow` this module may not import React, the
 // DOM, a client hook, or anything from `lib/server`.
 // ============================================================================
 
-import type { ToolResultMessage } from "./types";
+import { isSubagentTerminalStatus, type SubagentTaskStatus, type ToolResultMessage } from "./types";
 
-/** The subagent live/terminal states the tool result's details carry. */
-export type SubagentBlockStatus = "running" | "completed" | "failed" | "cancelled";
+export function isSubagentTaskStatus(value: unknown): value is SubagentTaskStatus {
+  return value === "queued"
+    || value === "creating"
+    || value === "running"
+    || value === "stopping"
+    || value === "completed"
+    || value === "failed"
+    || value === "cancelled"
+    || value === "interrupted";
+}
 
 export interface SubagentBlockState {
-  /** True while the child run is in flight: the block shows the live panel. */
+  /** True while the task is unfinished: the block shows the live panel. */
   running: boolean;
+  /** The task status the result carries, when it carries one. */
+  status: SubagentTaskStatus | null;
   /**
    * Child session whose activity the live panel polls. Null until the child
-   * session exists (the call can be waiting for a free concurrency slot) and
+   * session exists (the task can still be queued for a concurrency slot) and
    * whenever the block knows of no child at all.
    */
   childSessionId: string | null;
-  /** Name of the profile the call launched, when the result carries it. */
+  /** Name of the profile the task runs, when the result carries it. */
   subagentName: string | null;
+  /**
+   * True when the tool returned because its wait expired while the task is
+   * still unfinished: the task is alive in the background.
+   */
+  waitExpired: boolean;
 }
 
 export interface SubagentBlockStateInput {
   /** The block's result: final tool result, else the in-flight partial, else undefined. */
   result: ToolResultMessage | undefined;
-  /** Whether the tool call itself failed (a tool-level error, not a child status). */
+  /** Whether the tool call itself failed (a tool-level error, not a task status). */
   isError: boolean;
 }
 
-/** Details payload `spawn_subagent` puts on its result (see `lib/server/subagent-tool.ts`). */
-interface SpawnSubagentResultDetails {
-  status?: SubagentBlockStatus;
+/** Details payload the `subagent` tool puts on its result (see `lib/server/subagent-tool.ts`). */
+interface SubagentResultDetails {
+  status?: unknown;
+  childSessionId?: string | null;
+  /** Pre-rename field name, kept so old messages keep rendering. */
   sessionId?: string | null;
   subagentName?: string | null;
+  waitExpired?: unknown;
 }
 
 export function deriveSubagentBlockState({ result, isError }: SubagentBlockStateInput): SubagentBlockState {
-  const details = (result?.details ?? null) as SpawnSubagentResultDetails | null;
+  const details = (result?.details ?? null) as SubagentResultDetails | null;
+  const status = isSubagentTaskStatus(details?.status) ? details.status : null;
   const hasResultText = !!result && result.content.some((item) => item.type === "text" && item.text.trim().length > 0);
-  const terminal = details?.status === "completed" || details?.status === "failed" || details?.status === "cancelled" || isError;
+  const terminal = isError || (status !== null && isSubagentTerminalStatus(status));
+  const waitExpired = details?.waitExpired === true;
   return {
     // A run is only ever inferred from a result object we actually hold: the
     // in-flight partial pi streams while the tool executes, or the final
@@ -61,8 +87,10 @@ export function deriveSubagentBlockState({ result, isError }: SubagentBlockState
     // none. Reading absence as "still running" made a finished subagent show
     // "Subagent running / Waiting for subagent session…" until its slowest
     // sibling finished.
-    running: !!result && !hasResultText && !terminal,
-    childSessionId: details?.sessionId ?? null,
+    running: !!result && !terminal && (waitExpired || !hasResultText),
+    status,
+    childSessionId: details?.childSessionId ?? details?.sessionId ?? null,
     subagentName: details?.subagentName ?? null,
+    waitExpired,
   };
 }

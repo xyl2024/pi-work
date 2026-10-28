@@ -9,25 +9,31 @@ import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-
 
 interface Props {
   parentSessionId: string | null;
-  /** Incremented by the parent session's spawn_subagent event stream. */
+  /** Incremented by the parent session's subagent tool event stream. */
   refreshKey: number;
   onOpenSession: (sessionId: string) => void;
 }
 
 const STATUS_KEYS: Record<SubagentTaskStatus, string> = {
+  queued: "Queued",
   creating: "Creating",
   running: "Running",
+  stopping: "Stopping",
   completed: "Completed",
   failed: "Failed",
   cancelled: "Cancelled",
+  interrupted: "Interrupted",
 };
 
 const STATUS_COLORS: Record<SubagentTaskStatus, string> = {
+  queued: "var(--text-dim)",
   creating: "#eab308",
   running: "var(--accent)",
+  stopping: "#eab308",
   completed: "#22c55e",
   failed: "#ef4444",
   cancelled: "var(--text-dim)",
+  interrupted: "#f59e0b",
 };
 
 export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSession }: Props) {
@@ -80,7 +86,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
 
   // Load exactly once when this session becomes active. Subsequent loads are
   // driven by refreshKey, which the parent session increments for relevant
-  // spawn_subagent SSE events. While any child is still creating/running we
+  // subagent SSE events. While any task is still unfinished we
   // also poll so the per-child stats (messages / files read / model) stay
   // fresh; the poll stops once every task reaches a terminal state.
   // Refreshes also run while the popover is closed so its badge already
@@ -105,7 +111,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
   }, [loadTasks, parentSessionId, refreshKey]);
 
   const hasActiveTask = tasks.some(
-    (task) => task.status === "creating" || task.status === "running",
+    (task) => task.status === "queued" || task.status === "creating" || task.status === "running" || task.status === "stopping",
   );
 
   useEffect(() => {

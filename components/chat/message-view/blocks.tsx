@@ -13,7 +13,7 @@ import { classifyToolCall, isToolResultEmpty, toolCallDiffStats } from "@/lib/sh
 import { extractMessageText } from "@/lib/shared/message-content";
 import { deriveSubagentBlockState } from "@/lib/shared/subagent-block-state";
 import { useMarkdownComponents, highlightTextAsHtml, getToolPreview } from "./utils";
-import { SpawnSubagentLivePanel } from "./SpawnSubagentLivePanel";
+import { SubagentLivePanel } from "./SubagentLivePanel";
 import { useCollapseNonce } from "./context";
 import type { AssistantContentBlock, TextContent, ToolCallContent, ThinkingContent, ToolResultMessage } from "@/lib/shared/types";
 
@@ -166,12 +166,12 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
   const toolKind = classifyToolCall(block.toolName);
   const isBash = toolKind === "bash";
   const isFileMutation = toolKind === "file-mutation";
-  const isSpawnSubagent = toolKind === "subagent";
+  const isSubagent = toolKind === "subagent";
   const isCodemode = toolKind === "codemode";
   // Only the specialized renderers (bash / diff for edit & write / the
   // subagent live panel) stay expanded by default; every other tool call
   // block collapses by default.
-  const isSpecialized = isBash || isFileMutation || isSpawnSubagent;
+  const isSpecialized = isBash || isFileMutation || isSubagent;
   const isCollapsedByDefault = !isSpecialized;
   const timeout = isBash && (typeof block.input.timeout === "number" || typeof block.input.timeout === "string")
     ? String(block.input.timeout)
@@ -196,11 +196,11 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
     [isFileMutation, block, result],
   );
 
-  // spawn_subagent: while the child session is still running, the output area
-  // shows the live activity panel (details arrive via in-flight
-  // tool_execution_update partials). Once the final result lands it replaces
-  // the panel entirely.
-  const subagentState = isSpawnSubagent ? deriveSubagentBlockState({ result, isError }) : null;
+  // subagent: while the task is unfinished, the output area shows the live
+  // activity panel (details arrive via in-flight tool_execution_update
+  // partials, and via the final result when the caller's wait expired first).
+  // Once the task reaches a terminal status the result replaces the panel.
+  const subagentState = isSubagent ? deriveSubagentBlockState({ result, isError }) : null;
   const isSubagentRunning = subagentState?.running ?? false;
 
   const header = (
@@ -330,11 +330,20 @@ function ToolCallBlock({ block, result, cwd }: { block: ToolCallContent; result?
               >
                 {inputStr}
               </pre>
-              {isSpawnSubagent && isSubagentRunning ? (
-                <SpawnSubagentLivePanel
-                  childSessionId={subagentState?.childSessionId ?? null}
-                  subagentName={subagentState?.subagentName ?? null}
-                />
+              {isSubagent && isSubagentRunning ? (
+                <>
+                  {/* A wait that expired returns text the user must see (the
+                      task id, and that nothing was cancelled) while the panel
+                      keeps tracking the live task. */}
+                  {subagentState?.waitExpired && result && (
+                    <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />
+                  )}
+                  <SubagentLivePanel
+                    childSessionId={subagentState?.childSessionId ?? null}
+                    subagentName={subagentState?.subagentName ?? null}
+                    status={subagentState?.status ?? null}
+                  />
+                </>
               ) : (
                 result && <PairedResult text={resultText ?? ""} isEmpty={resultIsEmpty} isError={isError} />
               )}

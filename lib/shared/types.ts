@@ -262,14 +262,45 @@ export interface SessionInfo {
 
 /**
  * How many subagent child sessions may run at the same time, process-wide.
- * Shared with `lib/server/subagent-tool.ts` so the server's slot pool and the
- * prompt text shown for `spawn_subagent` state one number. A call beyond the
+ * Shared with `lib/server/subagent-tasks.ts` so the server's slot pool and the
+ * prompt text shown for the `subagent` tool state one number. A call beyond the
  * limit waits for a free slot: that wait is invisible to the UI and does not
  * count against the child's runtime limit.
  */
 export const MAX_CONCURRENT_SUBAGENT_RUNS = 4;
 
-export type SubagentTaskStatus = "creating" | "running" | "completed" | "failed" | "cancelled";
+/**
+ * One subagent task's lifecycle status. `queued` exists before the child
+ * session does (waiting for a concurrency slot); `stopping` is a requested stop
+ * whose turn has not confirmed yet; `interrupted` is a task the server lost
+ * track of (restart) and did not replay.
+ */
+export type SubagentTaskStatus =
+  | "queued"
+  | "creating"
+  | "running"
+  | "stopping"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "interrupted";
+
+/** The statuses that end a task. */
+export type SubagentTerminalStatus = "completed" | "failed" | "cancelled" | "interrupted";
+
+/** All of them, shared by the store, the tool, the task manager and the card so
+ *  "is it over?" is answered in exactly one place. */
+export const SUBAGENT_TERMINAL_STATUSES: readonly SubagentTerminalStatus[] = [
+  "completed",
+  "failed",
+  "cancelled",
+  "interrupted",
+];
+
+/** True for a status that ends the task. */
+export function isSubagentTerminalStatus(status: SubagentTaskStatus): status is SubagentTerminalStatus {
+  return (SUBAGENT_TERMINAL_STATUSES as readonly string[]).includes(status);
+}
 
 /** Browser-safe summary returned by the parent session's subagent endpoint. */
 export interface SubagentTaskSummary {
@@ -301,7 +332,7 @@ export interface SubagentActivityItem {
 
 /** Live snapshot of a running subagent child session, served by
  *  /api/subagents/[sessionId]/activity and polled by the parent session's
- *  spawn_subagent ToolCallBlock. */
+ *  subagent ToolCallBlock. */
 export interface SubagentLiveInfo {
   task: {
     status: SubagentTaskStatus;

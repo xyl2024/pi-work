@@ -759,7 +759,7 @@ export async function readSubagentSessionStats(sessionId: string): Promise<Subag
 // Subagent live info (stats + recent tool-call activity)
 //
 // Used by /api/subagents/[sessionId]/activity: polled every few seconds by
-// the parent session's spawn_subagent ToolCallBlock while the child runs.
+// the parent session's subagent ToolCallBlock while the child runs.
 // Same mtime-cache pattern as readSubagentSessionStats — an unchanged JSONL
 // is never re-parsed.
 // ============================================================================

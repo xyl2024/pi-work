@@ -1,5 +1,6 @@
 /**
- * Subagent profiles — the user-defined agents `spawn_subagent` can launch.
+ * Subagent profiles — the user-defined agents the `subagent` tool's `spawn`
+ * action can launch.
  *
  * A profile is a row in `subagents.db` (`subagent_profiles`), not a build-time
  * constant: name, description, system prompt, tool set, model, bot appearance
@@ -75,7 +76,7 @@ export const DEFAULT_SUBAGENT_BOT: SubagentBotAppearance = {
 export interface SubagentProfile {
   /** Stable identifier the model passes as `subagent_name`. Unique. */
   name: string;
-  /** Shown to the parent model in the spawn_subagent guidelines. */
+  /** Shown to the parent model in the subagent tool guidelines. */
   description: string;
   systemPrompt: string;
   /** Explicit tool names handed to the child session; `[]` means no tools. */
@@ -116,9 +117,74 @@ export const SUBAGENT_DESCRIPTION_MAX = 500;
 export const SUBAGENT_SYSTEM_PROMPT_MAX = 50_000;
 export const SUBAGENT_MAX_TOOLS = 200;
 
+/**
+ * The name of the agent tool that manages subagents. One name, six actions
+ * (`spawn`, `list`, `get`, `wait`, `continue`, `cancel`); the previous
+ * `spawn_subagent` name is not registered any more — stored tool selections are
+ * migrated on load, and old messages stay readable through the display layer.
+ */
+export const SUBAGENT_TOOL_NAME = "subagent";
+
+/** Legacy tool name, read-only: migrated selections and old message rendering. */
+export const LEGACY_SPAWN_SUBAGENT_TOOL_NAME = "spawn_subagent";
+
+/**
+ * Default tool-call wait for `spawn` / `continue` (15 minutes). Waiting is an
+ * observation only: when it expires the task keeps running and the caller can
+ * wait again.
+ */
+export const DEFAULT_SUBAGENT_WAIT_MS = 15 * 60 * 1000;
+
+/** Upper bound for an explicit wait; 0 means "return immediately". */
+export const MAX_SUBAGENT_WAIT_MS = 60 * 60 * 1000;
+
+/**
+ * The child configuration resolved when a task is created. Every later turn of
+ * the same child session reuses this snapshot, so editing or deleting the
+ * profile never reconfigures an existing child, and a cold start restores the
+ * same (narrowed) capabilities.
+ */
+export interface SubagentTaskConfigSnapshot {
+  subagentName: string;
+  /** Working directory the child session was created in. */
+  cwd: string;
+  /** Model resolved at creation: the profile's, else the parent's. */
+  model: { provider: string; modelId: string };
+  thinkingLevel: SubagentThinkingLevel;
+  /** Tool set baked into the child session; the subagent tool is never in it. */
+  tools: string[];
+  /**
+   * System prompt contribution resolved at creation. `override` is an inherited
+   * prompt copied verbatim; `prefix` is the profile's own prompt.
+   */
+  systemPrompt: { kind: "override"; text: string } | { kind: "prefix"; text: string };
+  /** Runtime limit for each turn of this child; queue time never counts. */
+  timeoutMs: number;
+}
+
 export const DEFAULT_SUBAGENT_TIMEOUT_MS = 30 * 60 * 1000;
 export const MIN_SUBAGENT_TIMEOUT_MS = 10 * 1000;
 export const MAX_SUBAGENT_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Map a stored tool selection onto today's tool names: a selection written
+ * before the rename may still say `spawn_subagent`, which is no longer
+ * registered. Order is preserved, duplicates collapse, and `"all"` is left
+ * alone. Pure, so every loader (session sidecar, cwd defaults, scheduler tasks,
+ * profiles) migrates by the same rule.
+ */
+export function migrateToolName(name: string): string {
+  return name === LEGACY_SPAWN_SUBAGENT_TOOL_NAME ? SUBAGENT_TOOL_NAME : name;
+}
+
+export function migrateToolNames(names: readonly string[]): string[] {
+  const migrated: string[] = [];
+  for (const name of names) {
+    const next = migrateToolName(name);
+    if (!migrated.includes(next)) migrated.push(next);
+  }
+  return migrated;
+}
 
 /** True when `value` is a usable profile name. */
 export function isValidSubagentName(value: string): boolean {

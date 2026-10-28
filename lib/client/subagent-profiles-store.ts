@@ -6,7 +6,7 @@ import type { SubagentProfile } from "@/lib/shared/subagent";
 /**
  * Client cache of the configured subagent profiles (`GET /api/subagents`).
  *
- * The chat surfaces that render a subagent's Pi Bot (the spawn_subagent live
+ * The chat surfaces that render a subagent's Pi Bot (the subagent live
  * panel and the subagent sessions popover) need the profile's appearance, and
  * the editor needs to invalidate it after a write. One module-level list keeps
  * those from each fetching on their own.

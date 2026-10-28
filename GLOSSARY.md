@@ -87,7 +87,7 @@ _Avoid_: 把全局按钮算作会话绑定
 _Avoid_: 用「工具按钮」指代它
 
 **Pi Bot**：
-GrokBot 绘制的机器人形象（界面文案写 Pi Bot，代码符号是 GrokBot / grokbot，两者是同一个东西）。它只用在子代理上：每个子代理档案有自己的「Pi Bot 形象」，`spawn_subagent` 的实时面板与子代理列表用它渲染对应子代理。不再有侧边栏常驻伴侣。
+GrokBot 绘制的机器人形象（界面文案写 Pi Bot，代码符号是 GrokBot / grokbot，两者是同一个东西）。它只用在子代理上：每个子代理档案有自己的「Pi Bot 形象」，`subagent` 工具的实时面板与子代理列表用它渲染对应子代理。不再有侧边栏常驻伴侣。
 _Avoid_: 把它当作 agent、频道、消息来源或会话状态
 
 ### 设置
@@ -193,7 +193,7 @@ _Avoid_: 把“是否需要你”的判断写进 `SessionItem`；把点当作「
 _Avoid_: 用「子 agent」指代它；把它当作会话标签页里的普通会话
 
 **子代理档案（Subagent profile）**：
-一条用户可编辑的子代理定义，存于 `subagents.db` 的 `subagent_profiles` 表：名称（`spawn_subagent` 的 `subagent_name` 取值）、描述、系统提示词、工具集、模型与推理强度、Pi Bot 形象与运行超时。三个内置档案 `codebase_explorer`（只读探索与报告）、`code_reviewer`（审查代码或 diff）与 `implementer`（小任务实现）在首次初始化时写入表中，之后同样可改可删；`implementer` 默认原样继承父会话的系统提示词，工具为 read/edit/write/bash/codemode。
+一条用户可编辑的子代理定义，存于 `subagents.db` 的 `subagent_profiles` 表：名称（`subagent` 工具 `spawn` 动作的 `subagent_name` 取值）、描述、系统提示词、工具集、模型与推理强度、Pi Bot 形象与运行超时。三个内置档案 `codebase_explorer`（只读探索与报告）、`code_reviewer`（审查代码或 diff）与 `implementer`（小任务实现）在首次初始化时写入表中，之后同样可改可删；`implementer` 默认原样继承父会话的系统提示词，工具为 read/edit/write/bash/codemode。
 _Avoid_: 把「子代理档案」说成「子代理类型」；把它与某次调用（子代理任务）混为一谈
 
 **子代理任务（Subagent task）**：

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { join } from "path";
 import { dataPath } from "./data-dir";
 import type { ToolSelection } from "../shared/types";
+import { migrateToolNames } from "../shared/subagent";
 
 const CONFIG_PATH = join(dataPath(), "cwd-tools.json");
 type StoredConfig = Record<string, ToolSelection>;
@@ -9,7 +10,7 @@ type StoredConfig = Record<string, ToolSelection>;
 function normalizeSelection(value: unknown): ToolSelection | null {
   if (value === "all") return "all";
   if (!Array.isArray(value) || !value.every((name) => typeof name === "string")) return null;
-  return Array.from(new Set(value as string[]));
+  return migrateToolNames(value as string[]);
 }
 
 function readConfig(): StoredConfig {

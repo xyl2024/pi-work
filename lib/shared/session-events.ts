@@ -35,6 +35,7 @@
  */
 
 import type { AskUserQuestion, AskUserQuestionsRequestPayload } from "./ask-user-questions-tool-types";
+import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./subagent";
 import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "./celebrate-tool-types";
 import type { UiSoundEventId } from "./config-types";
 import { normalizeToolCalls } from "./normalize";
@@ -223,7 +224,7 @@ export type IgnoredSessionEventType = Exclude<SessionEventType, ReducedSessionEv
 export const REDUCED_SESSION_EVENTS: Record<ReducedSessionEventType, string> = {
   agent_start: "Clears the runtime error, marks the session running, opens the streaming view.",
   agent_end: "Closes the low-level run: running flags off, pending model error surfaced.",
-  message_start: "Opens the streaming view, and refreshes the subagent panel for a new spawn_subagent call.",
+  message_start: "Opens the streaming view, and refreshes the subagent panel for a new subagent call.",
   message_update: "Feeds a streamed token snapshot into the streaming view.",
   message_end: "Commits the finished message, records a model error, requests a context-usage refresh.",
   session_tree_update: "Replaces the live conversation tree and the active leaf.",
@@ -527,28 +528,35 @@ const TOOL_ERROR_BOT_STATE = "suspicious";
  *  call without a message of its own. */
 const FALLBACK_ASSISTANT_ERROR = "Model call failed";
 
+/** Tool names that start a subagent task: current, plus the pre-rename name
+ *  still present in old messages (rendering only — it is never executed). */
+const SUBAGENT_TOOL_NAMES = new Set([SUBAGENT_TOOL_NAME, LEGACY_SPAWN_SUBAGENT_TOOL_NAME]);
+
 /**
- * The `spawn_subagent` tool-call ids inside a message.
+ * The subagent tool-call ids inside a message.
  *
  * Read from the raw pi message shape (`{ type: "toolCall", toolName }`), before
  * normalization: this is how the subagent panel learns a child was spawned
  * without waiting for the whole turn to finish.
  */
-function spawnSubagentToolCallIdsOf(message: unknown): string[] {
+function subagentToolCallIdsOf(message: unknown): string[] {
   if (!message || typeof message !== "object") return [];
   const content = (message as { content?: unknown }).content;
   if (!Array.isArray(content)) return [];
   return content.flatMap((block) => {
     if (!block || typeof block !== "object") return [];
     const value = block as { type?: unknown; toolName?: unknown; toolCallId?: unknown };
-    return value.type === "toolCall" && value.toolName === "spawn_subagent" && typeof value.toolCallId === "string"
+    return value.type === "toolCall"
+      && typeof value.toolName === "string"
+      && SUBAGENT_TOOL_NAMES.has(value.toolName)
+      && typeof value.toolCallId === "string"
       ? [value.toolCallId]
       : [];
   });
 }
 
 /**
- * Claim the `spawn_subagent` ids announced by one message, asking for a panel
+ * Claim the subagent tool-call ids announced by one message, asking for a panel
  * refresh the first time each id is seen and staying silent on the replays
  * that every later token (or an SSE reconnect) brings.
  */
@@ -557,7 +565,7 @@ function pushSubagentRefreshes(
   message: unknown,
   effects: SessionEventEffect[],
 ): void {
-  for (const toolCallId of spawnSubagentToolCallIdsOf(message)) {
+  for (const toolCallId of subagentToolCallIdsOf(message)) {
     if (state.seenSubagentToolCallIds.claim(toolCallId)) {
       effects.push({ kind: "refresh_subagent_panel", toolCallId });
     }
@@ -904,7 +912,7 @@ function reduceReducedSessionEvent(
       // A spawning tool call is also spotted in the *message* that announces
       // it; this end of the ledger covers a start event arriving without one
       // (e.g. a reconnect mid-turn).
-      if (toolName === "spawn_subagent" && state.seenSubagentToolStartIds.claim(toolCallId)) {
+      if (toolName && SUBAGENT_TOOL_NAMES.has(toolName) && state.seenSubagentToolStartIds.claim(toolCallId)) {
         effects.push({ kind: "refresh_subagent_panel", toolCallId });
       }
       return { state: next, effects };
@@ -934,7 +942,7 @@ function reduceReducedSessionEvent(
       const toolName = inFlight?.name ?? event.toolName;
       const effects: SessionEventEffect[] = [];
       if (isError) effects.push({ kind: "flash_bot_state", stateKey: TOOL_ERROR_BOT_STATE });
-      if (toolName === "spawn_subagent" && state.seenSubagentToolEndIds.claim(toolCallId)) {
+      if (toolName && SUBAGENT_TOOL_NAMES.has(toolName) && state.seenSubagentToolEndIds.claim(toolCallId)) {
         effects.push({ kind: "refresh_subagent_panel", toolCallId });
       }
       if (toolName && WORKTREE_MUTATING_TOOL_NAMES.has(toolName)) {

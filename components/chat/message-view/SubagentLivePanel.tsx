@@ -2,11 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import type { SubagentLiveInfo } from "@/lib/shared/types";
+import {
+  isSubagentTerminalStatus,
+  type SubagentLiveInfo,
+  type SubagentTaskStatus,
+  type SubagentTerminalStatus,
+} from "@/lib/shared/types";
 import { GrokBot } from "@/components/grokbot/GrokBot";
 import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-profiles-store";
 
 const POLL_INTERVAL_MS = 5_000;
+
+/** Terminal status labels shown once the task outlived the tool result. */
+const STATUS_LABELS: Record<SubagentTerminalStatus, string> = {
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  interrupted: "Interrupted",
+};
 const ACTIVITY_MAX_HEIGHT = 200;
 
 function fmtElapsed(ms: number): string {
@@ -26,18 +39,21 @@ function fmtClock(timestamp: number): string {
 }
 
 /**
- * Live activity panel rendered inside the spawn_subagent ToolCallBlock while
- * the child session is still running. Polls
+ * Live activity panel rendered inside the subagent ToolCallBlock while the
+ * task is unfinished (it can outlive the tool call that started it). Polls
  * /api/subagents/[sessionId]/activity every few seconds for aggregate stats
  * and the child's recent tool-call activity; once the tool finishes the whole
  * panel is replaced by the tool's final result.
  */
-export function SpawnSubagentLivePanel({
+export function SubagentLivePanel({
   childSessionId,
   subagentName,
+  status,
 }: {
   childSessionId: string | null;
   subagentName: string | null;
+  /** Tool-reported task status; the polled snapshot wins once it arrives. */
+  status?: SubagentTaskStatus | null;
 }) {
   const { t } = useI18n();
   const profiles = useSubagentProfiles();
@@ -63,7 +79,7 @@ export function SpawnSubagentLivePanel({
         setInfo(data);
         // task is null when the DB row vanished unexpectedly — keep polling.
         const status = data.task?.status;
-        if ((status === "completed" || status === "failed" || status === "cancelled") && timer) {
+        if (status && isSubagentTerminalStatus(status) && timer) {
           clearInterval(timer);
           timer = null;
         }
@@ -96,6 +112,19 @@ export function SpawnSubagentLivePanel({
   }, [activities.length]);
 
   const stats = info?.stats;
+  // The polled snapshot is fresher than the tool result; fall back to it while
+  // the first poll is still in flight (or when there is no child session yet).
+  const liveStatus = info?.task?.status ?? status ?? null;
+  const queued = liveStatus === "queued";
+  const stopping = liveStatus === "stopping";
+  // The task can finish after the tool call returned (wait expiry): the panel
+  // must say so rather than claim "running" forever.
+  const terminalLabel = liveStatus !== null && isSubagentTerminalStatus(liveStatus)
+    ? t(STATUS_LABELS[liveStatus])
+    : null;
+  const finished = terminalLabel !== null;
+  const statusLabel = terminalLabel ?? (stopping ? t("Stopping") : queued ? t("Queued") : t("Subagent running"));
+  const accent = finished || stopping ? "var(--text-dim)" : "#16a34a";
 
   return (
     <div style={{ borderTop: "1px solid rgba(34,197,94,0.2)", background: "var(--bg-subtle)", padding: "8px 10px", display: "flex", gap: 10 }}>
@@ -106,10 +135,13 @@ export function SpawnSubagentLivePanel({
       )}
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "#16a34a" }}>
-          <span className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: "#16a34a", flexShrink: 0 }} />
-          {t("Subagent running")}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: accent }}>
+          <span className={finished ? undefined : "animate-pulse"} style={{ width: 6, height: 6, borderRadius: "50%", background: accent, flexShrink: 0 }} />
+          {statusLabel}
         </span>
+        {finished && (
+          <span style={{ color: "var(--text-dim)" }}>{t("Refresh the conversation to see the final result")}</span>
+        )}
         {typeof stats?.assistantCount === "number" && (
           <span>{t("{n} messages", { n: stats.assistantCount })}</span>
         )}
@@ -126,7 +158,7 @@ export function SpawnSubagentLivePanel({
 
       {!childSessionId ? (
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>
-          {t("Waiting for subagent session…")}
+          {queued ? t("Waiting for a free slot…") : t("Waiting for subagent session…")}
         </div>
       ) : activities.length === 0 ? (
         <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-dim)" }}>

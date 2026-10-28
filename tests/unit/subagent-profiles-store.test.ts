@@ -194,6 +194,27 @@ describe("subagent profile store", () => {
   });
 });
 
+describe("profile tool-name migration", () => {
+  it("migrates a stored pre-rename tool name on load", async () => {
+    resetStoreGlobals();
+    const { getSubagentDb } = await import("@/lib/server/subagent-store");
+    const { getSubagentProfile, listSubagentProfiles } = await import("@/lib/server/subagent-profiles");
+    // Seeding happens on first read; make sure the table exists.
+    listSubagentProfiles();
+    getSubagentDb().prepare(`
+      INSERT INTO subagent_profiles
+        (name, description, system_prompt, inherit_system_prompt, tools, model_provider, model_id,
+         thinking_level, bot, timeout_ms, builtin, created_at, updated_at)
+      VALUES ('legacy_tools', 'd', 'p', 0, '["read","spawn_subagent"]', NULL, NULL,
+              'off', '{}', 30000, 0, 1, 1)
+    `).run();
+
+    // The old name may survive in an old row; it must never be handed to a
+    // child as an executable name (the child session does not register it).
+    expect(getSubagentProfile("legacy_tools")!.tools).toEqual(["read", "subagent"]);
+  });
+});
+
 describe("normalizeSubagentProfileInput", () => {
   it("rejects an invalid name and empty prompt", async () => {
     const { normalizeSubagentProfileInput, SubagentProfileError } = await import("@/lib/server/subagent-profiles");

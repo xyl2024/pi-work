@@ -2,8 +2,17 @@ import Database from "better-sqlite3";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 import { dataPath } from "./data-dir";
+import {
+  SUBAGENT_TERMINAL_STATUSES,
+  isSubagentTerminalStatus,
+  type SubagentTaskStatus,
+} from "../shared/types";
 
-export type SubagentTaskStatus = "creating" | "running" | "completed" | "failed" | "cancelled";
+export type { SubagentTaskStatus };
+export { isSubagentTerminalStatus };
+
+/** The same rule as SQL, for the guarded UPDATEs below. */
+const TERMINAL_SQL = SUBAGENT_TERMINAL_STATUSES.map((status) => `'${status}'`).join(", ");
 
 export interface SubagentTask {
   taskId: string;
@@ -16,6 +25,13 @@ export interface SubagentTask {
   status: SubagentTaskStatus;
   result: string | null;
   error: string | null;
+  /**
+   * JSON config resolved when the task was created (profile, model, thinking
+   * level, tools, system prompt, runtime limit). Reused when the child session
+   * continues, so editing the profile never changes an existing child.
+   * Null for rows written before snapshots existed.
+   */
+  configSnapshot: string | null;
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;
@@ -40,6 +56,7 @@ const SCHEMA = `
     status           TEXT NOT NULL,
     result           TEXT,
     error            TEXT,
+    config_snapshot  TEXT,
     created_at       INTEGER NOT NULL,
     started_at       INTEGER,
     finished_at      INTEGER
@@ -94,6 +111,19 @@ function migrateProfileColumns(db: Database.Database): void {
   }
 }
 
+/**
+ * Add `config_snapshot` to task tables created before the column existed.
+ * Idempotent: only added while absent. Legacy rows keep NULL, which readers
+ * treat as "no snapshot to reuse" rather than inventing today's profile.
+ */
+function migrateTaskConfigColumn(db: Database.Database): void {
+  const columns = (db.prepare("PRAGMA table_info(subagent_tasks)").all() as Array<{ name: string }>)
+    .map((column) => column.name);
+  if (!columns.includes("config_snapshot")) {
+    db.exec("ALTER TABLE subagent_tasks ADD COLUMN config_snapshot TEXT");
+  }
+}
+
 export function getSubagentDb(): Database.Database {
   if (globalThis.__piSubagentsDb) return globalThis.__piSubagentsDb;
   const dbPath = resolveDbPath();
@@ -104,6 +134,7 @@ export function getSubagentDb(): Database.Database {
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
   migrateTaskColumns(db);
+  migrateTaskConfigColumn(db);
   migrateProfileColumns(db);
   globalThis.__piSubagentsDb = db;
   return db;
@@ -120,6 +151,7 @@ function mapRow(row: Record<string, unknown>): SubagentTask {
     status: row.status as SubagentTaskStatus,
     result: (row.result as string | null) ?? null,
     error: (row.error as string | null) ?? null,
+    configSnapshot: (row.config_snapshot as string | null) ?? null,
     createdAt: row.created_at as number,
     startedAt: (row.started_at as number | null) ?? null,
     finishedAt: (row.finished_at as number | null) ?? null,
@@ -132,21 +164,43 @@ export function createSubagentTask(input: {
   subagentName: string;
   description: string;
   prompt: string;
+  /** JSON config snapshot; absent for callers that have none to record. */
+  configSnapshot?: string | null;
 }): SubagentTask {
   const now = Date.now();
   getSubagentDb().prepare(`
     INSERT INTO subagent_tasks
-      (task_id, parent_session_id, subagent_name, description, prompt, status, created_at)
-    VALUES (@taskId, @parentSessionId, @subagentName, @description, @prompt, 'creating', @now)
-  `).run({ ...input, now });
+      (task_id, parent_session_id, subagent_name, description, prompt, status, config_snapshot, created_at)
+    VALUES (@taskId, @parentSessionId, @subagentName, @description, @prompt, @status, @configSnapshot, @now)
+  `).run({
+    taskId: input.taskId,
+    parentSessionId: input.parentSessionId,
+    subagentName: input.subagentName,
+    description: input.description,
+    prompt: input.prompt,
+    // The id exists before the child session does; a queued task is a real,
+    // addressable task whose slot has not been granted yet.
+    status: "queued" satisfies SubagentTaskStatus,
+    configSnapshot: input.configSnapshot ?? null,
+    now,
+  });
   return getSubagentTask(input.taskId)!;
+}
+
+/** Move a task to a non-terminal status (`creating`, `stopping`, …). */
+export function markSubagentStatus(taskId: string, status: "creating" | "stopping"): void {
+  getSubagentDb().prepare(`
+    UPDATE subagent_tasks
+    SET status = ?
+    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
+  `).run(status, taskId);
 }
 
 export function markSubagentRunning(taskId: string, childSessionId: string): void {
   getSubagentDb().prepare(`
     UPDATE subagent_tasks
     SET child_session_id = ?, status = 'running', started_at = ?, error = NULL
-    WHERE task_id = ?
+    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
   `).run(childSessionId, Date.now(), taskId);
 }
 
@@ -154,16 +208,47 @@ export function completeSubagentTask(taskId: string, result: string): void {
   getSubagentDb().prepare(`
     UPDATE subagent_tasks
     SET status = 'completed', result = ?, error = NULL, finished_at = ?
-    WHERE task_id = ?
+    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
   `).run(result, Date.now(), taskId);
 }
 
-export function failSubagentTask(taskId: string, error: string, status: "failed" | "cancelled" = "failed"): void {
+export function failSubagentTask(
+  taskId: string,
+  error: string,
+  status: "failed" | "cancelled" | "interrupted" = "failed",
+): void {
   getSubagentDb().prepare(`
     UPDATE subagent_tasks
     SET status = ?, error = ?, finished_at = ?
-    WHERE task_id = ?
+    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
   `).run(status, error, Date.now(), taskId);
+}
+
+/**
+ * Attach the last partial output an abnormal stop produced. The row's `error`
+ * keeps the bare reason; this is the text the caller can also read. Deliberately
+ * not status-guarded: the manager calls it immediately after the terminal
+ * `failSubagentTask` write for the same task, where no other writer can be in
+ * between.
+ */
+export function setSubagentTaskPartialOutput(taskId: string, result: string): void {
+  getSubagentDb().prepare("UPDATE subagent_tasks SET result = ? WHERE task_id = ?")
+    .run(result, taskId);
+}
+
+/**
+ * Mark every task that never reached a terminal state as interrupted. Called
+ * once when the task manager starts: a restarted process cannot confirm the
+ * child turns are still running, so it reports the truth instead of leaving a
+ * stale `running` row or replaying the input.
+ */
+export function reconcileInterruptedSubagentTasks(error = "Interrupted: the server restarted before this task finished"): number {
+  const result = getSubagentDb().prepare(`
+    UPDATE subagent_tasks
+    SET status = 'interrupted', error = ?, finished_at = ?
+    WHERE status NOT IN (${TERMINAL_SQL})
+  `).run(error, Date.now());
+  return result.changes;
 }
 
 export function listSubagentChildSessionIds(): string[] {

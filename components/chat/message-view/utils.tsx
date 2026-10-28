@@ -9,6 +9,7 @@ import { SvgBlock } from "@/components/renderers/SvgBlock";
 import { CodeBlock } from "@/components/renderers/CodeBlock";
 import { MarkdownImage } from "@/components/renderers/ImageLightbox";
 import { resolveFileLink } from "@/lib/shared/file-link";
+import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "@/lib/shared/subagent";
 import type { MessageCallMetrics } from "@/lib/shared/token-audit-types";
 import { useFileLinkHandler } from "./context";
 
@@ -206,9 +207,10 @@ export function getToolPreview(block: { input?: unknown; toolName?: string }): s
       parts = [str(record.command)];
       break;
     }
-    case "spawn_subagent": {
-      // `subagentType` is the pre-rename field, still present on custom
-      // entries written by older versions.
+    // The current tool name, plus the pre-rename name still present in old
+    // messages. `subagentType` is the even older field name on custom entries.
+    case SUBAGENT_TOOL_NAME:
+    case LEGACY_SPAWN_SUBAGENT_TOOL_NAME: {
       parts = [str(record.subagent_name) || str(record.subagentType), str(record.description)];
       break;
     }

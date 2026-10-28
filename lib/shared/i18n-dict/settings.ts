@@ -74,7 +74,7 @@ export const settings = {
   "Edit subagent": "编辑子代理",
   "Built-in": "内置",
   "Delete subagent \"{name}\"?": "删除子代理“{name}”？",
-  "Create the agents the spawn_subagent tool can launch. Each has its own prompt, tools, model, Pi Bot and timeout.": "创建 spawn_subagent 工具可以调用的子代理。每个子代理拥有独立的提示词、工具、模型、Pi Bot 形象与超时配置。",
+  "Create the agents the subagent tool can launch. Each has its own prompt, tools, model, Pi Bot and timeout.": "创建 subagent 工具可以调用的子代理。每个子代理拥有独立的提示词、工具、模型、Pi Bot 形象与超时配置。",
   "No subagents configured yet.": "还没有配置子代理。",
   "The model passes this as subagent_name. Immutable after creation.": "模型通过 subagent_name 传入该名称，创建后不可修改。",
   "Shown to the parent model so it knows when to use this subagent.": "展示给父级模型，用于判断何时使用该子代理。",

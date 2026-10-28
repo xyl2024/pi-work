@@ -134,6 +134,18 @@ export interface RunTurnSpec {
    */
   abortSources?: TurnAbortSource[];
   /**
+   * Whether a stop (deadline or abort source) must be *confirmed* before the
+   * result is reported. With `false` (the default) a stop settles immediately
+   * and a deadline destroys the wrapper. With `true` the module asks the
+   * session to abort and keeps waiting for its own terminal event, so the
+   * caller only ever sees `timeout` / `cancelled` once the turn really stopped;
+   * the wrapper is not destroyed on the caller's behalf, because a destroyed
+   * wrapper is not proof the underlying turn stopped. A caller that needs the
+   * answer "is it still running?" (subagent tasks) opts in; everyone else
+   * keeps the immediate semantics.
+   */
+  confirmStop?: boolean;
+  /**
    * Called once, right after the session is acquired and before any setup
    * command or the prompt reaches it. Lets a caller that must address the
    * live session while the turn is running (to abort it, or to link it from a
@@ -162,6 +174,14 @@ export interface WatchSettledOptions {
    * deadline. Absent/empty leaves today's behaviour untouched.
    */
   abortSources?: TurnAbortSource[];
+  /**
+   * Confirm a stop before reporting it (see `RunTurnSpec.confirmStop`). With
+   * this set, a deadline or abort source asks the session to abort and settles
+   * only when the session reports its own terminal event; nothing is destroyed
+   * on the caller's behalf. An already-aborted source still settles at once —
+   * nothing started, so there is nothing to confirm.
+   */
+  confirmStop?: boolean;
 }
 
 /**
@@ -185,6 +205,9 @@ export interface TurnAbortSource {
  * converges to `interrupted`. When `timeoutMs` is given, the deadline is the
  * caller's policy executed here: the session is destroyed and the result is
  * `timeout`. Without `timeoutMs` the session is never touched by a deadline.
+ * With `confirmStop`, a deadline or abort source instead asks the session to
+ * abort and settles only on its own terminal event, so the reported state is
+ * always one the session actually reached.
  *
  * Ids: an observe-only call sees the wrapper's `sessionId`, which in
  * production IS pi's real session id. `runTurn` overwrites both ids with the
@@ -203,6 +226,8 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
     let removeEventListener: () => void = () => {};
     let removeDestroyListener: () => void = () => {};
     let removeAbortListeners: () => void = () => {};
+    /** The stop the caller asked for, once one was requested (confirm mode). */
+    let requestedStop: TurnEndReason | null = null;
 
     const finish = (reason: TurnEndReason) => {
       if (done) return;
@@ -219,10 +244,32 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
     // Both listeners are installed synchronously inside the Promise executor —
     // for watchSettled the turn may be mid-flight already, so there is no
     // "before the prompt" moment to be late for.
+    // A requested stop does not become the answer on its own: the turn's own
+    // terminal event confirms the session actually stopped. Until then the
+    // caller keeps seeing "no result yet", which is the honest state.
+    const requestStop = (reason: TurnEndReason) => {
+      if (done || requestedStop) return;
+      requestedStop = reason;
+      // Best-effort, exactly like the pre-seam abort path: the abort completes
+      // asynchronously and the session's JSONL still records the stop.
+      void Promise.resolve(session.send({ type: "abort" })).catch(() => undefined);
+    };
+
     removeEventListener = session.onEvent((event) => {
       snapshot = observeTurnEvent(snapshot, event);
       const reason = eventTurnEndReason(event);
-      if (reason) finish(reason);
+      if (!reason) return;
+      if (requestedStop && reason.kind === "settled") {
+        // A stop request races the turn's own end. If the session actually
+        // finished with a real reply in the meantime, that answer wins: a late
+        // stop must not overwrite a landed result with `timeout`/`cancelled`.
+        const natural = classifyTurnEnd(snapshot, reason);
+        if (natural.status === "completed" && natural.hasReply) {
+          finish(reason);
+          return;
+        }
+      }
+      finish(requestedStop ?? reason);
     });
     removeDestroyListener = session.onDestroy(() => {
       finish({ kind: "interrupted" });
@@ -231,6 +278,12 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
     if (options.timeoutMs !== undefined) {
       const deadlineMs = options.timeoutMs;
       timer = setTimeout(() => {
+        if (options.confirmStop) {
+          // Ask the session to stop and keep the wait alive: the result stays
+          // unreported until the turn settles or the wrapper is destroyed.
+          requestStop({ kind: "timeout", deadlineMs });
+          return;
+        }
         // Decide the outcome BEFORE destroying the session. The wrapper runs
         // its onDestroy callbacks synchronously, and a caller may have wired
         // one of them to a stop source (the subagent path wires the child
@@ -251,6 +304,10 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
     if (options.abortSources?.length) {
       const removeFns: Array<() => void> = [];
       const cancel = (source: TurnAbortSource) => {
+        if (options.confirmStop) {
+          requestStop({ kind: "cancelled", reason: source.reason });
+          return;
+        }
         // Best-effort, exactly like the pre-seam subagent path: the abort
         // completes asynchronously and its JSONL still records the stop.
         void Promise.resolve(session.send({ type: "abort" })).catch(() => undefined);
@@ -265,10 +322,16 @@ export async function watchSettled(session: TurnSession, options: WatchSettledOp
         for (const remove of removeFns) remove();
       };
       // A signal aborted before this call never fires its listener; converge at
-      // once instead of hanging until the session settles on its own.
+      // once instead of hanging until the session settles on its own. This is
+      // the one stop reported without confirmation: the turn had not started,
+      // so there is nothing left running to confirm.
       for (const source of options.abortSources) {
         if (source.signal.aborted) {
-          cancel(source);
+          // Still tell the session to stop (kept from the pre-confirm
+          // behaviour), then report at once: nothing was prompted, so there is
+          // nothing left running to confirm.
+          void Promise.resolve(session.send({ type: "abort" })).catch(() => undefined);
+          finish({ kind: "cancelled", reason: source.reason });
           break;
         }
       }
@@ -332,6 +395,7 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
   const watched = watchSettled(session, {
     timeoutMs: spec.timeoutMs,
     ...(spec.abortSources ? { abortSources: spec.abortSources } : {}),
+    ...(spec.confirmStop ? { confirmStop: true } : {}),
   });
 
   // A turn cancelled before its prompt is dispatched never starts one: the

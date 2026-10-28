@@ -31,6 +31,7 @@ import {
   sumDiffStats,
   type ToolDiffStats,
 } from "./tool-diff-stats";
+import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./subagent";
 import type {
   AgentMessage,
   AssistantMessage,
@@ -54,7 +55,10 @@ export function classifyToolCall(toolName: string): ToolCallKind {
       return "file-mutation";
     case "bash":
       return "bash";
-    case "spawn_subagent":
+    // The current tool name, plus the pre-rename one so old messages keep
+    // rendering as subagent cards (they are never executed any more).
+    case SUBAGENT_TOOL_NAME:
+    case LEGACY_SPAWN_SUBAGENT_TOOL_NAME:
       return "subagent";
     case "codemode":
       return "codemode";

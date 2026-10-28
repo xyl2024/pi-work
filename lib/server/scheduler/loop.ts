@@ -15,6 +15,7 @@
  */
 
 import { Cron } from "croner";
+import { migrateToolName } from "../../shared/subagent";
 import { getSchedulerDb } from "./db";
 import { recordRunStart, type ScheduledTask } from "./store";
 import { runTask } from "./runner";
@@ -106,7 +107,13 @@ function rowToTask(row: TaskRow): ScheduledTask {
   if (row.tool_names) {
     try {
       const parsed = JSON.parse(row.tool_names);
-      if (Array.isArray(parsed)) toolNames = parsed as string[];
+      // Same on-load migration as the store: a task configured before the
+      // subagent tool rename must keep the tool it was saved with.
+      if (Array.isArray(parsed)) {
+        toolNames = parsed
+          .filter((name): name is string => typeof name === "string")
+          .map(migrateToolName);
+      }
     } catch {
       // ignore — store handles parse
     }

@@ -28,7 +28,8 @@ import { buildAskUserQuestionsTool, ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK } fro
 import { celebrateTool } from "./celebrate-tool";
 import { getRegistry } from "./session-registry";
 import { piWorkCallTool } from "./self-tools/pi-work-call";
-import { spawnSubagentTool, buildSpawnSubagentSystemPromptBlock } from "./subagent-tool";
+import { subagentTool, buildSubagentSystemPromptBlock } from "./subagent-tool";
+import { SUBAGENT_TOOL_NAME, LEGACY_SPAWN_SUBAGENT_TOOL_NAME } from "../shared/subagent";
 import type { AskUserQuestionsCancel, AskUserQuestionsDecision } from "../shared/ask-user-questions-tool-types";
 import { evaluateDangerousCommand, getDangerousPatternTimeoutMs } from "./dangerous-patterns";
 import { DEFAULT_PERMISSION_MODE, isPermissionMode, type PermissionMode } from "../shared/permission-mode";
@@ -1102,7 +1103,12 @@ export async function startRpcSession(
             ));
         const blocks: string[] = [];
         if (sessionHasTool("ask_user_questions")) blocks.push(ASK_USER_QUESTIONS_SYSTEM_PROMPT_BLOCK);
-        if (sessionHasTool("spawn_subagent")) blocks.push(buildSpawnSubagentSystemPromptBlock());
+        // Both names are checked: a stored selection written before the rename
+        // is migrated on read, but the check is cheap and keeps a session whose
+        // cache predates the migration from silently losing its guidelines.
+        if (sessionHasTool(SUBAGENT_TOOL_NAME) || sessionHasTool(LEGACY_SPAWN_SUBAGENT_TOOL_NAME)) {
+          blocks.push(buildSubagentSystemPromptBlock());
+        }
         return blocks.length > 0 ? [...baseAppend, ...blocks] : baseAppend;
       },
       // Codebase explorers receive no Skills section. Other sessions retain
@@ -1360,10 +1366,11 @@ export async function startRpcSession(
         // (`excludeTools` filters custom definitions too), so "which shells
         // exist here" stays one decision (lib/shared/agent-shell-tools.ts).
         createPiWorkPowerShellTool(cwd),
-        // Core orchestration tool. Child profiles exclude it through
-        // allowedToolNames, so subagents cannot recursively spawn more
-        // subagents in the MVP.
-        spawnSubagentTool,
+        // Core orchestration tool. Never registered inside a subagent session:
+        // recursion is blocked by construction, not only by a profile's tool
+        // list — which also means a stale `spawn_subagent` name in a profile
+        // cannot bring recursion back after the rename.
+        ...(capturedSource === "subagent" ? [] : [subagentTool]),
         ...buildAskUserQuestionsTool({
           // Read the wrapper lazily at execute time. By the time the
           // agent can invoke the tool, the wrapper exists and the slot

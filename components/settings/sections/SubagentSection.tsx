@@ -19,7 +19,7 @@ async function loadSubagentProfiles(): Promise<SubagentProfile[]> {
 }
 
 /**
- * Subagents settings section — the CRUD list for the profiles `spawn_subagent`
+ * Subagents settings section — the CRUD list for the profiles the `subagent` tool
  * can launch. Edits commit immediately through `/api/subagents` (like an avatar
  * upload), so this section does not participate in the settings modal's staged
  * save; it keeps its own list and reloads after a write.
@@ -61,7 +61,7 @@ export function SubagentSection({ pageCache }: { pageCache: SettingsPageDataCach
         <PrimaryButton onClick={() => setEditing("new")}>{t("New subagent")}</PrimaryButton>
       </div>
       <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 6 }}>
-        {t("Create the agents the spawn_subagent tool can launch. Each has its own prompt, tools, model, Pi Bot and timeout.")}
+        {t("Create the agents the subagent tool can launch. Each has its own prompt, tools, model, Pi Bot and timeout.")}
       </p>
 
       {loading ? (

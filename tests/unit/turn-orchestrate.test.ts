@@ -28,6 +28,13 @@ const settledAssistant = (text: string) => ({
   stopReason: "end_turn",
 });
 
+/** The assistant message a session records for a turn that was aborted. */
+const abortedAssistant = (text: string) => ({
+  role: "assistant",
+  content: [{ type: "text", text }],
+  stopReason: "aborted",
+});
+
 class FakeTurnSession implements TurnSession {
   readonly sent: Record<string, unknown>[] = [];
   readonly sentOptions: (TurnSendOptions | undefined)[] = [];
@@ -506,6 +513,88 @@ describe("runTurn — abort sources", () => {
     // No prompt was ever sent: a turn nobody is going to wait for must not be
     // started and left running.
     expect(session.sent.map((command) => command.type)).toEqual(["abort"]);
+  });
+
+  it("waits for the session to confirm the stop before reporting cancelled", async () => {
+    const session = new FakeTurnSession("real-1");
+    const source = new AbortController();
+
+    const turn = runTurn(
+      baseSpec({
+        confirmStop: true,
+        timeoutMs: 60_000,
+        abortSources: [{ signal: source.signal, reason: "Subagent cancelled" }],
+      }),
+      makeFactory([session], []),
+    );
+    await tick();
+    source.abort();
+
+    let reported = false;
+    void turn.then(() => {
+      reported = true;
+    });
+    await tick();
+    // The abort command went out, but nothing is reported while the turn is
+    // still running: "cancelled" is only allowed to mean "it really stopped".
+    expect(session.sent.map((command) => command.type)).toEqual(["prompt", "abort"]);
+    expect(reported).toBe(false);
+
+    session.emit({ type: "agent_end", willRetry: false, messages: [abortedAssistant("cut short")] });
+    session.emit({ type: "agent_settled" });
+
+    const result = await turn;
+    expect(result.status).toBe("cancelled");
+    expect(result.error).toBe("Subagent cancelled");
+    // Confirming a stop never means destroying the wrapper.
+    expect(session.destroyed).toBe(0);
+  });
+
+  it("asks the session to abort at the deadline and waits for it before reporting timeout", async () => {
+    const session = new FakeTurnSession("real-1");
+
+    const turn = runTurn(baseSpec({ confirmStop: true, timeoutMs: 10 }), makeFactory([session], []));
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+
+    expect(session.destroyed).toBe(0);
+    expect(session.sent.some((command) => command.type === "abort")).toBe(true);
+
+    session.emit({ type: "agent_end", willRetry: false, messages: [] });
+    session.emit({ type: "agent_settled" });
+
+    const result = await turn;
+    expect(result.status).toBe("timeout");
+    expect(result.error).toContain("max lifetime exceeded");
+    // A destroyed wrapper is not proof the turn stopped, so confirm mode never
+    // destroys one — the caller keeps the honest observable state instead.
+    expect(session.destroyed).toBe(0);
+  });
+
+  it("lets a real completion win over a stop request that raced it", async () => {
+    const session = new FakeTurnSession("real-1");
+
+    const turn = runTurn(baseSpec({ confirmStop: true, timeoutMs: 10 }), makeFactory([session], []));
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+
+    // The deadline already asked for a stop, but the turn had finished its
+    // answer anyway: the landed result must not be reported as `timeout`.
+    session.emit({ type: "agent_end", willRetry: false, messages: [settledAssistant("the answer")] });
+    session.emit({ type: "agent_settled" });
+
+    const result = await turn;
+    expect(result.status).toBe("completed");
+    expect(result.text).toBe("the answer");
+  });
+
+  it("reports interrupted when the wrapper disappears before the stop is confirmed", async () => {
+    const session = new FakeTurnSession("real-1");
+
+    const turn = runTurn(baseSpec({ confirmStop: true, timeoutMs: 10 }), makeFactory([session], []));
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    session.destroy();
+
+    const result = await turn;
+    expect(result.status).toBe("interrupted");
   });
 
   it("behaves exactly as before when no abort sources are given", async () => {

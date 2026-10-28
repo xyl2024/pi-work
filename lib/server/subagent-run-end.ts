@@ -1,5 +1,5 @@
 /**
- * The spawn_subagent tool's mapping from the turn module's neutral terminal
+ * The subagent tool's mapping from the turn module's neutral terminal
  * state onto the subagent vocabulary the parent agent and the `subagents.db`
  * row see.
  *
