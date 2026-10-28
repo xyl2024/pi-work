@@ -175,3 +175,36 @@ export interface SummarizeResult {
   buckets: SummaryBucket[];
   totals: SummaryBucket;
 }
+
+/**
+ * Whole-session usage rollup shown in the bottom status bar.
+ *
+ * Tokens/cost come from the session's billing rows; the latency facts come
+ * from its model-call rows, so an unrecorded call simply contributes nothing
+ * instead of a zero. `null` marks "nothing measurable" for every derived
+ * number — it never means 0.
+ */
+export interface SessionUsageSummary {
+  /** Uncached input only (what the provider reports as `input`). */
+  inputTokens: number;
+  /**
+   * Input as the provider bills it: uncached input + cache read + cache write.
+   * This is the "In" the status bar shows, so `totalTokens` equals
+   * `inputTokensWithCache + outputTokens` with no token counted twice.
+   */
+  inputTokensWithCache: number;
+  outputTokens: number;
+  /** `inputTokensWithCache + outputTokens`. */
+  totalTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costTotal: number;
+  /** `cacheReadTokens / (inputTokens + cacheReadTokens)`; `null` when no input
+   *  was billed, so "no data" never renders as 0%. */
+  cacheHitRate: number | null;
+  /** Mean TTFT across calls that recorded one. */
+  avgTtftMs: number | null;
+  /** `Σ outputTokens / Σ generationDurationMs` over measurable chat calls
+   *  (token-weighted, so a short burst call cannot outweigh a long one). */
+  avgGenerationTps: number | null;
+}

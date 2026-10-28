@@ -495,6 +495,41 @@ export function reconcileInterruptedSubagentTasks(error = "Interrupted: the serv
   return result.changes;
 }
 
+/**
+ * Every session spawned under `parentSessionId`, transitively.
+ *
+ * A child is an ordinary session and can own tasks itself (a custom profile
+ * may hand the `subagent` tool on), so the walk follows `parent_session_id`
+ * downwards instead of stopping at the first level. Each session is visited at
+ * most once: the status bar polls this every few seconds and must never be able
+ * to loop. No store on disk means no subagent ever ran here, so the read
+ * returns empty instead of creating the database file.
+ */
+export function listDescendantSubagentSessionIds(parentSessionId: string): string[] {
+  if (!hasSubagentStore()) return [];
+  const selectChildren = getSubagentDb().prepare(
+    "SELECT DISTINCT child_session_id FROM subagent_tasks WHERE parent_session_id = ? AND child_session_id IS NOT NULL",
+  );
+  const seen = new Set<string>([parentSessionId]);
+  const descendants: string[] = [];
+  let frontier = [parentSessionId];
+  while (frontier.length > 0) {
+    const next: string[] = [];
+    for (const parent of frontier) {
+      const rows = selectChildren.all(parent) as Array<{ child_session_id: string }>;
+      for (const row of rows) {
+        const child = row.child_session_id;
+        if (seen.has(child)) continue;
+        seen.add(child);
+        descendants.push(child);
+        next.push(child);
+      }
+    }
+    frontier = next;
+  }
+  return descendants;
+}
+
 export function listSubagentChildSessionIds(): string[] {
   const rows = getSubagentDb().prepare(
     "SELECT child_session_id FROM subagent_tasks WHERE child_session_id IS NOT NULL",

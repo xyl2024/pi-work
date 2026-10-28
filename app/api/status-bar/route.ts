@@ -1,37 +1,12 @@
 import { NextResponse } from "next/server";
 import { readFileSync } from "node:fs";
 import { getRepoStatus } from "@/lib/server/git-diff";
-import { summarize } from "@/lib/server/token-audit-store";
+import { summarize, summarizeSessions } from "@/lib/server/token-audit-store";
 import { listChannels } from "@/lib/server/channels";
 import { currentInteractiveShellName } from "@/lib/server/interactive-shell";
+import { listDescendantSubagentSessionIds } from "@/lib/server/subagent-store";
 
 export const dynamic = "force-dynamic";
-
-let previousCpuSample: { usage: NodeJS.CpuUsage; timestamp: bigint } | null = null;
-
-function getProcessCpuUsage(): number | null {
-  const timestamp = process.hrtime.bigint();
-  const usage = process.cpuUsage();
-  const previous = previousCpuSample;
-  previousCpuSample = { usage, timestamp };
-  if (!previous) return null;
-
-  const elapsedMicros = Number(timestamp - previous.timestamp) / 1_000;
-  if (elapsedMicros <= 0) return null;
-
-  const userMicros = usage.user - previous.usage.user;
-  const systemMicros = usage.system - previous.usage.system;
-  return Math.min(100, Math.max(0, ((userMicros + systemMicros) / elapsedMicros) * 100));
-}
-
-function getServerMemory() {
-  const memory = process.memoryUsage();
-  return {
-    rss: memory.rss,
-    heapUsed: memory.heapUsed,
-    heapTotal: memory.heapTotal,
-  };
-}
 
 function getLinuxDistribution(): string | null {
   try {
@@ -56,7 +31,10 @@ function getOsName(): string {
 }
 
 export async function GET(request: Request) {
-  const cwd = new URL(request.url).searchParams.get("cwd");
+  const params = new URL(request.url).searchParams;
+  const cwd = params.get("cwd");
+  const sessionId = params.get("sessionId")?.trim() || null;
+
   let git: { branch: string | null; changedFiles: number; additions: number; deletions: number } = {
     branch: null,
     changedFiles: 0,
@@ -77,10 +55,24 @@ export async function GET(request: Request) {
 
   const tokenTotals = summarize("today", "none").totals;
   const activeChannels = listChannels().filter((c) => c.status === "connected").length;
+
+  // A conversation's spend includes the work it triggered: the subagent
+  // sessions it spawned are ordinary sessions with their own billing rows, and
+  // they can spawn further sessions of their own.
+  let session: ReturnType<typeof summarizeSessions> | null = null;
+  if (sessionId) {
+    let subagentSessionIds: string[] = [];
+    try {
+      subagentSessionIds = listDescendantSubagentSessionIds(sessionId);
+    } catch {
+      // A corrupt/unreadable subagent store must not take the status bar down;
+      // report the conversation's own numbers instead.
+    }
+    session = summarizeSessions([sessionId, ...subagentSessionIds]);
+  }
+
   return NextResponse.json({
     os: getOsName(),
-    cpu: getProcessCpuUsage(),
-    memory: getServerMemory(),
     shell: currentInteractiveShellName(),
     channels: activeChannels,
     git,
@@ -88,5 +80,9 @@ export async function GET(request: Request) {
       tokens: tokenTotals.inputTokens + tokenTotals.outputTokens + tokenTotals.cacheReadTokens + tokenTotals.cacheWriteTokens,
       cost: tokenTotals.costTotal,
     },
+    // Per-session rollup for the selected conversation (plus its subagent
+    // sessions); null when nothing is selected so the bar can hide the whole
+    // group instead of showing zeros.
+    session,
   });
 }

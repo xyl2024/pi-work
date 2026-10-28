@@ -31,6 +31,7 @@ import type {
   SummarizeResult,
   SummaryBucket,
   Source,
+  SessionUsageSummary,
   TokenCall,
   TokenCallInsert,
   ListCallsParams,
@@ -544,6 +545,149 @@ export function summarize(range: Range, groupBy: GroupBy, sessionIds?: string[])
   });
 
   return { buckets, totals };
+}
+
+interface SessionUsageAggregateRow {
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  costTotal: number | null;
+}
+
+interface SessionCallMetricRow {
+  status: string;
+  purpose: string;
+  output_tokens: number | null;
+  duration_ms: number | null;
+  ttft_ms: number | null;
+  generation_duration_ms: number | null;
+}
+
+/**
+ * Shortest generation window that counts as a measured speed.
+ *
+ * The window is first → last output delta. A non-streamed or burst-delivered
+ * call (translation, auto-naming, compaction, or a provider that hands every
+ * delta over in one tick) compresses it to a few dozen milliseconds while the
+ * provider still reports the full output usage — one such call would otherwise
+ * claim thousands of tok/s and drag the session average with it.
+ */
+const MIN_GENERATION_WINDOW_MS = 200;
+
+/** The "nothing measured yet" rollup: zeros for sums, `null` for every ratio. */
+function emptySessionUsage(): SessionUsageSummary {
+  return {
+    inputTokens: 0,
+    inputTokensWithCache: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    costTotal: 0,
+    cacheHitRate: null,
+    avgTtftMs: null,
+    avgGenerationTps: null,
+  };
+}
+
+/**
+ * Usage + latency rollup for a set of sessions, used by the bottom status bar.
+ *
+ * The caller passes the selected conversation plus every session it spawned
+ * (`listDescendantSubagentSessionIds`), so the numbers describe the work a
+ * conversation actually caused rather than only its own turns. Both queries are
+ * indexed lookups on `session_id`; the status bar polls them with the rest of
+ * its snapshot.
+ *
+ * - Cache hit rate is aggregate (weighted by tokens, same formula as the
+ *   audit panel). Input shown to the user includes cache, so the total is
+ *   simply that plus output.
+ * - TTFT is the mean over calls that recorded one; a reported 0ms counts.
+ * - Generation speed is `Σ outputTokens / Σ generationDurationMs` over chat
+ *   calls whose window is long enough to measure. Weighting by duration keeps
+ *   a burst call from outweighing a long real one, and excluding non-chat
+ *   purposes keeps non-interactive workloads out of a number users read as
+ *   "how fast is this conversation".
+ */
+export function summarizeSessions(sessionIds: readonly string[]): SessionUsageSummary {
+  const ids = [...new Set(sessionIds.filter((id) => id.length > 0))];
+  if (ids.length === 0) return emptySessionUsage();
+  const placeholders = ids.map(() => "?").join(", ");
+
+  const db = getTokenAuditDb();
+  const totals = db
+    .prepare(
+      `SELECT SUM(input_tokens)        AS inputTokens,
+              SUM(output_tokens)       AS outputTokens,
+              SUM(cache_read_tokens)   AS cacheReadTokens,
+              SUM(cache_write_tokens)  AS cacheWriteTokens,
+              SUM(cost_total)          AS costTotal
+         FROM token_calls
+        WHERE session_id IN (${placeholders})`,
+    )
+    .get(...ids) as SessionUsageAggregateRow | undefined;
+
+  const inputTokens = totals?.inputTokens ?? 0;
+  const outputTokens = totals?.outputTokens ?? 0;
+  const cacheReadTokens = totals?.cacheReadTokens ?? 0;
+  const cacheWriteTokens = totals?.cacheWriteTokens ?? 0;
+  const hitDenom = inputTokens + cacheReadTokens;
+
+  const metricRows = db
+    .prepare(
+      `SELECT status, purpose, output_tokens, duration_ms, ttft_ms, generation_duration_ms
+         FROM model_calls
+        WHERE session_id IN (${placeholders})`,
+    )
+    .all(...ids) as SessionCallMetricRow[];
+
+  let ttftSum = 0;
+  let ttftCount = 0;
+  let throughputTokens = 0;
+  let throughputDurationMs = 0;
+  for (const row of metricRows) {
+    // TTFT is not a denominator: a reported 0ms is a real measurement, so only
+    // negative/non-finite values are rejected (unlike the throughput guard,
+    // which demands a positive duration).
+    if (typeof row.ttft_ms === "number" && Number.isFinite(row.ttft_ms) && row.ttft_ms >= 0) {
+      ttftSum += row.ttft_ms;
+      ttftCount += 1;
+    }
+    if (mapPurpose(row.purpose) !== "chat") continue;
+    if (
+      typeof row.generation_duration_ms !== "number" ||
+      row.generation_duration_ms < MIN_GENERATION_WINDOW_MS
+    ) {
+      continue;
+    }
+    // `deriveCallThroughput` owns the "completed + reported usage" rules; using
+    // its verdict (rather than re-testing status here) keeps the badge in the
+    // chat and the status bar from disagreeing about what counts as a call.
+    const { generationTps } = deriveCallThroughput({
+      status: mapStatus(row.status),
+      outputTokens: row.output_tokens,
+      generationDurationMs: row.generation_duration_ms,
+      durationMs: row.duration_ms,
+    });
+    if (generationTps === null || row.output_tokens === null) continue;
+    throughputTokens += row.output_tokens;
+    throughputDurationMs += row.generation_duration_ms;
+  }
+
+  return {
+    inputTokens,
+    inputTokensWithCache: inputTokens + cacheReadTokens + cacheWriteTokens,
+    outputTokens,
+    totalTokens: inputTokens + cacheReadTokens + cacheWriteTokens + outputTokens,
+    cacheReadTokens,
+    cacheWriteTokens,
+    costTotal: totals?.costTotal ?? 0,
+    cacheHitRate: hitDenom > 0 ? cacheReadTokens / hitDenom : null,
+    avgTtftMs: ttftCount > 0 ? ttftSum / ttftCount : null,
+    avgGenerationTps:
+      throughputDurationMs > 0 ? (throughputTokens * 1000) / throughputDurationMs : null,
+  };
 }
 
 export function clearAllData(): { ok: true; deleted: number } {

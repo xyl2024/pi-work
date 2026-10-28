@@ -34,6 +34,7 @@ import { splitBaseBlocks, splitSystemPrompt, type SystemPromptSegment } from "@/
 import { CommandPalette } from "./CommandPalette";
 import { CwdPicker } from "../sessions/CwdPicker";
 import { useI18n } from "@/hooks/useI18n";
+import { useFormatCurrency } from "@/hooks/useFormatCurrency";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisableDefaultTab } from "@/hooks/useDisableDefaultTab";
 import { useExternalLinks } from "@/hooks/useExternalLinks";
@@ -45,6 +46,7 @@ import { ExpandRightIcon } from "../ui/animated-icons";
 import { useToast } from "../ui/Toast";
 import { useContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import type { SessionInfo, SessionSearchResult } from "@/lib/shared/types";
+import type { SessionUsageSummary } from "@/lib/shared/token-audit-types";
 import { getRelativeFilePath } from "@/lib/shared/file-paths";
 import { isRightBarButtonVisible } from "@/lib/shared/right-bar";
 import {
@@ -233,11 +235,23 @@ function lossyPanelKinds(tabs: readonly AnyPanelTab[]): PanelViewKind[] {
   return PANEL_KINDS_WITH_CLOSE_GUARD.filter((kind) => closing.has(kind));
 }
 
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "—";
-  const units = ["B", "KB", "MB", "GB"];
-  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / 1024 ** unitIndex).toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+function formatTokenCount(tokens: number): string {
+  if (!Number.isFinite(tokens) || tokens <= 0) return "0";
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(2)}M`;
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}k`;
+  return String(Math.round(tokens));
+}
+
+/** First-token latency: sub-second reads better in ms, later in seconds. */
+function formatTtft(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = ms / 1000;
+  return `${seconds.toFixed(seconds < 10 ? 2 : 1)}s`;
+}
+
+/** Generation speed: keep one decimal, drop it once it stops mattering. */
+function formatTps(tps: number): string {
+  return tps >= 100 ? tps.toFixed(0) : tps.toFixed(1);
 }
 
 // Fixed panel ratios (drag-resize removed). Center column takes the remainder.
@@ -413,30 +427,9 @@ function WorkspaceChatTabView({
   );
 }
 
-const USEFUL_TIP_KEYS = [
-  "You can set a custom Prompt and invoke it with '/'.",
-  "For unrelated tasks, consider starting a new session.",
-  "Use '/' to run commands and custom Prompts or SKILLs.",
-  "Press Space anywhere to focus the conversation input.",
-  "Press Ctrl + K to open the command palette.",
-  "Switch to a higher thinking level for more complex tasks.",
-  "Turn common workflows into SKILLs to reduce repetitive work.",
-  "Keep optimizing your AGENTS.md for simplicity and efficiency.",
-  "Remove unnecessary plugins, MCPs, and SKILLs to keep context concise and efficient.",
-  "Align on requirements before implementing code.",
-  "You can switch the current conversation branch in the conversation tree on the right.",
-  "Use Git to manage your projects.",
-  "Press ↑/↓ in the input box to cycle through sent messages.",
-] as const;
-
-function shuffleTips<T>(items: readonly T[]): T[] {
-  const shuffled = [...items];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
-  }
-  return shuffled;
-}
+// Bottom status bar state. Nothing in here animates: the bar re-reads its
+// snapshot every few seconds, and the per-session rollup only changes when a
+// model call finishes, so a timer-driven clock or tip rotation has no place.
 
 const WorkspaceChatTab = memo(WorkspaceChatTabView, (previous, next) =>
   previous.tab === next.tab &&
@@ -449,6 +442,8 @@ export function AppShell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t, setLocale } = useI18n();
+  // Status-bar session cost follows the header's USD/CNY choice.
+  const { formatCost } = useFormatCurrency();
   const theme = useTheme();
   const toast = useToast();
   // Strip the browser default Tab focus-traversal app-wide so that Tab can
@@ -1199,52 +1194,35 @@ export function AppShell() {
   // what matters (cfg.order → ordered ids).
   const selectedSessionId = selectedSession?.id ?? null;
   const selectedCwd = selectedSession?.cwd ?? newSessionCwd ?? null;
-  const [statusBar, setStatusBar] = useState({
+  const [statusBar, setStatusBar] = useState<{
+    os: string;
+    shell: string;
+    channels: number;
+    git: { branch: string | null; changedFiles: number; additions: number; deletions: number };
+    today: { tokens: number; cost: number };
+    session: SessionUsageSummary | null;
+  }>({
     os: "—",
     shell: "—",
     channels: 0,
-    cpu: null as number | null,
-    memory: { rss: 0, heapUsed: 0, heapTotal: 0 },
-    git: { branch: null as string | null, changedFiles: 0, additions: 0, deletions: 0 },
-    runningSessions: 0,
+    git: { branch: null, changedFiles: 0, additions: 0, deletions: 0 },
     today: { tokens: 0, cost: 0 },
+    session: null,
   });
-  const [statusBarTime, setStatusBarTime] = useState(() => new Date());
-  const [usefulTipOrder, setUsefulTipOrder] = useState<string[]>([...USEFUL_TIP_KEYS]);
-  const [usefulTipIndex, setUsefulTipIndex] = useState(0);
-  const [usefulTipVisible, setUsefulTipVisible] = useState(true);
   const { count: runningSessionCount } = useRunningSessions();
-
-  useEffect(() => {
-    setUsefulTipOrder(shuffleTips(USEFUL_TIP_KEYS));
-  }, []);
-
-  useEffect(() => {
-    let transitionTimer: number | undefined;
-    const timer = window.setInterval(() => {
-      setUsefulTipVisible(false);
-      transitionTimer = window.setTimeout(() => {
-        setUsefulTipIndex((index) => (index + 1) % usefulTipOrder.length);
-        setUsefulTipVisible(true);
-      }, 350);
-    }, 10000);
-    return () => {
-      window.clearInterval(timer);
-      if (transitionTimer !== undefined) window.clearTimeout(transitionTimer);
-    };
-  }, [usefulTipOrder.length]);
 
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
       try {
-        const query = selectedCwd ? `?cwd=${encodeURIComponent(selectedCwd)}` : "";
-        const response = await fetch(`/api/status-bar${query}`, { cache: "no-store" });
+        const params = new URLSearchParams();
+        if (selectedCwd) params.set("cwd", selectedCwd);
+        if (selectedSessionId) params.set("sessionId", selectedSessionId);
+        const query = params.toString();
+        const response = await fetch(`/api/status-bar${query ? `?${query}` : ""}`, { cache: "no-store" });
         if (!response.ok) return;
         const data = await response.json();
-        if (!cancelled) {
-          setStatusBar((previous) => ({ ...data, runningSessions: previous.runningSessions }));
-        }
+        if (!cancelled) setStatusBar(data);
       } catch {
         // The status bar is informational; retain the last known values.
       }
@@ -1255,12 +1233,7 @@ export function AppShell() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [selectedCwd]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setStatusBarTime(new Date()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+  }, [selectedCwd, selectedSessionId]);
 
   const rightBarCtx: RightBarCtx = {
     rightPanelState,
@@ -1752,6 +1725,9 @@ export function AppShell() {
           fontSize: 11,
           lineHeight: 1,
           marginTop: 4,
+          // The usage group is wider than a narrow window; clipping beats
+          // letting it push the right-aligned "Today" summary out of view.
+          overflow: "hidden",
         }}
       >
         <button
@@ -1821,30 +1797,55 @@ export function AppShell() {
         )}
         <span style={{ marginLeft: 10 }}>Active: <span style={{ color: runningSessionCount > 0 ? "var(--accent)" : "inherit" }}>{runningSessionCount}</span></span>
         <span style={{ marginLeft: 10 }}>{t("Channels")}: {statusBar.channels}</span>
-        <span style={{ marginLeft: 10 }}>
-          CPU {statusBar.cpu == null ? "—" : `${statusBar.cpu.toFixed(1)}%`} RAM {formatBytes(statusBar.memory.rss)}
-        </span>
-        <span
-          aria-live="polite"
-          style={{
-            flex: 1,
-            minWidth: 0,
-            margin: "0 10px",
-            overflow: "hidden",
-            textAlign: "left",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            opacity: usefulTipVisible ? 1 : 0,
-            transition: "opacity 350ms ease-in-out",
-          }}
-        >
-          {t(usefulTipOrder[usefulTipIndex] ?? USEFUL_TIP_KEYS[0])}
-        </span>
+        {statusBar.session && (() => {
+          const usage = statusBar.session;
+          // A session with nothing recorded yet shows no metric group at all —
+          // seven zeros would read like measured data.
+          if (
+            usage.totalTokens === 0 &&
+            usage.costTotal === 0 &&
+            usage.avgTtftMs === null &&
+            usage.avgGenerationTps === null
+          ) {
+            return null;
+          }
+          const items: Array<{ key: string; title: string; label: string; value: string }> = [
+            { key: "in", title: t("Input tokens with cache"), label: t("In"), value: formatTokenCount(usage.inputTokensWithCache) },
+            { key: "out", title: t("Output tokens"), label: t("Out"), value: formatTokenCount(usage.outputTokens) },
+            { key: "total", title: t("Total tokens"), label: t("Total"), value: formatTokenCount(usage.totalTokens) },
+            { key: "cost", title: t("Total cost"), label: t("Cost"), value: formatCost(usage.costTotal) },
+            {
+              key: "cache",
+              title: t("Cache hit rate"),
+              label: t("Cache"),
+              value: usage.cacheHitRate === null ? "—" : `${Math.round(usage.cacheHitRate * 100)}%`,
+            },
+            {
+              key: "ttft",
+              title: t("Avg TTFT"),
+              label: t("TTFT"),
+              value: usage.avgTtftMs === null ? "—" : formatTtft(usage.avgTtftMs),
+            },
+            {
+              key: "tps",
+              title: t("Avg TPS"),
+              label: t("TPS"),
+              value: usage.avgGenerationTps === null ? "—" : formatTps(usage.avgGenerationTps),
+            },
+          ];
+          return items.map((item) => (
+            <Tooltip key={item.key} content={item.title}>
+              {/* No own color/weight/size: the metric text inherits the bar's
+                  plain text style so it reads as one line, not as a new
+                  emphasis layer. */}
+              <span style={{ marginLeft: 10, whiteSpace: "nowrap" }}>
+                {item.label} {item.value}
+              </span>
+            </Tooltip>
+          ));
+        })()}
         <span style={{ marginLeft: "auto" }}>
           Today: {statusBar.today.tokens.toString().replace(/\B(?=(\d{4})+(?!\d))/g, ",")} tokens ${statusBar.today.cost.toFixed(4)}
-        </span>
-        <span style={{ marginLeft: 10 }}>
-          {statusBarTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
         </span>
       </div>
       </div>
