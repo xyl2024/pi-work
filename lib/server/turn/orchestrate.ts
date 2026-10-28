@@ -108,18 +108,19 @@ export interface RunTurnSpec {
   /** Who is running this turn (LLM-audit attribution). Defaults to "user". */
   source?: LlmAuditSource;
   /**
+   * 消息来源（ADR-0023）：由非网页发送方（定时任务、频道、子代理补输入）填
+   * 好、随 prompt 命令原样转发给收口点；session 的 RPC 层写对应的 custom
+   * entry 并给 SSE message_end 打标签；prompt 文本本身永远不因它改变。
+   * Omitted (web) writes nothing — the byte-identical default for every
+   * caller that does not opt in.
+   */
+  origin?: MessageOrigin;
+  /**
    * What this turn's model calls are for (LLM-audit attribution). Omitted lets
    * the session's own default stand (chat) — a channel message names `channel`
    * while keeping its user source.
    */
   purpose?: CallPurpose;
-  /**
-   * 消息来源（ADR-0023）：由非网页发送方（定时任务、频道、子代理补输入）填
-   * 好、随 prompt 命令原样转发给收口点；prompt 文本本身永远不因它改变。
-   * Omitted (the web path) leaves the command byte-identical to today's and
-   * writes nothing.
-   */
-  origin?: MessageOrigin;
   /**
    * Session strategy. Defaults to `{ kind: "fresh" }`: a new session in `cwd`.
    * `{ kind: "reuse", sessionId }` continues that session — the factory hands
