@@ -252,7 +252,7 @@ export function stopSubagentTaskForChildSession(
   const owner = findSubagentSessionOwner(childSessionId);
   if (!owner || isSubagentTerminalStatus(owner.latestTask.status)) return null;
   const taskId = owner.latestTask.taskId;
-  manager.stop(taskId, reason);
-  const after = manager.get(taskId) ?? owner.latestTask;
+  manager.stop(owner.parentSessionId, taskId, reason);
+  const after = manager.get(owner.parentSessionId, taskId) ?? owner.latestTask;
   return { taskId: after.taskId, status: after.status };
 }

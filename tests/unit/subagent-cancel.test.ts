@@ -153,8 +153,8 @@ async function settleCancelled(turn: ScriptedTurn | undefined, realSessionId: st
   });
 }
 
-function row(taskId: string): SubagentTask {
-  const task = getSubagentTask(taskId);
+function row(parentSessionId: string, taskId: string): SubagentTask {
+  const task = getSubagentTask(parentSessionId, taskId);
   if (!task) throw new Error(`missing task row ${taskId}`);
   return task;
 }
@@ -179,14 +179,14 @@ describe("subagent tool — cancel action", () => {
     expect(textOf(cancelled)).toContain("confirm");
     expect(textOf(cancelled)).toContain(`action="wait", task_id="${taskId}"`);
     // The request did not release the slot: the stop is not confirmed yet.
-    expect(manager.liveStatus(taskId)).toBe("stopping");
-    expect(row(taskId).status).toBe("stopping");
-    expect(row(taskId).finishedAt).toBeNull();
+    expect(manager.liveStatus("parent-cancel", taskId)).toBe("stopping");
+    expect(row("parent-cancel", taskId).status).toBe("stopping");
+    expect(row("parent-cancel", taskId).finishedAt).toBeNull();
 
     await settleCancelled(runner.turns[0], child.created[0], "Subagent cancelled");
     await manager.idle();
-    expect(row(taskId).status).toBe("cancelled");
-    expect(manager.liveStatus(taskId)).toBeNull();
+    expect(row("parent-cancel", taskId).status).toBe("cancelled");
+    expect(manager.liveStatus("parent-cancel", taskId)).toBeNull();
 
     // A repeated cancel is safe and does not rewrite the terminal row.
     const again = await run({ action: "cancel", task_id: taskId }, "parent-cancel");
@@ -200,7 +200,7 @@ describe("subagent tool — cancel action", () => {
     const ids: string[] = [];
     for (let i = 0; i < 5; i += 1) ids.push(await spawnTask("parent-queue-cancel", `job ${i}`));
     expect(runner.turns).toHaveLength(4);
-    expect(row(ids[4]).status).toBe("queued");
+    expect(row("parent-queue-cancel", ids[4]).status).toBe("queued");
 
     const cancelled = await run({ action: "cancel", task_id: ids[4] }, "parent-queue-cancel");
     expect(cancelled.details).toMatchObject({ status: "cancelled", requested: true });
@@ -210,7 +210,7 @@ describe("subagent tool — cancel action", () => {
     await runner.turns[0].settle({ text: "first done" });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(runner.turns).toHaveLength(4);
-    expect(row(ids[4]).status).toBe("cancelled");
+    expect(row("parent-queue-cancel", ids[4]).status).toBe("cancelled");
     // Cancel never created a wait deadline of its own.
     expect(timers.scheduled).toHaveLength(0);
 
@@ -225,21 +225,21 @@ describe("subagent tool — cancel action", () => {
     expect(runner.turns).toHaveLength(4);
 
     await run({ action: "cancel", task_id: ids[0] }, "parent-slot-hold");
-    expect(row(ids[0]).status).toBe("stopping");
+    expect(row("parent-slot-hold", ids[0]).status).toBe("stopping");
 
     // A requested stop is not a released slot: the fifth task still queues.
     const queuedId = await spawnTask("parent-slot-hold", "next job");
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(row(queuedId).status).toBe("queued");
+    expect(row("parent-slot-hold", queuedId).status).toBe("queued");
     expect(runner.turns).toHaveLength(4);
 
     // Only the confirmed stop frees the slot and admits the queued task.
     await settleCancelled(runner.turns[0], undefined, "Subagent cancelled");
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(row(ids[0]).status).toBe("cancelled");
+    expect(row("parent-slot-hold", ids[0]).status).toBe("cancelled");
     expect(runner.turns).toHaveLength(5);
     expect(runner.turns[4].spec.prompt).toBe("work");
-    expect(row(queuedId).status).not.toBe("queued");
+    expect(row("parent-slot-hold", queuedId).status).not.toBe("queued");
 
     for (const turn of runner.turns.slice(1)) await turn.settle({ text: "done" });
     await manager.idle();
@@ -250,7 +250,7 @@ describe("subagent tool — cancel action", () => {
     const taskId = await spawnTask("parent-late-cancel");
     await runner.turns[0].settle({ text: "landed answer" });
     await manager.idle();
-    expect(row(taskId).status).toBe("completed");
+    expect(row("parent-late-cancel", taskId).status).toBe("completed");
 
     const late = await run({ action: "cancel", task_id: taskId }, "parent-late-cancel");
     expect(late.details).toMatchObject({
@@ -260,7 +260,7 @@ describe("subagent tool — cancel action", () => {
     });
     expect(textOf(late)).toContain("already completed");
     expect(textOf(late)).not.toContain("was cancelled");
-    expect(row(taskId).result).toBe("landed answer");
+    expect(row("parent-late-cancel", taskId).result).toBe("landed answer");
   });
 
   it("keeps a result that lands while the cancelled turn is being confirmed", async () => {
@@ -269,14 +269,14 @@ describe("subagent tool — cancel action", () => {
     await runner.turns[0].acquire();
 
     await run({ action: "cancel", task_id: taskId }, "parent-cancel-race");
-    expect(row(taskId).status).toBe("stopping");
+    expect(row("parent-cancel-race", taskId).status).toBe("stopping");
 
     // The child finished with a real reply before the stop was confirmed: the
     // landed result wins, and the row must not be downgraded to cancelled.
     await runner.turns[0].settle({ text: "finished anyway" });
     await manager.idle();
-    expect(row(taskId).status).toBe("completed");
-    expect(row(taskId).result).toBe("finished anyway");
+    expect(row("parent-cancel-race", taskId).status).toBe("completed");
+    expect(row("parent-cancel-race", taskId).result).toBe("finished anyway");
   });
 
   it("only cancels its own parent's task and validates its arguments", async () => {
@@ -287,7 +287,7 @@ describe("subagent tool — cancel action", () => {
     const denied = await run({ action: "cancel", task_id: taskId }, "parent-intruder");
     expect(denied.isError).toBe(true);
     expect(textOf(denied)).toContain("No subagent task");
-    expect(manager.liveStatus(taskId)).toBe("running");
+    expect(manager.liveStatus("parent-owner", taskId)).toBe("running");
 
     const missing = await run({ action: "cancel" } as ExecuteParams, "parent-owner");
     expect(missing.isError).toBe(true);
@@ -302,7 +302,7 @@ describe("subagent tool — cancel action", () => {
     expect(textOf(foreign)).toContain("does not accept session_id");
 
     // None of the rejected calls stopped the task.
-    expect(manager.liveStatus(taskId)).toBe("running");
+    expect(manager.liveStatus("parent-owner", taskId)).toBe("running");
     await settleCancelled(runner.turns[0], undefined, "Subagent cancelled");
     await manager.idle();
   });
@@ -321,8 +321,8 @@ describe("parent session stop", () => {
     expect(manager.isStopping("parent-stop-all")).toBe(true);
     // Queued task is cancelled at once; running ones are held in `stopping`
     // and still own their slots.
-    for (const taskId of ids.slice(0, 4)) expect(row(taskId).status).toBe("stopping");
-    expect(row(ids[4]).status).toBe("cancelled");
+    for (const taskId of ids.slice(0, 4)) expect(row("parent-stop-all", taskId).status).toBe("stopping");
+    expect(row("parent-stop-all", ids[4]).status).toBe("cancelled");
 
     // A new spawn during the stop is refused, not queued behind it.
     const refused = await run(
@@ -344,7 +344,7 @@ describe("parent session stop", () => {
       await settleCancelled(runner.turns[i], child.created[i], SUBAGENT_PARENT_STOPPED);
     }
     await manager.idle();
-    for (const taskId of ids) expect(row(taskId).status).toBe("cancelled");
+    for (const taskId of ids) expect(row("parent-stop-all", taskId).status).toBe("cancelled");
     expect(manager.isStopping("parent-stop-all")).toBe(false);
 
     // The window is over: explicit delegation works again.
@@ -374,18 +374,18 @@ describe("parent session stop", () => {
 
     // An ordinary end of the parent's own turn is not a stop: the child keeps
     // running and stays managed.
-    expect(manager.liveStatus(mine)).toBe("running");
+    expect(manager.liveStatus("parent-scope", mine)).toBe("running");
 
     stopAllSubagentTasksForParent("parent-scope", SUBAGENT_PARENT_STOPPED);
-    expect(row(mine).status).toBe("stopping");
-    expect(row(other).status).toBe("running");
-    expect(manager.liveStatus(other)).toBe("running");
+    expect(row("parent-scope", mine).status).toBe("stopping");
+    expect(row("parent-other", other).status).toBe("running");
+    expect(manager.liveStatus("parent-other", other)).toBe("running");
 
     await settleCancelled(runner.turns[0], undefined, SUBAGENT_PARENT_STOPPED);
     await runner.turns[1].settle({ text: "other answer" });
     await manager.idle();
-    expect(row(mine).status).toBe("cancelled");
-    expect(row(other).status).toBe("completed");
+    expect(row("parent-scope", mine).status).toBe("cancelled");
+    expect(row("parent-other", other).status).toBe("completed");
   });
 
   it("reaches the task manager from the parent session's abort command", async () => {
@@ -412,12 +412,12 @@ describe("parent session stop", () => {
 
     await wrapper.send({ type: "abort" });
     expect(aborted).toBe(true);
-    expect(manager.liveStatus(taskId)).toBe("stopping");
-    expect(row(taskId).status).toBe("stopping");
+    expect(manager.liveStatus("parent-abort-contract", taskId)).toBe("stopping");
+    expect(row("parent-abort-contract", taskId).status).toBe("stopping");
 
     await settleCancelled(runner.turns[0], undefined, SUBAGENT_PARENT_STOPPED);
     await manager.idle();
-    expect(row(taskId).status).toBe("cancelled");
+    expect(row("parent-abort-contract", taskId).status).toBe("cancelled");
     wrapper.destroy();
   });
 
@@ -433,11 +433,11 @@ describe("parent session stop", () => {
     );
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ ok: true, stopped: 1, stopping: true });
-    expect(manager.liveStatus(taskId)).toBe("stopping");
+    expect(manager.liveStatus("parent-api-stop", taskId)).toBe("stopping");
 
     await settleCancelled(runner.turns[0], undefined, SUBAGENT_PARENT_STOPPED);
     await manager.idle();
-    expect(row(taskId).status).toBe("cancelled");
+    expect(row("parent-api-stop", taskId).status).toBe("cancelled");
   });
 });
 
@@ -456,14 +456,14 @@ describe("parent session deletion", () => {
 
     const result = await deleteSession("parent-delete");
     expect(result).not.toBeNull();
-    expect(row(mine).status).toBe("stopping");
-    expect(row(other).status).toBe("running");
+    expect(row("parent-delete", mine).status).toBe("stopping");
+    expect(row("parent-kept", other).status).toBe("running");
 
     await settleCancelled(runner.turns[0], undefined, SUBAGENT_PARENT_DELETED);
     await runner.turns[1].settle({ text: "other answer" });
     await manager.idle();
-    expect(row(mine).status).toBe("cancelled");
+    expect(row("parent-delete", mine).status).toBe("cancelled");
     // The other parent's task finished normally; deletion never reached it.
-    expect(row(other).status).toBe("completed");
+    expect(row("parent-kept", other).status).toBe("completed");
   });
 });

@@ -22,8 +22,8 @@ import {
   completeSubagentTask,
   createSubagentTask,
   failSubagentTask,
-  getSubagentDb,
   getSubagentTask,
+  getSubagentDb,
   listSubagentTasks,
   markSubagentRunning,
   type SubagentTask,
@@ -149,10 +149,10 @@ function seedFinishedTask(input: {
     configSnapshot: input.configSnapshot === undefined ? JSON.stringify(snapshot) : input.configSnapshot,
     requestId: input.requestId,
   });
-  markSubagentRunning(taskId, childSessionId);
-  if (input.status === "completed") completeSubagentTask(taskId, input.result ?? "first answer");
-  else failSubagentTask(taskId, input.error ?? input.status, input.status);
-  return getSubagentTask(taskId)!;
+  markSubagentRunning(input.parent, taskId, childSessionId);
+  if (input.status === "completed") completeSubagentTask(input.parent, taskId, input.result ?? "first answer");
+  else failSubagentTask(input.parent, taskId, input.error ?? input.status, input.status);
+  return getSubagentTask(input.parent, taskId)!;
 }
 
 async function spawnTask(parentSessionId: string, description = "first task"): Promise<string> {
@@ -177,10 +177,10 @@ describe("subagent tool — continue action", () => {
     const { runner, manager } = setup("parent-continue");
     const firstId = await spawnTask("parent-continue");
     await runner.turns[0].acquire();
-    const childSessionId = manager.get(firstId)!.childSessionId!;
+    const childSessionId = manager.get("parent-continue", firstId)!.childSessionId!;
     await runner.turns[0].settle({ text: "first answer" });
     await manager.idle();
-    const before = getSubagentTask(firstId)!;
+    const before = getSubagentTask("parent-continue", firstId)!;
 
     const continued = await run(
       {
@@ -217,7 +217,7 @@ describe("subagent tool — continue action", () => {
     await runner.turns[1].settle({ text: "second answer" });
     await manager.idle();
 
-    const after = getSubagentTask(firstId)!;
+    const after = getSubagentTask("parent-continue", firstId)!;
     expect(after.prompt).toBe(before.prompt);
     expect(after.result).toBe("first answer");
     expect(after.status).toBe("completed");
@@ -225,7 +225,7 @@ describe("subagent tool — continue action", () => {
     expect(after.startedAt).toBe(before.startedAt);
     expect(after.finishedAt).toBe(before.finishedAt);
 
-    const newest = getSubagentTask(details.taskId)!;
+    const newest = getSubagentTask("parent-continue", details.taskId)!;
     expect(newest.childSessionId).toBe(childSessionId);
     expect(newest.prompt).toBe("follow up");
     expect(newest.result).toBe("second answer");
@@ -254,7 +254,7 @@ describe("subagent tool — continue action", () => {
     expect(runner.turns[0].spec.thinkingLevel).toBe("high");
     await runner.turns[0].acquire();
     expect(child.created).toEqual([seeded.childSessionId]);
-    const row = getSubagentTask((continued.details as { taskId: string }).taskId)!;
+    const row = getSubagentTask("parent-snapshot", (continued.details as { taskId: string }).taskId)!;
     const frozen = JSON.parse(row.configSnapshot!) as SubagentTaskConfigSnapshot;
     expect(frozen).toEqual(snapshot);
   });
@@ -263,7 +263,7 @@ describe("subagent tool — continue action", () => {
     const { runner, manager } = setup("parent-busy");
     const firstId = await spawnTask("parent-busy");
     await runner.turns[0].acquire();
-    const childSessionId = manager.get(firstId)!.childSessionId!;
+    const childSessionId = manager.get("parent-busy", firstId)!.childSessionId!;
 
     const refused = await run(
       {
@@ -280,7 +280,7 @@ describe("subagent tool — continue action", () => {
     expect(listSubagentTasks("parent-busy")).toHaveLength(1);
 
     // The running task is untouched: same status, still alive.
-    expect(manager.liveStatus(firstId)).toBe("running");
+    expect(manager.liveStatus("parent-busy", firstId)).toBe("running");
     await runner.turns[0].settle({ text: "first answer" });
     await manager.idle();
 
@@ -322,9 +322,9 @@ describe("subagent tool — continue action", () => {
       expect(taskId).not.toBe(seeded.taskId);
       await runner.turns.at(-1)!.settle({ text: `after ${status}` });
       await manager.idle();
-      expect(getSubagentTask(taskId)!.result).toBe(`after ${status}`);
+      expect(getSubagentTask("parent-terminal-continue", taskId)!.result).toBe(`after ${status}`);
       // The seeded row keeps its own terminal state and output.
-      expect(getSubagentTask(seeded.taskId)!.status).toBe(status);
+      expect(getSubagentTask("parent-terminal-continue", seeded.taskId)!.status).toBe(status);
     }
   });
 
@@ -332,7 +332,7 @@ describe("subagent tool — continue action", () => {
     const { runner, timers, manager } = setup("parent-continue-wait");
     const firstId = await spawnTask("parent-continue-wait");
     await runner.turns[0].acquire();
-    const childSessionId = manager.get(firstId)!.childSessionId!;
+    const childSessionId = manager.get("parent-continue-wait", firstId)!.childSessionId!;
     await runner.turns[0].settle({ text: "first answer" });
     await manager.idle();
 
@@ -344,7 +344,7 @@ describe("subagent tool — continue action", () => {
     expect(immediate.details).toMatchObject({ action: "continue", waitExpired: true });
     const taskId = (immediate.details as { taskId: string }).taskId;
     expect(timers.scheduled).toHaveLength(0);
-    expect(manager.liveStatus(taskId)).not.toBeNull();
+    expect(manager.liveStatus("parent-continue-wait", taskId)).not.toBeNull();
     await runner.turns[1].acquire();
 
     // A shorter wait is honoured for a continued task too: it only ends the
@@ -358,7 +358,7 @@ describe("subagent tool — continue action", () => {
     shortDeadline.fire();
     const afterShort = await shortWait;
     expect(afterShort.details).toMatchObject({ status: "running", waitExpired: true });
-    expect(manager.liveStatus(taskId)).toBe("running");
+    expect(manager.liveStatus("parent-continue-wait", taskId)).toBe("running");
 
     const pendingWait = run(
       { action: "wait", task_id: taskId },
@@ -369,7 +369,7 @@ describe("subagent tool — continue action", () => {
     deadline.fire();
     const afterExpiry = await pendingWait;
     expect(afterExpiry.details).toMatchObject({ status: "running", waitExpired: true });
-    expect(manager.liveStatus(taskId)).toBe("running");
+    expect(manager.liveStatus("parent-continue-wait", taskId)).toBe("running");
 
     await runner.turns[1].settle({ text: "second answer" });
     await manager.idle();
@@ -381,7 +381,7 @@ describe("subagent tool — continue action", () => {
     const { runner, manager } = setup("parent-stopping");
     const firstId = await spawnTask("parent-stopping");
     await runner.turns[0].acquire();
-    const childSessionId = manager.get(firstId)!.childSessionId!;
+    const childSessionId = manager.get("parent-stopping", firstId)!.childSessionId!;
 
     manager.stopAll("parent-stopping");
     const refused = await run(
@@ -460,7 +460,13 @@ describe("subagent tool — continue action", () => {
       "parent-other",
     );
     expect(foreign.isError).toBeUndefined();
-    expect((foreign.details as { taskId: string }).taskId).not.toBe((one.details as { taskId: string }).taskId);
+    // Task ids are counted per parent, so `parent-other` legitimately starts at
+    // the same short id; what matters is that its own row, not the first
+    // parent's task, was returned.
+    expect((foreign.details as { taskId: string }).taskId).toBe("0001");
+    expect(listSubagentTasks("parent-other")).toMatchObject([
+      { taskId: "0001", parentSessionId: "parent-other", description: "other parent" },
+    ]);
   });
 
   it("keeps the dedupe record in the database across a manager restart", async () => {
@@ -508,7 +514,7 @@ describe("subagent tool — continue action", () => {
     const { runner, manager } = setup("parent-history");
     const firstId = await spawnTask("parent-history");
     await runner.turns[0].acquire();
-    const childSessionId = manager.get(firstId)!.childSessionId!;
+    const childSessionId = manager.get("parent-history", firstId)!.childSessionId!;
     await runner.turns[0].settle({ text: "first answer" });
     await manager.idle();
 
@@ -585,7 +591,7 @@ describe("subagent tool — continue action", () => {
     const { runner, manager } = setup("parent-old-cancel");
     const firstId = await spawnTask("parent-old-cancel");
     await runner.turns[0].acquire();
-    const childSessionId = manager.get(firstId)!.childSessionId!;
+    const childSessionId = manager.get("parent-old-cancel", firstId)!.childSessionId!;
     await runner.turns[0].settle({ text: "first answer" });
     await manager.idle();
 
@@ -597,8 +603,8 @@ describe("subagent tool — continue action", () => {
 
     const late = await run({ action: "cancel", task_id: firstId }, "parent-old-cancel");
     expect(late.details).toMatchObject({ taskId: firstId, status: "completed", requested: false });
-    expect(manager.liveStatus(secondId)).not.toBeNull();
-    expect(getSubagentTask(secondId)!.status).not.toBe("cancelled");
+    expect(manager.liveStatus("parent-old-cancel", secondId)).not.toBeNull();
+    expect(getSubagentTask("parent-old-cancel", secondId)!.status).not.toBe("cancelled");
 
     await runner.turns[1].settle({ text: "second answer" });
     await manager.idle();
@@ -617,7 +623,7 @@ describe("continue busy states and dedupe edge cases", () => {
     const { runner, manager } = setup("parent-busy-states", { maxConcurrent: 1 });
     const blocker = await spawnTask("parent-busy-states", "blocker");
     await runner.turns[0].acquire();
-    expect(manager.liveStatus(blocker)).toBe("running");
+    expect(manager.liveStatus("parent-busy-states", blocker)).toBe("running");
 
     const target = seedFinishedTask({ parent: "parent-busy-states", status: "completed" });
     const queued = await run(
@@ -625,7 +631,7 @@ describe("continue busy states and dedupe edge cases", () => {
       "parent-busy-states",
     );
     const targetTask = (queued.details as { taskId: string }).taskId;
-    expect(manager.get(targetTask)!.status).toBe("queued");
+    expect(manager.get("parent-busy-states", targetTask)!.status).toBe("queued");
     const busyQueued = await run(
       { action: "continue", session_id: target.childSessionId!, prompt: "should refuse", wait_ms: 0 },
       "parent-busy-states",
@@ -636,7 +642,7 @@ describe("continue busy states and dedupe edge cases", () => {
     // Release the slot: the queued continuation starts acquiring its session.
     await runner.turns[0].settle({ text: "blocker done" });
     await untilStarted(runner.turns, 2);
-    expect(manager.get(targetTask)!.status).toBe("creating");
+    expect(manager.get("parent-busy-states", targetTask)!.status).toBe("creating");
     const busyCreating = await run(
       { action: "continue", session_id: target.childSessionId!, prompt: "should refuse again", wait_ms: 0 },
       "parent-busy-states",
@@ -645,9 +651,9 @@ describe("continue busy states and dedupe edge cases", () => {
     expect(textOf(busyCreating)).toContain("busy");
 
     await runner.turns[1].acquire();
-    expect(manager.liveStatus(targetTask)).toBe("running");
+    expect(manager.liveStatus("parent-busy-states", targetTask)).toBe("running");
     await run({ action: "cancel", task_id: targetTask }, "parent-busy-states");
-    expect(manager.liveStatus(targetTask)).toBe("stopping");
+    expect(manager.liveStatus("parent-busy-states", targetTask)).toBe("stopping");
     const busyStopping = await run(
       { action: "continue", session_id: target.childSessionId!, prompt: "should refuse while stopping", wait_ms: 0 },
       "parent-busy-states",
@@ -657,7 +663,7 @@ describe("continue busy states and dedupe edge cases", () => {
 
     await runner.turns[1].settle({ status: "cancelled", text: "", hasReply: false, error: "Subagent cancelled" });
     await manager.idle();
-    expect(manager.liveStatus(targetTask)).toBeNull();
+    expect(manager.liveStatus("parent-busy-states", targetTask)).toBeNull();
   });
 
   it("returns the original task when a spawn request is retried after its profile was deleted", async () => {
@@ -763,7 +769,7 @@ describe("continue busy states and dedupe edge cases", () => {
         .map((index) => index.name);
       expect(indexes).toContain("idx_subagent_tasks_request");
       // Existing rows stay readable and are simply not dedupe-able.
-      expect(getSubagentTask("legacy-task")).toMatchObject({
+      expect(getSubagentTask("parent-legacy", "legacy-task")).toMatchObject({
         requestId: null,
         result: null,
         status: "completed",

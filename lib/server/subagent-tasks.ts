@@ -225,12 +225,12 @@ export interface SubagentTaskManager {
    */
   continue(input: ContinueSubagentTaskInput): SubagentTaskProgress;
   /** Observe a task up to `timeoutMs`; never cancels or unmanages it. */
-  wait(taskId: string, options?: WaitSubagentTaskOptions): Promise<SubagentTaskWaitResult>;
+  wait(parentSessionId: string, taskId: string, options?: WaitSubagentTaskOptions): Promise<SubagentTaskWaitResult>;
   /**
    * Ask a task to stop. Terminal tasks are left alone (a late cancel must not
    * overwrite a finished result); a queued task is cancelled without starting.
    */
-  stop(taskId: string, reason?: string): void;
+  stop(parentSessionId: string, taskId: string, reason?: string): void;
   /**
    * Stop every unfinished task of one parent (running and queued) and refuse
    * new spawns for that parent until the last stop is confirmed. Used by the
@@ -240,13 +240,13 @@ export interface SubagentTaskManager {
   /** True while a stop-all for this parent still has tasks to confirm. */
   isStopping(parentSessionId: string): boolean;
   /** The persisted row, or null. */
-  get(taskId: string): SubagentTask | null;
+  get(parentSessionId: string, taskId: string): SubagentTask | null;
   /**
    * Live status of a task this process still manages, or null when the process
    * is not managing it (finished, never started here, or from a dead process).
    * Read-side queries use it to avoid reporting stale non-terminal rows.
    */
-  liveStatus(taskId: string): SubagentTaskStatus | null;
+  liveStatus(parentSessionId: string, taskId: string): SubagentTaskStatus | null;
   /** Resolves once every unfinished task has finished | test / shutdown aid. */
   idle(): Promise<void>;
 }
@@ -356,6 +356,15 @@ async function readLastAssistantText(realSessionId: string): Promise<string> {
     if (text) return truncateResult(text);
   }
   return "";
+}
+
+/**
+ * Internal key of a task in the live maps. A task id is only unique within its
+ * parent session (ids are counted per session, `0001`…), so the pair is the key
+ * everywhere the persisted row is not at hand.
+ */
+function taskKey(parentSessionId: string, taskId: string): string {
+  return `${parentSessionId}\u0000${taskId}`;
 }
 
 /** A progress snapshot from a persisted row (dedupe replay / stale rows). */
@@ -503,7 +512,7 @@ const startSubagentChildSession: SubagentChildSessionFactory = async (input) => 
   }
 
   const { session, realSessionId } = await startRpcSession(
-    `__subagent__${input.taskId}`,
+    `__subagent__${input.parentSessionId}:${input.taskId}`,
     "",
     input.cwd,
     tools,
@@ -519,7 +528,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
   const timers = deps.timers ?? defaultTimers;
   const maxConcurrent = deps.maxConcurrent ?? MAX_CONCURRENT_SUBAGENT_RUNS;
   const running = new Map<string, RunningTask>();
-  /** FIFO of task ids waiting for a slot. */
+  /** FIFO of `taskKey`s waiting for a slot. */
   const queue: string[] = [];
   let active = 0;
   /**
@@ -555,8 +564,8 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     emit(task);
   };
 
-  const dropFromQueue = (taskId: string) => {
-    const index = queue.indexOf(taskId);
+  const dropFromQueue = (parentSessionId: string, taskId: string) => {
+    const index = queue.indexOf(taskKey(parentSessionId, taskId));
     if (index !== -1) queue.splice(index, 1);
   };
 
@@ -565,7 +574,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     if (task.finished) return;
     task.finished = true;
     if (task.started) active -= 1;
-    running.delete(task.taskId);
+    running.delete(taskKey(task.parentSessionId, task.taskId));
     task.resolveDone();
     emit(task);
     releaseParentStopIfIdle(task.parentSessionId);
@@ -583,7 +592,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
 
   const finishTerminal = (task: RunningTask, status: SubagentTaskStatus, error?: string) => {
     task.status = status;
-    failSubagentTask(task.taskId, error ?? SUBAGENT_CANCELLED, status as "cancelled" | "failed" | "interrupted");
+    failSubagentTask(task.parentSessionId, task.taskId, error ?? SUBAGENT_CANCELLED, status as "cancelled" | "failed" | "interrupted");
     finish(task);
   };
 
@@ -609,16 +618,16 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       }
     }
     if (end.status === "completed") {
-      completeSubagentTask(task.taskId, text);
+      completeSubagentTask(task.parentSessionId, task.taskId, text);
     } else {
       const reason = end.error ?? "Unknown error";
-      failSubagentTask(task.taskId, reason, end.status);
-      if (text) setSubagentTaskPartialOutput(task.taskId, text);
+      failSubagentTask(task.parentSessionId, task.taskId, reason, end.status);
+      if (text) setSubagentTaskPartialOutput(task.parentSessionId, task.taskId, text);
     }
     // The persisted row is the truth: a guarded UPDATE can refuse to overwrite
     // an already-terminal task (a late event, a concurrent stop), and the live
     // status must follow the row rather than claim a write that did not happen.
-    task.status = getSubagentTask(task.taskId)?.status ?? end.status;
+    task.status = getSubagentTask(task.parentSessionId, task.taskId)?.status ?? end.status;
     finish(task);
   };
 
@@ -651,7 +660,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
         notes: restored.notes,
       });
     }
-    if (!setSubagentTaskConfigSnapshot(task.taskId, JSON.stringify(restored.config))) {
+    if (!setSubagentTaskConfigSnapshot(task.parentSessionId, task.taskId, JSON.stringify(restored.config))) {
       // A terminal row cannot be given a config: the stop/complete already won,
       // so the recovered settings must not be applied to a new turn.
       throw new Error("This subagent task is no longer active; the recovered configuration was not applied.");
@@ -663,7 +672,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
   const startTask = async (task: RunningTask) => {
     task.started = true;
 
-    markSubagentStatus(task.taskId, "creating");
+    markSubagentStatus(task.parentSessionId, task.taskId, "creating");
     setStatus(task, "creating");
     let config = task.config;
     if (!config) {
@@ -683,7 +692,10 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       }
     }
 
-    const registryKey = `__subagent__${task.taskId}`;
+    // The registry key is process-wide, while a task id is only unique within
+    // its parent: the parent is part of the key so two sessions' `0001` cannot
+    // collide.
+    const registryKey = `__subagent__${task.parentSessionId}:${task.taskId}`;
     const displayName = `[Subagent] ${task.description}`;
     // Typed through a holder: the only assignment happens inside the factory
     // closure, where a plain `let` would be narrowed to `never` afterwards.
@@ -718,7 +730,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       // Publish the id before the prompt so a waiting caller can follow the
       // child's activity from the moment it exists.
       task.childSessionId = acquired.realSessionId;
-      markSubagentRunning(task.taskId, acquired.realSessionId);
+      markSubagentRunning(task.parentSessionId, task.taskId, acquired.realSessionId);
       setStatus(task, "running");
       // A continued task reuses the session (and its name) as-is; only the
       // first turn names the newly created child.
@@ -781,8 +793,8 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
 
   const pump = () => {
     while (active < maxConcurrent && queue.length > 0) {
-      const taskId = queue.shift()!;
-      const task = running.get(taskId);
+      const key = queue.shift()!;
+      const task = running.get(key);
       if (!task || task.finished) continue;
       active += 1;
       // Last-resort guard: a failure outside startTask's own try/catch (for
@@ -869,8 +881,8 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       done,
       resolveDone,
     };
-    running.set(taskId, task);
-    queue.push(taskId);
+    running.set(taskKey(task.parentSessionId, task.taskId), task);
+    queue.push(taskKey(task.parentSessionId, task.taskId));
     emit(task);
     pump();
     return progressOf(task);
@@ -970,13 +982,17 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     });
   };
 
-  const wait = async (taskId: string, options: WaitSubagentTaskOptions = {}): Promise<SubagentTaskWaitResult> => {
-    const row = getSubagentTask(taskId);
-    if (!row) throw new Error(`No subagent task with id "${taskId}"`);
+  const wait = async (
+    parentSessionId: string,
+    taskId: string,
+    options: WaitSubagentTaskOptions = {},
+  ): Promise<SubagentTaskWaitResult> => {
+    const row = getSubagentTask(parentSessionId, taskId);
+    if (!row) throw new Error(`No subagent task ${taskId} in this session`);
     // A terminal row is final: a late event must not resurrect it, and a
     // finished task is reported at once without touching the turn again.
     if (isSubagentTerminalStatus(row.status)) return asWaitResult(row, false);
-    const task = running.get(taskId);
+    const task = running.get(taskKey(parentSessionId, taskId));
     if (!task || task.finished) {
       // A non-terminal row this process does not manage cannot still be
       // running (a restart, or a manager that never adopted it). Report the
@@ -1023,34 +1039,34 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     if (outcome === "stopped") {
       // The caller is going away; that is a stop request for this task, not a
       // reason to forget it. The stop is confirmed by the turn module.
-      stop(taskId, options.stopOnAbort?.reason);
+      stop(parentSessionId, taskId, options.stopOnAbort?.reason);
     }
 
-    const current = getSubagentTask(taskId) ?? row;
+    const current = getSubagentTask(parentSessionId, taskId) ?? row;
     // An aborted observation reports the task's current state as-is: waiting is
     // an observation, so its cancellation never cancels the task.
     return asWaitResult(current, outcome === "timeout");
   };
 
-  const stop = (taskId: string, reason = SUBAGENT_CANCELLED) => {
-    const row = getSubagentTask(taskId);
+  const stop = (parentSessionId: string, taskId: string, reason = SUBAGENT_CANCELLED) => {
+    const row = getSubagentTask(parentSessionId, taskId);
     if (!row || isSubagentTerminalStatus(row.status)) return;
-    const task = running.get(taskId);
+    const task = running.get(taskKey(parentSessionId, taskId));
     if (!task || task.finished) {
       // No live management (a row left over from an earlier process): settle it
       // honestly instead of pretending a turn is still being stopped.
-      failSubagentTask(taskId, reason, "cancelled");
+      failSubagentTask(parentSessionId, taskId, reason, "cancelled");
       return;
     }
     task.stopReason = task.stopReason ?? reason;
     if (!task.started) {
       // Queued: nothing runs, so there is nothing to confirm.
-      dropFromQueue(taskId);
+      dropFromQueue(parentSessionId, taskId);
       finishTerminal(task, "cancelled", task.stopReason);
       return;
     }
     if (!task.stop.signal.aborted) {
-      markSubagentStatus(taskId, "stopping");
+      markSubagentStatus(parentSessionId, taskId, "stopping");
       setStatus(task, "stopping");
       task.stop.abort();
     }
@@ -1067,7 +1083,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       // does not manage (a stale row is settled honestly as cancelled).
       for (const row of listSubagentTasks(parentSessionId)) {
         if (isSubagentTerminalStatus(row.status)) continue;
-        stop(row.taskId, reason);
+        stop(parentSessionId, row.taskId, reason);
         stopped += 1;
       }
     } finally {
@@ -1091,8 +1107,8 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     stop,
     stopAll,
     isStopping: (parentSessionId) => stoppingParents.has(parentSessionId),
-    get: (taskId) => getSubagentTask(taskId),
-    liveStatus: (taskId) => running.get(taskId)?.status ?? null,
+    get: (parentSessionId, taskId) => getSubagentTask(parentSessionId, taskId),
+    liveStatus: (parentSessionId, taskId) => running.get(taskKey(parentSessionId, taskId))?.status ?? null,
     idle,
   };
 }

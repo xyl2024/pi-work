@@ -22,8 +22,8 @@ import {
 import {
   completeSubagentTask,
   createSubagentTask,
-  getSubagentDb,
   getSubagentTask,
+  getSubagentDb,
   hasSubagentStore,
   listSubagentTasks,
   markSubagentRunning,
@@ -180,8 +180,8 @@ async function waitFor(assertion: () => boolean, label: string): Promise<void> {
   throw new Error(`timed out waiting for ${label}`);
 }
 
-function row(taskId: string): SubagentTask {
-  const task = getSubagentTask(taskId);
+function row(parentSessionId: string, taskId: string): SubagentTask {
+  const task = getSubagentTask(parentSessionId, taskId);
   if (!task) throw new Error(`missing task ${taskId}`);
   return task;
 }
@@ -202,11 +202,11 @@ function seedTask(input: {
     description: `leftover ${input.status}`,
     prompt: "original input",
   });
-  if (input.status !== "queued") markSubagentRunning(created.taskId, childSessionId!);
-  if (input.status === "creating") markSubagentStatus(created.taskId, "creating");
-  if (input.status === "stopping") markSubagentStatus(created.taskId, "stopping");
-  if (input.result) setSubagentTaskPartialOutput(created.taskId, input.result);
-  return row(created.taskId);
+  if (input.status !== "queued") markSubagentRunning(input.parent, created.taskId, childSessionId!);
+  if (input.status === "creating") markSubagentStatus(input.parent, created.taskId, "creating");
+  if (input.status === "stopping") markSubagentStatus(input.parent, created.taskId, "stopping");
+  if (input.result) setSubagentTaskPartialOutput(input.parent, created.taskId, input.result);
+  return row(input.parent, created.taskId);
 }
 
 const snapshot: SubagentTaskConfigSnapshot = {
@@ -231,9 +231,9 @@ function seedFinishedChild(input: { parent: string; child: string; taskId?: stri
     prompt: "first input",
     configSnapshot: JSON.stringify(snapshot),
   });
-  markSubagentRunning(taskId, input.child);
-  completeSubagentTask(taskId, "first answer");
-  return row(taskId);
+  markSubagentRunning(input.parent, taskId, input.child);
+  completeSubagentTask(input.parent, taskId, "first answer");
+  return row(input.parent, taskId);
 }
 
 /** A finished legacy task (no snapshot) so the child session is a known one. */
@@ -248,9 +248,9 @@ function seedLegacyChild(parent: string, child: string): SubagentTask {
     prompt: "old input",
     configSnapshot: null,
   });
-  markSubagentRunning(taskId, child);
-  completeSubagentTask(taskId, "legacy answer");
-  return row(taskId);
+  markSubagentRunning(parent, taskId, child);
+  completeSubagentTask(parent, taskId, "legacy answer");
+  return row(parent, taskId);
 }
 
 /** A legacy child session file: header cwd, a thinking change and one answer. */
@@ -316,15 +316,15 @@ describe("startup reconciliation", () => {
       description: "finished before the restart",
       prompt: "old input",
     });
-    markSubagentRunning(completed.taskId, getSubagentTask(completed.taskId)!.childSessionId!);
-    completeSubagentTask(completed.taskId, "old answer");
+    markSubagentRunning(parent, completed.taskId, getSubagentTask(parent, completed.taskId)!.childSessionId!);
+    completeSubagentTask(parent, completed.taskId, "old answer");
 
     simulateRestart();
     expect(hasSubagentStore()).toBe(true);
     bootstrap();
 
     for (const task of [queued, creating, running, stopping]) {
-      const reconciled = row(task.taskId);
+      const reconciled = row(parent, task.taskId);
       expect(reconciled.status).toBe("interrupted");
       expect(reconciled.error).toContain("restarted");
       expect(reconciled.finishedAt).toBeTypeOf("number");
@@ -332,16 +332,16 @@ describe("startup reconciliation", () => {
       expect(reconciled.prompt).toBe("original input");
     }
     // Partial output and the terminal rows are untouched.
-    expect(row(running.taskId).result).toBe("partial output");
-    expect(row(completed.taskId)).toMatchObject({ status: "completed", result: "old answer", error: null });
+    expect(row(parent, running.taskId).result).toBe("partial output");
+    expect(row(parent, completed.taskId)).toMatchObject({ status: "completed", result: "old answer", error: null });
     expect(listSubagentTasks(parent)).toHaveLength(5);
 
     // Running the reconciliation again changes nothing: the boot hook is
     // once per process, and the store rule is itself idempotent.
-    const finishedAt = row(running.taskId).finishedAt;
+    const finishedAt = row(parent, running.taskId).finishedAt;
     bootstrap();
     expect(reconcileInterruptedSubagentTasks()).toBe(0);
-    expect(row(running.taskId)).toMatchObject({
+    expect(row(parent, running.taskId)).toMatchObject({
       status: "interrupted",
       finishedAt,
       result: "partial output",
@@ -405,8 +405,8 @@ describe("after a restart", () => {
     await manager.idle();
 
     // The interrupted task keeps its own history; the new task is separate.
-    expect(row(leftover.taskId)).toMatchObject({ status: "interrupted", result: null });
-    expect(row(continuedId)).toMatchObject({ status: "completed", result: "continued answer" });
+    expect(row(parent, leftover.taskId)).toMatchObject({ status: "interrupted", result: null });
+    expect(row(parent, continuedId)).toMatchObject({ status: "completed", result: "continued answer" });
     const after = await run({ action: "get", session_id: child }, parent);
     const history = (after.details as { tasks: { items: Array<{ taskId: string }> } }).tasks;
     expect(history.items.map((task) => task.taskId)).toEqual([continuedId, leftover.taskId]);
@@ -434,7 +434,7 @@ describe("after a restart", () => {
     expect(spawned.isError).toBeUndefined();
     const taskId = (spawned.details as { taskId: string }).taskId;
     await runner.turns[0].acquire();
-    const child = manager.get(taskId)!.childSessionId!;
+    const child = manager.get(parent, taskId)!.childSessionId!;
     await settle(runner.turns[0], child);
     await manager.idle();
     expect(deleteSubagentProfile("restart-worker")).toBe(true);
@@ -456,7 +456,7 @@ describe("after a restart", () => {
     });
     // The frozen tool set and prompt are the profile's creation-time ones.
     const persisted = parseSubagentConfigSnapshot(
-      row((continued.details as { taskId: string }).taskId).configSnapshot,
+      row(parent, (continued.details as { taskId: string }).taskId).configSnapshot,
     );
     expect(persisted).toMatchObject({
       subagentName: "restart-worker",
@@ -512,8 +512,8 @@ describe("legacy rows without a configuration snapshot", () => {
       prompt: "old input",
       configSnapshot: null,
     });
-    markSubagentRunning(seeded.taskId, child);
-    completeSubagentTask(seeded.taskId, "legacy answer");
+    markSubagentRunning(parent, seeded.taskId, child);
+    completeSubagentTask(parent, seeded.taskId, "legacy answer");
 
     simulateRestart();
     bootstrap();
@@ -539,7 +539,7 @@ describe("legacy rows without a configuration snapshot", () => {
     // The recovered config is frozen onto the new row: restricted tools (the
     // subagent tool never comes back) and a neutral prompt instead of today's
     // profile. A later restart reuses it without re-deriving.
-    const recovered = parseSubagentConfigSnapshot(row(newTaskId).configSnapshot);
+    const recovered = parseSubagentConfigSnapshot(row(parent, newTaskId).configSnapshot);
     expect(recovered).toMatchObject({
       subagentName: "codebase_explorer",
       cwd: "/tmp/legacy-project",
@@ -555,7 +555,7 @@ describe("legacy rows without a configuration snapshot", () => {
     await manager.idle();
 
     // The old task's history is untouched.
-    expect(row(seeded.taskId)).toMatchObject({ status: "completed", result: "legacy answer", prompt: "old input" });
+    expect(row(parent, seeded.taskId)).toMatchObject({ status: "completed", result: "legacy answer", prompt: "old input" });
 
     // Second restart: the sidecar is gone, but the recovered snapshot is enough.
     deleteSessionToolSelection(child);
@@ -681,10 +681,10 @@ describe("legacy rows without a configuration snapshot", () => {
       );
       expect(attempted.isError).toBeUndefined();
       const taskId = (attempted.details as { taskId: string }).taskId;
-      await waitFor(() => row(taskId).status === "failed", `task ${taskId} to fail`);
-      expect(row(taskId).error).toContain(testCase.expected);
+      await waitFor(() => row(parent, taskId).status === "failed", `task ${taskId} to fail`);
+      expect(row(parent, taskId).error).toContain(testCase.expected);
       // No turn ran with wider defaults, and no snapshot was invented.
-      expect(row(taskId).configSnapshot).toBeNull();
+      expect(row(parent, taskId).configSnapshot).toBeNull();
       const got = await run({ action: "get", task_id: taskId }, parent);
       const detail = (got.details as { detail: { task: { status: string; error: string | null } } }).detail;
       expect(detail.task.status).toBe("failed");
@@ -716,10 +716,10 @@ describe("legacy rows without a configuration snapshot", () => {
 
     // The legacy config is resolved asynchronously; stopping now must prevent
     // the child session (and the row) from being started.
-    manager.stop(taskId);
-    await waitFor(() => row(taskId).status === "cancelled", "the task to cancel");
+    manager.stop(parent, taskId);
+    await waitFor(() => row(parent, taskId).status === "cancelled", "the task to cancel");
     expect(runner.turns).toHaveLength(0);
-    expect(row(taskId).childSessionId).toBe(child);
+    expect(row(parent, taskId).childSessionId).toBe(child);
     await manager.idle();
   });
 });
@@ -756,7 +756,7 @@ describe("request-id dedupe across a restart", () => {
     expect(spawned.isError).toBeUndefined();
     const firstTaskId = (spawned.details as { taskId: string }).taskId;
     await first.runner.turns[0].acquire();
-    const child = first.manager.get(firstTaskId)!.childSessionId!;
+    const child = first.manager.get(parent, firstTaskId)!.childSessionId!;
     await settle(first.runner.turns[0], child);
     await first.manager.idle();
 
@@ -857,7 +857,7 @@ describe("store migration across restarts", () => {
 
     // First open after the upgrade.
     expect(columns()).toEqual(expect.arrayContaining(["origin", "request_id", "config_snapshot"]));
-    expect(row("legacy-task")).toMatchObject({
+    expect(row("parent-legacy-db", "legacy-task")).toMatchObject({
       status: "completed",
       origin: "tool",
       requestId: null,
@@ -871,7 +871,7 @@ describe("store migration across restarts", () => {
     simulateRestart();
     const reopened = getSubagentDb();
     expect(columns()).toEqual(expect.arrayContaining(["origin", "request_id", "config_snapshot"]));
-    expect(row("legacy-task")).toMatchObject({ status: "completed", result: null, prompt: "old input" });
+    expect(row("parent-legacy-db", "legacy-task")).toMatchObject({ status: "completed", result: null, prompt: "old input" });
     expect((reopened.prepare("PRAGMA index_list(subagent_tasks)").all() as Array<{ name: string }>)
       .map((index) => index.name)).toContain("idx_subagent_tasks_request");
   });

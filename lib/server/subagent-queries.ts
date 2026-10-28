@@ -76,9 +76,11 @@ export interface SubagentTaskView {
  * must not resurrect them); a non-terminal row is only live when this process
  * still manages the task.
  */
-export function resolveSubagentTaskStatus(task: Pick<SubagentTask, "taskId" | "status">): SubagentTaskStatus {
+export function resolveSubagentTaskStatus(
+  task: Pick<SubagentTask, "parentSessionId" | "taskId" | "status">,
+): SubagentTaskStatus {
   if (isSubagentTerminalStatus(task.status)) return task.status;
-  const live = getSubagentTaskManager().liveStatus(task.taskId);
+  const live = getSubagentTaskManager().liveStatus(task.parentSessionId, task.taskId);
   // A non-terminal row nobody manages cannot still be running: the manager
   // reconciles stale rows when it starts and removes a task once it finishes.
   return live ?? "interrupted";
@@ -370,8 +372,8 @@ async function readTaskDetail(task: SubagentTask, input: Omit<ReadSubagentTaskIn
  * `cancel` / `continue`) so ownership is one rule, not one per action.
  */
 export function getSubagentTaskForParent(parentSessionId: string, taskId: string): SubagentTask {
-  const row = getSubagentTask(taskId);
-  if (!row || row.parentSessionId !== parentSessionId) throw new SubagentQueryError(SUBAGENT_TASK_NOT_FOUND);
+  const row = getSubagentTask(parentSessionId, taskId);
+  if (!row) throw new SubagentQueryError(SUBAGENT_TASK_NOT_FOUND);
   return row;
 }
 

@@ -16,6 +16,10 @@ export { isSubagentTerminalStatus };
 const TERMINAL_SQL = SUBAGENT_TERMINAL_STATUSES.map((status) => `'${status}'`).join(", ");
 
 export interface SubagentTask {
+  /**
+   * Short counter (`0001`, `0002`, …) counted per parent session and never
+   * reused, so a row is addressed by `(parentSessionId, taskId)`.
+   */
   taskId: string;
   parentSessionId: string;
   childSessionId: string | null;
@@ -54,9 +58,32 @@ function resolveDbPath(): string {
   return process.env.PI_WORK_SUBAGENTS_DB?.trim() || dataPath("subagents.db");
 }
 
-const SCHEMA = `
+/**
+ * Every column of `subagent_tasks`, in the order the table is built and copied.
+ * The primary-key migration rebuilds the table, so the column list lives here
+ * instead of being repeated in the CREATE and the INSERT … SELECT.
+ */
+const TASK_COLUMNS = [
+  "task_id",
+  "parent_session_id",
+  "child_session_id",
+  "subagent_name",
+  "description",
+  "prompt",
+  "status",
+  "result",
+  "error",
+  "origin",
+  "request_id",
+  "config_snapshot",
+  "created_at",
+  "started_at",
+  "finished_at",
+] as const;
+
+const TASK_TABLE_DEFINITION = `
   CREATE TABLE IF NOT EXISTS subagent_tasks (
-    task_id          TEXT PRIMARY KEY,
+    task_id          TEXT NOT NULL,
     parent_session_id TEXT NOT NULL,
     child_session_id TEXT,
     subagent_name    TEXT NOT NULL,
@@ -65,21 +92,45 @@ const SCHEMA = `
     status           TEXT NOT NULL,
     result           TEXT,
     error            TEXT,
+    origin           TEXT NOT NULL DEFAULT 'tool',
     request_id       TEXT,
     config_snapshot  TEXT,
     created_at       INTEGER NOT NULL,
     started_at       INTEGER,
-    finished_at      INTEGER
+    finished_at      INTEGER,
+    -- A task id is a short counter per parent session ("0001", "0002", …), so
+    -- two parents can hold the same id: a row is addressed by both.
+    PRIMARY KEY (parent_session_id, task_id)
   );
+`;
+
+const TASK_INDEXES = `
   CREATE INDEX IF NOT EXISTS idx_subagent_tasks_parent_created
     ON subagent_tasks(parent_session_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_subagent_tasks_child
     ON subagent_tasks(child_session_id);
+`;
 
-  -- Task ids are short increasing numbers (see allocateSubagentTaskId);
-  -- this table keeps the high-water mark so an id is never handed out twice.
+/**
+ * The dedupe index needs the `request_id` column, which a legacy table only
+ * gains in `migrateTaskRequestColumn`: it can never be part of the initial
+ * schema.
+ */
+const TASK_REQUEST_INDEX = `
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_subagent_tasks_request
+    ON subagent_tasks(parent_session_id, request_id) WHERE request_id IS NOT NULL;
+`;
+
+const SCHEMA = `
+  ${TASK_TABLE_DEFINITION}
+  ${TASK_INDEXES}
+
+  -- Task ids are short increasing numbers counted per parent session (see
+  -- allocateSubagentTaskId); this table keeps each parent's high-water mark so
+  -- an id is never handed out twice, even after its task row is pruned.
   CREATE TABLE IF NOT EXISTS subagent_task_seq (
-    id INTEGER PRIMARY KEY AUTOINCREMENT
+    parent_session_id TEXT PRIMARY KEY,
+    next_value        INTEGER NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS subagent_profiles (
@@ -171,6 +222,56 @@ function migrateTaskRequestColumn(db: Database.Database): void {
 }
 
 /**
+ * Re-key `subagent_tasks` on `(parent_session_id, task_id)`. Databases created
+ * while task ids were a single global counter have `task_id` alone as the
+ * primary key; ids are now counted per parent session, so the row key has to be
+ * the pair. Idempotent: the rebuild only runs while the key is the old one, and
+ * existing rows keep their ids (which stay unique, just not 4-digit yet).
+ */
+function migrateTaskPrimaryKey(db: Database.Database): void {
+  const columns = db.prepare("PRAGMA table_info(subagent_tasks)").all() as Array<{
+    name: string;
+    pk: number;
+  }>;
+  const keyColumns = columns.filter((column) => column.pk > 0).map((column) => column.name);
+  if (keyColumns.length === 2 && keyColumns.includes("task_id") && keyColumns.includes("parent_session_id")) {
+    return;
+  }
+  const names = TASK_COLUMNS.join(", ");
+  const rebuild = db.transaction(() => {
+    // A rebuild that never finished (process killed mid-transaction) cannot leave
+    // a half-written table behind, but a leftover v2 from an older attempt could
+    // still be there: drop it before creating.
+    db.exec("DROP TABLE IF EXISTS subagent_tasks_v2");
+    db.exec(TASK_TABLE_DEFINITION.replace("IF NOT EXISTS subagent_tasks", "subagent_tasks_v2"));
+    db.exec(`INSERT INTO subagent_tasks_v2 (${names}) SELECT ${names} FROM subagent_tasks`);
+    db.exec("DROP TABLE subagent_tasks");
+    db.exec("ALTER TABLE subagent_tasks_v2 RENAME TO subagent_tasks");
+    db.exec(TASK_INDEXES);
+    db.exec(TASK_REQUEST_INDEX);
+  });
+  rebuild();
+}
+
+/**
+ * Rebuild `subagent_task_seq` as a per-parent counter. The sequence used to be
+ * one global AUTOINCREMENT table; it is recreated empty, because allocation
+ * seeds each parent from the highest id it already holds.
+ */
+function migrateTaskSequenceTable(db: Database.Database): void {
+  const columns = db.prepare("PRAGMA table_info(subagent_task_seq)").all() as Array<{ name: string }>;
+  if (columns.length > 0 && !columns.some((column) => column.name === "parent_session_id")) {
+    db.exec("DROP TABLE subagent_task_seq");
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS subagent_task_seq (
+      parent_session_id TEXT PRIMARY KEY,
+      next_value        INTEGER NOT NULL
+    )
+  `);
+}
+
+/**
  * True when a task store already exists on disk. Startup reconciliation uses
  * this so a server that never used subagents does not create an empty database
  * just to find nothing to reconcile.
@@ -193,6 +294,9 @@ export function getSubagentDb(): Database.Database {
   migrateTaskRequestColumn(db);
   migrateTaskOriginColumn(db);
   migrateProfileColumns(db);
+  // Last, so the rebuild always sees the full column set above.
+  migrateTaskSequenceTable(db);
+  migrateTaskPrimaryKey(db);
   globalThis.__piSubagentsDb = db;
   return db;
 }
@@ -218,20 +322,46 @@ function mapRow(row: Record<string, unknown>): SubagentTask {
 }
 
 /**
- * Allocate the next task id: `1`, `2`, `3` …
+ * Allocate the next task id of one parent session: `0001`, `0002`, `0003` …
  *
  * A parent session only ever delegates a handful of subagents, so a short
- * increasing number is enough to address a task and keeps every tool output and
- * UI label readable (no uuid to copy around). The sequence table is only ever
- * inserted into, so a pruned task can never hand its id to a different one.
+ * increasing number counted per session is enough to address a task and keeps
+ * every tool output and UI label readable (no uuid to copy around). The counter
+ * is stored, never derived from the rows, so a pruned task can never hand its
+ * id to a different one. Ids repeat across parents by design, which is why a
+ * task is addressed by `(parentSessionId, taskId)`.
  */
-function allocateSubagentTaskId(db: Database.Database): string {
-  const info = db.prepare("INSERT INTO subagent_task_seq DEFAULT VALUES").run();
-  return String(info.lastInsertRowid);
+function allocateSubagentTaskId(db: Database.Database, parentSessionId: string): string {
+  const allocate = db.transaction((parent: string): number => {
+    const current = db.prepare(
+      "SELECT next_value FROM subagent_task_seq WHERE parent_session_id = ?",
+    ).get(parent) as { next_value: number } | undefined;
+    if (current) {
+      db.prepare("UPDATE subagent_task_seq SET next_value = ? WHERE parent_session_id = ?")
+        .run(current.next_value + 1, parent);
+      return current.next_value;
+    }
+    // First id for this parent. Rows written while ids were one global counter
+    // keep theirs, so start after the highest one this session already holds
+    // instead of handing it out (or a lower number) again.
+    const legacy = db.prepare(
+      "SELECT MAX(CAST(task_id AS INTEGER)) AS highest FROM subagent_tasks WHERE parent_session_id = ?",
+    ).get(parent) as { highest: number | null };
+    const next = Math.max(1, (legacy?.highest ?? 0) + 1);
+    db.prepare("INSERT INTO subagent_task_seq (parent_session_id, next_value) VALUES (?, ?)")
+      .run(parent, next + 1);
+    return next;
+  });
+  return formatSubagentTaskId(allocate(parentSessionId));
+}
+
+/** Four digits, growing past `9999` rather than wrapping back to a used id. */
+function formatSubagentTaskId(value: number): string {
+  return String(value).padStart(4, "0");
 }
 
 export function createSubagentTask(input: {
-  /** Fixed id; omit to allocate the next numeric id. */
+  /** Fixed id; omit to allocate this parent's next counter (`0001`, `0002`, …). */
   taskId?: string;
   parentSessionId: string;
   subagentName: string;
@@ -248,7 +378,7 @@ export function createSubagentTask(input: {
 }): SubagentTask {
   const now = Date.now();
   const db = getSubagentDb();
-  const taskId = input.taskId ?? allocateSubagentTaskId(db);
+  const taskId = input.taskId ?? allocateSubagentTaskId(db, input.parentSessionId);
   db.prepare(`
     INSERT INTO subagent_tasks
       (task_id, parent_session_id, child_session_id, subagent_name, description, prompt, status, origin, request_id, config_snapshot, created_at)
@@ -268,35 +398,40 @@ export function createSubagentTask(input: {
     configSnapshot: input.configSnapshot ?? null,
     now,
   });
-  return getSubagentTask(taskId)!;
+  return getSubagentTask(input.parentSessionId, taskId)!;
 }
 
 /** Move a task to a non-terminal status (`creating`, `stopping`, …). */
-export function markSubagentStatus(taskId: string, status: "creating" | "stopping"): void {
+export function markSubagentStatus(
+  parentSessionId: string,
+  taskId: string,
+  status: "creating" | "stopping",
+): void {
   getSubagentDb().prepare(`
     UPDATE subagent_tasks
     SET status = ?
-    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
-  `).run(status, taskId);
+    WHERE parent_session_id = ? AND task_id = ? AND status NOT IN (${TERMINAL_SQL})
+  `).run(status, parentSessionId, taskId);
 }
 
-export function markSubagentRunning(taskId: string, childSessionId: string): void {
+export function markSubagentRunning(parentSessionId: string, taskId: string, childSessionId: string): void {
   getSubagentDb().prepare(`
     UPDATE subagent_tasks
     SET child_session_id = ?, status = 'running', started_at = ?, error = NULL
-    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
-  `).run(childSessionId, Date.now(), taskId);
+    WHERE parent_session_id = ? AND task_id = ? AND status NOT IN (${TERMINAL_SQL})
+  `).run(childSessionId, Date.now(), parentSessionId, taskId);
 }
 
-export function completeSubagentTask(taskId: string, result: string): void {
+export function completeSubagentTask(parentSessionId: string, taskId: string, result: string): void {
   getSubagentDb().prepare(`
     UPDATE subagent_tasks
     SET status = 'completed', result = ?, error = NULL, finished_at = ?
-    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
-  `).run(result, Date.now(), taskId);
+    WHERE parent_session_id = ? AND task_id = ? AND status NOT IN (${TERMINAL_SQL})
+  `).run(result, Date.now(), parentSessionId, taskId);
 }
 
 export function failSubagentTask(
+  parentSessionId: string,
   taskId: string,
   error: string,
   status: "failed" | "cancelled" | "interrupted" = "failed",
@@ -304,8 +439,8 @@ export function failSubagentTask(
   getSubagentDb().prepare(`
     UPDATE subagent_tasks
     SET status = ?, error = ?, finished_at = ?
-    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
-  `).run(status, error, Date.now(), taskId);
+    WHERE parent_session_id = ? AND task_id = ? AND status NOT IN (${TERMINAL_SQL})
+  `).run(status, error, Date.now(), parentSessionId, taskId);
 }
 
 /**
@@ -315,9 +450,9 @@ export function failSubagentTask(
  * `failSubagentTask` write for the same task, where no other writer can be in
  * between.
  */
-export function setSubagentTaskPartialOutput(taskId: string, result: string): void {
-  getSubagentDb().prepare("UPDATE subagent_tasks SET result = ? WHERE task_id = ?")
-    .run(result, taskId);
+export function setSubagentTaskPartialOutput(parentSessionId: string, taskId: string, result: string): void {
+  getSubagentDb().prepare("UPDATE subagent_tasks SET result = ? WHERE parent_session_id = ? AND task_id = ?")
+    .run(result, parentSessionId, taskId);
 }
 
 /**
@@ -326,12 +461,16 @@ export function setSubagentTaskPartialOutput(taskId: string, result: string): vo
  * recovered settings become the session's creation-time snapshot for every
  * later continue instead of being re-derived each time.
  */
-export function setSubagentTaskConfigSnapshot(taskId: string, configSnapshot: string): boolean {
+export function setSubagentTaskConfigSnapshot(
+  parentSessionId: string,
+  taskId: string,
+  configSnapshot: string,
+): boolean {
   const result = getSubagentDb().prepare(`
     UPDATE subagent_tasks
     SET config_snapshot = ?
-    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
-  `).run(configSnapshot, taskId);
+    WHERE parent_session_id = ? AND task_id = ? AND status NOT IN (${TERMINAL_SQL})
+  `).run(configSnapshot, parentSessionId, taskId);
   return result.changes > 0;
 }
 
@@ -363,11 +502,31 @@ export function listSubagentChildSessionIds(): string[] {
   return rows.flatMap((row) => row.child_session_id ? [row.child_session_id] : []);
 }
 
-export function getSubagentTask(taskId: string): SubagentTask | null {
+/**
+ * The row of one task. A task id is only unique within its parent session, so
+ * every lookup names both; see `findSubagentTask` for the id-only read used by
+ * callers that cannot (and tests).
+ */
+export function getSubagentTask(parentSessionId: string, taskId: string): SubagentTask | null {
   const row = getSubagentDb().prepare(
-    "SELECT * FROM subagent_tasks WHERE task_id = ?",
-  ).get(taskId) as Record<string, unknown> | undefined;
+    "SELECT * FROM subagent_tasks WHERE parent_session_id = ? AND task_id = ?",
+  ).get(parentSessionId, taskId) as Record<string, unknown> | undefined;
   return row ? mapRow(row) : null;
+}
+
+/**
+ * Resolve a task by its id alone. Task ids are counted per parent session, so
+ * two parents can hold the same id; this throws instead of guessing when that
+ * happens. Callers that know the parent must use `getSubagentTask`.
+ */
+export function findSubagentTask(taskId: string): SubagentTask | null {
+  const rows = getSubagentDb().prepare(
+    "SELECT * FROM subagent_tasks WHERE task_id = ? LIMIT 2",
+  ).all(taskId) as Record<string, unknown>[];
+  if (rows.length > 1) {
+    throw new Error(`Task id "${taskId}" belongs to more than one parent session; pass the parent session id`);
+  }
+  return rows.length === 0 ? null : mapRow(rows[0]);
 }
 
 export function listSubagentTasks(parentSessionId: string): SubagentTask[] {

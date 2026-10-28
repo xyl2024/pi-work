@@ -107,7 +107,7 @@ function seedChildSession(input: {
     configSnapshot:
       input.snapshotJson === undefined ? JSON.stringify(snapshot) : input.snapshotJson,
   });
-  completeSubagentTask(`subagent:seed-${child}`, "seeded result");
+  completeSubagentTask(input.parent, `subagent:seed-${child}`, "seeded result");
   return { parent: input.parent, child };
 }
 
@@ -133,8 +133,8 @@ function registry(): Map<string, never> {
   return getRegistry() as unknown as Map<string, never>;
 }
 
-function row(taskId: string): SubagentTask {
-  const task = getSubagentTask(taskId);
+function row(parentSessionId: string, taskId: string): SubagentTask {
+  const task = getSubagentTask(parentSessionId, taskId);
   if (!task) throw new Error(`missing task row ${taskId}`);
   return task;
 }
@@ -176,15 +176,15 @@ describe("manual follow-up enters task management", () => {
     expect(submitted.origin).toBe("manual");
     expect(submitted.deduped).toBe(false);
 
-    const created = row(submitted.taskId);
+    const created = row(parent, submitted.taskId);
     expect(created.origin).toBe("manual");
     expect(created.prompt).toBe("Please also check the tests\nand report what you changed.");
     expect(created.description).toBe(manualTaskDescription(created.prompt));
     expect(created.createdAt).toBeGreaterThan(0);
 
     await runner.turns[0].acquire();
-    expect(row(submitted.taskId).status).toBe("running");
-    expect(manager.liveStatus(submitted.taskId)).toBe("running");
+    expect(row(parent, submitted.taskId).status).toBe("running");
+    expect(manager.liveStatus(parent, submitted.taskId)).toBe("running");
 
     // The child stays a subagent: same session, configuration frozen at
     // creation instead of today's profile or the parent's settings.
@@ -197,8 +197,8 @@ describe("manual follow-up enters task management", () => {
 
     await settle(runner.turns[0], child);
     await manager.idle();
-    expect(row(submitted.taskId).status).toBe("completed");
-    expect(row(submitted.taskId).result).toBe("done");
+    expect(row(parent, submitted.taskId).status).toBe("completed");
+    expect(row(parent, submitted.taskId).result).toBe("done");
   });
 
   it("keeps one task history that the parent agent can read and tell apart", async () => {
@@ -326,7 +326,7 @@ describe("manual follow-up enters task management", () => {
 
     const stopped = manager.stopAll(parent);
     expect(stopped.stopped).toBe(1);
-    expect(row(submitted.taskId).status).toBe("stopping");
+    expect(row(parent, submitted.taskId).status).toBe("stopping");
 
     expect(() => submitSubagentManualPrompt({ childSessionId: child, message: "sneak in" }))
       .toThrow(/stopping all subagent tasks/);
@@ -337,7 +337,7 @@ describe("manual follow-up enters task management", () => {
       error: "Subagent stopped because the parent session was stopped",
     });
     await manager.idle();
-    expect(row(submitted.taskId).status).toBe("cancelled");
+    expect(row(parent, submitted.taskId).status).toBe("cancelled");
     expect(manager.isStopping(parent)).toBe(false);
   });
 
@@ -351,7 +351,7 @@ describe("manual follow-up enters task management", () => {
 
     const stop = stopSubagentTaskForChildSession(child);
     expect(stop).toEqual({ taskId: submitted.taskId, status: "stopping" });
-    expect(row(`subagent:seed-${other.child}`).status).toBe("completed");
+    expect(row(parent, `subagent:seed-${other.child}`).status).toBe("completed");
 
     await settle(runner.turns[0], child, {
       status: "cancelled",
@@ -359,7 +359,7 @@ describe("manual follow-up enters task management", () => {
       error: "Subagent cancelled",
     });
     await manager.idle();
-    expect(row(submitted.taskId).status).toBe("cancelled");
+    expect(row(parent, submitted.taskId).status).toBe("cancelled");
 
     // An idle child session has nothing left to stop.
     expect(stopSubagentTaskForChildSession(child)).toBeNull();
@@ -441,7 +441,7 @@ describe("/api/agent/[id] entry contract", () => {
     expect(body.success).toBe(true);
     expect(body.data.origin).toBe("manual");
 
-    const created = row(body.data.taskId);
+    const created = row(parent, body.data.taskId);
     expect(created.origin).toBe("manual");
     expect(created.childSessionId).toBe(child);
     expect(created.parentSessionId).toBe(parent);
@@ -470,7 +470,7 @@ describe("/api/agent/[id] entry contract", () => {
 
   it("maps a stop on the child session to its task instead of a raw abort", async () => {
     const { runner, manager } = setup();
-    const { child } = seedChildSession({ parent: uniqueId("parent") });
+    const { parent, child } = seedChildSession({ parent: uniqueId("parent") });
 
     const started = await post(child, { type: "prompt", message: "work" });
     const startedBody = await started.json() as { data: { taskId: string } };
@@ -483,7 +483,7 @@ describe("/api/agent/[id] entry contract", () => {
 
     await settle(runner.turns[0], child, { status: "cancelled", error: "Subagent cancelled", hasReply: false });
     await manager.idle();
-    expect(row(startedBody.data.taskId).status).toBe("cancelled");
+    expect(row(parent, startedBody.data.taskId).status).toBe("cancelled");
   });
 
   it("refuses images it cannot deliver to a task", async () => {
@@ -500,13 +500,13 @@ describe("/api/agent/[id] entry contract", () => {
 
   it("lets a stop fall through when the child has no tracked task", async () => {
     setup();
-    const { child } = seedChildSession({ parent: uniqueId("parent") });
+    const { parent, child } = seedChildSession({ parent: uniqueId("parent") });
 
     // Nothing is running: the abort is not a task stop, so the command follows
     // the ordinary session path (which cannot find this fake session file).
     const response = await post(child, { type: "abort" });
     expect(response.status).toBe(404);
-    expect(row(`subagent:seed-${child}`).status).toBe("completed");
+    expect(row(parent, `subagent:seed-${child}`).status).toBe("completed");
   });
 
   it("leaves ordinary sessions on the normal path", async () => {

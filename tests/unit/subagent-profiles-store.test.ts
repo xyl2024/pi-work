@@ -169,6 +169,9 @@ describe("subagent profile store", () => {
         status TEXT NOT NULL,
         result TEXT,
         error TEXT,
+        -- request_id is already part of the schema this legacy fixture models;
+        -- this test is about the subagent_type -> subagent_name rename.
+        request_id TEXT,
         created_at INTEGER NOT NULL,
         started_at INTEGER,
         finished_at INTEGER

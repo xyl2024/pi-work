@@ -142,8 +142,8 @@ async function settle(turn: ScriptedTurn | undefined, realSessionId: string, tex
   await turn?.settle({ text, realSessionId });
 }
 
-function row(taskId: string): SubagentTask {
-  const task = getSubagentTask(taskId);
+function row(parentSessionId: string, taskId: string): SubagentTask {
+  const task = getSubagentTask(parentSessionId, taskId);
   if (!task) throw new Error(`missing task row ${taskId}`);
   return task;
 }
@@ -165,7 +165,7 @@ describe("acceptance: one continuous delegation", () => {
     // the task keeps running.
     const firstTask = await spawnTask(parent, "map the module");
     await runner.turns[0].acquire();
-    const child = row(firstTask).childSessionId!;
+    const child = row(parent, firstTask).childSessionId!;
     expect(child).toBeTruthy();
 
     // 2. An expired wait only ends the observation.
@@ -173,7 +173,7 @@ describe("acceptance: one continuous delegation", () => {
     expect(observed.isError).toBeUndefined();
     expect(textOf(observed)).toContain("still running");
     expect(textOf(observed)).toContain("not cancelled");
-    expect(manager.liveStatus(firstTask)).toBe("running");
+    expect(manager.liveStatus(parent, firstTask)).toBe("running");
 
     // 3. The background task is findable again through list/get.
     const listed = await run({ action: "list", status: "running", limit: 10 }, parent);
@@ -209,14 +209,14 @@ describe("acceptance: one continuous delegation", () => {
     expect(runner.turns).toHaveLength(2);
     expect(runner.turns[1].spec.session).toEqual({ kind: "reuse", sessionId: child });
     await runner.turns[1].acquire();
-    expect(row(firstTask)).toMatchObject({ status: "completed", result: "first answer" });
+    expect(row(parent, firstTask)).toMatchObject({ status: "completed", result: "first answer" });
 
     // 6. A late cancel of the finished task is honest and touches nothing.
     const late = await run({ action: "cancel", task_id: firstTask }, parent);
     expect(late.isError).toBeUndefined();
     expect(detailOf<{ requested: boolean; status: string }>(late))
       .toMatchObject({ requested: false, status: "completed" });
-    expect(manager.liveStatus(secondTask)).toBe("running");
+    expect(manager.liveStatus(parent, secondTask)).toBe("running");
 
     // 7. The child's history keeps both tasks, newest first, in one list row.
     await settle(runner.turns[1], child, "second answer");
@@ -242,22 +242,22 @@ describe("acceptance: one continuous delegation", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ ok: true, stopped: 1, stopping: true });
     // Stopping is not stopped: the row waits for the turn to confirm.
-    expect(row(thirdTask).status).toBe("stopping");
-    expect(manager.liveStatus(thirdTask)).toBe("stopping");
+    expect(row(parent, thirdTask).status).toBe("stopping");
+    expect(manager.liveStatus(parent, thirdTask)).toBe("stopping");
 
     await runner.turns[2].settle({
       status: "cancelled",
       text: "",
       hasReply: false,
       error: "stopped with the parent",
-      realSessionId: row(thirdTask).childSessionId ?? child,
+      realSessionId: row(parent, thirdTask).childSessionId ?? child,
     });
     await manager.idle();
-    expect(row(thirdTask).status).toBe("cancelled");
+    expect(row(parent, thirdTask).status).toBe("cancelled");
     expect(manager.isStopping(parent)).toBe(false);
     // The completed tasks were never rewritten by the cascade.
-    expect(row(firstTask).status).toBe("completed");
-    expect(row(secondTask).status).toBe("completed");
+    expect(row(parent, firstTask).status).toBe("completed");
+    expect(row(parent, secondTask).status).toBe("completed");
   });
 });
 
@@ -271,7 +271,7 @@ describe("acceptance: manual and agent entries", () => {
     const { runner, manager } = setup();
     const firstTask = await spawnTask(parent, "delegated job");
     await runner.turns[0].acquire();
-    const child = row(firstTask).childSessionId!;
+    const child = row(parent, firstTask).childSessionId!;
 
     // The user cannot type a second, overlapping turn into the busy child.
     expect(submitErrorCode(() => submitSubagentManualPrompt({ childSessionId: child, message: "me too" })))
@@ -304,7 +304,7 @@ describe("acceptance: manual and agent entries", () => {
       realSessionId: child,
     });
     await manager.idle();
-    expect(row(firstTask).status).toBe("cancelled");
+    expect(row(parent, firstTask).status).toBe("cancelled");
     expect(manager.isStopping(parent)).toBe(false);
 
     // An explicit manual follow-up is now admitted as its own tracked task.
@@ -312,7 +312,7 @@ describe("acceptance: manual and agent entries", () => {
     expect(manual.origin).toBe("manual");
     expect(manual.taskId).not.toBe(firstTask);
     await runner.turns[1].acquire();
-    expect(manager.liveStatus(manual.taskId)).toBe("running");
+    expect(manager.liveStatus(parent, manual.taskId)).toBe("running");
 
     // ...and the agent's continue obeys the same busy rule in the reverse
     // direction: a manual turn is not something continue may overlap.
@@ -328,7 +328,7 @@ describe("acceptance: manual and agent entries", () => {
     const late = await run({ action: "cancel", task_id: firstTask }, parent);
     expect(detailOf<{ requested: boolean; status: string }>(late))
       .toMatchObject({ requested: false, status: "cancelled" });
-    expect(manager.liveStatus(manual.taskId)).toBe("running");
+    expect(manager.liveStatus(parent, manual.taskId)).toBe("running");
 
     await settle(runner.turns[1], child, "manual answer");
     await manager.idle();
@@ -358,7 +358,7 @@ describe("acceptance: result boundaries and the old name", () => {
     const { runner, manager } = setup();
     const taskId = await spawnTask(parent, "write a report");
     await runner.turns[0].acquire();
-    const child = row(taskId).childSessionId!;
+    const child = row(parent, taskId).childSessionId!;
     const long = `${"x".repeat(SUBAGENT_RESULT_WINDOW_DEFAULT)}TAIL-MARKER`;
     await settle(runner.turns[0], child, long);
     await manager.idle();

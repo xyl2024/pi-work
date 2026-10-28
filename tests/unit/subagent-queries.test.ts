@@ -20,6 +20,7 @@ import {
   completeSubagentTask,
   createSubagentTask,
   failSubagentTask,
+  findSubagentTask,
   getSubagentTask,
   markSubagentRunning,
   setSubagentTaskPartialOutput,
@@ -98,8 +99,8 @@ beforeEach(() => {
     isStopping() {
       return false;
     },
-    get: (taskId) => getSubagentTask(taskId),
-    liveStatus: (taskId) => live.get(taskId) ?? null,
+    get: (parentSessionId, taskId) => getSubagentTask(parentSessionId, taskId),
+    liveStatus: (_parentSessionId, taskId) => live.get(taskId) ?? null,
     async idle() {},
   };
   setSubagentTaskManagerForTests(manager);
@@ -162,11 +163,11 @@ function seedTask(input: SeedInput): string {
   });
   const status = input.status ?? "running";
   const child = input.child ?? null;
-  if (child && status !== "queued") markSubagentRunning(taskId, child);
-  if (status === "completed") completeSubagentTask(taskId, input.result ?? "done");
+  if (child && status !== "queued") markSubagentRunning(input.parent, taskId, child);
+  if (status === "completed") completeSubagentTask(input.parent, taskId, input.result ?? "done");
   else if (status === "failed" || status === "cancelled" || status === "interrupted") {
-    failSubagentTask(taskId, input.error ?? "boom", status);
-    if (input.result) setSubagentTaskPartialOutput(taskId, input.result);
+    failSubagentTask(input.parent, taskId, input.error ?? "boom", status);
+    if (input.result) setSubagentTaskPartialOutput(input.parent, taskId, input.result);
   }
   return taskId;
 }
@@ -279,25 +280,25 @@ describe("list", () => {
 describe("effective status", () => {
   it("reports an unmanaged non-terminal row as interrupted without rewriting it", () => {
     const taskId = seedTask({ parent: "parent-stale", child: "child-stale", status: "running" });
-    const row = getSubagentTask(taskId)!;
+    const row = findSubagentTask(taskId)!;
 
     expect(resolveSubagentTaskStatus(row)).toBe("interrupted");
     expect(toSubagentTaskView(row).status).toBe("interrupted");
     // This query only reports; rewriting stale rows is the manager's job when
     // it starts (`reconcileInterruptedSubagentTasks`).
-    expect(getSubagentTask(taskId)!.status).toBe("running");
+    expect(findSubagentTask(taskId)!.status).toBe("running");
   });
 
   it("keeps a terminal row terminal even when a late live status disagrees", () => {
     const taskId = seedTask({ parent: "parent-terminal", child: "child-done", status: "completed" });
     live.set(taskId, "running");
-    expect(resolveSubagentTaskStatus(getSubagentTask(taskId)!)).toBe("completed");
+    expect(resolveSubagentTaskStatus(findSubagentTask(taskId)!)).toBe("completed");
   });
 
   it("trusts the live manager for a task it still manages", () => {
     const taskId = seedTask({ parent: "parent-live", child: "child-live", status: "running" });
     live.set(taskId, "stopping");
-    expect(resolveSubagentTaskStatus(getSubagentTask(taskId)!)).toBe("stopping");
+    expect(resolveSubagentTaskStatus(findSubagentTask(taskId)!)).toBe("stopping");
   });
 });
 

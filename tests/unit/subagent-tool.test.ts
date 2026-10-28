@@ -67,7 +67,7 @@ function parentContext(overrides: Partial<SubagentParentContext> = {}): Subagent
 
 interface FakeManagerState {
   spawns: SpawnSubagentTaskInput[];
-  waits: Array<{ taskId: string; options: WaitSubagentTaskOptions | undefined }>;
+  waits: Array<{ parentSessionId: string; taskId: string; options: WaitSubagentTaskOptions | undefined }>;
   progress?: (progress: SubagentTaskProgress) => void;
   waitResult: SubagentTaskWaitResult;
   live: Map<string, SubagentTaskStatus>;
@@ -88,8 +88,8 @@ function fakeManager(waitResult: SubagentTaskWaitResult): { manager: SubagentTas
         origin: "tool",
       };
     },
-    async wait(taskId, options) {
-      state.waits.push({ taskId, options });
+    async wait(parentSessionId, taskId, options) {
+      state.waits.push({ parentSessionId, taskId, options });
       return waitResult;
     },
     continue() {
@@ -105,7 +105,7 @@ function fakeManager(waitResult: SubagentTaskWaitResult): { manager: SubagentTas
     get() {
       return null;
     },
-    liveStatus(taskId) {
+    liveStatus(_parentSessionId, taskId) {
       return state.live.get(taskId) ?? null;
     },
     async idle() {},
@@ -182,7 +182,7 @@ describe("subagent tool — spawn action", () => {
     expect(spawn.config.tools).not.toContain("subagent");
 
     expect(state.waits).toHaveLength(1);
-    expect(state.waits[0]).toMatchObject({ taskId: "subagent:fake" });
+    expect(state.waits[0]).toMatchObject({ parentSessionId: "parent-1", taskId: "subagent:fake" });
     expect(state.waits[0].options?.timeoutMs).toBe(DEFAULT_SUBAGENT_WAIT_MS);
 
     const text = result.content[0].type === "text" ? result.content[0].text : "";
@@ -336,8 +336,9 @@ function seedToolTask(input: {
     prompt: "the prompt",
   });
   const status = input.status ?? "running";
-  if (input.child && status !== "queued") markSubagentRunning(taskId, input.child);
-  if (status === "completed") completeSubagentTask(taskId, input.result ?? "done");
+  const parent = input.parent ?? "parent-1";
+  if (input.child && status !== "queued") markSubagentRunning(parent, taskId, input.child);
+  if (status === "completed") completeSubagentTask(parent, taskId, input.result ?? "done");
   return taskId;
 }
 

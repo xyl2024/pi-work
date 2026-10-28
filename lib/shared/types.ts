@@ -311,6 +311,10 @@ export type SubagentTaskOrigin = "tool" | "manual";
 
 /** Browser-safe summary returned by the parent session's subagent endpoint. */
 export interface SubagentTaskSummary {
+  /**
+   * Short counter (`0001`, `0002`, …) counted per parent session, so the same
+   * id can exist in two sessions: always read it together with the parent.
+   */
   taskId: string;
   childSessionId: string | null;
   /** Name of the configured subagent profile this task ran. */

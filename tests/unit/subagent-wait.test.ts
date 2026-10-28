@@ -151,11 +151,11 @@ function seedRow(input: {
     description: input.description ?? "seeded",
     prompt: "the prompt",
   });
-  if (input.child) markSubagentRunning(taskId, input.child);
-  if (input.status === "completed") completeSubagentTask(taskId, input.result ?? "done");
+  if (input.child) markSubagentRunning(input.parent, taskId, input.child);
+  if (input.status === "completed") completeSubagentTask(input.parent, taskId, input.result ?? "done");
   if (input.status === "failed" || input.status === "cancelled" || input.status === "interrupted") {
-    failSubagentTask(taskId, input.error ?? "stopped", input.status);
-    if (input.result) setSubagentTaskPartialOutput(taskId, input.result);
+    failSubagentTask(input.parent, taskId, input.error ?? "stopped", input.status);
+    if (input.result) setSubagentTaskPartialOutput(input.parent, taskId, input.result);
   }
   return taskId;
 }
@@ -204,7 +204,7 @@ describe("subagent tool — wait action", () => {
     expect(textOf(observed)).toContain(`action="wait", task_id="${taskId}"`);
     // The expiry ended only the observation: the turn is alive, its slot is
     // still held and no replacement task was created.
-    expect(manager.liveStatus(taskId)).toBe("running");
+    expect(manager.liveStatus("parent-wait", taskId)).toBe("running");
     expect(runner.turns).toHaveLength(1);
 
     await runner.turns[0].settle({ text: "final answer" });
@@ -244,7 +244,7 @@ describe("subagent tool — wait action", () => {
         waitExpired: true,
       });
     }
-    expect(manager.liveStatus(taskId)).toBe("running");
+    expect(manager.liveStatus("parent-waiters", taskId)).toBe("running");
     expect(runner.turns).toHaveLength(1);
 
     await runner.turns[0].settle({ text: "shared answer" });
@@ -367,7 +367,7 @@ describe("subagent tool — wait action", () => {
     expect(textOf(observed)).toContain("wait was cancelled");
     expect(textOf(observed)).toContain("keeps running");
     expect(deadline.cancelled).toBe(true);
-    expect(manager.liveStatus(taskId)).toBe("running");
+    expect(manager.liveStatus("parent-wait-abort", taskId)).toBe("running");
     expect(runner.turns).toHaveLength(1);
     await runner.turns[0].settle({ text: "survived" });
     await manager.idle();
@@ -386,7 +386,7 @@ describe("subagent tool — wait action", () => {
     }
     // Ownership is checked before the manager is involved: the real owner's
     // task is untouched and still running.
-    expect(manager.liveStatus(taskId)).toBe("running");
+    expect(manager.liveStatus("parent-owner", taskId)).toBe("running");
     expect(runner.turns).toHaveLength(1);
 
     const allowed = await run({ action: "wait", task_id: taskId, wait_ms: 0 }, "parent-owner");

@@ -1088,7 +1088,7 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
           });
         }
         const manager = getSubagentTaskManager();
-        const result = await manager.wait(existing.taskId, {
+        const result = await manager.wait(existing.parentSessionId, existing.taskId, {
           timeoutMs: input.waitMs,
           ...(signal ? { stopOnAbort: { signal, reason: SUBAGENT_CANCELLED } } : {}),
         });
@@ -1112,7 +1112,7 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
             onUpdate?.({ content: [], details: continueProgressDetails(progress) });
           },
         });
-        const result = await manager.wait(task.taskId, {
+        const result = await manager.wait(parentSessionId, task.taskId, {
           timeoutMs: input.waitMs,
           // Same contract as spawn: stopping the parent turn while it waits is
           // a stop request for this task, confirmed by the turn module.
@@ -1133,7 +1133,7 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
         // the caller's turn stops, but never stops the task or frees its slot.
         getSubagentTaskForParent(parentSessionId, input.taskId);
         const manager = getSubagentTaskManager();
-        const result = await manager.wait(input.taskId, {
+        const result = await manager.wait(parentSessionId, input.taskId, {
           timeoutMs: input.waitMs,
           ...(signal ? { observeAbort: signal } : {}),
         });
@@ -1154,9 +1154,9 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
         // A terminal task is final: never write it, so a late cancel cannot
         // overwrite a landed result (or a prior stop).
         if (!wasTerminal) {
-          manager.stop(input.taskId, SUBAGENT_CANCELLED);
+          manager.stop(parentSessionId, input.taskId, SUBAGENT_CANCELLED);
         }
-        const after = manager.get(input.taskId) ?? before;
+        const after = manager.get(parentSessionId, input.taskId) ?? before;
         // Report what actually happened, not what was attempted: a live stop
         // is `stopping` (or `cancelled` for a queued task); anything else was
         // already final (or a stale row reconciled on manager start) and left
@@ -1250,7 +1250,7 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
         },
       });
 
-      const result = await manager.wait(task.taskId, {
+      const result = await manager.wait(parentSessionId, task.taskId, {
         timeoutMs: waitMs,
         // The tool call's own abort (the user stopped the parent turn) is a
         // stop for this task; the turn module confirms it before the row turns
