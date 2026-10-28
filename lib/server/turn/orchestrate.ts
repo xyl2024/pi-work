@@ -29,6 +29,7 @@ import {
 import type { ToolSelection } from "../../shared/types";
 import type { LlmAuditSource } from "../../shared/llm-audit-types";
 import type { CallPurpose, ModelCallCommandOptions } from "../../shared/token-audit-types";
+import type { MessageOrigin } from "../../shared/message-origin";
 
 /** Optional per-command attribution for the session's model calls. */
 export type TurnSendOptions = ModelCallCommandOptions;
@@ -112,6 +113,13 @@ export interface RunTurnSpec {
    * while keeping its user source.
    */
   purpose?: CallPurpose;
+  /**
+   * Optional message origin (消息来源，ADR-0023) attached verbatim to the
+   * `prompt` command; the RPC session's dispatch point owns writing the
+   * custom entry. Omitted (the web path) leaves the command byte-identical
+   * to today's and writes nothing.
+   */
+  origin?: MessageOrigin;
   /**
    * Session strategy. Defaults to `{ kind: "fresh" }`: a new session in `cwd`.
    * `{ kind: "reuse", sessionId }` continues that session — the factory hands
@@ -407,7 +415,13 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
 
   try {
     await session.send(
-      { type: "prompt", message: spec.prompt },
+      {
+        type: "prompt",
+        message: spec.prompt,
+        // 消息来源：随 prompt 命令原样带给 RPC 收口点，由它写 custom entry。
+        // 不传时命令与现状逐字节一致。
+        ...(spec.origin ? { origin: spec.origin } : {}),
+      },
       spec.purpose ? { purpose: spec.purpose } : undefined,
     );
   } catch (error) {

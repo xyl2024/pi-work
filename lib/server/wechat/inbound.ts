@@ -167,6 +167,15 @@ async function processMessage(
   // Captured for the run below: the onSession hook is a closure, so it cannot
   // rely on the narrowing of `channel.workspaceId` done above.
   const workspaceId = channel.workspaceId;
+  // 消息来源（ticket 03）：频道入站消息带上频道 origin（id + provider + 名称快照，
+  // 从持久化记录取），随 prompt 命令交给 RPC 收口点写 custom entry；prompt
+  // 文本本身不变。网页端手动输入不传 origin，同一会话两条路径各自正确。
+  const origin = {
+    kind: "channel" as const,
+    channelId: channel.id,
+    provider: channel.provider,
+    name: channel.name,
+  };
   let sessionId: string | null = channel.currentSessionId ?? null;
   const coldStart = sessionId === null;
   void fireTyping(account, msg);
@@ -192,6 +201,7 @@ async function processMessage(
       // A channel message keeps the user source (the sender drove it) but is
       // attributable as channel usage rather than an ordinary chat call.
       purpose: "channel",
+      origin,
       session: sessionId ? { kind: "reuse", sessionId } : { kind: "fresh" },
       timeoutMs: AGENT_END_TIMEOUT_MS,
       // Runs the moment the session is acquired — before any setup command and
