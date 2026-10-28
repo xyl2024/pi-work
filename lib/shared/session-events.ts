@@ -35,6 +35,7 @@
  */
 
 import type { AskUserQuestion, AskUserQuestionsRequestPayload } from "./ask-user-questions-tool-types";
+import type { MessageOrigin } from "./message-origin";
 import { LEGACY_SPAWN_SUBAGENT_TOOL_NAME, SUBAGENT_TOOL_NAME } from "./subagent";
 import { CELEBRATE_TOOL_NAME, type CelebrateDetails } from "./celebrate-tool-types";
 import type { UiSoundEventId } from "./config-types";
@@ -95,7 +96,13 @@ export type SessionEvent =
        *  untyped rather than mirroring pi's event union. */
       assistantMessageEvent?: unknown;
     }
-  | { type: "message_end"; message: SessionEventMessage }
+  | {
+      type: "message_end";
+      message: SessionEventMessage;
+      /** 消息来源（ADR-0023）：仅 user 角色且来源非网页时有值，由 RPC 会话层
+       *  在刚收到该事件时附加。绝不写回 JSONL 消息体。 */
+      origin?: MessageOrigin;
+    }
   | { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
   | {
       type: "tool_execution_update";

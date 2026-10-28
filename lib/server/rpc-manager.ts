@@ -2,6 +2,9 @@ import { createAgentSession, createCodemodeExtension, createMcpExtension, Defaul
 import { cacheSessionPath, invalidateSessionListCache, stripSessionInfoNodes, fallbackSessionLeafId } from "./session-reader";
 import type { AgentSessionLike, ContextUsage, ToolInfo } from "./pi-types";
 import type { SessionEvent } from "../shared/session-events";
+import { buildMessageOriginEntryData, isMessageOrigin, normalizeMessageOrigin, MESSAGE_ORIGIN_ENTRY_TYPE, type MessageOrigin } from "../shared/message-origin";
+import { extractMessageText } from "../shared/message-content";
+import type { AgentMessage } from "../shared/types";
 import type { ToolSelection } from "../shared/types";
 import { declarableToolNames, expandToolSelection, isDeclarableTool } from "../shared/tool-selection";
 import {
@@ -121,6 +124,9 @@ export class AgentSessionWrapper {
   // in-flight one, and the tokenizer's 2.4MB first load can never interleave
   // two writes into the cache.
   private compositionRefreshId = 0;
+  // 消息来源（ADR-0023）：非网页来源的 prompt 入队后，由该 user message 的
+  // message_end 事件消费（见 consumePromptOrigin）。网页端从不入队。
+  private pendingPromptOrigins: ReturnType<typeof buildMessageOriginEntryData>[] = [];
   private compositionRefreshChain: Promise<void> = Promise.resolve();
   // Last accepted refresh inputs, so a `message_end` that didn't move the
   // anchor (a tool result, say) costs nothing. Message/tool *counts* are
@@ -234,6 +240,11 @@ export class AgentSessionWrapper {
       if (event.type === "agent_start") {
         this.lastAssistantText = "";
       } else if (event.type === "message_end") {
+        // 消息来源（ADR-0023）：user 消息的 message_end 事件在此处消费排队中的
+        // origin —— 先附加到即将转发给 SSE 监听者的事件上，再推迟一步写 entry。
+        if ((event.message as { role?: string }).role === "user") {
+          this.consumePromptOrigin(event);
+        }
         const body = extractAssistantBodyText(event.message);
         if (body) this.lastAssistantText = body;
       } else if (event.type === "agent_end") {
@@ -284,6 +295,44 @@ export class AgentSessionWrapper {
    * branch — reading it synchronously here would anchor one message behind.
    * The continuation runs after pi's own synchronous persistence.
    */
+  /**
+   * 消息来源的消费点与写入点（ADR-0023）。
+   *
+   * pi 对一条 user message 是先向监听者发 `message_end`、再同步 persist 该
+   * entry（见 scheduleContextCompositionRefresh 的注释）——所以这里同步把
+   * origin 附加到即将转发给 SSE 监听者的事件上（实时与历史一致），并推迟一
+   * 个微任务把 `pi_work_message_origin` custom entry 追加到 JSONL：微任务运
+   * 行时该 user message entry 必然已写入，entry 由 appendCustomEntry 自然挂
+   * 在当前叶（即该 user message）之后，随消息树走：分支自然脱落、压缩随旧
+   * 分支消失。只有非网页来源才有排队中的 origin；origin 永远不会被写回
+   * JSONL 的消息体。
+   *
+   * 匹配规则：用消息文本前缀找 pending 中最先匹配者。prompt 派发到 user
+   * message 写入之间可能有 steer/followUp 插队（文本不匹配则不消耗）；单个
+   * pending 且新鲜时直接消费，容忍文本被模板/图片 hints 扩写。prompt_failed
+   * 时清空 pending（对应的 user message 永远不会写入）。
+   */
+  private consumePromptOrigin(event: { message?: unknown }): void {
+    if (this.pendingPromptOrigins.length === 0) return;
+    const cutoff = Date.now() - 10 * 60_000;
+    this.pendingPromptOrigins = this.pendingPromptOrigins.filter((p) => p.timestamp > cutoff);
+    if (this.pendingPromptOrigins.length === 0) return;
+    const text = extractMessageText(!event.message ? ({ role: "user", content: [] } as AgentMessage) : event.message as AgentMessage);
+    const matchedIdx = this.pendingPromptOrigins.findIndex((p) => text.startsWith(p.messagePrefix));
+    const idx = matchedIdx !== -1 ? matchedIdx : this.pendingPromptOrigins.length === 1 ? 0 : -1;
+    if (idx === -1) return;
+    const consumed = this.pendingPromptOrigins.splice(idx, 1)[0];
+    (event as { origin?: MessageOrigin }).origin = consumed.origin;
+    void Promise.resolve().then(() => {
+      try {
+        if (!this._alive || !this.unsubscribe) return;
+        this.inner.sessionManager.appendCustomEntry(MESSAGE_ORIGIN_ENTRY_TYPE, consumed);
+      } catch (err) {
+        log.warn("failed to append message origin entry", { sessionId: this.sessionId, error: String(err) });
+      }
+    });
+  }
+
   private scheduleContextCompositionRefresh(): void {
     const refreshId = ++this.compositionRefreshId;
     this.compositionRefreshChain = this.compositionRefreshChain
@@ -550,11 +599,25 @@ export class AgentSessionWrapper {
         // as a synthetic prompt_failed event so the client can react instead
         // of silently hanging (e.g. missing API key, unregistered model).
         const promptImages = command.images as Array<{ type: "image"; data: string; mimeType: string }> | undefined;
+        // 消息来源收口（ADR-0023）：可选 origin 字段由非网页发送方（频道
+        // inbound、定时任务 runner、subagent 手动补输入）填好；网页端不传，
+        // 行为与现状完全一致（不写任何 entry）。非法 origin 按缺省（网页端）
+        // 处理，不抛错。
+        const rawOrigin = (command as { origin?: unknown }).origin;
+        if (rawOrigin !== undefined) {
+          const origin = isMessageOrigin(rawOrigin) ? rawOrigin : normalizeMessageOrigin(rawOrigin);
+          if (origin.kind !== "web") {
+            this.pendingPromptOrigins.push(buildMessageOriginEntryData(command.message as string, origin));
+          }
+        }
         this.inner
           .prompt(command.message as string, promptImages?.length ? { images: promptImages } : undefined)
           .catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             log.warn("prompt failed", { sessionId: this.sessionId, error });
+            // prompt 失败意味着对应的 user message 永远不会被写入；排队中的
+            // origin 丢弃，避免错挂到之后不相干的消息上。
+            this.pendingPromptOrigins = [];
             for (const l of this.listeners) {
               try {
                 l({ type: "prompt_failed", error: message });

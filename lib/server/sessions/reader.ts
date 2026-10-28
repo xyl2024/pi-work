@@ -20,6 +20,7 @@ import type {
   SessionInfo as PiSessionInfo,
 } from "@earendil-works/pi-coding-agent";
 import { listSessionNames } from "@/lib/server/session-names";
+import { isMessageOriginEntryData, MESSAGE_ORIGIN_ENTRY_TYPE } from "@/lib/shared/message-origin";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
 import { cleanFirstMessage } from "@/lib/shared/session-title";
 import {
@@ -559,6 +560,27 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
     cur = cur.parentId ? byId.get(cur.parentId) : undefined;
   }
 
+  // 消息来源（ADR-0023）：非网页来源的用户消息身后跟着一条
+  // `pi_work_message_origin` custom entry，挂在它描述的 user entry 之后。
+  // 归属规则：树序上最近的前一条 user message —— 沿 path 正序扫，遇到 entry
+  // 就记到当前的 user entry 上。origin 只在这里合并进返回给 UI 的消息对象，
+  // 绝不写回 JSONL 消息体；非法数据按缺省处理（不带 origin）。entry 随消息
+  // 树走：不在 path 上的 entry 自然脱落（分支）或随旧分支消失（压缩）。
+  const originByUserEntryId = new Map<string, unknown>();
+  let lastUserEntryId: string | undefined;
+  for (const entry of path) {
+    if (entry.type === "message" && (entry as { message?: { role?: string } }).message?.role === "user") {
+      lastUserEntryId = entry.id;
+    } else if (
+      entry.type === "custom" &&
+      (entry as unknown as { customType?: string }).customType === MESSAGE_ORIGIN_ENTRY_TYPE &&
+      lastUserEntryId
+    ) {
+      const data = (entry as unknown as { data?: unknown }).data;
+      if (isMessageOriginEntryData(data)) originByUserEntryId.set(lastUserEntryId, data.origin);
+    }
+  }
+
   // Project every displayable entry on the full path and build all parallel
   // arrays in the same loop. Compaction entries are rendered separately as
   // dividers, so their synthetic compactionSummary messages stay out of the
@@ -572,7 +594,10 @@ export function buildSessionContext(entries: SessionEntry[], leafId?: string | n
       entry as unknown as PiSessionEntry,
     ) as unknown as AgentMessage[];
     for (const message of projectedMessages) {
-      messages.push(normalizeToolCalls(message));
+      const withOrigin = originByUserEntryId.has(entry.id) && message.role === "user"
+        ? { ...message, origin: originByUserEntryId.get(entry.id) } as AgentMessage
+        : message;
+      messages.push(normalizeToolCalls(withOrigin));
       entryIds.push(entry.id);
       const ts = typeof entry.timestamp === "string" ? new Date(entry.timestamp).getTime() : undefined;
       entryTimestamps.push(Number.isFinite(ts) ? ts : undefined);
