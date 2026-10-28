@@ -694,7 +694,10 @@ function clock(ms: number | null): string {
 function taskSummaryLine(view: SubagentTaskView): string {
   const session = view.childSessionId ?? "(no child session yet)";
   const error = view.error ? ` — error: ${view.error}` : "";
-  return `${session} — ${view.status} — ${view.subagentName} — "${view.description}"`
+  // A manual task is the user typing into the child session themselves; the
+  // parent must be able to tell those apart from its own delegations.
+  const origin = view.origin === "manual" ? " — manual input by the user" : "";
+  return `${session} — ${view.status} — ${view.subagentName} — "${view.description}"${origin}`
     + ` — task ${view.taskId} — created ${iso(view.createdAt)}${error}`;
 }
 
@@ -834,6 +837,9 @@ function taskDetailLines(detail: SubagentTaskDetail): string[] {
   lines.push(`Subagent task ${task.taskId} — ${task.status}`);
   lines.push(`  subagent: ${task.subagentName}`);
   lines.push(`  description: ${task.description}`);
+  lines.push(task.origin === "manual"
+    ? "  origin: manual — the user typed this input into the child session (same task rules as a delegation)"
+    : "  origin: tool — this session delegated the input");
   lines.push(`  session: ${task.childSessionId ?? "(no child session yet — the task has not started)"}`);
   const timing = [`created ${iso(task.createdAt)}`];
   if (task.startedAt !== null) timing.push(`started ${iso(task.startedAt)}`);

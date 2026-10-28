@@ -150,6 +150,18 @@ function paramsToQuestions(params: AskUserQuestionsParamsType): AskUserQuestion[
   }));
 }
 
+/**
+ * Why a session without a human to answer refuses the question outright. Both
+ * entries close the gate immediately instead of hanging the turn until
+ * AGENT_END_TIMEOUT_MS.
+ */
+const UNATTENDED_REFUSAL: Partial<Record<BuildToolOptions["source"], string>> = {
+  scheduled:
+    "ask_user_questions is unavailable in scheduled tasks (no user is available to answer). Provide the necessary context to the model directly instead.",
+  subagent:
+    "ask_user_questions is unavailable in a subagent session (no user is available to answer it). Decide from the task you were given, state the assumption you made, and continue.",
+};
+
 function errorEnvelope(message: string): { content: [{ type: "text"; text: string }]; details: AskUserQuestionsDetails } {
   return {
     content: [{ type: "text", text: `Error: ${message}` }],
@@ -208,16 +220,18 @@ function makeTool({ requestUserInput, source }: BuildToolOptions) {
         return errorEnvelope(validationError);
       }
 
-      // Scheduled sessions have no human to answer. Fail fast so the
-      // scheduler run completes (with an error message for the agent)
-      // instead of hanging until AGENT_END_TIMEOUT_MS.
-      if (source === "scheduled") {
-        log.info("ask_user_questions short-circuited for scheduled session", {
+      // Scheduled sessions and subagent sessions have no human attached to
+      // answer. Fail fast so the run completes (with an error message for the
+      // agent) instead of hanging until AGENT_END_TIMEOUT_MS. A subagent's user
+      // question is never routed to the parent session's UI: the spec keeps the
+      // confirmation/question surfaces apart.
+      const unattended = UNATTENDED_REFUSAL[source];
+      if (unattended) {
+        log.info("ask_user_questions short-circuited for unattended session", {
           toolCallId,
+          source,
         });
-        return errorEnvelope(
-          "ask_user_questions is unavailable in scheduled tasks (no user is available to answer). Provide the necessary context to the model directly instead.",
-        );
+        return errorEnvelope(unattended);
       }
 
       const requestPromise = requestUserInput(toolCallId, questions);

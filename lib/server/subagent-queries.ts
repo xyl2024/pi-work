@@ -36,6 +36,7 @@ import {
 import {
   isSubagentTerminalStatus,
   type SubagentActivityItem,
+  type SubagentTaskOrigin,
   type SubagentTaskStatus,
 } from "../shared/types";
 import { getSubagentTask, listSubagentTasks, listSubagentTasksForChildSession, type SubagentTask } from "./subagent-store";
@@ -58,6 +59,8 @@ export interface SubagentTaskView {
   childSessionId: string | null;
   subagentName: string;
   description: string;
+  /** Who supplied the input: the parent agent (`tool`) or the user (`manual`). */
+  origin: SubagentTaskOrigin;
   /** Effective status (see the module comment), which can differ from the row. */
   status: SubagentTaskStatus;
   error: string | null;
@@ -88,6 +91,7 @@ export function toSubagentTaskView(task: SubagentTask): SubagentTaskView {
     childSessionId: task.childSessionId,
     subagentName: task.subagentName,
     description: task.description,
+    origin: task.origin,
     status: resolveSubagentTaskStatus(task),
     error: task.error,
     resultLength: task.result?.length ?? 0,

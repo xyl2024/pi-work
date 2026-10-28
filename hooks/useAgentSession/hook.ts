@@ -43,6 +43,18 @@ import type {
 
 
 
+/**
+ * One id per send attempt. It travels with the prompt as `request_id`, the
+ * dedupe key a subagent child session uses so a retried request body never
+ * starts a second task; other sessions ignore it.
+ */
+function newRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionResult {
   const {
     session, newSessionCwd, onAgentEnd, onSessionCreated, onFirstAssistantReady,
@@ -538,10 +550,19 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
           type: "prompt",
           message,
           ...(piImages?.length ? { images: piImages } : {}),
+          // A retry of *this* send (same body) must not start a second task.
+          // Sessions with no subagent task manager ignore the field; a subagent
+          // child session uses it as its dedupe key (issue 06).
+          request_id: newRequestId(),
         });
       }
     } catch (e) {
       console.error("Failed to send message:", e);
+      // The turn never started: leaving the optimistic user message in the
+      // transcript would show input the server refused (e.g. a subagent child
+      // session that is busy). A message the server did accept reappears from
+      // the session tree on the next event.
+      setMessages((prev) => prev.filter((entry) => entry !== userMsg));
       const message = e instanceof Error && e.message ? e.message : t("Failed to send message");
       setRuntimeError(message);
       showToast({ kind: "error", message });

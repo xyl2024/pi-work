@@ -85,6 +85,7 @@ function fakeManager(waitResult: SubagentTaskWaitResult): { manager: SubagentTas
         status: "queued",
         subagentName: input.config.subagentName,
         description: input.description,
+        origin: "tool",
       };
     },
     async wait(taskId, options) {
@@ -119,6 +120,7 @@ function waitResult(overrides: Partial<SubagentTaskWaitResult> = {}): SubagentTa
     status: "running",
     subagentName: "codebase_explorer",
     description: "explore",
+    origin: "tool",
     waitExpired: true,
     result: null,
     error: null,
@@ -293,6 +295,7 @@ describe("subagent tool — spawn action", () => {
       status: "queued",
       subagentName: "codebase_explorer",
       description: "d",
+      origin: "tool",
     });
     expect(updates).toHaveLength(1);
     expect(updates[0].details).toMatchObject({ status: "queued", childSessionId: null });

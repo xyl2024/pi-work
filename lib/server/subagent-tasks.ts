@@ -25,6 +25,7 @@ import {
   type SubagentProfile,
   type SubagentTaskConfigSnapshot,
 } from "../shared/subagent";
+import type { SubagentTaskOrigin } from "../shared/types";
 import { MAX_CONCURRENT_SUBAGENT_RUNS } from "../shared/types";
 import {
   runTurn,
@@ -36,6 +37,7 @@ import {
   type TurnSessionPolicy,
 } from "./turn";
 import { toSubagentEnd } from "./subagent-run-end";
+import type { AgentSessionWrapper, StartRpcSessionOptions } from "./rpc-manager";
 import { readSessionDetails, resolveSessionPath } from "./session-reader";
 import { writeSessionName } from "./session-names";
 import {
@@ -44,6 +46,7 @@ import {
   failSubagentTask,
   getSubagentSessionConfigSnapshot,
   getSubagentTask,
+  getSubagentTaskByChildSessionId,
   getSubagentTaskByRequestId,
   isSubagentTerminalStatus,
   listSubagentTasks,
@@ -132,6 +135,8 @@ export interface SubagentTaskProgress {
   status: SubagentTaskStatus;
   subagentName: string;
   description: string;
+  /** Who supplied the input: the parent agent (`tool`) or the user (`manual`). */
+  origin: SubagentTaskOrigin;
 }
 
 /** What a wait observes: the task's current state plus whether the wait timed out. */
@@ -165,6 +170,8 @@ export interface ContinueSubagentTaskInput {
   prompt: string;
   /** Optional dedupe key: a retry with the same id returns the same task. */
   requestId?: string | null;
+  /** Who supplied the input; absent means the parent agent (`tool`). */
+  origin?: SubagentTaskOrigin;
   onProgress?: (progress: SubagentTaskProgress) => void;
 }
 
@@ -280,6 +287,7 @@ interface RunningTask {
   config: SubagentTaskConfigSnapshot;
   description: string;
   prompt: string;
+  origin: SubagentTaskOrigin;
   /** Queued tasks have no turn yet, so a stop can settle them directly. */
   started: boolean;
   finished: boolean;
@@ -332,6 +340,7 @@ function progressOfRow(task: SubagentTask): SubagentTaskProgress {
     status: task.status,
     subagentName: task.subagentName,
     description: task.description,
+    origin: task.origin,
   };
 }
 
@@ -354,6 +363,7 @@ function asWaitResult(task: SubagentTask, waitExpired: boolean): SubagentTaskWai
     status: task.status,
     subagentName: task.subagentName,
     description: task.description,
+    origin: task.origin,
     waitExpired,
     result: task.result,
     error: task.error,
@@ -361,6 +371,72 @@ function asWaitResult(task: SubagentTask, waitExpired: boolean): SubagentTaskWai
     startedAt: task.startedAt,
     finishedAt: task.finishedAt,
   };
+}
+
+/**
+ * How a child session is started: the frozen snapshot supplies model, thinking
+ * level, tool set and system prompt, so neither a continued turn nor a cold
+ * start can be reconfigured by editing the profile or by the session's own cwd
+ * defaults.
+ */
+function childSessionStartOptions(
+  config: SubagentTaskConfigSnapshot,
+  parentSessionId: string,
+): StartRpcSessionOptions {
+  return {
+    model: config.model,
+    thinkingLevel: config.thinkingLevel,
+    allowedToolNames: config.tools,
+    ...(config.systemPrompt.kind === "override"
+      ? { systemPromptOverride: config.systemPrompt.text }
+      : { systemPromptPrefix: config.systemPrompt.text }),
+    stripDefaultSystemPromptSections: true,
+    parentSessionId,
+  };
+}
+
+/**
+ * Reopen (or adopt) a child session for reading and interaction — a tab, an
+ * event stream, a non-prompt command — with the configuration frozen when it was
+ * created, never today's profile, the parent's prompt or the cwd defaults.
+ *
+ * Returns null when the id is not a child session of any parent, or when its
+ * session file is gone; the caller then follows its ordinary path. A row that
+ * predates configuration snapshots reopens with its identity only (source
+ * `subagent`, so it keeps its no-recursion tool set and its fast-failing
+ * interaction gates); issue 07 owns restoring a partial snapshot for those.
+ */
+export async function openSubagentChildSession(
+  sessionId: string,
+): Promise<AgentSessionWrapper | null> {
+  // Dynamic imports, same reason as the factory below: rpc-manager loads this
+  // module, so a static edge back into it would close the cycle.
+  const { getRpcSession, startRpcSession } = await import("./rpc-manager");
+  const live = getRpcSession(sessionId);
+  if (live?.isAlive()) return live;
+
+  const ownerTask = getSubagentTaskByChildSessionId(sessionId);
+  if (!ownerTask) return null;
+  const sessionFile = await resolveSessionPath(sessionId);
+  if (!sessionFile) return null;
+
+  const { SessionManager } = await import("@earendil-works/pi-coding-agent");
+  const headerCwd = SessionManager.open(sessionFile).getHeader()?.cwd;
+  const snapshotJson = getSubagentSessionConfigSnapshot(ownerTask.parentSessionId, sessionId);
+  if (!snapshotJson) {
+    const { session } = await startRpcSession(sessionId, sessionFile, headerCwd ?? process.cwd(), undefined, "subagent");
+    return session;
+  }
+  const config = JSON.parse(snapshotJson) as SubagentTaskConfigSnapshot;
+  const { session } = await startRpcSession(
+    sessionId,
+    sessionFile,
+    headerCwd ?? config.cwd,
+    config.tools,
+    "subagent",
+    childSessionStartOptions(config, ownerTask.parentSessionId),
+  );
+  return session;
 }
 
 /**
@@ -374,16 +450,7 @@ const startSubagentChildSession: SubagentChildSessionFactory = async (input) => 
   // loads; a static edge would close the cycle.
   const { getRpcSession, startRpcSession } = await import("./rpc-manager");
   const config = input.config;
-  const options = {
-    model: config.model,
-    thinkingLevel: config.thinkingLevel,
-    allowedToolNames: config.tools,
-    ...(config.systemPrompt.kind === "override"
-      ? { systemPromptOverride: config.systemPrompt.text }
-      : { systemPromptPrefix: config.systemPrompt.text }),
-    stripDefaultSystemPromptSections: true,
-    parentSessionId: input.parentSessionId,
-  };
+  const options = childSessionStartOptions(config, input.parentSessionId);
 
   // Continue: run the next turn in the child session the caller named. A live
   // wrapper is handed over as-is; otherwise the session file is reopened with
@@ -443,6 +510,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     status: task.status,
     subagentName: task.config.subagentName,
     description: task.description,
+    origin: task.origin,
   });
 
   const emit = (task: RunningTask) => {
@@ -659,6 +727,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     childSessionId: string | null;
     reusedSessionId: string | null;
     requestId?: string | null;
+    origin?: SubagentTaskOrigin;
     onProgress?: (progress: SubagentTaskProgress) => void;
   }): SubagentTaskProgress => {
     const requestId = normalizeRequestId(input.requestId);
@@ -676,6 +745,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
         subagentName: input.config.subagentName,
         description: input.description,
         prompt: input.prompt,
+        origin: input.origin ?? "tool",
         requestId,
         configSnapshot: JSON.stringify(input.config),
       });
@@ -703,6 +773,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       config: input.config,
       description: input.description,
       prompt: input.prompt,
+      origin: input.origin ?? "tool",
       started: false,
       finished: false,
       stop: new AbortController(),
@@ -799,6 +870,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       childSessionId: input.childSessionId,
       reusedSessionId: input.childSessionId,
       requestId,
+      origin: input.origin ?? "tool",
       ...(input.onProgress ? { onProgress: input.onProgress } : {}),
     });
   };

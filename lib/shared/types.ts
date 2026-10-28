@@ -287,7 +287,6 @@ export type SubagentTaskStatus =
 
 /** The statuses that end a task. */
 export type SubagentTerminalStatus = "completed" | "failed" | "cancelled" | "interrupted";
-
 /** All of them, shared by the store, the tool, the task manager and the card so
  *  "is it over?" is answered in exactly one place. */
 export const SUBAGENT_TERMINAL_STATUSES: readonly SubagentTerminalStatus[] = [
@@ -302,6 +301,14 @@ export function isSubagentTerminalStatus(status: SubagentTaskStatus): status is 
   return (SUBAGENT_TERMINAL_STATUSES as readonly string[]).includes(status);
 }
 
+/**
+ * Who supplied one task's input. `tool` is the parent agent delegating through
+ * `subagent`, `manual` is the user typing into the child session's own chat
+ * input. The distinction exists so the parent agent (and the UI) can tell a
+ * manual follow-up from its own delegation without reading the prompt.
+ */
+export type SubagentTaskOrigin = "tool" | "manual";
+
 /** Browser-safe summary returned by the parent session's subagent endpoint. */
 export interface SubagentTaskSummary {
   taskId: string;
@@ -310,6 +317,12 @@ export interface SubagentTaskSummary {
   subagentName: string;
   description: string;
   status: SubagentTaskStatus;
+  /**
+   * Who supplied the turn's input: the parent agent delegating through the
+   * `subagent` tool, or the user typing into the child session themselves.
+   * Both enter the same task management (issue 06).
+   */
+  origin: SubagentTaskOrigin;
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;

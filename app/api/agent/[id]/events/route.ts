@@ -3,6 +3,7 @@ import { getRpcSession, startRpcSession } from "@/lib/server/rpc-manager";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { SessionEvent } from "@/lib/shared/session-events";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
+import { openSubagentChildSession } from "@/lib/server/subagent-tasks";
 
 export const dynamic = "force-dynamic";
 
@@ -20,15 +21,24 @@ export async function GET(
   // Fast path: already-running session
   let session = getRpcSession(id);
   if (!session || !session.isAlive()) {
-    const filePath = await resolveSessionPath(id);
-    if (!filePath) {
-      log.warn("agent event stream session not found", { id, durationMs: elapsedMs(startedAt) });
-      return new Response("Session not found", { status: 404 });
-    }
-    const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
     try {
-      ({ session } = await startRpcSession(id, filePath, cwd));
-      log.info("agent event stream started session", { id, cwd, durationMs: elapsedMs(startedAt) });
+      // Watching a child session must not rebuild it as an ordinary session: it
+      // reopens with the configuration frozen when it was created and keeps its
+      // subagent identity (no subagent tool, fast-failing interaction gates).
+      const childSession = await openSubagentChildSession(id);
+      if (childSession) {
+        session = childSession;
+        log.info("agent event stream reopened subagent session", { id, durationMs: elapsedMs(startedAt) });
+      } else {
+        const filePath = await resolveSessionPath(id);
+        if (!filePath) {
+          log.warn("agent event stream session not found", { id, durationMs: elapsedMs(startedAt) });
+          return new Response("Session not found", { status: 404 });
+        }
+        const cwd = SessionManager.open(filePath).getHeader()?.cwd ?? process.cwd();
+        ({ session } = await startRpcSession(id, filePath, cwd));
+        log.info("agent event stream started session", { id, cwd, durationMs: elapsedMs(startedAt) });
+      }
     } catch (error) {
       log.error("agent event stream failed to start session", { id, error, durationMs: elapsedMs(startedAt) });
       return new Response(`Failed to start agent: ${error}`, { status: 500 });

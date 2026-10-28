@@ -97,11 +97,11 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
 
   // Load exactly once when this session becomes active. Subsequent loads are
   // driven by refreshKey, which the parent session increments for relevant
-  // subagent SSE events. While any task is still unfinished we
-  // also poll so the per-child stats (messages / files read / model) stay
-  // fresh; the poll stops once every task reaches a terminal state.
-  // Refreshes also run while the popover is closed so its badge already
-  // reflects background subagent activity.
+  // subagent SSE events. Refreshes also run while the popover is closed so its
+  // badge already reflects background subagent activity; the polling effect
+  // below keeps the rows fresh while a task is unfinished or the popover is open
+  // (a manual follow-up is started from the child session's own input, so the
+  // parent's event stream never announces it).
   useEffect(() => {
     const sessionChanged = previousParentSessionIdRef.current !== parentSessionId;
     previousParentSessionIdRef.current = parentSessionId;
@@ -125,13 +125,17 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
     (task) => task.status === "queued" || task.status === "creating" || task.status === "running" || task.status === "stopping",
   );
 
+  // Poll while a task is unfinished, and while the popover is open: a manual
+  // follow-up is started from the *child* session's own input, so the parent's
+  // event stream never announces it — opening the popover is how it becomes
+  // visible, and it must not show a stale snapshot while the user is looking.
   useEffect(() => {
-    if (!parentSessionId || !hasActiveTask) return;
+    if (!parentSessionId || (!hasActiveTask && !open)) return;
     const timer = setInterval(() => {
       void loadTasks();
     }, 5_000);
     return () => clearInterval(timer);
-  }, [hasActiveTask, loadTasks, parentSessionId]);
+  }, [hasActiveTask, loadTasks, open, parentSessionId]);
 
   useEffect(() => () => {
     if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
@@ -365,6 +369,12 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                       <span style={{ color: "var(--text-dim)" }}>
                         {task.subagentName || t("SubAgent")}
                       </span>
+                      {task.origin === "manual" && (
+                        <>
+                          <span aria-hidden="true" style={{ color: "var(--text-dim)" }}>·</span>
+                          <span style={{ color: "var(--text-muted)" }}>{t("Manual")}</span>
+                        </>
+                      )}
                     </span>
                     {stats && (
                       <span

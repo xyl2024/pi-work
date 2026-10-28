@@ -19,6 +19,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
       childSessionId: task.childSessionId,
       subagentName: task.subagentName,
       description: task.description,
+      origin: task.origin,
       status: resolveSubagentTaskStatus(task),
       createdAt: task.createdAt,
       startedAt: task.startedAt,

@@ -5,10 +5,11 @@ import { dataPath } from "./data-dir";
 import {
   SUBAGENT_TERMINAL_STATUSES,
   isSubagentTerminalStatus,
+  type SubagentTaskOrigin,
   type SubagentTaskStatus,
 } from "../shared/types";
 
-export type { SubagentTaskStatus };
+export type { SubagentTaskStatus, SubagentTaskOrigin };
 export { isSubagentTerminalStatus };
 
 /** The same rule as SQL, for the guarded UPDATEs below. */
@@ -23,6 +24,8 @@ export interface SubagentTask {
   description: string;
   prompt: string;
   status: SubagentTaskStatus;
+  /** Who supplied the input: the parent agent (`tool`) or the user (`manual`). */
+  origin: SubagentTaskOrigin;
   result: string | null;
   error: string | null;
   /**
@@ -119,6 +122,19 @@ function migrateProfileColumns(db: Database.Database): void {
 }
 
 /**
+ * Add `origin` to task tables created before a user could type into a child
+ * session. Idempotent: only added while absent. Every legacy row stays `tool`,
+ * which is what it was.
+ */
+function migrateTaskOriginColumn(db: Database.Database): void {
+  const columns = (db.prepare("PRAGMA table_info(subagent_tasks)").all() as Array<{ name: string }>)
+    .map((column) => column.name);
+  if (!columns.includes("origin")) {
+    db.exec("ALTER TABLE subagent_tasks ADD COLUMN origin TEXT NOT NULL DEFAULT 'tool'");
+  }
+}
+
+/**
  * Add `config_snapshot` to task tables created before the column existed.
  * Idempotent: only added while absent. Legacy rows keep NULL, which readers
  * treat as "no snapshot to reuse" rather than inventing today's profile.
@@ -160,6 +176,7 @@ export function getSubagentDb(): Database.Database {
   migrateTaskColumns(db);
   migrateTaskConfigColumn(db);
   migrateTaskRequestColumn(db);
+  migrateTaskOriginColumn(db);
   migrateProfileColumns(db);
   globalThis.__piSubagentsDb = db;
   return db;
@@ -174,6 +191,7 @@ function mapRow(row: Record<string, unknown>): SubagentTask {
     description: row.description as string,
     prompt: row.prompt as string,
     status: row.status as SubagentTaskStatus,
+    origin: (row.origin as SubagentTaskOrigin | null) ?? "tool",
     result: (row.result as string | null) ?? null,
     error: (row.error as string | null) ?? null,
     requestId: (row.request_id as string | null) ?? null,
@@ -196,12 +214,14 @@ export function createSubagentTask(input: {
   childSessionId?: string | null;
   /** Optional dedupe key, unique per parent session. */
   requestId?: string | null;
+  /** Who supplied the input; absent means the parent agent (`tool`). */
+  origin?: SubagentTaskOrigin;
 }): SubagentTask {
   const now = Date.now();
   getSubagentDb().prepare(`
     INSERT INTO subagent_tasks
-      (task_id, parent_session_id, child_session_id, subagent_name, description, prompt, status, request_id, config_snapshot, created_at)
-    VALUES (@taskId, @parentSessionId, @childSessionId, @subagentName, @description, @prompt, @status, @requestId, @configSnapshot, @now)
+      (task_id, parent_session_id, child_session_id, subagent_name, description, prompt, status, origin, request_id, config_snapshot, created_at)
+    VALUES (@taskId, @parentSessionId, @childSessionId, @subagentName, @description, @prompt, @status, @origin, @requestId, @configSnapshot, @now)
   `).run({
     taskId: input.taskId,
     parentSessionId: input.parentSessionId,
@@ -212,6 +232,7 @@ export function createSubagentTask(input: {
     // The id exists before the child session does; a queued task is a real,
     // addressable task whose slot has not been granted yet.
     status: "queued" satisfies SubagentTaskStatus,
+    origin: input.origin ?? "tool",
     requestId: input.requestId ?? null,
     configSnapshot: input.configSnapshot ?? null,
     now,
