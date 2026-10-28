@@ -231,13 +231,6 @@ export function getToolPreview(block: { input?: unknown; toolName?: string }): s
 
 export interface UsageIconsProps {
   usage?: { input: number; output: number; cacheRead: number; cacheWrite: number; cost: { total: number } } | null;
-  /**
-   * Recorded TTFT / throughput for the call that produced this message. Comes
-   * from the model-call metrics DB (not from the session JSONL), so it can be
-   * missing for calls recorded before metrics existed or whose row failed to
-   * land — the footer then simply shows the token/cost items as before.
-   */
-  metrics?: MessageCallMetrics | null;
 }
 
 /** First-token latency: sub-second reads better in ms, later in seconds. */
@@ -252,7 +245,7 @@ function formatTps(tps: number): string {
   return tps >= 100 ? tps.toFixed(0) : tps.toFixed(1);
 }
 
-export function UsageIcons({ usage, metrics }: UsageIconsProps) {
+export function UsageIcons({ usage }: UsageIconsProps) {
   const { formatCost, currency } = useFormatCurrency();
   const inputDenom = usage ? usage.input + usage.cacheRead : 0;
   const cacheHitRate = inputDenom > 0 ? ((usage?.cacheRead ?? 0) / inputDenom) * 100 : 0;
@@ -313,6 +306,33 @@ export function UsageIcons({ usage, metrics }: UsageIconsProps) {
       ),
     });
   }
+  if (items.length === 0) return null;
+  return (
+    <>
+      {items.map((item) => (
+        <Tooltip key={item.key} content={item.label}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--text-dim)", fontSize: 11 }}>
+            {item.icon}
+            <span>{item.compact}</span>
+          </span>
+        </Tooltip>
+      ))}
+    </>
+  );
+}
+
+/**
+ * TTFT / generation-speed badges. Rendered next to the model name in the
+ * message header rather than in the footer, and hidden until the message is
+ * hovered. Both facts come from the model-call metrics DB (not the session
+ * JSONL), so a message whose call was never recorded simply shows nothing.
+ */
+export function CallMetricsBadges({ metrics, hidden }: {
+  metrics?: MessageCallMetrics | null;
+  /** Keep the badges mounted but transparent until the row is hovered. */
+  hidden?: boolean;
+}) {
+  const items: Array<{ key: string; label: string; compact: string; icon: React.ReactNode }> = [];
   const ttft = metrics?.ttftMs;
   if (typeof ttft === "number" && Number.isFinite(ttft) && ttft >= 0) {
     const text = formatTtft(ttft);
@@ -343,7 +363,15 @@ export function UsageIcons({ usage, metrics }: UsageIconsProps) {
   }
   if (items.length === 0) return null;
   return (
-    <>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        opacity: hidden ? 0 : 1,
+        transition: "opacity 0.12s",
+      }}
+    >
       {items.map((item) => (
         <Tooltip key={item.key} content={item.label}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--text-dim)", fontSize: 11 }}>
@@ -352,6 +380,6 @@ export function UsageIcons({ usage, metrics }: UsageIconsProps) {
           </span>
         </Tooltip>
       ))}
-    </>
+    </span>
   );
 }

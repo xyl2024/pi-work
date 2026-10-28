@@ -16,7 +16,7 @@ import { ReadFileChips } from "../ReadFileChips";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../../ui/ProviderIcon";
 import { BlockView } from "./blocks";
-import { formatTime, TurnDuration, UsageIcons } from "./utils";
+import { CallMetricsBadges, formatTime, TurnDuration, UsageIcons } from "./utils";
 import { useMessageCallMetrics } from "./context";
 import { countContentChars, extractMessageText } from "@/lib/shared/message-content";
 import type { AssistantMessage, ToolResultMessage, ReadFileInfo } from "@/lib/shared/types";
@@ -207,6 +207,10 @@ function AssistantMessageViewInner({
             <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
           </>
         )}
+        {/* TTFT / TPS sit next to the model name and stay hidden until the
+            message is hovered. They render nothing when the call was never
+            recorded, so no empty gap is left in the row. */}
+        {!isStreaming && <CallMetricsBadges metrics={callMetrics} hidden={!hovered} />}
         {isStreaming && (() => {
           const est = Math.round(streamChars / 4);
           return (
@@ -372,7 +376,7 @@ function AssistantMessageViewInner({
         {((readFiles && readFiles.length > 0) || turnDiffStats) && onOpenFile && (
           <ReadFileChips files={readFiles ?? []} diffStats={turnDiffStats} onOpenFile={onOpenFile} />
         )}
-        {!isStreaming && (message.usage || callMetrics || time) && (
+        {!isStreaming && (message.usage || time) && (
           <span style={{
             marginLeft: "auto",
             display: "flex",
@@ -382,7 +386,7 @@ function AssistantMessageViewInner({
             pointerEvents: hovered ? "auto" : "none",
             transition: "opacity 0.12s",
           }}>
-            <UsageIcons usage={message.usage} metrics={callMetrics} />
+            <UsageIcons usage={message.usage} />
             {time && <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{time}</span>}
           </span>
         )}
