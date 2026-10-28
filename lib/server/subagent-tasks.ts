@@ -33,17 +33,21 @@ import {
   type TurnResult,
   type TurnSession,
   type TurnSessionFactory,
+  type TurnSessionPolicy,
 } from "./turn";
 import { toSubagentEnd } from "./subagent-run-end";
-import { readSessionDetails } from "./session-reader";
+import { readSessionDetails, resolveSessionPath } from "./session-reader";
 import { writeSessionName } from "./session-names";
 import {
   completeSubagentTask,
   createSubagentTask,
   failSubagentTask,
+  getSubagentSessionConfigSnapshot,
   getSubagentTask,
+  getSubagentTaskByRequestId,
   isSubagentTerminalStatus,
   listSubagentTasks,
+  listSubagentTasksForChildSession,
   markSubagentRunning,
   markSubagentStatus,
   reconcileInterruptedSubagentTasks,
@@ -69,6 +73,11 @@ export const SUBAGENT_PARENT_STOPPED = "Subagent stopped because the parent sess
 
 /** Reason recorded when deleting the parent session cancels its unfinished tasks. */
 export const SUBAGENT_PARENT_DELETED = "Subagent stopped because the parent session was deleted";
+
+/** Wording when a child session already has an unfinished task. */
+export const SUBAGENT_SESSION_BUSY =
+  "This subagent session is busy: it already has a queued, creating, running or stopping task."
+  + " Wait for that task to finish (or cancel it) before continuing the session; inputs are never queued or steered into a running turn.";
 
 /**
  * How a child session's system prompt is built. An inheriting profile gets the
@@ -141,7 +150,21 @@ export interface SpawnSubagentTaskInput {
   description: string;
   prompt: string;
   config: SubagentTaskConfigSnapshot;
+  /** Optional dedupe key: a retry with the same id returns the same task. */
+  requestId?: string | null;
   /** Called on every status change while the task is unfinished. */
+  onProgress?: (progress: SubagentTaskProgress) => void;
+}
+
+export interface ContinueSubagentTaskInput {
+  parentSessionId: string;
+  /** The existing child session to continue (its newest task must be terminal). */
+  childSessionId: string;
+  description: string;
+  /** The new turn's input. Old prompts, results and timings are never touched. */
+  prompt: string;
+  /** Optional dedupe key: a retry with the same id returns the same task. */
+  requestId?: string | null;
   onProgress?: (progress: SubagentTaskProgress) => void;
 }
 
@@ -172,6 +195,12 @@ export interface StopAllSubagentResult {
 export interface SubagentTaskManager {
   /** Create a task and schedule it. Returns immediately; use `wait` to observe. */
   spawn(input: SpawnSubagentTaskInput): SubagentTaskProgress;
+  /**
+   * Start a new task in an existing child session, reusing the configuration
+   * frozen when that session was created. A busy session (any unfinished task)
+   * is refused instead of queued into the running turn.
+   */
+  continue(input: ContinueSubagentTaskInput): SubagentTaskProgress;
   /** Observe a task up to `timeoutMs`; never cancels or unmanages it. */
   wait(taskId: string, options?: WaitSubagentTaskOptions): Promise<SubagentTaskWaitResult>;
   /**
@@ -220,6 +249,8 @@ export type SubagentChildSessionFactory = (input: {
   description: string;
   cwd: string;
   config: SubagentTaskConfigSnapshot;
+  /** `reuse` for every later turn of a child session, `fresh` for spawn. */
+  session?: TurnSessionPolicy;
 }) => Promise<AcquiredTurnSession & { session: SubagentChildSession }>;
 
 /** Timer seam: tests drive the wait deadline without waiting 15 minutes. */
@@ -243,6 +274,8 @@ interface RunningTask {
   taskId: string;
   parentSessionId: string;
   childSessionId: string | null;
+  /** Set for a continued task: its turn runs in this existing child session. */
+  reusedSessionId: string | null;
   status: SubagentTaskStatus;
   config: SubagentTaskConfigSnapshot;
   description: string;
@@ -291,6 +324,29 @@ async function readLastAssistantText(realSessionId: string): Promise<string> {
   return "";
 }
 
+/** A progress snapshot from a persisted row (dedupe replay / stale rows). */
+function progressOfRow(task: SubagentTask): SubagentTaskProgress {
+  return {
+    taskId: task.taskId,
+    childSessionId: task.childSessionId,
+    status: task.status,
+    subagentName: task.subagentName,
+    description: task.description,
+  };
+}
+
+/** One rule for the optional dedupe key: trimmed, empty means absent. */
+function normalizeRequestId(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** A unique-index race, which dedupe can resolve by reading the winner. */
+function isUniqueConstraintError(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" && code.startsWith("SQLITE_CONSTRAINT");
+}
+
 function asWaitResult(task: SubagentTask, waitExpired: boolean): SubagentTaskWaitResult {
   return {
     taskId: task.taskId,
@@ -316,24 +372,50 @@ function asWaitResult(task: SubagentTask, waitExpired: boolean): SubagentTaskWai
 const startSubagentChildSession: SubagentChildSessionFactory = async (input) => {
   // Dynamic import: this module is imported by the tool, which rpc-manager
   // loads; a static edge would close the cycle.
-  const { startRpcSession } = await import("./rpc-manager");
+  const { getRpcSession, startRpcSession } = await import("./rpc-manager");
   const config = input.config;
+  const options = {
+    model: config.model,
+    thinkingLevel: config.thinkingLevel,
+    allowedToolNames: config.tools,
+    ...(config.systemPrompt.kind === "override"
+      ? { systemPromptOverride: config.systemPrompt.text }
+      : { systemPromptPrefix: config.systemPrompt.text }),
+    stripDefaultSystemPromptSections: true,
+    parentSessionId: input.parentSessionId,
+  };
+
+  // Continue: run the next turn in the child session the caller named. A live
+  // wrapper is handed over as-is; otherwise the session file is reopened with
+  // the frozen config (a cold start must not widen the child's capabilities).
+  if (input.session?.kind === "reuse") {
+    const sessionId = input.session.sessionId;
+    const live = getRpcSession(sessionId);
+    if (live?.isAlive()) {
+      return { session: live, sessionId, realSessionId: sessionId };
+    }
+    const sessionFile = await resolveSessionPath(sessionId);
+    if (!sessionFile) throw new Error(`Session not found: ${sessionId}`);
+    const { SessionManager } = await import("@earendil-works/pi-coding-agent");
+    const cwd = SessionManager.open(sessionFile).getHeader()?.cwd ?? config.cwd;
+    const { session, realSessionId } = await startRpcSession(
+      sessionId,
+      sessionFile,
+      cwd,
+      config.tools,
+      "subagent",
+      options,
+    );
+    return { session, sessionId, realSessionId };
+  }
+
   const { session, realSessionId } = await startRpcSession(
     `__subagent__${input.taskId}`,
     "",
     input.cwd,
     config.tools,
     "subagent",
-    {
-      model: config.model,
-      thinkingLevel: config.thinkingLevel,
-      allowedToolNames: config.tools,
-      ...(config.systemPrompt.kind === "override"
-        ? { systemPromptOverride: config.systemPrompt.text }
-        : { systemPromptPrefix: config.systemPrompt.text }),
-      stripDefaultSystemPromptSections: true,
-      parentSessionId: input.parentSessionId,
-    },
+    options,
   );
   return { session, sessionId: realSessionId, realSessionId };
 };
@@ -469,13 +551,14 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       { signal: childGone.signal, reason: SUBAGENT_SESSION_CLOSED_ERROR },
     ];
 
-    const factory: TurnSessionFactory = async (cwd) => {
+    const factory: TurnSessionFactory = async (cwd, _toolNames, _source, policy) => {
       const acquired = await createChild({
         taskId: task.taskId,
         parentSessionId: task.parentSessionId,
         description: task.description,
         cwd,
         config,
+        session: policy,
       });
       childRun.session = acquired.session;
       // A child wrapper destroyed from outside (deleted from the UI, idle
@@ -486,9 +569,17 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       task.childSessionId = acquired.realSessionId;
       markSubagentRunning(task.taskId, acquired.realSessionId);
       setStatus(task, "running");
-      acquired.session.inner.sessionManager.appendSessionInfo(displayName);
-      writeSessionName(acquired.realSessionId, displayName);
-      return { session: acquired.session, sessionId: registryKey, realSessionId: acquired.realSessionId };
+      // A continued task reuses the session (and its name) as-is; only the
+      // first turn names the newly created child.
+      if (!task.reusedSessionId) {
+        acquired.session.inner.sessionManager.appendSessionInfo(displayName);
+        writeSessionName(acquired.realSessionId, displayName);
+      }
+      return {
+        session: acquired.session,
+        sessionId: task.reusedSessionId ?? registryKey,
+        realSessionId: acquired.realSessionId,
+      };
     };
 
     try {
@@ -499,7 +590,20 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
           cwd: config.cwd,
           prompt: task.prompt,
           source: "subagent",
-          // The runtime limit starts here, with the turn — never with the queue.
+          // A continued task runs its next turn in the existing child session;
+          // the frozen config below still supplies model, thinking, tools and
+          // runtime limit for this turn. A live wrapper must be asked for the
+          // snapshot's model/thinking again so an earlier turn cannot leave it
+          // on a different setting.
+          ...(task.reusedSessionId
+            ? {
+              session: { kind: "reuse" as const, sessionId: task.reusedSessionId },
+              model: config.model,
+              thinkingLevel: config.thinkingLevel,
+            }
+            : {}),
+          // The runtime limit starts here, with the turn — never with the queue,
+          // and every continued turn gets a fresh allowance.
           timeoutMs: config.timeoutMs,
           abortSources,
           // A stop is only reported once the session confirmed it, so the row
@@ -541,21 +645,50 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     }
   };
 
-  const spawn = (input: SpawnSubagentTaskInput): SubagentTaskProgress => {
-    if (stoppingParents.has(input.parentSessionId)) {
-      throw new Error(
-        "The parent session is stopping all subagent tasks; wait for the stop to finish before spawning a new one.",
-      );
+  /**
+   * Persist one task and put it on the queue. Request-id dedupe is checked
+   * before the insert and again when the insert loses a race (the unique index
+   * is the authority), so a retry never starts a second task even across a
+   * process restart.
+   */
+  const createManagedTask = (input: {
+    parentSessionId: string;
+    description: string;
+    prompt: string;
+    config: SubagentTaskConfigSnapshot;
+    childSessionId: string | null;
+    reusedSessionId: string | null;
+    requestId?: string | null;
+    onProgress?: (progress: SubagentTaskProgress) => void;
+  }): SubagentTaskProgress => {
+    const requestId = normalizeRequestId(input.requestId);
+    if (requestId) {
+      const existing = getSubagentTaskByRequestId(input.parentSessionId, requestId);
+      if (existing) return progressOfRow(existing);
     }
+
     const taskId = `subagent:${randomUUID()}`;
-    createSubagentTask({
-      taskId,
-      parentSessionId: input.parentSessionId,
-      subagentName: input.config.subagentName,
-      description: input.description,
-      prompt: input.prompt,
-      configSnapshot: JSON.stringify(input.config),
-    });
+    try {
+      createSubagentTask({
+        taskId,
+        parentSessionId: input.parentSessionId,
+        childSessionId: input.childSessionId,
+        subagentName: input.config.subagentName,
+        description: input.description,
+        prompt: input.prompt,
+        requestId,
+        configSnapshot: JSON.stringify(input.config),
+      });
+    } catch (error) {
+      // A concurrent retry can win the unique index between the check above
+      // and this insert; return that task instead of failing the retry. Any
+      // other database failure stays an error.
+      if (requestId && isUniqueConstraintError(error)) {
+        const existing = getSubagentTaskByRequestId(input.parentSessionId, requestId);
+        if (existing) return progressOfRow(existing);
+      }
+      throw error;
+    }
 
     let resolveDone: () => void = () => {};
     const done = new Promise<void>((resolve) => {
@@ -564,7 +697,8 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     const task: RunningTask = {
       taskId,
       parentSessionId: input.parentSessionId,
-      childSessionId: null,
+      childSessionId: input.childSessionId,
+      reusedSessionId: input.reusedSessionId,
       status: "queued",
       config: input.config,
       description: input.description,
@@ -582,6 +716,91 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     emit(task);
     pump();
     return progressOf(task);
+  };
+
+  const spawn = (input: SpawnSubagentTaskInput): SubagentTaskProgress => {
+    // A retry of an existing request is not new work: return the original even
+    // while a stop window is open, so the caller can still collect it.
+    const requestId = normalizeRequestId(input.requestId);
+    if (requestId) {
+      const existing = getSubagentTaskByRequestId(input.parentSessionId, requestId);
+      if (existing) return progressOfRow(existing);
+    }
+    if (stoppingParents.has(input.parentSessionId)) {
+      throw new Error(
+        "The parent session is stopping all subagent tasks; wait for the stop to finish before spawning a new one.",
+      );
+    }
+    return createManagedTask({
+      parentSessionId: input.parentSessionId,
+      description: input.description,
+      prompt: input.prompt,
+      config: input.config,
+      childSessionId: null,
+      reusedSessionId: null,
+      requestId: input.requestId,
+      ...(input.onProgress ? { onProgress: input.onProgress } : {}),
+    });
+  };
+
+  const continueTask = (input: ContinueSubagentTaskInput): SubagentTaskProgress => {
+    const requestId = normalizeRequestId(input.requestId);
+    if (requestId) {
+      const existing = getSubagentTaskByRequestId(input.parentSessionId, requestId);
+      if (existing) {
+        // A request id is scoped to its parent and to the session it first
+        // continued; reusing it for another session is refused rather than
+        // silently reading/steering a different child.
+        if (existing.childSessionId !== input.childSessionId) {
+          throw new Error(
+            `request_id "${requestId}" was already used for a different subagent session; use a new request_id for this continue.`,
+          );
+        }
+        return progressOfRow(existing);
+      }
+    }
+
+    if (stoppingParents.has(input.parentSessionId)) {
+      throw new Error(
+        "The parent session is stopping all subagent tasks; wait for the stop to finish before continuing a subagent session.",
+      );
+    }
+
+    const rows = listSubagentTasksForChildSession(input.parentSessionId, input.childSessionId);
+    if (rows.length === 0) {
+      throw new Error(
+        `No subagent session "${input.childSessionId}" in this parent session. Only direct child sessions can be continued.`,
+      );
+    }
+
+    // A child session has at most one unfinished task: queued, creating,
+    // running and stopping all count. The input is never appended to, steered
+    // into, or queued behind the running turn.
+    const busy = [...running.values()].find(
+      (task) => task.parentSessionId === input.parentSessionId
+        && task.childSessionId === input.childSessionId
+        && !task.finished,
+    );
+    if (busy) throw new Error(SUBAGENT_SESSION_BUSY);
+
+    const snapshotJson = getSubagentSessionConfigSnapshot(input.parentSessionId, input.childSessionId);
+    if (!snapshotJson) {
+      throw new Error(
+        `The subagent session "${input.childSessionId}" has no configuration snapshot, so it cannot be continued safely.`
+        + " Start a new task instead; applying today's profile could widen the child's capabilities.",
+      );
+    }
+    const config = JSON.parse(snapshotJson) as SubagentTaskConfigSnapshot;
+    return createManagedTask({
+      parentSessionId: input.parentSessionId,
+      description: input.description,
+      prompt: input.prompt,
+      config,
+      childSessionId: input.childSessionId,
+      reusedSessionId: input.childSessionId,
+      requestId,
+      ...(input.onProgress ? { onProgress: input.onProgress } : {}),
+    });
   };
 
   const wait = async (taskId: string, options: WaitSubagentTaskOptions = {}): Promise<SubagentTaskWaitResult> => {
@@ -700,6 +919,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
 
   return {
     spawn,
+    continue: continueTask,
     wait,
     stop,
     stopAll,

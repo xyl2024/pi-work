@@ -38,7 +38,7 @@ import {
   type SubagentActivityItem,
   type SubagentTaskStatus,
 } from "../shared/types";
-import { getSubagentTask, listSubagentTasks, type SubagentTask } from "./subagent-store";
+import { getSubagentTask, listSubagentTasks, listSubagentTasksForChildSession, type SubagentTask } from "./subagent-store";
 import { getSubagentTaskManager } from "./subagent-tasks";
 import { readSessionDetails, readSubagentLiveInfo, summarizeToolInput } from "./sessions/reader";
 
@@ -368,6 +368,18 @@ async function readTaskDetail(task: SubagentTask, input: Omit<ReadSubagentTaskIn
 export function getSubagentTaskForParent(parentSessionId: string, taskId: string): SubagentTask {
   const row = getSubagentTask(taskId);
   if (!row || row.parentSessionId !== parentSessionId) throw new SubagentQueryError(SUBAGENT_TASK_NOT_FOUND);
+  return row;
+}
+
+/**
+ * The newest task of one direct child session of `parentSessionId`, enforcing
+ * ownership exactly like `getSubagentTaskForParent`. A child session of another
+ * parent is reported as not found. Used by `continue` to resolve the session it
+ * must run in; the manager owns the busy decision.
+ */
+export function getSubagentSessionTaskForParent(parentSessionId: string, sessionId: string): SubagentTask {
+  const row = listSubagentTasksForChildSession(parentSessionId, sessionId)[0];
+  if (!row) throw new SubagentQueryError(SUBAGENT_SESSION_NOT_FOUND);
   return row;
 }
 

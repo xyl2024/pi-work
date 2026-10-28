@@ -91,6 +91,9 @@ function fakeManager(waitResult: SubagentTaskWaitResult): { manager: SubagentTas
       state.waits.push({ taskId, options });
       return waitResult;
     },
+    continue() {
+      throw new Error("continue is not used by this fake");
+    },
     stop() {},
     stopAll() {
       return { stopped: 0, stopping: false };

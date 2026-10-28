@@ -1,4 +1,4 @@
-import type { RunTurnSpec, TurnResult, TurnSessionFactory } from "@/lib/server/turn";
+import type { RunTurnSpec, TurnResult, TurnSessionFactory, TurnSessionPolicy } from "@/lib/server/turn";
 import type {
   SubagentChildSession,
   SubagentTaskTimers,
@@ -42,7 +42,7 @@ export function createScriptedRunner() {
       spec,
       result,
       acquire: async () => {
-        await createSession(spec.cwd, undefined, "subagent", { kind: "fresh" });
+        await createSession(spec.cwd, undefined, "subagent", spec.session ?? { kind: "fresh" });
       },
       settle: async (overrides: Partial<TurnResult> = {}) => {
         resolveTurn({ ...completedResult(), ...overrides, realSessionId: `child-${turns.length}` });
@@ -73,8 +73,10 @@ export function fakeChildSession(realSessionId: string): SubagentChildSession {
 
 export function createChildSessionFactory() {
   const created: string[] = [];
-  const factory = async (input: { taskId: string }) => {
-    const realSessionId = `child-${input.taskId.slice(-6)}`;
+  const factory = async (input: { taskId: string; session?: TurnSessionPolicy }) => {
+    const realSessionId = input.session?.kind === "reuse"
+      ? input.session.sessionId
+      : `child-${input.taskId.slice(-6)}`;
     created.push(realSessionId);
     return { session: fakeChildSession(realSessionId), sessionId: realSessionId, realSessionId };
   };

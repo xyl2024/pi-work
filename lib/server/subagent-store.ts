@@ -26,6 +26,12 @@ export interface SubagentTask {
   result: string | null;
   error: string | null;
   /**
+   * Optional caller-supplied request id used to dedupe a retried spawn /
+   * continue. Unique per parent session; null for tasks created before it
+   * existed or without one.
+   */
+  requestId: string | null;
+  /**
    * JSON config resolved when the task was created (profile, model, thinking
    * level, tools, system prompt, runtime limit). Reused when the child session
    * continues, so editing the profile never changes an existing child.
@@ -56,6 +62,7 @@ const SCHEMA = `
     status           TEXT NOT NULL,
     result           TEXT,
     error            TEXT,
+    request_id       TEXT,
     config_snapshot  TEXT,
     created_at       INTEGER NOT NULL,
     started_at       INTEGER,
@@ -124,6 +131,23 @@ function migrateTaskConfigColumn(db: Database.Database): void {
   }
 }
 
+/**
+ * Add `request_id` to task tables created before dedupe existed, and make the
+ * per-parent uniqueness cheap to enforce. Idempotent: the column/index are only
+ * created while absent, and legacy rows keep NULL (never deduped).
+ */
+function migrateTaskRequestColumn(db: Database.Database): void {
+  const columns = (db.prepare("PRAGMA table_info(subagent_tasks)").all() as Array<{ name: string }>)
+    .map((column) => column.name);
+  if (!columns.includes("request_id")) {
+    db.exec("ALTER TABLE subagent_tasks ADD COLUMN request_id TEXT");
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_subagent_tasks_request
+      ON subagent_tasks(parent_session_id, request_id) WHERE request_id IS NOT NULL
+  `);
+}
+
 export function getSubagentDb(): Database.Database {
   if (globalThis.__piSubagentsDb) return globalThis.__piSubagentsDb;
   const dbPath = resolveDbPath();
@@ -135,6 +159,7 @@ export function getSubagentDb(): Database.Database {
   db.exec(SCHEMA);
   migrateTaskColumns(db);
   migrateTaskConfigColumn(db);
+  migrateTaskRequestColumn(db);
   migrateProfileColumns(db);
   globalThis.__piSubagentsDb = db;
   return db;
@@ -151,6 +176,7 @@ function mapRow(row: Record<string, unknown>): SubagentTask {
     status: row.status as SubagentTaskStatus,
     result: (row.result as string | null) ?? null,
     error: (row.error as string | null) ?? null,
+    requestId: (row.request_id as string | null) ?? null,
     configSnapshot: (row.config_snapshot as string | null) ?? null,
     createdAt: row.created_at as number,
     startedAt: (row.started_at as number | null) ?? null,
@@ -166,21 +192,27 @@ export function createSubagentTask(input: {
   prompt: string;
   /** JSON config snapshot; absent for callers that have none to record. */
   configSnapshot?: string | null;
+  /** Continue: the existing child session this task runs in. */
+  childSessionId?: string | null;
+  /** Optional dedupe key, unique per parent session. */
+  requestId?: string | null;
 }): SubagentTask {
   const now = Date.now();
   getSubagentDb().prepare(`
     INSERT INTO subagent_tasks
-      (task_id, parent_session_id, subagent_name, description, prompt, status, config_snapshot, created_at)
-    VALUES (@taskId, @parentSessionId, @subagentName, @description, @prompt, @status, @configSnapshot, @now)
+      (task_id, parent_session_id, child_session_id, subagent_name, description, prompt, status, request_id, config_snapshot, created_at)
+    VALUES (@taskId, @parentSessionId, @childSessionId, @subagentName, @description, @prompt, @status, @requestId, @configSnapshot, @now)
   `).run({
     taskId: input.taskId,
     parentSessionId: input.parentSessionId,
+    childSessionId: input.childSessionId ?? null,
     subagentName: input.subagentName,
     description: input.description,
     prompt: input.prompt,
     // The id exists before the child session does; a queued task is a real,
     // addressable task whose slot has not been granted yet.
     status: "queued" satisfies SubagentTaskStatus,
+    requestId: input.requestId ?? null,
     configSnapshot: input.configSnapshot ?? null,
     now,
   });
@@ -279,4 +311,40 @@ export function getSubagentTaskByChildSessionId(childSessionId: string): Subagen
     "SELECT * FROM subagent_tasks WHERE child_session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
   ).get(childSessionId) as Record<string, unknown> | undefined;
   return row ? mapRow(row) : null;
+}
+
+/** Every task of one direct child session of `parentSessionId`, newest first. */
+export function listSubagentTasksForChildSession(
+  parentSessionId: string,
+  childSessionId: string,
+): SubagentTask[] {
+  const rows = getSubagentDb().prepare(
+    "SELECT * FROM subagent_tasks WHERE parent_session_id = ? AND child_session_id = ? ORDER BY created_at DESC, rowid DESC",
+  ).all(parentSessionId, childSessionId) as Record<string, unknown>[];
+  return rows.map(mapRow);
+}
+
+/** The dedupe record of one parent's request id, or null. */
+export function getSubagentTaskByRequestId(parentSessionId: string, requestId: string): SubagentTask | null {
+  const row = getSubagentDb().prepare(
+    "SELECT * FROM subagent_tasks WHERE parent_session_id = ? AND request_id = ? LIMIT 1",
+  ).get(parentSessionId, requestId) as Record<string, unknown> | undefined;
+  return row ? mapRow(row) : null;
+}
+
+/**
+ * The configuration frozen when a child session was created: the snapshot of
+ * its oldest task. Later tasks of the same session reuse it, so editing or
+ * deleting the profile never reconfigures a running child. Null when the
+ * session predates snapshots (the caller then fails loudly instead of applying
+ * today's profile).
+ */
+export function getSubagentSessionConfigSnapshot(
+  parentSessionId: string,
+  childSessionId: string,
+): string | null {
+  const row = getSubagentDb().prepare(
+    "SELECT config_snapshot FROM subagent_tasks WHERE parent_session_id = ? AND child_session_id = ? AND config_snapshot IS NOT NULL ORDER BY created_at ASC, rowid ASC LIMIT 1",
+  ).get(parentSessionId, childSessionId) as { config_snapshot: string | null } | undefined;
+  return row?.config_snapshot ?? null;
 }

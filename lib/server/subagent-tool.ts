@@ -2,7 +2,7 @@
  * The `subagent` agent tool.
  *
  * One tool, action-discriminated parameters. This issue ships `spawn`, `list`,
- * `get`, `wait` and `cancel`:
+ * `get`, `wait`, `continue` and `cancel`:
  *
  * - `spawn` resolves a profile, freezes the child configuration, hands the task
  *   to the task manager and then *waits* (15 minutes by default, 0 for an
@@ -23,6 +23,12 @@
  *   before it starts; a running task becomes `stopping` and only reaches
  *   `cancelled` once the child session confirms the stop. A terminal task is
  *   never overwritten by a late cancel.
+ * - `continue` starts another turn in an existing child session by
+ *   `session_id`. It creates a *new* task id, leaves every earlier task's
+ *   input, result, error and timing untouched, and reuses the configuration
+ *   frozen when that child session was created. A busy child (any unfinished
+ *   task) is refused; inputs are never appended to or steered into a running
+ *   turn.
  *
  * The parent id always comes from the call context, never from the arguments,
  * so a child can only ever see the tasks its own session created.
@@ -40,6 +46,7 @@ import {
   SUBAGENT_ACTIVITY_MAX_LIMIT,
   SUBAGENT_LIST_MAX_LIMIT,
   SUBAGENT_NAME_MAX,
+  SUBAGENT_REQUEST_ID_MAX,
   SUBAGENT_RESULT_WINDOW_MAX,
   SUBAGENT_TOOL_NAME,
   SUBAGENT_TRANSCRIPT_MAX_LIMIT,
@@ -59,9 +66,10 @@ import {
   type SubagentTaskWaitResult,
 } from "./subagent-tasks";
 import { getSubagentProfile, listSubagentProfiles } from "./subagent-profiles";
-import type { SubagentTask } from "./subagent-store";
+import { getSubagentTaskByRequestId, type SubagentTask } from "./subagent-store";
 import {
   getSubagentSessionDetail,
+  getSubagentSessionTaskForParent,
   getSubagentTaskDetail,
   getSubagentTaskForParent,
   listSubagentSessions,
@@ -89,10 +97,17 @@ const MAX_PROMPT_LENGTH = 50_000;
  * compile; later lifecycle tickets extend both in one place.
  */
 const SUBAGENT_ACTION_SCHEMA = Type.Union(
-  [Type.Literal("spawn"), Type.Literal("list"), Type.Literal("get"), Type.Literal("wait"), Type.Literal("cancel")],
+  [
+    Type.Literal("spawn"),
+    Type.Literal("list"),
+    Type.Literal("get"),
+    Type.Literal("wait"),
+    Type.Literal("continue"),
+    Type.Literal("cancel"),
+  ],
   {
     description:
-      "Which subagent operation to run. 'spawn' creates and runs a new task; 'wait' observes an existing task by task_id without starting or replaying it; 'cancel' asks one task to stop; 'list' lists this session's direct subagent sessions (filter with status, page with limit/offset); 'get' reads one task by task_id or one child session by session_id.",
+      "Which subagent operation to run. 'spawn' creates and runs a new task; 'continue' starts another turn in an existing child session by session_id and returns a new task_id; 'wait' observes an existing task by task_id without starting or replaying it; 'cancel' asks one task to stop; 'list' lists this session's direct subagent sessions (filter with status, page with limit/offset); 'get' reads one task by task_id or one child session by session_id.",
   },
 );
 type SubagentActionName = Static<typeof SUBAGENT_ACTION_SCHEMA>;
@@ -165,12 +180,12 @@ export const SubagentParams = Type.Object({
   description: Type.Optional(Type.String({
     minLength: 1,
     maxLength: MAX_DESCRIPTION_LENGTH,
-    description: "spawn only: a short 3-5 word description of the task",
+    description: "spawn/continue: a short 3-5 word description of the task",
   })),
   prompt: Type.Optional(Type.String({
     minLength: 1,
     maxLength: MAX_PROMPT_LENGTH,
-    description: "spawn only: the complete instructions for the subagent",
+    description: "spawn/continue: the complete instructions for the subagent (continue: the new turn's input)",
   })),
   subagent_name: Type.Optional(Type.String({
     minLength: 1,
@@ -182,8 +197,14 @@ export const SubagentParams = Type.Object({
     minimum: 0,
     maximum: MAX_SUBAGENT_WAIT_MS,
     description:
-      `spawn/wait only: how long to wait for the result. Defaults to ${DEFAULT_SUBAGENT_WAIT_MS} ms; 0 returns immediately.`
+      `spawn/continue/wait only: how long to wait for the result. Defaults to ${DEFAULT_SUBAGENT_WAIT_MS} ms; 0 returns immediately.`
       + " When the wait expires the task keeps running and can be observed again later.",
+  })),
+  request_id: Type.Optional(Type.String({
+    minLength: 1,
+    maxLength: SUBAGENT_REQUEST_ID_MAX,
+    description:
+      "spawn/continue only: an optional caller-supplied request id. Retrying with the same id returns the task the first request created instead of starting a second one; use a new id for a new deliberate request. Scoped to this parent session.",
   })),
   // list
   status: Type.Optional(STATUS_PARAM),
@@ -207,7 +228,7 @@ export const SubagentParams = Type.Object({
   session_id: Type.Optional(Type.String({
     minLength: 1,
     maxLength: 200,
-    description: "get only: the child session id to read (newest task detail plus task history).",
+    description: "get/continue: the child session id to read (get) or to start another turn in (continue).",
   })),
   result_offset: Type.Optional(Type.Integer({
     minimum: 0,
@@ -245,7 +266,8 @@ type SubagentRawParams = Static<typeof SubagentParams>;
 
 /** Which parameters each action accepts; anything else is rejected by name. */
 const ACTION_KEYS: Record<SubagentActionName, readonly (keyof SubagentRawParams)[]> = {
-  spawn: ["description", "prompt", "subagent_name", "wait_ms"],
+  spawn: ["description", "prompt", "subagent_name", "wait_ms", "request_id"],
+  continue: ["session_id", "description", "prompt", "wait_ms", "request_id"],
   wait: ["task_id", "wait_ms"],
   cancel: ["task_id"],
   list: ["status", "limit", "offset"],
@@ -267,7 +289,15 @@ interface SubagentReadWindows {
 }
 
 type ParsedSubagentParams =
-  | { action: "spawn"; description: string; prompt: string; subagentName: string; waitMs: number }
+  | { action: "spawn"; description: string; prompt: string; subagentName: string; waitMs: number; requestId?: string }
+  | {
+    action: "continue";
+    sessionId: string;
+    description: string;
+    prompt: string;
+    waitMs: number;
+    requestId?: string;
+  }
   | { action: "wait"; taskId: string; waitMs: number }
   | { action: "cancel"; taskId: string }
   | { action: "list"; status?: SubagentTaskStatus; limit?: number; offset?: number }
@@ -283,6 +313,12 @@ type Parsed = { ok: true; params: ParsedSubagentParams } | { ok: false; error: s
 
 function isBlank(value: string | undefined): boolean {
   return (value ?? "").trim().length === 0;
+}
+
+/** One rule for the optional dedupe key: trimmed, empty means absent. */
+function normalizeRequestId(value: string | undefined): string | undefined {
+  const trimmed = value?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 /**
@@ -319,6 +355,32 @@ export function parseSubagentParams(raw: SubagentRawParams): Parsed {
         prompt: raw.prompt!.trim(),
         subagentName: raw.subagent_name!.trim(),
         waitMs: raw.wait_ms ?? DEFAULT_SUBAGENT_WAIT_MS,
+        ...(normalizeRequestId(raw.request_id) ? { requestId: normalizeRequestId(raw.request_id) } : {}),
+      },
+    };
+  }
+
+  if (action === "continue") {
+    const missing = (["session_id", "prompt"] as const).filter((key) => !present.includes(key));
+    if (missing.length > 0) {
+      return { ok: false, error: `action="continue" requires ${missing.join(", ")}.` };
+    }
+    if (isBlank(raw.session_id) || isBlank(raw.prompt)) {
+      return { ok: false, error: 'action="continue" requires a non-empty session_id and prompt.' };
+    }
+    // The description is only a card label; derive one from the input when the
+    // caller did not name the turn.
+    const prompt = raw.prompt!.trim();
+    const derived = prompt.split("\n")[0]!.slice(0, MAX_DESCRIPTION_LENGTH).trim() || "Continue";
+    return {
+      ok: true,
+      params: {
+        action,
+        sessionId: raw.session_id!.trim(),
+        description: raw.description?.trim() || derived,
+        prompt,
+        waitMs: raw.wait_ms ?? DEFAULT_SUBAGENT_WAIT_MS,
+        ...(normalizeRequestId(raw.request_id) ? { requestId: normalizeRequestId(raw.request_id) } : {}),
       },
     };
   }
@@ -396,6 +458,10 @@ export interface SubagentWaitDetails extends SubagentObservedDetails {
   action: "wait";
 }
 
+export interface SubagentContinueDetails extends SubagentObservedDetails {
+  action: "continue";
+}
+
 /** What a cancel reports: the state after the request, not a promise it stopped. */
 export interface SubagentCancelDetails {
   action: "cancel";
@@ -438,13 +504,14 @@ export interface SubagentGetDetails {
 }
 
 export interface SubagentQueryErrorDetails {
-  action: "list" | "get" | "wait" | "cancel";
+  action: "list" | "get" | "wait" | "continue" | "cancel";
   error: string;
 }
 
 export type SubagentToolDetails =
   | SubagentSpawnDetails
   | SubagentWaitDetails
+  | SubagentContinueDetails
   | SubagentCancelDetails
   | SubagentListDetails
   | SubagentGetDetails
@@ -455,6 +522,20 @@ function spawnProgressDetails(
 ): SubagentSpawnDetails {
   return {
     action: "spawn",
+    taskId: progress.taskId,
+    childSessionId: progress.childSessionId,
+    status: progress.status,
+    subagentName: progress.subagentName,
+    description: progress.description,
+    waitExpired: false,
+  };
+}
+
+function continueProgressDetails(
+  progress: SubagentTaskProgress,
+): SubagentContinueDetails {
+  return {
+    action: "continue",
     taskId: progress.taskId,
     childSessionId: progress.childSessionId,
     status: progress.status,
@@ -476,11 +557,11 @@ function targetOf(task: Pick<SubagentTaskWaitResult, "taskId" | "childSessionId"
  * parent never mistakes a wait timeout for a failed task.
  */
 function waitResultEnvelope(
-  action: "spawn" | "wait",
+  action: "spawn" | "wait" | "continue",
   task: SubagentTaskWaitResult,
   waitMs: number,
 ) {
-  const details: SubagentSpawnDetails | SubagentWaitDetails = {
+  const details: SubagentSpawnDetails | SubagentWaitDetails | SubagentContinueDetails = {
     action,
     taskId: task.taskId,
     childSessionId: task.childSessionId,
@@ -490,7 +571,7 @@ function waitResultEnvelope(
     waitExpired: task.waitExpired,
     ...(task.result ? { result: task.result } : {}),
     ...(task.error ? { error: task.error } : {}),
-  };
+  } as SubagentSpawnDetails | SubagentWaitDetails | SubagentContinueDetails;
 
   let text: string;
   if (task.status === "completed") {
@@ -551,7 +632,7 @@ function spawnErrorEnvelope(input: {
 }
 
 function queryErrorEnvelope(
-  action: "list" | "get" | "wait" | "cancel",
+  action: "list" | "get" | "wait" | "continue" | "cancel",
   error: string,
 ): { content: Array<{ type: "text"; text: string }>; details: SubagentQueryErrorDetails; isError: true } {
   return {
@@ -850,8 +931,10 @@ ${catalog}
 - \`spawn\` waits 15 minutes by default and returns the result. Pass a smaller \`wait_ms\` (0 for none) to keep working in parallel: the task keeps running in the background after the wait expires, and its status is not a failure.
 - \`action: "wait"\` with a \`task_id\` observes an existing task again under the same bounded wait (15 minutes by default, \`wait_ms: 0\` for an immediate status). It never starts, replays or cancels the task: a completed or failed task returns its result/error at once, and a timed-out wait only ends the observation — wait again or read it with \`get\`.
 - \`action: "list"\` finds this session's direct subagent sessions again (one row per child session with its newest task); filter with \`status\` and page with \`limit\`/\`offset\`. \`action: "get"\` reads one task by \`task_id\` or one child session by \`session_id\` (newest task detail plus task history), with a bounded \`result\` window, recent activity and an optional transcript page.
+- \`action: "continue"\` with a \`session_id\` starts another turn in that existing child session and returns a *new* \`task_id\` (same bounded wait, 15 minutes by default, \`wait_ms: 0\` for an immediate return). Earlier tasks keep their own inputs, results and timings; the child keeps the configuration frozen when it was created. A busy child session (queued, creating, running or stopping task) refuses continue with busy instead of queueing, steering or interrupting; wait for it to finish, then continue explicitly.
+- \`request_id\` is an optional spawn/continue dedupe key: retrying the same request with the same id returns the task the first call created (scoped to this parent session), while two deliberate requests without a shared id are never merged even with identical content.
 - \`action: "cancel"\` with a \`task_id\` stops that one task: a queued task is cancelled before it starts, a running task reports \`stopping\` until the child session confirms, and a finished task is left untouched. It only affects the task you name — never a later task of the same child session. Confirm the stop with \`action: "wait"\`.
-- The user's stop on the parent session stops every unfinished child task (running and queued) with it; starting a new one while that stop is in progress is refused. After it finishes you can delegate again explicitly.
+- The user's stop on the parent session stops every unfinished child task (running and queued) with it, including manual continues; starting or continuing a task while that stop is in progress is refused. After it finishes you can delegate again explicitly.
 - When you need to explore the codebase, prioritize dispatching a read-only explorer subagent over exploring it yourself, and give it a purely exploration-and-reporting task without requiring suggestions.
 - When you hand a subagent a change, files, or a question to review, also state the standards to judge against.
 - Independent tasks can be dispatched together: emit several \`subagent\` calls in the same message instead of one per turn. Subagents run in parallel (at most ${MAX_CONCURRENT_SUBAGENT_RUNS} at a time, further tasks queue in order), so keep each task self-contained and do not make one depend on another's result.
@@ -861,9 +944,11 @@ ${catalog}
 const TOOL_DESCRIPTION = [
   "Manage subagent tasks. action=\"spawn\" launches a persistent specialized subagent for a focused task and returns its result (waiting up to 15 minutes by default). Pick the subagent by name from the configured profiles listed in the subagent guidelines; the subagent runs in the current working directory and returns an evidence-based conclusion. With wait_ms=0 the call returns at once and the task keeps running in the background.",
   "action=\"wait\" observes an existing task by task_id with the same bounded wait (15 minutes by default, wait_ms=0 for an immediate status). It never starts, replays or cancels a task: a terminal task returns at once, and a timed-out wait leaves the task running.",
+  "action=\"continue\" with a session_id starts another turn in an existing child session, preserving its context and history, and returns a new task_id (same bounded wait; wait_ms=0 returns at once). Earlier tasks keep their results and timings. A busy child session refuses continue instead of queueing or steering input.",
   "action=\"list\" lists this session's direct subagent sessions (newest first, one row per child session with its newest task; filter with status, page with limit/offset).",
   "action=\"get\" reads one task by task_id or one child session by session_id (newest task detail plus paged task history); details carry status, timing, error, recent tool activity, a bounded result window and an optional transcript page. All lookups only see direct subagents of the calling session; truncation is always marked together with the offset that reads the rest.",
   "action=\"cancel\" stops one task by task_id: a queued task is cancelled without starting, a running task reports stopping until the child session confirms the stop, and a late cancel never overwrites a finished result.",
+  "spawn/continue accept an optional request_id: retrying the same request returns the existing task instead of starting a duplicate.",
 ].join(" ");
 
 export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetails>({
@@ -874,7 +959,7 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
   // No `executionMode`: the SDK default ("parallel") is what lets one assistant
   // message dispatch several subagents at once. Declaring "sequential" would
   // demote the whole tool batch to serial and start them one after another.
-  promptSnippet: "Launch a specialized subagent, list subagent sessions, read or wait for a task, or cancel one task.",
+  promptSnippet: "Launch a specialized subagent, continue an existing one, list subagent sessions, read or wait for a task, or cancel one task.",
   // Guidelines moved to `buildSubagentSystemPromptBlock` — injected via
   // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -883,7 +968,7 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
       const action = params.action;
       // list/get/wait share the small error payload; a spawn argument error is
       // still reported through the spawn envelope the card understands.
-      if (action === "list" || action === "get" || action === "wait" || action === "cancel") {
+      if (action === "list" || action === "get" || action === "wait" || action === "continue" || action === "cancel") {
         return queryErrorEnvelope(action, parsed.error);
       }
       return spawnErrorEnvelope({
@@ -897,6 +982,59 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
     // so a child can only ever see its own direct subagents.
     const parentSessionId = ctx.sessionManager.getSessionId();
     const input = parsed.params;
+
+    if (input.action === "spawn" && input.requestId) {
+      // Dedupe before profile resolution and the stop gate: a retry of an
+      // already-created request must return that task even if the profile was
+      // edited away or the parent has since entered a stop window. The manager
+      // also dedupes, but only this early check can spare the profile lookup.
+      const existing = getSubagentTaskByRequestId(parentSessionId, input.requestId);
+      if (existing) {
+        if (existing.subagentName !== input.subagentName || existing.prompt !== input.prompt) {
+          return spawnErrorEnvelope({
+            subagentName: input.subagentName,
+            description: input.description,
+            error:
+              `request_id "${input.requestId}" was already used for a different request; use a new request_id for this spawn.`,
+          });
+        }
+        const manager = getSubagentTaskManager();
+        const result = await manager.wait(existing.taskId, {
+          timeoutMs: input.waitMs,
+          ...(signal ? { stopOnAbort: { signal, reason: SUBAGENT_CANCELLED } } : {}),
+        });
+        return waitResultEnvelope("spawn", result, input.waitMs);
+      }
+    }
+
+    if (input.action === "continue") {
+      try {
+        // Ownership first: a session of another parent is indistinguishable
+        // from one that never existed, so continue cannot read or steer it.
+        getSubagentSessionTaskForParent(parentSessionId, input.sessionId);
+        const manager = getSubagentTaskManager();
+        const task = manager.continue({
+          parentSessionId,
+          childSessionId: input.sessionId,
+          description: input.description,
+          prompt: input.prompt,
+          ...(input.requestId ? { requestId: input.requestId } : {}),
+          onProgress: (progress) => {
+            onUpdate?.({ content: [], details: continueProgressDetails(progress) });
+          },
+        });
+        const result = await manager.wait(task.taskId, {
+          timeoutMs: input.waitMs,
+          // Same contract as spawn: stopping the parent turn while it waits is
+          // a stop request for this task, confirmed by the turn module.
+          ...(signal ? { stopOnAbort: { signal, reason: SUBAGENT_CANCELLED } } : {}),
+        });
+        return waitResultEnvelope("continue", result, input.waitMs);
+      } catch (error) {
+        if (error instanceof SubagentQueryError) return queryErrorEnvelope("continue", error.message);
+        return queryErrorEnvelope("continue", error instanceof Error ? error.message : String(error));
+      }
+    }
 
     if (input.action === "wait") {
       try {
@@ -1013,6 +1151,7 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
         description,
         prompt,
         config,
+        ...(input.requestId ? { requestId: input.requestId } : {}),
         onProgress: (progress) => {
           // In-flight partials let the parent UI start rendering the child's
           // live panel (and its queued state) before the call returns. Content

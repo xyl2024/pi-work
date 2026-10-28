@@ -166,6 +166,13 @@ export const DEFAULT_SUBAGENT_TIMEOUT_MS = 30 * 60 * 1000;
 export const MIN_SUBAGENT_TIMEOUT_MS = 10 * 1000;
 export const MAX_SUBAGENT_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Max length of a caller-supplied `request_id`. Dedupe is scoped to one parent
+ * session and persisted with the task, so a retry after a restart still returns
+ * the task the first request created.
+ */
+export const SUBAGENT_REQUEST_ID_MAX = 200;
+
 // ============================================================================
 // Bounded reads for the `list` / `get` actions
 //

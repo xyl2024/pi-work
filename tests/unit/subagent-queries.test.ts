@@ -85,6 +85,9 @@ beforeEach(() => {
     spawn() {
       throw new Error("spawn is not used by the query tests");
     },
+    continue() {
+      throw new Error("continue is not used by the query tests");
+    },
     async wait() {
       throw new Error("wait is not used by the query tests");
     },
