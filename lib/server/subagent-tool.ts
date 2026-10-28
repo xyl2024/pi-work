@@ -761,9 +761,32 @@ function taskSummaryLine(view: SubagentTaskView): string {
     + ` — task ${view.taskId} — created ${iso(view.createdAt)}${error}`;
 }
 
+/**
+ * One list row as a labelled block: the session id, the status/subagent of its
+ * latest task, that task's id and the session's task count are easy to confuse
+ * when they sit on one packed line, so every field gets its own line here.
+ */
+function listEntryLines(entry: SubagentSessionEntry, position: number): string[] {
+  const view = entry.latestTask;
+  const lines = [
+    `${position}. session_id: ${entry.sessionId ?? "(none yet — the latest task has no child session, it is still queued or creating)"}`,
+    `   status: ${view.status}${entry.taskCount > 1 ? " (of the latest task)" : ""}`,
+    `   subagent: ${view.subagentName}`,
+    `   description: "${view.description.replace(/\s+/g, " ")}"`,
+    `   latest_task_id: ${view.taskId}`,
+    `   tasks: ${entry.taskCount} in this session${entry.taskCount > 1 ? " (the info above is the newest one)" : ""}`,
+    `   created: ${iso(view.createdAt)}`,
+  ];
+  // A manual task is the user typing into the child session themselves; the
+  // parent must be able to tell those apart from its own delegations.
+  if (view.origin === "manual") lines.push("   origin: manual — the user typed this input into the child session");
+  if (view.error) lines.push(`   error: ${view.error}`);
+  return lines;
+}
+
 function listText(list: SubagentSessionList): string {
   const lines: string[] = [];
-  const filter = list.status ? ` — filter: status=${list.status}` : "";
+  const filter = list.status ? ` (filter: status=${list.status})` : "";
   if (list.entries.length === 0) {
     lines.push(`No subagent sessions of this session${list.status ? ` with status=${list.status}` : ""} were found.`);
     if (list.offset > 0) {
@@ -772,19 +795,21 @@ function listText(list: SubagentSessionList): string {
   } else {
     const first = list.offset + 1;
     const last = list.offset + list.entries.length;
-    lines.push(`Subagent sessions of this session — ${first}-${last} of ${list.total} (newest first)${filter}:`);
+    lines.push(`Subagent sessions of this session: ${list.total} in total${filter}, newest first.`);
+    lines.push(`Page: entries ${first}-${last} of ${list.total} (offset=${list.offset}, limit=${list.limit}).`);
     list.entries.forEach((entry, index) => {
-      lines.push(`  ${list.offset + index + 1}. ${taskSummaryLine(entry.latestTask)} — ${entry.taskCount} task(s)`);
+      lines.push("", ...listEntryLines(entry, list.offset + index + 1));
     });
   }
   if (list.hasMore) {
     const nextOffset = list.offset + list.entries.length;
     lines.push(
+      "",
       `${list.total - nextOffset} more session(s): call action="list" with offset=${nextOffset}`
       + `${list.status ? ` and status="${list.status}"` : ""} to read the next page.`,
     );
   } else if (list.entries.length > 0) {
-    lines.push("That is the last page.");
+    lines.push("", `That is the last page. All ${list.total} session(s) are shown.`);
   }
   lines.push(
     'Use action="get" with task_id (one task) or session_id (newest task detail plus task history) for status, timing, error, recent activity, result and transcript.',
