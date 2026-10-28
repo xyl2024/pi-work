@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { listSubagentTasks } from "@/lib/server/subagent-store";
+import { resolveSubagentTaskStatus } from "@/lib/server/subagent-queries";
 import { readSubagentSessionStats } from "@/lib/server/sessions/reader";
 import { createLogger } from "@/lib/server/logger";
 
@@ -11,12 +12,14 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function GET(_request: Request, { params }: RouteContext) {
   const { id } = await params;
   try {
+    // Same status source as the tool's list/get: a stale `running` row that no
+    // live task backs is reported as interrupted, so the panel stops polling it.
     const base = listSubagentTasks(id).map((task) => ({
       taskId: task.taskId,
       childSessionId: task.childSessionId,
       subagentName: task.subagentName,
       description: task.description,
-      status: task.status,
+      status: resolveSubagentTaskStatus(task),
       createdAt: task.createdAt,
       startedAt: task.startedAt,
       finishedAt: task.finishedAt,

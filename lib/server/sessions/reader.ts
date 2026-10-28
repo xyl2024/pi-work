@@ -22,6 +22,10 @@ import type {
 import { listSessionNames } from "@/lib/server/session-names";
 import { normalizeToolCalls } from "@/lib/shared/normalize";
 import { cleanFirstMessage } from "@/lib/shared/session-title";
+import {
+  SUBAGENT_ACTIVITY_DEFAULT_LIMIT,
+  SUBAGENT_ACTIVITY_MAX_LIMIT,
+} from "@/lib/shared/subagent";
 
 export { getAgentDir };
 
@@ -776,6 +780,8 @@ export interface SubagentLiveSnapshot {
   model: string | null;
   /** Recent tool calls in chronological order (oldest first). */
   activities: SubagentActivityItem[];
+  /** Total number of tool calls in the child session, before the window. */
+  activityCount: number;
 }
 
 interface SubagentLiveCacheEntry {
@@ -799,8 +805,14 @@ const ACTIVITY_SUMMARY_KEYS = [
 
 const ACTIVITY_SUMMARY_MAX = 120;
 
+/**
+ * The cache is keyed by session mtime, so it must hold the same window whatever
+ * a caller asks for; callers slice their own limit off the tail.
+ */
+const ACTIVITY_CACHE_LIMIT = SUBAGENT_ACTIVITY_MAX_LIMIT;
+
 /** Short single-line preview of a tool call's input, mirroring the UI's tool preview. */
-function summarizeToolInput(input: unknown): string {
+export function summarizeToolInput(input: unknown): string {
   if (!input || typeof input !== "object") return "";
   const record = input as Record<string, unknown>;
   for (const key of ACTIVITY_SUMMARY_KEYS) {
@@ -817,7 +829,10 @@ function summarizeToolInput(input: unknown): string {
 }
 
 /** Aggregate stats + recent tool-call activity for one child session. */
-export async function readSubagentLiveInfo(sessionId: string, activityLimit = 30): Promise<SubagentLiveSnapshot | null> {
+export async function readSubagentLiveInfo(
+  sessionId: string,
+  activityLimit = SUBAGENT_ACTIVITY_DEFAULT_LIMIT,
+): Promise<SubagentLiveSnapshot | null> {
   const filePath = await resolveSessionPath(sessionId);
   if (!filePath) return null;
   let mtimeMs = 0;
@@ -829,9 +844,15 @@ export async function readSubagentLiveInfo(sessionId: string, activityLimit = 30
 
   const cache = getSubagentLiveCache();
   const cached = cache.get(sessionId);
-  if (cached && cached.mtimeMs === mtimeMs) return cached.info;
+  // The cache holds the widest window; each caller gets its own slice, even on
+  // a cache hit (a hit must not leak the previous caller's limit).
+  const limited = (info: SubagentLiveSnapshot): SubagentLiveSnapshot => ({
+    ...info,
+    activities: activityLimit > 0 ? info.activities.slice(-activityLimit) : [],
+  });
+  if (cached && cached.mtimeMs === mtimeMs) return limited(cached.info);
 
-  const empty: SubagentLiveSnapshot = { assistantCount: 0, readCount: 0, model: null, activities: [] };
+  const empty: SubagentLiveSnapshot = { assistantCount: 0, readCount: 0, model: null, activities: [], activityCount: 0 };
   let info: SubagentLiveSnapshot = empty;
   try {
     const sm = SessionManager.open(filePath);
@@ -869,12 +890,13 @@ export async function readSubagentLiveInfo(sessionId: string, activityLimit = 30
       assistantCount,
       readCount: readPaths.size + readCalls,
       model,
-      activities: activities.slice(-activityLimit),
+      activities: activities.slice(-ACTIVITY_CACHE_LIMIT),
+      activityCount: activities.length,
     };
   } catch {
     // Unreadable / mid-write JSONL: fall through with the empty snapshot.
   }
 
   cache.set(sessionId, { mtimeMs, info });
-  return info;
+  return limited(info);
 }

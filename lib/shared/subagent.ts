@@ -166,6 +166,83 @@ export const DEFAULT_SUBAGENT_TIMEOUT_MS = 30 * 60 * 1000;
 export const MIN_SUBAGENT_TIMEOUT_MS = 10 * 1000;
 export const MAX_SUBAGENT_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
+// ============================================================================
+// Bounded reads for the `list` / `get` actions
+//
+// The parent's context window is the scarce resource: a list returns session
+// summaries only (never prompts, transcripts or full results), and a detail
+// read hands back one explicit window that says how to fetch the next one.
+// ============================================================================
+
+/** Default page size for `list` and for a session's task history in `get`. */
+export const SUBAGENT_LIST_DEFAULT_LIMIT = 10;
+/** Hard cap on one page; larger requests are clamped, not rejected. */
+export const SUBAGENT_LIST_MAX_LIMIT = 50;
+
+/** Default character window for a task result in `get`. */
+export const SUBAGENT_RESULT_WINDOW_DEFAULT = 4_000;
+/** Hard cap on one result window; larger requests are clamped. */
+export const SUBAGENT_RESULT_WINDOW_MAX = 20_000;
+
+/** Default number of recent tool calls `get` reports. */
+export const SUBAGENT_ACTIVITY_DEFAULT_LIMIT = 20;
+/** Hard cap on the activity feed. */
+export const SUBAGENT_ACTIVITY_MAX_LIMIT = 50;
+
+/** Default number of transcript messages in `get`; 0 means "don't read it". */
+export const SUBAGENT_TRANSCRIPT_DEFAULT_LIMIT = 0;
+/** Hard cap on transcript messages per page. */
+export const SUBAGENT_TRANSCRIPT_MAX_LIMIT = 20;
+/** Per-message character cap inside a transcript page (each note is explicit). */
+export const SUBAGENT_TRANSCRIPT_MESSAGE_MAX = 2_000;
+
+/**
+ * One bounded slice of a long text, with everything a caller needs to read the
+ * next slice. `truncated` covers both ends: a window that started late and a
+ * window that ends early. Pure, so the tool, the queries and the tests share
+ * exactly one truncation rule.
+ */
+export interface SubagentTextWindow {
+  text: string;
+  /** Character offset the window starts at. */
+  offset: number;
+  /** Requested window size after clamping. */
+  limit: number;
+  /** Length of the whole text. */
+  total: number;
+  /** True when the window does not cover the whole text. */
+  truncated: boolean;
+  /** Characters before the window. */
+  skipped: number;
+  /** Characters after the window. */
+  remaining: number;
+  /** Offset to pass next, or null when the window reaches the end. */
+  nextOffset: number | null;
+}
+
+/** Slice `text` into one window; offsets outside the text are clamped. */
+export function sliceSubagentText(
+  text: string,
+  offset = 0,
+  limit = SUBAGENT_RESULT_WINDOW_DEFAULT,
+): SubagentTextWindow {
+  const total = text.length;
+  const start = Math.min(Math.max(0, Math.trunc(offset) || 0), total);
+  const size = Math.max(1, Math.trunc(limit) || SUBAGENT_RESULT_WINDOW_DEFAULT);
+  const end = Math.min(total, start + size);
+  const slice = text.slice(start, end);
+  return {
+    text: slice,
+    offset: start,
+    limit: size,
+    total,
+    truncated: start > 0 || end < total,
+    skipped: start,
+    remaining: total - end,
+    nextOffset: end < total ? end : null,
+  };
+}
+
 /**
  * Map a stored tool selection onto today's tool names: a selection written
  * before the rename may still say `spawn_subagent`, which is no longer

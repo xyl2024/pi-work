@@ -163,6 +163,12 @@ export interface SubagentTaskManager {
   stop(taskId: string, reason?: string): void;
   /** The persisted row, or null. */
   get(taskId: string): SubagentTask | null;
+  /**
+   * Live status of a task this process still manages, or null when the process
+   * is not managing it (finished, never started here, or from a dead process).
+   * Read-side queries use it to avoid reporting stale non-terminal rows.
+   */
+  liveStatus(taskId: string): SubagentTaskStatus | null;
   /** Resolves once every unfinished task has finished | test / shutdown aid. */
   idle(): Promise<void>;
 }
@@ -604,7 +610,14 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     }
   };
 
-  return { spawn, wait, stop, get: (taskId) => getSubagentTask(taskId), idle };
+  return {
+    spawn,
+    wait,
+    stop,
+    get: (taskId) => getSubagentTask(taskId),
+    liveStatus: (taskId) => running.get(taskId)?.status ?? null,
+    idle,
+  };
 }
 
 declare global {

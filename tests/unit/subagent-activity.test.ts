@@ -48,10 +48,15 @@ describe("GET /api/subagents/[sessionId]/activity", () => {
       task: { status: string; startedAt: number | null; description: string } | null;
       stats: { assistantCount: number | null; readCount: number | null; model: string | null };
       activities: unknown[];
+      activityCount: number;
     };
-    expect(body.task?.status).toBe("running");
+    // The row was seeded as `running` but no live task backs it: the endpoint
+    // reports the effective status (interrupted), so the UI stops polling a
+    // record nothing is executing any more.
+    expect(body.task?.status).toBe("interrupted");
     expect(body.task?.description).toBe("test task");
     expect(body.stats).toEqual({ assistantCount: null, readCount: null, model: null });
     expect(body.activities).toEqual([]);
+    expect(body.activityCount).toBe(0);
   });
 });

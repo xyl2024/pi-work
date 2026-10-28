@@ -267,14 +267,16 @@ export function getSubagentTask(taskId: string): SubagentTask | null {
 
 export function listSubagentTasks(parentSessionId: string): SubagentTask[] {
   const rows = getSubagentDb().prepare(
-    "SELECT * FROM subagent_tasks WHERE parent_session_id = ? ORDER BY created_at DESC",
+    // rowid breaks created_at ties: several tasks can be created in the same
+    // millisecond, and "newest first" must still match insertion order.
+    "SELECT * FROM subagent_tasks WHERE parent_session_id = ? ORDER BY created_at DESC, rowid DESC",
   ).all(parentSessionId) as Record<string, unknown>[];
   return rows.map(mapRow);
 }
 
 export function getSubagentTaskByChildSessionId(childSessionId: string): SubagentTask | null {
   const row = getSubagentDb().prepare(
-    "SELECT * FROM subagent_tasks WHERE child_session_id = ? ORDER BY created_at DESC LIMIT 1",
+    "SELECT * FROM subagent_tasks WHERE child_session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
   ).get(childSessionId) as Record<string, unknown> | undefined;
   return row ? mapRow(row) : null;
 }

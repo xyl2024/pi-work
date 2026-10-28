@@ -348,6 +348,8 @@ export interface SubagentLiveInfo {
   };
   /** Recent tool calls in chronological order (oldest first). */
   activities: SubagentActivityItem[];
+  /** Tool calls in the child session in total, before the `activities` window. */
+  activityCount: number;
 }
 
 export interface SessionContext {

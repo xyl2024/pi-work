@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSubagentTaskByChildSessionId, listSubagentChildSessionIds } from "@/lib/server/subagent-store";
+import { resolveSubagentTaskStatus } from "@/lib/server/subagent-queries";
 import { readSubagentLiveInfo } from "@/lib/server/sessions/reader";
 import { createLogger } from "@/lib/server/logger";
 import type { SubagentLiveInfo } from "@/lib/shared/types";
@@ -24,7 +25,14 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const info = await readSubagentLiveInfo(sessionId);
     const payload: SubagentLiveInfo = {
       task: task
-        ? { status: task.status, startedAt: task.startedAt, description: task.description, subagentName: task.subagentName }
+        ? {
+          // Effective, not stored: a non-terminal row nobody manages is
+          // reported as interrupted instead of polling as "running" forever.
+          status: resolveSubagentTaskStatus(task),
+          startedAt: task.startedAt,
+          description: task.description,
+          subagentName: task.subagentName,
+        }
         : null,
       stats: {
         assistantCount: info?.assistantCount ?? null,
@@ -32,6 +40,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
         model: info?.model ?? null,
       },
       activities: info?.activities ?? [],
+      activityCount: info?.activityCount ?? 0,
     };
     return NextResponse.json(payload, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
