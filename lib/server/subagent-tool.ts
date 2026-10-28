@@ -56,7 +56,6 @@ import {
   type SubagentTextWindow,
 } from "../shared/subagent";
 import {
-  MAX_CONCURRENT_SUBAGENT_RUNS,
   isSubagentTerminalStatus,
   type SubagentActivityItem,
   type SubagentTaskStatus,
@@ -1004,6 +1003,12 @@ function sessionDetailEnvelope(session: SubagentSessionDetail) {
  * configured profiles so the model always sees the current names and
  * descriptions; with no profiles configured it says so instead of listing
  * names that no longer exist.
+ *
+ * Deliberately small, and capped by a test: everything the tool description,
+ * the parameter schema or a tool result already states is NOT repeated here.
+ * What is left is only what none of those can carry — when to delegate, the
+ * profile catalog (dynamic configuration), two behavioral preferences, and the
+ * one fact a parent is likely to misread (an expired wait is not a failure).
  */
 export function buildSubagentSystemPromptBlock(
   profiles: readonly SubagentProfile[] = listSubagentProfiles(),
@@ -1012,33 +1017,23 @@ export function buildSubagentSystemPromptBlock(
     ? profiles.map((profile) => `  - \`${profile.name}\`: ${profile.description}`).join("\n")
     : "  - (no subagents are configured yet; ask the user to create one in Settings → Subagents)";
   return `\
-## Tool subagent guidelines
-- For independent tasks that are parallelizable and have a well-defined scope, dispatch the tasks to subagents with \`subagent\` and \`action: "spawn"\`. Examples include codebase exploration, research and information gathering, and code review.
+## Subagent tool \`subagent\`
+- Delegate independent, well-scoped tasks to a subagent; emit several \`subagent\` calls in ONE message when the tasks do not depend on each other.
 - \`subagent_name\` selects one of the configured subagents:
 ${catalog}
-- Each subagent has its own system prompt, tool set, model and runtime limit; pick the one whose description best matches the task.
-- \`spawn\` waits 15 minutes by default and returns the result. Pass a smaller \`wait_ms\` (0 for none) to keep working in parallel: the task keeps running in the background after the wait expires, and its status is not a failure.
-- \`action: "wait"\` with a \`task_id\` observes an existing task again under the same bounded wait (15 minutes by default, \`wait_ms: 0\` for an immediate status). It never starts, replays or cancels the task: a completed or failed task returns its result/error at once, and a timed-out wait only ends the observation — wait again or read it with \`get\`.
-- \`action: "list"\` finds this session's direct subagent sessions again (one row per child session with its newest task); filter with \`status\` and page with \`limit\`/\`offset\`. \`action: "get"\` reads one task by \`task_id\` or one child session by \`session_id\` (newest task detail plus task history), with a bounded \`result\` window, recent activity and an optional transcript page.
-- \`action: "continue"\` with a \`session_id\` starts another turn in that existing child session and returns a *new* \`task_id\` (same bounded wait, 15 minutes by default, \`wait_ms: 0\` for an immediate return). Earlier tasks keep their own inputs, results and timings; the child keeps the configuration frozen when it was created. A busy child session (queued, creating, running or stopping task) refuses continue with busy instead of queueing, steering or interrupting; wait for it to finish, then continue explicitly.
-- \`request_id\` is an optional spawn/continue dedupe key: retrying the same request with the same id returns the task the first call created (scoped to this parent session), while two deliberate requests without a shared id are never merged even with identical content.
-- \`action: "cancel"\` with a \`task_id\` stops that one task: a queued task is cancelled before it starts, a running task reports \`stopping\` until the child session confirms, and a finished task is left untouched. It only affects the task you name — never a later task of the same child session. Confirm the stop with \`action: "wait"\`.
-- The user's stop on the parent session stops every unfinished child task (running and queued) with it, including manual continues; starting or continuing a task while that stop is in progress is refused. After it finishes you can delegate again explicitly.
-- When you need to explore the codebase, prioritize dispatching a read-only explorer subagent over exploring it yourself, and give it a purely exploration-and-reporting task without requiring suggestions.
-- When you hand a subagent a change, files, or a question to review, also state the standards to judge against.
-- Independent tasks can be dispatched together: emit several \`subagent\` calls in the same message instead of one per turn. Subagents run in parallel (at most ${MAX_CONCURRENT_SUBAGENT_RUNS} at a time, further tasks queue in order), so keep each task self-contained and do not make one depend on another's result.
+- Prefer a read-only explorer over exploring the codebase yourself; when you hand a subagent a change, files or a question to review, state the standards to judge against.
+- An expired \`wait\` has only ended the observation: the task is still running, not failed and not cancelled. Call \`action: "wait"\` again to observe it.
 `;
 }
 
-const TOOL_DESCRIPTION = [
-  "Manage subagent tasks. action=\"spawn\" launches a persistent specialized subagent for a focused task and returns its result (waiting up to 15 minutes by default). Pick the subagent by name from the configured profiles listed in the subagent guidelines; the subagent runs in the current working directory and returns an evidence-based conclusion. With wait_ms=0 the call returns at once and the task keeps running in the background.",
-  "action=\"wait\" observes an existing task by task_id with the same bounded wait (15 minutes by default, wait_ms=0 for an immediate status). It never starts, replays or cancels a task: a terminal task returns at once, and a timed-out wait leaves the task running.",
-  "action=\"continue\" with a session_id starts another turn in an existing child session, preserving its context and history, and returns a new task_id (same bounded wait; wait_ms=0 returns at once). Earlier tasks keep their results and timings. A busy child session refuses continue instead of queueing or steering input.",
-  "action=\"list\" lists this session's direct subagent sessions (newest first, one row per child session with its newest task; filter with status, page with limit/offset).",
-  "action=\"get\" reads one task by task_id or one child session by session_id (newest task detail plus paged task history); details carry status, timing, error, recent tool activity, a bounded result window and an optional transcript page. All lookups only see direct subagents of the calling session; truncation is always marked together with the offset that reads the rest.",
-  "action=\"cancel\" stops one task by task_id: a queued task is cancelled without starting, a running task reports stopping until the child session confirms the stop, and a late cancel never overwrites a finished result.",
-  "spawn/continue accept an optional request_id: retrying the same request returns the existing task instead of starting a duplicate.",
-].join(" ");
+/**
+ * Deliberately minimal, and capped by a test: the per-action semantics live in
+ * the `action` enum description, the per-action arguments and defaults in the
+ * parameter descriptions, and the runtime state transitions in the tool
+ * results. This line only has to make the tool discoverable at all.
+ */
+const TOOL_DESCRIPTION =
+  "Manage subagent tasks: spawn, wait, continue, list, get or cancel one persistent child session.";
 
 export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetails>({
   name: SUBAGENT_TOOL_NAME,
@@ -1048,7 +1043,7 @@ export const subagentTool = defineTool<typeof SubagentParams, SubagentToolDetail
   // No `executionMode`: the SDK default ("parallel") is what lets one assistant
   // message dispatch several subagents at once. Declaring "sequential" would
   // demote the whole tool batch to serial and start them one after another.
-  promptSnippet: "Launch a specialized subagent, continue an existing one, list subagent sessions, read or wait for a task, or cancel one task.",
+  promptSnippet: "Delegate a focused task to a specialized subagent, then observe, continue or cancel it.",
   // Guidelines moved to `buildSubagentSystemPromptBlock` — injected via
   // appendSystemPromptOverride, gated on the tool being loaded.
   async execute(_toolCallId, params, signal, onUpdate, ctx) {
