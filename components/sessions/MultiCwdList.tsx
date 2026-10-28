@@ -892,7 +892,7 @@ function LoadMoreRow({ loadingMore, onClick }: { loadingMore: boolean; onClick: 
         display: "flex",
         alignItems: "center",
         gap: 6,
-        paddingLeft: 18, // matches SessionItem's TEXT_INDENT_PX
+        paddingLeft: 8,
         paddingRight: 8,
         borderRadius: 8,
         cursor: disabled ? "default" : "pointer",

@@ -10,7 +10,6 @@ import { useI18n } from "@/hooks/useI18n";
 import type { SessionAttention } from "@/lib/shared/session-attention";
 import { useToast } from "../ui/Toast";
 import { Tooltip } from "../ui/Tooltip";
-import { PermissionModeBadge } from "../ui/PermissionModeBadge";
 
 interface SessionItemProps {
   session: SessionInfo;
@@ -224,11 +223,6 @@ export function SessionItem({
         ? "0 1px 2px rgba(0,0,0,0.06)"
         : "none";
 
-  // Tab indent — applied to the inner content wrapper, NOT the outer row.
-  // The row's hover / selected bg spans full width; only the visible text
-  // (icons + title) is pushed right.
-  const TEXT_INDENT_PX = 18;
-
   return (
     <div
       onClick={confirmDelete || renaming ? undefined : onClick}
@@ -320,14 +314,11 @@ export function SessionItem({
           }}
         />
       ) : (
-        /* ── Normal view — wrapped in an inner content wrapper so the outer
-            row's hover / selected bg spans full width while the text + icons
-            sit indented by TEXT_INDENT_PX. ── */
         <div
           style={{
             flex: 1, minWidth: 0,
             display: "flex", alignItems: "center",
-            paddingLeft: TEXT_INDENT_PX,
+            paddingLeft: 8,
             paddingRight: 8,
             gap: 6,
             overflow: "hidden",
@@ -388,7 +379,6 @@ export function SessionItem({
                 />
               </Tooltip>
             )}
-            <PermissionModeBadge sessionId={session.id} fallback={session.permissionMode ?? "confirm"} />
             <Tooltip content={title}>
             <div
               style={{
