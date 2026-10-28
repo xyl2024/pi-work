@@ -114,10 +114,10 @@ export interface RunTurnSpec {
    */
   purpose?: CallPurpose;
   /**
-   * Optional message origin (消息来源，ADR-0023) attached verbatim to the
-   * `prompt` command; the RPC session's dispatch point owns writing the
-   * custom entry. Omitted (the web path) leaves the command byte-identical
-   * to today's and writes nothing.
+   * 消息来源（ADR-0023）：由非网页发送方（定时任务、频道、子代理补输入）填
+   * 好、随 prompt 命令原样转发给收口点；prompt 文本本身永远不因它改变。
+   * Omitted (the web path) leaves the command byte-identical to today's and
+   * writes nothing.
    */
   origin?: MessageOrigin;
   /**
@@ -415,13 +415,7 @@ export async function runTurn(spec: RunTurnSpec, createSession: TurnSessionFacto
 
   try {
     await session.send(
-      {
-        type: "prompt",
-        message: spec.prompt,
-        // 消息来源：随 prompt 命令原样带给 RPC 收口点，由它写 custom entry。
-        // 不传时命令与现状逐字节一致。
-        ...(spec.origin ? { origin: spec.origin } : {}),
-      },
+      { type: "prompt", message: spec.prompt, ...(spec.origin ? { origin: spec.origin } : {}) },
       spec.purpose ? { purpose: spec.purpose } : undefined,
     );
   } catch (error) {
