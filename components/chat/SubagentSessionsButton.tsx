@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToast } from "@/components/ui/Toast";
-import type { SubagentTaskStatus, SubagentTaskSummary } from "@/lib/shared/types";
+import type { SubagentTaskSummary } from "@/lib/shared/types";
+import { SUBAGENT_STATUS_COLORS, SUBAGENT_STATUS_LABEL_KEYS } from "@/lib/shared/subagent-status";
 import { GrokBot } from "@/components/grokbot/GrokBot";
 import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-profiles-store";
 
@@ -22,28 +23,6 @@ interface Props {
    */
   parentIsStreaming?: boolean;
 }
-
-const STATUS_KEYS: Record<SubagentTaskStatus, string> = {
-  queued: "Queued",
-  creating: "Creating",
-  running: "Running",
-  stopping: "Stopping",
-  completed: "Completed",
-  failed: "Failed",
-  cancelled: "Cancelled",
-  interrupted: "Interrupted",
-};
-
-const STATUS_COLORS: Record<SubagentTaskStatus, string> = {
-  queued: "var(--text-dim)",
-  creating: "#eab308",
-  running: "var(--accent)",
-  stopping: "#eab308",
-  completed: "#22c55e",
-  failed: "#ef4444",
-  cancelled: "var(--text-dim)",
-  interrupted: "#f59e0b",
-};
 
 export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSession, parentIsStreaming = false }: Props) {
   const { t } = useI18n();
@@ -297,7 +276,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
           ) : (
             tasks.map((task) => {
               const canOpen = Boolean(task.childSessionId);
-              const statusColor = STATUS_COLORS[task.status];
+              const statusColor = SUBAGENT_STATUS_COLORS[task.status];
               const botProfile = findSubagentProfile(profiles, task.subagentName);
               const hasStats = task.assistantCount != null && task.readCount != null;
               const stats = hasStats
@@ -364,7 +343,7 @@ export function SubagentSessionsButton({ parentSessionId, refreshKey, onOpenSess
                         lineHeight: 1.3,
                       }}
                     >
-                      <span style={{ color: statusColor }}>{t(STATUS_KEYS[task.status])}</span>
+                      <span style={{ color: statusColor }}>{t(SUBAGENT_STATUS_LABEL_KEYS[task.status])}</span>
                       <span aria-hidden="true" style={{ color: "var(--text-dim)" }}>·</span>
                       <span style={{ color: "var(--text-dim)" }}>
                         {task.subagentName || t("SubAgent")}

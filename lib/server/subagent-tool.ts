@@ -47,10 +47,13 @@ import {
   SUBAGENT_LIST_MAX_LIMIT,
   SUBAGENT_NAME_MAX,
   SUBAGENT_REQUEST_ID_MAX,
+  SUBAGENT_RESULT_WINDOW_DEFAULT,
   SUBAGENT_RESULT_WINDOW_MAX,
   SUBAGENT_TOOL_NAME,
   SUBAGENT_TRANSCRIPT_MAX_LIMIT,
+  sliceSubagentText,
   type SubagentProfile,
+  type SubagentTextWindow,
 } from "../shared/subagent";
 import {
   MAX_CONCURRENT_SUBAGENT_RUNS,
@@ -328,6 +331,15 @@ function normalizeRequestId(value: string | undefined): string | undefined {
  */
 export function parseSubagentParams(raw: SubagentRawParams): Parsed {
   const action = raw.action;
+  // The SDK validates the schema before `execute`, but the retired
+  // `spawn_subagent` name (and any other unknown action) must fail as a normal
+  // argument error rather than crashing on a missing allowlist entry.
+  if (!Object.prototype.hasOwnProperty.call(ACTION_KEYS, action)) {
+    return {
+      ok: false,
+      error: `Unknown action "${String(action)}". Allowed: ${Object.keys(ACTION_KEYS).join(", ")}.`,
+    };
+  }
   const present = (Object.keys(raw) as (keyof SubagentRawParams)[])
     .filter((key) => key !== "action" && raw[key] !== undefined && raw[key] !== null);
   const foreign = present.filter((key) => !ACTION_KEYS[action].includes(key));
@@ -445,8 +457,14 @@ export interface SubagentObservedDetails {
   description: string;
   /** True when the caller's wait ran out and the task is still unfinished. */
   waitExpired: boolean;
-  /** Completed result, or the last partial output of an abnormal stop. */
+  /**
+   * A bounded window of the completed result, or of the last partial output of
+   * an abnormal stop. `resultTruncated` says the stored text is longer than
+   * this window, and `resultNextOffset` is where `get` continues it.
+   */
   result?: string;
+  resultTruncated?: boolean;
+  resultNextOffset?: number;
   error?: string;
 }
 
@@ -478,6 +496,8 @@ export interface SubagentCancelDetails {
   waitExpired?: boolean;
   /** The task's final result when it had already completed before the cancel. */
   result?: string;
+  resultTruncated?: boolean;
+  resultNextOffset?: number;
   error?: string;
 }
 
@@ -552,6 +572,41 @@ function targetOf(task: Pick<SubagentTaskWaitResult, "taskId" | "childSessionId"
 }
 
 /**
+ * A result-bearing action (spawn/wait/continue) returns the same bounded window
+ * `get` uses, so a long report cannot arrive unmarked: the caller must be able
+ * to tell a partial answer from the whole one and know the offset that reads
+ * the rest. Spawn/wait/continue have no window arguments, so this is the
+ * default window; deeper reads go through `get`.
+ */
+function boundedResult(text: string | null): SubagentTextWindow | null {
+  return text ? sliceSubagentText(text, 0, SUBAGENT_RESULT_WINDOW_DEFAULT) : null;
+}
+
+/** The bounded result fields every result-bearing envelope reports the same way. */
+function resultFields(
+  window: SubagentTextWindow | null,
+): Pick<SubagentObservedDetails, "result" | "resultTruncated" | "resultNextOffset"> {
+  if (!window) return {};
+  return {
+    result: window.text,
+    ...(window.truncated
+      ? { resultTruncated: true, resultNextOffset: window.nextOffset ?? undefined }
+      : {}),
+  };
+}
+
+/** The one "read the rest" sentence, shared by every truncation marker. */
+function resultContinuation(taskId: string, window: SubagentTextWindow): string {
+  return `read the rest with action="get", task_id="${taskId}", result_offset=${window.nextOffset}.`;
+}
+
+function truncationNote(taskId: string, window: SubagentTextWindow): string {
+  const end = window.offset + window.text.length;
+  return `[truncated] The stored result is ${window.total} chars; chars ${window.offset}-${end} are shown`
+    + ` and ${window.remaining} follow. To continue, ${resultContinuation(taskId, window)}`;
+}
+
+/**
  * The model-facing text. Deliberately explicit about which of the two limits
  * expired (wait vs. runtime) and about the task still being alive, so the
  * parent never mistakes a wait timeout for a failed task.
@@ -561,6 +616,7 @@ function waitResultEnvelope(
   task: SubagentTaskWaitResult,
   waitMs: number,
 ) {
+  const window = boundedResult(task.result);
   const details: SubagentSpawnDetails | SubagentWaitDetails | SubagentContinueDetails = {
     action,
     taskId: task.taskId,
@@ -569,20 +625,24 @@ function waitResultEnvelope(
     subagentName: task.subagentName,
     description: task.description,
     waitExpired: task.waitExpired,
-    ...(task.result ? { result: task.result } : {}),
+    ...resultFields(window),
     ...(task.error ? { error: task.error } : {}),
   } as SubagentSpawnDetails | SubagentWaitDetails | SubagentContinueDetails;
 
   let text: string;
   if (task.status === "completed") {
-    text = `Subagent completed (${targetOf(task)}).\n\n${task.result || "(no result)"}`;
+    text = `Subagent completed (${targetOf(task)}).\n\n${window?.text || "(no result)"}`;
+    if (window?.truncated) text += `\n\n${truncationNote(task.taskId, window)}`;
   } else if (task.waitExpired && !isSubagentTerminalStatus(task.status)) {
     const waited = waitMs >= 1000 ? `${Math.round(waitMs / 1000)}s` : `${waitMs}ms`;
     text = `Subagent is still ${task.status} after ${waited} (${targetOf(task)}).`
       + " The task keeps running in the background; it was not cancelled and its runtime limit is unaffected."
       + ` Observe it again with action="wait", task_id="${task.taskId}".`;
   } else if (isSubagentTerminalStatus(task.status)) {
-    const partial = task.result ? `\n\nLast partial output:\n${task.result}` : "";
+    const partial = window
+      ? `\n\nLast partial output:\n${window.text}`
+        + (window.truncated ? `\n\n${truncationNote(task.taskId, window)}` : "")
+      : "";
     const reason = task.error ?? (task.status === "interrupted"
       ? "The task is no longer managed by this process, so it cannot still be running."
       : "Unknown error");
@@ -673,7 +733,7 @@ function cancelEnvelope(row: SubagentTask, requested: boolean) {
       status: row.status,
       requested,
       waitExpired: !isSubagentTerminalStatus(row.status),
-      ...(row.result ? { result: row.result } : {}),
+      ...resultFields(boundedResult(row.result)),
       ...(row.error ? { error: row.error } : {}),
     },
   };
@@ -752,9 +812,7 @@ function resultBlock(detail: SubagentTaskDetail): string[] {
   }
   const lines = [header, window.text || "(empty)"];
   if (window.remaining > 0 && window.nextOffset !== null) {
-    lines.push(
-      `  [truncated] read the rest with action="get", task_id="${task.taskId}", result_offset=${window.nextOffset}.`,
-    );
+    lines.push(`  [truncated] ${resultContinuation(task.taskId, window)}`);
   } else if (window.skipped > 0 && window.text.length === 0) {
     // `result_offset` was at or past the end: nothing is returned, so point
     // back at a valid window instead of leaving the caller stuck.

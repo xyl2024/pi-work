@@ -6,20 +6,12 @@ import {
   isSubagentTerminalStatus,
   type SubagentLiveInfo,
   type SubagentTaskStatus,
-  type SubagentTerminalStatus,
 } from "@/lib/shared/types";
+import { SUBAGENT_STATUS_COLORS, SUBAGENT_STATUS_LABEL_KEYS } from "@/lib/shared/subagent-status";
 import { GrokBot } from "@/components/grokbot/GrokBot";
 import { findSubagentProfile, useSubagentProfiles } from "@/lib/client/subagent-profiles-store";
 
 const POLL_INTERVAL_MS = 5_000;
-
-/** Terminal status labels shown once the task outlived the tool result. */
-const STATUS_LABELS: Record<SubagentTerminalStatus, string> = {
-  completed: "Completed",
-  failed: "Failed",
-  cancelled: "Cancelled",
-  interrupted: "Interrupted",
-};
 const ACTIVITY_MAX_HEIGHT = 200;
 
 function fmtElapsed(ms: number): string {
@@ -116,15 +108,15 @@ export function SubagentLivePanel({
   // the first poll is still in flight (or when there is no child session yet).
   const liveStatus = info?.task?.status ?? status ?? null;
   const queued = liveStatus === "queued";
-  const stopping = liveStatus === "stopping";
   // The task can finish after the tool call returned (wait expiry): the panel
-  // must say so rather than claim "running" forever.
-  const terminalLabel = liveStatus !== null && isSubagentTerminalStatus(liveStatus)
-    ? t(STATUS_LABELS[liveStatus])
-    : null;
-  const finished = terminalLabel !== null;
-  const statusLabel = terminalLabel ?? (stopping ? t("Stopping") : queued ? t("Queued") : t("Subagent running"));
-  const accent = finished || stopping ? "var(--text-dim)" : "#16a34a";
+  // must say so rather than claim "running" forever. Every status uses the same
+  // label and colour as the sessions popover, so `creating` is never rendered
+  // as "running".
+  const finished = liveStatus !== null && isSubagentTerminalStatus(liveStatus);
+  const statusLabel = liveStatus !== null
+    ? t(SUBAGENT_STATUS_LABEL_KEYS[liveStatus])
+    : t("Subagent running");
+  const accent = liveStatus !== null ? SUBAGENT_STATUS_COLORS[liveStatus] : SUBAGENT_STATUS_COLORS.running;
 
   return (
     <div style={{ borderTop: "1px solid rgba(34,197,94,0.2)", background: "var(--bg-subtle)", padding: "8px 10px", display: "flex", gap: 10 }}>
