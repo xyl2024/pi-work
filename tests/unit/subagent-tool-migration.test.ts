@@ -45,6 +45,9 @@ describe("tool name", () => {
     const base = { subagent_name: "codebase_explorer", description: "explore", prompt: "look" };
     expect(Value.Check(SubagentParams, { action: "spawn", ...base })).toBe(true);
     expect(Value.Check(SubagentParams, { action: "spawn", ...base, wait_ms: 0 })).toBe(true);
+    // `wait` observes an existing task: task_id plus the same bounded wait.
+    expect(Value.Check(SubagentParams, { action: "wait", task_id: "subagent:x" })).toBe(true);
+    expect(Value.Check(SubagentParams, { action: "wait", task_id: "subagent:x", wait_ms: 0 })).toBe(true);
     // Unknown action, missing action, negative wait and stray properties are
     // all refused before any task is created.
     expect(Value.Check(SubagentParams, { action: "cancel", ...base })).toBe(false);

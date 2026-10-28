@@ -359,10 +359,21 @@ async function readTaskDetail(task: SubagentTask, input: Omit<ReadSubagentTaskIn
   return { task: toSubagentTaskView(task), result, activities, activityCount, transcript };
 }
 
+/**
+ * The row of one task, enforcing that it belongs to `parentSessionId`. A task
+ * of another parent is reported as not found, so the caller cannot learn that
+ * it exists. Shared by every id-addressed action (`get`, `wait`, and later
+ * `cancel` / `continue`) so ownership is one rule, not one per action.
+ */
+export function getSubagentTaskForParent(parentSessionId: string, taskId: string): SubagentTask {
+  const row = getSubagentTask(taskId);
+  if (!row || row.parentSessionId !== parentSessionId) throw new SubagentQueryError(SUBAGENT_TASK_NOT_FOUND);
+  return row;
+}
+
 /** Detail for one task id, enforcing that it belongs to `parentSessionId`. */
 export async function getSubagentTaskDetail(input: ReadSubagentTaskInput): Promise<SubagentTaskDetail> {
-  const row = getSubagentTask(input.taskId);
-  if (!row || row.parentSessionId !== input.parentSessionId) throw new SubagentQueryError(SUBAGENT_TASK_NOT_FOUND);
+  const row = getSubagentTaskForParent(input.parentSessionId, input.taskId);
   return readTaskDetail(row, input);
 }
 

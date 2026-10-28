@@ -149,6 +149,12 @@ export interface WaitSubagentTaskOptions {
    * contributes.
    */
   stopOnAbort?: { signal: AbortSignal; reason: string };
+  /**
+   * End the observation if this fires, without touching the task. Used by a
+   * `wait` on an existing task: the caller's turn was stopped, so the wait must
+   * return promptly, but the task keeps running and holds its slot.
+   */
+  observeAbort?: AbortSignal;
 }
 
 export interface SubagentTaskManager {
@@ -539,15 +545,22 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
   const wait = async (taskId: string, options: WaitSubagentTaskOptions = {}): Promise<SubagentTaskWaitResult> => {
     const row = getSubagentTask(taskId);
     if (!row) throw new Error(`No subagent task with id "${taskId}"`);
+    // A terminal row is final: a late event must not resurrect it, and a
+    // finished task is reported at once without touching the turn again.
+    if (isSubagentTerminalStatus(row.status)) return asWaitResult(row, false);
     const task = running.get(taskId);
-    if (!task || task.finished || isSubagentTerminalStatus(row.status)) {
-      return asWaitResult(row, false);
+    if (!task || task.finished) {
+      // A non-terminal row this process does not manage cannot still be
+      // running (a restart, or a manager that never adopted it). Report the
+      // honest state instead of echoing a stale `running` database value.
+      return asWaitResult({ ...row, status: "interrupted" }, false);
     }
 
     const timeoutMs = options.timeoutMs ?? DEFAULT_SUBAGENT_WAIT_MS;
     let timer: unknown = null;
     let abortListener: (() => void) | null = null;
-    const outcomes: Array<Promise<"done" | "timeout" | "stopped">> = [
+    let observeListener: (() => void) | null = null;
+    const outcomes: Array<Promise<"done" | "timeout" | "stopped" | "observed">> = [
       task.done.then(() => "done" as const),
     ];
     if (timeoutMs <= 0) {
@@ -565,10 +578,19 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
         if (stopSignal.aborted) resolve("stopped");
       }));
     }
+    const observeSignal = options.observeAbort;
+    if (observeSignal) {
+      outcomes.push(new Promise<"observed">((resolve) => {
+        observeListener = () => resolve("observed");
+        observeSignal.addEventListener("abort", observeListener, { once: true });
+        if (observeSignal.aborted) resolve("observed");
+      }));
+    }
 
     const outcome = await Promise.race(outcomes);
     if (timer !== null) timers.clearTimeout(timer);
     if (stopSignal && abortListener) stopSignal.removeEventListener("abort", abortListener);
+    if (observeSignal && observeListener) observeSignal.removeEventListener("abort", observeListener);
 
     if (outcome === "stopped") {
       // The caller is going away; that is a stop request for this task, not a
@@ -577,6 +599,8 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     }
 
     const current = getSubagentTask(taskId) ?? row;
+    // An aborted observation reports the task's current state as-is: waiting is
+    // an observation, so its cancellation never cancels the task.
     return asWaitResult(current, outcome === "timeout");
   };
 
