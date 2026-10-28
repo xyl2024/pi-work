@@ -24,6 +24,7 @@ import { ModelPickerModal } from "./ModelPickerModal";
 import { Tooltip } from "../ui/Tooltip";
 import { usePendingAskUserQuestions } from "@/hooks/askUserQuestionsStore";
 import { SubagentSessionsButton } from "./SubagentSessionsButton";
+import { MoreActionsRow } from "./chat-window/MoreActionsRow";
 import { AskUserQuestionsPanel } from "./AskUserQuestionsPanel";
 import { ReplayBar } from "./ReplayBar";
 import LoadingState from "../ui/LoadingState";
@@ -676,7 +677,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
     compactVisible: Boolean(session) && !agentRunning,
     isCompacting: agentPhase?.kind === "compacting",
     compactDisabled: agentRunning,
-    // Reply-notification channel binding (MoreMenu entry). The setter is
+    // Reply-notification channel binding (MoreActionsRow button). The setter is
     // stable; the memo rebuilds only when the id changes.
     onSetNotifyChannel: setNotifyChannel,
     notifyVisible: Boolean(session),
@@ -811,7 +812,8 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         onCwdChange={onCwdChange ?? (() => {})}
         // The notify picker lives in the bottom toolbar (right of the tools
         // picker) and is only offered while the new-session screen is still
-        // empty; sessions with messages bind their channel via the More menu.
+        // empty; sessions with messages bind their channel via the chat
+        // window's MoreActionsRow button.
         showNotifyPicker={isEmptyNew}
         notifyChannelId={pickedChannelId}
         onNotifyChannelChange={setPickedChannelId}
@@ -1353,6 +1355,10 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
           className="pointer-events-none absolute bottom-4 z-10 flex items-end gap-2"
           style={{ right: "max(16px, calc((100% - 820px) / 2))" }}
         >
+          {/* Replay / Export / Auto-name / Compact / Notification channel —
+              the five actions that used to live in the input area's "…" More
+              menu, now first (left-aligned) in this launcher row. */}
+          <MoreActionsRow />
           <SubagentSessionsButton
             parentSessionId={session?.id ?? currentSessionId}
             refreshKey={subagentRefreshKey}

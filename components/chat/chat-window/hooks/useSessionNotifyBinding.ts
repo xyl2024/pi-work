@@ -7,7 +7,7 @@
  *   - the channel picked on the new-session welcome screen, persisted once the
  *     session id exists so reloads keep it;
  *   - the channel bound to the current (existing) session, read back from the
- *     server on session change and edited from the MoreMenu.
+ *     server on session change and edited from the MoreActionsRow button.
  *
  * The branches — when to persist, and when a disk read must be ignored because
  * this window already wrote the binding — live in
@@ -40,7 +40,7 @@ export interface UseSessionNotifyBindingResult {
   setPickedChannelId: (channelId: string | null) => void;
   /** Channel bound to the current session (from disk, or just written). */
   boundChannelId: string | null;
-  /** Persist a MoreMenu change (null clears the binding). */
+  /** Persist a MoreActionsRow change (null clears the binding). */
   setNotifyChannel: (channelId: string | null) => Promise<void>;
 }
 
@@ -108,7 +108,7 @@ export function useSessionNotifyBinding({
         }
         setBoundChannelId(parseSessionNotifyChannelId(data.config));
       } catch {
-        // keep null — the MoreMenu entry then shows "No notification"
+        // keep null — the notify button then shows "No notification"
       }
     })();
     return () => {

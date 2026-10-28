@@ -110,7 +110,8 @@ interface Props {
   disabled?: boolean;
   /** Show the icon-only notification-channel picker in the bottom toolbar,
    *  right of the tools picker. Set only while the new-session screen is
-   *  still empty — sessions with messages use the More menu instead. */
+   *  still empty — sessions with messages use the chat window's
+ *  MoreActionsRow button instead. */
   showNotifyPicker?: boolean;
   /** Channel id the first prompt's replies should be sent to (null = none). */
   notifyChannelId?: string | null;
