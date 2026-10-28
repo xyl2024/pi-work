@@ -13,7 +13,7 @@
 // encodings, the provider count_tokens endpoints) and why there is deliberately
 // no "protocol overhead / unclassified" row.
 //
-// Four top-level buckets (CONTEXT.md, 上下文构成):
+// Four top-level buckets (GLOSSARY.md, 上下文构成):
 //
 //   system-prompt  — the whole system prompt minus the skills listing
 //   system-tools   — the API `tools` schemas (name + description + parameters)
@@ -44,7 +44,7 @@
 import { splitSystemPromptLeaves } from "./system-prompt-segments";
 import { formatContextTokensK } from "./context-usage";
 
-/** The four top-level sources of a context window, per CONTEXT.md
+/** The four top-level sources of a context window, per GLOSSARY.md
  *  （上下文构成）. `skills` is carved out of the system prompt, so
  *  `system-prompt + skills === countTokens(whole system prompt)`. */
 export const CONTEXT_BUCKET_IDS = [

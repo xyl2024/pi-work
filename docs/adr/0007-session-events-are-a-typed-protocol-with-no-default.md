@@ -17,9 +17,9 @@
 
 - 服务端新增或删除一个事件类型，客户端会**编译失败**，直到它被归约或被写进忽略清单。这是一次刻意的编译期约束，不是副作用。
 - 今天静默穿过的 11 种事件必须逐条表态：`agent_settled`、`turn_start`、`turn_end`、`entry_appended`、`queue_update`、`session_info_changed`、`summarization_retry_scheduled` / `_attempt_start` / `_finished`、`bash_execution_update`、`connected`。**表态不等于改行为**：这一刀只是把「不处理」写下来，不改变它们今天的效果。
-- 客户端「在 `agent_end` 收尾、忽略 `agent_settled`」的口径**不在本 ADR 范围内**。它与 ADR-0004 及 CONTEXT.md「回合」的定义（终止于不再有重试、压缩重试或排队续跑）冲突，是一次可见行为变更，另行决定；本 ADR 只保证它不会继续以「忘了」的形态存在。
+- 客户端「在 `agent_end` 收尾、忽略 `agent_settled`」的口径**不在本 ADR 范围内**。它与 ADR-0004 及 GLOSSARY.md「回合」的定义（终止于不再有重试、压缩重试或排队续跑）冲突，是一次可见行为变更，另行决定；本 ADR 只保证它不会继续以「忘了」的形态存在。
 - `applyAgentRuntimeState` 这条 REST resync 路径**本切片不合并**。合并是后续切片，并在那时处理 `contextUsage` 有三个写者的问题。收敛之后，「会话运行时状态变了吗」才只有一个答案。
 - 2 个服务端从不发送的类型（`auto_compaction_start` / `auto_compaction_end`，`events.ts:474,480`）在归约里没有位置，迁移时删除。
 - 去重账本从模块级搬进状态：`events.ts:43` 的 `seenCelebrateToolEndIds` 今天是**跨会话共享**的模块级 Set，正是 ADR-0003 记下的那次泄漏；进入会话运行时状态后它按会话隔离。
-- `hooks/useAgentSession/types.ts:38-56` 的 `AgentRuntimeState` 与 CONTEXT.md 新增的「会话运行时状态」**不是同一件事**（前者只是 REST 快照的 payload），需要改名，否则这个词条下一次就会被人当成它的定义。
+- `hooks/useAgentSession/types.ts:38-56` 的 `AgentRuntimeState` 与 GLOSSARY.md 新增的「会话运行时状态」**不是同一件事**（前者只是 REST 快照的 payload），需要改名，否则这个词条下一次就会被人当成它的定义。
 - 本仓仍不引入浏览器测试基建（ADR-0003 规则 3）：reducer 的验收靠 `tests/unit` 直接断三条性质——协议完备（编译器管）、重放幂等（同一条事件喂两遍，状态与 effects 不变，这是 SSE 重连与压缩重放会重放事件所要求的）、终态迁移（起 → 跑 → 收）。

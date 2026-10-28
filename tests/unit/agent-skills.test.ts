@@ -8,7 +8,7 @@ import { loadSkillsFromDir } from "@earendil-works/pi-coding-agent";
  *
  * `agent-skills/` is not loaded by the runtime — a user copies a directory
  * into `~/.pi-work/skills/`, which `lib/server/pi-work-skills` then scans with
- * this same SDK loader (see CONTEXT.md, "技能"). So this is the only place a
+ * this same SDK loader (see GLOSSARY.md, "技能"). So this is the only place a
  * copy-broken skill is caught before it reaches a user: frontmatter that the
  * Agent Skills spec rejects (bad `name`, missing/oversized `description`)
  * makes `loadSkillsFromDir` drop the skill and emit a diagnostic.

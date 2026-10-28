@@ -132,4 +132,4 @@ Issue 与 spec 记录在本地 `.scratch/<feature-slug>/` 下的 markdown 文件
 
 ### Domain docs
 
-单上下文（single-context）：根目录 `CONTEXT.md` + `docs/adr/`。详见 `docs/agents/domain.md`。
+单上下文（single-context）：根目录 `GLOSSARY.md` + `docs/adr/`。详见 `docs/agents/domain.md`。

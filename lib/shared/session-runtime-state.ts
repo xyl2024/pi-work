@@ -2,7 +2,7 @@
  * The session runtime state: the ONE object holding "what does the client
  * believe this session looks like right now".
  *
- * See `CONTEXT.md` "会话运行时状态（Session runtime state）" and
+ * See `GLOSSARY.md` "会话运行时状态（Session runtime state）" and
  * `docs/adr/0007-session-events-are-a-typed-protocol-with-no-default.md`.
  *
  * Before this module the same state was spread over eleven `useState` calls

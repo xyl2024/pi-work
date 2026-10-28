@@ -7,7 +7,8 @@
 - 一个 feature 一个目录：`.scratch/<feature-slug>/`
 - spec 是 `.scratch/<feature-slug>/spec.md`
 - 实现 issue 是每个 ticket 一个文件：`.scratch/<feature-slug>/issues/<NN>-<slug>.md`，从 `01` 开始编号；**永远不要**写成一个合并的 tickets 文件
-- 分诊状态写在每个 issue 文件靠上的 `Status:` 行（值见 `triage-labels.md`）
+- 分诊结果写在 issue 文件靠上的两行：`Category:` 记类别角色（`bug` / `enhancement`），`Status:` 记状态角色（值见 `triage-labels.md`）；一条 issue 各一条
+- 被拒的 enhancement 把理由写进 `.out-of-scope/<slug>.md`（同一请求再有第二次就靠它拦住），issue 里链接过去再关；被拒的 bug 只在 issue 里解释，不进这个知识库
 - 评论和对话历史追加到文件底部的 `## Comments` 标题下
 
 ## 操作
@@ -15,7 +16,7 @@
 - **新建 issue**：在 `.scratch/<feature-slug>/` 下创建文件（必要时先建目录，slug 用小写连字符）。
 - **读取 issue**：直接读引用的路径；用户通常会给路径或 issue 编号。
 - **列出 issue**：`ls .scratch/<feature-slug>/issues/`，再用 `grep -H '^Status:'` 过滤状态。
-- **打标签 / 改状态**：编辑文件里的 `Status:` 行。
+- **打标签 / 改状态**：编辑文件里的 `Status:` / `Category:` 行。
 - **评论**：在文件末尾 `## Comments` 下追加。
 - **关闭**：把 `Status:` 行的值改成 `wontfix` 之类，或按需删除文件；不要删除他人未完成的 ticket。
 
