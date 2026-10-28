@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { InlineLoader, type InlineLoaderVariant } from "generative-loaders";
+import { useI18n } from "@/hooks/useI18n";
 
 type LoadingVariant = InlineLoaderVariant | "dot-pulse";
 
@@ -28,12 +30,56 @@ function DotPulseLoader() {
   );
 }
 
+/** `HH:MM:SS`, zero-padded and never negative. */
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+
+/**
+ * Live "已耗时：HH:MM:SS" clock anchored to `since` (the turn's start).
+ * Ticks once a second; the interval restarts if the anchor changes.
+ */
+function ElapsedClock({ since }: { since: number }) {
+  const { t } = useI18n();
+  const [elapsedMs, setElapsedMs] = useState(() => Math.max(0, Date.now() - since));
+
+  useEffect(() => {
+    const tick = () => setElapsedMs(Math.max(0, Date.now() - since));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [since]);
+
+  return (
+    <span
+      data-loading-elapsed
+      style={{
+        fontSize: 12,
+        fontWeight: 500,
+        color: "var(--text-muted)",
+        fontVariantNumeric: "tabular-nums",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {t("Elapsed: {time}", { time: formatElapsed(elapsedMs) })}
+    </span>
+  );
+}
+
 export default function LoadingState({
   label = "Churning",
   variant = "spark",
+  elapsedSince = null,
 }: {
   label?: string;
   variant?: LoadingVariant;
+  /** Turn start timestamp (ms). Renders the live elapsed clock when set. */
+  elapsedSince?: number | null;
 }) {
   return (
     <div
@@ -49,6 +95,7 @@ export default function LoadingState({
       <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text-muted)" }}>
         {label}
       </span>
+      {typeof elapsedSince === "number" && <ElapsedClock since={elapsedSince} />}
     </div>
   );
 }

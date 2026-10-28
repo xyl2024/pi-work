@@ -20,6 +20,7 @@ export const chat = {
   "Reading file {name}": "正在读取文件 {name}",
   "Running": "正在运行",
   "Waiting for model...": "等待大模型响应",
+  "Elapsed: {time}": "已耗时：{time}",
   "Thinking...": "正在推理中",
   "Outputting...": "正在输出中",
   "Retrying": "正在重试",

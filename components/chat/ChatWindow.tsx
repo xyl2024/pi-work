@@ -546,6 +546,23 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
   // new message and should retain the ordinary chat layout.
   const liveTurnActive = agentRunning && agentPhase?.kind !== "compacting" && lastUserIdx !== -1;
 
+  // Start of the live turn's elapsed clock. Anchored to the user message that
+  // opened the turn — the same anchor the finished-turn footer uses — and
+  // latched for as long as the agent runs, so a mid-turn re-render or an SSE
+  // reconnect can't restart the clock. Falls back to the moment the client saw
+  // the turn start when the user message carries no timestamp.
+  const lastUserTimestamp = lastUserIdx !== -1 ? renderMessages[lastUserIdx]?.timestamp : undefined;
+  const [turnStartedAt, setTurnStartedAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (!agentRunning) {
+      setTurnStartedAt(null);
+      return;
+    }
+    setTurnStartedAt((prev) => prev ?? (typeof lastUserTimestamp === "number" ? lastUserTimestamp : Date.now()));
+  }, [agentRunning, lastUserTimestamp]);
+  // Compaction has no user turn of its own, so its elapsed would be misleading.
+  const turnElapsedSince = agentPhase?.kind === "compacting" ? null : turnStartedAt;
+
   // Once the current turn's streaming output has begun, keep the streaming
   // message viewport visible for the whole turn. `streamingStoreHasContent`
   // dips back to false between sub-messages (waiting for the model again), so
@@ -1212,9 +1229,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                       >
                         <div style={{ minWidth: 0, flexShrink: 1 }}>
                           {isStreamingThinking ? (
-                            <LoadingState label={t("Thinking...")} variant="dot-pulse" />
+                            <LoadingState label={t("Thinking...")} variant="dot-pulse" elapsedSince={turnElapsedSince} />
                           ) : streamingStoreIsBody ? (
-                            <LoadingState label={t("Outputting...")} variant="spark" />
+                            <LoadingState label={t("Outputting...")} variant="spark" elapsedSince={turnElapsedSince} />
                           ) : streamingStoreIsToolCall ? (
                             <LoadingState
                               label={phaseLabel(
@@ -1229,11 +1246,13 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                                 t,
                               )}
                               variant="rotor"
+                              elapsedSince={turnElapsedSince}
                             />
                           ) : agentRunning && !streamingStoreHasContent ? (
                             <LoadingState
                               label={phaseLabel(agentPhase, t)}
                               variant={phaseLoaderVariant(agentPhase)}
+                              elapsedSince={turnElapsedSince}
                             />
                           ) : null}
                         </div>
@@ -1289,7 +1308,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
             {!liveTurnActive && isStreamingThinking && (
               <div className="py-2">
-                <LoadingState label={t("Thinking...")} variant="dot-pulse" />
+                <LoadingState label={t("Thinking...")} variant="dot-pulse" elapsedSince={turnElapsedSince} />
               </div>
             )}
 
@@ -1298,6 +1317,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 <LoadingState
                   label={phaseLabel(agentPhase, t)}
                   variant={phaseLoaderVariant(agentPhase)}
+                  elapsedSince={turnElapsedSince}
                 />
               </div>
             )}
