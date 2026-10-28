@@ -21,7 +21,6 @@ import { randomUUID } from "node:crypto";
 import {
   DEFAULT_SUBAGENT_TIMEOUT_MS,
   DEFAULT_SUBAGENT_WAIT_MS,
-  SUBAGENT_TOOL_NAME,
   type SubagentProfile,
   type SubagentTaskConfigSnapshot,
 } from "../shared/subagent";
@@ -37,9 +36,20 @@ import {
   type TurnSessionPolicy,
 } from "./turn";
 import { toSubagentEnd } from "./subagent-run-end";
-import type { AgentSessionWrapper, StartRpcSessionOptions } from "./rpc-manager";
+import type { AgentSessionWrapper } from "./rpc-manager";
 import { readSessionDetails, resolveSessionPath } from "./session-reader";
 import { writeSessionName } from "./session-names";
+import { createLogger } from "./logger";
+import { reconcileLeftoverSubagentTasksOnce } from "./subagent-startup";
+import {
+  LEGACY_SUBAGENT_SYSTEM_PROMPT,
+  legacySubagentToolsOrThrow,
+  parseSubagentConfigSnapshot,
+  resolveSubagentChildConfig,
+  restrictSubagentTools,
+  subagentChildSessionStartOptions,
+  tryResolveSubagentChildConfig,
+} from "./subagent-restore";
 import {
   completeSubagentTask,
   createSubagentTask,
@@ -53,7 +63,7 @@ import {
   listSubagentTasksForChildSession,
   markSubagentRunning,
   markSubagentStatus,
-  reconcileInterruptedSubagentTasks,
+  setSubagentTaskConfigSnapshot,
   setSubagentTaskPartialOutput,
   type SubagentTask,
   type SubagentTaskStatus,
@@ -61,6 +71,8 @@ import {
 
 const MAX_RESULT_LENGTH = 20_000;
 const SUBAGENT_CUSTOM_ENTRY = "pi_work_subagent";
+
+const log = createLogger("subagent/tasks");
 
 /**
  * The cancel wording shared with the tool call's abort source. Kept next to the
@@ -120,7 +132,7 @@ export function resolveSubagentTaskConfig(input: {
     thinkingLevel: input.profile.thinkingLevel,
     // A child never gets the subagent tool, whatever the profile lists: the
     // rename must not turn a stale tool name into recursive delegation.
-    tools: input.profile.tools.filter((tool) => tool !== SUBAGENT_TOOL_NAME),
+    tools: restrictSubagentTools(input.profile.tools),
     systemPrompt: "systemPromptOverride" in prompt
       ? { kind: "override", text: prompt.systemPromptOverride }
       : { kind: "prefix", text: prompt.systemPromptPrefix },
@@ -269,7 +281,10 @@ export interface SubagentTaskTimers {
 export interface SubagentTaskManagerDeps {
   /** The turn seam; tests substitute a scripted adapter. */
   runTurn: typeof runTurn;
-  /** Mark stale non-terminal rows interrupted when the manager is created. */
+  /**
+   * Reconcile leftover non-terminal rows when the manager is created (at most
+   * once per process; the server-start hook normally did this already).
+   */
   reconcileOnCreate?: boolean;
   maxConcurrent?: number;
   timers?: SubagentTaskTimers;
@@ -284,7 +299,14 @@ interface RunningTask {
   /** Set for a continued task: its turn runs in this existing child session. */
   reusedSessionId: string | null;
   status: SubagentTaskStatus;
-  config: SubagentTaskConfigSnapshot;
+  /**
+   * The configuration this task runs with. Null only between `continue` and
+   * the start of a legacy task's turn, where the restricted config is recovered
+   * asynchronously from the child session's own persisted files.
+   */
+  config: SubagentTaskConfigSnapshot | null;
+  /** Profile name recorded on the task row (available before the config is). */
+  subagentName: string;
   description: string;
   prompt: string;
   origin: SubagentTaskOrigin;
@@ -374,37 +396,16 @@ function asWaitResult(task: SubagentTask, waitExpired: boolean): SubagentTaskWai
 }
 
 /**
- * How a child session is started: the frozen snapshot supplies model, thinking
- * level, tool set and system prompt, so neither a continued turn nor a cold
- * start can be reconfigured by editing the profile or by the session's own cwd
- * defaults.
- */
-function childSessionStartOptions(
-  config: SubagentTaskConfigSnapshot,
-  parentSessionId: string,
-): StartRpcSessionOptions {
-  return {
-    model: config.model,
-    thinkingLevel: config.thinkingLevel,
-    allowedToolNames: config.tools,
-    ...(config.systemPrompt.kind === "override"
-      ? { systemPromptOverride: config.systemPrompt.text }
-      : { systemPromptPrefix: config.systemPrompt.text }),
-    stripDefaultSystemPromptSections: true,
-    parentSessionId,
-  };
-}
-
-/**
  * Reopen (or adopt) a child session for reading and interaction — a tab, an
  * event stream, a non-prompt command — with the configuration frozen when it was
  * created, never today's profile, the parent's prompt or the cwd defaults.
  *
  * Returns null when the id is not a child session of any parent, or when its
  * session file is gone; the caller then follows its ordinary path. A row that
- * predates configuration snapshots reopens with its identity only (source
- * `subagent`, so it keeps its no-recursion tool set and its fast-failing
- * interaction gates); issue 07 owns restoring a partial snapshot for those.
+ * predates configuration snapshots is reopened with only what its own persisted
+ * files prove; when even that is unavailable the session is opened with no
+ * tools and the `subagent` identity, so viewing history can never widen it (an
+ * execution attempt then fails loudly in `continue`).
  */
 export async function openSubagentChildSession(
   sessionId: string,
@@ -422,19 +423,39 @@ export async function openSubagentChildSession(
 
   const { SessionManager } = await import("@earendil-works/pi-coding-agent");
   const headerCwd = SessionManager.open(sessionFile).getHeader()?.cwd;
-  const snapshotJson = getSubagentSessionConfigSnapshot(ownerTask.parentSessionId, sessionId);
-  if (!snapshotJson) {
-    const { session } = await startRpcSession(sessionId, sessionFile, headerCwd ?? process.cwd(), undefined, "subagent");
+  const restored = await tryResolveSubagentChildConfig({
+    parentSessionId: ownerTask.parentSessionId,
+    childSessionId: sessionId,
+    subagentName: ownerTask.subagentName,
+  });
+  if (!restored) {
+    // Read-only safety net: no recoverable creation-time settings, so no tools.
+    // Any prompt goes through `continue`, which refuses explicitly rather than
+    // running with today's defaults.
+    const { session } = await startRpcSession(
+      sessionId,
+      sessionFile,
+      headerCwd ?? process.cwd(),
+      [],
+      "subagent",
+      {
+        // A neutral prompt keeps APPEND_SYSTEM.md and generated sections out,
+        // matching every other subagent start; no tool is exposed.
+        systemPromptPrefix: LEGACY_SUBAGENT_SYSTEM_PROMPT,
+        stripDefaultSystemPromptSections: true,
+        persistToolSelection: false,
+      },
+    );
     return session;
   }
-  const config = JSON.parse(snapshotJson) as SubagentTaskConfigSnapshot;
+  const config = restored.config;
   const { session } = await startRpcSession(
     sessionId,
     sessionFile,
     headerCwd ?? config.cwd,
-    config.tools,
+    restrictSubagentTools(config.tools),
     "subagent",
-    childSessionStartOptions(config, ownerTask.parentSessionId),
+    subagentChildSessionStartOptions(config, ownerTask.parentSessionId),
   );
   return session;
 }
@@ -450,7 +471,8 @@ const startSubagentChildSession: SubagentChildSessionFactory = async (input) => 
   // loads; a static edge would close the cycle.
   const { getRpcSession, startRpcSession } = await import("./rpc-manager");
   const config = input.config;
-  const options = childSessionStartOptions(config, input.parentSessionId);
+  const tools = restrictSubagentTools(config.tools);
+  const options = subagentChildSessionStartOptions(config, input.parentSessionId);
 
   // Continue: run the next turn in the child session the caller named. A live
   // wrapper is handed over as-is; otherwise the session file is reopened with
@@ -469,7 +491,7 @@ const startSubagentChildSession: SubagentChildSessionFactory = async (input) => 
       sessionId,
       sessionFile,
       cwd,
-      config.tools,
+      tools,
       "subagent",
       options,
     );
@@ -480,7 +502,7 @@ const startSubagentChildSession: SubagentChildSessionFactory = async (input) => 
     `__subagent__${input.taskId}`,
     "",
     input.cwd,
-    config.tools,
+    tools,
     "subagent",
     options,
   );
@@ -488,7 +510,7 @@ const startSubagentChildSession: SubagentChildSessionFactory = async (input) => 
 };
 
 export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): SubagentTaskManager {
-  if (deps.reconcileOnCreate) reconcileInterruptedSubagentTasks();
+  if (deps.reconcileOnCreate) reconcileLeftoverSubagentTasksOnce();
 
   const timers = deps.timers ?? defaultTimers;
   const maxConcurrent = deps.maxConcurrent ?? MAX_CONCURRENT_SUBAGENT_RUNS;
@@ -508,7 +530,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     taskId: task.taskId,
     childSessionId: task.childSessionId,
     status: task.status,
-    subagentName: task.config.subagentName,
+    subagentName: task.subagentName,
     description: task.description,
     origin: task.origin,
   });
@@ -568,8 +590,8 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
    * last assistant message with text; an abnormal stop keeps it as partial
    * output (stored beside the bare reason).
    */
-  const finalize = async (task: RunningTask, result: TurnResult) => {
-    const end = toSubagentEnd(result, task.config.timeoutMs);
+  const finalize = async (task: RunningTask, result: TurnResult, config: SubagentTaskConfigSnapshot) => {
+    const end = toSubagentEnd(result, config.timeoutMs);
     // A completed turn's reply text comes straight from the turn result (it is
     // the final assistant text the turn module classified). An abnormal stop
     // has no reply text by contract, so its partial output is re-read from the
@@ -596,12 +618,69 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     finish(task);
   };
 
+  /**
+   * The configuration a task runs with, recovering a legacy task's restricted
+   * settings right before its first turn. The recovered config is frozen onto
+   * the row, so later continues reuse it instead of re-deriving it (or falling
+   * back to today's profile). A recovery that cannot prove the tool set or model
+   * fails the task instead of running it with wider defaults.
+   */
+  const ensureTaskConfig = async (task: RunningTask): Promise<SubagentTaskConfigSnapshot> => {
+    if (task.config) return task.config;
+    if (!task.reusedSessionId) {
+      throw new Error(
+        "This subagent task has no configuration snapshot and no existing child session to recover one from.",
+      );
+    }
+    const restored = await resolveSubagentChildConfig({
+      parentSessionId: task.parentSessionId,
+      childSessionId: task.reusedSessionId,
+      subagentName: task.subagentName,
+    });
+    if (restored.source === "recovered") {
+      // The parent cannot read these caveats in the tool result, but an
+      // operator can see why this child runs with a neutral prompt or the
+      // default runtime limit.
+      log.warn("recovered a legacy subagent configuration", {
+        taskId: task.taskId,
+        childSessionId: task.reusedSessionId,
+        notes: restored.notes,
+      });
+    }
+    if (!setSubagentTaskConfigSnapshot(task.taskId, JSON.stringify(restored.config))) {
+      // A terminal row cannot be given a config: the stop/complete already won,
+      // so the recovered settings must not be applied to a new turn.
+      throw new Error("This subagent task is no longer active; the recovered configuration was not applied.");
+    }
+    task.config = restored.config;
+    return restored.config;
+  };
+
   const startTask = async (task: RunningTask) => {
     task.started = true;
 
+    markSubagentStatus(task.taskId, "creating");
+    setStatus(task, "creating");
+    let config = task.config;
+    if (!config) {
+      // Only a legacy task takes this branch; a stored config never yields
+      // before the turn starts, so the queue keeps its synchronous handoff.
+      try {
+        config = await ensureTaskConfig(task);
+      } catch (error) {
+        finishTerminal(task, "failed", error instanceof Error ? error.message : String(error));
+        return;
+      }
+      // A stop can land while the legacy config is being recovered; the child
+      // session must not be opened for a task the user already stopped.
+      if (task.stop.signal.aborted) {
+        finishTerminal(task, "cancelled", task.stopReason ?? SUBAGENT_CANCELLED);
+        return;
+      }
+    }
+
     const registryKey = `__subagent__${task.taskId}`;
     const displayName = `[Subagent] ${task.description}`;
-    const config = task.config;
     // Typed through a holder: the only assignment happens inside the factory
     // closure, where a plain `let` would be narrowed to `never` afterwards.
     const childRun: { session: SubagentChildSession | null; offDestroy: (() => void) | null } = {
@@ -651,8 +730,6 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     };
 
     try {
-      markSubagentStatus(task.taskId, "creating");
-      setStatus(task, "creating");
       const result = await deps.runTurn(
         {
           cwd: config.cwd,
@@ -689,7 +766,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
           subagentName: config.subagentName,
         });
       }
-      await finalize(task, result);
+      await finalize(task, result, config);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       finishTerminal(task, "failed", message);
@@ -723,7 +800,13 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     parentSessionId: string;
     description: string;
     prompt: string;
-    config: SubagentTaskConfigSnapshot;
+    /**
+     * The frozen config, or null for a legacy continue: its restricted config is
+     * recovered from the child session's persisted files before the turn starts
+     * (see `ensureTaskConfig`).
+     */
+    config: SubagentTaskConfigSnapshot | null;
+    subagentName: string;
     childSessionId: string | null;
     reusedSessionId: string | null;
     requestId?: string | null;
@@ -742,12 +825,12 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
         taskId,
         parentSessionId: input.parentSessionId,
         childSessionId: input.childSessionId,
-        subagentName: input.config.subagentName,
+        subagentName: input.subagentName,
         description: input.description,
         prompt: input.prompt,
         origin: input.origin ?? "tool",
         requestId,
-        configSnapshot: JSON.stringify(input.config),
+        configSnapshot: input.config ? JSON.stringify(input.config) : null,
       });
     } catch (error) {
       // A concurrent retry can win the unique index between the check above
@@ -771,6 +854,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       reusedSessionId: input.reusedSessionId,
       status: "queued",
       config: input.config,
+      subagentName: input.subagentName,
       description: input.description,
       prompt: input.prompt,
       origin: input.origin ?? "tool",
@@ -807,6 +891,7 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
       description: input.description,
       prompt: input.prompt,
       config: input.config,
+      subagentName: input.config.subagentName,
       childSessionId: null,
       reusedSessionId: null,
       requestId: input.requestId,
@@ -855,18 +940,25 @@ export function createSubagentTaskManager(deps: SubagentTaskManagerDeps): Subage
     if (busy) throw new Error(SUBAGENT_SESSION_BUSY);
 
     const snapshotJson = getSubagentSessionConfigSnapshot(input.parentSessionId, input.childSessionId);
-    if (!snapshotJson) {
-      throw new Error(
-        `The subagent session "${input.childSessionId}" has no configuration snapshot, so it cannot be continued safely.`
-        + " Start a new task instead; applying today's profile could widen the child's capabilities.",
-      );
+    // A legacy child may predate snapshots. Keep the freeze rule: reuse the
+    // creation-time snapshot when there is one; otherwise the task starts with
+    // no config and recovers only what the child session's own persisted files
+    // prove (and fails explicitly when the restricted tool set is unknown).
+    const config = parseSubagentConfigSnapshot(snapshotJson);
+    if (!config) {
+      // A legacy child: refuse synchronously when the restricted tool set is
+      // already known to be unrecoverable, instead of queueing a task that can
+      // only fail later. The remaining checks (session file, model) need I/O
+      // and are repeated right before the turn starts.
+      legacySubagentToolsOrThrow(input.childSessionId);
     }
-    const config = JSON.parse(snapshotJson) as SubagentTaskConfigSnapshot;
+    const latestRow = rows[0];
     return createManagedTask({
       parentSessionId: input.parentSessionId,
       description: input.description,
       prompt: input.prompt,
       config,
+      subagentName: latestRow.subagentName,
       childSessionId: input.childSessionId,
       reusedSessionId: input.childSessionId,
       requestId,

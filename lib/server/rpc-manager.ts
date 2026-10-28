@@ -927,6 +927,13 @@ export interface StartRpcSessionOptions {
   systemPromptOverride?: string;
   /** Remove Pi's generic documentation / harness sections from the prompt. */
   stripDefaultSystemPromptSections?: boolean;
+  /**
+   * Whether to mirror this start's tool selection into the session-tools
+   * sidecar (default true). A read-only reopen that had to fall back to an
+   * empty tool set passes false: it must not overwrite the selection a later
+   * restoration (or an explicit failure about it) depends on.
+   */
+  persistToolSelection?: boolean;
   /** Persist the parent session id in a newly-created session header. */
   parentSessionId?: string;
   /**
@@ -1495,7 +1502,9 @@ export async function startRpcSession(
     // Mirror the live selection to the sidecar so a server restart can
     // restore exactly this set when re-opening the session (per-session
     // selection has no home inside pi's session JSONL).
-    writeSessionToolSelection(realSessionId, effectiveToolNames);
+    if (options.persistToolSelection !== false) {
+      writeSessionToolSelection(realSessionId, effectiveToolNames);
+    }
 
     wrapper.onDestroy(() => {
       registry.delete(realSessionId);

@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { dirname } from "node:path";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dataPath } from "./data-dir";
 import {
   SUBAGENT_TERMINAL_STATUSES,
@@ -164,6 +164,15 @@ function migrateTaskRequestColumn(db: Database.Database): void {
   `);
 }
 
+/**
+ * True when a task store already exists on disk. Startup reconciliation uses
+ * this so a server that never used subagents does not create an empty database
+ * just to find nothing to reconcile.
+ */
+export function hasSubagentStore(): boolean {
+  return existsSync(resolveDbPath());
+}
+
 export function getSubagentDb(): Database.Database {
   if (globalThis.__piSubagentsDb) return globalThis.__piSubagentsDb;
   const dbPath = resolveDbPath();
@@ -290,15 +299,36 @@ export function setSubagentTaskPartialOutput(taskId: string, result: string): vo
 }
 
 /**
+ * Freeze a configuration recovered for a legacy task that was created before
+ * snapshots existed. Called once, right before that task's turn starts, so the
+ * recovered settings become the session's creation-time snapshot for every
+ * later continue instead of being re-derived each time.
+ */
+export function setSubagentTaskConfigSnapshot(taskId: string, configSnapshot: string): boolean {
+  const result = getSubagentDb().prepare(`
+    UPDATE subagent_tasks
+    SET config_snapshot = ?
+    WHERE task_id = ? AND status NOT IN (${TERMINAL_SQL})
+  `).run(configSnapshot, taskId);
+  return result.changes > 0;
+}
+
+/**
  * Mark every task that never reached a terminal state as interrupted. Called
- * once when the task manager starts: a restarted process cannot confirm the
- * child turns are still running, so it reports the truth instead of leaving a
- * stale `running` row or replaying the input.
+ * once on server start (and again harmlessly when the task manager is created):
+ * a restarted process cannot confirm the child turns are still running, so it
+ * reports the truth instead of leaving a stale `running` row or replaying the
+ * input. Idempotent: terminal rows and their results are never touched, and a
+ * second run has nothing left to change.
  */
 export function reconcileInterruptedSubagentTasks(error = "Interrupted: the server restarted before this task finished"): number {
   const result = getSubagentDb().prepare(`
     UPDATE subagent_tasks
-    SET status = 'interrupted', error = ?, finished_at = ?
+    SET status = 'interrupted',
+        -- Keep a reason an earlier writer recorded; only a row without one gets
+        -- the restart explanation.
+        error = CASE WHEN error IS NULL OR error = '' THEN ? ELSE error END,
+        finished_at = ?
     WHERE status NOT IN (${TERMINAL_SQL})
   `).run(error, Date.now());
   return result.changes;

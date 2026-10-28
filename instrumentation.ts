@@ -33,5 +33,9 @@ export async function register(): Promise<void> {
   // Warm the allowed-roots cache off the request path (non-blocking, idempotent).
   await safeBootstrap("allowed-roots", () => import("@/lib/server/file-access-prewarm"));
   await safeBootstrap("scheduler", () => import("@/lib/server/scheduler/startup"));
+  // Report subagent tasks a previous process left unfinished as interrupted.
+  // Runs before any request so a stale `running` row is never served or
+  // mistaken for live work; nothing is replayed.
+  await safeBootstrap("subagents", () => import("@/lib/server/subagent-startup"));
   await safeBootstrap("terminal",  () => import("@/lib/server/terminal/startup"));
 }

@@ -219,7 +219,8 @@ export function submitSubagentManualPrompt(
       throw new SubagentManualInputError("stopping", text);
     }
     // Not the caller's bad input: the manager refused for its own reasons (a
-    // missing configuration snapshot, an unknown child session, …).
+    // legacy child whose restricted tool set cannot be recovered, an unknown
+    // child session, …).
     throw new SubagentManualInputError("unavailable", text);
   }
 
