@@ -6,6 +6,8 @@ import { useCollapseHeight } from "@/hooks/useCollapseHeight";
 import { useTransientFlag } from "@/hooks/useTransientFlag";
 import { useImageLightbox } from "@/hooks/useImageLightbox";
 import { Tooltip } from "../../ui/Tooltip";
+import { MessageCircle, CalendarClock, Bot } from "lucide-react";
+import { messageOriginDisplay } from "@/lib/shared/message-origin";
 import { copyText } from "@/lib/client/clipboard";
 import { SmartImage } from "../../ui/SmartImage";
 import { type ImageItem } from "@/components/renderers/ImageLightbox";
@@ -14,6 +16,13 @@ import { extractMessageImages, extractMessageText } from "@/lib/shared/message-c
 import type { ImageContent, UserMessage } from "@/lib/shared/types";
 
 const COLLAPSED_USER_MSG_HEIGHT = 240;
+
+// 图标名 → 组件：渲染层的唯一映射点，与 MESSAGE_ORIGIN_ICONS 对齐。
+const ORIGIN_ICON_COMPONENTS = {
+  MessageCircle,
+  CalendarClock,
+  Bot,
+} as const;
 const BUBBLE_VERTICAL_EXTRA = 18;
 
 function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEntryId, onEditContent, keywords, isSearchMatch }: {
@@ -66,6 +75,8 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
   const lightbox = useImageLightbox(imageGallery);
 
   const time = formatTime(message.timestamp);
+  const originDisplay = messageOriginDisplay(message.origin);
+  const OriginIcon = originDisplay.icon !== undefined ? ORIGIN_ICON_COMPONENTS[originDisplay.icon as keyof typeof ORIGIN_ICON_COMPONENTS] : undefined;
   const canNavigate = !!prevAssistantEntryId && !!onNavigate;
   const hasMetadata = !!time || canNavigate || !!content;
 
@@ -95,9 +106,10 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
       >
         <div
           style={{
+            minWidth: 0,
+            flexShrink: 0,
             width: 26,
             height: 26,
-            flexShrink: 0,
             borderRadius: "50%",
             overflow: "hidden",
             background: "var(--bg-hover)",
@@ -107,7 +119,9 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
             border: "1px solid var(--border)",
           }}
         >
-          {avatarOk && (
+          {OriginIcon !== undefined ? (
+            <OriginIcon size={14} style={{ color: "var(--text-muted)" }} />
+          ) : avatarOk && (
             <SmartImage
               key={avatarSrc}
               src={avatarSrc}
@@ -117,7 +131,7 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
               style={{ width: "100%", height: "100%", objectFit: "cover" }}
             />
           )}
-          {!avatarOk && (
+          {!avatarOk && OriginIcon === undefined && (
             <svg
               width="14"
               height="14"
@@ -134,7 +148,23 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
             </svg>
           )}
         </div>
-        <span>{username ?? t("You")}</span>
+        {originDisplay.label !== undefined && originDisplay.hover !== undefined ? (
+          <Tooltip content={t(originDisplay.hover.key, originDisplay.hover.params)}>
+            <span
+              style={{
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                color: "var(--text-muted)",
+              }}
+            >
+              {originDisplay.label}
+            </span>
+          </Tooltip>
+        ) : (
+          <span style={{ minWidth: 0 }}>{username ?? t("You")}</span>
+        )}
       </div>
 
       {(imageBlocks.length > 0 || content) && (
