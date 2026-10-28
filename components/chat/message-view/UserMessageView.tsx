@@ -13,9 +13,20 @@ import { SmartImage } from "../../ui/SmartImage";
 import { type ImageItem } from "@/components/renderers/ImageLightbox";
 import { highlightKeywords, formatTime } from "./utils";
 import { extractMessageImages, extractMessageText } from "@/lib/shared/message-content";
+import { parseSkillBlock } from "@/lib/shared/skill-block";
+import { ToolIcon } from "../../ui/icons";
 import type { ImageContent, UserMessage } from "@/lib/shared/types";
 
 const COLLAPSED_USER_MSG_HEIGHT = 240;
+
+// 用户消息正文的统一样式（技能消息的附加文字与普通消息共用）。
+const USER_TEXT_STYLE = {
+  fontSize: 14,
+  lineHeight: 1.6,
+  color: "var(--text)",
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+} as const;
 
 // 图标名 → 组件：渲染层的唯一映射点，与 MESSAGE_ORIGIN_ICONS 对齐。
 const ORIGIN_ICON_COMPONENTS = {
@@ -41,6 +52,10 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
   const [avatarOk, setAvatarOk] = useState(true);
   const [avatarCacheKey] = useState(() => `${Date.now()}`);
   const [expanded, setExpanded] = useState(false);
+  // 技能调用消息：`/skill:<name>` 被服务端展开成 `<skill …>` 块后才落进
+  // JSONL。气泡里默认只显示技能 pill（点按展开正文），正文之下再显示用户
+  // 的附加文字；copy / 分支导航仍使用完整 content，发给 LLM 的内容不受影响。
+  const [skillExpanded, setSkillExpanded] = useState(false);
   const { contentRef, contentHeight, allowAnim } = useCollapseHeight<HTMLDivElement>();
   const isOpen = expanded || !!isFocused;
   const naturalHeight = contentHeight === null ? "auto" : contentHeight + BUBBLE_VERTICAL_EXTRA;
@@ -60,6 +75,8 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
   }, []);
 
   const content = extractMessageText(message);
+  // 技能展开块判别：命中则气泡只渲染 pill + 用户附加文字（见渲染处）。
+  const skillBlock = parseSkillBlock(content);
   const imageBlocks: ImageContent[] = extractMessageImages(message);
   const imageGallery: ImageItem[] = imageBlocks.map((image) => {
     const flat = image as unknown as { data?: string; mimeType?: string };
@@ -211,18 +228,46 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
               </div>
             )}
 
-            {content && (
-              <div
-                style={{
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                  color: "var(--text)",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
-              >
-                {highlightKeywords(content, keywords, isSearchMatch)}
-              </div>
+            {skillBlock ? (
+              <>
+                <div style={{ marginBottom: skillBlock.userMessage ? 8 : 0 }}>
+                  <SkillInvocationPill
+                    name={skillBlock.name}
+                    expanded={skillExpanded}
+                    onToggle={() => setSkillExpanded((v) => !v)}
+                  />
+                </div>
+                {skillExpanded && (
+                  <div
+                    style={{
+                      marginBottom: skillBlock.userMessage ? 8 : 0,
+                      padding: "8px 10px",
+                      background: "rgba(59,130,246,0.06)",
+                      borderLeft: "3px solid rgba(59,130,246,0.35)",
+                      borderRadius: 6,
+                      fontSize: 12,
+                      lineHeight: 1.55,
+                      fontFamily: "var(--font-mono)",
+                      color: "var(--text-muted)",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {skillBlock.content}
+                  </div>
+                )}
+                {skillBlock.userMessage && (
+                  <div style={USER_TEXT_STYLE}>
+                    {highlightKeywords(skillBlock.userMessage, keywords, isSearchMatch)}
+                  </div>
+                )}
+              </>
+            ) : (
+              content && (
+                <div style={USER_TEXT_STYLE}>
+                  {highlightKeywords(content, keywords, isSearchMatch)}
+                </div>
+              )
             )}
           </div>
 
@@ -382,3 +427,61 @@ function UserMessageViewInner({ message, isFocused, onNavigate, prevAssistantEnt
  */
 export const UserMessageView = memo(UserMessageViewInner);
 UserMessageView.displayName = "UserMessageView";
+
+/**
+ * 技能调用 pill：[扳手图标 + 技能名 + 展开箭头]，默认收起，点按才
+ * 展开 SKILL.md 正文。配色与用户气泡同调（蓝色 accent + 半透明蓝色胶囊，
+ * 与 GitLogView 的蓝色 chip 同一做法），深浅两套主题下都能浮在
+ * --user-bg 上；悬停加深背景。
+ */
+function SkillInvocationPill({ name, expanded, onToggle }: {
+  name: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <Tooltip content={expanded ? t("Hide skill content") : t("Show skill content")}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 5,
+          maxWidth: "100%",
+          height: 22,
+          padding: "0 9px",
+          background: "rgba(59,130,246,0.10)",
+          border: "1px solid rgba(59,130,246,0.28)",
+          borderRadius: 999,
+          color: "var(--accent)",
+          cursor: "pointer",
+          fontSize: 11,
+          fontFamily: "var(--font-mono)",
+          whiteSpace: "nowrap",
+          transition: "background 0.12s",
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(59,130,246,0.18)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(59,130,246,0.10)"; }}
+      >
+        <ToolIcon size={12} style={{ flexShrink: 0 }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s", opacity: 0.7 }}
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+    </Tooltip>
+  );
+}

@@ -163,6 +163,8 @@ export const chat = {
   "Save failed": "保存失败",
   "Copy message": "复制消息",
   "Collapse message": "折叠",
+  "Show skill content": "展开技能内容",
+  "Hide skill content": "收起技能内容",
   "Download request body": "下载请求体",
   "No request body was captured for this message": "这条消息没有抓到请求体",
   "Failed to download request body": "请求体下载失败",
