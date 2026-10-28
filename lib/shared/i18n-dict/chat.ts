@@ -268,6 +268,8 @@ export const chat = {
   "Compacting...": "压缩中...",
   "Compacting context...": "正在压缩上下文",
   "Wait for the current turn to end before compacting.": "请等待当前 turn 结束后再压缩。",
+  "Compact context?": "压缩上下文？",
+  "This will summarize the conversation so far and clear older messages from the visible context. The compaction summary will be kept.": "将总结目前的对话并从可见上下文中清除较早的消息，压缩摘要会保留。",
   "Compact failed": "压缩失败",
   "Compacted context": "上下文已压缩",
   "Compacted from {n} tokens": "已从 {n} tokens 压缩",

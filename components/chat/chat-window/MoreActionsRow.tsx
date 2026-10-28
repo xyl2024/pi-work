@@ -19,6 +19,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { Tooltip } from "../../ui/Tooltip";
 import { AnimatedPopover } from "../../ui/AnimatedPopover";
 import { useChatHeaderActions } from "@/hooks/chatHeaderActionsStore";
+import { useConfirm } from "../../ui/ConfirmDialog";
 import {
   CompressIcon,
   DownloadIcon,
@@ -44,6 +45,7 @@ function launcherStyle(enabled: boolean): React.CSSProperties {
 
 export function MoreActionsRow() {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const headerActions = useChatHeaderActions();
   const [channels, setChannels] = useState<ChannelRecord[]>([]);
   const [notifyOpen, setNotifyOpen] = useState(false);
@@ -151,7 +153,20 @@ export function MoreActionsRow() {
         <Tooltip content={headerActions.isCompacting ? t("Compacting...") : t("Compact")}>
           <button
             type="button"
-            onClick={headerActions.onCompact}
+            onClick={async () => {
+              // Compacting is disruptive (older messages leave the visible
+              // context), so ask for a second confirmation before dispatching.
+              const ok = await confirm({
+                title: t("Compact context?"),
+                description: t(
+                  "This will summarize the conversation so far and clear older messages from the visible context. The compaction summary will be kept."
+                ),
+                confirmLabel: t("Compact"),
+                cancelLabel: t("Cancel"),
+                destructive: false,
+              });
+              if (ok) headerActions.onCompact();
+            }}
             disabled={headerActions.isCompacting || headerActions.compactDisabled}
             aria-label={t("Compact")}
             className={launcherButtonClass}
