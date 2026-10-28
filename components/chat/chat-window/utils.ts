@@ -43,9 +43,9 @@ export function phaseLabel(phase: AgentPhase, t: (key: string, params?: Record<s
 }
 
 export function phaseLoaderVariant(phase: AgentPhase) {
-  if (phase?.kind === "waiting_model") return "domino" as const;
+  if (phase?.kind === "waiting_model") return "fold" as const;
   if (phase?.kind === "running_tools") return "rotor" as const;
-  if (phase?.kind === "compacting") return "fold" as const;
+  if (phase?.kind === "compacting") return "domino" as const;
   return "spark" as const;
 }
 
