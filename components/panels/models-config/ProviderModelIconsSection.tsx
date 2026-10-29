@@ -6,19 +6,18 @@ import { useToast } from "@/components/ui/Toast";
 import { ProviderGearIcon, ProviderIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
 import { SectionTitle } from "@/components/settings/models-config/form-fields";
 import type { RuntimeCatalog, RuntimeModelInfo } from "@/lib/shared/models-config";
+import { MODEL_ICON_LIST_COLLAPSE_THRESHOLD, shouldCollapseModelIconList } from "@/lib/shared/model-icon-list";
 import {
-  MODEL_ICON_LIST_COLLAPSE_THRESHOLD,
+  MODEL_ICON_PREFERENCE_AUTO,
   MODEL_ICON_PREFERENCE_PROVIDER,
   canToggleModelIcon,
   isProviderIconPreferred,
   matchModelIcon,
-  shouldCollapseModelIconList,
+  modelIconPreferenceKey,
   type ModelIconPreferences,
 } from "@/lib/shared/model-icon-match";
-import {
-  saveModelIconPreference,
-  subscribeModelIconPreferences,
-} from "@/lib/client/model-icon-preferences";
+import { saveModelIconPreference } from "@/lib/client/model-icon-preferences";
+import { useModelIconPreferencesSync } from "@/lib/client/useModelIconPreferencesSync";
 
 interface ModelsApiResponse {
   catalog?: RuntimeCatalog;
@@ -78,7 +77,7 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
 
   // A toggle in another provider's page (or a second window) still lands here:
   // the full preference map is broadcast, so patch the cached copy in place.
-  useEffect(() => subscribeModelIconPreferences(setPreferences), []);
+  useModelIconPreferencesSync(setPreferences);
 
   const providerIconId = useMemo(
     () => resolveProviderIcon(providerId, undefined, modelIcons),
@@ -89,14 +88,14 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
   const visibleModels = collapsed ? models.slice(0, MODEL_ICON_LIST_COLLAPSE_THRESHOLD) : models;
 
   const handleToggle = useCallback(async (modelId: string, useProviderIcon: boolean) => {
-    const key = `${providerId}:${modelId}`;
+    const key = modelIconPreferenceKey(providerId, modelId);
     if (savingKey) return;
     setSavingKey(key);
     try {
       const next = await saveModelIconPreference(
         providerId,
         modelId,
-        useProviderIcon ? MODEL_ICON_PREFERENCE_PROVIDER : "auto",
+        useProviderIcon ? MODEL_ICON_PREFERENCE_PROVIDER : MODEL_ICON_PREFERENCE_AUTO,
       );
       setPreferences(next);
     } catch {
@@ -133,7 +132,11 @@ export function ProviderModelIconsSection({ providerId }: { providerId: string }
               const providerPreferred = isProviderIconPreferred(preferences, providerId, model.id);
               const effectiveIconId = resolveProviderIcon(providerId, model.id, modelIcons, preferences);
               const matchedIconId = matchModelIcon(model.id);
-              const canToggle = canToggleModelIcon(model.id, providerIconId);
+              const canToggle = canToggleModelIcon(
+                model.id,
+                providerIconId,
+                modelIcons[modelIconPreferenceKey(providerId, model.id)] ?? modelIcons[model.id],
+              );
               const busy = savingKey !== null;
               return (
                 <div

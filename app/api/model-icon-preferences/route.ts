@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server";
 import { createLogger, elapsedMs } from "@/lib/server/logger";
 import { readModelIconPreferences, setModelIconPreference } from "@/lib/server/model-icon-preferences";
-import { MODEL_ICON_PREFERENCE_PROVIDER } from "@/lib/shared/model-icon-match";
+import {
+  MODEL_ICON_PREFERENCE_AUTO,
+  MODEL_ICON_PREFERENCE_PROVIDER,
+} from "@/lib/shared/model-icon-match";
 
 export const dynamic = "force-dynamic";
 
 const log = createLogger("api/model-icon-preferences");
+
+/**
+ * Upper bound on the provider / modelId identifiers accepted by the write
+ * route. Real ids are far shorter; the cap keeps a stray client from growing
+ * the preference file with huge keys (and its `provider:modelId` composite).
+ */
+const MAX_IDENTIFIER_LENGTH = 200;
 
 // GET /api/model-icon-preferences → { preferences: { "provider:modelId": "provider" } }
 export async function GET() {
@@ -35,8 +45,17 @@ export async function PUT(req: Request) {
   if (!provider || !modelId) {
     return NextResponse.json({ error: "provider and modelId must be non-empty strings" }, { status: 400 });
   }
-  if (preference !== MODEL_ICON_PREFERENCE_PROVIDER && preference !== "auto") {
-    return NextResponse.json({ error: `preference must be "${MODEL_ICON_PREFERENCE_PROVIDER}" or "auto"` }, { status: 400 });
+  if (provider.length > MAX_IDENTIFIER_LENGTH || modelId.length > MAX_IDENTIFIER_LENGTH) {
+    return NextResponse.json(
+      { error: `provider and modelId must be at most ${MAX_IDENTIFIER_LENGTH} characters` },
+      { status: 400 },
+    );
+  }
+  if (preference !== MODEL_ICON_PREFERENCE_PROVIDER && preference !== MODEL_ICON_PREFERENCE_AUTO) {
+    return NextResponse.json(
+      { error: `preference must be "${MODEL_ICON_PREFERENCE_PROVIDER}" or "${MODEL_ICON_PREFERENCE_AUTO}"` },
+      { status: 400 },
+    );
   }
   try {
     const preferences = setModelIconPreference(provider, modelId, preference);

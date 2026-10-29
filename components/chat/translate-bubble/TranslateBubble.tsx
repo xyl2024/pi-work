@@ -7,7 +7,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { MorphToggleIcon } from "@/components/ui/MorphToggleIcon";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { copyText } from "@/lib/client/clipboard";
-import { subscribeModelIconPreferences } from "@/lib/client/model-icon-preferences";
+import { useModelIconPreferencesSync } from "@/lib/client/useModelIconPreferencesSync";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useTranslationStream } from "@/hooks/useTranslationStream";
@@ -155,7 +155,7 @@ export function TranslateBubble() {
 
   // 图标偏好 (icon preference) written from the models-config panel patches
   // this bubble's cached map in place, without re-running the models fetch.
-  useEffect(() => subscribeModelIconPreferences(setModelIconPreferences), []);
+  useModelIconPreferencesSync(setModelIconPreferences);
 
   // ── translation stream ──────────────────────────────────────────────
   const { output, isStreaming, error, start, stop } = useTranslationStream();

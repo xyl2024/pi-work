@@ -1,21 +1,45 @@
 import { describe, expect, it } from "vitest";
 import {
-  MODEL_ICON_LIST_COLLAPSE_THRESHOLD,
   MODEL_ICON_PREFERENCE_PROVIDER,
   canToggleModelIcon,
   isProviderIconPreferred,
   matchModelIcon,
   modelIconPreferenceKey,
-  shouldCollapseModelIconList,
+  resolveModelIconId,
 } from "@/lib/shared/model-icon-match";
-import { resolveProviderIcon } from "@/components/ui/ProviderIcon";
 
 /**
  * Model icon auto-match (lib/shared/model-icon-match.ts) and the three-layer
- * resolution in resolveProviderIcon (components/ui/ProviderIcon.tsx). Driven
- * as plain data — no DOM, no fetch. Expected icon ids are the icon library's
- * provider ids, written as literals from the spec.
+ * resolution in resolveModelIconId, driven as plain data — no DOM, no fetch,
+ * no React / icon-library import. Expected icon ids are the icon library's
+ * provider ids, written as literals from the spec; `isKnownIcon` below is a
+ * literal stand-in for the client's icon-library membership check.
  */
+
+const KNOWN_ICONS = new Set([
+  "anthropic",
+  "openai",
+  "google",
+  "deepseek",
+  "zai",
+  "moonshotai",
+  "qwen",
+  "minimax",
+  "mistral",
+  "xai",
+  "github-copilot",
+]);
+
+const isKnownIcon = (iconId: string): boolean => KNOWN_ICONS.has(iconId);
+
+function resolve(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+  modelIcons?: Record<string, string>,
+  preferences?: Record<string, string>,
+): string | undefined {
+  return resolveModelIconId(provider, model, modelIcons, preferences, isKnownIcon);
+}
 
 describe("matchModelIcon", () => {
   it.each([
@@ -115,87 +139,89 @@ describe("icon preference", () => {
     expect(canToggleModelIcon(undefined, "openai")).toBe(false);
     expect(canToggleModelIcon(null, "openai")).toBe(false);
   });
-});
 
-describe("shouldCollapseModelIconList", () => {
-  it("keeps short lists fully expanded", () => {
-    expect(shouldCollapseModelIconList(0)).toBe(false);
-    expect(shouldCollapseModelIconList(1)).toBe(false);
-    expect(shouldCollapseModelIconList(MODEL_ICON_LIST_COLLAPSE_THRESHOLD)).toBe(false);
-  });
-
-  it("collapses once the list grows past the threshold", () => {
-    expect(shouldCollapseModelIconList(MODEL_ICON_LIST_COLLAPSE_THRESHOLD + 1)).toBe(true);
-    expect(shouldCollapseModelIconList(40)).toBe(true);
-  });
-
-  it("treats nonsense counts as nothing to collapse", () => {
-    expect(shouldCollapseModelIconList(-1)).toBe(false);
-    expect(shouldCollapseModelIconList(Number.NaN)).toBe(false);
-    expect(shouldCollapseModelIconList(Number.POSITIVE_INFINITY)).toBe(false);
+  it("offers no toggle when an explicit model-level icon already wins", () => {
+    // Layer 1 outranks both preference states, so switching changes nothing.
+    expect(canToggleModelIcon("claude-sonnet-4", "github-copilot", "deepseek")).toBe(false);
+    expect(canToggleModelIcon("claude-sonnet-4", "github-copilot", "github-copilot")).toBe(false);
+    // Without an explicit icon the same row stays toggleable.
+    expect(canToggleModelIcon("claude-sonnet-4", "github-copilot", undefined)).toBe(true);
   });
 });
 
-describe("resolveProviderIcon", () => {
+describe("resolveModelIconId", () => {
   it("keeps the provider icon when nothing is configured or matched", () => {
-    expect(resolveProviderIcon("openai", "gpt-4o")).toBe("openai");
-    expect(resolveProviderIcon("openai", undefined)).toBe("openai");
-    expect(resolveProviderIcon("openai", undefined, {})).toBe("openai");
-    expect(resolveProviderIcon("unknown-provider", "unknown-model")).toBeUndefined();
+    expect(resolve("openai", "gpt-4o")).toBe("openai");
+    expect(resolve("openai", undefined)).toBe("openai");
+    expect(resolve("openai", undefined, {})).toBe("openai");
+    expect(resolve("unknown-provider", "unknown-model")).toBeUndefined();
   });
 
   it("auto-matches a model id onto its brand icon", () => {
-    expect(resolveProviderIcon("github-copilot", "claude-sonnet-4-5")).toBe("anthropic");
-    expect(resolveProviderIcon("my-gateway", "gpt-4o")).toBe("openai");
-    expect(resolveProviderIcon("my-gateway", "GLM-4.6")).toBe("zai");
+    expect(resolve("github-copilot", "claude-sonnet-4-5")).toBe("anthropic");
+    expect(resolve("my-gateway", "gpt-4o")).toBe("openai");
+    expect(resolve("my-gateway", "GLM-4.6")).toBe("zai");
   });
 
   it("falls back to the provider icon when the model does not match", () => {
-    expect(resolveProviderIcon("github-copilot", "llama-3.1")).toBe("github-copilot");
-    expect(resolveProviderIcon("my-gateway", "llama-3.1")).toBeUndefined();
+    expect(resolve("github-copilot", "llama-3.1")).toBe("github-copilot");
+    expect(resolve("my-gateway", "llama-3.1")).toBeUndefined();
+    expect(resolve("my-gateway", "llama-3.1", { "my-gateway": "xai" })).toBe("xai");
   });
 
   it("lets an explicit model-level icon win over the auto match (builtin providers included)", () => {
     expect(
-      resolveProviderIcon("github-copilot", "claude-sonnet-4-5", {
+      resolve("github-copilot", "claude-sonnet-4-5", {
         "github-copilot:claude-sonnet-4-5": "deepseek",
       }),
     ).toBe("deepseek");
-    // Bare model id and provider-level entries still act as fallbacks.
+    // Bare model id entries still act as a model-level fallback.
+    expect(resolve("github-copilot", "claude-sonnet-4-5", { "claude-sonnet-4-5": "mistral" })).toBe(
+      "mistral",
+    );
+    // A provider-level entry is layer 3 — it must not outrank the auto match.
+    expect(resolve("my-gateway", "claude-sonnet-4-5", { "my-gateway": "xai" })).toBe("anthropic");
     expect(
-      resolveProviderIcon("github-copilot", "claude-sonnet-4-5", { "claude-sonnet-4-5": "mistral" }),
-    ).toBe("mistral");
-    expect(resolveProviderIcon("my-gateway", "claude-sonnet-4-5", { "my-gateway": "xai" })).toBe("xai");
+      resolve("my-gateway", "claude-sonnet-4-5", {
+        "my-gateway:claude-sonnet-4-5": "xai",
+        "my-gateway": "zai",
+      }),
+    ).toBe("xai");
   });
 
   it("skips the auto match when the preference says provider, but explicit icons still win", () => {
     const modelId = "claude-sonnet-4-5";
     const preferences = { [`github-copilot:${modelId}`]: MODEL_ICON_PREFERENCE_PROVIDER };
-    expect(resolveProviderIcon("github-copilot", modelId, undefined, preferences)).toBe("github-copilot");
+    expect(resolve("github-copilot", modelId, undefined, preferences)).toBe("github-copilot");
     expect(
-      resolveProviderIcon("github-copilot", modelId, { [`github-copilot:${modelId}`]: "deepseek" }, preferences),
+      resolve("github-copilot", modelId, { [`github-copilot:${modelId}`]: "deepseek" }, preferences),
     ).toBe("deepseek");
   });
 
   it("uses the auto match when the preference is missing or says something else", () => {
     const modelId = "claude-sonnet-4-5";
-    expect(resolveProviderIcon("github-copilot", modelId, undefined, {})).toBe("anthropic");
+    expect(resolve("github-copilot", modelId, undefined, {})).toBe("anthropic");
     expect(
-      resolveProviderIcon("github-copilot", modelId, undefined, { [`github-copilot:${modelId}`]: "anthropic" }),
+      resolve("github-copilot", modelId, undefined, { [`github-copilot:${modelId}`]: "anthropic" }),
     ).toBe("anthropic");
     // Another model's preference does not leak over.
     expect(
-      resolveProviderIcon("github-copilot", modelId, undefined, { "github-copilot:gpt-5": "provider" }),
+      resolve("github-copilot", modelId, undefined, { "github-copilot:gpt-5": "provider" }),
     ).toBe("anthropic");
   });
 
   it("keeps provider-only rows on the provider icon, still honoring an explicit provider-level icon", () => {
-    expect(resolveProviderIcon("github-copilot", undefined)).toBe("github-copilot");
-    expect(resolveProviderIcon("my-gateway", undefined, { "my-gateway": "deepseek" })).toBe("deepseek");
+    expect(resolve("github-copilot", undefined)).toBe("github-copilot");
+    expect(resolve("my-gateway", undefined, { "my-gateway": "deepseek" })).toBe("deepseek");
     expect(
-      resolveProviderIcon("github-copilot", undefined, undefined, {
+      resolve("github-copilot", undefined, undefined, {
         "github-copilot:claude-sonnet-4-5": MODEL_ICON_PREFERENCE_PROVIDER,
       }),
     ).toBe("github-copilot");
+  });
+
+  it("ignores configured and matched icons outside the icon library", () => {
+    expect(resolve("my-gateway", "llama-3.1", { "my-gateway": "nonexistent" })).toBeUndefined();
+    expect(resolve("my-gateway", undefined, { "my-gateway": "nonexistent" })).toBeUndefined();
   });
 });

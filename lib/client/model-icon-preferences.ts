@@ -17,11 +17,8 @@
 import {
   normalizeModelIconPreferences,
   type ModelIconPreferences,
-  MODEL_ICON_PREFERENCE_PROVIDER,
+  type ModelIconPreference,
 } from "@/lib/shared/model-icon-match";
-
-/** The two states a model's icon can be in: auto-matched, or provider icon. */
-export type ModelIconPreference = typeof MODEL_ICON_PREFERENCE_PROVIDER | "auto";
 
 type Listener = (preferences: ModelIconPreferences) => void;
 

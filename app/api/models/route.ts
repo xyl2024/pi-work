@@ -62,10 +62,15 @@ function serializeModel(model: {
  * Custom-model icon map, read from ~/.pi/agent/models.json. Both custom
  * providers and custom models can carry an `icon` field whose value is a
  * builtin provider id (chosen in ModelsConfig); the assistant message header
- * uses this to render an icon for custom models. A model without its own icon
- * falls back to its provider's icon. Keyed "<provider>:<modelId>" (model wins),
- * plus a bare provider key and a bare modelId fallback mirroring how
- * modelNames resolves display names.
+ * uses this to render an icon for custom models.
+ *
+ * Only an **explicit model-level** `icon` feeds the model keys —
+ * "<provider>:<modelId>" plus a bare modelId fallback mirroring how modelNames
+ * resolves display names. A **provider-level** `icon` only feeds the bare
+ * provider key. Folding the provider icon into every model key would let it
+ * outrank the auto match (spec priority: explicit model-level icon >
+ * auto-match > provider icon), which story 10 deliberately accepts as a
+ * display change for providers configured with a brand-level icon.
  */
 async function readModelIcons(): Promise<Record<string, string>> {
   const icons: Record<string, string> = {};
@@ -86,11 +91,11 @@ async function readModelIcons(): Promise<Record<string, string>> {
         const mIcon = typeof (m as { icon?: unknown } | null)?.icon === "string"
           ? (m as { icon: string }).icon.trim()
           : "";
-        const icon = mIcon || pIcon; // model-level icon wins over provider-level
-        if (!icon) continue;
+        // Only the model's own icon feeds the model keys; no provider fallback.
+        if (!mIcon) continue;
         const qualified = `${providerName}:${id}`;
-        if (!icons[qualified]) icons[qualified] = icon;
-        if (!icons[id]) icons[id] = icon;
+        if (!icons[qualified]) icons[qualified] = mIcon;
+        if (!icons[id]) icons[id] = mIcon;
       }
     }
   } catch (error) {

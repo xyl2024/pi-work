@@ -15,8 +15,10 @@ import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileS
 import { dataPath } from "./data-dir";
 import {
   MODEL_ICON_PREFERENCE_PROVIDER,
+  modelIconPreferenceKey,
   normalizeModelIconPreferences,
   type ModelIconPreferences,
+  type ModelIconPreference,
 } from "../shared/model-icon-match";
 
 const FILE_NAME = "model-icon-preferences.json";
@@ -58,10 +60,10 @@ function writeModelIconPreferences(preferences: ModelIconPreferences): void {
 export function setModelIconPreference(
   provider: string,
   modelId: string,
-  preference: "provider" | "auto",
+  preference: ModelIconPreference,
 ): ModelIconPreferences {
   const preferences = readModelIconPreferences();
-  const key = `${provider}:${modelId}`;
+  const key = modelIconPreferenceKey(provider, modelId);
   if (preference === MODEL_ICON_PREFERENCE_PROVIDER) {
     preferences[key] = MODEL_ICON_PREFERENCE_PROVIDER;
   } else {

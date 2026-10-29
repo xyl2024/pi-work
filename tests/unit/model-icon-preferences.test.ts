@@ -109,6 +109,8 @@ describe("model icon preferences api", () => {
     ["empty provider", { provider: "", modelId: "m", preference: "provider" }],
     ["missing modelId", { provider: "p", preference: "provider" }],
     ["empty modelId", { provider: "p", modelId: "", preference: "provider" }],
+    ["over-long provider", { provider: "p".repeat(201), modelId: "m", preference: "provider" }],
+    ["over-long modelId", { provider: "p", modelId: "m".repeat(201), preference: "provider" }],
     ["missing preference", { provider: "p", modelId: "m" }],
     ["unknown preference", { provider: "p", modelId: "m", preference: "auto-match" }],
     ["non-string preference", { provider: "p", modelId: "m", preference: 1 }],

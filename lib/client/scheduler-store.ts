@@ -146,6 +146,8 @@ function patch(partial: Partial<SchedulerStoreState>): void {
 // 图标偏好 (icon preference) is written from the models-config panel while the
 // scheduler panel may already hold its model meta. Patch the cached meta in
 // place so the form and detail icons follow without a reload.
+// Module-scope subscription on purpose: this store is a non-React singleton and
+// lives for the process lifetime, so it must not be tied to a component mount.
 subscribeModelIconPreferences((modelIconPreferences) => {
   if (!state.meta) return;
   patch({ meta: { ...state.meta, modelIconPreferences } });
