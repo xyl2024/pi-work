@@ -204,7 +204,7 @@ function AssistantMessageViewInner({
         {message.provider && (
           <>
             <ProviderIcon id={resolveProviderIcon(message.provider, message.model, modelIcons) ?? ""} size={16} fallback={<ProviderGearIcon size={16} />} />
-            <span>{modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
+            <span>{message.provider} - {modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
           </>
         )}
         {/* TTFT / TPS sit next to the model name and stay hidden until the
