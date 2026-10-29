@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect, useReducer, useMemo } from "r
 import type { AgentMessage, SessionTreeNode, TextContent, UserMessage, ToolInfo, ToolSelection, CompactionPoint } from "@/lib/shared/types";
 import { sendAgentCommand } from "@/lib/client/agent-client";
 import { readLastUsedModel, writeLastUsedModel } from "@/lib/client/last-used-model";
+import { subscribeModelIconPreferences } from "@/lib/client/model-icon-preferences";
 import { useToast } from "@/components/ui/Toast";
 import { useI18n } from "../useI18n";
 import { usePendingPermissionsRef } from "../usePendingPermissions";
@@ -947,6 +948,12 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     setLeafChangeHandler(handleLeafChange, controllerId);
     return () => setLeafChangeHandler(null, controllerId);
   }, [controllerId, isActive, handleLeafChange]);
+
+  // 图标偏好 (icon preference) is written from the models-config panel while a
+  // chat session stays mounted. The models fetch below only runs on mount /
+  // models refresh, so patch the same state from the notification instead of
+  // remounting every icon consumer.
+  useEffect(() => subscribeModelIconPreferences(setModelIconPreferences), []);
 
   // Load model list
   useEffect(() => {

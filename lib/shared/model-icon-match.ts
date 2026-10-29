@@ -99,6 +99,17 @@ export function isProviderIconPreferred(
 }
 
 /**
+ * Above this many models, a provider detail page's model list starts
+ * collapsed behind a "show all" control so the page is not drowned by rows.
+ */
+export const MODEL_ICON_LIST_COLLAPSE_THRESHOLD = 8;
+
+/** Whether a provider detail's model list should default to collapsed. */
+export function shouldCollapseModelIconList(modelCount: number): boolean {
+  return Number.isFinite(modelCount) && modelCount > MODEL_ICON_LIST_COLLAPSE_THRESHOLD;
+}
+
+/**
  * Whether the UI should offer the auto-match ↔ provider-icon toggle: only when
  * the model auto-matches and the result differs from the provider icon. If
  * the two are the same there is nothing to switch. Explicit model-level icons

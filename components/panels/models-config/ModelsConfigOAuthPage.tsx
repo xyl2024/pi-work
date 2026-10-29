@@ -4,6 +4,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { OAuthDetail } from "@/components/settings/models-config/OAuthDetail";
 import { reloadModelsConfigOAuthProviders, useModelsConfigStore } from "@/lib/client/models-config-store";
 import { ModelsConfigBackButton } from "./ModelsConfigBackButton";
+import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
 
 /**
  * One subscription provider's page. It reuses the shared `OAuthDetail` body
@@ -22,7 +23,10 @@ export function ModelsConfigOAuthPage({ providerId }: { providerId: string }) {
         <span style={titleStyle}>{provider?.name ?? providerId}</span>
       </div>
       {provider ? (
-        <OAuthDetail key={provider.id} provider={provider} onRefresh={reloadModelsConfigOAuthProviders} />
+        <>
+          <OAuthDetail key={provider.id} provider={provider} onRefresh={reloadModelsConfigOAuthProviders} />
+          <ProviderModelIconsSection providerId={provider.id} />
+        </>
       ) : (
         <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No providers configured")}</div>
       )}

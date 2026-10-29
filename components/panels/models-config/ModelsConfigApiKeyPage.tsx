@@ -4,6 +4,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { ApiKeyDetail } from "@/components/settings/models-config/runtime";
 import { reloadModelsConfigApiKeyProviders, useModelsConfigStore } from "@/lib/client/models-config-store";
 import { ModelsConfigBackButton } from "./ModelsConfigBackButton";
+import { ProviderModelIconsSection } from "./ProviderModelIconsSection";
 
 /**
  * One API-key provider's page: paste / replace / remove the key plus the
@@ -24,7 +25,10 @@ export function ModelsConfigApiKeyPage({ providerId }: { providerId: string }) {
         </span>
       </div>
       {provider ? (
-        <ApiKeyDetail key={provider.id} provider={provider} onRefresh={reloadModelsConfigApiKeyProviders} />
+        <>
+          <ApiKeyDetail key={provider.id} provider={provider} onRefresh={reloadModelsConfigApiKeyProviders} />
+          <ProviderModelIconsSection providerId={provider.id} />
+        </>
       ) : (
         <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{t("No providers configured")}</div>
       )}
