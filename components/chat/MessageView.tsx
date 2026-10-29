@@ -14,6 +14,8 @@ interface Props {
   modelNames?: Record<string, string>;
   /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
   modelIcons?: Record<string, string>;
+  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
+  modelIconPreferences?: Record<string, string>;
   entryId?: string;
   onNavigate?: (entryId: string) => void;
   prevAssistantEntryId?: string;
@@ -50,7 +52,7 @@ interface Props {
  * historical re-renders when neither message content nor props move,
  * which is the common case during a streaming turn.
  */
-function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, turnDiffStats, onOpenFile, cwd, sessionId }: Props) {
+function MessageViewInner({ message, isStreaming, toolResults, modelNames, modelIcons, modelIconPreferences, entryId, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, keywords, highlightEntryId, isSearchMatch, afterContent, turnDuration, readFiles, turnDiffStats, onOpenFile, cwd, sessionId }: Props) {
   const isFocused = !!(highlightEntryId && entryId === highlightEntryId);
   // Feeds the markdown link renderer so bare file paths open in the right
   // panel instead of navigating; null when the shell gave no opener.
@@ -70,7 +72,7 @@ function MessageViewInner({ message, isStreaming, toolResults, modelNames, model
     return (
       <div className={isFocused ? "search-flash" : undefined}>
         <FileLinkProvider value={fileLinkHandler}>
-          <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} turnDiffStats={turnDiffStats} onOpenFile={onOpenFile} cwd={cwd} sessionId={sessionId} />
+          <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} modelNames={modelNames} modelIcons={modelIcons} modelIconPreferences={modelIconPreferences} showTimestamp={showTimestamp} keywords={keywords} isSearchMatch={isSearchMatch} afterContent={afterContent} turnDuration={turnDuration} readFiles={readFiles} turnDiffStats={turnDiffStats} onOpenFile={onOpenFile} cwd={cwd} sessionId={sessionId} />
         </FileLinkProvider>
       </div>
     );

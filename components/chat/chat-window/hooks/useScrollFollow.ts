@@ -29,9 +29,11 @@ import {
   decideScrollFollowOnBottom,
   decideScrollFollowOnGrowth,
   decideScrollFollowOnScroll,
+  decideScrollFollowOnTop,
   decideScrollFollowOnTouchScroll,
   decideScrollFollowOnWheel,
   elementScrollTop,
+  isAtTop,
   resolveScrollFollow,
   type ScrollCommand,
   type ScrollFollowDecision,
@@ -70,6 +72,9 @@ export interface UseScrollFollowOptions {
 export interface UseScrollFollowResult {
   /** The "back to bottom" button is enabled (it stays mounted when disabled). */
   showToBottom: boolean;
+  /** The scrollport is at its top edge, so the "back to top" button is greyed
+   *  out (it also stays mounted when disabled). */
+  atTop: boolean;
   /** `onScroll` of the chat scrollport. */
   handleScroll: () => void;
   /** `onWheel` of the chat scrollport. */
@@ -83,6 +88,8 @@ export interface UseScrollFollowResult {
   /** The "back to bottom" button — also reused by compaction and the
    *  Ask-User-Questions panel appearing. */
   handleToBottom: () => void;
+  /** The "back to top" button. */
+  handleToTop: () => void;
   /** An explicit jump (a search hit, a tool-call row) re-engages following. */
   handleExplicitScroll: () => void;
   /** A session-entry navigation finished: land at the end of the reloaded
@@ -122,6 +129,10 @@ const SCROLL_COMMANDS: Record<ScrollCommand, (targets: ScrollTargets) => void> =
     if (!container) return;
     container.scrollTo({ top: container.scrollHeight, behavior: "instant" });
   },
+  toTopSmooth: ({ container }) => {
+    if (!container) return;
+    container.scrollTo({ top: 0, behavior: "smooth" });
+  },
   userMessageToTop: ({ container, lastUserMessage }) => {
     if (!container || !lastUserMessage) return;
     const top =
@@ -149,6 +160,7 @@ export function useScrollFollow({
   onScrollComplete,
 }: UseScrollFollowOptions): UseScrollFollowResult {
   const [showToBottom, setShowToBottom] = useState(INITIAL_SCROLL_FOLLOW_STATE.showToBottom);
+  const [atTop, setAtTop] = useState(INITIAL_SCROLL_FOLLOW_STATE.atTop);
 
   // Resolve the nodes at call time: a command can land before the chat has
   // mounted the row it targets (first render, or a row that is not rendered
@@ -162,6 +174,16 @@ export function useScrollFollow({
     [scrollContainerRef, lastUserMsgRef, messagesEndRef],
   );
 
+  // An instant scroll into a scrollport with nothing to scroll (a session
+  // shorter than the viewport) leaves `scrollTop` at 0, so it emits no scroll
+  // event to read the top edge from. Every scroll write is therefore followed
+  // by this re-read instead of relying on the event. A smooth scroll reads the
+  // position it is animating away from, which is still the honest answer.
+  const syncAtTop = useCallback(() => {
+    const metrics = readScrollMetrics(scrollContainerRef.current);
+    if (metrics) setAtTop(isAtTop(metrics));
+  }, [scrollContainerRef]);
+
   // The one place a decision is applied: record the follow state it asks for
   // (fields it omits keep their current value), then perform the scroll. The
   // pause flag is read at call time, since the nested live viewport may have
@@ -170,9 +192,11 @@ export function useScrollFollow({
     (decision: ScrollFollowDecision) => {
       pausedRef.current = decision.follow.paused ?? pausedRef.current;
       setShowToBottom((prev) => decision.follow.showToBottom ?? prev);
+      setAtTop((prev) => decision.follow.atTop ?? prev);
       SCROLL_COMMANDS[decision.command](readTargets());
+      syncAtTop();
     },
-    [pausedRef, readTargets],
+    [pausedRef, readTargets, syncAtTop],
   );
 
   const handleScroll = useCallback(() => {
@@ -211,6 +235,10 @@ export function useScrollFollow({
     apply(decideScrollFollowOnBottom());
   }, [apply]);
 
+  const handleToTop = useCallback(() => {
+    apply(decideScrollFollowOnTop());
+  }, [apply]);
+
   const handleExplicitScroll = useCallback(() => {
     apply(resolveScrollFollow());
   }, [apply]);
@@ -227,7 +255,8 @@ export function useScrollFollow({
     pendingScrollToUserRef.current = decision.pendingScrollToUser;
     initialScrollDoneRef.current = decision.initialScrollDone;
     SCROLL_COMMANDS[decision.command](readTargets());
-  }, [messageCount, pendingScrollToUserRef, initialScrollDoneRef, readTargets]);
+    syncAtTop();
+  }, [messageCount, pendingScrollToUserRef, initialScrollDoneRef, readTargets, syncAtTop]);
 
   const handleEntryNavigated = useCallback(() => {
     window.setTimeout(() => {
@@ -238,12 +267,14 @@ export function useScrollFollow({
 
   return {
     showToBottom,
+    atTop,
     handleScroll,
     handleWheel,
     handleTouchMove,
     handleResume,
     handleHeightIncrease,
     handleToBottom,
+    handleToTop,
     handleExplicitScroll,
     handleEntryNavigated,
   };

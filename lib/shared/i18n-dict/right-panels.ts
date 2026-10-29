@@ -112,6 +112,7 @@ export const rightPanels = {
   "Saved and loaded {name}": "已保存并加载 {name}",
 
   "Scroll to bottom": "回到底部",
+  "Scroll to top": "回到顶部",
 
   // Token audit
   "Token audit": "Token 用量",

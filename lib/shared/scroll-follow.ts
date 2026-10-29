@@ -8,6 +8,8 @@
 //   - when following pauses (an upward wheel, a touch drag) and when it resumes
 //     (the bottom edge is reached again, an explicit jump, the back-to-bottom
 //     button), and what the back-to-bottom affordance shows in each case;
+//   - whether the scrollport sits at its top edge, which is what greys out the
+//     back-to-top button (it is disabled exactly at the top);
 //   - how a scroll position maps to "at the bottom", and how one more growth of
 //     the live viewport is judged against the distance the chat had *before*
 //     that growth;
@@ -30,6 +32,11 @@
  *  so requiring an exact pixel-perfect bottom would make recovery impractical. */
 export const SCROLL_BOTTOM_THRESHOLD_PX = 100;
 
+/** Distance from the top edge within which the scrollport counts as "at the
+ *  top". Small on purpose: the back-to-top button is meant to be disabled
+ *  exactly at the top, and only a sub-pixel / zoom rounding slop is forgiven. */
+export const SCROLL_TOP_THRESHOLD_PX = 4;
+
 /** Follow state owned by the chat window's scroll hook. */
 export interface ScrollFollowState {
   /** Streaming must not pull the view down — the user scrolled away from the
@@ -37,10 +44,18 @@ export interface ScrollFollowState {
   paused: boolean;
   /** The "back to bottom" affordance is on screen. */
   showToBottom: boolean;
+  /** The scrollport sits at its top edge — the "back to top" button greys out
+   *  while this holds. */
+  atTop: boolean;
 }
 
-/** Nothing has been scrolled yet: following, affordance hidden. */
-export const INITIAL_SCROLL_FOLLOW_STATE: ScrollFollowState = { paused: false, showToBottom: false };
+/** Nothing has been scrolled yet: following, bottom affordance hidden, the
+ *  scrollport showing its first content (= at the top). */
+export const INITIAL_SCROLL_FOLLOW_STATE: ScrollFollowState = {
+  paused: false,
+  showToBottom: false,
+  atTop: true,
+};
 
 /** The scrollport's layout, read straight off the element. */
 export interface ScrollMetrics {
@@ -52,6 +67,11 @@ export interface ScrollMetrics {
 /** Distance from the bottom edge, in pixels. */
 export function distanceFromBottom(metrics: ScrollMetrics): number {
   return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight;
+}
+
+/** Whether the scrollport is at (or within rounding slop of) its top edge. */
+export function isAtTop(metrics: ScrollMetrics): boolean {
+  return metrics.scrollTop <= SCROLL_TOP_THRESHOLD_PX;
 }
 
 /**
@@ -79,6 +99,7 @@ export type ScrollCommand =
   | "none"
   | "toBottomSmooth"
   | "toBottomInstant"
+  | "toTopSmooth"
   | "userMessageToTop"
   | "toMessagesEnd";
 
@@ -122,13 +143,18 @@ export function decideScrollFollowOnTouchScroll(): ScrollFollowDecision {
  * A scroll position change in the chat scrollport: following tracks the bottom
  * edge, and so does the affordance — being pulled back to the bottom (by a
  * smooth scroll that finished, or by the user dragging the scrollbar down)
- * resumes following. `metrics` is null while the scrollport is not mounted;
- * then there is nothing to measure and nothing to change.
+ * resumes following. The top flag rides along: it only says where the view is,
+ * so every scroll position reports it (the back-to-top button greys out at the
+ * top edge). `metrics` is null while the scrollport is not mounted; then there
+ * is nothing to measure and nothing to change.
  */
 export function decideScrollFollowOnScroll(metrics: ScrollMetrics | null): ScrollFollowDecision {
   if (!metrics) return NO_FOLLOW_CHANGE;
   const nearBottom = distanceFromBottom(metrics) < SCROLL_BOTTOM_THRESHOLD_PX;
-  return { follow: { paused: !nearBottom, showToBottom: !nearBottom }, command: "none" };
+  return {
+    follow: { paused: !nearBottom, showToBottom: !nearBottom, atTop: isAtTop(metrics) },
+    command: "none",
+  };
 }
 
 /** One growth of the nested live viewport, as its `ResizeObserver` reports it. */
@@ -177,6 +203,16 @@ export function decideScrollFollowOnGrowth(
  */
 export function decideScrollFollowOnBottom(): ScrollFollowDecision {
   return { follow: { paused: false, showToBottom: false }, command: "toBottomSmooth" };
+}
+
+/**
+ * The user asked to go back to the top (the button right next to the
+ * back-to-bottom one). It only scrolls: where the view ends up is decided by
+ * the scroll events the smooth scroll emits, which is also what re-arms the
+ * button once the top edge is reached.
+ */
+export function decideScrollFollowOnTop(): ScrollFollowDecision {
+  return { follow: {}, command: "toTopSmooth" };
 }
 
 /**

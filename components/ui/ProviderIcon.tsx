@@ -31,6 +31,10 @@ import NvidiaColorIcon from "@lobehub/icons/es/Nvidia/components/Color";
 import BasetenIcon from "@lobehub/icons/es/Baseten/components/Mono";
 import AntGroupColorIcon from "@lobehub/icons/es/AntGroup/components/Color";
 import XiaomiMiMoIcon from "@lobehub/icons/es/XiaomiMiMo/components/Mono";
+import {
+  resolveModelIconId,
+  type ModelIconPreferences,
+} from "@/lib/shared/model-icon-match";
 
 type IconComponent = React.ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
 
@@ -123,25 +127,19 @@ export function ProviderGearIcon({ size, color = "var(--text-muted)" }: { size: 
 }
 
 /**
- * Resolve the icon id to render for a model.
- * 1. A builtin provider icon, when the provider itself has one.
- * 2. A custom icon picked in ModelsConfig (stored per-model and per-provider
- *    in models.json; the route folds provider icons into each model and keeps
- *    a bare provider key). Values are provider ids.
- * 3. undefined → caller renders the default gear fallback.
+ * Resolve the icon id to render for a model — a thin wrapper over the shared,
+ * pure three-layer resolver (`resolveModelIconId` in
+ * lib/shared/model-icon-match): explicit model-level icon > auto match >
+ * provider icon, with the icon-library membership check supplied here. The
+ * signature is kept stable for the existing icon consumers.
  */
 export function resolveProviderIcon(
   provider: string | null | undefined,
   model: string | null | undefined,
   modelIcons?: Record<string, string>,
+  preferences?: ModelIconPreferences,
 ): string | undefined {
-  if (provider && PROVIDER_ICONS[provider]) return provider;
-  if (provider && modelIcons) {
-    const iconId = model ? (modelIcons[`${provider}:${model}`] ?? modelIcons[model]) : modelIcons[provider];
-    const resolved = iconId ?? modelIcons[provider];
-    if (resolved && PROVIDER_ICONS[resolved]) return resolved;
-  }
-  return undefined;
+  return resolveModelIconId(provider, model, modelIcons, preferences, hasProviderIcon);
 }
 
 export function ProviderIcon({ id, size, fallback }: { id: string; size: number; fallback?: React.ReactNode }) {

@@ -7,6 +7,7 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { MorphToggleIcon } from "@/components/ui/MorphToggleIcon";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { copyText } from "@/lib/client/clipboard";
+import { useModelIconPreferencesSync } from "@/lib/client/useModelIconPreferencesSync";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "@/components/ui/ProviderIcon";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useTranslationStream } from "@/hooks/useTranslationStream";
@@ -32,6 +33,7 @@ interface ModelsApiResponse {
   models?: Record<string, string>;
   defaultModel?: { provider: string; modelId: string } | null;
   modelIcons?: Record<string, string>;
+  modelIconPreferences?: Record<string, string>;
 }
 
 interface PersistedBubbleState {
@@ -83,6 +85,7 @@ export function TranslateBubble() {
   // ── model state + persistence ───────────────────────────────────────
   const [modelList, setModelList] = useState<ModelInfo[]>([]);
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
+  const [modelIconPreferences, setModelIconPreferences] = useState<Record<string, string>>({});
   const [model, setModel] = useState<{ provider: string; modelId: string } | null>(null);
   const savedModelRef = useRef<{ provider: string; modelId: string } | null>(null);
   // Gate the first persistence save so the hydration pass doesn't
@@ -134,6 +137,7 @@ export function TranslateBubble() {
         const list = data.modelList ?? [];
         setModelList(list);
         setModelIcons(data.modelIcons ?? {});
+        setModelIconPreferences(data.modelIconPreferences ?? {});
         const saved = savedModelRef.current;
         if (saved && list.some((m) => m.provider === saved.provider && m.id === saved.modelId)) {
           setModel(saved);
@@ -148,6 +152,10 @@ export function TranslateBubble() {
     })();
     return () => { cancelled = true; };
   }, [toast, t]);
+
+  // 图标偏好 (icon preference) written from the models-config panel patches
+  // this bubble's cached map in place, without re-running the models fetch.
+  useModelIconPreferencesSync(setModelIconPreferences);
 
   // ── translation stream ──────────────────────────────────────────────
   const { output, isStreaming, error, start, stop } = useTranslationStream();
@@ -330,7 +338,7 @@ export function TranslateBubble() {
             }}
           >
             <ProviderIcon
-              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons) ?? ""}
+              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons, modelIconPreferences) ?? ""}
               size={11}
               fallback={<ProviderGearIcon size={10} />}
             />

@@ -257,7 +257,7 @@ export function SchedulerDetailPage({
       {/* Block body */}
       <div data-scroll-wide style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 14px" }}>
         {block === "overview" && (
-          <TaskOverviewTab task={task} runs={runs} channelMeta={channelMeta} modelIcons={meta?.modelIcons} />
+          <TaskOverviewTab task={task} runs={runs} channelMeta={channelMeta} modelIcons={meta?.modelIcons} modelIconPreferences={meta?.modelIconPreferences} />
         )}
         {block === "runs" && (
           <TaskRunsTab
@@ -272,7 +272,7 @@ export function SchedulerDetailPage({
         )}
         {block === "prompt" && <TaskPromptTab task={task} />}
         {block === "config" && (
-          <TaskConfigTab task={task} modelIcons={meta?.modelIcons} channelMeta={channelMeta} onEdit={() => openSchedulerForm(task, null)} />
+          <TaskConfigTab task={task} modelIcons={meta?.modelIcons} modelIconPreferences={meta?.modelIconPreferences} channelMeta={channelMeta} onEdit={() => openSchedulerForm(task, null)} />
         )}
       </div>
     </div>

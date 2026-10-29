@@ -144,6 +144,7 @@ export function SchedulerModelSelect({
   const { t } = useI18n();
   const options = meta?.modelList ?? [];
   const modelIcons = meta?.modelIcons;
+  const modelIconPreferences = meta?.modelIconPreferences;
   const isUnselected = !form.provider || !form.modelId;
   const current = options.find((o) => o.provider === form.provider && o.id === form.modelId);
   // Stable identity across parent re-renders — a fresh object literal here
@@ -153,7 +154,7 @@ export function SchedulerModelSelect({
     [isUnselected, form.provider, form.modelId],
   );
   const [open, setOpen] = useState(false);
-  const triggerIconId = resolveProviderIcon(current?.provider, current?.id, modelIcons);
+  const triggerIconId = resolveProviderIcon(current?.provider, current?.id, modelIcons, modelIconPreferences);
 
   return (
     <Field label={t("Model")} hint={t("Scheduler field required")} error={error}>
@@ -175,6 +176,7 @@ export function SchedulerModelSelect({
           open={open}
           model={pickerModel}
           modelIcons={modelIcons}
+          modelIconPreferences={modelIconPreferences}
           modelList={options}
           onModelChange={(provider, modelId) => {
             const partial: Partial<SchedulerTaskForm> = { provider, modelId };

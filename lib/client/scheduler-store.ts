@@ -66,6 +66,7 @@ import type {
   TaskUpdatePayload,
 } from "@/lib/shared/scheduler";
 import type { TaskNotification } from "@/lib/shared/notifications";
+import { subscribeModelIconPreferences } from "@/lib/client/model-icon-preferences";
 
 /** The task-list filters the root page offers. */
 export type SchedulerFilter = "all" | "enabled" | "disabled" | "error";
@@ -141,6 +142,16 @@ function patch(partial: Partial<SchedulerStoreState>): void {
   state = { ...state, ...partial };
   emit();
 }
+
+// 图标偏好 (icon preference) is written from the models-config panel while the
+// scheduler panel may already hold its model meta. Patch the cached meta in
+// place so the form and detail icons follow without a reload.
+// Module-scope subscription on purpose: this store is a non-React singleton and
+// lives for the process lifetime, so it must not be tied to a component mount.
+subscribeModelIconPreferences((modelIconPreferences) => {
+  if (!state.meta) return;
+  patch({ meta: { ...state.meta, modelIconPreferences } });
+});
 
 // ── Background poll ─────────────────────────────────────────────────────
 // One loop, shared by every subscriber (the right-bar badge is always one).
