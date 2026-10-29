@@ -7,7 +7,7 @@ import { Tooltip } from "../ui/Tooltip";
 import { MorphToggleIcon } from "../ui/MorphToggleIcon";
 import { COPY, CHECK } from "@/lib/client/icon-paths";
 import { copyText } from "@/lib/client/clipboard";
-import { subscribeModelIconPreferences } from "@/lib/client/model-icon-preferences";
+import { useModelIconPreferencesSync } from "@/lib/client/useModelIconPreferencesSync";
 import { AnimatedPopover } from "../ui/AnimatedPopover";
 import { ProviderIcon, ProviderGearIcon, resolveProviderIcon } from "../ui/ProviderIcon";
 import {
@@ -155,7 +155,7 @@ export function TranslatePanel() {
 
   // 图标偏好 (icon preference) can be written from the models-config panel
   // while this panel stays mounted; patch the cached map in place.
-  useEffect(() => subscribeModelIconPreferences(setModelIconPreferences), []);
+  useModelIconPreferencesSync(setModelIconPreferences);
 
   // Close the model dropdown on outside click.
   useEffect(() => {

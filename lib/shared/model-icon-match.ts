@@ -9,6 +9,14 @@
 /** Preference value meaning "show the provider icon instead of the auto match". */
 export const MODEL_ICON_PREFERENCE_PROVIDER = "provider";
 
+/** Preference value meaning "use the auto-matched icon" (stored as deletion). */
+export const MODEL_ICON_PREFERENCE_AUTO = "auto";
+
+/** The two states a model's icon can be in: auto-matched, or provider icon. */
+export type ModelIconPreference =
+  | typeof MODEL_ICON_PREFERENCE_PROVIDER
+  | typeof MODEL_ICON_PREFERENCE_AUTO;
+
 /**
  * 图标偏好 (icon preference): keyed by `provider:modelId`. Only real
  * deviations are stored — `provider` means "use the provider icon"; the
@@ -99,26 +107,57 @@ export function isProviderIconPreferred(
 }
 
 /**
- * Above this many models, a provider detail page's model list starts
- * collapsed behind a "show all" control so the page is not drowned by rows.
- */
-export const MODEL_ICON_LIST_COLLAPSE_THRESHOLD = 8;
-
-/** Whether a provider detail's model list should default to collapsed. */
-export function shouldCollapseModelIconList(modelCount: number): boolean {
-  return Number.isFinite(modelCount) && modelCount > MODEL_ICON_LIST_COLLAPSE_THRESHOLD;
-}
-
-/**
  * Whether the UI should offer the auto-match ↔ provider-icon toggle: only when
  * the model auto-matches and the result differs from the provider icon. If
- * the two are the same there is nothing to switch. Explicit model-level icons
- * do not hide the toggle; custom providers never show it (a UI-layer rule).
+ * the two are the same there is nothing to switch. An explicit model-level
+ * icon also hides the toggle: it outranks both preference states, so switching
+ * would not change the glyph. Custom providers never show it (a UI-layer rule).
  */
 export function canToggleModelIcon(
   modelId: string | null | undefined,
   providerIconId: string | null | undefined,
+  explicitModelIconId?: string | null,
 ): boolean {
+  if (explicitModelIconId) return false;
   const match = matchModelIcon(modelId);
   return match !== undefined && match !== providerIconId;
+}
+
+/**
+ * Resolve the icon id to render for a model. Three layers, highest first:
+ * 1. An explicit model-level icon (models.json): `<provider>:<modelId>`, then
+ *    the bare model id fallback.
+ * 2. The icon auto-matched from the model id (see matchModelIcon). Skipped when
+ *    the icon preference for this model says `provider`.
+ * 3. The explicit provider-level icon, then the provider id itself (provider-only
+ *    rows, model undefined, stop here as well).
+ *
+ * A candidate only wins when `isKnownIcon` accepts it, so the caller keeps the
+ * icon-library membership check. Returns undefined when nothing resolves.
+ */
+export function resolveModelIconId(
+  provider: string | null | undefined,
+  model: string | null | undefined,
+  modelIcons: Record<string, string> | null | undefined,
+  preferences: ModelIconPreferences | null | undefined,
+  isKnownIcon: (iconId: string) => boolean,
+): string | undefined {
+  // Layer 1: explicit model-level icon, qualified key first, bare id second.
+  if (model) {
+    const explicit = (provider ? modelIcons?.[modelIconPreferenceKey(provider, model)] : undefined)
+      ?? modelIcons?.[model];
+    if (explicit && isKnownIcon(explicit)) return explicit;
+  }
+  // Layer 2: auto match, unless the user pinned the provider icon.
+  if (model && !isProviderIconPreferred(preferences, provider, model)) {
+    const matched = matchModelIcon(model);
+    if (matched && isKnownIcon(matched)) return matched;
+  }
+  // Layer 3: provider-level explicit icon, then the provider's own icon.
+  if (provider) {
+    const providerIcon = modelIcons?.[provider];
+    if (providerIcon && isKnownIcon(providerIcon)) return providerIcon;
+    if (isKnownIcon(provider)) return provider;
+  }
+  return undefined;
 }
