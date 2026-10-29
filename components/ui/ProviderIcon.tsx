@@ -31,6 +31,11 @@ import NvidiaColorIcon from "@lobehub/icons/es/Nvidia/components/Color";
 import BasetenIcon from "@lobehub/icons/es/Baseten/components/Mono";
 import AntGroupColorIcon from "@lobehub/icons/es/AntGroup/components/Color";
 import XiaomiMiMoIcon from "@lobehub/icons/es/XiaomiMiMo/components/Mono";
+import {
+  isProviderIconPreferred,
+  matchModelIcon,
+  type ModelIconPreferences,
+} from "@/lib/shared/model-icon-match";
 
 type IconComponent = React.ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
 
@@ -123,24 +128,33 @@ export function ProviderGearIcon({ size, color = "var(--text-muted)" }: { size: 
 }
 
 /**
- * Resolve the icon id to render for a model.
- * 1. A builtin provider icon, when the provider itself has one.
- * 2. A custom icon picked in ModelsConfig (stored per-model and per-provider
- *    in models.json; the route folds provider icons into each model and keeps
- *    a bare provider key). Values are provider ids.
- * 3. undefined → caller renders the default gear fallback.
+ * Resolve the icon id to render for a model. Three layers, highest first:
+ * 1. An explicit icon configured in ModelsConfig (models.json): the model's
+ *    own `icon`, then a bare model id, then the provider-level icon. Values
+ *    are provider ids and must exist in the icon library.
+ * 2. The icon auto-matched from the model id (see lib/shared/model-icon-match).
+ *    Skipped when the icon preference for this model says `provider`.
+ * 3. The builtin provider icon (provider-only rows stop here as well).
+ * undefined → caller renders the default gear fallback.
+ *
+ * `preferences` is optional; missing/empty behaves like "no deviations".
  */
 export function resolveProviderIcon(
   provider: string | null | undefined,
   model: string | null | undefined,
   modelIcons?: Record<string, string>,
+  preferences?: ModelIconPreferences,
 ): string | undefined {
-  if (provider && PROVIDER_ICONS[provider]) return provider;
   if (provider && modelIcons) {
     const iconId = model ? (modelIcons[`${provider}:${model}`] ?? modelIcons[model]) : modelIcons[provider];
     const resolved = iconId ?? modelIcons[provider];
     if (resolved && PROVIDER_ICONS[resolved]) return resolved;
   }
+  if (model && !isProviderIconPreferred(preferences, provider, model)) {
+    const matched = matchModelIcon(model);
+    if (matched && PROVIDER_ICONS[matched]) return matched;
+  }
+  if (provider && PROVIDER_ICONS[provider]) return provider;
   return undefined;
 }
 
