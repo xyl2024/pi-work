@@ -37,6 +37,7 @@ export function ModelPickerModal({
   model,
   modelNames,
   modelIcons,
+  modelIconPreferences,
   modelList,
   disabled,
   onModelChange,
@@ -47,6 +48,8 @@ export function ModelPickerModal({
   modelNames?: Record<string, string>;
   /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
   modelIcons?: Record<string, string>;
+  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
+  modelIconPreferences?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string }[];
   disabled?: boolean;
   onModelChange?: (provider: string, modelId: string) => void;
@@ -337,7 +340,7 @@ export function ModelPickerModal({
                       textTransform: "uppercase", letterSpacing: "0.07em",
                       borderTop: gi > 0 ? "1px solid var(--border)" : "none",
                     }}>
-                      <ProviderIcon id={resolveProviderIcon(group.provider, undefined, modelIcons) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
+                      <ProviderIcon id={resolveProviderIcon(group.provider, undefined, modelIcons, modelIconPreferences) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
                       <span>{group.provider}</span>
                     </div>
                   )}
@@ -377,7 +380,7 @@ export function ModelPickerModal({
                           )}
                         </span>
                         <ProviderIcon
-                          id={resolveProviderIcon(opt.provider, opt.modelId, modelIcons) ?? ""}
+                          id={resolveProviderIcon(opt.provider, opt.modelId, modelIcons, modelIconPreferences) ?? ""}
                           size={13}
                           fallback={<ProviderGearIcon size={12} />}
                         />

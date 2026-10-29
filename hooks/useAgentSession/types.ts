@@ -172,6 +172,8 @@ export interface UseAgentSessionResult {
   // Models and tools.
   modelNames: Record<string, string>;
   modelIcons: Record<string, string>;
+  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
+  modelIconPreferences: Record<string, string>;
   modelList: SessionModelOption[];
   modelThinkingLevels: Record<string, string[]>;
   modelThinkingLevelMaps: Record<string, Record<string, string | null>>;

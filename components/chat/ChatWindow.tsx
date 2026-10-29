@@ -137,7 +137,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
   const {
     data, loading, error, runtimeError, messages, entryIds, entryTimestamps, compactionPoints, streamState,
-    agentRunning, modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps,
+    agentRunning, modelNames, modelIcons, modelIconPreferences, modelList, modelThinkingLevels, modelThinkingLevelMaps,
     toolSelection, availableTools, toolsLoading, toolsError, thinkingLevel, permissionMode,
     retryInfo,
     displayModel: displayModelValue,
@@ -775,6 +775,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         model={displayModelValue}
         modelNames={modelNames}
         modelIcons={modelIcons}
+        modelIconPreferences={modelIconPreferences}
         modelList={modelList}
         onModelChange={handleModelChange}
         toolSelection={toolSelection}
@@ -990,6 +991,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                     toolResults={toolResultsMap}
                     modelNames={modelNames}
                     modelIcons={modelIcons}
+                    modelIconPreferences={modelIconPreferences}
                     entryId={renderEntryIds[idx]}
                     onNavigate={agentRunning ? undefined : handleNavigate}
                     prevAssistantEntryId={agentRunning ? undefined : prevAssistantEntryId}
@@ -1217,6 +1219,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                               toolResults={toolResultsMap}
                               modelNames={modelNames}
                               modelIcons={modelIcons}
+                              modelIconPreferences={modelIconPreferences}
                               cwd={session?.cwd ?? cwd}
                               onOpenFile={handleOpenFile}
                             />
@@ -1294,6 +1297,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
                 toolResults={toolResultsMap}
                 modelNames={modelNames}
                 modelIcons={modelIcons}
+                modelIconPreferences={modelIconPreferences}
                 cwd={session?.cwd ?? cwd}
                 onOpenFile={handleOpenFile}
                 sessionId={session?.id ?? null}
@@ -1462,6 +1466,7 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
         model={displayModelValue}
         modelNames={modelNames}
         modelIcons={modelIcons}
+        modelIconPreferences={modelIconPreferences}
         modelList={modelList}
         disabled={agentRunning}
         onModelChange={handleModelChange}

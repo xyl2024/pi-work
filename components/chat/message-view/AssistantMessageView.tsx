@@ -27,6 +27,8 @@ interface AssistantMessageViewProps {
   toolResults?: Map<string, ToolResultMessage>;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
+  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
+  modelIconPreferences?: Record<string, string>;
   showTimestamp?: boolean;
   keywords?: string[];
   isSearchMatch?: boolean;
@@ -48,6 +50,7 @@ function AssistantMessageViewInner({
   toolResults,
   modelNames,
   modelIcons,
+  modelIconPreferences,
   showTimestamp,
   keywords,
   isSearchMatch,
@@ -203,7 +206,7 @@ function AssistantMessageViewInner({
       >
         {message.provider && (
           <>
-            <ProviderIcon id={resolveProviderIcon(message.provider, message.model, modelIcons) ?? ""} size={16} fallback={<ProviderGearIcon size={16} />} />
+            <ProviderIcon id={resolveProviderIcon(message.provider, message.model, modelIcons, modelIconPreferences) ?? ""} size={16} fallback={<ProviderGearIcon size={16} />} />
             <span>{message.provider} - {modelNames?.[`${message.provider}:${message.model}`] ?? modelNames?.[message.model] ?? message.model}</span>
           </>
         )}

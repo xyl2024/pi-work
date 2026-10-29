@@ -36,6 +36,7 @@ interface ModelsApiResponse {
   models?: Record<string, string>;
   defaultModel?: { provider: string; modelId: string } | null;
   modelIcons?: Record<string, string>;
+  modelIconPreferences?: Record<string, string>;
 }
 
 interface PersistedState {
@@ -51,6 +52,7 @@ export function TranslatePanel() {
 
   const [modelList, setModelList] = useState<ModelInfo[]>([]);
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
+  const [modelIconPreferences, setModelIconPreferences] = useState<Record<string, string>>({});
   const [model, setModel] = useState<{ provider: string; modelId: string } | null>(null);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [modelDropdownRect, setModelDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -132,6 +134,7 @@ export function TranslatePanel() {
         const list = data.modelList ?? [];
         setModelList(list);
         setModelIcons(data.modelIcons ?? {});
+        setModelIconPreferences(data.modelIconPreferences ?? {});
         // Prefer the model the user had selected last session; fall back to
         // the default model, then to the first entry in the list.
         const saved = savedModelRef.current;
@@ -284,7 +287,7 @@ export function TranslatePanel() {
             }}
           >
             <ProviderIcon
-              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons) ?? ""}
+              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons, modelIconPreferences) ?? ""}
               size={12}
               fallback={<ProviderGearIcon size={11} />}
             />
@@ -320,7 +323,7 @@ export function TranslatePanel() {
                       textTransform: "uppercase", letterSpacing: "0.07em",
                       borderTop: gi > 0 ? "1px solid var(--border)" : "none",
                     }}>
-                      <ProviderIcon id={resolveProviderIcon(group.provider, undefined, modelIcons) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
+                      <ProviderIcon id={resolveProviderIcon(group.provider, undefined, modelIcons, modelIconPreferences) ?? ""} size={10} fallback={<ProviderGearIcon size={9} />} />
                       <span>{group.provider}</span>
                     </div>
                   )}
@@ -350,7 +353,7 @@ export function TranslatePanel() {
                         {isActive
                           ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="1.5 5 4 7.5 8.5 2.5" /></svg>
                           : <span style={{ width: 10, flexShrink: 0 }} />}
-                        <ProviderIcon id={resolveProviderIcon(opt.provider, opt.modelId, modelIcons) ?? ""} size={12} fallback={<ProviderGearIcon size={11} />} />
+                        <ProviderIcon id={resolveProviderIcon(opt.provider, opt.modelId, modelIcons, modelIconPreferences) ?? ""} size={12} fallback={<ProviderGearIcon size={11} />} />
                         {opt.name}
                       </button>
                     );

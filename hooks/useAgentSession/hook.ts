@@ -166,6 +166,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
   }, [setSubagentRefreshKey]);
   const [modelNames, setModelNames] = useState<Record<string, string>>({});
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
+  const [modelIconPreferences, setModelIconPreferences] = useState<Record<string, string>>({});
   const [modelList, setModelList] = useState<SessionModelOption[]>([]);
   const [modelThinkingLevels, setModelThinkingLevels] = useState<Record<string, string[]>>({});
   const [modelThinkingLevelMaps, setModelThinkingLevelMaps] = useState<Record<string, Record<string, string | null>>>({});
@@ -949,9 +950,10 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
 
   // Load model list
   useEffect(() => {
-    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: SessionModelOption[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]>; thinkingLevelMaps?: Record<string, Record<string, string | null>>; modelIcons?: Record<string, string> }) => {
+    fetch("/api/models").then((r) => r.json()).then((d: { models: Record<string, string>; modelList?: SessionModelOption[]; defaultModel?: { provider: string; modelId: string } | null; thinkingLevels?: Record<string, string[]>; thinkingLevelMaps?: Record<string, Record<string, string | null>>; modelIcons?: Record<string, string>; modelIconPreferences?: Record<string, string> }) => {
       setModelNames(d.models);
       if (d.modelIcons) setModelIcons(d.modelIcons);
+      if (d.modelIconPreferences) setModelIconPreferences(d.modelIconPreferences);
       if (d.thinkingLevels) setModelThinkingLevels(d.thinkingLevels);
       if (d.thinkingLevelMaps) setModelThinkingLevelMaps(d.thinkingLevelMaps);
       if (d.modelList) {
@@ -1011,7 +1013,7 @@ export function useAgentSession(opts: UseAgentSessionOptions): UseAgentSessionRe
     retryInfo: runtimeState.retryInfo,
     contextUsage: runtimeState.contextUsage,
     subagentRefreshKey: runtimeState.subagentRefreshKey,
-    modelNames, modelIcons, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel,
+    modelNames, modelIcons, modelIconPreferences, modelList, modelThinkingLevels, modelThinkingLevelMaps, newSessionModel,
     toolSelection, availableTools, toolsLoading, toolsError,
     thinkingLevel: runtimeState.thinkingLevel,
     permissionMode,

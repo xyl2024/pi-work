@@ -16,15 +16,16 @@ import { RUNNER_DEFAULT_MAX_LIFETIME_MS } from "@/lib/shared/scheduler-form";
 interface Props {
   task: ScheduledTask;
   modelIcons?: Record<string, string>;
+  modelIconPreferences?: Record<string, string>;
   onEdit: () => void;
   /** channelId → { name, status } for wechat channels (TaskDetail fetches). */
   channelMeta?: Record<string, { name: string; status: string }> | null;
 }
 
-export function TaskConfigTab({ task, modelIcons, onEdit, channelMeta }: Props) {
+export function TaskConfigTab({ task, modelIcons, modelIconPreferences, onEdit, channelMeta }: Props) {
   const { t } = useI18n();
   const { provider, modelId, thinkingLevel, toolNames, cwd, maxLifetimeMs } = task;
-  const modelIcon = resolveProviderIcon(provider, modelId, modelIcons);
+  const modelIcon = resolveProviderIcon(provider, modelId, modelIcons, modelIconPreferences);
 
   // Render the max lifetime as a human-friendly "Xh Ym" string. The
   // server-side default is the shared runner default (2h).

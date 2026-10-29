@@ -47,6 +47,8 @@ export interface BottomToolbarProps {
   modelNames?: Record<string, string>;
   /** "<provider>:<modelId>" → provider id map from /api/models. */
   modelIcons?: Record<string, string>;
+  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
+  modelIconPreferences?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[];
   onModelChange?: (provider: string, modelId: string) => void;
   cwd?: string | null;
@@ -112,7 +114,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
     onSlashAction,
     hasAttachedImages,
     fileInputRef,
-    model, modelNames, modelIcons, modelList, onModelChange,
+    model, modelNames, modelIcons, modelIconPreferences, modelList, onModelChange,
     cwd, onCwdChange,
     contextUsage, sessionStats, contextComposition,
     permissionMode = "confirm",
@@ -399,7 +401,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
             }}
           >
             <ProviderIcon
-              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons) ?? ""}
+              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons, modelIconPreferences) ?? ""}
               size={12}
               fallback={<ProviderGearIcon size={11} />}
             />
@@ -415,6 +417,7 @@ export function BottomToolbar(props: BottomToolbarProps) {
           model={model ?? null}
           modelNames={modelNames}
           modelIcons={modelIcons}
+          modelIconPreferences={modelIconPreferences}
           modelList={modelList}
           disabled={isStreaming}
           onModelChange={onModelChange}

@@ -108,6 +108,8 @@ export interface SchedulerModelMeta {
   defaultModel: { provider: string; modelId: string } | null;
   /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
   modelIcons?: Record<string, string>;
+  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
+  modelIconPreferences?: Record<string, string>;
 }
 
 /**

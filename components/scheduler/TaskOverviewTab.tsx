@@ -24,9 +24,11 @@ interface Props {
   channelMeta?: Record<string, { name: string; status: string }> | null;
   /** "<provider>:<modelId>" → provider id map, for model icons. */
   modelIcons?: Record<string, string>;
+  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
+  modelIconPreferences?: Record<string, string>;
 }
 
-export function TaskOverviewTab({ task, runs, channelMeta, modelIcons }: Props) {
+export function TaskOverviewTab({ task, runs, channelMeta, modelIcons, modelIconPreferences }: Props) {
   const { t, locale } = useI18n();
   const stats = computeStats(runs);
   const now = useNow(30_000);
@@ -122,7 +124,7 @@ export function TaskOverviewTab({ task, runs, channelMeta, modelIcons }: Props) 
           <Row label={t("Provider")}>
             {task.provider ? (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <ProviderIcon id={resolveProviderIcon(task.provider, undefined, modelIcons) ?? ""} size={14} fallback={<ProviderGearIcon size={14} />} />
+                <ProviderIcon id={resolveProviderIcon(task.provider, undefined, modelIcons, modelIconPreferences) ?? ""} size={14} fallback={<ProviderGearIcon size={14} />} />
                 <code style={monoStyle}>{task.provider}</code>
               </span>
             ) : <Missing>{t("Not set")}</Missing>}
@@ -130,7 +132,7 @@ export function TaskOverviewTab({ task, runs, channelMeta, modelIcons }: Props) 
           <Row label={t("Model")}>
             {task.modelId ? (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <ProviderIcon id={resolveProviderIcon(task.provider, task.modelId, modelIcons) ?? ""} size={14} fallback={<ProviderGearIcon size={14} />} />
+                <ProviderIcon id={resolveProviderIcon(task.provider, task.modelId, modelIcons, modelIconPreferences) ?? ""} size={14} fallback={<ProviderGearIcon size={14} />} />
                 <code style={monoStyle}>{task.modelId}</code>
               </span>
             ) : <Missing>{t("Not set")}</Missing>}
