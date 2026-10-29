@@ -32,6 +32,7 @@ interface ModelsApiResponse {
   models?: Record<string, string>;
   defaultModel?: { provider: string; modelId: string } | null;
   modelIcons?: Record<string, string>;
+  modelIconPreferences?: Record<string, string>;
 }
 
 interface PersistedBubbleState {
@@ -83,6 +84,7 @@ export function TranslateBubble() {
   // ── model state + persistence ───────────────────────────────────────
   const [modelList, setModelList] = useState<ModelInfo[]>([]);
   const [modelIcons, setModelIcons] = useState<Record<string, string>>({});
+  const [modelIconPreferences, setModelIconPreferences] = useState<Record<string, string>>({});
   const [model, setModel] = useState<{ provider: string; modelId: string } | null>(null);
   const savedModelRef = useRef<{ provider: string; modelId: string } | null>(null);
   // Gate the first persistence save so the hydration pass doesn't
@@ -134,6 +136,7 @@ export function TranslateBubble() {
         const list = data.modelList ?? [];
         setModelList(list);
         setModelIcons(data.modelIcons ?? {});
+        setModelIconPreferences(data.modelIconPreferences ?? {});
         const saved = savedModelRef.current;
         if (saved && list.some((m) => m.provider === saved.provider && m.id === saved.modelId)) {
           setModel(saved);
@@ -330,7 +333,7 @@ export function TranslateBubble() {
             }}
           >
             <ProviderIcon
-              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons) ?? ""}
+              id={resolveProviderIcon(model?.provider, model?.modelId, modelIcons, modelIconPreferences) ?? ""}
               size={11}
               fallback={<ProviderGearIcon size={10} />}
             />

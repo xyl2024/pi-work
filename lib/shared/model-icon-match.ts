@@ -67,6 +67,22 @@ export function matchModelIcon(modelId: string | null | undefined): string | und
   return undefined;
 }
 
+/**
+ * Normalize a raw preferences value (usually freshly parsed JSON) into the
+ * canonical map: anything that is not a plain object, or whose entries are not
+ * a known deviation value, is dropped. Never throws — corrupt or hand-edited
+ * files must degrade to "no deviations".
+ */
+export function normalizeModelIconPreferences(value: unknown): ModelIconPreferences {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: ModelIconPreferences = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (!key || raw !== MODEL_ICON_PREFERENCE_PROVIDER) continue;
+    result[key] = MODEL_ICON_PREFERENCE_PROVIDER;
+  }
+  return result;
+}
+
 /** Preference key for one model: `provider:modelId`. */
 export function modelIconPreferenceKey(provider: string, modelId: string): string {
   return `${provider}:${modelId}`;

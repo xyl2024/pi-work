@@ -42,6 +42,8 @@ interface Props {
   modelNames?: Record<string, string>;
   /** Custom-model icon map ("<provider>:<modelId>" → provider id), from /api/models. */
   modelIcons?: Record<string, string>;
+  /** 图标偏好 ("provider:modelId" → "provider"), from /api/models. */
+  modelIconPreferences?: Record<string, string>;
   modelList?: { id: string; name: string; provider: string; reasoning?: boolean; input?: string[]; contextWindow?: number; maxTokens?: number; cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number } }[];
   onModelChange?: (provider: string, modelId: string) => void;
   /** The user's tool selection state. `[]` ≡ Off, `"all"` ≡ High, partial
@@ -126,7 +128,7 @@ export interface ChatInputHandle {
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  onSend, onAbort, isStreaming, sessionBusy = false, model, modelNames, modelIcons, modelList, onModelChange,
+  onSend, onAbort, isStreaming, sessionBusy = false, model, modelNames, modelIcons, modelIconPreferences, modelList, onModelChange,
   toolSelection = "all", onToolSelectionChange,
   availableTools = [], toolsLoading = false, toolsError = null, onEnsureAvailableTools,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
@@ -679,6 +681,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             model={model}
             modelNames={modelNames}
             modelIcons={modelIcons}
+            modelIconPreferences={modelIconPreferences}
             modelList={modelList}
             onModelChange={onModelChange}
             cwd={cwd}

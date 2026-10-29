@@ -17,13 +17,14 @@ interface Props {
   tabId: string;
   modelNames?: Record<string, string>;
   modelIcons?: Record<string, string>;
+  modelIconPreferences?: Record<string, string>;
   toolResults?: Map<string, ToolResultMessage>;
   cwd?: string | null;
   onOpenFile?: (filePath: string, fileName: string) => void;
   sessionId?: string | null;
 }
 
-function StreamingBubbleInner({ tabId, modelNames, modelIcons, toolResults, cwd, onOpenFile, sessionId }: Props) {
+function StreamingBubbleInner({ tabId, modelNames, modelIcons, modelIconPreferences, toolResults, cwd, onOpenFile, sessionId }: Props) {
   const { isStreaming, streamingMessage } = useStreamingMessage(tabId);
   if (!isStreaming || !streamingMessage) return null;
   return (
@@ -34,6 +35,7 @@ function StreamingBubbleInner({ tabId, modelNames, modelIcons, toolResults, cwd,
         toolResults={toolResults}
         modelNames={modelNames}
         modelIcons={modelIcons}
+        modelIconPreferences={modelIconPreferences}
         cwd={cwd}
         onOpenFile={onOpenFile}
         sessionId={sessionId}
