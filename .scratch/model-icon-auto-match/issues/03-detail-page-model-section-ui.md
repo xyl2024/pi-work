@@ -1,7 +1,7 @@
 # 03: 详情页模型区块与切换 UI
 
 `Category: enhancement`
-`Status: ready-for-agent`
+`Status: resolved`
 
 **What to build:** **图标偏好**的用户入口。**模型配置**面板里 Subscriptions / API Key provider 的详情页新增「模型」区块：列出该 provider 在**模型目录**下的全部模型（含当前未鉴权可见的），每行显示当前生效图标；自动匹配成功的行提供两态切换（匹配图标 ↔ provider 图标），匹配结果与 provider 图标相同、或该模型无匹配时隐藏切换入口；模型超过 8 个默认折叠、点开全铺。切换即时落盘并全端生效：点一下，聊天工具栏、模型选择弹窗、助手消息头、翻译、定时任务里的图标全部跟着变。切换入口只对 API Key / Subscriptions 来源的模型开放；自定义 provider 的模型沿用既有图标挑选字段，不加第二入口。全部文案走 i18n 机制。
 
