@@ -1334,8 +1334,9 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
 
         {/* Bottom-right action stack — all launchers stay mounted at all
             times so the affordance is stable. Disabled + dimmed when the
-            action doesn't apply. Hard-coded bilingual labels for the
-            "回到底部" button per product decision (no i18n key).
+            action doesn't apply (the "回到底部" button while the view is
+            already at the bottom, the "回到顶部" button while it sits at the
+            top).
 
             `right` is computed against the parent (`flex-1 overflow-hidden`
             inside ChatWindowContent — same width as ChatInput's wrapper):
@@ -1402,6 +1403,25 @@ function ChatWindowContent({ tabId, isActive = true, session, newSessionCwd, onA
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </Tooltip>
+          <Tooltip content={t("Scroll to top")}>
+            <button
+              type="button"
+              onClick={scrollFollow.handleToTop}
+              disabled={scrollFollow.atTop}
+              aria-label={t("Scroll to top")}
+              className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full border shadow-lg transition-all duration-200 hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100"
+              style={{
+                background: "var(--bg-panel)",
+                borderColor: "var(--border)",
+                color: scrollFollow.atTop ? "var(--text-dim)" : "var(--text-muted)",
+                opacity: scrollFollow.atTop ? 0.45 : 1,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 10L8 6L12 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </button>
           </Tooltip>

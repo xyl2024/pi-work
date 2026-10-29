@@ -3,14 +3,17 @@ import {
   INITIAL_SCROLL_FOLLOW_STATE,
   NO_FOLLOW_CHANGE,
   SCROLL_BOTTOM_THRESHOLD_PX,
+  SCROLL_TOP_THRESHOLD_PX,
   decideEntryScroll,
   decideScrollFollowOnBottom,
   decideScrollFollowOnGrowth,
   decideScrollFollowOnScroll,
+  decideScrollFollowOnTop,
   decideScrollFollowOnTouchScroll,
   decideScrollFollowOnWheel,
   distanceFromBottom,
   elementScrollTop,
+  isAtTop,
   resolveScrollFollow,
   type ScrollMetrics,
 } from "@/lib/shared/scroll-follow";
@@ -36,6 +39,15 @@ describe("distanceFromBottom", () => {
   });
 });
 
+describe("isAtTop", () => {
+  it("is true at the top edge, with rounding slop", () => {
+    expect(isAtTop(metrics(0))).toBe(true);
+    expect(isAtTop(metrics(SCROLL_TOP_THRESHOLD_PX))).toBe(true);
+    expect(isAtTop(metrics(SCROLL_TOP_THRESHOLD_PX + 1))).toBe(false);
+    expect(isAtTop(metrics(1200))).toBe(false);
+  });
+});
+
 describe("elementScrollTop", () => {
   it("converts a row's viewport rect into a scrollport offset", () => {
     expect(
@@ -51,8 +63,12 @@ describe("elementScrollTop", () => {
 });
 
 describe("decideScrollFollowOnWheel", () => {
-  it("starts following with no affordance", () => {
-    expect(INITIAL_SCROLL_FOLLOW_STATE).toEqual({ paused: false, showToBottom: false });
+  it("starts following with no affordance, showing the top", () => {
+    expect(INITIAL_SCROLL_FOLLOW_STATE).toEqual({
+      paused: false,
+      showToBottom: false,
+      atTop: true,
+    });
   });
 
   it("pauses and shows the button on an upward wheel", () => {
@@ -84,12 +100,12 @@ describe("decideScrollFollowOnScroll", () => {
   it("follows while inside the bottom threshold", () => {
     expect(
       decideScrollFollowOnScroll(metricsWithDistanceFromBottom(SCROLL_BOTTOM_THRESHOLD_PX - 1)),
-    ).toEqual({ follow: { paused: false, showToBottom: false }, command: "none" });
+    ).toEqual({ follow: { paused: false, showToBottom: false, atTop: false }, command: "none" });
   });
 
   it("follows exactly at the bottom", () => {
     expect(decideScrollFollowOnScroll(metricsWithDistanceFromBottom(0))).toEqual({
-      follow: { paused: false, showToBottom: false },
+      follow: { paused: false, showToBottom: false, atTop: false },
       command: "none",
     });
   });
@@ -97,10 +113,18 @@ describe("decideScrollFollowOnScroll", () => {
   it("pauses at the threshold and above it", () => {
     for (const distance of [SCROLL_BOTTOM_THRESHOLD_PX, SCROLL_BOTTOM_THRESHOLD_PX + 1, 500]) {
       expect(decideScrollFollowOnScroll(metricsWithDistanceFromBottom(distance))).toEqual({
-        follow: { paused: true, showToBottom: true },
+        follow: { paused: true, showToBottom: true, atTop: false },
         command: "none",
       });
     }
+  });
+
+  it("reports the top edge for the back-to-top button", () => {
+    expect(decideScrollFollowOnScroll(metrics(0)).follow.atTop).toBe(true);
+    expect(decideScrollFollowOnScroll(metrics(SCROLL_TOP_THRESHOLD_PX)).follow.atTop).toBe(true);
+    expect(decideScrollFollowOnScroll(metrics(SCROLL_TOP_THRESHOLD_PX + 1)).follow.atTop).toBe(
+      false,
+    );
   });
 
   it("changes nothing before the scrollport is mounted", () => {
@@ -176,6 +200,14 @@ describe("decideScrollFollowOnBottom", () => {
       follow: { paused: false, showToBottom: false },
       command: "toBottomSmooth",
     });
+  });
+});
+
+describe("decideScrollFollowOnTop", () => {
+  it("asks for a smooth scroll to the top and decides nothing else", () => {
+    // The top flag is reported by the scroll events the smooth scroll emits,
+    // so the button only greys out once the view actually gets there.
+    expect(decideScrollFollowOnTop()).toEqual({ follow: {}, command: "toTopSmooth" });
   });
 });
 
