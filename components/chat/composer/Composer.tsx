@@ -5,12 +5,14 @@ import { useI18n } from "@/hooks/useI18n";
 import { useSessionUiState } from "@/hooks/sessionUiStore";
 import { AttachmentList } from "../AttachmentList";
 import { CollapsiblePanel } from "../../ui/CollapsiblePanel";
-import { findDirectSlashResource, formatSlashContent, type SlashResource } from "@/lib/shared/slash-commands";
+import { SlashCommandMenu } from "../SlashCommandMenu";
+import { findDirectSlashResource, formatSlashContent, rankSlashResources, type SlashResource } from "@/lib/shared/slash-commands";
+import { getSlashQuery } from "@/lib/shared/composer-queries";
 import type { ToolInfo, ToolSelection } from "@/lib/shared/types";
 import { useImageAttachments } from "../chat-input/hooks/useImageAttachments";
 import { useToolsDropdown } from "../chat-input/hooks/useToolsDropdown";
 import { BottomToolbar } from "../chat-input/BottomToolbar";
-import { THINKING_BORDER_COLOR } from "../chat-input/constants";
+import { BUILTIN_SLASH_ACTIONS, SLASH_PAGE_SIZE, THINKING_BORDER_COLOR } from "../chat-input/constants";
 import { FULL_ACCESS_BORDER_COLOR } from "../../ui/permission-mode-colors";
 import type { PermissionMode } from "@/lib/shared/permission-mode";
 import type { ThinkingLevelOption } from "@/lib/shared/thinking-level-utils";
@@ -28,6 +30,7 @@ import {
 import { docLength, offsetToCursor, projectDocText } from "@/lib/client/composer/offsets";
 import { reduceComposerKey } from "@/lib/client/composer/reducer";
 import { serializeComposer } from "@/lib/client/composer/serialize";
+import { applySlashSelection, shouldOpenSlashMenu } from "@/lib/client/composer/slash";
 import {
   readDoc,
   readSelection,
@@ -117,6 +120,10 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
   const stateRef = useRef(state);
   stateRef.current = state;
 
+  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const [slashPage, setSlashPage] = useState(0);
+
   const editorRef = useRef<HTMLDivElement>(null);
   const composingRef = useRef(false);
   const skipProjectionRef = useRef(false);
@@ -134,6 +141,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
 
   const labels = useMemo<ComposerLabels>(() => ({
     skill: (node) => t("Skill {name}", { name: node.name }),
+    skillTitle: (node) => (node.source === "skill" ? t("Skill") : t("Builtin action")),
     file: (path) => t("File {path}", { path }),
     image: (id) => t("Image {id}", { id }),
   }), [t]);
@@ -154,6 +162,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     stateRef.current = next;
     if (options?.skipProjection) skipProjectionRef.current = true;
     setState(next);
+    setSlashMenuOpen((open) => shouldOpenSlashMenu(projectDocText(next.doc), offsetOfCursor(next), open));
   }, []);
 
   const syncFromDom = useCallback((options?: { resetCompositionSkip?: boolean }) => {
@@ -179,8 +188,92 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
   const resetDoc = useCallback(() => {
     const next = emptyComposerState();
     updateState(next);
+    setSlashMenuOpen(false);
     focusEditor(next.doc, next.cursor);
   }, [focusEditor, updateState]);
+
+  const slashQuery = useMemo(
+    () => getSlashQuery(projectDocText(state.doc), offsetOfCursor(state)),
+    [state],
+  );
+
+  const filteredSlashResources = useMemo(() => {
+    if (!slashMenuOpen || !slashQuery) return [];
+    const query = slashQuery.query.toLowerCase();
+    const builtinMatches = rankSlashResources(BUILTIN_SLASH_ACTIONS, query);
+    const matches = rankSlashResources(slashResources, query);
+    return builtinMatches.length > 0 ? [...builtinMatches, ...matches] : matches;
+  }, [slashMenuOpen, slashQuery, slashResources]);
+
+  const slashPageCount = Math.max(1, Math.ceil(filteredSlashResources.length / SLASH_PAGE_SIZE));
+  const slashCurrentPage = Math.min(slashPage, slashPageCount - 1);
+  const visibleSlashResources = useMemo(() => {
+    const start = slashCurrentPage * SLASH_PAGE_SIZE;
+    return filteredSlashResources.slice(start, start + SLASH_PAGE_SIZE);
+  }, [filteredSlashResources, slashCurrentPage]);
+
+  useEffect(() => {
+    setSlashActiveIndex(0);
+    setSlashPage(0);
+  }, [slashQuery?.query, slashResources]);
+
+  useEffect(() => {
+    setSlashPage((page) => Math.min(page, slashPageCount - 1));
+  }, [slashPageCount]);
+
+  useEffect(() => {
+    setSlashActiveIndex((index) => Math.min(index, Math.max(0, visibleSlashResources.length - 1)));
+  }, [visibleSlashResources.length]);
+
+  const selectSlashResource = useCallback((item: SlashResource) => {
+    const current = stateRef.current;
+    const cursorOffset = offsetOfCursor(current);
+    if (item.source === "action") onSlashAction?.(item.command);
+    const next = applySlashSelection(current, item, cursorOffset);
+    updateState(next);
+    setSlashMenuOpen(false);
+    setSlashActiveIndex(0);
+    setSlashPage(0);
+    focusEditor(next.doc, next.cursor);
+  }, [focusEditor, onSlashAction, updateState]);
+
+  const handleSlashKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>): boolean => {
+    if (!slashMenuOpen) return false;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSlashMenuOpen(false);
+      return true;
+    }
+    if (!slashQuery || visibleSlashResources.length === 0) return false;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSlashActiveIndex((index) => (index + 1) % visibleSlashResources.length);
+      return true;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSlashActiveIndex((index) => (index - 1 + visibleSlashResources.length) % visibleSlashResources.length);
+      return true;
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      setSlashPage((page) => (page >= slashPageCount - 1 ? 0 : page + 1));
+      setSlashActiveIndex(0);
+      return true;
+    }
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      setSlashPage((page) => (page <= 0 ? slashPageCount - 1 : page - 1));
+      setSlashActiveIndex(0);
+      return true;
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      selectSlashResource(visibleSlashResources[slashActiveIndex] ?? visibleSlashResources[0]);
+      return true;
+    }
+    return false;
+  }, [slashMenuOpen, slashQuery, visibleSlashResources, slashActiveIndex, slashPageCount, selectSlashResource]);
 
   const handleSend = useCallback(() => {
     const current = stateRef.current;
@@ -205,6 +298,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (composingRef.current || event.nativeEvent.isComposing) return;
+    if (handleSlashKeyDown(event)) return;
     const editor = editorRef.current;
     if (!editor) return;
     const selection = readSelection(editor) ?? undefined;
@@ -223,7 +317,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
       return;
     }
     updateState(result.state);
-  }, [handleSend, updateState]);
+  }, [handleSend, handleSlashKeyDown, updateState]);
 
   const handleInput = useCallback(() => {
     if (composingRef.current) return;
@@ -277,6 +371,41 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
     const next = setCursor(stateRef.current, offsetToCursor(stateRef.current.doc, selection.end));
     updateState(next, { skipProjection: true });
   }, [updateState]);
+
+  const chipFromEvent = useCallback((event: React.MouseEvent<HTMLDivElement>): HTMLElement | null => {
+    const editor = editorRef.current;
+    if (!editor || !(event.target instanceof Element)) return null;
+    const chip = event.target.closest("[data-composer-kind]");
+    if (!(chip instanceof HTMLElement) || !editor.contains(chip)) return null;
+    return chip;
+  }, []);
+
+  const handleChipMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const chip = chipFromEvent(event);
+    const editor = editorRef.current;
+    if (!chip || !editor) return;
+    event.preventDefault();
+    editor.focus();
+    const range = document.createRange();
+    range.setStartAfter(chip);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    handleSelect();
+  }, [chipFromEvent, handleSelect]);
+
+  const handleChipDoubleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const chip = chipFromEvent(event);
+    if (!chip) return;
+    event.preventDefault();
+    const range = document.createRange();
+    range.selectNode(chip);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    handleSelect();
+  }, [chipFromEvent, handleSelect]);
 
   useImperativeHandle(ref, () => ({
     insertText(text: string) {
@@ -348,7 +477,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
         )}
         <AttachmentList images={attachedImages} onRemove={removeImage} />
 
-        <CollapsiblePanel open={true}>
+        <div style={{ position: "relative" }}>
+          <CollapsiblePanel open={true}>
           <div
             style={{
               display: "flex",
@@ -378,6 +508,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
               onCompositionStart={handleCompositionStart}
               onCompositionEnd={handleCompositionEnd}
               onSelect={handleSelect}
+              onMouseDown={handleChipMouseDown}
+              onDoubleClick={handleChipDoubleClick}
               onDrop={(event) => event.preventDefault()}
               style={EDITABLE_STYLE}
             />
@@ -436,7 +568,24 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({
               </button>
             )}
           </div>
-        </CollapsiblePanel>
+          </CollapsiblePanel>
+
+          {slashMenuOpen && slashQuery && (
+            <div style={{
+              position: "absolute", bottom: "calc(100% + 44px)", left: 0,
+              zIndex: 200, width: "min(560px, 100%)",
+              background: "var(--bg)", border: "1px solid var(--border)",
+              borderRadius: 8, boxShadow: "0 -4px 16px rgba(0,0,0,0.10)",
+              overflow: "hidden",
+            }}>
+              <SlashCommandMenu
+                items={visibleSlashResources}
+                activeIndex={slashActiveIndex}
+                onSelect={selectSlashResource}
+              />
+            </div>
+          )}
+        </div>
 
         <BottomToolbar
           t={t}

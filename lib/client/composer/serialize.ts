@@ -39,10 +39,8 @@ export function serializeComposer(doc: ComposerDoc): SerializedComposer {
 
     text += `/skill:${node.name}`;
     const following = doc.nodes[index + 1];
-    if (following?.kind === "text") {
-      const args = following.text.trim();
-      if (args) text += ` ${args}`;
-      index += 1;
+    if (following?.kind === "text" && following.text.length > 0 && !/^\s/.test(following.text)) {
+      text += " ";
     }
   }
 

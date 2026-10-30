@@ -27,6 +27,8 @@ export const chat = {
   "Upload image": "上传图片",
   "Type / for skills, @ for files": "输入 / 调用技能，@ 引用文件",
   "Skill {name}": "技能 {name}",
+  "Skill": "技能",
+  "Builtin action": "内置动作",
   "File {path}": "文件 {path}",
   "Image {id}": "图片 {id}",
   "↑↓ switch, ←→ page, Enter to pick": "↑↓切换，←→翻页，回车确认",

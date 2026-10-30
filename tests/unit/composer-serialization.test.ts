@@ -19,9 +19,26 @@ describe("serializeComposer", () => {
     expect(serializeComposer(docOf(skill(), { kind: "text", text: "" })).text).toBe("/skill:review");
   });
 
-  it("serializes a skill with trimmed args and a single separating space", () => {
-    expect(serializeComposer(docOf(skill(), { kind: "text", text: "  fix this  " })).text)
+  it("serializes a skill with args and a single separating space", () => {
+    expect(serializeComposer(docOf(skill(), { kind: "text", text: "fix this" })).text)
       .toBe("/skill:review fix this");
+  });
+
+  it("keeps leading whitespace and newlines after a skill without adding a space", () => {
+    expect(serializeComposer(docOf(skill(), { kind: "text", text: "  fix this  " })).text)
+      .toBe("/skill:review  fix this  ");
+    expect(serializeComposer(docOf(skill(), { kind: "text", text: "\nnext line" })).text)
+      .toBe("/skill:review\nnext line");
+  });
+
+  it("keeps nodes that follow a skill's args in visual order", () => {
+    const result = serializeComposer(docOf(
+      skill(),
+      { kind: "text", text: "args" },
+      { kind: "skill", source: "skill", name: "other", command: "other" },
+      { kind: "text", text: "tail" },
+    ));
+    expect(result.text).toBe("/skill:review args/skill:other tail");
   });
 
   it("serializes a file chip as a relative code span with one trailing space", () => {
